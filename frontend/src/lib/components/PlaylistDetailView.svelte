@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
-	import { playPlaylistEntries, setShuffle } from '$lib/stores/player';
+	import { playPlaylistFrom } from '$lib/stores/player';
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,
@@ -51,23 +51,11 @@
 	// link, mobile without the Rail mounted, or a failed loadPlaylists) --
 	// once the detail itself has loaded for the open id, its own fields
 	// stand in for the list entry rather than rendering nothing.
-	//
-	// The id match only matters while a *different* playlist id is open --
-	// that is the one case a stale detail could render under the wrong
-	// header. loadPlaylistDetail always sets selectedPlaylistId before its
-	// async fetch, so during real navigation this is never null while a
-	// fetch for a new id is in flight. When no collection is open at all
-	// (selectedPlaylistId is null, e.g. a caller that renders this view
-	// directly off selectedPlaylistDetail without going through
-	// navigation), there is no "wrong id" to guard against, so the detail
-	// is trusted as-is.
 	const listEntry = $derived($selectedPlaylist);
 	const playlistDetail = $derived(
-		$selectedPlaylistId === null
+		$selectedPlaylistDetail && $selectedPlaylistDetail.id === $selectedPlaylistId
 			? $selectedPlaylistDetail
-			: $selectedPlaylistDetail && $selectedPlaylistDetail.id === $selectedPlaylistId
-				? $selectedPlaylistDetail
-				: null
+			: null
 	);
 	const playlistMeta = $derived(
 		listEntry ??
@@ -198,8 +186,7 @@
 			audioPlayer.toggle();
 			return;
 		}
-		setShuffle(false);
-		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
+		playPlaylistFrom(playlistDetail, index);
 	}
 
 	function isEntryCurrent(entry: { generation_id: string; mp3_path: string }): boolean {
@@ -313,7 +300,7 @@
 	}
 </script>
 
-{#if $selectedPlaylistId || playlistDetail}
+{#if $selectedPlaylistId}
 	<div class="detail-panel">
 		{#if playlistMeta}
 			<CollectionHeader

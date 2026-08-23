@@ -27,6 +27,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -34,8 +35,6 @@ log = logging.getLogger(__name__)
 _sync_clients: dict[str, object] = {}
 _async_clients: dict[str, object] = {}
 _client_lock = threading.Lock()
-
-_ENV_SECRETS = ("ANTHROPIC_API_KEY", "SESSION_SECRET", "DATABASE_URL", "REDIS_URL")
 
 _DISALLOWED_TOOLS = (
     "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,"
@@ -571,7 +570,7 @@ def _build_mcp_cli_cmd(
 
 def _scrub_env() -> dict[str, str]:
     env = os.environ.copy()
-    for key in _ENV_SECRETS:
+    for key in SECRET_ENV_KEYS:
         env.pop(key, None)
     return env
 

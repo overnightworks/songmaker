@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from songmaker_cli.api_models.songs import generation_version_lyrics
+from songmaker_cli.api_models.whisper import WhisperCue
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry
@@ -155,6 +156,7 @@ class SharedPlaylistEntryResponse(BaseModel):
     generation_id: str | None
     audio_duration: int | None
     lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
 
 
 class SharedPlaylistResponse(BaseModel):

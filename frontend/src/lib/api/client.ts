@@ -6,7 +6,7 @@ export {
 	fetchAlbum,
 	fetchAlbums,
 	createAlbum,
-	renameAlbum,
+	updateAlbum,
 	shareAlbum,
 	unshareAlbum,
 	deleteAlbum,

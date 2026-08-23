@@ -1,4 +1,4 @@
-import { mount, tick, unmount, type ComponentProps } from 'svelte';
+import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
@@ -7,6 +7,7 @@ vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
 import CollectionHeader from './CollectionHeader.svelte';
+import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -30,7 +31,12 @@ function baseProps(): CollectionHeaderProps {
 		onrename: vi.fn().mockResolvedValue(undefined),
 		isShared: false,
 		shareSlug: null,
-		onshare: vi.fn().mockResolvedValue({ status: 'ok', share_url: 'https://x/y', share_slug: 'y' }),
+		onshare: vi.fn().mockResolvedValue({
+			status: 'ok',
+			share_url: 'https://x/y',
+			share_slug: 'y',
+			songs_without_playable_take: []
+		}),
 		onunshare: vi.fn().mockResolvedValue(undefined),
 		ondelete: vi.fn(),
 		oncover: vi.fn(),
@@ -167,6 +173,47 @@ describe('CollectionHeader', () => {
 
 		addSong.click();
 		expect(onaddsong).toHaveBeenCalledTimes(1);
+	});
+
+	it('announces the album title as the heading name, with a separately named edit button', async () => {
+		const target = await render(baseProps());
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit album title');
+		expect(editButton.textContent?.trim()).toBe('Night Drive');
+	});
+
+	it('announces the playlist title as the heading name, with a separately named edit button', async () => {
+		const target = await render({
+			...baseProps(),
+			kind: 'playlist' as const,
+			title: 'Late Night Mix'
+		});
+		const heading = getByRoleHeading(target, 'Late Night Mix');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit playlist title');
+		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
+	});
+
+	it('renders the album-only metaEditor snippet under the title, above the breadcrumb', async () => {
+		const metaEditor = createRawSnippet(() => ({
+			render: () => `<p class="album-meta-stub">Live at the Roxy · 1994</p>`
+		}));
+		const target = await render({ ...baseProps(), metaEditor });
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
+		const titles = requireElement(target, '.header-titles');
+		const stub = requireElement(titles, '.album-meta-stub');
+		expect(stub.textContent).toBe('Live at the Roxy · 1994');
+		const breadcrumb = requireElement(titles, 'nav');
+		expect(
+			stub.compareDocumentPosition(breadcrumb) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('renders no metaEditor area when the caller passes none, as playlists do', async () => {
+		const target = await render({ ...baseProps(), kind: 'playlist' as const });
+		expect(target.querySelector('.album-meta-stub')).toBeNull();
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {

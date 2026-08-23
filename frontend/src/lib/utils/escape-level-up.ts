@@ -39,15 +39,22 @@ export function shouldHandleGlobalEscape(
 	return true;
 }
 
-export type EscapeLevelUpTarget = 'collection' | 'wall' | null;
+export type EscapeLevelUpTarget = 'now-playing' | 'collection' | 'wall' | null;
 
-// Pure decision: what one level up means for the current navigation state.
-// The +layout.svelte handler reads the live stores and calls the matching
-// navigation action (backToCollection / openLibraryWall).
+// Pure decision: what one level up means for the current state. The
+// +layout.svelte handler reads the live stores and calls the matching action
+// (escapeNowPlaying / backToCollection / openLibraryWall).
+//
+// Now Playing sits above the navigation levels because it is the surface the
+// listener opened last. Only its docked panel reaches this decision: the
+// panel is deliberately not an overlay, so nothing yields for it, while the
+// full-screen surface is modal and answers Escape itself.
 export function escapeLevelUpTarget(
+	hasDockedNowPlaying: boolean,
 	hasOpenSong: boolean,
 	hasOpenCollection: boolean
 ): EscapeLevelUpTarget {
+	if (hasDockedNowPlaying) return 'now-playing';
 	if (hasOpenSong) return 'collection';
 	if (hasOpenCollection) return 'wall';
 	return null;

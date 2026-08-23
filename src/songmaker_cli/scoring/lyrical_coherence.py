@@ -1,21 +1,45 @@
-"""Lyrical coherence scorer — uses Claude to judge sung lyrics.
+"""Lyrical coherence judge — uses Claude to judge sung lyrics.
 
 Sends intended lyrics + Whisper transcription to Claude and asks:
 does the sung result make sense as a song? Creative deviations from
 intended lyrics are fine as long as the output is coherent.
+
+Runs in the worker parent, on the scores the scorer child returned: it is
+the one scorer that calls an external service, and the child that loads
+third-party model weights holds no credential (see docs/security.md).
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from dataclasses import dataclass
+
+from pydantic import SecretStr
 
 from songmaker_cli.claude.provider import call_claude, parse_json_response
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import LyricalCoherenceScore, SharedScorerData
-from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
+from songmaker_cli.scoring.models import (
+    LyricalCoherenceScore,
+    SongScores,
+    TextAccuracyScore,
+)
+from songmaker_cli.scoring.pipeline import ScorerDependencyUnavailable, run_scorer
+from songmaker_cli.scoring.registry import LYRICAL_COHERENCE_SCORER
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CoherenceJudgeConfig:
+    """What the parent needs to reach Claude, resolved from Settings and the
+    DB by the caller — the judge itself reads neither, and defaults none of
+    it: which model judges a song is a configured decision, not a fallback.
+    ``api_key=None`` selects the Claude CLI backend."""
+
+    model: str
+    api_key: SecretStr | None
+    timeout: int
+
 
 JUDGE_PROMPT = (  # noqa: E501
     "You are a vocal quality judge for AI-generated songs.\n\n"
@@ -59,21 +83,41 @@ JUDGE_PROMPT = (  # noqa: E501
 )
 
 
-@register("lyrical_coherence")
-def score_lyrical_coherence(
-    mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+def judge_lyrical_coherence(
+    scores: SongScores, meta: SongMeta | None, config: CoherenceJudgeConfig,
+) -> SongScores:
+    """Add Claude's coherence verdict on this run's transcription to ``scores``.
+
+    Runs under its own time budget and never raises: like every scorer in the
+    child, its outcome is data, and only a successful judgement overwrites the
+    stored lyrical_coherence score.
+    """
+    return scores.including(run_scorer(
+        LYRICAL_COHERENCE_SCORER,
+        lambda: _judge(meta, scores.text_accuracy, config),
+        config.timeout,
+    ))
+
+
+def _judge(
+    meta: SongMeta | None,
+    transcription: TextAccuracyScore | None,
+    config: CoherenceJudgeConfig,
 ) -> LyricalCoherenceScore:
     """Judge lyrical coherence using Claude (CLI or API).
 
-    Requires text_accuracy to run first — reads transcription from shared_data.
+    Requires text_accuracy to have produced a transcription in this run.
     """
     if meta is None or not meta.lyrics:
-        raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
+        raise ScorerDependencyUnavailable(
+            "No lyrics metadata — cannot judge lyrical coherence",
+        )
 
-    transcribed = shared_data.whisper_text if shared_data else None
-    if transcribed is None:
-        raise ValueError("No Whisper transcription in pipeline. Run text_accuracy first.")
+    if transcription is None:
+        raise ScorerDependencyUnavailable(
+            "No Whisper transcription in this run — text_accuracy produced none",
+        )
+    transcribed = transcription.transcript
     if not transcribed:
         log.info("Empty Whisper transcription (no vocals detected) — skipping coherence check")
         return LyricalCoherenceScore(
@@ -90,12 +134,8 @@ def score_lyrical_coherence(
     n_intended = len(intended.splitlines())
     n_transcribed = len(transcribed.splitlines())
     log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
-    from songmaker_cli.settings import get_settings
-    settings = get_settings()
-    scoring_model = (config.claude_scoring_model if config and config.claude_scoring_model
-                     else settings.claude_scoring_model)
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    response = call_claude(prompt, api_key=api_key, model=scoring_model)
+    api_key = config.api_key.get_secret_value() if config.api_key else None
+    response = call_claude(prompt, api_key=api_key, model=config.model)
     log.debug("Claude response: %d chars", len(response.text))
     data = parse_json_response(response.text)
 

@@ -1,11 +1,20 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
-import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS, RAIL_LIBRARY_LABEL } from '$lib/constants';
+import {
+	NOW_PLAYING_LABEL,
+	RAIL_LIBRARY_LABEL,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
 	albumList,
+	closeNowPlaying,
+	nowPlayingDockable,
+	nowPlayingSurface,
 	playStartNotice,
 	queueContext,
 	selectedAlbumId,
@@ -161,12 +170,19 @@ beforeEach(() => {
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	songList.set([]);
 	albumList.set([]);
-	queueContext.set({ type: 'playlist', entries: [], index: 0 });
+	queueContext.set({
+		type: 'playlist',
+		playlist: { id: 'p1', title: 'Night Drive' },
+		entries: [],
+		index: 0
+	});
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
 	setShuffle(false);
 });
 
@@ -353,57 +369,79 @@ describe('PlayerBar shuffle', () => {
 	});
 });
 
-describe('PlayerBar Now Playing', () => {
-	it('opens Now Playing from the compact title and swaps lyrics with the take', async () => {
-		audioPlayer.loadStream(
-			manifest([
-				track(0, {
-					generation_id: 'g-old',
-					song_id: 's-old',
-					song_title: 'Tide',
-					lyrics: 'old verse'
-				}),
-				track(1, {
-					generation_id: 'g-new',
-					song_id: 's-new',
-					song_title: 'Second',
-					lyrics: 'second verse',
-					generation_number: 4
-				})
-			]),
-			0,
-			{ autoplay: false }
-		);
+describe('PlayerBar transport labels', () => {
+	function playButton(): HTMLButtonElement {
+		const button = target.querySelector<HTMLButtonElement>('.play-btn');
+		if (!button) throw new Error('Expected a play control in the transport bar');
+		return button;
+	}
+
+	async function press(): Promise<void> {
+		playButton().click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+	}
+
+	it('names the transport button after the state its click leaves', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
 		await tick();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
 
-		const title = target.querySelector<HTMLButtonElement>(
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		await press();
+		audio.fire('canplay');
+		await tick();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
+
+		await press();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+
+		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
+		await press();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_RETRY_LABEL);
+	});
+});
+
+describe('PlayerBar Now Playing', () => {
+	function nowPlayingButton(): HTMLButtonElement {
+		const button = target.querySelector<HTMLButtonElement>(
 			`button[aria-label="${NOW_PLAYING_LABEL}"]`
 		);
-		title?.click();
-		await tick();
+		if (!button) throw new Error('Expected a Now Playing trigger in the transport bar');
+		return button;
+	}
 
-		const sheet = document.querySelector('.now-playing');
-		expect(sheet?.textContent).toContain('Tide');
-		expect(sheet?.textContent).toContain('old verse');
-		expect(sheet?.textContent).not.toContain('second verse');
-
-		audio.currentTime = 15;
-		audio.fire('timeupdate');
-		await tick();
-
-		expect(sheet?.textContent).toContain('Second');
-		expect(sheet?.textContent).toContain('second verse');
-		expect(sheet?.textContent).not.toContain('old verse');
-	});
-
-	it('shows the empty lyrics state for a take without version lyrics', async () => {
-		audioPlayer.loadStream(manifest([track(0, { lyrics: null })]), 0, { autoplay: false });
+	it('opens Now Playing, and puts the docked panel away again on a second press', async () => {
+		nowPlayingDockable.set(true);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
 		await tick();
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		// A panel in the page is a disclosure, not a dialog trigger.
+		expect(nowPlayingButton().getAttribute('aria-expanded')).toBe('false');
+
+		nowPlayingButton().click();
 		await tick();
-		expect(document.querySelector('.now-playing')?.textContent).toContain(NOW_PLAYING_NO_LYRICS);
+		expect(get(nowPlayingSurface)).toBe('docked');
+		expect(nowPlayingButton().getAttribute('aria-expanded')).toBe('true');
+		expect(nowPlayingButton().getAttribute('aria-haspopup')).toBeNull();
+
+		nowPlayingButton().click();
+		await tick();
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('names the full surface a dialog, which the bar only ever opens', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(nowPlayingButton().getAttribute('aria-haspopup')).toBe('dialog');
+		nowPlayingButton().click();
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
 	});
 
 	it('closes the drawer when Now Playing opens', async () => {
@@ -413,10 +451,115 @@ describe('PlayerBar Now Playing', () => {
 		toggleSidebar();
 		expect(get(sidebarOpen)).toBe(true);
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		nowPlayingButton().click();
 		await tick();
 
 		expect(get(sidebarOpen)).toBe(false);
 		sidebarOpen.set(false);
+	});
+
+	// "One player, never two": the full surface carries the only transport.
+	it('hides the transport bar under the full surface and brings it back on close', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
+		expect(target.querySelector('.player-bar')).toBeNull();
+
+		closeNowPlaying();
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
+
+	it('keeps the transport bar while Now Playing is docked', async () => {
+		nowPlayingDockable.set(true);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
+
+	// The full surface unmounts the bar. If the bar owned the audio graph, that
+	// would close the context bound to the playing <audio> element and silence
+	// it for the rest of the session (browser gate on #140).
+	it('leaves the playing element its audio graph when the bar makes way for the full surface', async () => {
+		const analyser = {
+			fftSize: 2048,
+			smoothingTimeConstant: 0,
+			frequencyBinCount: 1024,
+			connect: vi.fn(),
+			getByteFrequencyData: vi.fn(),
+			getByteTimeDomainData: vi.fn()
+		};
+		const context = {
+			state: 'running',
+			destination: {},
+			createAnalyser: vi.fn(() => analyser),
+			createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+			resume: vi.fn(),
+			close: vi.fn()
+		};
+		audioContextConstructor.mockImplementation(() => context);
+		// A fine pointer on a wide viewport: the only shape that draws a
+		// visualizer at all, and so the only one that builds a graph.
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(context.close).not.toHaveBeenCalled();
+
+		closeNowPlaying();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		// The remounted bar borrows the same analyser instead of rebuilding a
+		// graph the element can never be handed to twice.
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+		expect(audioContextConstructor).toHaveBeenCalledOnce();
+	});
+
+	it('returns focus to the transport bar trigger the bar remounts with', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+
+		closeNowPlaying();
+		await tick();
+
+		expect(document.activeElement).toBe(
+			target.querySelector(`button[aria-label="${NOW_PLAYING_LABEL}"]`)
+		);
 	});
 });

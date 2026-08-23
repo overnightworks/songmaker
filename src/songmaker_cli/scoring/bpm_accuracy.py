@@ -9,7 +9,7 @@ import librosa
 import numpy as np
 
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import BpmAccuracyScore, SharedScorerData
+from songmaker_cli.scoring.models import BpmAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 @register("bpm_accuracy")
 def score_bpm(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+    config: PipelineConfig | None = None,
 ) -> BpmAccuracyScore:
     """Detect BPM and compare to requested value from song metadata."""
     requested_bpm = _extract_requested_bpm(meta)

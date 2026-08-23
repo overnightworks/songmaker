@@ -9,6 +9,8 @@
 		TAKE_PIN_SEED_LABEL,
 		TAKE_PLAYLIST_LABEL,
 		TAKE_REMASTER_LABEL,
+		TAKE_RESCORE_LABEL,
+		TAKE_RESCORING_LABEL,
 		TAKE_RESTORE_LABEL,
 		TAKE_SHARE_LABEL,
 		TAKE_UNSHARE_LABEL,
@@ -18,6 +20,7 @@
 
 	interface Props {
 		gen: GenerationItem;
+		rescoring: boolean;
 		onagain: () => void;
 		onuseasreference: () => void;
 		onshare: () => void;
@@ -26,12 +29,14 @@
 		onpinseed: () => void;
 		onaddtoplaylist: () => void;
 		onremaster: () => void;
+		onrescore: () => void;
 		onrestore: () => void;
 		ondelete: () => void;
 	}
 
 	let {
 		gen,
+		rescoring,
 		onagain,
 		onuseasreference,
 		onshare,
@@ -40,6 +45,7 @@
 		onpinseed,
 		onaddtoplaylist,
 		onremaster,
+		onrescore,
 		onrestore,
 		ondelete
 	}: Props = $props();
@@ -179,6 +185,15 @@
 			>
 				{TAKE_REMASTER_LABEL}
 			</button>
+			<button
+				type="button"
+				role="menuitem"
+				class="overflow-item"
+				disabled={rescoring}
+				onclick={() => runAndClose(onrescore)}
+			>
+				{rescoring ? TAKE_RESCORING_LABEL : TAKE_RESCORE_LABEL}
+			</button>
 			{#if gen.is_archived}
 				<button
 					type="button"
@@ -277,5 +292,10 @@
 
 	.overflow-item.destructive:hover:not(:disabled) {
 		color: var(--score-bad);
+	}
+
+	.overflow-item:disabled {
+		color: var(--text-subtle);
+		cursor: default;
 	}
 </style>

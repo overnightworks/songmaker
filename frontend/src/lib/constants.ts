@@ -31,8 +31,8 @@ export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
 export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are archived';
 
 // A collection row announces the action its click performs, then the title:
-// "Play Tide", "Pause Tide". One owner for the format — the album detail, the
-// playlist detail and the e2e flows that find rows by name all read it here.
+// "Play Tide", "Pause Tide". Every surface that renders such a row, and every
+// flow that finds one by name, builds the label here.
 export const COLLECTION_ROW_PLAY_ACTION = 'Play';
 export const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
 
@@ -43,6 +43,13 @@ export function collectionRowPlayLabel(title: string): string {
 export function collectionRowPauseLabel(title: string): string {
 	return `${COLLECTION_ROW_PAUSE_ACTION} ${title}`;
 }
+
+// The transport's play button is named after the state its click leaves:
+// "Pause" while audio is really playing, "Retry" once it errored, otherwise
+// "Play". A flow reads the name to tell a sounding take from a dead one.
+export const TRANSPORT_PLAY_LABEL = 'Play';
+export const TRANSPORT_PAUSE_LABEL = 'Pause';
+export const TRANSPORT_RETRY_LABEL = 'Retry';
 
 export const NOW_PLAYING_LABEL = 'Now Playing';
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
@@ -64,8 +71,9 @@ export const TAKE_REMASTER_LABEL = 'Remaster';
 export const TAKE_RESTORE_LABEL = 'Restore';
 export const TAKE_ARCHIVED_TITLE = 'Archived take — restore to play';
 export const TAKE_DELETE_LABEL = 'Delete';
-export const TAKE_SCORE_LABEL = 'Score';
-export const TAKE_SCORING_LABEL = 'Scoring...';
+export const TAKE_RESCORE_LABEL = 'Re-score';
+export const TAKE_RESCORING_LABEL = 'Re-scoring…';
+export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
 export const TAKES_EMPTY = 'No takes yet';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
@@ -188,9 +196,21 @@ export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remov
 export const ALBUM_ADD_SONG_LABEL = '+ Song';
 export const ALBUM_ADD_SONG_GLYPH = '+';
 
+export const ALBUM_SUBTITLE_LABEL = 'Album subtitle';
+export const ALBUM_SUBTITLE_PLACEHOLDER = 'Add subtitle';
+export const ALBUM_SUBTITLE_MAX_LENGTH = 400;
+export const ALBUM_YEAR_LABEL = 'Album year';
+export const ALBUM_YEAR_PLACEHOLDER = 'Add year';
+export const ALBUM_YEAR_MIN = 1900;
+export const ALBUM_YEAR_MAX = 2100;
+export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
+
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_SUMMARY_LOADING = '…';
+// The drawer the compact shell puts the rail in — its accessible name, which
+// is how a flow scopes to it while another overlay may be open.
+export const RAIL_DRAWER_LABEL = 'Navigation';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
@@ -263,3 +283,4 @@ export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
 export const JOB_TYPE_GENERATE = 'generate';
+export const JOB_TYPE_SCORE = 'score';

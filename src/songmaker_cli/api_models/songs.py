@@ -48,18 +48,23 @@ def generation_version_lyrics(gen: Generation) -> str | None:
 
 @dataclass(frozen=True)
 class SharePickMedia:
-    """The generation, duration, and lyrics behind a share payload's audio.
+    """Everything a listener needs to play one shared take: its generation,
+    duration, lyrics, and the cues that make those lyrics follow playback —
+    the same fields Now Playing reads from a generation payload.
 
-    Null across all three fields when there is no playable generation —
-    same "no pick" honesty as `audio_url: null` on the surrounding response.
+    Null across all fields when there is no playable generation — same
+    "no pick" honesty as `audio_url: null` on the surrounding response.
     """
 
     generation_id: str | None
     audio_duration: int | None
     lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
 
 
-_NO_SHARE_PICK_MEDIA = SharePickMedia(generation_id=None, audio_duration=None, lyrics=None)
+_NO_SHARE_PICK_MEDIA = SharePickMedia(
+    generation_id=None, audio_duration=None, lyrics=None, whisper_cues=None,
+)
 
 
 def share_pick_media(gen: Generation | None) -> SharePickMedia:
@@ -69,6 +74,7 @@ def share_pick_media(gen: Generation | None) -> SharePickMedia:
         generation_id=gen.id,
         audio_duration=gen.version.audio_duration if gen.version else None,
         lyrics=generation_version_lyrics(gen),
+        whisper_cues=generation_whisper_cues(gen.whisper_cues),
     )
 
 
@@ -86,6 +92,9 @@ def _safe_json_dict(value: object, entity_type: str, entity_id: str) -> dict | N
 
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = MODEL_AVAILABLE_MODES
+
+ALBUM_YEAR_MIN = 1900
+ALBUM_YEAR_MAX = 2100
 
 
 GenerationParams = BaseGenerationParams
@@ -155,10 +164,19 @@ class AlbumResponse(BaseModel):
         )
 
 
+class UnplayableSongSummary(BaseModel):
+    """A song that will be silently absent from the public share page --
+    no non-archived take carries audio to play."""
+
+    id: str
+    title: str
+
+
 class ShareResponse(BaseModel):
     status: str = "ok"
     share_url: str
     share_slug: str
+    songs_without_playable_take: list[UnplayableSongSummary] = Field(default_factory=list)
 
 
 class SharedSongItem(BaseModel):
@@ -169,6 +187,7 @@ class SharedSongItem(BaseModel):
     generation_id: str | None
     audio_duration: int | None
     lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
 
 
 class SharedAlbumResponse(BaseModel):
@@ -205,6 +224,7 @@ class SharedSongResponse(BaseModel):
     generation_id: str | None
     audio_duration: int | None
     lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
 
     cover: AlbumCoverUrls | None = None
 
@@ -219,6 +239,7 @@ class SharedGenerationResponse(BaseModel):
     generation_id: str | None
     audio_duration: int | None
     lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
 
 
 def generation_expiry(gen: Generation) -> datetime | None:
@@ -477,6 +498,18 @@ class AlbumCreateRequest(BaseModel):
     artist: str = Field("", max_length=200)
 
 
+class AlbumUpdateRequest(BaseModel):
+    """Partial update for album metadata — title, subtitle, and year.
+
+    A field absent from the request body is left unchanged. An explicit
+    empty subtitle clears it. Title, if present, must be non-blank.
+    """
+
+    title: str | None = Field(None, max_length=200)
+    subtitle: str | None = Field(None, max_length=400)
+    year: int | None = Field(None, ge=ALBUM_YEAR_MIN, le=ALBUM_YEAR_MAX)
+
+
 class SongCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     album_id: str = Field(max_length=64)
@@ -592,7 +625,7 @@ class ScorerSchemaItem(BaseModel):
     output_keys: list[str]
     needs_audio: bool
     device: str
-    after_gpu: bool
+    host: str
 
 
 class ScoringSchemaResponse(BaseModel):
@@ -609,7 +642,7 @@ class ScoringSchemaResponse(BaseModel):
                     output_keys=list(spec.output_keys),
                     needs_audio=spec.needs_audio,
                     device=spec.device,
-                    after_gpu=spec.after_gpu,
+                    host=spec.host.value,
                 )
                 for spec in SCORERS.values()
             ],

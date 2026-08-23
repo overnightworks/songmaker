@@ -26,9 +26,11 @@ import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/serv
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import { addToast } from '$lib/stores/toast';
 import {
+	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
 	queuePlaybackMode,
+	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
 	shouldUseQueueStream,
 	type LibraryTakePool
@@ -50,7 +52,8 @@ import {
 } from '$lib/constants';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-	NOW_PLAYING_SHUFFLE_LABEL_PREFIX
+	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
+	type NowPlayingSurfaceKind
 } from '$lib/constants/now-playing';
 
 // --- Data ---
@@ -119,10 +122,25 @@ export function clearGenerationSelection(): void {
 }
 
 // --- Playback queue context ---
+
+// A playlist queue names the playlist it was built from. The queue is the
+// only owner of that name: navigation may open, close, or replace the
+// playlist detail while the queue keeps playing, so nothing downstream may
+// read the open collection to label what is playing.
+export interface PlaylistQueueSource {
+	id: string;
+	title: string;
+}
+
 export type QueueContext =
 	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
-	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
+	| {
+			type: 'playlist';
+			playlist: PlaylistQueueSource;
+			entries: PlaylistEntryItem[];
+			index: number;
+	  };
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
@@ -259,22 +277,6 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	return { items: [start, ...rest], startIndex: 0 };
 }
 
-function streamLoadOpts(
-	restart: boolean,
-	track: QueueStreamManifest['tracks'][number] | undefined,
-	resumeAtTrackTime: number | undefined
-): { restart: boolean; resumeAt?: number } {
-	if (resumeAtTrackTime === undefined || !track) return { restart };
-	return { restart, resumeAt: track.start_offset + resumeAtTrackTime };
-}
-
-function showWindowedNotice(trackCount: number): void {
-	addToast(
-		`Streaming the first ${trackCount} tracks — the queue is longer than one stream allows.`,
-		'info'
-	);
-}
-
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
 // back to an unrotated default queue (which starts at library track 1).
@@ -402,37 +404,6 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 	loadNativeTake(takes[index]);
 }
 
-export async function playStreamEntries(
-	entries: PlaylistEntryItem[],
-	startIndex: number,
-	opts: { restart?: boolean; resumeAtTrackTime?: number }
-): Promise<void> {
-	clearWindowEnd();
-	clearLibraryQueueSkipFeedback();
-	let manifest: QueueStreamManifest;
-	try {
-		manifest = await createQueueStreamSnapshot(
-			entries.map((entry) => ({
-				generation_id: entry.generation_id,
-				entry_id: entry.id
-			}))
-		);
-	} catch {
-		retryPlayIntent = () => playStreamEntries(entries, startIndex, opts);
-		addToast('Stream unavailable. Press play to retry.', 'error');
-		return;
-	}
-	retryPlayIntent = null;
-	audioPlayer.loadStream(
-		manifest,
-		startIndex,
-		streamLoadOpts(opts.restart ?? true, manifest.tracks[startIndex], opts.resumeAtTrackTime)
-	);
-	if (manifest.windowed) {
-		showWindowedNotice(manifest.tracks.length);
-	}
-}
-
 export async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: { resumeAtTrackTime?: number } = {}
@@ -546,7 +517,7 @@ export async function playIdleStart(): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		await playPlaylist(playlist);
+		playPlaylist(playlist);
 		return;
 	}
 	if (target.type === 'album') {
@@ -581,7 +552,7 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		});
 		return;
 	}
-	await playPlaylistEntries(ctx.entries, currentPlaylistIndex(ctx, current), {
+	startPlaylistQueue(ctx.playlist, ctx.entries, currentPlaylistIndex(ctx, current), {
 		restart: true,
 		resumeAtTrackTime: trackTime
 	});
@@ -874,42 +845,95 @@ export function jumpToQueueIndex(index: number): void {
 	playNativeIndex(ctx, index);
 }
 
-// Whether the Now Playing surface is mounted, and which of its right-panel
-// tabs it should open on. Owned here (not by PlayerBar, which only reads
-// them) so any surface — a take row, a deep link — can open Now Playing
-// straight to the judging panel without routing through PlayerBar's own
-// open/close click handlers.
-export const nowPlayingOpen = writable(false);
+// Which Now Playing surface is showing, and which of its right-panel tabs it
+// opens on. Owned here (not by PlayerBar or the layout, which only read them)
+// so any surface — a take row, a deep link — can open Now Playing straight to
+// the judging panel without routing through PlayerBar's own click handlers.
+export type NowPlayingSurface = 'closed' | NowPlayingSurfaceKind;
+export const nowPlayingSurface = writable<NowPlayingSurface>('closed');
+export const nowPlayingOpen = derived(nowPlayingSurface, (surface) => surface !== 'closed');
 export type NowPlayingPanel = 'queue' | 'take';
 export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
+
+// Whether the viewport has room for the docked panel beside the workspace.
+// The layout owns that media query — the same width/pointer switch the frame
+// stacks on — and reports it here, so opening and Escape resolve the surface
+// from one fact instead of each re-reading the breakpoint.
+export const nowPlayingDockable = writable(false);
+
+nowPlayingDockable.subscribe((dockable) => {
+	if (!dockable && get(nowPlayingSurface) === 'docked') nowPlayingSurface.set('full');
+});
 
 // The element to return focus to when Now Playing closes. PlayerBar
 // registers its own "Now Playing" button here once on mount — every opener
 // (PlayerBar's button, a TakesList row, NowPlayingTake's "Use as reference")
 // shares that single restore target instead of each tracking its own.
 let nowPlayingFocusTrigger: HTMLElement | null = null;
+let restoreFocusOnRegister = false;
 
 export function registerNowPlayingTrigger(el: HTMLElement | null): void {
 	nowPlayingFocusTrigger = el;
+	if (!el || !restoreFocusOnRegister) return;
+	restoreFocusOnRegister = false;
+	el.focus();
+}
+
+// Leaving the full surface remounts the transport bar it hides, so the button
+// to hand focus back to does not exist yet at the moment of closing; it
+// arrives with the bar and registerNowPlayingTrigger delivers the focus then.
+function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
+	const trigger = nowPlayingFocusTrigger;
+	if (trigger) {
+		queueMicrotask(() => trigger.focus());
+		return;
+	}
+	restoreFocusOnRegister = closedFromFullSurface;
 }
 
 // The single open/close owner for Now Playing: every surface that opens or
 // closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
 // NowPlayingTake's "Use as reference") routes through these two functions
-// instead of poking `nowPlayingOpen`/`nowPlayingPanel` directly, so closing
+// instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so closing
 // the mobile rail drawer on open and restoring focus on close happen exactly
 // once, the same way, regardless of entry point.
 export function openNowPlaying(panel: NowPlayingPanel): void {
 	closeSidebar();
 	nowPlayingPanel.set(panel);
-	nowPlayingOpen.set(true);
+	nowPlayingSurface.set(get(nowPlayingDockable) ? get(desktopNowPlayingSurface) : 'full');
 }
 
 export function closeNowPlaying(): void {
-	if (!get(nowPlayingOpen)) return;
-	nowPlayingOpen.set(false);
-	const trigger = nowPlayingFocusTrigger;
-	queueMicrotask(() => trigger?.focus());
+	const surface = get(nowPlayingSurface);
+	if (surface === 'closed') return;
+	nowPlayingSurface.set('closed');
+	restoreNowPlayingTriggerFocus(surface === 'full');
+}
+
+// Docked versus full is a surface choice, not an open or close, and the
+// choice is remembered so the next open lands where the listener last was.
+export function expandNowPlaying(): void {
+	chooseDesktopSurface('full');
+}
+
+export function dockNowPlaying(): void {
+	chooseDesktopSurface('docked');
+}
+
+function chooseDesktopSurface(surface: NowPlayingSurfaceKind): void {
+	setDesktopNowPlayingSurface(surface);
+	nowPlayingSurface.set(surface);
+}
+
+// Escape leaves Now Playing one level at a time: the full surface falls back
+// to the docked panel wherever there is room for one, and the docked panel —
+// like a full surface on a compact viewport — closes.
+export function escapeNowPlaying(): void {
+	if (get(nowPlayingSurface) === 'full' && get(nowPlayingDockable)) {
+		dockNowPlaying();
+		return;
+	}
+	closeNowPlaying();
 }
 
 // The single playback entry point for a take row (TakesList, TakeStrip):
@@ -1048,7 +1072,9 @@ export async function playPrevSong(): Promise<void> {
 // all archived is skipped rather than taken as proof the album is
 // unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
-// own playStartIsCurrent check.
+// own playStartIsCurrent check. A rejected load (e.g. 429) is left
+// uncaught here and propagates to the caller, which mirrors
+// playAlbumSong's handling of the same call.
 async function firstPlayableAlbumTake(
 	albumId: string,
 	seq: number
@@ -1074,7 +1100,15 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	const start = await firstPlayableAlbumTake(albumId, seq);
+	let start: { song: SongItem; gen: GenerationItem } | null;
+	try {
+		start = await firstPlayableAlbumTake(albumId, seq);
+	} catch (err) {
+		if (!playStartIsCurrent(seq)) return;
+		playStartNotice.set('idle');
+		addToast(albumSongsErrorMessage(err), 'error');
+		return;
+	}
 	if (!playStartIsCurrent(seq)) return;
 	if (!start) {
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
@@ -1135,13 +1169,18 @@ export async function playAlbumFromGeneration(
 }
 
 function playPlaylistIndex(
-	ctx: { entries: PlaylistEntryItem[]; index: number },
+	ctx: { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] },
 	newIndex: number,
 	opts: { restart?: boolean; startAt?: number } = {}
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
-	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
+	queueContext.set({
+		type: 'playlist',
+		playlist: ctx.playlist,
+		entries: ctx.entries,
+		index: newIndex
+	});
 	const info = playlistEntryToPlaybackInfo(entry);
 	if (opts.startAt !== undefined) {
 		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
@@ -1154,13 +1193,29 @@ function playPlaylistIndex(
 	audioPlayer.load(info);
 }
 
-async function playPlaylist(playlist: PlaylistDetailItem): Promise<void> {
+function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
+	return { id: playlist.id, title: playlist.title };
+}
+
+// The idle transport Play on an open playlist. It keeps the listener's
+// shuffle setting, unlike playPlaylistFrom, where picking a specific entry
+// is itself the statement that the queue should start in playlist order.
+function playPlaylist(playlist: PlaylistDetailItem): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, () => playPlaylist(playlist));
+		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
 		return;
 	}
 	playStartNotice.set('idle');
-	await playPlaylistEntries(playlist.entries, 0, { restart: true });
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, 0, { restart: true });
+}
+
+// The one way a surface starts a playlist: name the playlist and the entry
+// the listener picked. Owning the shuffle reset here is what keeps every
+// entry click honest — a row means "play from here", which no leftover
+// shuffle from a previous queue may reorder.
+export function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): void {
+	setShuffle(false);
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
 
 // A playlist entry's `position` is the playlist's order of record, so a
@@ -1171,11 +1226,12 @@ function inPlaylistOrder(entries: PlaylistEntryItem[]): PlaylistEntryItem[] {
 	return [...entries].sort((a, b) => a.position - b.position);
 }
 
-export async function playPlaylistEntries(
+function startPlaylistQueue(
+	playlist: PlaylistQueueSource,
 	entries: PlaylistEntryItem[],
-	startIndex = 0,
+	startIndex: number,
 	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
-): Promise<void> {
+): void {
 	beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
@@ -1187,11 +1243,7 @@ export async function playPlaylistEntries(
 	);
 	const loadOpts: { restart?: boolean; startAt?: number } = { restart: opts.restart };
 	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
-	playPlaylistIndex(
-		{ entries: ordered.items, index: ordered.startIndex },
-		ordered.startIndex,
-		loadOpts
-	);
+	playPlaylistIndex({ playlist, entries: ordered.items }, ordered.startIndex, loadOpts);
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {

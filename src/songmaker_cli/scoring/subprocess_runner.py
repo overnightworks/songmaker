@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
@@ -64,6 +65,25 @@ class ShutdownRequest:
     pass
 
 
+@dataclass(frozen=True)
+class EnvProbeRequest:
+    """Ask the child which of ``keys`` are still set in its own os.environ.
+
+    A spawned process's environment cannot be observed from outside it (and
+    must not be — that is the whole point of the scrub). This round-trip is
+    the only way a test can drive the real ``_child_main`` and verify
+    ``_scrub_secret_env_vars()`` actually ran, rather than re-implementing
+    the scrub in a test-only stand-in.
+    """
+
+    keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class EnvProbeResponse:
+    present: frozenset[str]
+
+
 def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
     try:
         import torch
@@ -98,7 +118,25 @@ def _release_scorer_models() -> None:
         pass
 
 
+def _scrub_secret_env_vars() -> None:
+    """Drop SECRET_ENV_KEYS from this process's own environment.
+
+    multiprocessing's spawn start method has no ``env=`` parameter — unlike
+    subprocess.Popen, the child inherits the parent's full os.environ at
+    spawn time (see claude/provider.py's ``_scrub_env`` and
+    acestep_worker/subprocess_runner.py's ``build_env`` for the equivalent
+    scrub on subprocesses that do accept ``env=``). This is the child-side
+    equivalent: called first thing in ``_child_main``, before any import
+    that might read the environment on its own.
+    """
+    for key in SECRET_ENV_KEYS:
+        if key in os.environ:
+            del os.environ[key]
+
+
 def _child_main(conn: Connection) -> None:
+    _scrub_secret_env_vars()
+
     from songmaker_cli.scoring.pipeline import default_registry, run_scoring_pipeline
 
     signal.signal(signal.SIGTERM, _cleanup_gpu_and_exit)
@@ -117,6 +155,12 @@ def _child_main(conn: Connection) -> None:
         if isinstance(request, ReleaseGpuRequest):
             _release_scorer_models()
             conn.send(ReleaseGpuResponse(success=True))
+            continue
+
+        if isinstance(request, EnvProbeRequest):
+            conn.send(EnvProbeResponse(
+                present=frozenset(key for key in request.keys if key in os.environ),
+            ))
             continue
 
         if isinstance(request, ScoreRequest):
@@ -149,13 +193,28 @@ class ScorerProcess:
         self._process: multiprocessing.Process | None = None
         self._conn: Connection | None = None
         self._pipe_lock = threading.Lock()
+        # A scorer over budget was abandoned inside this child and still runs
+        # there. Set and read under _pipe_lock, so the next request — even a
+        # concurrent one — cannot reuse the child it tainted.
+        self._tainted = False
 
     @property
     def alive(self) -> bool:
         return self._process is not None and self._process.is_alive()
 
     def _ensure_started(self) -> Connection:
-        if self.alive and self._conn is not None:
+        """The connection to a child fit to serve a request.
+
+        A tainted child is never handed out: whatever the job that tainted it
+        did or did not get around to, the next request gets a fresh process.
+        """
+        if self._tainted and self.alive:
+            log.warning(
+                "Scorer subprocess (PID %d) still runs a scorer over budget — replacing it",
+                self._process.pid,
+            )
+            self._kill()
+        elif self.alive and self._conn is not None:
             return self._conn
         self._cleanup_dead()
         parent_conn, child_conn = _ctx.Pipe()
@@ -163,6 +222,7 @@ class ScorerProcess:
         self._process.start()
         child_conn.close()
         self._conn = parent_conn
+        self._tainted = False
         log.info("Scorer subprocess started (PID %d)", self._process.pid)
         return parent_conn
 
@@ -201,7 +261,9 @@ class ScorerProcess:
                 )
                 try:
                     conn.send(request)
-                    return self._poll_response(conn, scorers, config, on_progress)
+                    scores = self._poll_response(conn, scorers, config, on_progress)
+                    self._tainted = scores.any_child_scorer_timed_out
+                    return scores
                 except (BrokenPipeError, EOFError, ConnectionResetError):
                     if attempt == 2:
                         raise RuntimeError("Scorer subprocess crashed twice — aborting")
@@ -242,6 +304,26 @@ class ScorerProcess:
         )
         self._kill()
         raise TimeoutError(f"Scoring timed out after {config.pipeline_timeout}s")
+
+    def recycle(self) -> None:
+        """Kill the child now, rather than leaving it to the next request.
+
+        A scorer over budget is abandoned, not stopped — a Python thread
+        cannot be killed. That thread keeps holding the child's model globals
+        and its GPU memory, and killing the process is the only way to
+        reclaim them. ``_ensure_started`` would replace a tainted child
+        anyway; calling this right after a run frees the GPU immediately
+        instead of at the next request, which may be minutes away.
+        """
+        with self._pipe_lock:
+            if not self.alive:
+                self._cleanup_dead()
+                return
+            log.warning(
+                "Recycling scorer subprocess (PID %d) — a scorer over budget still runs in it",
+                self._process.pid,
+            )
+            self._kill()
 
     def release_gpu(self, timeout: int = 30) -> None:
         if not self.alive:

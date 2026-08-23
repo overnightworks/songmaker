@@ -49,6 +49,7 @@ from songmaker_cli.db.queries import (
     get_playlist_by_slug,
     get_song_by_slug,
 )
+from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
@@ -132,11 +133,11 @@ def _check_rate_limit(
 
 
 def _picked_generation(song):
-    picked = [g for g in song.generations if g.is_picked and not g.is_archived]
+    picked = [g for g in song.generations if g.is_picked and is_playable_take(g)]
     if picked:
         return picked[0]
     available = sorted(
-        (g for g in song.generations if g.mp3_path and not g.is_archived),
+        (g for g in song.generations if is_playable_take(g)),
         key=lambda g: g.generation_number,
     )
     if available:
@@ -246,6 +247,7 @@ def get_shared_album(
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
+            whisper_cues=media.whisper_cues,
         ))
     response = SharedAlbumResponse.from_orm(album, songs=song_items, cover=cover)
     return JSONResponse(response.model_dump())
@@ -373,6 +375,7 @@ def get_shared_song(
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
         lyrics=media.lyrics,
+        whisper_cues=media.whisper_cues,
     )
     return JSONResponse(response.model_dump())
 
@@ -451,6 +454,7 @@ def get_shared_generation(
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
         lyrics=media.lyrics,
+        whisper_cues=media.whisper_cues,
     )
     return JSONResponse(response.model_dump())
 
@@ -505,6 +509,7 @@ def get_shared_playlist(
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
+            whisper_cues=media.whisper_cues,
         ))
     response = SharedPlaylistResponse(title=playlist.title, entries=entry_items)
     return JSONResponse(response.model_dump())

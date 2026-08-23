@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick, type Snippet } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import type { WhisperCue } from '$lib/api/types';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -14,9 +14,13 @@
 		SONG_PREVIOUS_LABEL
 	} from '$lib/constants';
 	import {
+		NOW_PLAYING_COLLAPSE_LABEL,
+		NOW_PLAYING_DOCKED_WIDTH_PX,
+		NOW_PLAYING_EXPAND_LABEL,
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_UP_NEXT_PREFIX,
-		NOW_PLAYING_Z_INDEX
+		NOW_PLAYING_Z_INDEX,
+		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
 	import { formatTime } from '$lib/utils/format';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -27,7 +31,11 @@
 	let {
 		info,
 		coverUrl,
+		surface = 'full',
 		onclose,
+		onEscape,
+		onExpand,
+		onCollapse,
 		canPrev = false,
 		canNext = false,
 		onprev,
@@ -47,11 +55,30 @@
 		// whisper data). Absent/null means "no cues yet" — static lyrics.
 		lyricsCues = null,
 		whisperText = null,
+		// #138: the resolved take's lyrics, for callers whose `info` cannot
+		// carry them. A share page in stream mode builds `info` from the
+		// public queue-stream manifest, which redacts `lyrics` — the text
+		// comes from the share payload instead.
+		lyricsText = null,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
 		coverUrl: string | null;
+		// 'full' covers the viewport as a modal dialog; 'docked' is a column in
+		// the page's own layout — no dialog role, no focus trap, no transport
+		// of its own, since the transport bar beside it keeps carrying that.
+		surface?: NowPlayingSurfaceKind;
 		onclose: () => void;
+		// Escape while the surface holds focus. The app steps down one level
+		// (full screen back to the docked panel) where the plain close button
+		// leaves Now Playing altogether; a caller that makes no such
+		// distinction can omit it.
+		onEscape?: () => void;
+		// The docked panel grows to the full surface; the full surface shrinks
+		// back to the panel wherever the viewport has room for one. A caller
+		// with only one surface omits both.
+		onExpand?: () => void;
+		onCollapse?: () => void;
 		canPrev?: boolean;
 		canNext?: boolean;
 		onprev?: () => void;
@@ -75,8 +102,11 @@
 		lyricsEmptyLabel?: string;
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
+		lyricsText?: string | null;
 		rightPanel: Snippet;
 	} = $props();
+
+	const isDocked = $derived(surface === 'docked');
 
 	let root: HTMLDivElement | undefined = $state();
 	let stacked = $state(false);
@@ -115,12 +145,19 @@
 		}, NOW_PLAYING_STACKED_MEDIA);
 	});
 
-	onMount(() => {
+	// Opening focuses the surface, and so does every change between docked and
+	// full: switching rebuilds the controls the listener was on, which would
+	// otherwise drop focus back to the document.
+	$effect(() => {
+		void surface;
 		void tick().then(() => root?.focus());
 	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!root) return;
+		// The docked panel is not an overlay: it neither traps focus nor
+		// answers Escape — the page's own level-up owns that key while it is
+		// open, exactly as it would with no panel at all.
+		if (isDocked || !root) return;
 		if (mobilePanelOpen) {
 			if (!mobileSheet) return;
 			handleFocusTrapKeydown(mobileSheet, event, () => {
@@ -128,7 +165,7 @@
 			});
 			return;
 		}
-		handleFocusTrapKeydown(root, event, onclose);
+		handleFocusTrapKeydown(root, event, onEscape ?? onclose);
 	}
 
 	async function openMobilePanel(): Promise<void> {
@@ -148,12 +185,14 @@
 <div
 	bind:this={root}
 	class="now-playing"
+	class:docked={isDocked}
 	class:stacked
-	role="dialog"
-	aria-modal="true"
+	role={isDocked ? 'complementary' : 'dialog'}
+	aria-modal={isDocked ? undefined : 'true'}
 	aria-labelledby="now-playing-title"
 	tabindex="-1"
-	style:z-index={NOW_PLAYING_Z_INDEX}
+	style:z-index={isDocked ? null : NOW_PLAYING_Z_INDEX}
+	style:width={isDocked ? `${NOW_PLAYING_DOCKED_WIDTH_PX}px` : null}
 >
 	{#key `${info.songId}:${info.generation.id}`}
 		<header class="np-header">
@@ -161,16 +200,27 @@
 				<p class="np-kicker">{NOW_PLAYING_LABEL}</p>
 				<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
 			</div>
-			<button
-				type="button"
-				class="icon-btn"
-				style:min-width="{HITBOX_FREQUENT_PX}px"
-				style:min-height="{HITBOX_FREQUENT_PX}px"
-				onclick={onclose}
-				aria-label={NOW_PLAYING_CLOSE}
-			>
-				<Icon name="x" size={20} />
-			</button>
+			<div class="np-header-actions">
+				{#if isDocked && onExpand}
+					<button type="button" class="surface-btn" onclick={onExpand}
+						>{NOW_PLAYING_EXPAND_LABEL}</button
+					>
+				{:else if !isDocked && onCollapse}
+					<button type="button" class="surface-btn" onclick={onCollapse}
+						>{NOW_PLAYING_COLLAPSE_LABEL}</button
+					>
+				{/if}
+				<button
+					type="button"
+					class="icon-btn"
+					style:min-width="{HITBOX_FREQUENT_PX}px"
+					style:min-height="{HITBOX_FREQUENT_PX}px"
+					onclick={onclose}
+					aria-label={NOW_PLAYING_CLOSE}
+				>
+					<Icon name="x" size={20} />
+				</button>
+			</div>
 		</header>
 
 		<div class="np-body">
@@ -185,76 +235,80 @@
 					{#if albumLine}<span class="cover-line">{albumLine}</span>{/if}
 					{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
 				</div>
-				<div class="progress">
-					<span class="time">{formatTime(currentTime)}</span>
-					<input
-						class="progress-range"
-						style:--progress="{progressPercent}%"
-						type="range"
-						min="0"
-						max={duration || 0}
-						step="0.1"
-						value={duration > 0 ? currentTime : 0}
-						oninput={seekFromRange}
-						disabled={duration <= 0}
-						aria-label="Seek playback"
-					/>
-					<span class="time">{formatTime(duration)}</span>
-				</div>
-				<div class="transport">
-					<button
-						type="button"
-						class="icon-btn"
-						class:active={shuffle}
-						style:min-width="{HITBOX_FREQUENT_PX}px"
-						style:min-height="{HITBOX_FREQUENT_PX}px"
-						onclick={onToggleShuffle}
-						aria-pressed={shuffle}
-						aria-label={shuffleLabel}
-						title={shuffleLabel}
-					>
-						<Icon name="shuffle" size={18} />
-					</button>
-					{#if onprev}
+				<!-- The docked panel has no transport of its own: the bar beside it
+					stays visible and keeps carrying seek, shuffle, prev/next and play. -->
+				{#if !isDocked}
+					<div class="progress">
+						<span class="time">{formatTime(currentTime)}</span>
+						<input
+							class="progress-range"
+							style:--progress="{progressPercent}%"
+							type="range"
+							min="0"
+							max={duration || 0}
+							step="0.1"
+							value={duration > 0 ? currentTime : 0}
+							oninput={seekFromRange}
+							disabled={duration <= 0}
+							aria-label="Seek playback"
+						/>
+						<span class="time">{formatTime(duration)}</span>
+					</div>
+					<div class="transport">
 						<button
 							type="button"
 							class="icon-btn"
+							class:active={shuffle}
 							style:min-width="{HITBOX_FREQUENT_PX}px"
 							style:min-height="{HITBOX_FREQUENT_PX}px"
-							onclick={onprev}
-							disabled={!canPrev}
-							aria-label={SONG_PREVIOUS_LABEL}
+							onclick={onToggleShuffle}
+							aria-pressed={shuffle}
+							aria-label={shuffleLabel}
+							title={shuffleLabel}
 						>
-							<Icon name="skip-back" size={20} />
+							<Icon name="shuffle" size={18} />
 						</button>
-					{/if}
-					<button
-						type="button"
-						class="play-btn"
-						onclick={() => audioPlayer.toggle()}
-						aria-label={isPlaying ? 'Pause' : 'Play'}
-					>
-						<Icon name={isPlaying ? 'pause' : 'play'} size={26} />
-					</button>
-					{#if onnext}
+						{#if onprev}
+							<button
+								type="button"
+								class="icon-btn"
+								style:min-width="{HITBOX_FREQUENT_PX}px"
+								style:min-height="{HITBOX_FREQUENT_PX}px"
+								onclick={onprev}
+								disabled={!canPrev}
+								aria-label={SONG_PREVIOUS_LABEL}
+							>
+								<Icon name="skip-back" size={20} />
+							</button>
+						{/if}
 						<button
 							type="button"
-							class="icon-btn"
-							style:min-width="{HITBOX_FREQUENT_PX}px"
-							style:min-height="{HITBOX_FREQUENT_PX}px"
-							onclick={onnext}
-							disabled={!canNext}
-							aria-label={SONG_NEXT_LABEL}
+							class="play-btn"
+							onclick={() => audioPlayer.toggle()}
+							aria-label={isPlaying ? 'Pause' : 'Play'}
 						>
-							<Icon name="skip-forward" size={20} />
+							<Icon name={isPlaying ? 'pause' : 'play'} size={26} />
 						</button>
-					{/if}
-				</div>
+						{#if onnext}
+							<button
+								type="button"
+								class="icon-btn"
+								style:min-width="{HITBOX_FREQUENT_PX}px"
+								style:min-height="{HITBOX_FREQUENT_PX}px"
+								onclick={onnext}
+								disabled={!canNext}
+								aria-label={SONG_NEXT_LABEL}
+							>
+								<Icon name="skip-forward" size={20} />
+							</button>
+						{/if}
+					</div>
+				{/if}
 			</section>
 
 			<section class="np-lyrics-col">
 				<NowPlayingLyrics
-					lyrics={info.lyrics}
+					lyrics={lyricsText ?? info.lyrics}
 					cues={lyricsCues}
 					{whisperText}
 					emptyLabel={lyricsEmptyLabel}
@@ -319,6 +373,8 @@
 <style>
 	.now-playing {
 		position: fixed;
+		/* Whatever room the transport bar takes right now — the app collapses
+		   that to zero while this surface is up, a share page keeps its bar. */
 		inset: 0 0 var(--player-height);
 		display: flex;
 		flex-direction: column;
@@ -332,6 +388,29 @@
 		justify-content: space-between;
 		gap: 0.6rem;
 		padding: 1rem 1.4rem 0;
+	}
+	.np-header-actions {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.surface-btn {
+		padding: 0.4rem 0.8rem;
+		border-radius: var(--btn-radius-sm);
+		border: 1px solid var(--border);
+		background: transparent;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+	}
+	.surface-btn:hover {
+		border-color: var(--primary);
+		color: var(--text);
+		background: color-mix(in srgb, var(--primary) 12%, var(--surface));
 	}
 	.np-heading {
 		min-width: 0;
@@ -580,6 +659,39 @@
 		flex-direction: column;
 		gap: 0.7rem;
 		min-height: 0;
+	}
+
+	.now-playing.docked {
+		position: relative;
+		inset: auto;
+		flex: none;
+		height: 100%;
+		border-left: 1px solid var(--border);
+		background: var(--header-bg);
+	}
+	.now-playing.docked .np-header {
+		padding: 0.9rem 1rem 0;
+	}
+	.now-playing.docked .np-body {
+		grid-template-columns: 1fr;
+		gap: 1.1rem;
+		padding: 0.9rem 1rem 1.2rem;
+		overflow-y: auto;
+	}
+	.now-playing.docked .np-cover-col,
+	.now-playing.docked .np-lyrics-col,
+	.now-playing.docked .np-right-col {
+		justify-content: flex-start;
+	}
+	.now-playing.docked .np-right-col {
+		overflow-y: visible;
+	}
+	.now-playing.docked .cover-art {
+		width: min(220px, 70%);
+		box-shadow: 0 12px 30px color-mix(in srgb, #000 35%, transparent);
+	}
+	.now-playing.docked .cover-title {
+		font-size: 1.1rem;
 	}
 
 	.now-playing.stacked .np-body {

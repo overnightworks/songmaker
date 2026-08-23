@@ -17,7 +17,7 @@ from typing import Final
 
 from songmaker_cli.env_override import temporary_env_override
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import AudioBoxScore, SharedScorerData
+from songmaker_cli.scoring.models import AudioBoxScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ def _force_cpu_env() -> AbstractContextManager[None]:
 @register("audiobox")
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+    config: PipelineConfig | None = None,
 ) -> AudioBoxScore:
     """Score audio quality using Meta's AudioBox Aesthetics model."""
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()

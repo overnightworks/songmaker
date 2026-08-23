@@ -7,7 +7,6 @@
 		type SharedTrack
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
-	import type { QueueContext } from '$lib/stores/player';
 	import { ALBUM_COVER_ALT_TYPE, SONG_COVER_ALT_TYPE } from '$lib/constants';
 	import { SHARE_NOW_PLAYING_NO_LYRICS, SHARE_NOW_PLAYING_SHEET_LABEL } from '$lib/constants/share';
 	import { formatTime, titleInitials } from '$lib/utils/format';
@@ -21,7 +20,6 @@
 	import SharedFooter from './SharedFooter.svelte';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
-	const SHARE_QUEUE_CONTEXT: QueueContext = { type: 'playlist', entries: [], index: 0 };
 
 	interface Props {
 		loading: boolean;
@@ -105,7 +103,6 @@
 
 {#snippet rightPanel()}
 	<NowPlayingQueue
-		ctx={SHARE_QUEUE_CONTEXT}
 		queue={playback.queue}
 		contextLabel={view?.title ?? null}
 		currentSongTitle={playback.currentTrack?.title ?? view?.title ?? ''}
@@ -208,6 +205,8 @@
 		sheetLabel={SHARE_NOW_PLAYING_SHEET_LABEL}
 		showTakeLabel={false}
 		lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
+		lyricsCues={playback.currentCues}
+		lyricsText={playback.currentTrack?.lyrics ?? null}
 		{rightPanel}
 	/>
 {/if}

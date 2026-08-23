@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { ShareResult } from '$lib/api/types';
+	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -17,6 +17,7 @@
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import ShareButton from './ShareButton.svelte';
+	import ShareDialog from './ShareDialog.svelte';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -63,6 +64,23 @@
 	let menuOpen = $state(false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
 	let menu: HTMLDivElement | undefined = $state();
+	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
+
+	async function shareAndWarnIfIncomplete(): Promise<ShareResult> {
+		const result = await onshare();
+		if (kind === 'album' && result.songs_without_playable_take.length > 0) {
+			missingTakeSongs = result.songs_without_playable_take;
+			// Close the menu so its own focus-trapped dialog doesn't stack with
+			// ShareDialog's -- two independent window keydown handlers would
+			// otherwise both react to a single Escape press.
+			closeMenu(false);
+		}
+		return result;
+	}
+
+	function closeShareWarning(): void {
+		missingTakeSongs = [];
+	}
 
 	async function openMenu(): Promise<void> {
 		menuOpen = true;
@@ -126,7 +144,7 @@
 			<p class="menu-heading">{kindLabel} · {title}</p>
 			<div class="menu-row">
 				<span class="menu-row-label">{shareLabel}</span>
-				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
+				<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
 			</div>
 			{#if kind === 'album' && oncover}
 				<button class="menu-item" onclick={() => runAndClose(oncover)}
@@ -167,6 +185,7 @@
 			</button>
 		</div>
 	{/if}
+	<ShareDialog songs={missingTakeSongs} onclose={closeShareWarning} />
 </div>
 
 <style>

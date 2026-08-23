@@ -1045,3 +1045,87 @@ describe('swapCallbacks() / restoreCallbacks()', () => {
 		expect(shareOnEnded).not.toHaveBeenCalled();
 	});
 });
+
+// The <audio> element can be handed to createMediaElementSource exactly once,
+// and closing the context that owns that source silences the element for good
+// — so the graph has to belong to the player, not to a transport bar the app
+// unmounts whenever the full Now Playing surface takes over (issue #140).
+describe('audio graph', () => {
+	function fakeAudioContext() {
+		const analyser = {
+			fftSize: 2048,
+			smoothingTimeConstant: 0,
+			frequencyBinCount: 1024,
+			connect: vi.fn()
+		};
+		const context = {
+			state: 'running',
+			destination: {},
+			createAnalyser: vi.fn(() => analyser),
+			createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+			resume: vi.fn(),
+			close: vi.fn()
+		};
+		return { context, analyser, constructor: vi.fn(() => context) };
+	}
+
+	it('hands out one analyser for the element, however often it is asked', () => {
+		const fake = fakeAudioContext();
+		vi.stubGlobal('AudioContext', fake.constructor);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+
+		const first = audioPlayer.getAnalyser();
+		const second = audioPlayer.getAnalyser();
+
+		expect(first).toBe(second);
+		expect(fake.constructor).toHaveBeenCalledOnce();
+		expect(fake.context.createMediaElementSource).toHaveBeenCalledOnce();
+	});
+
+	it('keeps the graph alive across everything but destroy', () => {
+		const fake = fakeAudioContext();
+		vi.stubGlobal('AudioContext', fake.constructor);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		audioPlayer.getAnalyser();
+
+		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2' }) }), { autoplay: false });
+		audioPlayer.pause();
+
+		expect(fake.context.close).not.toHaveBeenCalled();
+
+		audioPlayer.destroy();
+
+		expect(fake.context.close).toHaveBeenCalledOnce();
+	});
+
+	it('builds no graph where the browser offers no Web Audio', () => {
+		vi.stubGlobal('AudioContext', undefined);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+
+		expect(audioPlayer.getAnalyser()).toBeNull();
+	});
+
+	it('leaves no half-built graph behind when the browser refuses the source', () => {
+		const fake = fakeAudioContext();
+		fake.context.createMediaElementSource = vi.fn(() => {
+			throw new Error('already connected');
+		});
+		vi.stubGlobal('AudioContext', fake.constructor);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+
+		expect(() => audioPlayer.getAnalyser()).toThrow('already connected');
+		expect(fake.context.close).toHaveBeenCalledOnce();
+	});
+
+	it('resumes a context suspended until the first gesture, since it carries the sound', () => {
+		const fake = fakeAudioContext();
+		fake.context.state = 'suspended';
+		vi.stubGlobal('AudioContext', fake.constructor);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		audioPlayer.getAnalyser();
+
+		audioPlayer.resumeAudioGraph();
+
+		expect(fake.context.resume).toHaveBeenCalledOnce();
+	});
+});

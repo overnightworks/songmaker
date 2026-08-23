@@ -8,6 +8,7 @@ import type {
 	LibraryPoolQueue,
 	LibraryPoolTakeItem,
 	PaginatedResponse,
+	PlaylistDetailItem,
 	PlaylistEntryItem,
 	QueueStreamManifest,
 	QueueStreamTrackItem,
@@ -67,9 +68,14 @@ import {
 	idlePlayTarget,
 	jumpToQueueIndex,
 	closeNowPlaying,
+	dockNowPlaying,
+	escapeNowPlaying,
+	expandNowPlaying,
 	navigateToPlaying,
+	nowPlayingDockable,
 	nowPlayingOpen,
 	nowPlayingPanel,
+	nowPlayingSurface,
 	openNowPlaying,
 	playGeneration,
 	playTake,
@@ -89,8 +95,10 @@ import {
 	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
-	playPlaylistEntries,
+	playPlaylistFrom,
 	queueContext,
+	type PlaylistQueueSource,
+	type QueueContext,
 	selectAlbum,
 	selectSong,
 	selectedAlbumId,
@@ -100,6 +108,7 @@ import {
 	selectedSongId,
 	setShuffle,
 	shuffleEnabled,
+	shuffleLabel,
 	songList,
 	toggleShuffle,
 	updateGenerationScores,
@@ -108,7 +117,12 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
-import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
+import {
+	DEFAULT_DESKTOP_NOW_PLAYING_SURFACE,
+	libraryTakePool,
+	setDesktopNowPlayingSurface,
+	setLibraryTakePool
+} from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
 import { RAIL_LIBRARY_LABEL } from '$lib/constants';
@@ -214,6 +228,28 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 	};
 }
 
+const QUEUE_PLAYLIST: PlaylistQueueSource = { id: 'p1', title: 'Night Drive' };
+
+function makePlaylist(
+	entries: PlaylistEntryItem[],
+	overrides: Partial<PlaylistDetailItem> = {}
+): PlaylistDetailItem {
+	return {
+		id: QUEUE_PLAYLIST.id,
+		title: QUEUE_PLAYLIST.title,
+		entry_count: entries.length,
+		is_shared: false,
+		share_slug: null,
+		created_at: '',
+		entries,
+		...overrides
+	};
+}
+
+function playlistQueue(entries: PlaylistEntryItem[], index: number): QueueContext {
+	return { type: 'playlist', playlist: QUEUE_PLAYLIST, entries, index };
+}
+
 function makePoolTake(overrides: Partial<LibraryPoolTakeItem> = {}): LibraryPoolTakeItem {
 	return {
 		generation_id: 'g1',
@@ -282,9 +318,12 @@ afterEach(() => {
 	audioPlayer.currentTime = 0;
 	audioPlayer.status = 'idle';
 	toasts.set([]);
-	nowPlayingOpen.set(false);
+	nowPlayingSurface.set('closed');
 	nowPlayingPanel.set('queue');
+	nowPlayingDockable.set(false);
 	registerNowPlayingTrigger(null);
+	setDesktopNowPlayingSurface(DEFAULT_DESKTOP_NOW_PLAYING_SURFACE);
+	localStorage.removeItem('nowPlayingDesktopSurface');
 	sidebarOpen.set(false);
 	localStorage.removeItem('queueShuffleEnabled');
 	localStorage.removeItem('libraryTakePool');
@@ -637,11 +676,11 @@ describe('playback dispatch', () => {
 			makePlaylistEntry({ id: 'pe1', generation_id: 'g1', song_title: 'First', mp3_path: 'a.mp3' }),
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2', song_title: 'Second', mp3_path: 'b.mp3' })
 		];
-		playPlaylistEntries(entries);
+		playPlaylistFrom(makePlaylist(entries), 0);
 
 		handlePlaybackEnded();
 
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'Second' })
 		);
@@ -666,7 +705,7 @@ describe('playback dispatch', () => {
 		libraryQueueSkipped.set([{ song_id: 's1', generation_id: 'g1', reason: 'missing_file' }]);
 		windowEnded.set(true);
 
-		playPlaylistEntries([makePlaylistEntry()]);
+		playPlaylistFrom(makePlaylist([makePlaylistEntry()]), 0);
 
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(windowEnded)).toBe(false);
@@ -694,11 +733,11 @@ describe('playback dispatch', () => {
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2', song_title: 'Second', mp3_path: 'b.mp3' })
 		];
 		shuffleEnabled.set(true);
-		playPlaylistEntries(entries);
+		playPlaylistFrom(makePlaylist(entries), 0);
 
 		await playNextSong();
 
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'Second' })
 		);
@@ -723,7 +762,7 @@ describe('playback dispatch', () => {
 				mp3_path: 'c.mp3'
 			})
 		];
-		await playPlaylistEntries(entries, 2, { restart: true });
+		playPlaylistFrom(makePlaylist(entries), 2);
 		const inOrder = get(queueContext);
 		if (inOrder.type !== 'playlist') throw new Error('expected a playlist queue');
 		expect(inOrder.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe2', 'pe3']);
@@ -745,11 +784,11 @@ describe('playback dispatch', () => {
 			makePlaylistEntry({ id: 'pe1', generation_id: 'g1', song_title: 'First', mp3_path: 'a.mp3' }),
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2', song_title: 'Second', mp3_path: 'b.mp3' })
 		];
-		playPlaylistEntries(entries, 1);
+		playPlaylistFrom(makePlaylist(entries), 1);
 
 		await playNextSong();
 
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'First' })
 		);
@@ -760,11 +799,11 @@ describe('playback dispatch', () => {
 			makePlaylistEntry({ id: 'pe1', generation_id: 'g1', song_title: 'First', mp3_path: 'a.mp3' }),
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2', song_title: 'Second', mp3_path: 'b.mp3' })
 		];
-		playPlaylistEntries(entries);
+		playPlaylistFrom(makePlaylist(entries), 0);
 
 		await playPrevSong();
 
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'Second' })
 		);
@@ -982,8 +1021,8 @@ describe('canPlay predicates', () => {
 			albumTitle: '',
 			lyrics: null
 		};
-		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
-		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
+		expect(canPlayNextSong(cur, [], playlistQueue(entries, 0))).toBe(true);
+		expect(canPlayPrevSong(cur, [], playlistQueue(entries, 0))).toBe(true);
 	});
 
 	it('playlist context: canPlayPrevSong true when not at start', () => {
@@ -999,7 +1038,7 @@ describe('canPlay predicates', () => {
 			albumTitle: '',
 			lyrics: null
 		};
-		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 1 })).toBe(true);
+		expect(canPlayPrevSong(cur, [], playlistQueue(entries, 1))).toBe(true);
 	});
 
 	it('playlist context: canPlayNextSong false for a single-entry playlist', () => {
@@ -1012,7 +1051,7 @@ describe('canPlay predicates', () => {
 			albumTitle: '',
 			lyrics: null
 		};
-		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(false);
+		expect(canPlayNextSong(cur, [], playlistQueue(entries, 0))).toBe(false);
 	});
 
 	it('playlist context: canPlayNextSong true at last entry when shuffle is enabled', () => {
@@ -1028,7 +1067,7 @@ describe('canPlay predicates', () => {
 			albumTitle: '',
 			lyrics: null
 		};
-		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 1 }, true)).toBe(true);
+		expect(canPlayNextSong(cur, [], playlistQueue(entries, 1), true)).toBe(true);
 	});
 
 	it('playlist context derives position from current generation when context index is stale', () => {
@@ -1044,12 +1083,12 @@ describe('canPlay predicates', () => {
 			albumTitle: '',
 			lyrics: null
 		};
-		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
-		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
+		expect(canPlayNextSong(cur, [], playlistQueue(entries, 0))).toBe(true);
+		expect(canPlayPrevSong(cur, [], playlistQueue(entries, 0))).toBe(true);
 	});
 });
 
-describe('playPlaylistEntries', () => {
+describe('playPlaylistFrom', () => {
 	it('sets playlist context and triggers load', () => {
 		const entries = [
 			makePlaylistEntry({
@@ -1065,12 +1104,14 @@ describe('playPlaylistEntries', () => {
 				mp3_path: 'y.mp3'
 			})
 		];
-		playPlaylistEntries(entries);
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
-		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }));
+		playPlaylistFrom(makePlaylist(entries), 0);
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
+		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }), {
+			restart: true
+		});
 	});
 
-	it('playPlaylistEntries uses entry lyrics, not a later song draft', () => {
+	it('playPlaylistFrom uses entry lyrics, not a later song draft', () => {
 		const entries = [
 			makePlaylistEntry({
 				id: 'pe1',
@@ -1079,13 +1120,14 @@ describe('playPlaylistEntries', () => {
 				album_title: 'Nachtstrom'
 			})
 		];
-		playPlaylistEntries(entries);
+		playPlaylistFrom(makePlaylist(entries), 0);
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
 				lyrics: 'old verse',
 				albumTitle: 'Nachtstrom',
 				generation: expect.objectContaining({ version_lyrics: 'old verse' })
-			})
+			}),
+			{ restart: true }
 		);
 	});
 
@@ -1104,38 +1146,76 @@ describe('playPlaylistEntries', () => {
 				mp3_path: 'y.mp3'
 			})
 		];
-		playPlaylistEntries(entries, 1);
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
+		playPlaylistFrom(makePlaylist(entries), 1);
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
 				songTitle: 'Second',
 				generation: expect.objectContaining({ id: 'g11', mp3_path: 'y.mp3' })
-			})
+			}),
+			{ restart: true }
 		);
-	});
-
-	it('can request a clean restart for a playlist entry', () => {
-		const entries = [
-			makePlaylistEntry({
-				id: 'pe1',
-				song_title: 'First',
-				generation_id: 'g10',
-				mp3_path: 'x.mp3'
-			})
-		];
-		playPlaylistEntries(entries, 0, { restart: true });
-		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }), {
-			restart: true
-		});
 	});
 
 	it('does nothing for empty entries', () => {
 		audioPlayer.current = null;
 		queueContext.set({ type: 'library' });
-		playPlaylistEntries([]);
+		playPlaylistFrom(makePlaylist([]), 0);
 		expect(audioPlayer.current).toBeNull();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual({ type: 'library' });
+	});
+});
+
+describe('a playlist queue keeps its own identity', () => {
+	const entries = () => [
+		makePlaylistEntry({ id: 'pe1', position: 0, generation_id: 'g1', song_title: 'First' }),
+		makePlaylistEntry({
+			id: 'pe2',
+			position: 1,
+			generation_id: 'g2',
+			song_title: 'Second',
+			mp3_path: 'b.mp3'
+		}),
+		makePlaylistEntry({
+			id: 'pe3',
+			position: 2,
+			generation_id: 'g3',
+			song_title: 'Third',
+			mp3_path: 'c.mp3'
+		})
+	];
+
+	function playingPlaylist(): { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] } {
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		return { playlist: ctx.playlist, entries: ctx.entries };
+	}
+
+	it('still names the playlist it plays after the listener opens an album', () => {
+		const queued = entries();
+		playPlaylistFrom(makePlaylist(queued), 0);
+
+		openCollection.set({ kind: 'album', id: 'a1' });
+		selectedPlaylistDetail.set(null);
+
+		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
+		expect(playingPlaylist().entries.map((entry) => entry.song_title)).toEqual([
+			'First',
+			'Second',
+			'Third'
+		]);
+	});
+
+	it('still names the playlist it plays after a shuffle toggle reorders the queue', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		playPlaylistFrom(makePlaylist(entries()), 0);
+
+		await toggleShuffle();
+
+		expect(playingPlaylist().entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
+		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
+		expect(get(shuffleLabel)).toBe('Disable shuffle (this playlist)');
 	});
 });
 
@@ -1199,12 +1279,13 @@ describe('native first play ignores stream settings', () => {
 		toasts.set([]);
 	});
 
-	it('playPlaylistEntries loads the first take natively without concat', async () => {
+	it('playPlaylistFrom loads the first take natively without concat', async () => {
 		const entries = [makePlaylistEntry()];
-		await playPlaylistEntries(entries);
+		playPlaylistFrom(makePlaylist(entries), 0);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({ songTitle: 'Playlist Song' })
+			expect.objectContaining({ songTitle: 'Playlist Song' }),
+			{ restart: true }
 		);
 	});
 
@@ -1660,7 +1741,7 @@ describe('rebuildQueueStream routing', () => {
 
 	it('routes playlist context rebuild to the generic endpoint', async () => {
 		const entries = [makePlaylistEntry()];
-		queueContext.set({ type: 'playlist', entries, index: 0 });
+		queueContext.set(playlistQueue(entries, 0));
 		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
 		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
 
@@ -1890,6 +1971,56 @@ describe('playAlbum start track', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(playStartNotice)).toBe('empty');
 	});
+
+	it('toasts and returns the notice to idle when a take load is rejected', async () => {
+		songList.set([makeSong({ id: 's1', track_number: 1, generation_count: 1, generations: [] })]);
+		vi.mocked(fetchSong).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/songs/s1')
+		);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('idle');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Too many requests', type: 'error' })
+		]);
+	});
+
+	it('leaves a superseded start silent when its take load is rejected', async () => {
+		songList.set([
+			makeSong({ id: 's1', album_id: 'a1', track_number: 1, generation_count: 1, generations: [] }),
+			makeSong({
+				id: 's2',
+				album_id: 'a2',
+				title: 'Two',
+				track_number: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', is_picked: true })]
+			})
+		]);
+		let rejectFirst: ((err: unknown) => void) | undefined;
+		vi.mocked(fetchSong).mockImplementationOnce(
+			() =>
+				new Promise((_resolve, reject) => {
+					rejectFirst = reject;
+				})
+		);
+
+		const first = playAlbum('a1');
+		await vi.waitFor(() => expect(rejectFirst).toEqual(expect.any(Function)));
+
+		await playAlbum('a2');
+		rejectFirst?.(new ApiError(429, 'Too many requests', '/api/songs/s1'));
+		await first;
+
+		expect(get(toasts)).toEqual([]);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(audioPlayer.load).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			{ restart: true }
+		);
+	});
 });
 
 describe('shuffle rebuilds the playing queue', () => {
@@ -1965,12 +2096,12 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
 		];
-		await playPlaylistEntries(entries, 0, { restart: true });
+		playPlaylistFrom(makePlaylist(entries), 0);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 	});
 
-	it('playlist shuffle keeps the current entry first and mixes the rest', async () => {
+	it('starting a playlist at a chosen entry clears shuffle and keeps playlist order', async () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0);
 		setShuffle(true);
 		const entries = [
@@ -1978,13 +2109,10 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
 		];
-		await playPlaylistEntries(entries, 0, { restart: true });
+		playPlaylistFrom(makePlaylist(entries), 0);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
-		const ctx = get(queueContext);
-		expect(ctx.type).toBe('playlist');
-		if (ctx.type !== 'playlist') throw new Error('expected playlist');
-		expect(ctx.entries.map((entry) => entry.generation_id)).toEqual(['g1', 'g3', 'g2']);
-		expect(ctx.index).toBe(0);
+		expect(get(shuffleEnabled)).toBe(false);
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 	});
 
 	it('expired library rebuild keeps the shuffle flag', async () => {
@@ -2209,6 +2337,38 @@ describe('playIdleStart', () => {
 		);
 	});
 
+	it('keeps shuffle on when Play starts the open playlist, unlike picking an entry', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		setShuffle(true);
+		openCollection.set({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set(
+			makePlaylist([
+				makePlaylistEntry({ id: 'pe1', position: 0, generation_id: 'g1', song_title: 'First' }),
+				makePlaylistEntry({
+					id: 'pe2',
+					position: 1,
+					generation_id: 'g2',
+					song_title: 'Second',
+					mp3_path: 'b.mp3'
+				}),
+				makePlaylistEntry({
+					id: 'pe3',
+					position: 2,
+					generation_id: 'g3',
+					song_title: 'Third',
+					mp3_path: 'c.mp3'
+				})
+			])
+		);
+
+		await playIdleStart();
+
+		expect(get(shuffleEnabled)).toBe(true);
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
+	});
+
 	it('falls back to the library pool when the open playlist detail failed to load', async () => {
 		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set(null);
@@ -2263,7 +2423,7 @@ describe('buildQueueViewModel', () => {
 			makePlaylistEntry({ id: 'e1', generation_id: 'g1', audio_duration: 141 }),
 			makePlaylistEntry({ id: 'e2', generation_id: 'g2', audio_duration: null })
 		];
-		const ctx = { type: 'playlist' as const, entries, index: 0 };
+		const ctx = playlistQueue(entries, 0);
 
 		const vm = buildQueueViewModel(ctx, null, [song]);
 
@@ -2303,7 +2463,7 @@ describe('buildQueueViewModel', () => {
 			}),
 			makePlaylistEntry({ id: 'e2', generation_id: 'g2', song_title: 'Second' })
 		];
-		const ctx = { type: 'playlist' as const, entries, index: 0 };
+		const ctx = playlistQueue(entries, 0);
 
 		const vm = buildQueueViewModel(ctx, null, []);
 
@@ -2336,7 +2496,7 @@ describe('jumpToQueueIndex', () => {
 			makePlaylistEntry({ id: 'e1' }),
 			makePlaylistEntry({ id: 'e2', generation_id: 'g2' })
 		];
-		queueContext.set({ type: 'playlist', entries, index: 0 });
+		queueContext.set(playlistQueue(entries, 0));
 
 		jumpToQueueIndex(1);
 
@@ -2344,13 +2504,13 @@ describe('jumpToQueueIndex', () => {
 			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
 			{ restart: true }
 		);
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 	});
 
 	it('seeks the stream engine to the requested track when a shared-link stream is playing', () => {
 		const seekToStreamTrack = vi.spyOn(audioPlayer, 'seekToStreamTrack').mockReturnValue(true);
 		audioPlayer.mode = 'stream';
-		queueContext.set({ type: 'playlist', entries: [makePlaylistEntry({ id: 'e1' })], index: 0 });
+		queueContext.set(playlistQueue([makePlaylistEntry({ id: 'e1' })], 0));
 
 		jumpToQueueIndex(2);
 
@@ -2445,5 +2605,117 @@ describe('openNowPlaying / closeNowPlaying', () => {
 		closeNowPlaying();
 
 		expect(focusSpy).not.toHaveBeenCalled();
+	});
+
+	it('restores focus to the transport bar trigger that remounts after the full surface', () => {
+		const trigger = document.createElement('button');
+		document.body.append(trigger);
+		registerNowPlayingTrigger(trigger);
+		openNowPlaying('queue');
+		// The full surface hides the bar, which unregisters its button.
+		registerNowPlayingTrigger(null);
+
+		closeNowPlaying();
+		registerNowPlayingTrigger(trigger);
+
+		expect(document.activeElement).toBe(trigger);
+		trigger.remove();
+	});
+});
+
+describe('Now Playing surface', () => {
+	it('opens full screen where no docked panel fits', () => {
+		nowPlayingDockable.set(false);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('opens docked by default where a docked panel fits', () => {
+		nowPlayingDockable.set(true);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('opens on the desktop surface the listener last chose', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+		closeNowPlaying();
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('leaves the remembered desktop choice alone when a compact viewport forces full screen', () => {
+		nowPlayingDockable.set(false);
+		openNowPlaying('queue');
+		closeNowPlaying();
+		nowPlayingDockable.set(true);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('Escape steps from full screen back to the docked panel where one fits', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('Escape closes the docked panel', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('Escape closes a full surface that has no docked panel to fall back to', () => {
+		nowPlayingDockable.set(false);
+		openNowPlaying('queue');
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('turns a docked panel into the full surface when the viewport loses room for it', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expect(get(nowPlayingSurface)).toBe('docked');
+
+		nowPlayingDockable.set(false);
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('leaves a closed Now Playing closed when the viewport loses room for the panel', () => {
+		nowPlayingDockable.set(true);
+
+		nowPlayingDockable.set(false);
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('dockNowPlaying returns to the panel and remembers it', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+
+		dockNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+		expect(localStorage.getItem('nowPlayingDesktopSurface')).toBe('docked');
 	});
 });

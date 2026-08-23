@@ -4,6 +4,7 @@ import type { SongItem } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import EditorHeader from './EditorHeader.svelte';
+import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 function px(value: string): number {
 	const resolved = value.startsWith('var(')
@@ -85,7 +86,12 @@ function defaultProps() {
 		onselectnext: vi.fn(),
 		isShared: false,
 		shareSlug: null,
-		onshare: vi.fn(async () => ({ status: 'ok', share_url: '', share_slug: 's' })),
+		onshare: vi.fn(async () => ({
+			status: 'ok',
+			share_url: '',
+			share_slug: 's',
+			songs_without_playable_take: []
+		})),
 		onunshare: vi.fn(async () => undefined),
 		onaddtoplaylist: vi.fn(),
 		ondeletesong: vi.fn(),
@@ -182,6 +188,14 @@ describe('EditorHeader', () => {
 		);
 		item?.click();
 		expect(onsaveversion).toHaveBeenCalledTimes(1);
+	});
+
+	it('announces the song title as the heading name, with a separately named edit button', async () => {
+		const { target } = await render({ song: song({ title: 'Sommerlicht' }) });
+		const heading = getByRoleHeading(target, 'Sommerlicht');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit song title');
+		expect(editButton.textContent?.trim()).toBe('Sommerlicht');
 	});
 
 	it('moves Generate to a fixed bottom bar and drops it from the header row in compact mode', async () => {

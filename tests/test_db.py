@@ -768,7 +768,10 @@ def test_available_models_seed_idempotent(tmp_path: Path) -> None:
 
 
 def test_save_scores_create(seeded_session: Session) -> None:
-    save_scores(seeded_session, "g2", {"dynamics": 77.0, "enjoyment": 8.5})
+    save_scores(
+        seeded_session, "g2", {"dynamics": 77.0, "enjoyment": 8.5},
+        refreshed_keys={"dynamics", "enjoyment"},
+    )
     seeded_session.commit()
     gen = get_generation(seeded_session, "g2")
     scores = {s.scorer: s.value for s in gen.scores}
@@ -776,7 +779,7 @@ def test_save_scores_create(seeded_session: Session) -> None:
 
 
 def test_save_scores_upsert(seeded_session: Session) -> None:
-    save_scores(seeded_session, "g1", {"dynamics": 99.0})
+    save_scores(seeded_session, "g1", {"dynamics": 99.0}, refreshed_keys={"dynamics"})
     seeded_session.commit()
     gen = get_generation(seeded_session, "g1")
     batch_scores = [s for s in gen.scores if s.scorer == "batch"]
@@ -804,7 +807,7 @@ def test_save_scores_upsert_persists(tmp_path: Path) -> None:
         session.commit()
 
     with factory() as s2:
-        save_scores(s2, "gx", {"new": 99.0})
+        save_scores(s2, "gx", {"new": 99.0}, refreshed_keys={"old", "new"})
         s2.commit()
 
     with factory() as s3:

@@ -10,7 +10,8 @@ import {
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_EMPTY,
 	LIBRARY_SHARES_OPEN_LABEL,
-	LIBRARY_SHARES_UNSHARE_LABEL
+	LIBRARY_SHARES_UNSHARE_LABEL,
+	collectionRowPlayLabel
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -242,6 +243,21 @@ describe('LibraryWall selection', () => {
 		play.click();
 		await tick();
 		expect(get(openCollection)).toBeNull();
+	});
+
+	it('names every wall play control after the collection it starts', async () => {
+		playlistList.set([playlist()]);
+		const root = await render();
+		expect(requireElement(root, '.wall-tile-play').getAttribute('aria-label')).toBe(
+			collectionRowPlayLabel('Local Album')
+		);
+
+		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
+		await tick();
+
+		expect(requireElement(root, '.wall-tile-play').getAttribute('aria-label')).toBe(
+			collectionRowPlayLabel('Night Drive')
+		);
 	});
 });
 

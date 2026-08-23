@@ -1,11 +1,25 @@
 <script lang="ts">
 	interface Props {
 		value: string;
-		onsave: (newTitle: string) => Promise<void>;
+		onsave: (newValue: string) => Promise<void>;
 		ariaLabel?: string;
+		/** When true, an emptied field commits (clears) instead of reverting. */
+		allowEmpty?: boolean;
+		/** Text shown in place of an empty value; only meaningful with allowEmpty. */
+		placeholder?: string;
+		maxlength?: number;
+		inputmode?: 'text' | 'numeric';
 	}
 
-	let { value, onsave, ariaLabel = 'Title' }: Props = $props();
+	let {
+		value,
+		onsave,
+		ariaLabel = 'Title',
+		allowEmpty = false,
+		placeholder = '',
+		maxlength = 200,
+		inputmode = 'text'
+	}: Props = $props();
 
 	let editing = $state(false);
 	let draft = $state('');
@@ -24,7 +38,7 @@
 
 	async function commit(): Promise<void> {
 		const trimmed = draft.trim();
-		if (!trimmed || trimmed === value) {
+		if (trimmed === value || (!trimmed && !allowEmpty)) {
 			editing = false;
 			return;
 		}
@@ -32,6 +46,9 @@
 		try {
 			await onsave(trimmed);
 			editing = false;
+		} catch {
+			// The caller already surfaces the failure (e.g. a toast); leave
+			// the field in edit mode with the draft intact so the user can fix it.
 		} finally {
 			saving = false;
 		}
@@ -58,7 +75,8 @@
 		bind:value={draft}
 		class="editable-title-input"
 		type="text"
-		maxlength="200"
+		{inputmode}
+		{maxlength}
 		aria-label={ariaLabel}
 		disabled={saving}
 		onblur={commit}
@@ -68,11 +86,12 @@
 	<button
 		type="button"
 		class="editable-title-display"
+		class:editable-title-empty={!value}
 		onclick={startEdit}
 		aria-label={`Edit ${ariaLabel.toLowerCase()}`}
-		title="Click to rename"
+		title="Click to edit"
 	>
-		{value}
+		{value || placeholder}
 	</button>
 {/if}
 
@@ -97,6 +116,11 @@
 	.editable-title-display:focus-visible {
 		outline: 2px solid var(--accent, #a020f0);
 		outline-offset: 2px;
+	}
+
+	.editable-title-empty {
+		color: var(--text-subtle, rgba(255, 255, 255, 0.4));
+		font-style: italic;
 	}
 
 	.editable-title-input {

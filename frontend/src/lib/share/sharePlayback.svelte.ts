@@ -58,6 +58,10 @@ export class SharePlayback {
 		this.activeIndex >= 0 ? (this.playOrder[this.activeIndex] ?? null) : null
 	);
 
+	// The playing take's own cues, taken from the share payload rather than
+	// from the manifest, so lyrics follow playback in stream mode too.
+	readonly currentCues = $derived(this.currentTrack?.cues ?? null);
+
 	readonly canNext = $derived(
 		audioPlayer.mode === 'stream' ? audioPlayer.canNextStreamTrack : this.playOrder.length > 1
 	);
@@ -74,7 +78,7 @@ export class SharePlayback {
 				songId: track.key,
 				songTitle: track.title,
 				generationId: track.key,
-				durationSec: streamTrack?.duration ?? null,
+				durationSec: streamTrack?.duration ?? track.durationSec,
 				versionNumber: null,
 				generationNumber: 1
 			};

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { WhisperCue } from '$lib/api/types';
 import {
 	collectionSubtitle,
 	fromSharedAlbum,
@@ -10,6 +11,40 @@ import {
 	type SharedTrack
 } from './sharedCollection';
 
+// The media half every share payload carries for its take. Defaults to the
+// "no pick" shape so each test spells out only the fields it is about.
+function media(
+	overrides: {
+		generation_id?: string | null;
+		audio_duration?: number | null;
+		lyrics?: string | null;
+		whisper_cues?: WhisperCue[] | null;
+	} = {}
+) {
+	return {
+		generation_id: null,
+		audio_duration: null,
+		lyrics: null,
+		whisper_cues: null,
+		...overrides
+	};
+}
+
+function track(overrides: Partial<SharedTrack> & { key: string; title: string }): SharedTrack {
+	return {
+		subtitle: null,
+		audioUrl: null,
+		durationSec: null,
+		lyrics: null,
+		cues: null,
+		...overrides
+	};
+}
+
+const CUES: WhisperCue[] = [
+	{ start: 0, end: 2, text: 'the lantern hums', words: [{ start: 0, end: 1, text: 'the' }] }
+];
+
 describe('fromSharedAlbum', () => {
 	it('maps an album payload to a collection view with one track per song', () => {
 		const view = fromSharedAlbum({
@@ -19,8 +54,19 @@ describe('fromSharedAlbum', () => {
 			year: '2026',
 			cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' },
 			songs: [
-				{ id: 's1', title: 'First', track_number: 1, audio_url: '/audio/first.mp3' },
-				{ id: 's2', title: 'Second', track_number: 2, audio_url: null }
+				{
+					id: 's1',
+					title: 'First',
+					track_number: 1,
+					audio_url: '/audio/first.mp3',
+					...media({
+						generation_id: 'g1',
+						audio_duration: 128,
+						lyrics: 'verse one',
+						whisper_cues: CUES
+					})
+				},
+				{ id: 's2', title: 'Second', track_number: 2, audio_url: null, ...media() }
 			]
 		});
 
@@ -30,8 +76,15 @@ describe('fromSharedAlbum', () => {
 		expect(view.year).toBe('2026');
 		expect(view.cover).toEqual({ card: '/cover-card.jpg', detail: '/cover-detail.jpg' });
 		expect(view.tracks).toEqual([
-			{ key: 's1', title: 'First', subtitle: null, audioUrl: '/audio/first.mp3' },
-			{ key: 's2', title: 'Second', subtitle: null, audioUrl: null }
+			track({
+				key: 's1',
+				title: 'First',
+				audioUrl: '/audio/first.mp3',
+				durationSec: 128,
+				lyrics: 'verse one',
+				cues: CUES
+			}),
+			track({ key: 's2', title: 'Second' })
 		]);
 	});
 
@@ -57,14 +110,16 @@ describe('fromSharedPlaylist', () => {
 					song_title: 'First',
 					artist: 'Artist One',
 					generation_number: 1,
-					audio_url: '/audio/first.mp3'
+					audio_url: '/audio/first.mp3',
+					...media({ audio_duration: 95, lyrics: 'verse one', whisper_cues: CUES })
 				},
 				{
 					entry_id: 'e2',
 					song_title: 'Second',
 					artist: 'Artist Two',
 					generation_number: 2,
-					audio_url: null
+					audio_url: null,
+					...media()
 				}
 			]
 		});
@@ -72,8 +127,16 @@ describe('fromSharedPlaylist', () => {
 		expect(view.kind).toBe('playlist');
 		expect(view.title).toBe('Late Night Mix');
 		expect(view.tracks).toEqual([
-			{ key: 'e1', title: 'First', subtitle: 'Artist One', audioUrl: '/audio/first.mp3' },
-			{ key: 'e2', title: 'Second', subtitle: 'Artist Two', audioUrl: null }
+			track({
+				key: 'e1',
+				title: 'First',
+				subtitle: 'Artist One',
+				audioUrl: '/audio/first.mp3',
+				durationSec: 95,
+				lyrics: 'verse one',
+				cues: CUES
+			}),
+			track({ key: 'e2', title: 'Second', subtitle: 'Artist Two' })
 		]);
 	});
 });
@@ -85,13 +148,21 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			artist: 'Artist',
 			album_title: 'Album',
 			audio_url: '/audio/solo.mp3',
-			cover: { card: '/c.jpg', detail: '/d.jpg' }
+			cover: { card: '/c.jpg', detail: '/d.jpg' },
+			...media({ audio_duration: 210, lyrics: 'solo lyrics', whisper_cues: CUES })
 		});
 
 		expect(view.kind).toBe('song');
 		expect(view.albumTitle).toBe('Album');
 		expect(view.tracks).toEqual([
-			{ key: 'single', title: 'Solo Track', subtitle: null, audioUrl: '/audio/solo.mp3' }
+			track({
+				key: 'single',
+				title: 'Solo Track',
+				audioUrl: '/audio/solo.mp3',
+				durationSec: 210,
+				lyrics: 'solo lyrics',
+				cues: CUES
+			})
 		]);
 	});
 
@@ -102,12 +173,20 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			album_title: 'Album',
 			generation_number: 3,
 			seed: 42,
-			audio_url: '/audio/take3.mp3'
+			audio_url: '/audio/take3.mp3',
+			...media({ audio_duration: 187, lyrics: 'take lyrics', whisper_cues: CUES })
 		});
 
 		expect(view.kind).toBe('take');
 		expect(view.tracks).toEqual([
-			{ key: 'single', title: 'Solo Track', subtitle: null, audioUrl: '/audio/take3.mp3' }
+			track({
+				key: 'single',
+				title: 'Solo Track',
+				audioUrl: '/audio/take3.mp3',
+				durationSec: 187,
+				lyrics: 'take lyrics',
+				cues: CUES
+			})
 		]);
 	});
 
@@ -116,7 +195,8 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			title: 'Solo Track',
 			artist: 'Artist',
 			album_title: '',
-			audio_url: null
+			audio_url: null,
+			...media()
 		});
 		expect(view.albumTitle).toBeNull();
 	});
@@ -124,9 +204,9 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 
 describe('playableTracks', () => {
 	const tracks: SharedTrack[] = [
-		{ key: 's1', title: 'First', subtitle: null, audioUrl: '/audio/first.mp3' },
-		{ key: 's2', title: 'Second (unpicked)', subtitle: null, audioUrl: null },
-		{ key: 's3', title: 'Third', subtitle: null, audioUrl: '/audio/third.mp3' }
+		track({ key: 's1', title: 'First', audioUrl: '/audio/first.mp3' }),
+		track({ key: 's2', title: 'Second (unpicked)' }),
+		track({ key: 's3', title: 'Third', audioUrl: '/audio/third.mp3' })
 	];
 
 	it('drops tracks whose audio_url is null instead of showing a disabled row', () => {
@@ -145,7 +225,15 @@ describe('trackPlaybackInfo', () => {
 			artist: 'Artist',
 			subtitle: '',
 			year: '',
-			songs: [{ id: 's1', title: 'First', track_number: 1, audio_url: '/audio/first.mp3' }]
+			songs: [
+				{
+					id: 's1',
+					title: 'First',
+					track_number: 1,
+					audio_url: '/audio/first.mp3',
+					...media()
+				}
+			]
 		});
 		const info = trackPlaybackInfo(view, view.tracks[0]);
 
@@ -157,6 +245,23 @@ describe('trackPlaybackInfo', () => {
 		expect(info.lyrics).toBeNull();
 	});
 
+	it('carries the shared take lyrics and cues so Now Playing can follow along', () => {
+		const view = fromSharedGeneration({
+			title: 'Solo Track',
+			artist: 'Artist',
+			album_title: 'Album',
+			generation_number: 3,
+			seed: null,
+			audio_url: '/audio/take3.mp3',
+			...media({ lyrics: 'the lantern hums', whisper_cues: CUES })
+		});
+		const info = trackPlaybackInfo(view, view.tracks[0]);
+
+		expect(info.lyrics).toBe('the lantern hums');
+		expect(info.generation.whisper_cues).toEqual(CUES);
+		expect(info.generation.version_lyrics).toBe('the lantern hums');
+	});
+
 	it('uses the entry artist for a playlist track', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
@@ -166,7 +271,8 @@ describe('trackPlaybackInfo', () => {
 					song_title: 'First',
 					artist: 'Artist One',
 					generation_number: 1,
-					audio_url: '/audio/first.mp3'
+					audio_url: '/audio/first.mp3',
+					...media()
 				}
 			]
 		});
@@ -181,7 +287,8 @@ describe('trackPlaybackInfo', () => {
 			title: 'Solo Track',
 			artist: 'Artist',
 			album_title: 'Album',
-			audio_url: '/audio/solo.mp3'
+			audio_url: '/audio/solo.mp3',
+			...media()
 		});
 		const info = trackPlaybackInfo(view, view.tracks[0]);
 
@@ -191,6 +298,17 @@ describe('trackPlaybackInfo', () => {
 });
 
 describe('collectionSubtitle', () => {
+	function playlistEntry(entryId: string, title: string, audioUrl: string | null) {
+		return {
+			entry_id: entryId,
+			song_title: title,
+			artist: 'Artist',
+			generation_number: 1,
+			audio_url: audioUrl,
+			...media()
+		};
+	}
+
 	it('shows artist and year for an album', () => {
 		const view = fromSharedAlbum({
 			title: 'Album',
@@ -205,22 +323,7 @@ describe('collectionSubtitle', () => {
 	it('shows the track count for a playlist', () => {
 		const view = fromSharedPlaylist({
 			title: 'Mix',
-			entries: [
-				{
-					entry_id: 'e1',
-					song_title: 'First',
-					artist: 'Artist',
-					generation_number: 1,
-					audio_url: '/a.mp3'
-				},
-				{
-					entry_id: 'e2',
-					song_title: 'Second',
-					artist: 'Artist',
-					generation_number: 1,
-					audio_url: '/b.mp3'
-				}
-			]
+			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'Second', '/b.mp3')]
 		});
 		expect(collectionSubtitle(view)).toBe('2 tracks');
 	});
@@ -228,22 +331,7 @@ describe('collectionSubtitle', () => {
 	it('excludes unplayable entries from the playlist track count', () => {
 		const view = fromSharedPlaylist({
 			title: 'Mix',
-			entries: [
-				{
-					entry_id: 'e1',
-					song_title: 'First',
-					artist: 'Artist',
-					generation_number: 1,
-					audio_url: '/a.mp3'
-				},
-				{
-					entry_id: 'e2',
-					song_title: 'No pick yet',
-					artist: 'Artist',
-					generation_number: 1,
-					audio_url: null
-				}
-			]
+			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'No pick yet', null)]
 		});
 		expect(collectionSubtitle(view)).toBe('1 track');
 	});
@@ -253,7 +341,8 @@ describe('collectionSubtitle', () => {
 			title: 'Solo',
 			artist: 'Artist',
 			album_title: 'Album',
-			audio_url: '/a.mp3'
+			audio_url: '/a.mp3',
+			...media()
 		});
 		expect(collectionSubtitle(view)).toBe('Artist · Album');
 	});
@@ -265,7 +354,8 @@ describe('collectionSubtitle', () => {
 			album_title: 'Album',
 			generation_number: 3,
 			seed: null,
-			audio_url: '/a.mp3'
+			audio_url: '/a.mp3',
+			...media()
 		});
 		expect(collectionSubtitle(view)).toBe('Artist · Album');
 	});

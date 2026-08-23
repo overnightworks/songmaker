@@ -55,6 +55,77 @@ def test_share_album(sharing_app: TestClient) -> None:
     assert data["status"] == "ok"
     assert data["share_slug"]
     assert "/share/" in data["share_url"]
+    assert data["songs_without_playable_take"] == []
+
+
+def _seed_mixed_playability_album(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    session.add(Song(id="s_playable", title="Has A Take", album_id="test_album", track_number=1))
+    session.add(Generation(
+        id="g_playable", song_id="s_playable", generation_number=1,
+        mp3_path="admin_user/g_playable.mp3", seed=1, is_picked=True,
+    ))
+    session.add(Song(
+        id="s_no_gen", title="No Generation At All", album_id="test_album", track_number=2,
+    ))
+    session.add(Song(
+        id="s_archived_only", title="Only Archived Take", album_id="test_album", track_number=3,
+    ))
+    session.add(Generation(
+        id="g_archived", song_id="s_archived_only", generation_number=1,
+        mp3_path="admin_user/g_archived.mp3", seed=1, is_archived=True,
+    ))
+    session.add(Song(
+        id="s_unpicked_take", title="Unpicked But Playable", album_id="test_album", track_number=4,
+    ))
+    session.add(Generation(
+        id="g_unpicked", song_id="s_unpicked_take", generation_number=1,
+        mp3_path="admin_user/g_unpicked.mp3", seed=1, is_picked=False,
+    ))
+    session.add(Song(
+        id="s_empty_mp3", title="Picked Take With Empty File",
+        album_id="test_album", track_number=5,
+    ))
+    session.add(Generation(
+        id="g_empty_mp3", song_id="s_empty_mp3", generation_number=1,
+        mp3_path="", seed=1, is_picked=True,
+    ))
+
+
+def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
+    login_and_csrf(client, "admin", "admin12345")
+
+    resp = client.post("/api/albums/test_album/share")
+
+    assert resp.status_code == 200
+    missing = resp.json()["songs_without_playable_take"]
+    assert {(item["id"], item["title"]) for item in missing} == {
+        ("s_no_gen", "No Generation At All"),
+        ("s_archived_only", "Only Archived Take"),
+        ("s_empty_mp3", "Picked Take With Empty File"),
+    }
+
+
+def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path: Path) -> None:
+    """The owner-facing warning list and the public share page must use the
+    same playability rule -- a song can't vanish from one without showing up
+    in the other (#147)."""
+    client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
+    login_and_csrf(client, "admin", "admin12345")
+
+    share_resp = client.post("/api/albums/test_album/share")
+    slug = share_resp.json()["share_slug"]
+    warned_ids = {item["id"] for item in share_resp.json()["songs_without_playable_take"]}
+
+    unauthed = TestClient(client.app, cookies={})
+    shared_songs = unauthed.get(f"/shared/{slug}").json()["songs"]
+
+    for song in shared_songs:
+        has_audio = song["audio_url"] is not None
+        assert has_audio == (song["id"] not in warned_ids)
 
 
 def test_share_album_idempotent(sharing_app: TestClient) -> None:
@@ -778,3 +849,136 @@ def test_api_library_shares_requires_auth(sharing_app: TestClient) -> None:
     unauthed = TestClient(sharing_app.app, cookies={})
     resp = unauthed.get("/api/library/shares")
     assert resp.status_code == 401
+
+
+# ── Share payload cues (#138) ───────────────────────────────────────
+
+_SUNG_CUES = [
+    {
+        "start": 0.0,
+        "end": 3.0,
+        "text": "the lantern hums",
+        "words": [
+            {"start": 0.0, "end": 1.0, "text": "the"},
+            {"start": 1.0, "end": 2.0, "text": "lantern"},
+            {"start": 2.0, "end": 3.0, "text": "hums"},
+        ],
+    },
+]
+_OTHER_TAKE_CUES = [{"start": 0.0, "end": 2.0, "text": "a different rendition"}]
+# A take scored before word timestamps stores no words; the payload says so
+# explicitly rather than dropping the key.
+_OTHER_TAKE_CUES_PAYLOAD = [{**_OTHER_TAKE_CUES[0], "words": None}]
+
+_SHARED_ALBUM_KEYS = {"title", "artist", "subtitle", "year", "songs", "cover"}
+_SHARED_ALBUM_SONG_KEYS = {
+    "id", "title", "track_number", "audio_url",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+}
+_SHARED_SONG_KEYS = {
+    "title", "artist", "album_title", "audio_url", "cover",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+}
+_SHARED_GENERATION_KEYS = {
+    "title", "artist", "album_title", "generation_number", "seed", "audio_url",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+}
+_SHARED_PLAYLIST_ENTRY_KEYS = {
+    "entry_id", "song_title", "artist", "generation_number", "audio_url",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+}
+
+
+def _seed_song_with_two_takes(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    session.add(Song(id="s1", title="Song One", album_id="test_album", track_number=1))
+    session.add(Version(
+        id="v1", song_id="s1", version_number=1, lyrics="the lantern hums", audio_duration=187,
+    ))
+    session.add(Playlist(id="pl1", title="My Playlist"))
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="admin_user/g1.mp3", seed=1, is_picked=True,
+        whisper_text="the lantern hums", whisper_cues=_SUNG_CUES,
+    ))
+    session.add(Generation(
+        id="g2", song_id="s1", version_id="v1", generation_number=2,
+        mp3_path="admin_user/g2.mp3", seed=2,
+        whisper_text="a different rendition", whisper_cues=_OTHER_TAKE_CUES,
+    ))
+    session.add(PlaylistEntry(id="e1", playlist_id="pl1", generation_id="g1", position=0))
+
+
+@pytest.fixture()
+def two_take_app(tmp_path: Path) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_song_with_two_takes)
+    login_and_csrf(client, "admin", "admin12345")
+    return client
+
+
+def _share_slug(client: TestClient, path: str) -> str:
+    return client.post(path).json()["share_slug"]
+
+
+@pytest.mark.parametrize(
+    ("share_path", "shared_path_template", "expected_cues"),
+    [
+        ("/api/songs/s1/share", "/shared/song/{slug}", _SUNG_CUES),
+        ("/api/generations/g1/share", "/shared/gen/{slug}", _SUNG_CUES),
+        ("/api/generations/g2/share", "/shared/gen/{slug}", _OTHER_TAKE_CUES_PAYLOAD),
+    ],
+)
+def test_share_payload_carries_only_the_shared_takes_cues(
+    two_take_app: TestClient,
+    share_path: str,
+    shared_path_template: str,
+    expected_cues: list[dict],
+) -> None:
+    slug = _share_slug(two_take_app, share_path)
+
+    unauthed = TestClient(two_take_app.app, cookies={})
+    data = unauthed.get(shared_path_template.format(slug=slug)).json()
+
+    assert data["whisper_cues"] == expected_cues
+
+
+def test_shared_album_view_carries_the_picked_takes_cues(two_take_app: TestClient) -> None:
+    slug = _share_slug(two_take_app, "/api/albums/test_album/share")
+
+    unauthed = TestClient(two_take_app.app, cookies={})
+    data = unauthed.get(f"/shared/{slug}").json()
+
+    assert data["songs"][0]["whisper_cues"] == _SUNG_CUES
+
+
+def test_shared_playlist_view_carries_the_entry_takes_cues(two_take_app: TestClient) -> None:
+    slug = _share_slug(two_take_app, "/api/playlists/pl1/share")
+
+    unauthed = TestClient(two_take_app.app, cookies={})
+    data = unauthed.get(f"/shared/playlist/{slug}").json()
+
+    assert data["entries"][0]["whisper_cues"] == _SUNG_CUES
+
+
+def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient) -> None:
+    """A public listener gets the shared take's playback data and nothing else —
+    no transcript, no scores, no sibling takes, no owner."""
+    album_slug = _share_slug(two_take_app, "/api/albums/test_album/share")
+    song_slug = _share_slug(two_take_app, "/api/songs/s1/share")
+    gen_slug = _share_slug(two_take_app, "/api/generations/g1/share")
+    playlist_slug = _share_slug(two_take_app, "/api/playlists/pl1/share")
+
+    unauthed = TestClient(two_take_app.app, cookies={})
+    album = unauthed.get(f"/shared/{album_slug}").json()
+    song = unauthed.get(f"/shared/song/{song_slug}").json()
+    generation = unauthed.get(f"/shared/gen/{gen_slug}").json()
+    playlist = unauthed.get(f"/shared/playlist/{playlist_slug}").json()
+
+    assert set(album) == _SHARED_ALBUM_KEYS
+    assert set(album["songs"][0]) == _SHARED_ALBUM_SONG_KEYS
+    assert set(song) == _SHARED_SONG_KEYS
+    assert set(generation) == _SHARED_GENERATION_KEYS
+    assert set(playlist) == {"title", "entries"}
+    assert set(playlist["entries"][0]) == _SHARED_PLAYLIST_ENTRY_KEYS

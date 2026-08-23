@@ -1,13 +1,17 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '$lib/api/types';
-	import { NOW_PLAYING_TAKE_PREFIX, TAKE_USE_AS_REFERENCE_LABEL } from '$lib/constants';
+	import {
+		NOW_PLAYING_TAKE_PREFIX,
+		TAKE_RESCORE_LABEL,
+		TAKE_RESCORING_LABEL,
+		TAKE_USE_AS_REFERENCE_LABEL
+	} from '$lib/constants';
 	import {
 		NOW_PLAYING_DEVIATIONS_EMPTY,
 		NOW_PLAYING_DEVIATIONS_LABEL,
 		NOW_PLAYING_DEVIATIONS_UNAVAILABLE,
 		NOW_PLAYING_DEVIATION_ADDED_TITLE,
 		NOW_PLAYING_KEEP_LABEL,
-		NOW_PLAYING_LYRICS_RESCORE_HINT,
 		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_PICK_LABEL,
 		NOW_PLAYING_PIN_SEED_PREFIX,
@@ -15,6 +19,7 @@
 		NOW_PLAYING_RATING_NOTES_PLACEHOLDER,
 		NOW_PLAYING_RATING_SAVE,
 		NOW_PLAYING_RATING_SAVING,
+		NOW_PLAYING_RESCORE_ACTION_LABEL,
 		NOW_PLAYING_SCORES_EMPTY,
 		NOW_PLAYING_SCORES_LABEL,
 		NOW_PLAYING_UNKEEP_LABEL,
@@ -23,7 +28,14 @@
 	import { revealPlayingSong } from '$lib/stores/navigation';
 	import { closeNowPlaying } from '$lib/stores/player';
 	import { pendingSource } from '$lib/stores/recipe';
-	import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
+	import {
+		pinSeed,
+		rate,
+		rescore,
+		rescoringTakeIds,
+		setKeep,
+		setPick
+	} from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
 	import { scoreColor } from '$lib/utils/scores';
@@ -47,8 +59,10 @@
 
 	const scores = $derived(generation.scores);
 	// #141/9: without cues the lyrics cannot follow the audio — the panel says
-	// so instead of leaving the listener to wonder why nothing highlights.
+	// so instead of leaving the listener to wonder why nothing highlights, and
+	// the sentence is the button that fixes it.
 	const hasCues = $derived((generation.whisper_cues?.length ?? 0) > 0);
+	const rescoring = $derived($rescoringTakeIds.has(generation.id));
 
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
 		if (!scores) return [];
@@ -220,6 +234,10 @@
 		}
 	}
 
+	function onRescore(): void {
+		void rescore(song.id, generation.id);
+	}
+
 	function onPinSeed(): void {
 		if (generation.seed == null) return;
 		pinSeed(generation.seed);
@@ -293,7 +311,15 @@
 	<section class="take-section">
 		<h4 class="section-title">{NOW_PLAYING_DEVIATIONS_LABEL}</h4>
 		{#if !hasCues}
-			<p class="rescore-hint">{NOW_PLAYING_LYRICS_RESCORE_HINT}</p>
+			<button
+				type="button"
+				class="rescore-hint"
+				data-hitbox="frequent"
+				disabled={rescoring}
+				onclick={onRescore}
+			>
+				{rescoring ? TAKE_RESCORING_LABEL : NOW_PLAYING_RESCORE_ACTION_LABEL}
+			</button>
 		{/if}
 		{#if !hasTranscript}
 			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_UNAVAILABLE}</p>
@@ -366,6 +392,15 @@
 		>
 			{TAKE_USE_AS_REFERENCE_LABEL}
 		</button>
+		<button
+			type="button"
+			class="rescore"
+			data-hitbox="frequent"
+			disabled={rescoring}
+			onclick={onRescore}
+		>
+			{rescoring ? TAKE_RESCORING_LABEL : TAKE_RESCORE_LABEL}
+		</button>
 	</div>
 </div>
 
@@ -434,9 +469,26 @@
 		font-style: italic;
 	}
 	.rescore-hint {
+		align-self: flex-start;
 		margin: 0;
+		padding: 0;
+		border: none;
+		background: none;
+		text-align: left;
+		font-family: var(--font-body);
 		font-size: 0.78rem;
-		color: var(--text-muted);
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+	.rescore-hint:hover:not(:disabled) {
+		color: var(--text);
+	}
+	.rescore-hint:disabled {
+		color: var(--text-subtle);
+		text-decoration: none;
+		cursor: default;
 	}
 	.scores-grid {
 		display: grid;
@@ -554,7 +606,8 @@
 		gap: 0.5rem;
 	}
 	.pin-seed,
-	.use-as-reference {
+	.use-as-reference,
+	.rescore {
 		align-self: flex-start;
 		padding: 0.3rem 0.7rem;
 		border-radius: var(--btn-radius-pill);
@@ -568,8 +621,13 @@
 		cursor: pointer;
 	}
 	.pin-seed:hover,
-	.use-as-reference:hover {
+	.use-as-reference:hover,
+	.rescore:hover:not(:disabled) {
 		border-color: var(--primary);
 		color: var(--text);
+	}
+	.rescore:disabled {
+		color: var(--text-subtle);
+		cursor: default;
 	}
 </style>

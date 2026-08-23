@@ -16,6 +16,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
+from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
@@ -23,12 +24,6 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 INITIAL_TRACK_NUMBER: Final[int] = 1
-
-
-class _Unset:
-    """Sentinel distinguishing 'not provided' from None."""
-
-UNSET = _Unset()
 
 
 def list_songs(

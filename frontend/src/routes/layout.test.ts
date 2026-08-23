@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -7,7 +10,20 @@ import { checkAuth, currentUser, authLoading, authCheckError } from '$lib/stores
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface } from '$lib/stores/libraryContext';
-import { selectedSongId } from '$lib/stores/player';
+import {
+	closeNowPlaying,
+	nowPlayingSurface,
+	openNowPlaying,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
+import {
+	NOW_PLAYING_DOCK_MIN_PX,
+	NOW_PLAYING_DOCKED_WIDTH_PX,
+	NOW_PLAYING_EXPAND_LABEL
+} from '$lib/constants/now-playing';
+import type { PlaybackInfo } from '$lib/services/playbackTypes';
+import type { GenerationItem, SongItem } from '$lib/api/types';
 import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -66,6 +82,10 @@ vi.mock('$lib/api/songs', () => ({
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
 import { goto } from '$app/navigation';
+
+// `?raw` yields an empty string for a stylesheet under this vitest config
+// (CSS processing is off), so app.css is read from disk instead.
+const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
 const VIEWPORT_PX = 320;
 const USER = { id: 'u1', username: 'felix', role: 'user' as const };
@@ -170,6 +190,9 @@ afterEach(async () => {
 	delete document.documentElement.dataset.pointer;
 	openCollection.set(null);
 	selectedSongId.set(null);
+	closeNowPlaying();
+	audioPlayer.current = null;
+	songList.set([]);
 	currentUser.set(null);
 	authLoading.set(false);
 	authCheckError.set(null);
@@ -178,6 +201,87 @@ afterEach(async () => {
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
 });
+
+const TAKE: GenerationItem = {
+	id: 'g1',
+	song_id: 's1',
+	version_id: 'v1',
+	version_number: 1,
+	generation_number: 2,
+	mp3_path: 'a.mp3',
+	wav_path: null,
+	seed: 1,
+	status: 'completed',
+	is_archived: false,
+	is_picked: false,
+	is_kept: false,
+	is_shared: false,
+	model_mode: 'sft',
+	whisper_text: null,
+	whisper_cues: null,
+	version_lyrics: 'old verse',
+	scores: null,
+	generation_params: null,
+	created_at: ''
+};
+
+const PLAYING_SONG: SongItem = {
+	id: 's1',
+	title: 'Tide',
+	album_id: 'a1',
+	album_title: 'Nachtstrom',
+	artist: 'Artist',
+	track_number: 1,
+	vocal_language: 'en',
+	lyrics: 'old verse',
+	prompt: 'dreamy',
+	version_count: 1,
+	generation_count: 1,
+	is_shared: false,
+	created_at: '',
+	generations: [TAKE]
+};
+
+function playing(songTitle = 'Tide'): PlaybackInfo {
+	return {
+		generation: TAKE,
+		songId: 's1',
+		songTitle,
+		artist: 'Artist',
+		albumTitle: 'Nachtstrom',
+		lyrics: 'old verse'
+	};
+}
+
+// Evaluates the one media feature these layout subscriptions use, so a test
+// can name a viewport width instead of a blanket true/false. A fine-pointer
+// device never matches `(any-pointer: coarse)`; the `data-pointer` override
+// that stands in for touch is applied by subscribeCompactLayout itself.
+function stubMatchMediaAtWidth(width: number): void {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn((query: string) => {
+			const maxWidth = /max-width:\s*(\d+)px/.exec(query);
+			return {
+				matches: maxWidth !== null && width <= Number(maxWidth[1]),
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			};
+		})
+	);
+}
+
+/** A fine-pointer viewport, wide enough for the docked panel unless told otherwise. */
+async function renderDesktopLayout(width = NOW_PLAYING_DOCK_MIN_PX): Promise<HTMLElement> {
+	stubMatchMediaAtWidth(width);
+	delete document.documentElement.dataset.pointer;
+	return renderLayout('/');
+}
 
 function pressEscape(target: EventTarget): void {
 	target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -322,6 +426,161 @@ describe('global Escape', () => {
 		pressEscape(window);
 		await tick();
 		expect(get(selectedSongId)).toBe('s1');
+	});
+});
+
+describe('docked Now Playing', () => {
+	beforeEach(() => {
+		// The surface resolves the playing take against the song list; seeding it
+		// keeps the test off the API.
+		songList.set([PLAYING_SONG]);
+	});
+
+	it('opens as a column of the shell row, leaving the workspace and the transport bar in place', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+
+		openNowPlaying('queue');
+		await tick();
+
+		const panel = requireElement<HTMLElement>(target, '.now-playing.docked');
+		expect(panel.parentElement?.classList.contains('shell-row')).toBe(true);
+		expect(panel.style.width).toBe(`${NOW_PLAYING_DOCKED_WIDTH_PX}px`);
+		expect(target.querySelector('main')).not.toBeNull();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
+
+	it('is no overlay: no dialog role, no aria-modal, and no transport of its own', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+
+		openNowPlaying('queue');
+		await tick();
+
+		const panel = requireElement<HTMLElement>(target, '.now-playing.docked');
+		expect(panel.getAttribute('role')).toBe('complementary');
+		expect(panel.getAttribute('aria-modal')).toBeNull();
+		expect(panel.querySelector('.transport')).toBeNull();
+		expect(panel.querySelector('.progress')).toBeNull();
+	});
+
+	it('does not trap Tab inside the panel, so the workspace stays reachable', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+
+		const workspaceButton = requireElement<HTMLButtonElement>(
+			target,
+			'[data-testid="workspace-focus"]'
+		);
+		workspaceButton.focus();
+		workspaceButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+
+		expect(document.activeElement).toBe(workspaceButton);
+	});
+
+	it('expands to the full surface, which hides the transport bar', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+
+		const expand = Array.from(target.querySelectorAll('button')).find(
+			(button) => button.textContent?.trim() === NOW_PLAYING_EXPAND_LABEL
+		);
+		expand?.click();
+		await tick();
+
+		const surface = requireElement<HTMLElement>(target, '.now-playing');
+		expect(surface.classList.contains('docked')).toBe(false);
+		expect(surface.getAttribute('aria-modal')).toBe('true');
+		expect(target.querySelector('.player-bar')).toBeNull();
+	});
+
+	it('Escape steps out of the full surface into the panel, then out of Now Playing', async () => {
+		selectedSongId.set('s1');
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+		nowPlayingSurface.set('full');
+		await tick();
+
+		pressEscape(target.querySelector('.now-playing') ?? window);
+		await tick();
+		expect(target.querySelector('.now-playing.docked')).not.toBeNull();
+
+		pressEscape(window);
+		await tick();
+		expect(target.querySelector('.now-playing')).toBeNull();
+		// Leaving Now Playing is the whole level-up: the open song stays open.
+		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('follows the playing take while it stays open', async () => {
+		audioPlayer.current = playing('Tide');
+		const target = await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+		expect(requireElement(target, '.cover-title').textContent).toBe('Tide');
+
+		audioPlayer.current = playing('Second');
+		await tick();
+
+		expect(requireElement(target, '.cover-title').textContent).toBe('Second');
+	});
+
+	// One owner for "the room the transport bar takes right now": the shell
+	// rows, the toast stack, the queue-stream chip and Now Playing's own sheet
+	// all read --player-height, so hiding the bar has to collapse that one
+	// value rather than leave each surface its own exception.
+	it('collapses the reserved transport-bar height while the full surface hides the bar', async () => {
+		audioPlayer.current = playing();
+		await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBe('full');
+		expect(extractRule(appCss, "html[data-now-playing='full']")).toContain('--player-height: 0px');
+		// Same specificity as the coarse-pointer override of the same variable,
+		// so only source order makes the collapse win.
+		expect(appCss.indexOf("html[data-now-playing='full']")).toBeGreaterThan(
+			appCss.indexOf("html[data-pointer='coarse']")
+		);
+
+		closeNowPlaying();
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+	});
+
+	// Docking costs the workspace 400px, which the editor's takes column and
+	// header cannot give up below the threshold — its take actions would land
+	// outside `main`, which is `overflow: hidden`, and become unreachable.
+	it('takes the whole screen on a viewport too narrow to spare the panel its width', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout(NOW_PLAYING_DOCK_MIN_PX - 1);
+
+		openNowPlaying('queue');
+		await tick();
+
+		expect(target.querySelector('.now-playing.docked')).toBeNull();
+		expect(requireElement(target, '.now-playing').getAttribute('aria-modal')).toBe('true');
+	});
+
+	it('opens full screen on a compact viewport, which has no room to dock', async () => {
+		audioPlayer.current = playing();
+		const target = await renderLayout('/');
+
+		openNowPlaying('queue');
+		await tick();
+
+		expect(target.querySelector('.now-playing.docked')).toBeNull();
+		expect(requireElement(target, '.now-playing').getAttribute('aria-modal')).toBe('true');
+		expect(target.querySelector('.player-bar')).toBeNull();
 	});
 });
 

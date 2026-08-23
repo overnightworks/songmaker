@@ -95,6 +95,10 @@ WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
+# Default for Settings.claude_scoring_model, which the DB setting overrides
+# (get_claude_scoring_model). The scoring job resolves the model there and
+# hands it to the coherence judge on CoherenceJudgeConfig.
+CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
@@ -198,8 +202,15 @@ PRESET_GLOBAL_DEFAULTS_NAME = "__global_defaults__"
 # wrote (each container has its own /tmp).
 WORKER_SHARED_TMP_DIRNAME = ".tmp"
 
-# Scoring subprocess
+# Scoring subprocess. Each scorer runs under its own budget; text_accuracy
+# gets a larger one because a cold Whisper model load counts against it.
+# The pipeline watchdog must outlive the slowest single scorer plus the
+# dependent scorers that run after it, otherwise the per-scorer budget is
+# unreachable and the whole run is killed instead of one scorer.
 SCORING_PIPELINE_TIMEOUT_SECONDS = 240
+SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS = 120
+SCORER_TIMEOUT_SECONDS = 120
+TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
@@ -247,6 +258,14 @@ RATE_LIMIT_SETTING_KEYS = frozenset({
     SETTING_MAX_QUEUE_DEPTH,
     SETTING_MAX_USER_ACTIVE_JOBS,
 })
+
+# Response compression
+GZIP_MINIMUM_SIZE_BYTES: Final[int] = 1024
+# zlib's own default (6) trades ~0.5pp less reduction than level 9 for
+# roughly a third of the CPU time on a typical ~24 KB whisper_cues JSON
+# payload (measured: level 6 -> 3855 bytes / 0.25ms avg; level 9 -> 3728
+# bytes / 0.70ms avg). Not worth the extra CPU per request for that.
+GZIP_COMPRESS_LEVEL: Final[int] = 6
 
 # SSE streaming
 SSE_POLL_INTERVAL_SECONDS = 1
@@ -432,3 +451,19 @@ LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
     LoraStatus.TRAINING,
     LoraStatus.EXPORTING,
 })
+
+# Env var names stripped from the environment of every child process this
+# package spawns (currently the Claude CLI, in claude/provider.py). The
+# acestep_worker package keeps an identical tuple of the same name in
+# acestep_worker/constants.py — it cannot import this module (see
+# CLAUDE.md "Engine packages are independent") — and
+# tests/test_secret_scrub_parity.py pins the two as equal sets.
+SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
+    "ANTHROPIC_API_KEY",
+    "SESSION_SECRET",
+    "SONGMAKER_INTERNAL_TOKEN",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "POSTGRES_PASSWORD",
+    "HF_TOKEN",
+)

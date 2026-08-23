@@ -3,8 +3,8 @@
 		albumList,
 		closeNowPlaying,
 		idlePlayTarget,
-		navigateToPlaying,
 		nowPlayingOpen,
+		nowPlayingSurface,
 		openNowPlaying,
 		playIdleStart,
 		playNextSong,
@@ -29,7 +29,6 @@
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL
 	} from '$lib/constants';
-	import NowPlaying from './NowPlaying.svelte';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import {
 		updateMediaSessionPlaybackState,
@@ -55,6 +54,7 @@
 	const isError = $derived(status === 'error');
 
 	const songs = $derived($songList);
+	const docked = $derived($nowPlayingSurface === 'docked');
 	const ctx = $derived($queueContext);
 	const idleTarget = $derived(
 		idlePlayTarget({
@@ -83,14 +83,12 @@
 		});
 	}
 
-	function onOpenNowPlayingClick(): void {
+	// The docked panel is a disclosure the bar owns: the same press that opened
+	// it puts it away again. A dialog surface only ever opens from here.
+	function onNowPlayingClick(): void {
 		if (!current) return;
-		openNowPlaying('queue');
-	}
-
-	function goToPlayingSong(): void {
-		closeNowPlaying();
-		void navigateToPlaying();
+		if (docked) closeNowPlaying();
+		else openNowPlaying('queue');
 	}
 
 	$effect(() => {
@@ -146,39 +144,33 @@
 	</span>
 {/snippet}
 
-<TransportBarFrame
-	{isPlaying}
-	{isLoading}
-	{isError}
-	{errorMsg}
-	{currentTime}
-	{duration}
-	{formatTime}
-	canPrev={Boolean(prevSong)}
-	canNext={Boolean(nextSong)}
-	onPrev={playPrevSong}
-	onNext={playNextSong}
-	shuffle={$shuffleEnabled}
-	shuffleLabel={$shuffleLabel}
-	onToggleShuffle={() => void toggleShuffle()}
-	onTogglePlay={togglePlay}
-	onSeek={(seconds) => audioPlayer.seek(seconds)}
-	{trackInfo}
-	nowPlayingOpen={$nowPlayingOpen}
-	onOpenNowPlaying={onOpenNowPlayingClick}
-	nowPlayingDisabled={!current}
-	onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
-	{mobileTransport}
-/>
-{#if $nowPlayingOpen && current}
-	<NowPlaying
-		info={current}
-		onclose={closeNowPlaying}
-		onGoToSong={goToPlayingSong}
+<!-- One player, never two: the full surface carries the only transport, so the
+	bar steps aside for it on every viewport. -->
+{#if $nowPlayingSurface !== 'full'}
+	<TransportBarFrame
+		{isPlaying}
+		{isLoading}
+		{isError}
+		{errorMsg}
+		{currentTime}
+		{duration}
+		{formatTime}
 		canPrev={Boolean(prevSong)}
 		canNext={Boolean(nextSong)}
-		onprev={playPrevSong}
-		onnext={playNextSong}
+		onPrev={playPrevSong}
+		onNext={playNextSong}
+		shuffle={$shuffleEnabled}
+		shuffleLabel={$shuffleLabel}
+		onToggleShuffle={() => void toggleShuffle()}
+		onTogglePlay={togglePlay}
+		onSeek={(seconds) => audioPlayer.seek(seconds)}
+		{trackInfo}
+		nowPlayingOpen={$nowPlayingOpen}
+		onOpenNowPlaying={onNowPlayingClick}
+		nowPlayingDocked={docked}
+		nowPlayingDisabled={!current}
+		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
+		{mobileTransport}
 	/>
 {/if}
 

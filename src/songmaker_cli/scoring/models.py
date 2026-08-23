@@ -1,22 +1,57 @@
-"""Score dataclasses for the scoring pipeline."""
+"""Score models for the scoring pipeline — values plus per-scorer outcomes."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, fields, replace
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from songmaker_cli.api_models.whisper import WhisperCue
-from songmaker_cli.scoring.registry import SCORERS
+from songmaker_cli.scoring.registry import SCORERS, ScorerHost
 
 
-@dataclass
-class SharedScorerData:
-    """Data shared between scorer phases (e.g. text_accuracy → lyrical_coherence).
+class ScorerOutcome(StrEnum):
+    """What happened to a single scorer during one pipeline run."""
 
-    Mutable: scorers write fields during execution. Not frozen because
-    GPU-phase scorers populate data that CPU-phase scorers read.
-    """
+    OK = "ok"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    TIMED_OUT = "timed_out"
 
-    whisper_text: str | None = field(default=None)
+
+class ScorerRun(BaseModel):
+    """One scorer's fate in a pipeline run, with the reason when it produced
+    no value. Only an ``OK`` run may overwrite a stored score."""
+
+    model_config = ConfigDict(frozen=True)
+
+    scorer: str
+    outcome: ScorerOutcome
+    detail: str = ""
+
+    @field_validator("scorer")
+    @classmethod
+    def _must_be_a_known_scorer(cls, value: str) -> str:
+        if value not in SCORERS:
+            raise ValueError(f"Unknown scorer: {value}")
+        return value
+
+    @property
+    def produced_value(self) -> bool:
+        return self.outcome is ScorerOutcome.OK
+
+    def __str__(self) -> str:
+        reason = f" ({self.detail})" if self.detail else ""
+        return f"{self.scorer}={self.outcome}{reason}"
+
+
+@dataclass(frozen=True)
+class ScorerExecution:
+    """What one scorer produced, and how its run ended."""
+
+    run: ScorerRun
+    value: object | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +71,12 @@ class TextAccuracyScore:
     @property
     def transcribed_lines(self) -> int:
         return len(self.transcribed_line_texts)
+
+    @property
+    def transcript(self) -> str:
+        """What Whisper heard, as one text — the form the coherence judge
+        reads and the generation stores."""
+        return "\n".join(self.transcribed_line_texts)
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -171,6 +212,20 @@ class SongScores:
     bpm_accuracy: BpmAccuracyScore | None = None
     silence: SilenceScore | None = None
     spectral_quality: SpectralQualityScore | None = None
+    runs: tuple[ScorerRun, ...] = ()
+
+    def including(self, execution: ScorerExecution) -> SongScores:
+        """These scores plus one more scorer's run.
+
+        The value lands only when that scorer produced one, so a failed,
+        skipped, or timed-out run contributes its reason alone and leaves
+        whatever the generation already scored untouched.
+        """
+        produced = (
+            {execution.run.scorer: execution.value}
+            if execution.run.produced_value else {}
+        )
+        return replace(self, runs=(*self.runs, execution.run), **produced)
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -179,6 +234,37 @@ class SongScores:
             if score is not None:
                 result.update(score.to_dict())
         return result
+
+    def refreshed_output_keys(self) -> frozenset[str]:
+        """Score keys owned by the scorers that produced a value in this run.
+
+        Persisting replaces exactly these keys, so a scorer that failed,
+        timed out, or was skipped keeps its previously stored value.
+        """
+        return frozenset(
+            key
+            for run in self.runs
+            if run.produced_value
+            for key in SCORERS[run.scorer].output_keys
+        )
+
+    @property
+    def any_child_scorer_timed_out(self) -> bool:
+        """True when a scorer inside the scorer child blew its budget.
+
+        Its call was abandoned, not stopped, so that child still runs it and
+        is no longer clean. A parent-hosted scorer over budget leaves its
+        thread here instead — killing the child would reclaim nothing.
+        """
+        return any(
+            run.outcome is ScorerOutcome.TIMED_OUT
+            and SCORERS[run.scorer].host is ScorerHost.CHILD
+            for run in self.runs
+        )
+
+    def outcome_summary(self) -> str:
+        """Every scorer's outcome in one line, for the job log."""
+        return ", ".join(str(run) for run in self.runs) if self.runs else "no scorers ran"
 
 
 _TO_DICT_ORDER: tuple[str, ...] = (
@@ -193,4 +279,20 @@ _TO_DICT_ORDER: tuple[str, ...] = (
 
 assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
     "_TO_DICT_ORDER must contain exactly the scorer names from SCORERS"
+)
+
+SCORE_TYPES: dict[str, type] = {
+    "text_accuracy": TextAccuracyScore,
+    "lyrical_coherence": LyricalCoherenceScore,
+    "emotional_dynamics": EmotionalDynamicsScore,
+    "audiobox": AudioBoxScore,
+    "bpm_accuracy": BpmAccuracyScore,
+    "silence": SilenceScore,
+    "spectral_quality": SpectralQualityScore,
+}
+
+_SCORE_FIELD_NAMES = frozenset(f.name for f in fields(SongScores)) - {"runs"}
+
+assert frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()), (
+    "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers"
 )

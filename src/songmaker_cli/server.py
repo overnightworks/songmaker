@@ -24,7 +24,12 @@ from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import APP_NAME, PWA_ICON_PATHS
+from songmaker_cli.constants import (
+    APP_NAME,
+    GZIP_COMPRESS_LEVEL,
+    GZIP_MINIMUM_SIZE_BYTES,
+    PWA_ICON_PATHS,
+)
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     auto_setup_admin,
@@ -41,6 +46,7 @@ from songmaker_cli.middleware import (
     IpRateLimitMiddleware,
     ResourceStreamDeadlineMiddleware,
     SecurityHeadersMiddleware,
+    SelectiveGZipMiddleware,
 )
 from songmaker_cli.settings import get_settings
 
@@ -147,14 +153,33 @@ def create_app(
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
-    #   2. CORS middleware            -- add configured cross-origin policy
-    #   3. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   4. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   5. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   6. CsrfTokenMiddleware        -- verify double-submit CSRF token
-    #   7. AccessLogMiddleware        -- log all requests (after security checks)
-    #   8. SecurityHeadersMiddleware  -- add security headers to responses
+    #   2. SelectiveGZipMiddleware    -- compress the finished response body
+    #   3. CORS middleware            -- add configured cross-origin policy
+    #   4. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   5. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   6. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   7. CsrfTokenMiddleware        -- verify double-submit CSRF token
+    #   8. AccessLogMiddleware        -- log all requests (after security checks)
+    #   9. SecurityHeadersMiddleware  -- add security headers to responses
     # WARNING: reordering these lines changes security behavior.
+    # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
+    # (the true outermost layer) and outside everything else, on purpose:
+    #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
+    #     pair and never reads or rejects the request, so its placement
+    #     cannot affect the auth/CSRF/rate-limit checks below -- those
+    #     already ran and could already reject the request before this
+    #     middleware's compression step ever executes.
+    #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
+    #     means it compresses the fully-assembled response (every other
+    #     middleware's headers already set) exactly once, not an
+    #     intermediate state some inner middleware still touches.
+    #   - It stays inside ResourceStreamDeadlineMiddleware because that one
+    #     needs to observe/bound the complete raw ASGI exchange for the one
+    #     SSE path it governs. That observation is unaffected by GZip's
+    #     presence: `text/event-stream` is never on the compression
+    #     allowlist, so GZip forwards those messages one-for-one with no
+    #     buffering, exactly as if it were absent (see `middleware/gzip.py`
+    #     and `test_server_middleware.py`'s SSE test).
     script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     app.add_middleware(SecurityHeadersMiddleware, script_hashes=script_hashes)
     app.add_middleware(AccessLogMiddleware)
@@ -185,6 +210,11 @@ def create_app(
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
+    app.add_middleware(
+        SelectiveGZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+        compresslevel=GZIP_COMPRESS_LEVEL,
+    )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
 
     @app.exception_handler(RequestValidationError)

@@ -30,9 +30,12 @@ export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
 export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
 export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
-// #45: shown instead of synced highlighting when a take has whisper_text but
-// no whisper_cues yet (scored before #44 landed) — lyrics stay static.
-export const NOW_PLAYING_LYRICS_RESCORE_HINT = 'Re-score this take to follow the lyrics.';
+// #45: a take scored before #44 landed has whisper_text but no whisper_cues,
+// so its lyrics stay static instead of following the audio. The lyrics panel
+// only names that state — it also renders for a public share listener, who
+// cannot re-score anything. The take panel owns the action that fixes it.
+export const NOW_PLAYING_LYRICS_UNSYNCED_NOTE = "Lyrics aren't synced for this take.";
+export const NOW_PLAYING_RESCORE_ACTION_LABEL = 'Re-score this take to follow the lyrics.';
 
 export const NOW_PLAYING_PICK_LABEL = 'Pick';
 export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';
@@ -52,6 +55,29 @@ export const NOW_PLAYING_Z_INDEX = 350;
 // stacked layout regardless of viewport width.
 export const NOW_PLAYING_STACKED_MAX_PX = 1099;
 export const NOW_PLAYING_STACKED_MEDIA = `(max-width: ${NOW_PLAYING_STACKED_MAX_PX}px), (any-pointer: coarse)`;
+
+// The two surfaces Now Playing can show as. The player store adds 'closed'
+// on top of them; the frame only ever renders one of these two.
+export const NOW_PLAYING_SURFACE_KINDS = ['docked', 'full'] as const;
+export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
+
+// Docking beside the workspace instead of covering it costs the workspace
+// NOW_PLAYING_DOCKED_WIDTH_PX. The editor's takes column and its header do not
+// survive that below 1440 — at 1280 a take row's Pick/Keep/… actions fall
+// outside `main`, which is `overflow: hidden`, so they become unreachable
+// rather than scrollable (browser gate on #140, 2026-08-23). Hence a dock
+// threshold of its own rather than reusing the stacking breakpoint: narrower
+// than this, Now Playing takes the whole screen, where it costs the editor
+// nothing. Issue #185 makes the editor answer to its own width, and lowers
+// this again.
+export const NOW_PLAYING_DOCK_MIN_PX = 1440;
+// Phrased as "cannot dock" so it reads like NOW_PLAYING_STACKED_MEDIA and
+// composes with subscribeCompactLayout, which ORs in the data-pointer='coarse'
+// override: too narrow, or any touch pointer, and there is no docked panel.
+export const NOW_PLAYING_UNDOCKED_MEDIA = `(max-width: ${NOW_PLAYING_DOCK_MIN_PX - 1}px), (any-pointer: coarse)`;
+export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
+export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
+export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
 
 // Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
 // this surface's copy, kept alongside the rest of Now Playing's strings.

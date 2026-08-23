@@ -5,7 +5,9 @@ import {
 	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
 	TAKE_AGAIN_LABEL,
-	TAKE_PLAYLIST_LABEL
+	TAKE_PLAYLIST_LABEL,
+	TAKE_RESCORE_LABEL,
+	TAKE_RESCORING_LABEL
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
@@ -64,6 +66,7 @@ function gen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 function defaultProps() {
 	return {
 		gen: gen(),
+		rescoring: false,
 		onagain: vi.fn(),
 		onuseasreference: vi.fn(),
 		onshare: vi.fn(),
@@ -72,6 +75,7 @@ function defaultProps() {
 		onpinseed: vi.fn(),
 		onaddtoplaylist: vi.fn(),
 		onremaster: vi.fn(),
+		onrescore: vi.fn(),
 		onrestore: vi.fn(),
 		ondelete: vi.fn()
 	};
@@ -131,6 +135,33 @@ describe('TakeMenu', () => {
 		await tick();
 		expect(props.onuseasreference).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('.overflow-menu')).toBeNull();
+	});
+
+	it('offers Re-score and runs it once', async () => {
+		const { target, props } = await render();
+		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
+			(el) => el.textContent?.trim() === TAKE_RESCORE_LABEL
+		);
+		expect(item, 'the menu offers Re-score').toBeDefined();
+
+		item?.click();
+		await tick();
+
+		expect(props.onrescore).toHaveBeenCalledTimes(1);
+	});
+
+	it('names the take as re-scoring and refuses a second run while one is queued', async () => {
+		const { target, props } = await render({ rescoring: true });
+		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
+			(el) => el.textContent?.trim() === TAKE_RESCORING_LABEL
+		);
+		if (!item) throw new Error('Expected the re-scoring menu item');
+		expect(item.disabled).toBe(true);
+
+		item.click();
+		await tick();
+
+		expect(props.onrescore).not.toHaveBeenCalled();
 	});
 
 	it('sizes the overflow trigger to the frequent hitbox on a coarse pointer', async () => {

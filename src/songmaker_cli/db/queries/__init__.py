@@ -14,10 +14,10 @@ from songmaker_cli.db.queries.albums import get_album as get_album
 from songmaker_cli.db.queries.albums import get_album_by_slug as get_album_by_slug
 from songmaker_cli.db.queries.albums import list_albums as list_albums
 from songmaker_cli.db.queries.albums import list_expired_albums as list_expired_albums
-from songmaker_cli.db.queries.albums import rename_album as rename_album
 from songmaker_cli.db.queries.albums import restore_album as restore_album
 from songmaker_cli.db.queries.albums import set_album_cover_key as set_album_cover_key
 from songmaker_cli.db.queries.albums import soft_delete_album as soft_delete_album
+from songmaker_cli.db.queries.albums import update_album as update_album
 from songmaker_cli.db.queries.auth import (
     LOGIN_ATTEMPT_RETENTION_DAYS as LOGIN_ATTEMPT_RETENTION_DAYS,
 )
@@ -278,6 +278,7 @@ from songmaker_cli.db.queries.resource_events import (
 from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after as list_resource_events_after,
 )
+from songmaker_cli.db.queries.sentinels import UNSET as UNSET
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
 from songmaker_cli.db.queries.settings import (
@@ -329,7 +330,6 @@ from songmaker_cli.db.queries.sharing import (
 from songmaker_cli.db.queries.sharing import (
     list_shared_inventory as list_shared_inventory,
 )
-from songmaker_cli.db.queries.songs import UNSET as UNSET
 from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
 from songmaker_cli.db.queries.songs import count_songs as count_songs
 from songmaker_cli.db.queries.songs import create_song as create_song
