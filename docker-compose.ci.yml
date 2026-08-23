@@ -1,0 +1,36 @@
+# CI override for docker-compose.yml — boots only the web-facing services
+# (no GPU, no monitoring) so the stack fits an ubuntu-latest runner.
+# `profiles: [gpu]` keeps the GPU/monitoring services out of both
+# `docker compose config` and `up` without needing to delete them here.
+x-gha-cache: &gha_cache
+  cache_from:
+    - type=gha
+  cache_to:
+    - type=gha,mode=max
+
+services:
+  prometheus:
+    profiles: ["gpu"]
+  grafana:
+    profiles: ["gpu"]
+  songmaker-acestep-worker-0:
+    profiles: ["gpu"]
+  songmaker-music-worker:
+    profiles: ["gpu"]
+  songmaker-scoring-worker:
+    profiles: ["gpu"]
+
+  migrate:
+    build:
+      <<: *gha_cache
+
+  songmaker-web:
+    build:
+      <<: *gha_cache
+    ports: !override
+      - "${WEB_PORT:-8080}:8080"
+    # !override drops the host Claude-CLI bind mounts — CI has no host
+    # Claude credentials and must not depend on the operator's machine.
+    volumes: !override
+      - audiofiles:/app/data/audio
+      - queuestreams:/app/data/queue-streams
