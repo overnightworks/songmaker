@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, isNotFound } from '$lib/api/fetch';
 import {
 	fetchPlaylists,
 	fetchPlaylist,
@@ -74,22 +74,28 @@ function fetchPlaylistDetailDeduped(
 	if (options.force) {
 		// A forced (post-mutation) call must not adopt a stale pre-mutation
 		// fetch that is still in flight -- drop it and start fresh. The old
-		// promise keeps running and only clears its OWN map entry on settle
-		// (identity-checked below), never the fresh one registered after it.
+		// promise keeps running, but it is no longer the map's current
+		// entry for this id, so both its cache write and its in-flight
+		// cleanup below are identity-checked and become no-ops: a
+		// superseded response landing after a newer one can neither poison
+		// the 15s cache with a stale snapshot nor clobber the fresh entry.
 		playlistDetailInflight.delete(id);
 	} else {
 		const inflight = playlistDetailInflight.get(id);
 		if (inflight) return inflight;
 	}
-	const request: Promise<PlaylistDetailItem> = (async () => {
-		const detail = await fetchPlaylist(id);
-		playlistDetailCache.set(id, { detail, fetchedAt: Date.now() });
-		return detail;
-	})().finally(() => {
-		if (playlistDetailInflight.get(id) === request) {
-			playlistDetailInflight.delete(id);
-		}
-	});
+	const request: Promise<PlaylistDetailItem> = Promise.resolve(fetchPlaylist(id))
+		.then((detail) => {
+			if (playlistDetailInflight.get(id) === request) {
+				playlistDetailCache.set(id, { detail, fetchedAt: Date.now() });
+			}
+			return detail;
+		})
+		.finally(() => {
+			if (playlistDetailInflight.get(id) === request) {
+				playlistDetailInflight.delete(id);
+			}
+		});
 	playlistDetailInflight.set(id, request);
 	return request;
 }
@@ -169,7 +175,7 @@ export async function loadPlaylistDetail(
 		playlistDetailLoad.set({ status: 'ready', error: null });
 	} catch (err) {
 		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
-		if (err instanceof ApiError && err.status === 404) {
+		if (isNotFound(err)) {
 			// The playlist is gone -- this is a permanent condition, not a
 			// transient error. Close the collection instead of showing a
 			// retry that can never succeed (matches hydrateCollection's

@@ -143,6 +143,31 @@ describe('loadPlaylistDetail', () => {
 		expect(get(selectedPlaylistDetail)?.title).toBe('Second');
 	});
 
+	it('does not let a superseded request poison the cache for a later reopen', async () => {
+		// remove A -> R1 (forced), remove B -> R2 (forced); R1 (now stale)
+		// lands last. A later plain reopen within the freshness window must
+		// serve R2's snapshot from the cache, not R1's stale one (#139).
+		let resolveFirst: ((value: PlaylistDetailItem) => void) | undefined;
+		vi.mocked(fetchPlaylist).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+
+		const first = loadPlaylistDetail('a', { forceRefresh: true });
+		const second = loadPlaylistDetail('a', { forceRefresh: true });
+		await second;
+		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		await first;
+
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+		expect(get(selectedPlaylistDetail)?.title).toBe('Second');
+	});
+
 	it('clears the collection when the playlist is gone', async () => {
 		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
 			new ApiError(404, 'gone', '/api/playlists/gone')

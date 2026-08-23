@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
-import { ApiError } from '$lib/api/fetch';
+import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong } from '$lib/api/songs';
 import { LIBRARY_DEFAULT_FILTER, LIBRARY_HISTORY_KIND, type LibraryFilter } from '$lib/constants';
@@ -384,8 +384,4 @@ function upsertReplace<T extends { id: string }>(items: T[], item: T): T[] {
 	const index = items.findIndex((existing) => existing.id === item.id);
 	if (index === -1) return [...items, item];
 	return items.map((existing, i) => (i === index ? item : existing));
-}
-
-function isNotFound(err: unknown): boolean {
-	return err instanceof ApiError && err.status === 404;
 }

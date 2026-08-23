@@ -19,6 +19,10 @@ export function isRateLimited(err: unknown): boolean {
 	return err instanceof ApiError && err.status === 429;
 }
 
+export function isNotFound(err: unknown): boolean {
+	return err instanceof ApiError && err.status === 404;
+}
+
 function parseRetryAfterSeconds(resp: {
 	headers?: { get: (name: string) => string | null };
 }): number | null {
