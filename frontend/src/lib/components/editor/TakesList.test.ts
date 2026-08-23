@@ -375,13 +375,14 @@ describe('TakesList archived takes', () => {
 		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
 	});
 
-	it('opens its menu and playlist picker unclipped, with no stacking context on the row', async () => {
-		// #141: `opacity` on the row would create a stacking context and clip
-		// the row's own popovers under the next row.
+	it('owns and anchors its menu and playlist picker, archived or not', async () => {
+		// Vitest runs with CSS off, so the absent stacking context cannot be
+		// asserted by computed style here — the browser walkthrough covers that
+		// (R1: row opacity 1, picker bottom hit-testable). What jsdom proves is
+		// the structure: the row owns its popovers and anchors them itself.
 		const { target } = await renderWithArchived();
 		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		if (!archivedRow) throw new Error('Expected the archived take row');
-		expect(getComputedStyle(archivedRow).opacity).not.toBe('0.55');
 
 		openTakeMenu(archivedRow);
 		await tick();
