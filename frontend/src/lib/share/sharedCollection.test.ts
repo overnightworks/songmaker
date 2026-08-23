@@ -227,6 +227,29 @@ describe('collectionSubtitle', () => {
 		expect(collectionSubtitle(view)).toBe('2 tracks');
 	});
 
+	it('excludes unplayable entries from the playlist track count', () => {
+		const view = fromSharedPlaylist({
+			title: 'Mix',
+			entries: [
+				{
+					entry_id: 'e1',
+					song_title: 'First',
+					artist: 'Artist',
+					generation_number: 1,
+					audio_url: '/a.mp3'
+				},
+				{
+					entry_id: 'e2',
+					song_title: 'No pick yet',
+					artist: 'Artist',
+					generation_number: 1,
+					audio_url: null
+				}
+			]
+		});
+		expect(collectionSubtitle(view)).toBe('1 track');
+	});
+
 	it('shows artist and album for a song', () => {
 		const view = fromSharedSong({
 			title: 'Solo',

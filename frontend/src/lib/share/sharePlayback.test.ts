@@ -210,17 +210,6 @@ describe('toggle() and classic playback', () => {
 		expect(playback.currentTrack?.key).toBe('s1');
 		playback.stop();
 	});
-
-	it('exposes null lyrics in classic mode', () => {
-		const playback = new SharePlayback();
-		const view = albumView();
-		playback.start(view, null);
-
-		playback.toggle(view.tracks[0]);
-
-		expect(playback.lyrics).toBeNull();
-		playback.stop();
-	});
 });
 
 describe('stream playback', () => {
@@ -236,7 +225,6 @@ describe('stream playback', () => {
 
 		expect(fakeAudio.src).toBe('/shared-stream.mp3');
 		expect(audioPlayer.current?.songTitle).toBe('Second');
-		expect(playback.lyrics).toBe('verse two');
 		playback.stop();
 	});
 
@@ -289,30 +277,41 @@ describe('stream playback', () => {
 });
 
 describe('shuffle', () => {
-	it('switches playback to classic and reorders the queue, keeping the playing track first', () => {
+	it('drops out of stream mode to classic per-track playback, keeping the playing track first', async () => {
 		setQueuePlaybackMode('stream');
+		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
-		playback.start(view, null);
+		playback.start(view, fetchStream);
 
 		playback.toggle(view.tracks[0]);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+
 		playback.setShuffle(true);
 
 		expect(playback.shuffle).toBe(true);
 		expect(playback.queueRows[0]?.key).toBe('s1');
 		expect(audioPlayer.mode).toBe('classic');
+		expect(fakeAudio.src).toBe('/shared/slug/audio/s1.mp3');
 		expect(playback.currentTrack?.key).toBe('s1');
 		playback.stop();
 	});
 
-	it('restores the original order when disabled', () => {
+	it('returns to stream mode when disabled', async () => {
+		setQueuePlaybackMode('stream');
+		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
-		playback.start(view, null);
+		playback.start(view, fetchStream);
 
 		playback.toggle(view.tracks[0]);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+
 		playback.setShuffle(true);
+		expect(audioPlayer.mode).toBe('classic');
+
 		playback.setShuffle(false);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 
 		expect(playback.queueRows.map((r) => r.key)).toEqual(['s1', 's2']);
 		playback.stop();

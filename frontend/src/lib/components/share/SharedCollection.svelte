@@ -9,6 +9,7 @@
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
 	import type { QueueContext } from '$lib/stores/player';
 	import { ALBUM_COVER_ALT_TYPE, SONG_COVER_ALT_TYPE } from '$lib/constants';
+	import { SHARE_NOW_PLAYING_NO_LYRICS, SHARE_NOW_PLAYING_SHEET_LABEL } from '$lib/constants/share';
 	import { formatTime, titleInitials } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import CollectionHeaderFrame from '$lib/components/CollectionHeaderFrame.svelte';
@@ -204,7 +205,9 @@
 		onToggleShuffle={() => playback.setShuffle(!playback.shuffle)}
 		upNextTitle={playback.queue.upNext?.songTitle ?? null}
 		rightPanelLabel="Queue"
+		sheetLabel={SHARE_NOW_PLAYING_SHEET_LABEL}
 		showTakeLabel={false}
+		lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
 		{rightPanel}
 	/>
 {/if}
@@ -218,7 +221,6 @@
 		font-family: var(--font-body, 'Open Sans', sans-serif);
 		color: var(--text, #e0e0e0);
 		position: relative;
-		z-index: 1;
 	}
 
 	.bg-effects {

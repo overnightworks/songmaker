@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { fetchSharedAlbumStream } from '$lib/api/client';
+	import { fetchSharedAlbumStream } from '$lib/api/queue-streams';
 	import { APP_NAME } from '$lib/constants';
 	import SharedCollection from '$lib/components/share/SharedCollection.svelte';
 	import { fromSharedAlbum, type SharedAlbumPayload } from '$lib/share/sharedCollection';

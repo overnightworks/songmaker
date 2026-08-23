@@ -37,8 +37,10 @@
 		onGoToSong,
 		upNextTitle,
 		rightPanelLabel,
+		sheetLabel,
 		rightPanelOpenOnMount = false,
 		showTakeLabel = true,
+		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
@@ -54,12 +56,17 @@
 		onGoToSong?: () => void;
 		upNextTitle: string | null;
 		rightPanelLabel: string;
+		// The mobile sheet's accessible name. Independent of rightPanelLabel
+		// (the visible trigger button text, which can change with tab state)
+		// so the dialog's aria-label stays a stable description.
+		sheetLabel: string;
 		rightPanelOpenOnMount?: boolean;
 		// Take/version numbering is an internal editing concept — the app's
 		// NowPlaying shows it, a public share listener never sees "Take N"
 		// (share's classic-mode playback has no real take number to show
 		// anyway; see trackPlaybackInfo()).
 		showTakeLabel?: boolean;
+		lyricsEmptyLabel?: string;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -244,7 +251,7 @@
 				{#if hasLyrics}
 					<div class="lyrics">{lyrics}</div>
 				{:else}
-					<p class="lyrics-empty">{NOW_PLAYING_NO_LYRICS}</p>
+					<p class="lyrics-empty">{lyricsEmptyLabel}</p>
 				{/if}
 				{#if onGoToSong}
 					<button
@@ -293,7 +300,7 @@
 					class="mobile-sheet"
 					role="dialog"
 					aria-modal="true"
-					aria-label={rightPanelLabel}
+					aria-label={sheetLabel}
 					tabindex="-1"
 				>
 					{@render rightPanel()}

@@ -157,7 +157,7 @@ export function playableTracks(tracks: SharedTrack[]): SharedTrack[] {
 // collection surface never has to branch on `kind` itself.
 export function collectionSubtitle(view: SharedCollectionView): string {
 	if (view.kind === 'playlist') {
-		const count = view.tracks.length;
+		const count = playableTracks(view.tracks).length;
 		return `${count} track${count !== 1 ? 's' : ''}`;
 	}
 	if (view.kind === 'take') {

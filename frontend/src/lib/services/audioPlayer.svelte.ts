@@ -439,6 +439,7 @@ class AudioPlayer {
 			}
 		});
 		el.addEventListener('error', () => {
+			if (!this.currentUrl) return;
 			if (this.streamEngine.active) {
 				void this.recoverStream('media-error');
 				return;

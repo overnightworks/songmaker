@@ -91,12 +91,6 @@ export class SharePlayback {
 		return { items, currentIndex, upNext };
 	});
 
-	readonly lyrics = $derived.by((): string | null => {
-		if (audioPlayer.mode !== 'stream' || this.activeIndex < 0) return null;
-		const track = this.playOrder[this.activeIndex];
-		return this.streamTrackFor(track)?.lyrics ?? null;
-	});
-
 	start(collection: SharedCollectionView, fetchStream: ShareStreamFetcher | null): void {
 		this.collection = collection;
 		this.baseTracks = playableTracks(collection.tracks);

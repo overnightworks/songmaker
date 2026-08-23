@@ -212,6 +212,7 @@
 	{onGoToSong}
 	upNextTitle={queueVm.upNext?.songTitle ?? null}
 	rightPanelLabel={mobileTriggerLabel}
+	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}
 	rightPanelOpenOnMount={rightPanelTab === 'take'}
 	{rightPanel}
 />

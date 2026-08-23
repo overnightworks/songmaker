@@ -949,8 +949,12 @@ describe('loadUrl()', () => {
 		expect(fakeAudio.src).toBe('/shared/slug/audio/first.mp3?recover=1');
 	});
 
-	it('probes the loadUrl URL on a media error and never calls onAuthLost when none is installed', async () => {
+	it("probes the loadUrl URL on a media error and never calls a previous owner's onAuthLost after swapping in null", async () => {
 		fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
+		const appOnAuthLost = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onAuthLost: appOnAuthLost }));
+		audioPlayer.swapCallbacks(callbacks({ onAuthLost: null }));
+
 		audioPlayer.loadUrl(makeInfo(), '/shared/slug/audio/first.mp3', { autoplay: false });
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
@@ -960,6 +964,7 @@ describe('loadUrl()', () => {
 			credentials: 'include'
 		});
 		expect(audioPlayer.status).toBe('error');
+		expect(appOnAuthLost).not.toHaveBeenCalled();
 	});
 });
 
@@ -994,6 +999,17 @@ describe('unload()', () => {
 
 		expect(audioPlayer.status).toBe('loading');
 		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+	});
+
+	it('ignores an error event that fires after unload clearing the src', () => {
+		audioPlayer.load(makeInfo());
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+
+		audioPlayer.unload();
+		fakeAudio.fire('error');
+
+		expect(audioPlayer.status).toBe('idle');
 	});
 });
 
