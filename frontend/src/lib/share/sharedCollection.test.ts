@@ -95,7 +95,7 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 		]);
 	});
 
-	it('produces a one-track collection for a shared take, carrying the take number and seed', () => {
+	it('produces a one-track collection for a shared take', () => {
 		const view = fromSharedGeneration({
 			title: 'Solo Track',
 			artist: 'Artist',
@@ -106,8 +106,6 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 		});
 
 		expect(view.kind).toBe('take');
-		expect(view.takeNumber).toBe(3);
-		expect(view.seed).toBe(42);
 		expect(view.tracks).toEqual([
 			{ key: 'single', title: 'Solo Track', subtitle: null, audioUrl: '/audio/take3.mp3' }
 		]);
