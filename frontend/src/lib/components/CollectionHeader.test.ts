@@ -156,7 +156,10 @@ describe('CollectionHeader', () => {
 		const onaddsong = vi.fn();
 		const target = await render({ ...baseProps(), onaddsong });
 		const addSong = requireElement<HTMLButtonElement>(target, '.add-song-btn');
-		expect(addSong.textContent?.trim()).toBe(ALBUM_ADD_SONG_LABEL);
+		expect(addSong.getAttribute('aria-label')).toBe(ALBUM_ADD_SONG_LABEL);
+		expect(requireElement(addSong, '.add-song-full').textContent?.trim()).toBe(
+			ALBUM_ADD_SONG_LABEL
+		);
 
 		// Sizing itself is pinned once for the shared mechanism in
 		// frequent-hitbox.test.ts; here the contract is that this control opts in.

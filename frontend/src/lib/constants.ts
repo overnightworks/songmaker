@@ -168,7 +168,10 @@ export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
 export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
+// The album header's create action. On a narrow header the glyph stands
+// alone — the word would otherwise squeeze the album title out of the row.
 export const ALBUM_ADD_SONG_LABEL = '+ Song';
+export const ALBUM_ADD_SONG_GLYPH = '+';
 
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
