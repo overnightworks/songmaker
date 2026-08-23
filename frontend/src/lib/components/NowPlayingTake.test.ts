@@ -22,7 +22,7 @@ import { NOW_PLAYING_RESCORE_ACTION_LABEL } from '$lib/constants/now-playing';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
 import { revealPlayingSong } from '$lib/stores/navigation';
-import { nowPlayingOpen } from '$lib/stores/player';
+import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
 import { pendingSource } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
@@ -80,7 +80,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	vi.clearAllMocks();
-	nowPlayingOpen.set(false);
+	nowPlayingSurface.set('closed');
 	pendingSource.set(null);
 	activeJobs.set([]);
 });
@@ -369,7 +369,7 @@ describe('NowPlayingTake', () => {
 	});
 
 	it('use as reference sets the recipe source, closes Now Playing, and navigates to the song', async () => {
-		nowPlayingOpen.set(true);
+		nowPlayingSurface.set('full');
 		const gen = generation();
 		const withSong = song();
 		await render({ generation: gen, song: withSong });

@@ -7,16 +7,20 @@ import {
 } from './escape-level-up';
 
 describe('escapeLevelUpTarget', () => {
+	it('leaves the docked Now Playing panel before any navigation level', () => {
+		expect(escapeLevelUpTarget(true, true, true)).toBe('now-playing');
+	});
+
 	it('goes from a song to its collection', () => {
-		expect(escapeLevelUpTarget(true, true)).toBe('collection');
+		expect(escapeLevelUpTarget(false, true, true)).toBe('collection');
 	});
 
 	it('goes from a collection to the wall', () => {
-		expect(escapeLevelUpTarget(false, true)).toBe('wall');
+		expect(escapeLevelUpTarget(false, false, true)).toBe('wall');
 	});
 
 	it('does nothing at the wall', () => {
-		expect(escapeLevelUpTarget(false, false)).toBeNull();
+		expect(escapeLevelUpTarget(false, false, false)).toBeNull();
 	});
 });
 

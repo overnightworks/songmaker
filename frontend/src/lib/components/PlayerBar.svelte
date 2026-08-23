@@ -3,8 +3,8 @@
 		albumList,
 		closeNowPlaying,
 		idlePlayTarget,
-		navigateToPlaying,
 		nowPlayingOpen,
+		nowPlayingSurface,
 		openNowPlaying,
 		playIdleStart,
 		playNextSong,
@@ -88,11 +88,6 @@
 		openNowPlaying('queue');
 	}
 
-	function goToPlayingSong(): void {
-		closeNowPlaying();
-		void navigateToPlaying();
-	}
-
 	$effect(() => {
 		if (!current) closeNowPlaying();
 	});
@@ -146,40 +141,36 @@
 	</span>
 {/snippet}
 
-<TransportBarFrame
-	{isPlaying}
-	{isLoading}
-	{isError}
-	{errorMsg}
-	{currentTime}
-	{duration}
-	{formatTime}
-	canPrev={Boolean(prevSong)}
-	canNext={Boolean(nextSong)}
-	onPrev={playPrevSong}
-	onNext={playNextSong}
-	shuffle={$shuffleEnabled}
-	shuffleLabel={$shuffleLabel}
-	onToggleShuffle={() => void toggleShuffle()}
-	onTogglePlay={togglePlay}
-	onSeek={(seconds) => audioPlayer.seek(seconds)}
-	{trackInfo}
-	nowPlayingOpen={$nowPlayingOpen}
-	onOpenNowPlaying={onOpenNowPlayingClick}
-	nowPlayingDisabled={!current}
-	onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
-	{mobileTransport}
-/>
-{#if $nowPlayingOpen && current}
-	<NowPlaying
-		info={current}
-		onclose={closeNowPlaying}
-		onGoToSong={goToPlayingSong}
+<!-- One player, never two: the full surface carries the only transport, so the
+	bar steps aside for it on every viewport. -->
+{#if $nowPlayingSurface !== 'full'}
+	<TransportBarFrame
+		{isPlaying}
+		{isLoading}
+		{isError}
+		{errorMsg}
+		{currentTime}
+		{duration}
+		{formatTime}
 		canPrev={Boolean(prevSong)}
 		canNext={Boolean(nextSong)}
-		onprev={playPrevSong}
-		onnext={playNextSong}
+		onPrev={playPrevSong}
+		onNext={playNextSong}
+		shuffle={$shuffleEnabled}
+		shuffleLabel={$shuffleLabel}
+		onToggleShuffle={() => void toggleShuffle()}
+		onTogglePlay={togglePlay}
+		onSeek={(seconds) => audioPlayer.seek(seconds)}
+		{trackInfo}
+		nowPlayingOpen={$nowPlayingOpen}
+		onOpenNowPlaying={onOpenNowPlayingClick}
+		nowPlayingDisabled={!current}
+		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
+		{mobileTransport}
 	/>
+{/if}
+{#if $nowPlayingOpen && current}
+	<NowPlaying info={current} />
 {/if}
 
 <style>

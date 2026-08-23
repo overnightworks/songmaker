@@ -13,12 +13,16 @@ import {
 import {
 	albumList,
 	libraryQueueSkipped,
+	nowPlayingDockable,
 	nowPlayingPanel,
+	nowPlayingSurface,
 	queueContext,
 	setShuffle,
 	shuffleEnabled,
 	songList
 } from '$lib/stores/player';
+import * as playerStore from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import NowPlaying from './NowPlaying.svelte';
@@ -104,8 +108,12 @@ let target: HTMLDivElement;
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+	vi.restoreAllMocks();
 	document.body.replaceChildren();
 	document.documentElement.dataset.pointer = '';
+	audioPlayer.current = null;
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
 	songList.set([]);
 	albumList.set([]);
 	queueContext.set({ type: 'library' });
@@ -116,35 +124,15 @@ afterEach(async () => {
 	nowPlayingPanel.set('queue');
 });
 
-async function renderSurface(
-	playback: PlaybackInfo,
-	handlers: {
-		onclose?: ReturnType<typeof vi.fn>;
-		onGoToSong?: ReturnType<typeof vi.fn>;
-		canPrev?: boolean;
-		canNext?: boolean;
-		onprev?: ReturnType<typeof vi.fn>;
-		onnext?: ReturnType<typeof vi.fn>;
-	} = {}
-) {
+// The surface reads what is playing and what the queue allows from the player
+// store, so a test arranges playback rather than handing it callbacks.
+async function renderSurface(playback: PlaybackInfo) {
+	audioPlayer.current = playback;
+	nowPlayingSurface.set('full');
 	target = document.createElement('div');
 	document.body.append(target);
-	const onclose = handlers.onclose ?? vi.fn();
-	const onGoToSong = handlers.onGoToSong ?? vi.fn();
-	mounted = mount(NowPlaying, {
-		target,
-		props: {
-			info: playback,
-			onclose,
-			onGoToSong,
-			canPrev: handlers.canPrev,
-			canNext: handlers.canNext,
-			onprev: handlers.onprev,
-			onnext: handlers.onnext
-		}
-	});
+	mounted = mount(NowPlaying, { target, props: { info: playback } });
 	await tick();
-	return { onclose, onGoToSong };
 }
 
 describe('NowPlaying', () => {
@@ -186,42 +174,61 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.lyrics')?.textContent).toContain('old verse');
 	});
 
-	it('closes on Escape and the close button', async () => {
-		const handlers = await renderSurface(info());
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		expect(handlers.onclose).toHaveBeenCalledOnce();
+	it('closes on the close button', async () => {
+		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)?.click();
-		expect(handlers.onclose).toHaveBeenCalledTimes(2);
+
+		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
-	it('goes to the playing song', async () => {
-		const handlers = await renderSurface(info());
+	it('closes on Escape where no docked panel fits', async () => {
+		await renderSurface(info());
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('steps back to the docked panel on Escape where one fits', async () => {
+		nowPlayingDockable.set(true);
+		await renderSurface(info());
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('goes to the playing song and leaves Now Playing behind', async () => {
+		const navigate = vi.spyOn(playerStore, 'navigateToPlaying').mockResolvedValue();
+		await renderSurface(info());
+
 		const go = Array.from(target.querySelectorAll('button')).find(
 			(button) => button.textContent === NOW_PLAYING_GO_TO_SONG
 		);
 		go?.click();
-		expect(handlers.onGoToSong).toHaveBeenCalledOnce();
+
+		expect(navigate).toHaveBeenCalledOnce();
+		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
-	it('wires Previous and Next to the given handlers, respecting can-navigate flags', async () => {
-		const onprev = vi.fn();
-		const onnext = vi.fn();
-		await renderSurface(info(), { canPrev: false, canNext: true, onprev, onnext });
-
-		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous song"]');
-		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
-		expect(previous?.disabled).toBe(true);
-		expect(next?.disabled).toBe(false);
-		next?.click();
-		expect(onnext).toHaveBeenCalledOnce();
-		expect(onprev).not.toHaveBeenCalled();
-	});
-
-	it('omits Previous and Next when no handlers are given', async () => {
+	it('offers Previous and Next only as far as the playing queue reaches', async () => {
+		const next = vi.spyOn(playerStore, 'playNextSong').mockResolvedValue();
+		albumList.set([album()]);
+		songList.set([song()]);
+		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
-		expect(target.querySelector('button[aria-label="Previous song"]')).toBeNull();
-		expect(target.querySelector('button[aria-label="Next song"]')).toBeNull();
+		expect(
+			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+		).toBe(true);
+
+		songList.set([song(), song({ id: 's2', title: 'Second' })]);
+		await tick();
+
+		const nextButton = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
+		expect(nextButton?.disabled).toBe(false);
+		nextButton?.click();
+		expect(next).toHaveBeenCalledOnce();
 	});
 
 	it('toggles shuffle from the overlay, scoped to the current queue', async () => {
@@ -400,7 +407,7 @@ describe('NowPlaying', () => {
 
 	it('scopes the mobile sheet focus trap to the sheet, not the whole surface, on Escape', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		const handlers = await renderSurface(info());
+		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
@@ -409,6 +416,6 @@ describe('NowPlaying', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
-		expect(handlers.onclose).not.toHaveBeenCalled();
+		expect(get(nowPlayingSurface)).toBe('full');
 	});
 });

@@ -356,4 +356,28 @@ describe('shared album page', () => {
 		expect(target.querySelector('.cover-meta')?.textContent).not.toContain('Take');
 		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
 	});
+
+	// The app hides its transport bar under the full Now Playing surface
+	// (issue #140). A share listener keeps theirs: the public page has no
+	// docked panel and no second player to reconcile.
+	it('keeps the transport bar under its Now Playing surface', async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await tick();
+
+		const surface = target.querySelector('.now-playing');
+		expect(surface).not.toBeNull();
+		expect(surface?.getAttribute('aria-modal')).toBe('true');
+		expect(surface?.classList.contains('over-transport-bar')).toBe(true);
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
 });

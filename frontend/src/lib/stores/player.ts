@@ -26,11 +26,14 @@ import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/serv
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import { addToast } from '$lib/stores/toast';
 import {
+	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
 	queuePlaybackMode,
+	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
 	shouldUseQueueStream,
+	type DesktopNowPlayingSurface,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -842,42 +845,95 @@ export function jumpToQueueIndex(index: number): void {
 	playNativeIndex(ctx, index);
 }
 
-// Whether the Now Playing surface is mounted, and which of its right-panel
-// tabs it should open on. Owned here (not by PlayerBar, which only reads
-// them) so any surface — a take row, a deep link — can open Now Playing
-// straight to the judging panel without routing through PlayerBar's own
-// open/close click handlers.
-export const nowPlayingOpen = writable(false);
+// Which Now Playing surface is showing, and which of its right-panel tabs it
+// opens on. Owned here (not by PlayerBar or the layout, which only read them)
+// so any surface — a take row, a deep link — can open Now Playing straight to
+// the judging panel without routing through PlayerBar's own click handlers.
+export type NowPlayingSurface = 'closed' | 'docked' | 'full';
+export const nowPlayingSurface = writable<NowPlayingSurface>('closed');
+export const nowPlayingOpen = derived(nowPlayingSurface, (surface) => surface !== 'closed');
 export type NowPlayingPanel = 'queue' | 'take';
 export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
+
+// Whether the viewport has room for the docked panel beside the workspace.
+// The layout owns that media query — the same width/pointer switch the frame
+// stacks on — and reports it here, so opening and Escape resolve the surface
+// from one fact instead of each re-reading the breakpoint.
+export const nowPlayingDockable = writable(false);
+
+nowPlayingDockable.subscribe((dockable) => {
+	if (!dockable && get(nowPlayingSurface) === 'docked') nowPlayingSurface.set('full');
+});
 
 // The element to return focus to when Now Playing closes. PlayerBar
 // registers its own "Now Playing" button here once on mount — every opener
 // (PlayerBar's button, a TakesList row, NowPlayingTake's "Use as reference")
 // shares that single restore target instead of each tracking its own.
 let nowPlayingFocusTrigger: HTMLElement | null = null;
+let restoreFocusOnRegister = false;
 
 export function registerNowPlayingTrigger(el: HTMLElement | null): void {
 	nowPlayingFocusTrigger = el;
+	if (!el || !restoreFocusOnRegister) return;
+	restoreFocusOnRegister = false;
+	el.focus();
+}
+
+// Leaving the full surface remounts the transport bar it hides, so the button
+// to hand focus back to does not exist yet at the moment of closing; it
+// arrives with the bar and registerNowPlayingTrigger delivers the focus then.
+function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
+	const trigger = nowPlayingFocusTrigger;
+	if (trigger) {
+		queueMicrotask(() => trigger.focus());
+		return;
+	}
+	restoreFocusOnRegister = closedFromFullSurface;
 }
 
 // The single open/close owner for Now Playing: every surface that opens or
 // closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
 // NowPlayingTake's "Use as reference") routes through these two functions
-// instead of poking `nowPlayingOpen`/`nowPlayingPanel` directly, so closing
+// instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so closing
 // the mobile rail drawer on open and restoring focus on close happen exactly
 // once, the same way, regardless of entry point.
 export function openNowPlaying(panel: NowPlayingPanel): void {
 	closeSidebar();
 	nowPlayingPanel.set(panel);
-	nowPlayingOpen.set(true);
+	nowPlayingSurface.set(get(nowPlayingDockable) ? get(desktopNowPlayingSurface) : 'full');
 }
 
 export function closeNowPlaying(): void {
-	if (!get(nowPlayingOpen)) return;
-	nowPlayingOpen.set(false);
-	const trigger = nowPlayingFocusTrigger;
-	queueMicrotask(() => trigger?.focus());
+	const surface = get(nowPlayingSurface);
+	if (surface === 'closed') return;
+	nowPlayingSurface.set('closed');
+	restoreNowPlayingTriggerFocus(surface === 'full');
+}
+
+// Docked versus full is a surface choice, not an open or close, and the
+// choice is remembered so the next open lands where the listener last was.
+export function expandNowPlaying(): void {
+	chooseDesktopSurface('full');
+}
+
+export function dockNowPlaying(): void {
+	chooseDesktopSurface('docked');
+}
+
+function chooseDesktopSurface(surface: DesktopNowPlayingSurface): void {
+	setDesktopNowPlayingSurface(surface);
+	nowPlayingSurface.set(surface);
+}
+
+// Escape leaves Now Playing one level at a time: the full surface falls back
+// to the docked panel wherever there is room for one, and the docked panel —
+// like a full surface on a compact viewport — closes.
+export function escapeNowPlaying(): void {
+	if (get(nowPlayingSurface) === 'full' && get(nowPlayingDockable)) {
+		dockNowPlaying();
+		return;
+	}
+	closeNowPlaying();
 }
 
 // The single playback entry point for a take row (TakesList, TakeStrip):

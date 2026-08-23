@@ -28,6 +28,7 @@
 		info,
 		coverUrl,
 		onclose,
+		onEscape,
 		canPrev = false,
 		canNext = false,
 		onprev,
@@ -52,11 +53,20 @@
 		// public queue-stream manifest, which redacts `lyrics` — the text
 		// comes from the share payload instead.
 		lyricsText = null,
+		// True where a transport bar stays visible under the surface. The share
+		// page keeps its own bar; the app hides its bar so Now Playing carries
+		// the only transport ("one player, never two") and owns the viewport.
+		transportBarBelow = false,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
 		coverUrl: string | null;
 		onclose: () => void;
+		// Escape while the surface holds focus. The app steps down one level
+		// (full screen back to the docked panel) where the plain close button
+		// leaves Now Playing altogether; a caller that makes no such
+		// distinction can omit it.
+		onEscape?: () => void;
 		canPrev?: boolean;
 		canNext?: boolean;
 		onprev?: () => void;
@@ -81,6 +91,7 @@
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
 		lyricsText?: string | null;
+		transportBarBelow?: boolean;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -134,7 +145,7 @@
 			});
 			return;
 		}
-		handleFocusTrapKeydown(root, event, onclose);
+		handleFocusTrapKeydown(root, event, onEscape ?? onclose);
 	}
 
 	async function openMobilePanel(): Promise<void> {
@@ -154,6 +165,7 @@
 <div
 	bind:this={root}
 	class="now-playing"
+	class:over-transport-bar={transportBarBelow}
 	class:stacked
 	role="dialog"
 	aria-modal="true"
@@ -325,7 +337,7 @@
 <style>
 	.now-playing {
 		position: fixed;
-		inset: 0 0 var(--player-height);
+		inset: 0;
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
@@ -567,7 +579,7 @@
 	}
 	.mobile-sheet-backdrop {
 		position: fixed;
-		inset: 0 0 var(--player-height);
+		inset: 0;
 		width: 100%;
 		border: 0;
 		background: color-mix(in srgb, #000 42%, transparent);
@@ -577,7 +589,7 @@
 		position: fixed;
 		left: 0;
 		right: 0;
-		bottom: var(--player-height);
+		bottom: 0;
 		max-height: min(70vh, 32rem);
 		padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
 		background: var(--header-bg);
@@ -586,6 +598,12 @@
 		flex-direction: column;
 		gap: 0.7rem;
 		min-height: 0;
+	}
+
+	.now-playing.over-transport-bar,
+	.now-playing.over-transport-bar .mobile-sheet-backdrop,
+	.now-playing.over-transport-bar .mobile-sheet {
+		bottom: var(--player-height);
 	}
 
 	.now-playing.stacked .np-body {

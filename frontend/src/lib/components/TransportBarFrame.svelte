@@ -86,8 +86,12 @@
 	const playFaceStyle = $derived(isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : '');
 	const trackTitleGlowStyle = $derived(isPlaying ? titleGlowStyle(bassLevel, vizColors) : '');
 
+	// Reported on unmount too: the app hides the whole bar under the
+	// full-screen Now Playing surface, and an owner that kept the detached
+	// button would hand focus to an element no longer on the page.
 	$effect(() => {
 		onNowPlayingTriggerBind?.(nowPlayingTrigger);
+		return () => onNowPlayingTriggerBind?.(undefined);
 	});
 
 	$effect(() => {

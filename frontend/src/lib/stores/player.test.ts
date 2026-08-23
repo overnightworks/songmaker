@@ -68,9 +68,14 @@ import {
 	idlePlayTarget,
 	jumpToQueueIndex,
 	closeNowPlaying,
+	dockNowPlaying,
+	escapeNowPlaying,
+	expandNowPlaying,
 	navigateToPlaying,
+	nowPlayingDockable,
 	nowPlayingOpen,
 	nowPlayingPanel,
+	nowPlayingSurface,
 	openNowPlaying,
 	playGeneration,
 	playTake,
@@ -112,7 +117,12 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
-import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
+import {
+	DEFAULT_DESKTOP_NOW_PLAYING_SURFACE,
+	libraryTakePool,
+	setDesktopNowPlayingSurface,
+	setLibraryTakePool
+} from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
 import { RAIL_LIBRARY_LABEL } from '$lib/constants';
@@ -308,9 +318,12 @@ afterEach(() => {
 	audioPlayer.currentTime = 0;
 	audioPlayer.status = 'idle';
 	toasts.set([]);
-	nowPlayingOpen.set(false);
+	nowPlayingSurface.set('closed');
 	nowPlayingPanel.set('queue');
+	nowPlayingDockable.set(false);
 	registerNowPlayingTrigger(null);
+	setDesktopNowPlayingSurface(DEFAULT_DESKTOP_NOW_PLAYING_SURFACE);
+	localStorage.removeItem('nowPlayingDesktopSurface');
 	sidebarOpen.set(false);
 	localStorage.removeItem('queueShuffleEnabled');
 	localStorage.removeItem('libraryTakePool');
@@ -2592,5 +2605,117 @@ describe('openNowPlaying / closeNowPlaying', () => {
 		closeNowPlaying();
 
 		expect(focusSpy).not.toHaveBeenCalled();
+	});
+
+	it('restores focus to the transport bar trigger that remounts after the full surface', () => {
+		const trigger = document.createElement('button');
+		document.body.append(trigger);
+		registerNowPlayingTrigger(trigger);
+		openNowPlaying('queue');
+		// The full surface hides the bar, which unregisters its button.
+		registerNowPlayingTrigger(null);
+
+		closeNowPlaying();
+		registerNowPlayingTrigger(trigger);
+
+		expect(document.activeElement).toBe(trigger);
+		trigger.remove();
+	});
+});
+
+describe('Now Playing surface', () => {
+	it('opens full screen where no docked panel fits', () => {
+		nowPlayingDockable.set(false);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('opens docked by default where a docked panel fits', () => {
+		nowPlayingDockable.set(true);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('opens on the desktop surface the listener last chose', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+		closeNowPlaying();
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('leaves the remembered desktop choice alone when a compact viewport forces full screen', () => {
+		nowPlayingDockable.set(false);
+		openNowPlaying('queue');
+		closeNowPlaying();
+		nowPlayingDockable.set(true);
+
+		openNowPlaying('queue');
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('Escape steps from full screen back to the docked panel where one fits', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('Escape closes the docked panel', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('Escape closes a full surface that has no docked panel to fall back to', () => {
+		nowPlayingDockable.set(false);
+		openNowPlaying('queue');
+
+		escapeNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('turns a docked panel into the full surface when the viewport loses room for it', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expect(get(nowPlayingSurface)).toBe('docked');
+
+		nowPlayingDockable.set(false);
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it('leaves a closed Now Playing closed when the viewport loses room for the panel', () => {
+		nowPlayingDockable.set(true);
+
+		nowPlayingDockable.set(false);
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('dockNowPlaying returns to the panel and remembers it', () => {
+		nowPlayingDockable.set(true);
+		openNowPlaying('queue');
+		expandNowPlaying();
+
+		dockNowPlaying();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+		expect(localStorage.getItem('nowPlayingDesktopSurface')).toBe('docked');
 	});
 });

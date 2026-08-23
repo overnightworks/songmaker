@@ -207,6 +207,7 @@
 		lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
 		lyricsCues={playback.currentCues}
 		lyricsText={playback.currentTrack?.lyrics ?? null}
+		transportBarBelow
 		{rightPanel}
 	/>
 {/if}

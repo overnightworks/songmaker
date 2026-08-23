@@ -13,6 +13,9 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
 	albumList,
+	closeNowPlaying,
+	nowPlayingDockable,
+	nowPlayingSurface,
 	playStartNotice,
 	queueContext,
 	selectedAlbumId,
@@ -179,6 +182,8 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
 	setShuffle(false);
 });
 
@@ -465,5 +470,54 @@ describe('PlayerBar Now Playing', () => {
 
 		expect(get(sidebarOpen)).toBe(false);
 		sidebarOpen.set(false);
+	});
+
+	// "One player, never two": the full surface carries the only transport.
+	it('hides the transport bar under the full surface and brings it back on close', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(target.querySelector('.now-playing')).not.toBeNull();
+
+		closeNowPlaying();
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
+
+	it('keeps the transport bar while Now Playing is docked', async () => {
+		nowPlayingDockable.set(true);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+	});
+
+	it('returns focus to the transport bar trigger the bar remounts with', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+
+		closeNowPlaying();
+		await tick();
+
+		expect(document.activeElement).toBe(
+			target.querySelector(`button[aria-label="${NOW_PLAYING_LABEL}"]`)
+		);
 	});
 });
