@@ -39,3 +39,11 @@ content_sha256 = "e40ca8bfed8ad0e99d43342a3b481886602b4081d8b651d55484fd6b7555a9
 witness_path = "docs/requirements/witnesses/5373996621.json"
 witness_sha256 = "97b67288d588c40af908f985bc3fc069ae46e758bc989e64b898786a988f7ea4"
 predecessor = "GENESIS"
+
+[[revision]]
+document = "0005"
+path = "docs/requirements/0005-sharing-and-administration.md"
+content_sha256 = "fc42bd1fe237f8c96223f8c84e2e43ae3c5cf9fcf692fdebea90d5872b0ed552"
+witness_path = "docs/requirements/witnesses/5385059751.json"
+witness_sha256 = "7d0ad0ffb7fea317cf04f8bb2a6277130d3ad59b238ced629f903d9c06724c3c"
+predecessor = "e40ca8bfed8ad0e99d43342a3b481886602b4081d8b651d55484fd6b7555a963"
