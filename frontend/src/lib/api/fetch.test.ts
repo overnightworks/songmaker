@@ -6,7 +6,7 @@ vi.stubGlobal('fetch', mockFetch);
 vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError } from './fetch';
+import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -83,6 +83,42 @@ describe('sseFetch', () => {
 		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
 		const headers = call[1].headers as Record<string, string>;
 		expect(headers['X-CSRF-Token']).toBe('token-xyz');
+	});
+});
+
+describe('apiFetch 429 classification', () => {
+	function headersWithRetryAfter(value: string | null) {
+		return { get: (name: string) => (name === 'Retry-After' ? value : null) };
+	}
+
+	it('carries status and Retry-After seconds on the ApiError', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 429,
+			headers: headersWithRetryAfter('60'),
+			json: () => Promise.resolve({ detail: 'Too many requests' })
+		});
+
+		const err = await apiFetch('/api/library/pool-queue').catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect((err as ApiError).status).toBe(429);
+		expect((err as ApiError).retryAfterSeconds).toBe(60);
+		expect(isRateLimited(err)).toBe(true);
+	});
+
+	it('leaves retryAfterSeconds null when the header is absent', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			headers: headersWithRetryAfter(null),
+			json: () => Promise.resolve({ detail: 'boom' })
+		});
+
+		const err = await apiFetch('/api/library/pool-queue').catch((e: unknown) => e);
+
+		expect((err as ApiError).retryAfterSeconds).toBeNull();
+		expect(isRateLimited(err)).toBe(false);
 	});
 });
 

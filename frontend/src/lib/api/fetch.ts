@@ -7,11 +7,29 @@ export class ApiError extends Error {
 	constructor(
 		public readonly status: number,
 		public readonly detail: string,
-		public readonly path: string
+		public readonly path: string,
+		public readonly retryAfterSeconds: number | null = null
 	) {
 		super(detail || `API ${path}: ${status}`);
 		this.name = 'ApiError';
 	}
+}
+
+export function isRateLimited(err: unknown): boolean {
+	return err instanceof ApiError && err.status === 429;
+}
+
+export function isNotFound(err: unknown): boolean {
+	return err instanceof ApiError && err.status === 404;
+}
+
+function parseRetryAfterSeconds(resp: {
+	headers?: { get: (name: string) => string | null };
+}): number | null {
+	const header = resp.headers?.get?.('Retry-After') ?? null;
+	if (!header) return null;
+	const seconds = Number(header);
+	return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 function getCsrfToken(): string {
@@ -66,7 +84,7 @@ export async function apiFetch<T>(
 				clearAuth();
 				await goto('/login');
 			}
-			throw new ApiError(resp.status, detail, path);
+			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		return resp.json() as Promise<T>;
 	} finally {
@@ -118,7 +136,7 @@ export async function* sseFetch<T = unknown>(
 				clearAuth();
 				await goto('/login');
 			}
-			throw new ApiError(resp.status, detail, path);
+			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		if (!resp.body) {
 			return;

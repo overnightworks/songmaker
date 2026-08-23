@@ -36,6 +36,11 @@ const EMPTY_INVENTORY: ShareInventoryState = {
 	typeFilter: null
 };
 
+// A share count younger than this is reused instead of refetched on a
+// LibraryWall remount (watchShareStatus runs on every mount) — the
+// request-storm this guards against (#139).
+const SHARE_COUNT_FRESH_MS = 15_000;
+
 export const sharesViewOpen = writable(false);
 export const shareCount = writable<ShareCountState>({ ...EMPTY_COUNT });
 export const shareInventory = writable<ShareInventoryState>({ ...EMPTY_INVENTORY });
@@ -45,6 +50,21 @@ let inventoryGeneration = 0;
 let statusWatchers = 0;
 let viewWatchers = 0;
 let visibilityBound = false;
+let countInflight: Promise<boolean> | null = null;
+let countFetchedAt = 0;
+const inventoryInflight = new Map<string, Promise<boolean>>();
+
+function isCountFresh(): boolean {
+	return (
+		countFetchedAt > 0 &&
+		Date.now() - countFetchedAt < SHARE_COUNT_FRESH_MS &&
+		get(shareCount).status === 'ready'
+	);
+}
+
+function inventoryKey(typeFilter: ShareInventoryType | null, offset: number): string {
+	return `${typeFilter ?? 'all'}:${offset}`;
+}
 
 export function openSharesInventory(): void {
 	sharesViewOpen.set(true);
@@ -60,11 +80,17 @@ export function toggleSharesInventory(): boolean {
 	return next;
 }
 
-export function resetSharesForTests(): void {
+// Wipes every share store, in-flight fetch, and freshness timestamp --
+// called both by tests and, in production, by clearAuth() on
+// logout/401 so the next session never sees a stale cached count.
+export function resetShares(): void {
 	countGeneration += 1;
 	inventoryGeneration += 1;
 	statusWatchers = 0;
 	viewWatchers = 0;
+	countInflight = null;
+	countFetchedAt = 0;
+	inventoryInflight.clear();
 	releaseVisibility();
 	sharesViewOpen.set(false);
 	shareCount.set({ ...EMPTY_COUNT });
@@ -91,65 +117,104 @@ export function watchShareView(): () => void {
 	};
 }
 
-export async function refreshShareCount(): Promise<boolean> {
+export async function refreshShareCount(options: { force?: boolean } = {}): Promise<boolean> {
+	if (options.force) {
+		// A forced (post-mutation) refresh must not adopt a stale pre-mutation
+		// request that is still in flight -- drop the reference and start a
+		// fresh one. The old request keeps running; its own finally only
+		// clears countInflight if it is still the current entry (identity
+		// check below), so it can never clobber the fresh one.
+		countInflight = null;
+	} else {
+		if (countInflight) return countInflight;
+		if (isCountFresh()) return true;
+	}
 	const generation = ++countGeneration;
 	const previous = get(shareCount);
 	if (previous.total === null) {
 		shareCount.set({ status: 'loading', error: null, total: null });
 	}
-	try {
-		const page = await requestShares({ offset: 0, limit: 1 });
-		if (generation !== countGeneration) return false;
-		shareCount.set({ status: 'ready', error: null, total: page.total });
-		return true;
-	} catch (err) {
-		if (generation !== countGeneration) return false;
-		shareCount.set({
-			status: 'error',
-			error: shareErrorMessage(err),
-			total: previous.total
-		});
-		return false;
-	}
+	const request: Promise<boolean> = (async () => {
+		try {
+			const page = await requestShares({ offset: 0, limit: 1 });
+			if (generation !== countGeneration) return false;
+			shareCount.set({ status: 'ready', error: null, total: page.total });
+			countFetchedAt = Date.now();
+			return true;
+		} catch (err) {
+			if (generation !== countGeneration) return false;
+			shareCount.set({
+				status: 'error',
+				error: shareErrorMessage(err),
+				total: previous.total
+			});
+			return false;
+		}
+	})().finally(() => {
+		if (countInflight === request) countInflight = null;
+	});
+	countInflight = request;
+	return request;
 }
 
-export async function loadShareInventory(options: { reset: boolean }): Promise<boolean> {
-	const generation = ++inventoryGeneration;
+export async function loadShareInventory(options: {
+	reset: boolean;
+	force?: boolean;
+}): Promise<boolean> {
 	const current = get(shareInventory);
 	const typeFilter = current.typeFilter;
 	const offset = options.reset ? 0 : current.offset;
+	const key = inventoryKey(typeFilter, offset);
+	if (options.force) {
+		// Same reasoning as refreshShareCount: a forced reload after a
+		// mutation must not adopt a stale in-flight page for this key.
+		inventoryInflight.delete(key);
+	} else {
+		const inflight = inventoryInflight.get(key);
+		if (inflight) return inflight;
+	}
+	const generation = ++inventoryGeneration;
 	shareInventory.update((state) => ({
 		...state,
 		status: 'loading',
 		error: null,
 		...(options.reset && state.items.length === 0 ? { items: [], offset: 0, hasMore: false } : {})
 	}));
-	try {
-		const page = await requestShares({
-			offset,
-			limit: LIBRARY_SHARES_PAGE_SIZE,
-			type: typeFilter
-		});
-		if (generation !== inventoryGeneration) return false;
-		shareCount.set({ status: 'ready', error: null, total: page.total });
-		shareInventory.set({
-			status: 'ready',
-			error: null,
-			items: options.reset ? page.items : [...current.items, ...page.items],
-			offset: offset + page.items.length,
-			hasMore: page.has_more,
-			typeFilter
-		});
-		return true;
-	} catch (err) {
-		if (generation !== inventoryGeneration) return false;
-		shareInventory.update((state) => ({
-			...state,
-			status: 'error',
-			error: shareErrorMessage(err)
-		}));
-		return false;
-	}
+	const request: Promise<boolean> = (async () => {
+		try {
+			const page = await requestShares({
+				offset,
+				limit: LIBRARY_SHARES_PAGE_SIZE,
+				type: typeFilter
+			});
+			if (generation !== inventoryGeneration) return false;
+			shareCount.set({ status: 'ready', error: null, total: page.total });
+			countFetchedAt = Date.now();
+			shareInventory.set({
+				status: 'ready',
+				error: null,
+				items: options.reset ? page.items : [...current.items, ...page.items],
+				offset: offset + page.items.length,
+				hasMore: page.has_more,
+				typeFilter
+			});
+			return true;
+		} catch (err) {
+			if (generation !== inventoryGeneration) return false;
+			shareInventory.update((state) => ({
+				...state,
+				status: 'error',
+				error: shareErrorMessage(err)
+			}));
+			return false;
+		}
+	})().finally(() => {
+		if (inventoryInflight.get(key) === request) {
+			inventoryInflight.delete(key);
+		}
+	});
+	inventoryInflight.set(key, request);
+	return request;
 }
 
 export async function loadMoreShares(): Promise<boolean> {
@@ -172,9 +237,9 @@ export async function setShareTypeFilter(type: ShareInventoryType | null): Promi
 }
 
 export async function refreshSharesAfterMutation(): Promise<void> {
-	await refreshShareCount();
+	await refreshShareCount({ force: true });
 	if (get(sharesViewOpen) || viewWatchers > 0) {
-		await loadShareInventory({ reset: true });
+		await loadShareInventory({ reset: true, force: true });
 	}
 }
 

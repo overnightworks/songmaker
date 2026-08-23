@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
-import { ApiError } from '$lib/api/fetch';
+import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong } from '$lib/api/songs';
 import { LIBRARY_DEFAULT_FILTER, LIBRARY_HISTORY_KIND, type LibraryFilter } from '$lib/constants';
@@ -22,12 +22,7 @@ import {
 	selectedSongId,
 	songList
 } from '$lib/stores/player';
-import {
-	deselectPlaylist,
-	ensurePlaylistsLoaded,
-	loadPlaylistDetail,
-	selectedPlaylistDetail
-} from '$lib/stores/playlists';
+import { deselectPlaylist, ensurePlaylistsLoaded, loadPlaylistDetail } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
 // 'browse' shows the library wall (the LibraryWall component); 'detail' shows
@@ -181,7 +176,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	libraryScrollAnchor.set(state.scrollAnchor);
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
-	await hydrateCollection(state.collection, generation);
+	await hydrateCollection(state.collection);
 	if (generation !== historyApplyGeneration) return false;
 	if (state.filter === 'playlists') {
 		void ensurePlaylistsLoaded();
@@ -206,22 +201,11 @@ export function cancelLibraryHistoryApply(): void {
 	historyApplyGeneration += 1;
 }
 
-async function hydrateCollection(
-	collection: CollectionSnapshot,
-	generation: number
-): Promise<void> {
+async function hydrateCollection(collection: CollectionSnapshot): Promise<void> {
 	if (collection?.kind === 'playlist') {
-		try {
-			await loadPlaylistDetail(collection.id);
-		} catch (err) {
-			if (generation !== historyApplyGeneration) return;
-			if (isNotFound(err)) {
-				setOpenCollection(null);
-				selectedPlaylistDetail.set(null);
-			} else if (get(selectedPlaylistDetail)?.id !== collection.id) {
-				selectedPlaylistDetail.set(null);
-			}
-		}
+		// loadPlaylistDetail owns the not-found policy (closes the collection
+		// on a 404) and never rejects, so there is nothing left to catch here.
+		await loadPlaylistDetail(collection.id);
 		return;
 	}
 	deselectPlaylist();
@@ -400,8 +384,4 @@ function upsertReplace<T extends { id: string }>(items: T[], item: T): T[] {
 	const index = items.findIndex((existing) => existing.id === item.id);
 	if (index === -1) return [...items, item];
 	return items.map((existing, i) => (i === index ? item : existing));
-}
-
-function isNotFound(err: unknown): boolean {
-	return err instanceof ApiError && err.status === 404;
 }

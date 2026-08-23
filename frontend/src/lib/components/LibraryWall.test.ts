@@ -23,8 +23,8 @@ import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryC
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/player';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { resetSharesForTests } from '$lib/stores/shares';
+import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { resetShares } from '$lib/stores/shares';
 
 const searchLibrary = vi.fn();
 const fetchPlaylists = vi.fn();
@@ -184,8 +184,8 @@ beforeEach(() => {
 	unshareAlbum.mockReset().mockResolvedValue(undefined);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetSharesForTests();
-	resetPlaylistsForTests();
+	resetShares();
+	resetPlaylists();
 	searchQuery.set('');
 	albumList.set([album()]);
 	songList.set([]);
@@ -199,8 +199,8 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetSharesForTests();
-	resetPlaylistsForTests();
+	resetShares();
+	resetPlaylists();
 });
 
 async function render(): Promise<HTMLElement> {
@@ -617,5 +617,19 @@ describe('LibraryWall search', () => {
 
 		expect(root.textContent).toContain('Two');
 		expect((history.state as { searchLoadedCount: number }).searchLoadedCount).toBe(2);
+	});
+});
+
+describe('LibraryWall share count request storm (#139)', () => {
+	it('does not refetch the share count on a fast remount', async () => {
+		await render();
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+
+		const first = mounted.pop();
+		if (first) await unmount(first);
+
+		await render();
+
+		expect(fetchShares).toHaveBeenCalledTimes(1);
 	});
 });

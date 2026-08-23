@@ -195,6 +195,80 @@ def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
     assert "Queue is full" in resp.json()["detail"]
 
 
+# ── Per-IP exemptions ───────────────────────────────────────────────
+
+
+@pytest.fixture()
+def ip_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("IP_RATE_LIMIT", "2")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+    build_dir = tmp_path / "frontend" / "build"
+    (build_dir / "favicon.svg").write_text("<svg></svg>")
+    (build_dir / "service-worker.js").write_text("// sw")
+    (build_dir / "manifest.webmanifest").write_text("{}")
+    (build_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n")
+    (build_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n")
+    yield client
+    get_settings.cache_clear()
+
+
+def test_ip_rate_limit_blocks_api_after_budget(ip_limited_client: TestClient) -> None:
+    for _ in range(2):
+        ip_limited_client.get("/api/auth/check")
+
+    resp = ip_limited_client.get("/api/auth/check")
+
+    assert resp.status_code == 429
+
+
+@pytest.mark.parametrize("path", [
+    "/manifest.webmanifest",
+    "/robots.txt",
+    "/favicon.svg",
+    "/service-worker.js",
+    "/icon-192.png",
+    "/icon-512.png",
+])
+def test_exempt_static_paths_bypass_ip_rate_limit(ip_limited_client: TestClient, path: str) -> None:
+    for _ in range(5):
+        resp = ip_limited_client.get(path)
+
+    assert resp.status_code != 429
+
+
+def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
+    ip_limited_client: TestClient, mock_arq_pool,
+) -> None:
+    """/health is the priciest anonymous endpoint (DB + ~6 Redis round trips)
+    and must share the same budget as every other request -- an anonymous
+    caller must not be able to hammer it for free (see rate_limit.py)."""
+    with (
+        ip_limited_client,
+        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
+    ):
+        for _ in range(2):
+            ip_limited_client.get("/health")
+        resp = ip_limited_client.get("/health")
+
+    assert resp.status_code == 429
+
+
+def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -> None:
+    for _ in range(10):
+        ip_limited_client.get("/favicon.svg")
+
+    resp = ip_limited_client.get("/api/auth/check")
+
+    assert resp.status_code != 429
+
+
 # ── Job gets user_id ────────────────────────────────────────────────
 
 

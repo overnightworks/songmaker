@@ -8,7 +8,7 @@ import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
-import { resetPlaylistsForTests, selectedPlaylistId } from '$lib/stores/playlists';
+import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
@@ -153,7 +153,7 @@ beforeEach(() => {
 	});
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylistsForTests();
+	resetPlaylists();
 	resetNavigationForTests();
 	searchQuery.set('');
 	albumList.set([album('a1', 'Nachtstrom'), album('a2', 'Other')]);
@@ -172,7 +172,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylistsForTests();
+	resetPlaylists();
 	resetCollectionForTests();
 });
 

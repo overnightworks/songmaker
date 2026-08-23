@@ -12,12 +12,8 @@ import {
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
-import {
-	playlistLoad,
-	resetPlaylistsForTests,
-	selectedPlaylistDetail
-} from '$lib/stores/playlists';
-import { resetSharesForTests, sharesViewOpen } from '$lib/stores/shares';
+import { playlistLoad, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { resetShares, sharesViewOpen } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -175,8 +171,8 @@ beforeEach(() => {
 	fetchSong.mockResolvedValue(song({ id: 's9', album_id: 'a9', album_title: 'Remote' }));
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetSharesForTests();
-	resetPlaylistsForTests();
+	resetShares();
+	resetPlaylists();
 	searchQuery.set('');
 	albumList.set([]);
 	songList.set([]);
@@ -189,8 +185,8 @@ beforeEach(() => {
 afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetSharesForTests();
-	resetPlaylistsForTests();
+	resetShares();
+	resetPlaylists();
 });
 
 describe('albumIsExpanded', () => {

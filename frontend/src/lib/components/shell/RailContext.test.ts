@@ -6,7 +6,7 @@ import type { GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/type
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, selectedSongId, songList } from '$lib/stores/player';
-import { resetPlaylistsForTests, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
@@ -113,7 +113,7 @@ async function render(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-	resetPlaylistsForTests();
+	resetPlaylists();
 	resetLibraryContextForTests();
 	albumList.set([
 		{
@@ -141,7 +141,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	openCollection.set(null);
-	resetPlaylistsForTests();
+	resetPlaylists();
 	resetLibraryContextForTests();
 });
 

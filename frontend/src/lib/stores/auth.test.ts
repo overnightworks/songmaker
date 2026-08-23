@@ -33,6 +33,8 @@ import {
 	clearAuth
 } from './auth';
 import { ApiError } from '$lib/api/client';
+import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { shareCount } from '$lib/stores/shares';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
@@ -167,6 +169,35 @@ describe('clearAuth', () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		clearAuth();
 		expect(get(currentUser)).toBeNull();
+	});
+
+	it('wipes the per-user playlist and share caches so the next session starts clean', () => {
+		playlistList.set([
+			{
+				id: 'p1',
+				title: 'Leftover',
+				entry_count: 1,
+				is_shared: false,
+				share_slug: null,
+				created_at: ''
+			}
+		]);
+		selectedPlaylistDetail.set({
+			id: 'p1',
+			title: 'Leftover',
+			entry_count: 1,
+			is_shared: false,
+			share_slug: null,
+			created_at: '',
+			entries: []
+		});
+		shareCount.set({ status: 'ready', error: null, total: 4 });
+
+		clearAuth();
+
+		expect(get(playlistList)).toEqual([]);
+		expect(get(selectedPlaylistDetail)).toBeNull();
+		expect(get(shareCount)).toMatchObject({ status: 'idle', total: null });
 	});
 });
 

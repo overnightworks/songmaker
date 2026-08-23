@@ -2,15 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { createPlaylist, fetchPlaylist, fetchPlaylists } from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
+import { toasts } from '$lib/stores/toast';
+import { ApiError } from '$lib/api/fetch';
 import type { PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
 	createNewPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
 	loadPlaylists,
+	playlistDetailLoad,
 	playlistList,
 	playlistLoad,
-	resetPlaylistsForTests,
+	resetPlaylists,
 	selectedPlaylistDetail,
 	selectedPlaylistId
 } from './playlists';
@@ -28,7 +31,7 @@ vi.mock('$lib/api/client', () => ({
 	reorderPlaylistEntry: vi.fn()
 }));
 
-function makeDetail(id: string): PlaylistDetailItem {
+function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
 	return {
 		id,
 		title: id,
@@ -36,17 +39,21 @@ function makeDetail(id: string): PlaylistDetailItem {
 		is_shared: false,
 		share_slug: null,
 		created_at: '',
-		entries: []
+		entries: [],
+		...overrides
 	};
 }
 
 beforeEach(() => {
-	resetPlaylistsForTests();
+	resetPlaylists();
+	toasts.set([]);
 });
 
 afterEach(() => {
-	resetPlaylistsForTests();
+	resetPlaylists();
+	toasts.set([]);
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe('loadPlaylistDetail', () => {
@@ -68,6 +75,131 @@ describe('loadPlaylistDetail', () => {
 
 		expect(get(selectedPlaylistId)).toBe('b');
 		expect(get(selectedPlaylistDetail)?.id).toBe('b');
+	});
+
+	it('dedupes concurrent opens of the same playlist into a single fetch', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+
+		await Promise.all([loadPlaylistDetail('a'), loadPlaylistDetail('a')]);
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(1);
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+		expect(get(playlistDetailLoad).status).toBe('ready');
+	});
+
+	it('reuses a still-fresh detail instead of refetching on reopen', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		vi.advanceTimersByTime(1_000);
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(1);
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+	});
+
+	it('refetches once the cached detail goes stale', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		vi.advanceTimersByTime(16_000);
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+	});
+
+	it('forceRefresh bypasses a still-fresh cached detail', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		await loadPlaylistDetail('a', { forceRefresh: true });
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+	});
+
+	it('forceRefresh bypasses an in-flight fetch so the later call wins', async () => {
+		// Two quick mutations on the same playlist (e.g. add then remove a
+		// track) both force-refresh. The first's fetch must not be adopted
+		// by the second -- each gets its own request, and the request that
+		// is still current when its fetch resolves wins (#139).
+		let resolveFirst: ((value: PlaylistDetailItem) => void) | undefined;
+		vi.mocked(fetchPlaylist).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+
+		const first = loadPlaylistDetail('a', { forceRefresh: true });
+		const second = loadPlaylistDetail('a', { forceRefresh: true });
+		await second;
+		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		await first;
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+		expect(get(selectedPlaylistDetail)?.title).toBe('Second');
+	});
+
+	it('does not let a superseded request poison the cache for a later reopen', async () => {
+		// remove A -> R1 (forced), remove B -> R2 (forced); R1 (now stale)
+		// lands last. A later plain reopen within the freshness window must
+		// serve R2's snapshot from the cache, not R1's stale one (#139).
+		let resolveFirst: ((value: PlaylistDetailItem) => void) | undefined;
+		vi.mocked(fetchPlaylist).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+
+		const first = loadPlaylistDetail('a', { forceRefresh: true });
+		const second = loadPlaylistDetail('a', { forceRefresh: true });
+		await second;
+		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		await first;
+
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+		expect(get(selectedPlaylistDetail)?.title).toBe('Second');
+	});
+
+	it('clears the collection when the playlist is gone', async () => {
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(404, 'gone', '/api/playlists/gone')
+		);
+
+		await loadPlaylistDetail('gone');
+
+		expect(get(selectedPlaylistId)).toBeNull();
+		expect(get(selectedPlaylistDetail)).toBeNull();
+		expect(get(playlistDetailLoad)).toEqual({ status: 'idle', error: null });
+		expect(get(toasts)).toEqual([]);
+	});
+
+	it('never leaves the previous playlist rows under a rate-limited open', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+		await loadPlaylistDetail('a');
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/playlists/b')
+		);
+		await loadPlaylistDetail('b');
+
+		expect(get(selectedPlaylistId)).toBe('b');
+		expect(get(selectedPlaylistDetail)).toBeNull();
+		expect(get(playlistDetailLoad)).toEqual({
+			status: 'error',
+			error: 'Too many requests'
+		});
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Too many requests', type: 'error' })
+		]);
 	});
 });
 
