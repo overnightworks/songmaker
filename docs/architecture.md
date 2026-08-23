@@ -507,12 +507,29 @@ POST /api/generations/{id}/score
         GPU scorers (audiobox) run sequentially
         CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,
           bpm_accuracy, silence_detection, spectral_quality) run concurrently
-        Deferred CPU scorers (lyrical_coherence) wait for shared_data from GPU
+        Deferred scorers (lyrical_coherence) run once the other scorers are
+          done, so the Whisper transcript they consume is actually there
         Each scorer fault-isolated: one failure does not block others
       Parent kills subprocess on timeout (SIGKILL), freeing GPU memory
-    → save scores + whisper_text + whisper_cues to DB
+    → merge scores + whisper_text + whisper_cues into DB
   → Job status: completed
 ```
+
+**Every scorer reports its own outcome.** `SongScores.runs` carries one
+`ScorerRun` per requested scorer — `ok`, `failed`, `timed_out`, or `skipped`
+(with the reason, e.g. lyrical_coherence when text_accuracy produced no
+transcript). Persisting replaces exactly the `output_keys` of the scorers that
+came back `ok`, so a scorer that timed out or failed leaves the value it stored
+in an earlier run untouched; a whole run of failures changes nothing. The job
+log line names every scorer's outcome. Before #161 the run replaced the entire
+score blob, so one slow scorer erased the previous result.
+
+**Timeouts are per scorer.** `SCORER_TIMEOUT_SECONDS` (120) is the default
+budget; `TEXT_ACCURACY_TIMEOUT_SECONDS` (300) gives Whisper its own, because a
+cold model load counts against it. The outer subprocess watchdog is derived
+from the slowest scorer budget plus headroom, never below
+`SCORING_PIPELINE_TIMEOUT_SECONDS` — otherwise a per-scorer budget would be
+unreachable and the whole run would be killed instead of the one scorer.
 
 `whisper_cues` is a JSON list of `{start, end, text}` from faster-whisper segments (start/end in seconds), each optionally carrying `words`, the same shape one level finer, from `word_timestamps=True` (#142). `null` means never scored or a legacy row; a list (including `[]`) means text_accuracy ran and stored whatever usable cues it produced. A cue without `words` was scored before word timestamps existed and gets them only through a re-score (#132) — the key is omitted rather than stored as `null`, so those rows keep their original shape. `whisper_text` is the same cue texts joined with newlines. Missing timings are not invented.
 

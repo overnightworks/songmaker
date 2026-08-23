@@ -8,39 +8,41 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     import numpy as np
 
+from songmaker_cli.constants import (
+    SCORER_TIMEOUT_SECONDS,
+    SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
+    SCORING_PIPELINE_TIMEOUT_SECONDS,
+    TEXT_ACCURACY_TIMEOUT_SECONDS,
+)
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
-    AudioBoxScore,
-    BpmAccuracyScore,
-    EmotionalDynamicsScore,
-    LyricalCoherenceScore,
+    SCORE_TYPES,
+    ScorerOutcome,
+    ScorerRun,
     SharedScorerData,
-    SilenceScore,
     SongScores,
-    SpectralQualityScore,
-    TextAccuracyScore,
 )
 from songmaker_cli.scoring.registry import (
     DEVICE_CPU,
     DEVICE_GPU,
     SCORERS,
+    TEXT_ACCURACY_SCORER,
     VALID_SCORER_NAMES,
 )
 
 log = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 __all__ = [
     "DEVICE_CPU",
     "DEVICE_GPU",
     "SCORERS",
     "VALID_SCORER_NAMES",
+    "ScorerDependencyUnavailable",
 ]
 
 
@@ -52,9 +54,6 @@ class AudioData:
     sr: int
 
 
-SCORER_TIMEOUT_SECONDS = 120
-
-
 @dataclass(frozen=True)
 class PipelineConfig:
     """Configuration passed to all scorers."""
@@ -63,13 +62,29 @@ class PipelineConfig:
     whisper_device: str = ""
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
+    text_accuracy_timeout: int = TEXT_ACCURACY_TIMEOUT_SECONDS
     pipeline_timeout: int = 0
     claude_scoring_model: str = ""
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:
-            from songmaker_cli.constants import SCORING_PIPELINE_TIMEOUT_SECONDS
-            object.__setattr__(self, "pipeline_timeout", SCORING_PIPELINE_TIMEOUT_SECONDS)
+            object.__setattr__(self, "pipeline_timeout", self._watchdog_timeout())
+
+    def timeout_for(self, scorer: str) -> int:
+        """Time budget for one scorer. text_accuracy has its own because a
+        cold Whisper model load counts against it."""
+        if scorer == TEXT_ACCURACY_SCORER:
+            return self.text_accuracy_timeout
+        return self.scorer_timeout
+
+    def _watchdog_timeout(self) -> int:
+        """Outer budget for the whole run — must outlive the slowest scorer,
+        otherwise its own budget is unreachable and the run is killed whole."""
+        slowest = max(self.scorer_timeout, self.text_accuracy_timeout)
+        return max(
+            SCORING_PIPELINE_TIMEOUT_SECONDS,
+            slowest + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
+        )
 
 
 ScorerFunc = Callable[
@@ -185,6 +200,22 @@ class _ScorerTimeout(Exception):
     """Raised when a scorer exceeds its time limit."""
 
 
+class ScorerDependencyUnavailable(Exception):
+    """Raised by a scorer whose input another scorer did not produce.
+
+    Not a failure: the scorer is reported as skipped with this reason, and
+    whatever the generation already scored for it stays untouched.
+    """
+
+
+@dataclass(frozen=True)
+class _ScorerExecution:
+    """What one scorer produced, and how it ended."""
+
+    run: ScorerRun
+    value: object | None = None
+
+
 def _run_with_timeout(
     func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
     audio_data: AudioData | None, config: PipelineConfig,
@@ -206,29 +237,60 @@ def _run_with_timeout(
             raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
 
 
-def _validated(
-    results: dict[str, object], key: str, expected_type: type[T],
-) -> T | None:
-    """Extract and type-check a scorer result, returning None on mismatch."""
-    value = results.get(key)
-    if value is None:
-        return None
+def _ended(name: str, outcome: ScorerOutcome, detail: str) -> _ScorerExecution:
+    return _ScorerExecution(run=ScorerRun(scorer=name, outcome=outcome, detail=detail))
+
+
+def _run_scorer(
+    func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
+    audio_data: AudioData | None, config: PipelineConfig,
+    shared_data: SharedScorerData, name: str,
+) -> _ScorerExecution:
+    """Run one scorer under its own time budget and classify how it ended.
+
+    Never raises — a scorer's fate is data, so one scorer cannot abort the
+    run and only a successful one may overwrite a stored score.
+    """
+    timeout = config.timeout_for(name)
+    log.info("Running scorer: %s (budget %ds)", name, timeout)
+    try:
+        value = _run_with_timeout(
+            func, mp3_path, meta, audio_data, config, shared_data, timeout, name,
+        )
+    except _ScorerTimeout as exc:
+        log.error("Scorer '%s' timed out after %ds — keeping its stored score", name, timeout)
+        return _ended(name, ScorerOutcome.TIMED_OUT, str(exc))
+    except ScorerDependencyUnavailable as exc:
+        log.info("Scorer '%s' skipped: %s", name, exc)
+        return _ended(name, ScorerOutcome.SKIPPED, str(exc))
+    except Exception as exc:  # noqa: BLE001 — scorer failures must not block others
+        log.exception("Scorer '%s' failed", name)
+        return _ended(name, ScorerOutcome.FAILED, str(exc))
+
+    expected_type = SCORE_TYPES[name]
     if not isinstance(value, expected_type):
         log.warning(
             "Scorer '%s' returned %s, expected %s",
-            key, type(value).__name__, expected_type.__name__,
+            name, type(value).__name__, expected_type.__name__,
         )
-        return None
-    return value
+        return _ended(
+            name, ScorerOutcome.FAILED,
+            f"returned {type(value).__name__}, expected {expected_type.__name__}",
+        )
+    return _ScorerExecution(run=ScorerRun(scorer=name, outcome=ScorerOutcome.OK), value=value)
 
 
-def _resolve_scorer(
-    reg: ScorerRegistry, name: str,
-) -> ScorerFunc | None:
-    func = reg.get(name)
-    if func is None:
-        log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))
-    return func
+def _unrunnable(name: str, reg: ScorerRegistry) -> _ScorerExecution | None:
+    """Classify a requested scorer that has no registered function.
+
+    A known scorer whose module could not be imported is skipped; a name that
+    is not a scorer at all is a caller mistake and only warns.
+    """
+    if name in VALID_SCORER_NAMES:
+        log.warning("Scorer '%s' is not registered — skipping", name)
+        return _ended(name, ScorerOutcome.SKIPPED, "scorer not registered")
+    log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))
+    return None
 
 
 def _submit_scorers(
@@ -240,34 +302,42 @@ def _submit_scorers(
     audio_data: AudioData | None,
     config: PipelineConfig,
     shared_data: SharedScorerData,
-) -> dict[Future[object], str]:
-    futures: dict[Future[object], str] = {}
-    for name in names:
-        func = _resolve_scorer(reg, name)
-        if func is None:
-            continue
-        log.info("Running scorer: %s", name)
-        future = pool.submit(
-            _run_with_timeout, func, mp3_path, meta, audio_data,
-            config, shared_data, config.scorer_timeout, name,
+) -> list[Future[_ScorerExecution]]:
+    return [
+        pool.submit(
+            _run_scorer, reg.get(name), mp3_path, meta, audio_data,
+            config, shared_data, name,
         )
-        futures[future] = name
-    return futures
+        for name in names
+    ]
 
 
 def _collect_futures(
-    futures: dict[Future[object], str],
-    results: dict[str, object],
-    on_scorer_done: Callable[[str], None] | None = None,
-) -> None:
+    futures: list[Future[_ScorerExecution]],
+    on_scorer_done: Callable[[str], None],
+) -> list[_ScorerExecution]:
+    executions = []
     for future in as_completed(futures):
-        name = futures[future]
-        try:
-            results[name] = future.result()
-        except Exception:  # noqa: BLE001 — scorer failures must not block others
-            log.exception("Scorer '%s' failed", name)
-        if on_scorer_done:
-            on_scorer_done(name)
+        execution = future.result()
+        executions.append(execution)
+        on_scorer_done(execution.run.scorer)
+    return executions
+
+
+def _aggregate(
+    executions: list[_ScorerExecution], requested_order: list[str],
+) -> SongScores:
+    """Build the run's SongScores, with runs ordered as the caller asked."""
+    by_scorer = {execution.run.scorer: execution for execution in executions}
+    values = {
+        name: execution.value
+        for name, execution in by_scorer.items()
+        if execution.run.produced_value
+    }
+    runs = tuple(
+        by_scorer[name].run for name in requested_order if name in by_scorer
+    )
+    return SongScores(runs=runs, **values)
 
 
 def run_scoring_pipeline(
@@ -280,13 +350,15 @@ def run_scoring_pipeline(
 ) -> SongScores:
     """Run all (or selected) scorers on an MP3 and return aggregated scores.
 
-    Audio is loaded once and shared across all scorers.
-    Each scorer runs independently — one failure does not block others.
+    Audio is loaded once and shared across all scorers. Every scorer reports
+    its own outcome (ok / failed / skipped / timed out) in ``SongScores.runs``;
+    one scorer's fate never blocks or invalidates another's.
 
     Execution strategy for parallelism:
     1. Independent CPU scorers run concurrently in a thread pool
     2. GPU scorers run sequentially in the main thread (VRAM contention)
-    3. CPU scorers that depend on GPU output (after_gpu) run after GPU completes
+    3. Scorers that consume another scorer's output (after_gpu) run once the
+       GPU and CPU phases are done, so their input is actually there
     CPU and GPU phases overlap — CPU scorers execute during GPU inference.
     """
     reg = registry or default_registry
@@ -296,26 +368,32 @@ def run_scoring_pipeline(
     if config is None:
         config = PipelineConfig()
 
-    any_needs_audio = any(
-        reg.scorer_needs_audio(s) for s in scorers if reg.get(s) is not None
-    )
+    executions: list[_ScorerExecution] = []
+    runnable: list[str] = []
+    for name in scorers:
+        if reg.get(name) is not None:
+            runnable.append(name)
+            continue
+        unrunnable = _unrunnable(name, reg)
+        if unrunnable is not None:
+            executions.append(unrunnable)
+
+    any_needs_audio = any(reg.scorer_needs_audio(name) for name in runnable)
     audio_data = load_audio(mp3_path) if any_needs_audio else None
 
-    gpu_names = [n for n in scorers if reg.scorer_uses_gpu(n)]
-    cpu_names = [n for n in scorers if not reg.scorer_uses_gpu(n) and not reg.scorer_after_gpu(n)]
-    deferred_cpu_names = [n for n in scorers if reg.scorer_after_gpu(n)]
+    gpu_names = [n for n in runnable if reg.scorer_uses_gpu(n)]
+    deferred_names = [n for n in runnable if reg.scorer_after_gpu(n)]
+    cpu_names = [n for n in runnable if n not in gpu_names and n not in deferred_names]
 
-    total_scorers = sum(1 for n in scorers if reg.get(n) is not None)
     completed_count = 0
 
     def _on_scorer_done(name: str) -> None:
         nonlocal completed_count
         completed_count += 1
         if on_progress:
-            on_progress(completed_count, total_scorers, name)
+            on_progress(completed_count, len(runnable), name)
 
     shared_data = SharedScorerData()
-    results: dict[str, object] = {}
 
     with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:
         cpu_futures = _submit_scorers(
@@ -323,32 +401,16 @@ def run_scoring_pipeline(
         )
 
         for name in gpu_names:
-            func = _resolve_scorer(reg, name)
-            if func is None:
-                continue
-            try:
-                log.info("Running scorer: %s", name)
-                results[name] = _run_with_timeout(
-                    func, mp3_path, meta, audio_data, config,
-                    shared_data, config.scorer_timeout, name,
-                )
-            except Exception:  # noqa: BLE001 — scorer failures must not block others
-                log.exception("Scorer '%s' failed", name)
+            executions.append(_run_scorer(
+                reg.get(name), mp3_path, meta, audio_data, config, shared_data, name,
+            ))
             _on_scorer_done(name)
 
+        executions.extend(_collect_futures(cpu_futures, _on_scorer_done))
+
         deferred_futures = _submit_scorers(
-            pool, deferred_cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
+            pool, deferred_names, reg, mp3_path, meta, audio_data, config, shared_data,
         )
+        executions.extend(_collect_futures(deferred_futures, _on_scorer_done))
 
-        _collect_futures(cpu_futures, results, on_scorer_done=_on_scorer_done)
-        _collect_futures(deferred_futures, results, on_scorer_done=_on_scorer_done)
-
-    return SongScores(
-        text_accuracy=_validated(results, "text_accuracy", TextAccuracyScore),
-        emotional_dynamics=_validated(results, "emotional_dynamics", EmotionalDynamicsScore),
-        audiobox=_validated(results, "audiobox", AudioBoxScore),
-        bpm_accuracy=_validated(results, "bpm_accuracy", BpmAccuracyScore),
-        silence=_validated(results, "silence", SilenceScore),
-        spectral_quality=_validated(results, "spectral_quality", SpectralQualityScore),
-        lyrical_coherence=_validated(results, "lyrical_coherence", LyricalCoherenceScore),
-    )
+    return _aggregate(executions, scorers)

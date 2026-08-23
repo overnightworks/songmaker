@@ -14,12 +14,16 @@ from songmaker_cli.scoring.models import (
     AudioBoxScore,
     BpmAccuracyScore,
     EmotionalDynamicsScore,
+    ScorerOutcome,
+    ScorerRun,
     SilenceScore,
     SongScores,
     TextAccuracyScore,
 )
 from songmaker_cli.scoring.pipeline import (
     AudioData,
+    PipelineConfig,
+    ScorerDependencyUnavailable,
     ScorerRegistry,
     run_scoring_pipeline,
 )
@@ -450,12 +454,10 @@ def test_gpu_scorer_failure_does_not_block_cpu(
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
-def test_pipeline_warns_on_unknown_gpu_scorer(
+def test_pipeline_reports_a_known_but_unregistered_scorer_as_skipped(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """An unknown scorer in the GPU partition logs a warning and is skipped."""
-    import logging
+    """A scorer whose module never registered is skipped, not failed."""
 
     @clean_registry.register("silence")
     def ok_scorer(
@@ -464,12 +466,207 @@ def test_pipeline_warns_on_unknown_gpu_scorer(
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    with caplog.at_level(logging.WARNING):
-        scores = run_scoring_pipeline(
-            fake_mp3, scorers=["silence", "text_accuracy"], registry=clean_registry,
-        )
+    scores = run_scoring_pipeline(
+        fake_mp3, scorers=["silence", "text_accuracy"], registry=clean_registry,
+    )
     assert scores.silence is not None
     assert scores.text_accuracy is None
-    assert "Unknown scorer" in caplog.text
+    assert _outcomes(scores) == {
+        "silence": ScorerOutcome.OK,
+        "text_accuracy": ScorerOutcome.SKIPPED,
+    }
 
 
+
+
+# ── Per-scorer outcome tests ─────────────────────────────────────
+
+
+SCORER_BUDGET_SECONDS = 1
+OVER_BUDGET_SECONDS = 1.2
+
+
+def _outcomes(scores: SongScores) -> dict[str, ScorerOutcome]:
+    return {run.scorer: run.outcome for run in scores.runs}
+
+
+def _silence_scorer(*_args: object, **_kwargs: object) -> SilenceScore:
+    return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_timed_out_scorer_reports_timeout_and_no_value(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    clean_registry.register("silence")(_silence_scorer)
+
+    @clean_registry.register("bpm_accuracy")
+    def scorer_over_budget(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> BpmAccuracyScore:
+        time.sleep(OVER_BUDGET_SECONDS)
+        return BpmAccuracyScore(
+            detected_bpm=120, requested_bpm=120, deviation_percent=0, octave_corrected=False,
+        )
+
+    scores = run_scoring_pipeline(
+        fake_mp3, registry=clean_registry,
+        config=PipelineConfig(scorer_timeout=SCORER_BUDGET_SECONDS, pipeline_timeout=30),
+    )
+
+    assert scores.bpm_accuracy is None
+    assert _outcomes(scores)["bpm_accuracy"] is ScorerOutcome.TIMED_OUT
+    assert scores.silence is not None
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_failed_scorer_reports_failure_with_reason(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    @clean_registry.register("silence")
+    def broken_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> SilenceScore:
+        raise RuntimeError("boom")
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+
+    run = scores.runs[0]
+    assert run.outcome is ScorerOutcome.FAILED
+    assert "boom" in run.detail
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_scorer_with_unavailable_dependency_is_skipped_not_failed(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    @clean_registry.register("lyrical_coherence")
+    def needs_transcript(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> object:
+        raise ScorerDependencyUnavailable("no transcript")
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+
+    run = scores.runs[0]
+    assert run.outcome is ScorerOutcome.SKIPPED
+    assert run.detail == "no transcript"
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_wrong_return_type_counts_as_failure(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """A wrong type must not count as success — it would clear the stored score."""
+
+    @clean_registry.register("silence")
+    def wrong_type_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> object:
+        return "not a SilenceScore"
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+
+    assert scores.silence is None
+    assert scores.runs[0].outcome is ScorerOutcome.FAILED
+    assert scores.refreshed_output_keys() == frozenset()
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_deferred_scorer_sees_output_of_a_slow_cpu_scorer(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """lyrical_coherence must not start before text_accuracy has finished."""
+
+    @clean_registry.register("text_accuracy")
+    def slow_transcriber(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data=None,
+    ) -> TextAccuracyScore:
+        time.sleep(SLEEP_SECONDS)
+        shared_data.whisper_text = "hello world"
+        return TextAccuracyScore(
+            similarity_ratio=1.0,
+            intended_line_texts=("hello world",),
+            transcribed_line_texts=("hello world",),
+        )
+
+    @clean_registry.register("lyrical_coherence")
+    def deferred_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data=None,
+    ) -> object:
+        from songmaker_cli.scoring.models import LyricalCoherenceScore
+
+        if shared_data.whisper_text is None:
+            raise ScorerDependencyUnavailable("no transcript")
+        return LyricalCoherenceScore(score=8, issues=(), summary="good")
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+
+    assert _outcomes(scores) == {
+        "text_accuracy": ScorerOutcome.OK,
+        "lyrical_coherence": ScorerOutcome.OK,
+    }
+
+
+# ── Per-scorer timeout configuration ─────────────────────────────
+
+
+def test_text_accuracy_has_its_own_timeout_budget() -> None:
+    config = PipelineConfig()
+
+    assert config.timeout_for("text_accuracy") == config.text_accuracy_timeout
+    assert config.timeout_for("silence") == config.scorer_timeout
+    assert config.text_accuracy_timeout > config.scorer_timeout
+
+
+def test_watchdog_outlives_the_slowest_scorer_budget() -> None:
+    config = PipelineConfig(scorer_timeout=120, text_accuracy_timeout=900)
+
+    assert config.pipeline_timeout > 900
+
+
+def test_explicit_pipeline_timeout_is_kept() -> None:
+    assert PipelineConfig(pipeline_timeout=42).pipeline_timeout == 42
+
+
+# ── Outcome reporting ────────────────────────────────────────────
+
+
+def test_refreshed_output_keys_covers_only_successful_scorers() -> None:
+    scores = SongScores(
+        runs=(
+            ScorerRun(scorer="silence", outcome=ScorerOutcome.OK),
+            ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT),
+            ScorerRun(scorer="lyrical_coherence", outcome=ScorerOutcome.SKIPPED),
+            ScorerRun(scorer="bpm_accuracy", outcome=ScorerOutcome.FAILED),
+        ),
+    )
+
+    assert scores.refreshed_output_keys() == frozenset({"silence_gaps", "silence_longest"})
+
+
+def test_outcome_summary_names_every_scorer_and_its_reason() -> None:
+    scores = SongScores(
+        runs=(
+            ScorerRun(scorer="silence", outcome=ScorerOutcome.OK),
+            ScorerRun(
+                scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT,
+                detail="timed out after 300s",
+            ),
+        ),
+    )
+
+    assert scores.outcome_summary() == (
+        "silence=ok, text_accuracy=timed_out (timed out after 300s)"
+    )
+
+
+def test_scorer_run_rejects_an_unknown_scorer_name() -> None:
+    with pytest.raises(ValueError, match="Unknown scorer"):
+        ScorerRun(scorer="not_a_scorer", outcome=ScorerOutcome.OK)

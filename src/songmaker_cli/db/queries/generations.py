@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -79,7 +80,18 @@ def create_generation(
     return gen
 
 
-def save_scores(session: Session, generation_id: str, scores: dict) -> None:
+def save_scores(
+    session: Session,
+    generation_id: str,
+    scores: dict[str, object],
+    refreshed_keys: Collection[str],
+) -> None:
+    """Merge one scoring run's values into the generation's stored scores.
+
+    Only ``refreshed_keys`` — the keys owned by the scorers that actually
+    produced a value — are dropped before the merge. A scorer that timed out,
+    failed, or was skipped therefore keeps the value it stored earlier.
+    """
     from sqlalchemy.orm.attributes import flag_modified
 
     existing = (
@@ -87,11 +99,17 @@ def save_scores(session: Session, generation_id: str, scores: dict) -> None:
         .filter_by(generation_id=generation_id, scorer="batch")
         .first()
     )
-    if existing:
-        existing.value = scores
-        flag_modified(existing, "value")
-    else:
-        session.add(Score(generation_id=generation_id, scorer="batch", value=scores))
+    if existing is None:
+        session.add(Score(generation_id=generation_id, scorer="batch", value=dict(scores)))
+        session.flush()
+        return
+
+    merged = {
+        key: value for key, value in existing.value.items() if key not in refreshed_keys
+    }
+    merged.update(scores)
+    existing.value = merged
+    flag_modified(existing, "value")
     session.flush()
 
 

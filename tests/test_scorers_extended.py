@@ -612,8 +612,9 @@ def test_text_accuracy_score_detected_language_default() -> None:
 
 def test_score_lyrical_coherence_no_meta() -> None:
     from songmaker_cli.scoring.lyrical_coherence import score_lyrical_coherence
+    from songmaker_cli.scoring.pipeline import ScorerDependencyUnavailable
 
-    with pytest.raises(ValueError, match="No lyrics"):
+    with pytest.raises(ScorerDependencyUnavailable, match="No lyrics"):
         score_lyrical_coherence(Path("test.mp3"), meta=None)
 
 
@@ -625,7 +626,9 @@ def test_score_lyrical_coherence_no_whisper(tmp_path: Path) -> None:
     mp3.write_bytes(b"fake")
 
     from songmaker_cli.scoring.models import SharedScorerData
-    with pytest.raises(ValueError, match="No Whisper transcription"):
+    from songmaker_cli.scoring.pipeline import ScorerDependencyUnavailable
+
+    with pytest.raises(ScorerDependencyUnavailable, match="No Whisper transcription"):
         score_lyrical_coherence(mp3, meta=meta, shared_data=SharedScorerData())
 
 
