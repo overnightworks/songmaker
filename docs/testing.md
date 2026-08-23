@@ -202,7 +202,8 @@ frontend/src/
 │                                  bootstrap disconnect, resync, focus, retry, cleanup),
 │                                  navigation, LoRA, player, playlists, toast
 ├── lib/services/*.test.ts         Audio player service tests (incl. swapCallbacks/restoreCallbacks,
-│                                  loadUrl, unload)
+│                                  loadUrl, unload); lyrics alignment transport (latest take wins,
+│                                  synchronous fallback where the platform has no Worker)
 ├── lib/share/*.test.ts            Pure sharedCollection adapters; SharePlayback's classic/stream
 │                                  dispatch, shuffle, and callback ownership
 ├── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
@@ -238,6 +239,9 @@ frontend/e2e/
 - **Mock stores** for component isolation
 - **`vi.useFakeTimers()`** for job polling tests
 - **Svelte store tests** use `get()` to read reactive values
+- **jsdom ships no `Worker`**, so `alignInWorker` runs the same pure alignment synchronously there.
+  A test that needs to see the state *before* the answer arrives (`NowPlayingLyrics.test.ts`) stubs
+  `Worker` with a fake that runs the real pure function and delivers it when the test says so
 
 ## Adding Tests for New Features
 

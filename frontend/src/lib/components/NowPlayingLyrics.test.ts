@@ -1,11 +1,13 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 	NOW_PLAYING_RESCORE_ACTION_LABEL
 } from '$lib/constants/now-playing';
+import { alignLyricsToCues } from '$lib/utils/lyrics-align';
 import NowPlayingLyrics from './NowPlayingLyrics.svelte';
 
 const EMPTY_LABEL = 'No lyrics for this take';
@@ -26,6 +28,38 @@ function sungCue(start: number, secondsPerWord: number, text: string): WhisperCu
 		text: word
 	}));
 	return { start: words[0].start, end: words[words.length - 1].end, text, words };
+}
+
+// Plays the part the browser's worker plays (#158): the same pure alignment,
+// but delivered only once a test says the answer arrived. That is what lets a
+// test see the take as it reads before it is aligned.
+class FakeAlignmentWorker {
+	static instance: FakeAlignmentWorker | null = null;
+	private requests: AlignmentRequest[] = [];
+	private readonly listeners: ((event: { data: AlignmentResult }) => void)[] = [];
+
+	constructor() {
+		FakeAlignmentWorker.instance = this;
+	}
+
+	addEventListener(type: string, listener: (event: { data: AlignmentResult }) => void): void {
+		if (type === 'message') this.listeners.push(listener);
+	}
+
+	postMessage(request: AlignmentRequest): void {
+		this.requests.push(request);
+	}
+
+	terminate(): void {}
+
+	deliver(): void {
+		const pending = this.requests;
+		this.requests = [];
+		for (const request of pending) {
+			const lines = alignLyricsToCues(request.lyrics, request.cues);
+			for (const listener of this.listeners) listener({ data: { id: request.id, lines } });
+		}
+	}
 }
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -82,6 +116,10 @@ function lyricsBox(): HTMLElement {
 	return box;
 }
 
+beforeEach(() => {
+	vi.stubGlobal('Worker', FakeAlignmentWorker);
+});
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
@@ -91,7 +129,7 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-async function render(props: {
+async function mountLyrics(props: {
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
 	whisperText: string | null;
@@ -100,6 +138,21 @@ async function render(props: {
 	document.body.append(target);
 	mounted = mount(NowPlayingLyrics, { target, props: { emptyLabel: EMPTY_LABEL, ...props } });
 	await tick();
+}
+
+/** The take's alignment comes back from the worker and is rendered. */
+async function settleAlignment() {
+	FakeAlignmentWorker.instance?.deliver();
+	await tick();
+}
+
+async function render(props: {
+	lyrics: string | null;
+	cues: WhisperCue[] | null;
+	whisperText: string | null;
+}) {
+	await mountLyrics(props);
+	await settleAlignment();
 }
 
 describe('NowPlayingLyrics', () => {
@@ -149,6 +202,23 @@ describe('NowPlayingLyrics', () => {
 		await render({ lyrics: LINE_1, cues: null, whisperText: 'a rough transcript' });
 		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 		expect(target.querySelector('button')).toBeNull();
+	});
+
+	it('reads the take as plain lyrics until the alignment comes back', async () => {
+		// #158: aligning a take costs a few hundred milliseconds, so it happens
+		// off the main thread. Until its answer arrives the lyrics are simply
+		// text — no line is highlighted, and none is claimed to be sung.
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
+		audioPlayer.currentTime = 1.5;
+
+		await mountLyrics({ lyrics, cues, whisperText: null });
+		expect(target.querySelector('.lyrics-line')).toBeNull();
+		expect(target.querySelector('.lyrics-text')?.textContent).toBe(lyrics);
+
+		await settleAlignment();
+		const lines = target.querySelectorAll('.lyrics-line');
+		expect(lines[1].classList.contains('active')).toBe(true);
 	});
 
 	it('highlights the line whose cue interval covers the current playback time', async () => {
