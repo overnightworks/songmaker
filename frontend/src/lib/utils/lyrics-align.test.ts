@@ -220,7 +220,12 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
-	it('lights a repeated chorus line at each of its repeats', () => {
+	// Precision over recall (#142 review): a rendition of a repeated chorus
+	// line has, further along the take, a differently-worded reading of the
+	// repeat that scores within the margin of it, so the take cannot say which
+	// of the two the first chorus line was sung on and it stays dark. The last
+	// repeat has no such rival behind it and is lit.
+	it('lights only the last of two identical chorus renditions', () => {
 		const lyrics = [LINE_1, CHORUS, LINE_3, CHORUS].join('\n');
 
 		const aligned = alignLyricsToCues(lyrics, [
@@ -229,7 +234,7 @@ describe('alignLyricsToCues with word timestamps', () => {
 
 		expect(aligned.map((line) => line.interval)).toEqual([
 			{ start: 0, end: 2.5 },
-			{ start: 2.5, end: 5.5 },
+			null,
 			{ start: 5.5, end: 8 },
 			{ start: 8, end: 11 }
 		]);

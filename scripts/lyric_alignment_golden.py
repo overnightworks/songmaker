@@ -233,10 +233,6 @@ def _overlaps(candidate: Candidate, other: Candidate) -> bool:
     return candidate.first <= other.last and candidate.last >= other.first
 
 
-def _echoes(candidate_text: str, best_text: str) -> bool:
-    return candidate_text in best_text or best_text in candidate_text
-
-
 def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
     best: Candidate | None = None
     for candidate in candidates:
@@ -247,7 +243,7 @@ def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
 
     rival_score = float("-inf")
     for candidate in candidates:
-        if _overlaps(candidate, best) or _echoes(candidate.text, best.text):
+        if _overlaps(candidate, best) or candidate.text == best.text:
             continue
         rival_score = max(rival_score, candidate.score)
     if rival_score != float("-inf") and best.score - rival_score < AMBIGUITY_MARGIN:
@@ -422,7 +418,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (_sung_cue(0.0, 0.3, f"{LINE_1} ooh yeah come on {LINE_2}"),),
     ),
     AlignmentFixture(
-        "word path: a repeated chorus line takes its own repeat in order",
+        "word path: only the last of two identical chorus renditions is lit",
         "\n".join(["[verse]", LINE_1, "[chorus]", CHORUS, "", "[verse]", LINE_3, CHORUS]),
         (_sung_cue(2.0, 0.45, f"{LINE_1} {CHORUS} {LINE_3} {CHORUS}"),),
     ),

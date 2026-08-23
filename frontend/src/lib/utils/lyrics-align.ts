@@ -21,14 +21,13 @@
 // per-line timing (#45); only a re-score buys real per-line intervals.
 //
 // Both paths share the same accept rule: the best candidate must clear
-// MIN_RATIO, and it must beat every rival — a candidate that neither
-// overlaps it nor merely echoes its words — by AMBIGUITY_MARGIN. An echo is
-// a candidate whose text contains the winner's or is contained in it: the
-// same phrase sung twice, or the same phrase with a shifted boundary. Those
-// cannot say where the line was sung, and under a forward-only cursor the
-// earliest reading is the right one, so a repeated chorus is never blocked
-// by its own repeat. Anything short of that leaves the line dark: a missed
-// highlight is a gap, a wrong one is a lie.
+// MIN_RATIO, and it must beat every rival by AMBIGUITY_MARGIN. A rival is a
+// candidate that does not overlap the winner and reads differently from it —
+// overlapping candidates are the same rendition seen through a shifted
+// window, and identical text cannot disambiguate anything, which is why a
+// chorus line is never blocked by a word-for-word repeat of itself (#45).
+// Anything short of that leaves the line dark: a missed highlight is a gap,
+// a wrong one is a lie.
 import type { WhisperCue } from '$lib/api/types';
 import { normalizeLyricsToken } from './lyrics-normalize';
 import { SequenceMatcher } from './sequence-matcher';
@@ -198,10 +197,6 @@ function overlaps(candidate: Candidate, other: Candidate): boolean {
 	return candidate.from <= other.to && candidate.to >= other.from;
 }
 
-function echoes(candidateText: string, bestText: string): boolean {
-	return bestText.includes(candidateText) || candidateText.includes(bestText);
-}
-
 function chooseCandidate(candidates: Candidate[]): Candidate | null {
 	let best: Candidate | null = null;
 	for (const candidate of candidates) {
@@ -211,7 +206,7 @@ function chooseCandidate(candidates: Candidate[]): Candidate | null {
 
 	let rivalScore = -Infinity;
 	for (const candidate of candidates) {
-		if (overlaps(candidate, best) || echoes(candidate.text, best.text)) continue;
+		if (overlaps(candidate, best) || candidate.text === best.text) continue;
 		if (candidate.score > rivalScore) rivalScore = candidate.score;
 	}
 	if (rivalScore !== -Infinity && best.score - rivalScore < AMBIGUITY_MARGIN) return null;

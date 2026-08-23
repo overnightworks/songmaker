@@ -406,10 +406,7 @@
 					"start": 2.0
 				},
 				null,
-				{
-					"end": 6.95,
-					"start": 4.25
-				},
+				null,
 				null,
 				null,
 				{
@@ -422,7 +419,7 @@
 				}
 			],
 			"lyrics": "[verse]\nthe lantern hums quietly tonight\n[chorus]\nhold the line until the morning\n\n[verse]\nanother mile of rusted signs\nhold the line until the morning",
-			"name": "word path: a repeated chorus line takes its own repeat in order"
+			"name": "word path: only the last of two identical chorus renditions is lit"
 		},
 		{
 			"cues": [
