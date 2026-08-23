@@ -15,6 +15,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Final
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SharedScorerData
@@ -25,6 +26,8 @@ log = logging.getLogger(__name__)
 _predictor: object | None = None
 _predictor_device: str | None = None
 _predictor_lock = threading.Lock()
+
+_CUDA_VISIBLE_DEVICES: Final = "CUDA_VISIBLE_DEVICES"
 
 
 def clear_cache() -> None:
@@ -55,16 +58,20 @@ def _force_cpu_env() -> Iterator[None]:
     Known limitation: AesPredictor has no explicit device parameter, so
     env mutation is the only way to force CPU. If upstream adds device
     support, replace this with direct device passing.
+
+    The visibility that is taken away here is process state, not
+    configuration: it is removed and put back exactly as found, so it
+    must not be routed through Settings.
     """
-    saved = os.environ.get("CUDA_VISIBLE_DEVICES")
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    hidden_devices = os.environ.pop(_CUDA_VISIBLE_DEVICES, None)
+    os.environ[_CUDA_VISIBLE_DEVICES] = ""
     try:
         yield
     finally:
-        if saved is None:
-            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        if hidden_devices is None:
+            os.environ.pop(_CUDA_VISIBLE_DEVICES, None)
         else:
-            os.environ["CUDA_VISIBLE_DEVICES"] = saved
+            os.environ[_CUDA_VISIBLE_DEVICES] = hidden_devices
 
 
 @register("audiobox")
