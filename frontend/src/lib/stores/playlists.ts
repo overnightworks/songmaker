@@ -67,15 +67,28 @@ function invalidatePlaylistDetailCache(id: string): void {
 	playlistDetailCache.delete(id);
 }
 
-function fetchPlaylistDetailDeduped(id: string): Promise<PlaylistDetailItem> {
-	const inflight = playlistDetailInflight.get(id);
-	if (inflight) return inflight;
-	const request = (async () => {
+function fetchPlaylistDetailDeduped(
+	id: string,
+	options: { force?: boolean } = {}
+): Promise<PlaylistDetailItem> {
+	if (options.force) {
+		// A forced (post-mutation) call must not adopt a stale pre-mutation
+		// fetch that is still in flight -- drop it and start fresh. The old
+		// promise keeps running and only clears its OWN map entry on settle
+		// (identity-checked below), never the fresh one registered after it.
+		playlistDetailInflight.delete(id);
+	} else {
+		const inflight = playlistDetailInflight.get(id);
+		if (inflight) return inflight;
+	}
+	const request: Promise<PlaylistDetailItem> = (async () => {
 		const detail = await fetchPlaylist(id);
 		playlistDetailCache.set(id, { detail, fetchedAt: Date.now() });
 		return detail;
 	})().finally(() => {
-		playlistDetailInflight.delete(id);
+		if (playlistDetailInflight.get(id) === request) {
+			playlistDetailInflight.delete(id);
+		}
 	});
 	playlistDetailInflight.set(id, request);
 	return request;
@@ -105,7 +118,10 @@ export async function ensurePlaylistsLoaded(): Promise<boolean> {
 	return loadPlaylists();
 }
 
-export function resetPlaylistsForTests(): void {
+// Wipes every playlist store, in-flight fetch, and cache -- called both by
+// tests and, in production, by clearAuth() on logout/401 so the next
+// session never sees a stale cached detail or list from the previous user.
+export function resetPlaylists(): void {
 	playlistsInflight = null;
 	playlistList.set([]);
 	setOpenCollection(null);
@@ -147,12 +163,22 @@ export async function loadPlaylistDetail(
 	}
 	playlistDetailLoad.set({ status: 'loading', error: null });
 	try {
-		const detail = await fetchPlaylistDetailDeduped(id);
+		const detail = await fetchPlaylistDetailDeduped(id, { force: options.forceRefresh });
 		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
 		selectedPlaylistDetail.set(detail);
 		playlistDetailLoad.set({ status: 'ready', error: null });
 	} catch (err) {
 		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
+		if (err instanceof ApiError && err.status === 404) {
+			// The playlist is gone -- this is a permanent condition, not a
+			// transient error. Close the collection instead of showing a
+			// retry that can never succeed (matches hydrateCollection's
+			// former not-found handling, now owned here).
+			selectedPlaylistDetail.set(null);
+			playlistDetailLoad.set({ status: 'idle', error: null });
+			setOpenCollection(null);
+			return;
+		}
 		const message = playlistErrorMessage(err);
 		selectedPlaylistDetail.set(null);
 		playlistDetailLoad.set({ status: 'error', error: message });

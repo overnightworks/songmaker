@@ -13,7 +13,7 @@ import {
 	playlistDetailLoad,
 	playlistList,
 	playlistLoad,
-	resetPlaylistsForTests,
+	resetPlaylists,
 	selectedPlaylistDetail,
 	selectedPlaylistId
 } from './playlists';
@@ -31,7 +31,7 @@ vi.mock('$lib/api/client', () => ({
 	reorderPlaylistEntry: vi.fn()
 }));
 
-function makeDetail(id: string): PlaylistDetailItem {
+function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
 	return {
 		id,
 		title: id,
@@ -39,17 +39,18 @@ function makeDetail(id: string): PlaylistDetailItem {
 		is_shared: false,
 		share_slug: null,
 		created_at: '',
-		entries: []
+		entries: [],
+		...overrides
 	};
 }
 
 beforeEach(() => {
-	resetPlaylistsForTests();
+	resetPlaylists();
 	toasts.set([]);
 });
 
 afterEach(() => {
-	resetPlaylistsForTests();
+	resetPlaylists();
 	toasts.set([]);
 	vi.restoreAllMocks();
 	vi.useRealTimers();
@@ -116,6 +117,43 @@ describe('loadPlaylistDetail', () => {
 		await loadPlaylistDetail('a', { forceRefresh: true });
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+	});
+
+	it('forceRefresh bypasses an in-flight fetch so the later call wins', async () => {
+		// Two quick mutations on the same playlist (e.g. add then remove a
+		// track) both force-refresh. The first's fetch must not be adopted
+		// by the second -- each gets its own request, and the request that
+		// is still current when its fetch resolves wins (#139).
+		let resolveFirst: ((value: PlaylistDetailItem) => void) | undefined;
+		vi.mocked(fetchPlaylist).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+
+		const first = loadPlaylistDetail('a', { forceRefresh: true });
+		const second = loadPlaylistDetail('a', { forceRefresh: true });
+		await second;
+		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		await first;
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+		expect(get(selectedPlaylistDetail)?.title).toBe('Second');
+	});
+
+	it('clears the collection when the playlist is gone', async () => {
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(404, 'gone', '/api/playlists/gone')
+		);
+
+		await loadPlaylistDetail('gone');
+
+		expect(get(selectedPlaylistId)).toBeNull();
+		expect(get(selectedPlaylistDetail)).toBeNull();
+		expect(get(playlistDetailLoad)).toEqual({ status: 'idle', error: null });
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it('never leaves the previous playlist rows under a rate-limited open', async () => {
