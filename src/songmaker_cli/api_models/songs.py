@@ -129,13 +129,14 @@ class AlbumResponse(BaseModel):
     year: str = ""
     colors: dict[str, str] = Field(default_factory=dict)
     song_count: int = 0
+    picked_count: int = 0
     is_shared: bool = False
     share_slug: str | None = None
     cover: AlbumCoverUrls | None = None
     created_at: str
 
     @classmethod
-    def from_orm(cls, album: Album) -> AlbumResponse:
+    def from_orm(cls, album: Album, *, picked_count: int = 0) -> AlbumResponse:
         cover = album_cover_urls(album.id, album.cover_key) if album.cover_key else None
         return cls(
             id=album.id,
@@ -145,6 +146,7 @@ class AlbumResponse(BaseModel):
             year=album.year,
             colors=album.colors or {},
             song_count=len(album.songs) if album.songs else 0,
+            picked_count=picked_count,
             is_shared=album.is_shared,
             share_slug=album.share_slug,
             cover=cover,

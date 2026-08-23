@@ -42,8 +42,11 @@ class LibraryAlbumHit(BaseModel):
     album: AlbumResponse
 
     @classmethod
-    def from_orm(cls, album: Album) -> LibraryAlbumHit:
-        return cls(type=LIBRARY_ITEM_ALBUM, album=AlbumResponse.from_orm(album))
+    def from_orm(cls, album: Album, *, picked_count: int = 0) -> LibraryAlbumHit:
+        return cls(
+            type=LIBRARY_ITEM_ALBUM,
+            album=AlbumResponse.from_orm(album, picked_count=picked_count),
+        )
 
 
 class LibrarySongHit(BaseModel):
@@ -82,13 +85,17 @@ class LibrarySearchResponse(BaseModel):
         *,
         has_more: bool,
         next_cursor: str | None,
+        picked_counts: dict[str, int] | None = None,
     ) -> LibrarySearchResponse:
         from songmaker_cli.db.models import Album as AlbumModel
 
+        counts = picked_counts or {}
         items: list[LibraryAlbumHit | LibrarySongHit] = []
         for hit in hits:
             if isinstance(hit, AlbumModel):
-                items.append(LibraryAlbumHit.from_orm(hit))
+                items.append(
+                    LibraryAlbumHit.from_orm(hit, picked_count=counts.get(hit.id, 0)),
+                )
             else:
                 items.append(LibrarySongHit.from_orm(hit))
         return cls(items=items, next_cursor=next_cursor, has_more=has_more)

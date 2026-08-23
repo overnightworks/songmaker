@@ -91,6 +91,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 		year: '',
 		colors: {},
 		song_count: 1,
+		picked_count: 0,
 		is_shared: false,
 		created_at: '',
 		...overrides

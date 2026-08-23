@@ -119,9 +119,11 @@ RULES: list[Rule] = [
         allowlist={
             # GenerationResponse.expires_at is a computed field, not a DB
             # column — returns None for picked/kept generations since they
-            # never expire. Legitimate nullable.
-            "src/songmaker_cli/api_models/songs.py:233",
-            "src/songmaker_cli/api_models/songs.py:275",
+            # never expire. Legitimate nullable. Line-number keyed: any
+            # edit above these lines in songs.py needs to shift them too
+            # (see #136 for the fragility of this allowlist scheme).
+            "src/songmaker_cli/api_models/songs.py:235",
+            "src/songmaker_cli/api_models/songs.py:277",
             # An absent memory row is represented as an empty scope with no
             # update timestamp; this is a computed response field.
             "src/songmaker_cli/api_models/settings.py:237",

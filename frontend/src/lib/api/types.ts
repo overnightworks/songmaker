@@ -194,6 +194,7 @@ export interface AlbumItem {
 	year: string;
 	colors: Record<string, string>;
 	song_count: number;
+	picked_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
 	cover?: AlbumCoverUrls | null;
