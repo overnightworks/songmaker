@@ -199,13 +199,17 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
 	});
 
-	it('sizes the pick, keep, seed, and reference actions to the frequent hitbox', async () => {
-		await render({});
-		const optedIn = Array.from(target.querySelectorAll('[data-hitbox="frequent"]')).map((el) =>
-			Array.from(el.classList).find((name) => !name.startsWith('svelte-'))
-		);
-		expect(optedIn).toEqual(['badge-btn', 'badge-btn', 'pin-seed', 'use-as-reference']);
-	});
+	it.each(['.badge-btn', '.pin-seed', '.use-as-reference'])(
+		'opts %s into the frequent hitbox',
+		async (selector) => {
+			// Sizing itself is pinned once for the shared mechanism in
+			// frequent-hitbox.test.ts; here the contract is that these controls opt in.
+			await render({});
+			const controls = Array.from(target.querySelectorAll<HTMLElement>(selector));
+			expect(controls.length).toBeGreaterThan(0);
+			for (const control of controls) expect(control.dataset.hitbox).toBe('frequent');
+		}
+	);
 
 	it('flips pick through takeActions', async () => {
 		await render({ generation: generation({ is_picked: false }) });
