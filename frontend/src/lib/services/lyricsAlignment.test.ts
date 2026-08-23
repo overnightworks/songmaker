@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
+import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 import { alignLyricsToCues, type AlignedLyricLine } from '$lib/utils/lyrics-align';
-import type { AlignmentRequest, AlignmentResult } from './lyricsAlignment';
+import type { AlignmentRequest, AlignmentResult } from './lyricsAlignment.svelte';
 
 const LYRICS = ['the lantern hums quietly tonight', 'we count the fading city lights'].join('\n');
 const CUES: WhisperCue[] = [
@@ -13,7 +14,9 @@ const WORKER_LINES: AlignedLyricLine[] = [
 ];
 
 // Stands in for the real worker: records what it was asked and lets the test
-// decide when — and whether — an answer comes back.
+// decide when — and whether — an answer comes back. It structured-clones every
+// request exactly as the browser does, so a take that could not cross the
+// worker boundary fails here too.
 class FakeAlignmentWorker {
 	static latest: FakeAlignmentWorker | null = null;
 	readonly requests: AlignmentRequest[] = [];
@@ -28,7 +31,7 @@ class FakeAlignmentWorker {
 	}
 
 	postMessage(request: AlignmentRequest): void {
-		this.requests.push(request);
+		this.requests.push(structuredClone(request));
 	}
 
 	terminate(): void {}
@@ -58,11 +61,12 @@ async function loadService(withWorker: boolean) {
 	FakeAlignmentWorker.latest = null;
 	vi.stubGlobal('Worker', withWorker ? FakeAlignmentWorker : undefined);
 	vi.resetModules();
-	return await import('./lyricsAlignment');
+	return await import('./lyricsAlignment.svelte');
 }
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 describe('alignInWorker', () => {
@@ -78,6 +82,19 @@ describe('alignInWorker', () => {
 		const aligned = alignInWorker(LYRICS, CUES);
 		const [request] = workingWorker().requests;
 		expect(request).toMatchObject({ lyrics: LYRICS, cues: CUES });
+		workingWorker().answer({ id: request.id, lines: WORKER_LINES });
+
+		await expect(aligned).resolves.toEqual(WORKER_LINES);
+	});
+
+	it('sends cues held in reactive state across the worker boundary', async () => {
+		// Share pages read the playing take's cues off `$state`, and a proxy
+		// cannot be structured-cloned — the take has to cross as plain data.
+		const { alignInWorker } = await loadService(true);
+
+		const aligned = alignInWorker(LYRICS, stateProxy(CUES));
+		const [request] = workingWorker().requests;
+		expect(request.cues).toEqual(CUES);
 		workingWorker().answer({ id: request.id, lines: WORKER_LINES });
 
 		await expect(aligned).resolves.toEqual(WORKER_LINES);
@@ -108,12 +125,28 @@ describe('alignInWorker', () => {
 		expect(workingWorker()).toBe(first);
 	});
 
-	it('rejects the take in flight when the worker fails', async () => {
+	it('aligns the take in flight on the main thread when the worker fails', async () => {
+		// An offline listener whose cache never held the worker chunk gets the
+		// pre-#158 behaviour rather than lyrics that never follow.
 		const { alignInWorker } = await loadService(true);
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const aligned = alignInWorker(LYRICS, CUES);
 		workingWorker().fail('boom');
 
-		await expect(aligned).rejects.toThrow('boom');
+		await expect(aligned).resolves.toEqual(alignLyricsToCues(LYRICS, CUES));
+		expect(logged).toHaveBeenCalled();
+	});
+
+	it('starts a fresh worker for the take after a failed one', async () => {
+		const { alignInWorker } = await loadService(true);
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		alignInWorker(LYRICS, CUES);
+		const failed = workingWorker();
+		failed.fail('boom');
+		alignInWorker(LYRICS, CUES);
+
+		expect(workingWorker()).not.toBe(failed);
 	});
 });

@@ -2,12 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment';
+import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment.svelte';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 	NOW_PLAYING_RESCORE_ACTION_LABEL
 } from '$lib/constants/now-playing';
 import { alignLyricsToCues } from '$lib/utils/lyrics-align';
+import { reactiveProps } from '../../tests/reactive-fixtures.svelte';
 import NowPlayingLyrics from './NowPlayingLyrics.svelte';
 
 const EMPTY_LABEL = 'No lyrics for this take';
@@ -32,7 +33,9 @@ function sungCue(start: number, secondsPerWord: number, text: string): WhisperCu
 
 // Plays the part the browser's worker plays (#158): the same pure alignment,
 // but delivered only once a test says the answer arrived. That is what lets a
-// test see the take as it reads before it is aligned.
+// test see the take as it reads before it is aligned. Requests are
+// structured-cloned exactly as the browser clones them, so a take that could
+// not cross the worker boundary fails here too.
 class FakeAlignmentWorker {
 	static instance: FakeAlignmentWorker | null = null;
 	private requests: AlignmentRequest[] = [];
@@ -47,7 +50,7 @@ class FakeAlignmentWorker {
 	}
 
 	postMessage(request: AlignmentRequest): void {
-		this.requests.push(request);
+		this.requests.push(structuredClone(request));
 	}
 
 	terminate(): void {}
@@ -129,15 +132,21 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-async function mountLyrics(props: {
+interface LyricsProps {
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
 	whisperText: string | null;
-}) {
+}
+
+// Props the test can change afterwards, as the panel's own props change when
+// the listener moves to another take.
+async function mountLyrics(props: LyricsProps): Promise<LyricsProps> {
 	target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(NowPlayingLyrics, { target, props: { emptyLabel: EMPTY_LABEL, ...props } });
+	const live = reactiveProps({ emptyLabel: EMPTY_LABEL, ...props });
+	mounted = mount(NowPlayingLyrics, { target, props: live });
 	await tick();
+	return live;
 }
 
 /** The take's alignment comes back from the worker and is rendered. */
@@ -146,11 +155,7 @@ async function settleAlignment() {
 	await tick();
 }
 
-async function render(props: {
-	lyrics: string | null;
-	cues: WhisperCue[] | null;
-	whisperText: string | null;
-}) {
+async function render(props: LyricsProps) {
 	await mountLyrics(props);
 	await settleAlignment();
 }
@@ -219,6 +224,21 @@ describe('NowPlayingLyrics', () => {
 		await settleAlignment();
 		const lines = target.querySelectorAll('.lyrics-line');
 		expect(lines[1].classList.contains('active')).toBe(true);
+	});
+
+	it('keeps the take static when it loses its cues before the answer arrives', async () => {
+		// Moving to an unscored take re-runs the effect without asking for a new
+		// alignment, so nothing supersedes the one still in flight. Its answer
+		// belongs to a take that is no longer showing.
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const live = await mountLyrics({ lyrics, cues: [cue(0, 1, LINE_1)], whisperText: null });
+
+		live.cues = null;
+		await tick();
+		await settleAlignment();
+
+		expect(target.querySelector('.lyrics-line')).toBeNull();
+		expect(target.querySelector('.lyrics-text')?.textContent).toBe(lyrics);
 	});
 
 	it('highlights the line whose cue interval covers the current playback time', async () => {

@@ -22,10 +22,8 @@ export interface AlignmentResult {
 	lines: AlignedLyricLine[];
 }
 
-interface AwaitedAlignment {
-	id: number;
+interface AwaitedAlignment extends AlignmentRequest {
 	resolve: (lines: AlignedLyricLine[] | null) => void;
-	reject: (error: Error) => void;
 }
 
 let worker: Worker | null = null;
@@ -42,10 +40,18 @@ function startWorker(): Worker {
 		awaited = null;
 		request.resolve(event.data.lines);
 	});
+	// A worker that never loaded — an offline listener whose cache has no
+	// worker chunk — or one that died mid-take would otherwise leave the take
+	// on static lyrics forever. It is dropped, the take is aligned on the main
+	// thread as it was before #158, and the next take starts a fresh worker.
 	started.addEventListener('error', (event) => {
+		const cause = event.message || 'the worker script could not be loaded';
+		console.error(`Lyrics alignment worker failed, aligning on the main thread: ${cause}`);
+		started.terminate();
+		if (worker === started) worker = null;
 		const request = awaited;
 		awaited = null;
-		request?.reject(new Error(`Lyrics alignment worker failed: ${event.message}`));
+		if (request) request.resolve(alignLyricsToCues(request.lyrics, request.cues));
 	});
 	return started;
 }
@@ -65,15 +71,19 @@ export function alignInWorker(
 	lyrics: string,
 	cues: WhisperCue[]
 ): Promise<AlignedLyricLine[] | null> {
-	if (typeof Worker === 'undefined') return Promise.resolve(alignLyricsToCues(lyrics, cues));
+	// Share pages read the playing take's cues off reactive state, and a
+	// `$state` proxy cannot cross a worker boundary — structuredClone rejects
+	// it. The take is snapshotted here, at the boundary that needs it plain.
+	const takeCues = $state.snapshot(cues) as WhisperCue[];
+	if (typeof Worker === 'undefined') return Promise.resolve(alignLyricsToCues(lyrics, takeCues));
 
 	worker ??= startWorker();
 	supersedeAwaited();
 	const id = ++lastRequestId;
-	const aligned = new Promise<AlignedLyricLine[] | null>((resolve, reject) => {
-		awaited = { id, resolve, reject };
+	const aligned = new Promise<AlignedLyricLine[] | null>((resolve) => {
+		awaited = { id, lyrics, cues: takeCues, resolve };
 	});
-	worker.postMessage({ id, lyrics, cues } satisfies AlignmentRequest);
+	worker.postMessage({ id, lyrics, cues: takeCues } satisfies AlignmentRequest);
 	return aligned;
 }
 

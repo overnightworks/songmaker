@@ -241,7 +241,11 @@ frontend/e2e/
 - **Svelte store tests** use `get()` to read reactive values
 - **jsdom ships no `Worker`**, so `alignInWorker` runs the same pure alignment synchronously there.
   A test that needs to see the state *before* the answer arrives (`NowPlayingLyrics.test.ts`) stubs
-  `Worker` with a fake that runs the real pure function and delivers it when the test says so
+  `Worker` with a fake that runs the real pure function and delivers it when the test says so. Every
+  such fake `postMessage` **structured-clones its request**, so a take that could not really cross
+  the worker boundary — reactive `$state` cues from a share page — fails in the test too
+- **Runes need a `.svelte.ts` module**: `src/tests/reactive-fixtures.svelte.ts` hands a plain
+  `.test.ts` a real `$state` proxy or props a mounted component follows when the test changes them
 
 ## Adding Tests for New Features
 

@@ -5,7 +5,7 @@
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 		NOW_PLAYING_LYRICS_ROW_LABEL
 	} from '$lib/constants/now-playing';
-	import { alignInWorker } from '$lib/services/lyricsAlignment';
+	import { alignInWorker } from '$lib/services/lyricsAlignment.svelte';
 	import { activeLyricLineIndices, type AlignedLyricLine } from '$lib/utils/lyrics-align';
 
 	let {
@@ -42,11 +42,9 @@
 		if (takeCues == null || takeCues.length === 0) return;
 
 		let superseded = false;
-		alignInWorker(takeLyrics, takeCues)
-			.then((lines) => {
-				if (!superseded && lines) alignedLines = lines;
-			})
-			.catch((error) => console.error(error));
+		alignInWorker(takeLyrics, takeCues).then((lines) => {
+			if (!superseded && lines) alignedLines = lines;
+		});
 		return () => {
 			superseded = true;
 		};
