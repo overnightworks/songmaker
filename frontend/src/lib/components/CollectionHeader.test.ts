@@ -7,6 +7,7 @@ vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
 import CollectionHeader from './CollectionHeader.svelte';
+import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -167,6 +168,26 @@ describe('CollectionHeader', () => {
 
 		addSong.click();
 		expect(onaddsong).toHaveBeenCalledTimes(1);
+	});
+
+	it('announces the album title as the heading name, with a separately named edit button', async () => {
+		const target = await render(baseProps());
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit album title');
+		expect(editButton.textContent?.trim()).toBe('Night Drive');
+	});
+
+	it('announces the playlist title as the heading name, with a separately named edit button', async () => {
+		const target = await render({
+			...baseProps(),
+			kind: 'playlist' as const,
+			title: 'Late Night Mix'
+		});
+		const heading = getByRoleHeading(target, 'Late Night Mix');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit playlist title');
+		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {

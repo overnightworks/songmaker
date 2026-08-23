@@ -79,13 +79,13 @@ test.afterEach(() => {
  * line below it — not that the rendered title is untruncated, which the
  * header's own ellipsis makes unmeasurable from outside.
  *
- * Both are addressed by role alone: the album surface carries exactly one
- * heading and one breadcrumb, and the rename control inside the heading owns
- * the heading's accessible name, so the album's own title cannot select it.
+ * Both are addressed by role: the heading's accessible name is the album
+ * title (see CollectionHeader.svelte's aria-label — issue #160), so it is
+ * the name filter, not "the only heading in the surface", that selects it.
  */
 async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Promise<void> {
 	const surface = workspace(page);
-	const title = surface.getByRole('heading');
+	const title = surface.getByRole('heading', { name: albumTitle });
 	const breadcrumb = surface.getByRole('navigation');
 
 	await page.setViewportSize(NARROW_VIEWPORT);
@@ -166,6 +166,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
 
 	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
+	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	if (shell === 'mobile') await expectHeaderReadsAtNarrowest(page, library.albumTitle);
 
 	await surface
