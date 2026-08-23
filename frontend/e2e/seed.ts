@@ -1,0 +1,160 @@
+// Seeds the library the desktop flow drives, through the same public API the
+// app uses. Runs once per Playwright run from global-setup, so the flow spec
+// only ever clicks — it never creates data of its own.
+
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { APIRequestContext } from '@playwright/test';
+import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
+
+const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ARTIFACT_DIR = path.join(E2E_DIR, '.artifacts');
+const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
+const SEEDED_LIBRARY_FILE = path.join(ARTIFACT_DIR, 'seeded-library.json');
+
+export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
+export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
+
+const CSRF_COOKIE = 'csrf_token';
+const CSRF_HEADER = 'x-csrf-token';
+
+const ALBUM_ARTIST = 'E2E Ensemble';
+// Fixed titles: only one album is ever open at a time, so they stay unique on
+// screen even when a local re-run seeds a second album.
+const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
+// The album and the playlist are listed side by side with everything a
+// previous local run left behind, so their titles carry a per-run marker.
+const ALBUM_TITLE_PREFIX = 'E2E Album';
+const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
+
+export interface SeededLibrary {
+	albumTitle: string;
+	albumShareUrl: string;
+	playlistTitle: string;
+	/** Its take is the album pick — played from the album row, added to the playlist by hand. */
+	pickedSongTitle: string;
+	/** Titles of the takes seeded into the playlist, in playlist order. */
+	playlistSongTitles: string[];
+	/** Row label of a reimported take, which carries no version. */
+	takeLabel: string;
+}
+
+interface CreatedResource {
+	id: string;
+}
+
+interface ShareLink {
+	share_slug: string;
+}
+
+type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
+
+function requiredEnv(name: string): string {
+	const value = process.env[name];
+	if (!value) throw new Error(`${name} must be set to the CI stack's admin credentials`);
+	return value;
+}
+
+class SeedApi {
+	constructor(
+		private readonly api: APIRequestContext,
+		private readonly csrfToken: string
+	) {}
+
+	static async login(api: APIRequestContext): Promise<SeedApi> {
+		const response = await api.post('/api/auth/login', {
+			data: { username: requiredEnv('ADMIN_USERNAME'), password: requiredEnv('ADMIN_PASSWORD') }
+		});
+		if (!response.ok()) {
+			throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
+		}
+		const { cookies } = await api.storageState();
+		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE);
+		if (!csrf) throw new Error('Login set no CSRF cookie');
+		return new SeedApi(api, csrf.value);
+	}
+
+	async postJson<T>(url: string, data: unknown): Promise<T> {
+		return this.send<T>(url, { data });
+	}
+
+	async postFile<T>(url: string, multipart: Record<string, MultipartFile>): Promise<T> {
+		return this.send<T>(url, { multipart });
+	}
+
+	private async send<T>(
+		url: string,
+		body: { data?: unknown; multipart?: Record<string, MultipartFile> }
+	): Promise<T> {
+		const response = await this.api.post(url, {
+			// The origin header is what the CSRF origin check reads on a form
+			// submission; without it a multipart upload is rejected with 403.
+			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL },
+			...body
+		});
+		if (!response.ok()) {
+			throw new Error(`POST ${url} failed: ${response.status()} ${await response.text()}`);
+		}
+		return (await response.json()) as T;
+	}
+}
+
+export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
+	const seed = await SeedApi.login(api);
+	const runMarker = Date.now().toString(36);
+	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker}`;
+	const playlistTitle = `${PLAYLIST_TITLE_PREFIX} ${runMarker}`;
+	const takeAudio = readFileSync(TAKE_FIXTURE);
+
+	const album = await seed.postJson<CreatedResource>('/api/albums', {
+		title: albumTitle,
+		artist: ALBUM_ARTIST
+	});
+
+	const takeBySongTitle = new Map<string, string>();
+	for (const title of SONG_TITLES) {
+		const song = await seed.postJson<CreatedResource>('/api/songs', {
+			title,
+			album_id: album.id,
+			lyrics: `${title} — seeded lyrics`,
+			prompt: 'calm test tone'
+		});
+		const take = await seed.postFile<CreatedResource>(`/api/songs/${song.id}/reimport`, {
+			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
+		});
+		takeBySongTitle.set(title, take.id);
+	}
+
+	const [pickedSongTitle, ...playlistSongTitles] = SONG_TITLES;
+	await seed.postJson(`/api/generations/${takeBySongTitle.get(pickedSongTitle)}/pick`, {});
+
+	const playlist = await seed.postJson<CreatedResource>('/api/playlists', {
+		title: playlistTitle
+	});
+	for (const title of playlistSongTitles) {
+		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
+			generation_id: takeBySongTitle.get(title)
+		});
+	}
+
+	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
+
+	return {
+		albumTitle,
+		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
+		playlistTitle,
+		pickedSongTitle,
+		playlistSongTitles,
+		takeLabel: nowPlayingTakeLabel(null, 1)
+	};
+}
+
+export function writeSeededLibrary(library: SeededLibrary): void {
+	mkdirSync(ARTIFACT_DIR, { recursive: true });
+	writeFileSync(SEEDED_LIBRARY_FILE, JSON.stringify(library, null, 2));
+}
+
+export function readSeededLibrary(): SeededLibrary {
+	return JSON.parse(readFileSync(SEEDED_LIBRARY_FILE, 'utf-8')) as SeededLibrary;
+}

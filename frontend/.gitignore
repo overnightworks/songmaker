@@ -21,3 +21,13 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Playwright
+/playwright-report
+/test-results
+/blob-report
+/e2e/.artifacts
+
+# The e2e take fixture is source, not generated audio (the root .gitignore
+# drops every *.mp3).
+!e2e/fixtures/*.mp3
