@@ -14,8 +14,6 @@ from songmaker_cli.scoring.models import ScorerOutcome, ScorerRun, SongScores
 from songmaker_cli.scoring.subprocess_runner import (
     EnvProbeRequest,
     EnvProbeResponse,
-    ReleaseGpuRequest,
-    ReleaseGpuResponse,
     ScoreRequest,
     ScoreResponse,
     ScorerProcess,
@@ -83,7 +81,7 @@ def _run_child_with_messages(messages: list, timeout: float = 10.0) -> list:
         while parent_conn.poll(timeout=timeout):
             resp = parent_conn.recv()
             responses.append(resp)
-            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse, EnvProbeResponse)):
+            if isinstance(resp, (ScoreResponse, EnvProbeResponse)):
                 break
 
     proc.join(timeout=5)
@@ -101,16 +99,6 @@ def test_child_handles_shutdown() -> None:
     proc.join(timeout=10)
     assert not proc.is_alive()
     parent_conn.close()
-
-
-def test_child_handles_release_gpu() -> None:
-    responses = _run_child_with_messages([
-        ReleaseGpuRequest(),
-        ShutdownRequest(),
-    ])
-    assert len(responses) == 1
-    assert isinstance(responses[0], ReleaseGpuResponse)
-    assert responses[0].success is True
 
 
 def test_child_handles_score_request(tmp_path: Path) -> None:
@@ -135,15 +123,16 @@ def test_child_handles_score_request(tmp_path: Path) -> None:
     assert resp.error is None
 
 
-def test_child_handles_score_error(tmp_path: Path) -> None:
-    """The child reports a pipeline failure via ScoreResponse.error rather
-    than crashing or hanging.
+def test_child_reports_a_missing_audio_file_as_an_error(tmp_path: Path) -> None:
+    """The child answers a request it cannot fulfil with ScoreResponse.error,
+    rather than crashing, hanging, or reporting empty scores as success.
 
-    Uses the ``silence`` scorer (needs_audio, no model weights) rather than
-    ``text_accuracy``: a missing mp3_path fails inside ``load_audio`` before
-    any scorer runs, so this pins the same error-handling contract without
-    ever reaching faster-whisper's ~6s model load, which starved the 10s
-    poll budget under load (issue #184).
+    The rejection happens before any scorer is dispatched, so the outcome does
+    not depend on which optional scoring dependencies are installed. It used
+    to: naming ``text_accuracy`` reached a ~6s Whisper load that starved the
+    poll budget (issue #184), and naming ``silence`` reached no scorer at all
+    where librosa is absent — as in CI — which made the request succeed with
+    every scorer skipped (issue #186).
     """
     from songmaker_cli.scoring.pipeline import PipelineConfig
 
@@ -161,8 +150,9 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
     score_responses = [r for r in responses if isinstance(r, ScoreResponse)]
     assert len(score_responses) == 1
     resp = score_responses[0]
-    assert resp.error is not None
     assert resp.scores is None
+    assert resp.error is not None
+    assert str(missing) in resp.error
 
 
 # ── Secret env scrubbing ─────────────────────────────────────────
@@ -227,20 +217,6 @@ def test_scorer_process_score_empty_scorers(tmp_path: Path) -> None:
         assert isinstance(result, SongScores)
     finally:
         sp.shutdown()
-
-
-def test_scorer_process_release_gpu() -> None:
-    sp = ScorerProcess()
-    sp._ensure_started()
-    try:
-        sp.release_gpu(timeout=10)
-    finally:
-        sp.shutdown()
-
-
-def test_scorer_process_release_gpu_noop_when_dead() -> None:
-    sp = ScorerProcess()
-    sp.release_gpu()
 
 
 def _slow_child_main(conn):
