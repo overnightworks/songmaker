@@ -6,6 +6,7 @@
 		restoreAlbum,
 		shareAlbum,
 		unshareAlbum,
+		updateAlbumMetadata,
 		uploadAlbumCover
 	} from '$lib/api/client';
 	import { fetchSongs } from '$lib/api/songs';
@@ -39,6 +40,7 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import type { SongItem } from '$lib/api/types';
+	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import Icon from './Icon.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -123,6 +125,35 @@
 			addToast('Album renamed', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			throw e;
+		}
+	}
+
+	async function onSaveAlbumSubtitle(newSubtitle: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		try {
+			const updated = await updateAlbumMetadata(albumId, { subtitle: newSubtitle });
+			updateAlbumInList(albumId, () => updated);
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
+			throw e;
+		}
+	}
+
+	async function onSaveAlbumYear(newYear: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		const year = newYear ? Number(newYear) : null;
+		if (newYear && !Number.isInteger(year)) {
+			addToast('Year must be a whole number', 'error');
+			throw new Error('Year must be a whole number');
+		}
+		try {
+			const updated = await updateAlbumMetadata(albumId, { year });
+			updateAlbumInList(albumId, () => updated);
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
 			throw e;
 		}
 	}
@@ -214,7 +245,16 @@
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			onaddsong={openLibraryCreate}
-		/>
+		>
+			{#snippet metaEditor()}
+				<AlbumMetaEditor
+					subtitle={selectedAlbum.subtitle}
+					year={selectedAlbum.year}
+					onsavesubtitle={onSaveAlbumSubtitle}
+					onsaveyear={onSaveAlbumYear}
+				/>
+			{/snippet}
+		</CollectionHeader>
 		<input
 			bind:this={coverInput}
 			class="cover-file-input"

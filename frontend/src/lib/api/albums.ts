@@ -33,6 +33,21 @@ export async function renameAlbum(albumId: string, title: string): Promise<Album
 	});
 }
 
+/**
+ * Update album subtitle and/or year independently. A field left out of
+ * `params` is left unchanged server-side; passing `null` for year clears it.
+ */
+export async function updateAlbumMetadata(
+	albumId: string,
+	params: { subtitle?: string; year?: number | null }
+): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/title`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(params)
+	});
+}
+
 export async function shareAlbum(albumId: string): Promise<ShareResult> {
 	return apiFetch<ShareResult>(`/api/albums/${albumId}/share`, { method: 'POST' });
 }

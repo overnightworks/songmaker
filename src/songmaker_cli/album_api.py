@@ -22,12 +22,12 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models import (
     AlbumCreateRequest,
     AlbumResponse,
+    AlbumUpdateRequest,
     CleanupResponse,
     LibrarySort,
     PaginatedResponse,
     ShareResponse,
     StatusResponse,
-    TitleUpdateRequest,
 )
 from songmaker_cli.api_models.songs import UnplayableSongSummary
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -58,11 +58,12 @@ from songmaker_cli.db.queries import (
     get_album,
     list_albums,
     record_audit,
-    rename_album,
     restore_album,
     set_album_cover_key,
     soft_delete_album,
+    update_album,
 )
+from songmaker_cli.db.queries.albums import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -134,18 +135,32 @@ def api_create_album(
 
 
 @router.put("/albums/{album_id}/title")
-def api_rename_album(
-    album_id: str, req: TitleUpdateRequest,
+def api_update_album(
+    album_id: str, req: AlbumUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> AlbumResponse:
+    """Update album title, subtitle, and/or year.
+
+    Each field is independently optional: a field absent from the request
+    body is left unchanged, letting the header commit one edited field at a
+    time (as EditableTitle already does for title).
+    """
     album = get_album(session, album_id)
     check_album_access(album, user)
-    title = req.title.strip()
-    if not title:
-        raise HTTPException(422, "Title is required")
+    fields_set = req.model_fields_set
+
+    title: str | None = None
+    if "title" in fields_set:
+        title = req.title.strip() if req.title else ""
+        if not title:
+            raise HTTPException(422, "Title is required")
+
+    subtitle = (req.subtitle or "").strip() if "subtitle" in fields_set else UNSET
+    year = (str(req.year) if req.year is not None else "") if "year" in fields_set else UNSET
+
     try:
-        album = rename_album(session, album_id, title)
+        album = update_album(session, album_id, title=title, subtitle=subtitle, year=year)
     except ValueError:
         raise HTTPException(404, "Album not found")
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album_id)

@@ -112,13 +112,38 @@ def create_album(
     return album
 
 
-def rename_album(session: Session, album_id: str, title: str) -> Album:
+class _Unset:
+    """Sentinel distinguishing "field not provided" from an explicit clear."""
+
+
+UNSET = _Unset()
+
+
+def update_album(
+    session: Session,
+    album_id: str,
+    title: str | None = None,
+    subtitle: str | _Unset = UNSET,
+    year: str | _Unset = UNSET,
+) -> Album:
+    """Partially update album metadata.
+
+    `title` of `None` and `subtitle`/`year` of `UNSET` leave that field
+    untouched, letting callers update title, subtitle, and year independently.
+    """
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    album.title = title
+    if title is not None:
+        album.title = title
+    if not isinstance(subtitle, _Unset):
+        album.subtitle = subtitle
+    if not isinstance(year, _Unset):
+        album.year = year
     session.flush()
-    log.info("Renamed album %s to %r", album_id, title)
+    log.info(
+        "Updated album %s (title=%r subtitle=%r year=%r)", album_id, title, subtitle, year,
+    )
     return album
 
 

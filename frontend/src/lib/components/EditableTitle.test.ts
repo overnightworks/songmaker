@@ -89,4 +89,43 @@ describe('EditableTitle', () => {
 		});
 		expect(getByRoleButton(target, 'Edit title')).not.toBeNull();
 	});
+
+	it('reverts an emptied field by default instead of committing an empty value', async () => {
+		const onsave = vi.fn().mockResolvedValue(undefined);
+		const target = await render({ value: 'Night Drive', onsave });
+		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+		await tick();
+		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
+		input.value = '   ';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await tick();
+		expect(onsave).not.toHaveBeenCalled();
+		expect(target.querySelector('.editable-title-input')).toBeNull();
+	});
+
+	it('commits an emptied field when allowEmpty is set, clearing the value', async () => {
+		const onsave = vi.fn().mockResolvedValue(undefined);
+		const target = await render({ value: 'Live at the Roxy', onsave, allowEmpty: true });
+		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+		await tick();
+		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
+		input.value = '';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await vi.waitFor(() => expect(onsave).toHaveBeenCalledWith(''));
+	});
+
+	it('shows the placeholder in place of an empty value and keeps it clickable', async () => {
+		const target = await render({
+			value: '',
+			onsave: vi.fn().mockResolvedValue(undefined),
+			allowEmpty: true,
+			placeholder: 'Add subtitle',
+			ariaLabel: 'Album subtitle'
+		});
+		const display = requireElement<HTMLButtonElement>(target, '.editable-title-display');
+		expect(display.textContent?.trim()).toBe('Add subtitle');
+		expect(getByRoleButton(target, 'Edit album subtitle')).toBe(display);
+	});
 });
