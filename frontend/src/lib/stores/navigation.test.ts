@@ -5,7 +5,7 @@ import { resolve } from '$app/paths';
 
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { detailTab, librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
 import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
@@ -266,6 +266,14 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		const stateBefore = get(openCollection);
 		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		expect(get(openCollection)).toBe(stateBefore);
+	});
+
+	it('opens the editor on Write, the only tab a compact layout starts on', () => {
+		// #141/13: Takes was the landing tab, which hid the editor behind a tab
+		// switch on every phone-width open.
+		detailTab.set('takes');
+		selectSong('s1');
+		expect(get(detailTab)).toBe('write');
 	});
 
 	it('pushes a new history entry per selectSong call', () => {

@@ -244,7 +244,7 @@ function applySelectedSong(
 	songId: string,
 	knownSong: SongItem | undefined,
 	historyMode: 'stack' | 'replace',
-	tab: 'keep' | 'takes'
+	tab: 'keep' | 'write'
 ): void {
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
@@ -256,7 +256,7 @@ function applySelectedSong(
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
-	if (tab === 'takes') openTakesTab();
+	if (tab === 'write') openWriteTab();
 	setLibrarySurface('detail');
 	closeSidebar();
 	if (historyMode === 'replace') {
@@ -286,7 +286,7 @@ function selectSongHistoryMode(
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
 	void guardDirtyNavigation(() =>
-		applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes')
+		applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'write')
 	);
 }
 
@@ -347,7 +347,7 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 		await goto(resolve('/'));
 	}
 	await guardDirtyNavigation(() => {
-		applySelectedSong(song.id, song, 'stack', 'takes');
+		applySelectedSong(song.id, song, 'stack', 'write');
 		selectedGenerationId.set(generationId);
 		persistLibraryHistory();
 	});

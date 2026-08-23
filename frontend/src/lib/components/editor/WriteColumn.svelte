@@ -262,12 +262,16 @@
 		letter-spacing: 0.5px;
 	}
 
+	.cowriter-lyrics .lyrics-area {
+		flex: 1;
+	}
+
 	.cowriter-takes {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.4rem;
-		width: 3.4rem;
+		width: 7rem;
 	}
 
 	.cowriter-takes :global(.take-strip) {
