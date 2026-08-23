@@ -2,13 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type {
-	AlbumItem,
-	GenerationItem,
-	PlaylistItem,
-	ShareInventoryItem,
-	SongItem
-} from '$lib/api/types';
+import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUMS_EMPTY,
 	LIBRARY_PLAYLISTS_EMPTY,
@@ -99,32 +93,6 @@ function playlist(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
 		entry_count: 2,
 		is_shared: false,
 		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function pickedGeneration(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'completed',
-		is_archived: false,
-		is_picked: true,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'sft',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
@@ -259,12 +227,11 @@ describe('LibraryWall selection', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-local' });
 	});
 
-	it('shows the song and pick count beneath the album title', async () => {
-		songList.set([
-			song({ id: 's1', album_id: 'a-local', generations: [] }),
-			song({ id: 's2', album_id: 'a-local', generations: [pickedGeneration()] })
-		]);
-		albumList.set([album({ song_count: 2 })]);
+	it("shows the album's own song and pick counts, not a recount of the loaded songs", async () => {
+		// The tile must not recount picks from songList: only the songs already
+		// loaded are there, which is why every tile read "0 picks" (#141/2).
+		songList.set([song({ id: 's1', album_id: 'a-local', generations: [] })]);
+		albumList.set([album({ song_count: 2, picked_count: 1 })]);
 		const root = await render();
 		expect(root.querySelector('.wall-tile-subtitle')?.textContent).toBe('2 songs · 1 pick');
 	});

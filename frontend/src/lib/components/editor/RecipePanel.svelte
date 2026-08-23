@@ -41,6 +41,7 @@
 	import { fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
+	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import {
 		RECIPE_COLLAPSE_LABEL,
 		RECIPE_DEFAULT_PINNED_SEED,
@@ -173,7 +174,9 @@
 <div class="recipe-panel" role="region" aria-label={RECIPE_PANEL_LABEL}>
 	<div class="recipe-panel-header">
 		<span class="recipe-hint">{RECIPE_SAVED_HINT}</span>
-		<button type="button" class="collapse-btn" onclick={onclose}>{RECIPE_COLLAPSE_LABEL} ˄</button>
+		<button type="button" class="collapse-btn" data-hitbox="frequent" onclick={onclose}
+			>{RECIPE_COLLAPSE_LABEL} ˄</button
+		>
 	</div>
 
 	<div class="preset-row">
@@ -202,7 +205,12 @@
 				>Cancel</button
 			>
 		{:else}
-			<button type="button" class="preset-save-btn" onclick={() => (showSavePresetInput = true)}>
+			<button
+				type="button"
+				class="preset-save-btn"
+				data-hitbox="frequent"
+				onclick={() => (showSavePresetInput = true)}
+			>
 				{RECIPE_SAVE_AS_PRESET_LABEL}
 			</button>
 		{/if}
@@ -304,6 +312,7 @@
 				<div class="segmented">
 					<button
 						type="button"
+						data-hitbox="frequent"
 						class:active={$pinnedSeed == null}
 						onclick={() => pinnedSeed.set(null)}
 					>
@@ -311,6 +320,7 @@
 					</button>
 					<button
 						type="button"
+						data-hitbox="frequent"
 						class:active={$pinnedSeed != null}
 						onclick={() => pinnedSeed.set($pinnedSeed ?? RECIPE_DEFAULT_PINNED_SEED)}
 					>
@@ -331,12 +341,18 @@
 			<div class="repaint-row">
 				<span class="field-label">Repaint</span>
 				<div class="segmented">
-					<button type="button" class:active={$sourceGeneration === null} onclick={clearSource}>
+					<button
+						type="button"
+						data-hitbox="frequent"
+						class:active={$sourceGeneration === null}
+						onclick={clearSource}
+					>
 						{RECIPE_REPAINT_OFF_LABEL}
 					</button>
 					{#each REPAINT_MODES as mode (mode)}
 						<button
 							type="button"
+							data-hitbox="frequent"
 							class:active={$sourceGeneration !== null &&
 								$sourceMode === 'repaint' &&
 								$repaintMode === mode}
@@ -356,7 +372,7 @@
 				{@const gen = $sourceGeneration}
 				<div class="source-bar">
 					<span class="source-label">
-						{RECIPE_SOURCE_LABEL}: v{gen.version_number ?? '—'} · take {gen.generation_number}
+						{RECIPE_SOURCE_LABEL}: {nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 					</span>
 					<div class="segmented">
 						<button
