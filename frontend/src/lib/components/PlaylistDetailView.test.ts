@@ -10,7 +10,7 @@ import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
 	playlistList,
-	resetPlaylistsForTests,
+	resetPlaylists,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 
@@ -83,9 +83,11 @@ function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem
 	};
 }
 
-// The header now renders from the lightweight playlist in playlistList
-// (see PlaylistDetailView.svelte), not from the detail fetch — every test
-// opening a playlist must seed both, the way navigation.openPlaylist does.
+// The header prefers the lightweight playlist in playlistList and falls
+// back to the detail once it matches the open id (see PlaylistDetailView.
+// svelte) — this seeds both, the way navigation.openPlaylist does, so tests
+// exercise the common (list populated) path. Tests for the fallback path
+// seed only the detail.
 function openPlaylistDetail(d: PlaylistDetailItem): void {
 	playlistList.set([
 		{
@@ -111,7 +113,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	resetPlaylistsForTests();
+	resetPlaylists();
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -351,5 +353,38 @@ describe('PlaylistDetailView load failure (#139)', () => {
 
 		expect(target.querySelector('.retry-btn')).toBeNull();
 		expect(target.textContent).toContain('Solstice');
+	});
+});
+
+describe('PlaylistDetailView with an empty playlistList (#139)', () => {
+	it('falls back to the detail for the header when the playlist is not in playlistList', async () => {
+		// Reachable from the Shares inventory, a deep link, or mobile without
+		// the Rail ever mounting ensurePlaylistsLoaded().
+		playlistList.set([]);
+		setOpenCollection({ kind: 'playlist', id: 'p9' });
+		selectedPlaylistDetail.set(detail({ id: 'p9', title: 'Shared Mix' }));
+		playlistDetailLoad.set({ status: 'ready', error: null });
+
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(requireElement(target, '.collection-header').textContent).toContain('Shared Mix');
+		expect(target.querySelector('.entry-row')).not.toBeNull();
+	});
+
+	it('shows a loading placeholder instead of nothing while the detail is still in flight', async () => {
+		playlistList.set([]);
+		setOpenCollection({ kind: 'playlist', id: 'p9' });
+		selectedPlaylistDetail.set(null);
+		playlistDetailLoad.set({ status: 'loading', error: null });
+
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(requireElement(target, '[role="status"]').textContent).toBe('Loading playlist…');
 	});
 });

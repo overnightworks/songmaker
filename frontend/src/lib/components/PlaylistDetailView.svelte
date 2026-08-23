@@ -4,6 +4,7 @@
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,
+		selectedPlaylistId,
 		playlistDetailLoad,
 		loadPlaylistDetail,
 		deletePlaylist,
@@ -41,16 +42,31 @@
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
 
-	// The header renders from the lightweight playlist (already in the
-	// library list) so a slow or failed detail fetch never leaves the
-	// previous playlist's header+rows mismatched under the new title (#139).
-	// The entry list renders from the detail only once it matches this
-	// playlist's id.
-	const playlistMeta = $derived($selectedPlaylist);
+	// The header prefers the lightweight playlist already in playlistList so
+	// a slow or failed detail fetch never leaves the previous playlist's
+	// header+rows mismatched under the new title (#139). playlistList is not
+	// guaranteed populated when a playlist opens (Shares inventory, a deep
+	// link, mobile without the Rail mounted, or a failed loadPlaylists) --
+	// once the detail itself has loaded for the open id, its own fields
+	// stand in for the list entry rather than rendering nothing.
+	const listEntry = $derived($selectedPlaylist);
 	const playlistDetail = $derived(
-		$selectedPlaylistDetail && $selectedPlaylistDetail.id === playlistMeta?.id
+		$selectedPlaylistDetail && $selectedPlaylistDetail.id === $selectedPlaylistId
 			? $selectedPlaylistDetail
 			: null
+	);
+	const playlistMeta = $derived(
+		listEntry ??
+			(playlistDetail
+				? {
+						id: playlistDetail.id,
+						title: playlistDetail.title,
+						entry_count: playlistDetail.entry_count,
+						is_shared: playlistDetail.is_shared,
+						share_slug: playlistDetail.share_slug,
+						created_at: playlistDetail.created_at
+					}
+				: null)
 	);
 	const detailLoad = $derived($playlistDetailLoad);
 	let reorderBusy = $state(false);
@@ -290,39 +306,32 @@
 	}
 </script>
 
-{#if playlistMeta}
+{#if $selectedPlaylistId}
 	<div class="detail-panel">
-		<CollectionHeader
-			kind="playlist"
-			title={playlistMeta.title}
-			coverUrl={null}
-			coverAlt=""
-			{initials}
-			artFill={null}
-			onplay={() => playEntry(0)}
-			onrename={onPlaylistRename}
-			isShared={playlistMeta.is_shared}
-			shareSlug={playlistMeta.share_slug}
-			onshare={onPlaylistShareEnable}
-			onunshare={onPlaylistShareDisable}
-			ondelete={() => (showDeleteConfirm = true)}
-			onsaveoffline={onSaveOfflineToggle}
-			offlineSaved={Boolean(offlineSavedStreamUrl)}
-			{offlineSaving}
-			{offlineProgressLabel}
-		/>
+		{#if playlistMeta}
+			<CollectionHeader
+				kind="playlist"
+				title={playlistMeta.title}
+				coverUrl={null}
+				coverAlt=""
+				{initials}
+				artFill={null}
+				onplay={() => playEntry(0)}
+				onrename={onPlaylistRename}
+				isShared={playlistMeta.is_shared}
+				shareSlug={playlistMeta.share_slug}
+				onshare={onPlaylistShareEnable}
+				onunshare={onPlaylistShareDisable}
+				ondelete={() => (showDeleteConfirm = true)}
+				onsaveoffline={onSaveOfflineToggle}
+				offlineSaved={Boolean(offlineSavedStreamUrl)}
+				{offlineSaving}
+				{offlineProgressLabel}
+			/>
+		{/if}
 
 		<div class="entry-list">
-			{#if detailLoad.status === 'loading' && !playlistDetail}
-				<p class="empty-tab" role="status">Loading playlist…</p>
-			{:else if detailLoad.status === 'error' && !playlistDetail}
-				<p class="empty-tab" role="alert">{detailLoad.error}</p>
-				<button
-					class="retry-btn"
-					onclick={() => playlistMeta && loadPlaylistDetail(playlistMeta.id)}
-					>{LIBRARY_RETRY_LABEL}</button
-				>
-			{:else if playlistDetail}
+			{#if playlistDetail}
 				{#each playlistDetail.entries as entry, i (entry.id)}
 					<div
 						class="entry-row"
@@ -490,6 +499,15 @@
 				{#if playlistDetail.entries.length === 0}
 					<p class="empty-tab">No tracks in this playlist yet.</p>
 				{/if}
+			{:else if detailLoad.status === 'error'}
+				<p class="empty-tab" role="alert">{detailLoad.error}</p>
+				<button
+					class="retry-btn"
+					onclick={() => $selectedPlaylistId && loadPlaylistDetail($selectedPlaylistId)}
+					>{LIBRARY_RETRY_LABEL}</button
+				>
+			{:else}
+				<p class="empty-tab" role="status">Loading playlist…</p>
 			{/if}
 		</div>
 	</div>

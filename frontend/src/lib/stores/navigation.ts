@@ -18,6 +18,7 @@ import {
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
+	ensurePlaylistsLoaded,
 	loadPlaylistDetail
 } from '$lib/stores/playlists';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
@@ -153,6 +154,11 @@ export function openPlaylist(playlistId: string): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	void loadPlaylistDetail(playlistId);
+	// A playlist can be opened before playlistList is populated (Shares
+	// inventory, a deep link, mobile without the Rail mounted) --
+	// PlaylistDetailView falls back to the detail fetch for its header
+	// meanwhile, but this backfills the canonical list-backed entry too.
+	void ensurePlaylistsLoaded();
 	setLibrarySurface('detail');
 	closeSidebar();
 	pushLibraryHistory();
