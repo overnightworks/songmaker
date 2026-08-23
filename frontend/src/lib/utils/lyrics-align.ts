@@ -352,10 +352,7 @@ export function alignLyricsToCues(lyrics: string, cues: WhisperCue[]): AlignedLy
 // Interval is half-open [start, end): a boundary time belongs to the line
 // that starts there. A cue window puts the same span on each of its lines, so
 // those light together.
-export function activeLyricLineIndices(
-	lines: AlignedLyricLine[],
-	currentTime: number
-): number[] {
+export function activeLyricLineIndices(lines: AlignedLyricLine[], currentTime: number): number[] {
 	const active: number[] = [];
 	for (let index = 0; index < lines.length; index++) {
 		const interval = lines[index].interval;
