@@ -185,13 +185,31 @@ def test_register_valid_name(clean_registry: ScorerRegistry) -> None:
 
 
 def test_register_invalid_name_raises(clean_registry: ScorerRegistry) -> None:
-    with pytest.raises(ValueError, match="does not match any SongScores field"):
+    with pytest.raises(ValueError, match="not a scorer this process runs"):
         @clean_registry.register("bogus_name")
         def bad_scorer(
             mp3_path: Path, meta: object = None,
             audio_data: object = None, config: object = None,
         ) -> None:
             pass
+
+
+def test_register_refuses_a_parent_hosted_scorer(clean_registry: ScorerRegistry) -> None:
+    """lyrical_coherence calls Claude — it runs in the worker parent, so the
+    child must not be able to register it and pull the secret into itself."""
+    with pytest.raises(ValueError, match="not a scorer this process runs"):
+        @clean_registry.register("lyrical_coherence")
+        def judge(
+            mp3_path: Path, meta: object = None,
+            audio_data: object = None, config: object = None,
+        ) -> None:
+            pass
+
+
+def test_the_scorer_child_does_not_load_the_claude_judge() -> None:
+    from songmaker_cli.scoring.pipeline import default_registry
+
+    assert "lyrical_coherence" not in default_registry.available()
 
 
 # ── Pipeline runner tests ────────────────────────────────────────────
@@ -393,42 +411,6 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
-def test_after_gpu_scorers_run_after_gpu_completes(
-    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
-) -> None:
-    """Scorers with after_gpu=True wait for GPU scorers to populate shared_data."""
-
-    @clean_registry.register("audiobox")
-    def gpu_scorer(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data=None,
-    ) -> AudioBoxScore:
-        time.sleep(SLEEP_SECONDS)
-        if shared_data is not None:
-            shared_data.whisper_text = "hello world"
-        return AudioBoxScore(
-            content_enjoyment=7.0, content_understanding=8.0,
-            production_complexity=6.0, production_quality=9.0,
-        )
-
-    @clean_registry.register("lyrical_coherence")
-    def deferred_scorer(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data=None,
-    ) -> object:
-        from songmaker_cli.scoring.models import LyricalCoherenceScore
-
-        transcribed = shared_data.whisper_text if shared_data else ""
-        assert transcribed == "hello world", f"Expected shared_data populated, got: {transcribed!r}"
-        return LyricalCoherenceScore(score=8, issues=(), summary="good")
-
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
-    assert scores.audiobox is not None
-    assert scores.lyrical_coherence is not None
-    assert scores.lyrical_coherence.score == 8
-
-
-@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_gpu_scorer_failure_does_not_block_cpu(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
@@ -542,8 +524,8 @@ def test_failed_scorer_reports_failure_with_reason(
 def test_scorer_with_unavailable_dependency_is_skipped_not_failed(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
-    @clean_registry.register("lyrical_coherence")
-    def needs_transcript(
+    @clean_registry.register("text_accuracy")
+    def needs_vocals(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None, shared_data: object = None,
     ) -> object:
@@ -576,44 +558,6 @@ def test_wrong_return_type_counts_as_failure(
     assert scores.refreshed_output_keys() == frozenset()
 
 
-@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
-def test_deferred_scorer_sees_output_of_a_slow_cpu_scorer(
-    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
-) -> None:
-    """lyrical_coherence must not start before text_accuracy has finished."""
-
-    @clean_registry.register("text_accuracy")
-    def slow_transcriber(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data=None,
-    ) -> TextAccuracyScore:
-        time.sleep(SLEEP_SECONDS)
-        shared_data.whisper_text = "hello world"
-        return TextAccuracyScore(
-            similarity_ratio=1.0,
-            intended_line_texts=("hello world",),
-            transcribed_line_texts=("hello world",),
-        )
-
-    @clean_registry.register("lyrical_coherence")
-    def deferred_scorer(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data=None,
-    ) -> object:
-        from songmaker_cli.scoring.models import LyricalCoherenceScore
-
-        if shared_data.whisper_text is None:
-            raise ScorerDependencyUnavailable("no transcript")
-        return LyricalCoherenceScore(score=8, issues=(), summary="good")
-
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
-
-    assert _outcomes(scores) == {
-        "text_accuracy": ScorerOutcome.OK,
-        "lyrical_coherence": ScorerOutcome.OK,
-    }
-
-
 # ── Per-scorer timeout configuration ─────────────────────────────
 
 
@@ -625,12 +569,12 @@ def test_text_accuracy_has_its_own_timeout_budget() -> None:
     assert config.text_accuracy_timeout > config.scorer_timeout
 
 
-def test_watchdog_outlives_the_concurrent_phase_plus_the_deferred_phase() -> None:
-    """Deferred scorers start only after the slowest concurrent one finishes,
-    so the watchdog must cover both budgets, not just the slowest single one."""
+def test_watchdog_outlives_the_slowest_scorer_in_the_child() -> None:
+    """The child runs its scorers concurrently, so the watchdog must outlive
+    the slowest single budget — if it fires first, produced values are lost."""
     config = PipelineConfig(scorer_timeout=120, text_accuracy_timeout=900)
 
-    assert config.pipeline_timeout > 900 + 120
+    assert config.pipeline_timeout > 900
 
 
 def test_explicit_pipeline_timeout_is_kept() -> None:

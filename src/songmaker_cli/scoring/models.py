@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -46,9 +46,17 @@ class ScorerRun(BaseModel):
         return f"{self.scorer}={self.outcome}{reason}"
 
 
+@dataclass(frozen=True)
+class ScorerExecution:
+    """What one scorer produced, and how its run ended."""
+
+    run: ScorerRun
+    value: object | None = None
+
+
 @dataclass
 class SharedScorerData:
-    """Data shared between scorer phases (e.g. text_accuracy → lyrical_coherence).
+    """Data one scorer publishes for another inside the same child run.
 
     Mutable: scorers write fields during execution. Not frozen because
     GPU-phase scorers populate data that CPU-phase scorers read.
@@ -210,6 +218,19 @@ class SongScores:
     silence: SilenceScore | None = None
     spectral_quality: SpectralQualityScore | None = None
     runs: tuple[ScorerRun, ...] = ()
+
+    def including(self, execution: ScorerExecution) -> SongScores:
+        """These scores plus one more scorer's run.
+
+        The value lands only when that scorer produced one, so a failed,
+        skipped, or timed-out run contributes its reason alone and leaves
+        whatever the generation already scored untouched.
+        """
+        produced = (
+            {execution.run.scorer: execution.value}
+            if execution.run.produced_value else {}
+        )
+        return replace(self, runs=(*self.runs, execution.run), **produced)
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {}

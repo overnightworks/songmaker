@@ -27,7 +27,12 @@ STORED_SCORES: dict[str, object] = {
     "detected_language": "de",
     "silence_gaps": 3,
     "silence_longest": 4.0,
+    "lyrical_coherence": 7,
+    "lyrical_summary": "coherent enough",
 }
+
+COHERENT_VERDICT = '{"score": 9, "issues": [], "summary": "great"}'
+
 
 FRESH_SILENCE = SilenceScore(
     total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -76,10 +81,29 @@ def scored_generation(tmp_path: Path):
     return factory
 
 
-def _score(db_factory, result: SongScores, audio_dir: Path) -> dict[str, object]:
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=MagicMock(score=MagicMock(return_value=result)),
+def _claude(verdict: str | Exception | None):
+    """The judge's Claude call: a canned answer, a failure, or a refusal for
+    the runs that must never reach it."""
+    from songmaker_cli.claude.provider import ClaudeResponse
+
+    target = "songmaker_cli.scoring.lyrical_coherence.call_claude"
+    if verdict is None:
+        return patch(target, side_effect=AssertionError("the judge must not run here"))
+    if isinstance(verdict, Exception):
+        return patch(target, side_effect=verdict)
+    return patch(target, return_value=ClaudeResponse(text=verdict))
+
+
+def _score(
+    db_factory, result: SongScores, audio_dir: Path,
+    verdict: str | Exception | None = None,
+) -> dict[str, object]:
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(return_value=result)),
+        ),
+        _claude(verdict),
     ):
         run_scoring_job(
             JOB_ID, GENERATION_ID, None, db_factory=db_factory, audio_dir=audio_dir,
@@ -176,16 +200,66 @@ def test_successful_scorer_drops_a_key_it_no_longer_emits(
 def test_run_where_every_scorer_failed_leaves_all_scores_intact(
     scored_generation, tmp_path: Path,
 ) -> None:
+    """Without a transcription the parent judge is skipped too, so this run
+    writes nothing at all."""
+    result = SongScores(runs=(_run("text_accuracy", ScorerOutcome.TIMED_OUT),))
+
+    stored = _score(scored_generation, result, tmp_path / "audio")
+
+    assert stored == STORED_SCORES
+
+
+def test_coherence_judged_in_the_parent_is_stored_with_the_childs_scores(
+    scored_generation, tmp_path: Path,
+) -> None:
+    """lyrical_coherence runs here, after the child returned — its verdict
+    lands in the same score row as the scores the child produced."""
     result = SongScores(
+        text_accuracy=_text_accuracy(detected_language="en"),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    stored = _score(scored_generation, result, tmp_path / "audio", COHERENT_VERDICT)
+
+    assert stored["lyrical_coherence"] == 9
+    assert stored["lyrical_summary"] == "great"
+    assert stored["text_accuracy"] == 50.0
+
+
+def test_a_failed_judgement_keeps_the_stored_coherence_score(
+    scored_generation, tmp_path: Path,
+) -> None:
+    result = SongScores(
+        text_accuracy=_text_accuracy(),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    stored = _score(
+        scored_generation, result, tmp_path / "audio",
+        RuntimeError("Claude unreachable"),
+    )
+
+    assert stored["lyrical_coherence"] == STORED_SCORES["lyrical_coherence"]
+    assert stored["lyrical_summary"] == STORED_SCORES["lyrical_summary"]
+
+
+def test_a_run_without_a_transcript_keeps_the_stored_coherence_score(
+    scored_generation, tmp_path: Path,
+) -> None:
+    """The judge reads the transcription out of the child's result; without
+    one it is skipped, exactly as it was inside the pipeline."""
+    result = SongScores(
+        silence=FRESH_SILENCE,
         runs=(
-            _run("text_accuracy", ScorerOutcome.TIMED_OUT),
-            _run("lyrical_coherence", ScorerOutcome.SKIPPED),
+            _run("text_accuracy", ScorerOutcome.FAILED),
+            _run("silence", ScorerOutcome.OK),
         ),
     )
 
     stored = _score(scored_generation, result, tmp_path / "audio")
 
-    assert stored == STORED_SCORES
+    assert stored["lyrical_coherence"] == STORED_SCORES["lyrical_coherence"]
+    assert stored["silence_gaps"] == 0
 
 
 def test_first_scoring_run_creates_the_score_row(tmp_path: Path) -> None:
