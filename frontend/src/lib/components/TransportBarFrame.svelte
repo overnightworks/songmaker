@@ -2,7 +2,12 @@
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { NOW_PLAYING_LABEL } from '$lib/constants';
+	import {
+		NOW_PLAYING_LABEL,
+		TRANSPORT_PAUSE_LABEL,
+		TRANSPORT_PLAY_LABEL,
+		TRANSPORT_RETRY_LABEL
+	} from '$lib/constants';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -199,7 +204,11 @@
 				class:playing={isPlaying}
 				class:errored={isError}
 				onclick={onTogglePlay}
-				aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
+				aria-label={isError
+					? TRANSPORT_RETRY_LABEL
+					: isPlaying
+						? TRANSPORT_PAUSE_LABEL
+						: TRANSPORT_PLAY_LABEL}
 				title={isError && errorMsg ? errorMsg : ''}
 			>
 				<span class="play-btn-face" style={playFaceStyle}>

@@ -28,7 +28,7 @@ env:
 
 jobs:
   smoke:
-    name: Boot stack + desktop flow
+    name: Boot stack + library flows
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -94,7 +94,7 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Desktop library flow
+      - name: Library flows (desktop and mobile)
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}

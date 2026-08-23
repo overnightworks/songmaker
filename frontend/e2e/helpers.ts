@@ -1,20 +1,35 @@
-// Shared guards and name matchers for the browser flows.
+// Shared guards, shell facts and name matchers for the browser flows.
 
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { COLLECTION_ROW_PAUSE_ACTION, COLLECTION_ROW_PLAY_ACTION } from '../src/lib/constants';
 
-// The desktop library flow measured 26 /api requests on its first green run;
-// this is that plus 20% headroom. A flow that suddenly costs more round trips
-// is a regression, not a reason to raise this number.
-export const LIBRARY_FLOW_API_REQUEST_BUDGET = 32;
+/** The two shells the same flow drives — also the Playwright project names. */
+export type Shell = 'desktop' | 'mobile';
+
+// Above 1099px Now Playing keeps its three columns and above 768px the shell
+// keeps its rail; the mobile viewport is a phone in portrait, and the narrow
+// one is the smallest screen the album header still has to read on.
+export const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+export const MOBILE_VIEWPORT = { width: 390, height: 844 };
+export const NARROW_VIEWPORT = { width: 320, height: 844 };
+
+/**
+ * What the library flow costs the API per shell, measured on the first green
+ * run plus ~20% headroom. Both projects share one IP rate-limit window, so a
+ * flow that suddenly needs more round trips is a regression — find the extra
+ * requests instead of raising these numbers.
+ */
+export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
+	desktop: 32,
+	mobile: 32
+};
 
 const API_PATH_PREFIX = '/api';
 
-// The transport's play button renames itself after the state it will leave:
-// "Pause" only while audio is really playing, "Retry" once it errored (see
-// TransportBarFrame.svelte). Asserting it is how a flow proves a click
-// produced sound rather than a dead take.
-export const TRANSPORT_PAUSE_LABEL = 'Pause';
+/** Which shell a test drives: the mobile project is the emulated phone. */
+export function shellOf(testInfo: TestInfo): Shell {
+	return testInfo.project.use.isMobile ? 'mobile' : 'desktop';
+}
 
 function escapeForRegExp(literal: string): string {
 	return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -42,6 +57,24 @@ export function playableRows(page: Page): Locator {
 
 export function containing(title: string): RegExp {
 	return new RegExp(escapeForRegExp(title));
+}
+
+export interface RenderedBox {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** Rendered boxes, in the order given — how a flow measures a layout promise. */
+export async function boundingBoxes(...locators: Locator[]): Promise<RenderedBox[]> {
+	return Promise.all(
+		locators.map(async (locator) => {
+			const box = await locator.boundingBox();
+			if (!box) throw new Error('Expected a rendered box to measure');
+			return box;
+		})
+	);
 }
 
 /**

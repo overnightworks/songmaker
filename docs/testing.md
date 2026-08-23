@@ -116,17 +116,28 @@ create a real approval or make a network request.
 
 `frontend/e2e/` drives the real stack — Postgres, Redis, migrations and the web
 container from `docker-compose.ci.yml` — through the click paths an operator
-walks by hand, in Chromium at 1440. Unit tests keep missing those: every
-operator bug from 2026-08-23 (dead picker, ▶ after an album switch, shuffle,
-429 storm) passed them.
+walks by hand. Unit tests keep missing those: every operator bug from
+2026-08-23 (dead picker, ▶ after an album switch, shuffle, 429 storm) passed
+them.
+
+Two Chromium projects walk the same flow: `desktop` at 1440×900 and `mobile` at
+390×844 with touch input. The steps the two shells share are written once; the
+mobile project adds what the compact shell does differently — the rail as a
+drawer, the editor opening on Write, Now Playing's judging panel as a sheet,
+the one 64px transport row with a thumb-sized play control — plus a 320-wide
+check that the album header still reads as a title over its breadcrumb.
 
 What a flow proves that a unit test cannot: the album pick really plays (the
 transport offers Pause, not Retry), Now Playing opens on the judged take, a
 take reaches a playlist and can be reordered and pruned there, shuffle toggles,
 and a share link serves the album to a logged-out visitor. Any 429 or 5xx
 response, failed request, browser console error or uncaught page exception
-fails the flow, and each flow holds a named `/api` request budget.
+fails the flow, and each flow holds a named `/api` request budget per shell.
 
+- **Projects run serially** (`fullyParallel: false`, one worker). Both shells
+  share one stack behind one IP rate-limit window, so their cost is additive and
+  measurable instead of a burst. Measured on the first green run: 26 `/api`
+  requests per shell, budget 32 each.
 - **One login per run.** Global setup authenticates once, seeds an album, songs,
   takes, a pick and a share link through the public API, and hands its session
   to every attempt as storage state. Mutable fixtures (the playlist) are seeded
@@ -202,8 +213,8 @@ frontend/src/
 frontend/e2e/
 ├── global-setup.ts                One login per run, seeds the library, saves the storage state
 ├── seed.ts                        Public-API seeding: per-run library, per-attempt playlist
-├── helpers.ts                     Response/console/request guards, /api budget, name matchers
-├── library.spec.ts                Desktop library flow at 1440
+├── helpers.ts                     Guards, shell facts, /api budgets, name matchers
+├── library.spec.ts                Library flow, driven in both the desktop and the mobile shell
 └── fixtures/take.mp3              3-second tone imported as a real take
 ```
 
