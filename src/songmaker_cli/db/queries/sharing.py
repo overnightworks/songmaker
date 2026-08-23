@@ -59,6 +59,29 @@ def disable_sharing(session: Session, model_class: type[T], entity_id: str) -> T
     return entity
 
 
+def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:
+    """Songs on the album with no non-archived generation carrying audio.
+
+    Mirrors the predicate the public share page uses (`_picked_generation`
+    in sharing_api.py) to pick what to play for a song -- a song failing
+    this check is silently absent from the /shared/{slug} payload.
+    """
+    has_take = (
+        session.query(Generation.song_id)
+        .filter(Generation.song_id == Song.id)
+        .filter(Generation.mp3_path.isnot(None))
+        .filter(Generation.is_archived.is_(False))
+        .exists()
+    )
+    return (
+        session.query(Song)
+        .filter(Song.album_id == album_id)
+        .filter(~has_take)
+        .order_by(Song.track_number)
+        .all()
+    )
+
+
 def count_shared_inventory(session: Session, user_id: str) -> int:
     session.flush()
     return _count_shared_inventory(session, user_id)

@@ -55,6 +55,49 @@ def test_share_album(sharing_app: TestClient) -> None:
     assert data["status"] == "ok"
     assert data["share_slug"]
     assert "/share/" in data["share_url"]
+    assert data["songs_without_playable_take"] == []
+
+
+def _seed_mixed_playability_album(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    session.add(Song(id="s_playable", title="Has A Take", album_id="test_album", track_number=1))
+    session.add(Generation(
+        id="g_playable", song_id="s_playable", generation_number=1,
+        mp3_path="admin_user/g_playable.mp3", seed=1, is_picked=True,
+    ))
+    session.add(Song(
+        id="s_no_gen", title="No Generation At All", album_id="test_album", track_number=2,
+    ))
+    session.add(Song(
+        id="s_archived_only", title="Only Archived Take", album_id="test_album", track_number=3,
+    ))
+    session.add(Generation(
+        id="g_archived", song_id="s_archived_only", generation_number=1,
+        mp3_path="admin_user/g_archived.mp3", seed=1, is_archived=True,
+    ))
+    session.add(Song(
+        id="s_unpicked_take", title="Unpicked But Playable", album_id="test_album", track_number=4,
+    ))
+    session.add(Generation(
+        id="g_unpicked", song_id="s_unpicked_take", generation_number=1,
+        mp3_path="admin_user/g_unpicked.mp3", seed=1, is_picked=False,
+    ))
+
+
+def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
+    login_and_csrf(client, "admin", "admin12345")
+
+    resp = client.post("/api/albums/test_album/share")
+
+    assert resp.status_code == 200
+    missing = resp.json()["songs_without_playable_take"]
+    assert {(item["id"], item["title"]) for item in missing} == {
+        ("s_no_gen", "No Generation At All"),
+        ("s_archived_only", "Only Archived Take"),
+    }
 
 
 def test_share_album_idempotent(sharing_app: TestClient) -> None:

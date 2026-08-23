@@ -408,10 +408,16 @@ export interface CleanupResult {
 	deleted: number;
 }
 
+export interface UnplayableSongSummary {
+	id: string;
+	title: string;
+}
+
 export interface ShareResult {
 	status: string;
 	share_url: string;
 	share_slug: string;
+	songs_without_playable_take: UnplayableSongSummary[];
 }
 
 export interface ShareInventoryItem {

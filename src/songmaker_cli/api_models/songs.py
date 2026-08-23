@@ -161,10 +161,19 @@ class AlbumResponse(BaseModel):
         )
 
 
+class UnplayableSongSummary(BaseModel):
+    """A song that will be silently absent from the public share page --
+    no non-archived take carries audio to play."""
+
+    id: str
+    title: str
+
+
 class ShareResponse(BaseModel):
     status: str = "ok"
     share_url: str
     share_slug: str
+    songs_without_playable_take: list[UnplayableSongSummary] = Field(default_factory=list)
 
 
 class SharedSongItem(BaseModel):
