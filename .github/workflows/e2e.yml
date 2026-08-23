@@ -48,13 +48,11 @@ jobs:
           base="http://localhost:${WEB_PORT}"
           cookies="$(mktemp)"
 
-          curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health" | tee /dev/stderr \
-            | jq -e '.status'
+          # curl -fsS already asserts the 200; no music/scoring worker in this
+          # stack, so /health legitimately reports "degraded" — that's expected.
+          curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health"
 
-          # No music/scoring worker in this stack, so /health legitimately
-          # reports degraded — only the HTTP status (200) is asserted above.
-
-          setup_required="$(curl -fsS "$base/api/auth/setup-required" | jq -e '.required')"
+          setup_required="$(curl -fsS "$base/api/auth/setup-required" | jq -r '.required')"
           [ "$setup_required" = "false" ] || {
             echo "expected setup-required=false (admin auto-setup from ADMIN_* env), got $setup_required" >&2
             exit 1
