@@ -6,9 +6,9 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File              | Covers                                                                                                                                                |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library.spec.ts` | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → shuffle → open the public album link logged out |
+| File              | Covers                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library.spec.ts` | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out |
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -52,9 +52,9 @@ ffmpeg -y -f lavfi -i "sine=frequency=440:sample_rate=22050:duration=3" \
 browser console error, and on any uncaught page exception. It also counts what
 the flow costs the API and holds it under a named budget.
 
-**The budget is a ceiling, not a knob.** Each shell has its own, measured on
-the first green run and carrying ~20% headroom: 26 `/api` requests measured per
-shell, 32 budgeted. A flow that suddenly needs more round trips is a regression
+**The budget is a ceiling, not a knob.** Each shell has its own, measured on a
+green run and carrying headroom: 25 `/api` requests measured per shell, 32
+budgeted. A flow that suddenly needs more round trips is a regression
 — find the extra requests instead of raising the number. The measured count is
 printed on every run.
 

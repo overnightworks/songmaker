@@ -138,8 +138,8 @@ fails the flow, and each flow holds a named `/api` request budget per shell.
 
 - **Projects run serially** (`fullyParallel: false`, one worker). Both shells
   share one stack behind one IP rate-limit window, so their cost is additive and
-  measurable instead of a burst. Measured on the first green run: 26 `/api`
-  requests per shell, budget 32 each.
+  measurable instead of a burst. Measured on a green run: 25 `/api` requests
+  per shell, budget 32 each.
 - **One login per run.** Global setup authenticates once, seeds an album, songs,
   takes, a pick and a share link through the public API, and hands its session
   to every attempt as storage state. Mutable fixtures (the playlist) are seeded
