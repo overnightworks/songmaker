@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song
@@ -59,6 +61,32 @@ def _album_query(
     if q:
         query = query.filter(title_matches(Album.title, q))
     return query
+
+
+def count_picked_songs_by_album(
+    session: Session, album_ids: Sequence[str],
+) -> dict[str, int]:
+    """Count songs with an active picked generation, grouped by album.
+
+    One aggregate query rather than a per-album loop over loaded
+    generations — keeps album list/detail responses free of N+1 queries.
+    A song counts once even if (impossibly) it had more than one active
+    pick, since is_picked is exclusive per song.
+    """
+    if not album_ids:
+        return {}
+    rows = (
+        session.query(Song.album_id, func.count(func.distinct(Song.id)))
+        .join(Generation, Generation.song_id == Song.id)
+        .filter(
+            Song.album_id.in_(album_ids),
+            Generation.is_picked == True,  # noqa: E712
+            Generation.is_archived == False,  # noqa: E712
+        )
+        .group_by(Song.album_id)
+        .all()
+    )
+    return dict(rows)
 
 
 def get_album(

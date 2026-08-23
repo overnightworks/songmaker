@@ -3,6 +3,9 @@
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
 from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
 from songmaker_cli.db.queries.albums import count_albums as count_albums
+from songmaker_cli.db.queries.albums import (
+    count_picked_songs_by_album as count_picked_songs_by_album,
+)
 from songmaker_cli.db.queries.albums import create_album as create_album
 from songmaker_cli.db.queries.albums import delete_album as delete_album
 from songmaker_cli.db.queries.albums import disable_album_sharing as disable_album_sharing
