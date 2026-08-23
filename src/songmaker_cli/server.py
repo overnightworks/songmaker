@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import APP_NAME
+from songmaker_cli.constants import APP_NAME, PWA_ICON_PATHS
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     auto_setup_admin,
@@ -228,9 +228,7 @@ def create_app(
     _pwa_exact_paths = frozenset({
         "/service-worker.js",
         "/manifest.webmanifest",
-        "/icon-192.png",
-        "/icon-512.png",
-    })
+    }) | PWA_ICON_PATHS
 
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:

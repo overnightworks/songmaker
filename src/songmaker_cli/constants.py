@@ -9,6 +9,14 @@ from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
 APP_NAME = "Hallucinai"
 
+# The two PWA icon files SvelteKit's static build emits. Shared by
+# server.py (SPA-fallback 404 exclusion, see `_pwa_exact_paths`) and
+# rate_limit.py (per-IP budget exemption) so the two never drift.
+PWA_ICON_PATHS: Final[frozenset[str]] = frozenset({
+    "/icon-192.png",
+    "/icon-512.png",
+})
+
 MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
     "turbo",
     "sft",

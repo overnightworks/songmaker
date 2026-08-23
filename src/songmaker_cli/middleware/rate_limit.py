@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import PWA_ICON_PATHS
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -16,18 +17,22 @@ log = logging.getLogger(__name__)
 IP_RATE_WINDOW = 60
 STATIC_ASSET_PREFIX = "/_app/"
 
-# Health checks and static PWA root assets are fetched by infrastructure,
-# the browser, and the service worker outside of user-driven navigation --
-# they must not compete with `/api/*` calls for the per-IP budget. No API
-# path belongs in this allowlist.
+# Static PWA root assets are fetched by the browser and the service worker
+# outside of user-driven navigation, so they must not compete with `/api/*`
+# calls for the per-IP budget. No API path belongs in this allowlist.
+#
+# `/health` is deliberately NOT here: it is the most expensive anonymous
+# endpoint (a DB query plus ~6 Redis round trips for worker/queue state),
+# the browser only polls it every 15s (~4/min, see health.ts), and nothing
+# in the deploy hits it as a healthcheck (docker-compose.yml has none) --
+# exempting it would let an anonymous caller hammer the priciest endpoint
+# for free.
 RATE_LIMIT_EXEMPT_PATHS = frozenset({
-    "/health",
     "/manifest.webmanifest",
     "/robots.txt",
     "/favicon.svg",
     "/service-worker.js",
-})
-RATE_LIMIT_EXEMPT_ICON_PREFIX = "/icon-"
+}) | PWA_ICON_PATHS
 
 
 class IpRateLimitMiddleware(BaseHTTPMiddleware):
@@ -47,11 +52,7 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         path = request.url.path
-        if (
-            path.startswith(STATIC_ASSET_PREFIX)
-            or path in RATE_LIMIT_EXEMPT_PATHS
-            or path.startswith(RATE_LIMIT_EXEMPT_ICON_PREFIX)
-        ):
+        if path.startswith(STATIC_ASSET_PREFIX) or path in RATE_LIMIT_EXEMPT_PATHS:
             return await call_next(request)
         from songmaker_cli.auth import get_client_ip
         ctx: AppContext = request.app.state.ctx

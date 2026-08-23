@@ -209,6 +209,7 @@ def ip_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
     (build_dir / "service-worker.js").write_text("// sw")
     (build_dir / "manifest.webmanifest").write_text("{}")
     (build_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n")
+    (build_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n")
     yield client
     get_settings.cache_clear()
 
@@ -228,6 +229,7 @@ def test_ip_rate_limit_blocks_api_after_budget(ip_limited_client: TestClient) ->
     "/favicon.svg",
     "/service-worker.js",
     "/icon-192.png",
+    "/icon-512.png",
 ])
 def test_exempt_static_paths_bypass_ip_rate_limit(ip_limited_client: TestClient, path: str) -> None:
     for _ in range(5):
@@ -236,9 +238,12 @@ def test_exempt_static_paths_bypass_ip_rate_limit(ip_limited_client: TestClient,
     assert resp.status_code != 429
 
 
-def test_health_endpoint_exempt_from_ip_rate_limit(
+def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
     ip_limited_client: TestClient, mock_arq_pool,
 ) -> None:
+    """/health is the priciest anonymous endpoint (DB + ~6 Redis round trips)
+    and must share the same budget as every other request -- an anonymous
+    caller must not be able to hammer it for free (see rate_limit.py)."""
     with (
         ip_limited_client,
         patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
@@ -248,10 +253,11 @@ def test_health_endpoint_exempt_from_ip_rate_limit(
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
-        for _ in range(5):
-            resp = ip_limited_client.get("/health")
+        for _ in range(2):
+            ip_limited_client.get("/health")
+        resp = ip_limited_client.get("/health")
 
-    assert resp.status_code != 429
+    assert resp.status_code == 429
 
 
 def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -> None:
