@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
+from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
 from songmaker_cli.constants import MEMORY_MAX_LENGTH
 
@@ -234,7 +235,7 @@ class MemoryScopeResponse(BaseModel):
     scope: Literal["user", "song", "album"]
     target_id: str
     body: str
-    updated_at: str | None = None
+    updated_at: ComputedTimestamp = None
 
     @classmethod
     def from_orm(cls, scope: str, target_id: str, row) -> MemoryScopeResponse:

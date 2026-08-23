@@ -130,8 +130,8 @@ def test_start_download_creates_task(tmp_path: Path) -> None:
     assert snap is not None
     assert snap.state == "done"
     assert snap.result is not None
-    assert snap.result["mode"] == "sft"
-    assert snap.result["size_bytes"] >= 200
+    assert snap.result.mode == "sft"
+    assert snap.result.size_bytes >= 200
 
 
 def test_run_download_unknown_mode(tmp_path: Path) -> None:

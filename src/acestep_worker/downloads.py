@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
+from acestep_worker.models import DownloadTaskResult
 from acestep_worker.settings import get_worker_settings
 from acestep_worker.task_store import TaskStore
 
@@ -109,7 +110,7 @@ async def run_download(
         actual_size = directory_size_bytes(target_dir)
         await task_store.complete(
             task_id,
-            {"mode": mode, "size_bytes": actual_size},
+            DownloadTaskResult(mode=mode, size_bytes=actual_size),
         )
     except Exception as exc:
         log.exception("Download failed for mode %s", mode)

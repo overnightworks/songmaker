@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.cleanup import run_generation_retention
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Song, Version
@@ -134,3 +135,31 @@ def test_archived_generations_are_not_re_archived(
     report = run_generation_retention(retention_factory, tmp_path / "audio")
 
     assert "g1" not in report.archived_ids
+
+
+def test_live_generation_expires_after_the_retention_window(retention_factory) -> None:
+    with retention_factory() as session:
+        gen = get_generation(session, "g1")
+        assert generation_expiry(gen) == gen.created_at + timedelta(days=7)
+
+
+def test_archived_generation_expires_after_the_hard_delete_window(
+    retention_factory,
+) -> None:
+    _age(retention_factory, "g1", created_days_ago=30, archived_days_ago=10)
+
+    with retention_factory() as session:
+        gen = get_generation(session, "g1")
+        assert generation_expiry(gen) == gen.archived_at + timedelta(days=30)
+
+
+@pytest.mark.parametrize("mark_survivor", [pick_generation, keep_generation])
+def test_picked_or_kept_generation_never_expires(
+    retention_factory, mark_survivor,
+) -> None:
+    with retention_factory() as session:
+        mark_survivor(session, "g1")
+        session.commit()
+
+    with retention_factory() as session:
+        assert generation_expiry(get_generation(session, "g1")) is None

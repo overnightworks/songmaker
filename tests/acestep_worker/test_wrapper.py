@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache
-from acestep_worker.models import WorkerTaskEvent
+from acestep_worker.models import GenerationTaskResult, WorkerTaskEvent
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
     WorkerDeps,
@@ -58,7 +58,9 @@ def _make_deps(tmp_path: Path) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis
         await store.mark_running(task_id)
         await store.complete(
             task_id,
-            {"mode": mode, "audio_path": f"/fake/{task_id}.wav", "seed": 42},
+            GenerationTaskResult(
+                mode=mode, audio_path=f"/fake/{task_id}.wav", seed=42,
+            ),
         )
 
     deps = WorkerDeps(
@@ -295,6 +297,7 @@ def test_get_task_known(tmp_path: Path) -> None:
             if resp.json()["state"] == "done":
                 break
     assert resp.json()["state"] == "done"
+    assert resp.json()["result"]["seed"] == 42
 
 
 def test_stream_task_unknown(tmp_path: Path) -> None:
@@ -357,7 +360,7 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
     assert snap is not None
     assert snap.state == "done"
     assert snap.result is not None
-    assert snap.result["seed"] == 99
+    assert snap.result.seed == 99
     assert (tmp_path / "audio").exists()
 
 
@@ -739,7 +742,7 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
         await release_event.wait()
         await store.complete(
             task_id,
-            {"mode": mode, "audio_path": "/x", "seed": 0},
+            GenerationTaskResult(mode=mode, audio_path="/x", seed=0),
         )
 
     deps.generate_runner = slow_runner
