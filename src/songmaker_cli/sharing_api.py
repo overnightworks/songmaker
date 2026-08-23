@@ -246,6 +246,7 @@ def get_shared_album(
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
+            whisper_cues=media.whisper_cues,
         ))
     response = SharedAlbumResponse.from_orm(album, songs=song_items, cover=cover)
     return JSONResponse(response.model_dump())
@@ -373,6 +374,7 @@ def get_shared_song(
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
         lyrics=media.lyrics,
+        whisper_cues=media.whisper_cues,
     )
     return JSONResponse(response.model_dump())
 
@@ -451,6 +453,7 @@ def get_shared_generation(
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
         lyrics=media.lyrics,
+        whisper_cues=media.whisper_cues,
     )
     return JSONResponse(response.model_dump())
 
@@ -505,6 +508,7 @@ def get_shared_playlist(
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
+            whisper_cues=media.whisper_cues,
         ))
     response = SharedPlaylistResponse(title=playlist.title, entries=entry_items)
     return JSONResponse(response.model_dump())

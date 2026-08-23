@@ -1,6 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueueStreamManifest } from '$lib/api/types';
+import type {
+	QueueStreamManifest,
+	SharedAlbumPayload,
+	SharedAlbumSongPayload,
+	WhisperCue
+} from '$lib/api/types';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
@@ -41,15 +46,47 @@ class FakeAudio {
 	}
 }
 
-const album = {
+const FIRST_LINE = 'the lantern hums quietly tonight';
+const SECOND_LINE = 'we count the fading city lights';
+
+// One segment per lyric line, a word every second, as a take scored with
+// word timestamps delivers them.
+function sungCue(start: number, text: string): WhisperCue {
+	const words = text.split(' ').map((word, index) => ({
+		start: start + index,
+		end: start + index + 1,
+		text: word
+	}));
+	return { start: words[0].start, end: words[words.length - 1].end, text, words };
+}
+
+function albumSong(
+	id: string,
+	title: string,
+	trackNumber: number,
+	audioUrl: string | null
+): SharedAlbumSongPayload {
+	return {
+		id,
+		title,
+		track_number: trackNumber,
+		audio_url: audioUrl,
+		generation_id: audioUrl ? `gen-${id}` : null,
+		audio_duration: audioUrl ? 187 : null,
+		lyrics: audioUrl ? `${FIRST_LINE}\n${SECOND_LINE}` : null,
+		whisper_cues: audioUrl ? [sungCue(0, FIRST_LINE), sungCue(6, SECOND_LINE)] : null
+	};
+}
+
+const album: SharedAlbumPayload = {
 	title: 'Shared album',
 	artist: 'Artist',
 	subtitle: '',
 	year: '',
 	cover: null,
 	songs: [
-		{ id: 's1', title: 'First', track_number: 1, audio_url: '/audio/first.mp3' },
-		{ id: 's2', title: 'Second', track_number: 2, audio_url: '/audio/second.mp3' }
+		albumSong('s1', 'First', 1, '/audio/first.mp3'),
+		albumSong('s2', 'Second', 2, '/audio/second.mp3')
 	]
 };
 
@@ -62,25 +99,31 @@ function manifest(windowed: boolean): QueueStreamManifest {
 		windowed,
 		skipped: [],
 		skipped_complete: true,
-		tracks: album.songs.map((song, index) => ({
-			key: song.id,
-			index,
-			entry_id: null,
-			generation_id: `g${index + 1}`,
-			song_id: song.id,
-			song_title: song.title,
-			artist: album.artist,
-			album_title: album.title,
-			lyrics: null,
-			generation_number: 1,
-			mp3_path: `${song.id}.mp3`,
-			audio_url: song.audio_url,
-			seed: null,
-			model_mode: 'sft',
-			duration: 10,
-			start_offset: index * 10,
-			end_offset: (index + 1) * 10
-		}))
+		// sharing_api.py's stream builder skips songs without a pick, so a
+		// manifest only ever carries playable tracks.
+		tracks: album.songs
+			.filter(
+				(song): song is SharedAlbumSongPayload & { audio_url: string } => song.audio_url !== null
+			)
+			.map((song, index) => ({
+				key: song.id,
+				index,
+				entry_id: null,
+				generation_id: `g${index + 1}`,
+				song_id: song.id,
+				song_title: song.title,
+				artist: album.artist,
+				album_title: album.title,
+				lyrics: null,
+				generation_number: 1,
+				mp3_path: `${song.id}.mp3`,
+				audio_url: song.audio_url,
+				seed: null,
+				model_mode: 'sft',
+				duration: 10,
+				start_offset: index * 10,
+				end_offset: (index + 1) * 10
+			}))
 	};
 }
 
@@ -151,7 +194,7 @@ describe('shared album page', () => {
 			status: 200,
 			json: async () => ({
 				...album,
-				songs: [...album.songs, { id: 's3', title: 'Unpicked', track_number: 3, audio_url: null }]
+				songs: [...album.songs, albumSong('s3', 'Unpicked', 3, null)]
 			})
 		});
 		const target = document.createElement('div');
@@ -179,6 +222,30 @@ describe('shared album page', () => {
 		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[1].classList).toContain(
 			'current'
 		);
+	});
+
+	it('follows the sung words in stream mode, where the manifest redacts the lyrics', async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		expect(audioPlayer.current?.lyrics).toBeNull();
+
+		document.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await vi.waitFor(() => expect(document.querySelector('.lyrics-synced')).not.toBeNull());
+		audioPlayer.currentTime = 7.5;
+		await tick();
+
+		const active = [...document.querySelectorAll('.lyrics-line.active')].map((el) =>
+			el.textContent?.trim()
+		);
+		expect(active).toEqual([SECOND_LINE]);
 	});
 
 	it('keeps direct non-windowed album playback wrapping', async () => {
