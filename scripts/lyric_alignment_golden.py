@@ -196,6 +196,31 @@ def collect_candidates(
     return candidates
 
 
+def matched_word_range(
+    unit_texts: list[str], run: Candidate, lyric_text: str,
+) -> tuple[int, int]:
+    blocks = [
+        block
+        for block in SequenceMatcher(None, run.text, lyric_text).get_matching_blocks()
+        if block.size > 0
+    ]
+
+    first = -1
+    last = -1
+    word_start = 0
+    for index in range(run.first, run.last + 1):
+        word_end = word_start + len(unit_texts[index])
+        participates = any(
+            block.a < word_end and block.a + block.size > word_start for block in blocks
+        )
+        if participates:
+            if first == -1:
+                first = index
+            last = index
+        word_start = word_end + 1
+    return (run.first, run.last) if first == -1 else (first, last)
+
+
 def _overlaps(candidate: Candidate, other: Candidate) -> bool:
     return candidate.first <= other.last and candidate.last >= other.first
 
@@ -241,8 +266,9 @@ def align_against_words(
         ))
         if chosen is None:
             continue
-        intervals[line_position] = Interval(words[chosen.first].start, words[chosen.last].end)
-        cursor = chosen.last + 1
+        first, last = matched_word_range(word_texts, chosen, line_text)
+        intervals[line_position] = Interval(words[first].start, words[last].end)
+        cursor = last + 1
     return intervals
 
 
@@ -382,6 +408,11 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: section markers and blank lines never take an interval",
         "\n".join(["[intro]", "", LINE_1, "[verse]", LINE_2]),
         (_sung_cue(0.2, 0.4, f"{LINE_1} {LINE_2}"),),
+    ),
+    AlignmentFixture(
+        "word path: a run padded with foreign words starts at the line's own first word",
+        "\n".join([LINE_1, LINE_2]),
+        (_sung_cue(0.0, 0.4, f"{LINE_1} {' '.join(['la'] * 30)} {LINE_2}"),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

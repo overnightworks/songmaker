@@ -552,6 +552,234 @@
 		{
 			"cues": [
 				{
+					"end": 16.4,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la we count the fading city lights",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "la"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "la"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "la"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "la"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "la"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "la"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "la"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "la"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "la"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "la"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "la"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "la"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "la"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "la"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "la"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "la"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "la"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "la"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "la"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "la"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "la"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "la"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "la"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "la"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "la"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "la"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "la"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "la"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "la"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "la"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "we"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "count"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "the"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "fading"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "city"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "lights"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 16.4,
+					"start": 14.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "word path: a run padded with foreign words starts at the line's own first word"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",

@@ -151,6 +151,36 @@ function collectCandidates(
 	return candidates;
 }
 
+// The words of a run that take part in a matching block against the lyric
+// line are the ones the line was actually sung on; a run can begin or end on
+// foreign words when the line's own opening lies beyond the search window.
+// The interval is derived from the first and last of the line's own words.
+function matchedWordRange(
+	unitTexts: string[],
+	run: Candidate,
+	lyricText: string
+): { from: number; to: number } {
+	const blocks = new SequenceMatcher(run.text, lyricText)
+		.getMatchingBlocks()
+		.filter((block) => block.size > 0);
+
+	let first = -1;
+	let last = -1;
+	let wordStart = 0;
+	for (let index = run.from; index <= run.to; index++) {
+		const wordEnd = wordStart + unitTexts[index].length;
+		const participates = blocks.some(
+			(block) => block.a < wordEnd && block.a + block.size > wordStart
+		);
+		if (participates) {
+			if (first === -1) first = index;
+			last = index;
+		}
+		wordStart = wordEnd + 1;
+	}
+	return first === -1 ? { from: run.from, to: run.to } : { from: first, to: last };
+}
+
 function overlaps(candidate: Candidate, other: Candidate): boolean {
 	return candidate.from <= other.to && candidate.to >= other.from;
 }
@@ -197,8 +227,9 @@ function alignAgainstWords(
 			)
 		);
 		if (chosen === null) continue;
-		assign(linePosition, { start: words[chosen.from].start, end: words[chosen.to].end });
-		cursor = chosen.to + 1;
+		const sung = matchedWordRange(wordTexts, chosen, lineText);
+		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });
+		cursor = sung.to + 1;
 	}
 }
 

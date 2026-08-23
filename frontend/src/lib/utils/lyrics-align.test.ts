@@ -237,6 +237,18 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
+	it('starts a line at its own first sung word, not at foreign words before it', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const filler = new Array(30).fill('la').join(' ');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_1} ${filler} ${LINE_2}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 17.5, end: 20.5 }
+		]);
+	});
+
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 
