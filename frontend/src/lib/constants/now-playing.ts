@@ -1,3 +1,5 @@
+import { formatTime } from '$lib/utils/format';
+
 // Now Playing copy and layout constants (issue #101). Kept separate from
 // lib/constants.ts, which #100 owns for the same landing window — see the
 // epic's file-split rule.
@@ -6,6 +8,10 @@ export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
 export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
 
+// What separates the parts of a take's one-line description, everywhere one
+// is written out.
+const META_SEPARATOR = ' · ';
+
 // Queue row take label: "v<N> · take <k>", or just "take <k>" when the row
 // carries no version (library-pool items have version_number: null).
 export function nowPlayingTakeLabel(
@@ -13,7 +19,27 @@ export function nowPlayingTakeLabel(
 	generationNumber: number
 ): string {
 	const takePart = `take ${generationNumber}`;
-	return versionNumber != null ? `v${versionNumber} · ${takePart}` : takePart;
+	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
+}
+
+export interface TakeMetaParts {
+	artist: string | null;
+	versionNumber: number | null;
+	generationNumber: number;
+	durationSec: number | null;
+}
+
+// A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built
+// here rather than in markup: a separator written at the start of an `{#if}`
+// loses its leading space to the compiler, which is how the playlist row came
+// to read "take 1· 3:15" (#163/5). One owner, one spacing rule, whatever a
+// given row happens to know.
+export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
+	const written = [parts.artist, nowPlayingTakeLabel(parts.versionNumber, parts.generationNumber)];
+	if (parts.durationSec !== null && parts.durationSec > 0) {
+		written.push(formatTime(parts.durationSec));
+	}
+	return written.filter((part): part is string => Boolean(part)).join(META_SEPARATOR);
 }
 
 export const NOW_PLAYING_UP_NEXT_PREFIX = 'Up next:';
@@ -21,7 +47,9 @@ export const NOW_PLAYING_SHUFFLE_LABEL_PREFIX = 'Shuffle';
 export const NOW_PLAYING_SHUFFLE_DISABLE_PREFIX = 'Disable shuffle';
 
 export function nowPlayingQueueHeading(contextLabel: string | null): string {
-	return contextLabel ? `${NOW_PLAYING_QUEUE_TAB} · ${contextLabel}` : NOW_PLAYING_QUEUE_TAB;
+	return contextLabel
+		? `${NOW_PLAYING_QUEUE_TAB}${META_SEPARATOR}${contextLabel}`
+		: NOW_PLAYING_QUEUE_TAB;
 }
 
 export const NOW_PLAYING_SCORES_LABEL = 'Scores';
