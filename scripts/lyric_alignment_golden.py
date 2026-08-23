@@ -233,7 +233,19 @@ def _overlaps(candidate: Candidate, other: Candidate) -> bool:
     return candidate.first <= other.last and candidate.last >= other.first
 
 
-def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
+def repeats_of_winner(unit_texts: list[str], winner: Candidate) -> list[Candidate]:
+    length = winner.last - winner.first + 1
+    winner_units = unit_texts[winner.first : winner.last + 1]
+    return [
+        winner._replace(first=first, last=first + length - 1)
+        for first in range(len(unit_texts) - length + 1)
+        if unit_texts[first : first + length] == winner_units
+    ]
+
+
+def choose_candidate(
+    unit_texts: list[str], candidates: list[Candidate],
+) -> Candidate | None:
     best: Candidate | None = None
     for candidate in candidates:
         if best is None or candidate.score > best.score:
@@ -241,7 +253,7 @@ def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
     if best is None or best.score < MIN_RATIO:
         return None
 
-    repeats = [candidate for candidate in candidates if candidate.text == best.text]
+    repeats = repeats_of_winner(unit_texts, best)
     rival_score = float("-inf")
     for candidate in candidates:
         if any(_overlaps(candidate, repeat) for repeat in repeats):
@@ -259,9 +271,8 @@ def collect_with_growing_window(
     candidates: list[Candidate] = []
     scanned = cursor
     plausible = False
-    furthest_end = -1
 
-    while scanned < len(word_texts):
+    while scanned < len(word_texts) and not plausible:
         limit = min(len(word_texts), scanned + WORD_STREAM_LOOKAHEAD)
         for candidate in collect_candidates(
             word_texts,
@@ -273,10 +284,7 @@ def collect_with_growing_window(
         ):
             candidates.append(candidate)
             plausible = plausible or candidate.score >= MIN_RATIO
-            furthest_end = max(furthest_end, candidate.last)
         scanned = limit
-        if plausible and furthest_end < scanned:
-            break
     return candidates
 
 
@@ -288,6 +296,38 @@ def another_line_reads_run_as_well(
         and run.score - score_against_lyrics(run.text, line_texts[other]) < AMBIGUITY_MARGIN
         for other in range(line_position + 1, len(line_texts))
     )
+
+
+def contesting_lines(
+    word_texts: list[str], line_texts: list[str], line_position: int, run: Candidate,
+) -> list[int]:
+    waiting = [
+        other
+        for other in range(line_position + 1, len(line_texts))
+        if line_texts[other] != line_texts[line_position]
+    ]
+    if not waiting:
+        return []
+    longest_waiting = max(len(line_texts[other]) for other in waiting)
+
+    contesting: list[int] = []
+    phrase = run.text
+    for end in range(run.last + 1, len(word_texts)):
+        phrase = f"{phrase} {word_texts[end]}"
+        if len(phrase) > longest_waiting * LENGTH_FACTOR_MAX:
+            break
+        own_reading = score_against_lyrics(phrase, line_texts[line_position])
+        for other in waiting:
+            if other in contesting:
+                continue
+            lyric_length = len(line_texts[other])
+            reach = (2 * min(len(phrase), lyric_length)) / (len(phrase) + lyric_length)
+            if reach < MIN_RATIO or reach <= own_reading:
+                continue
+            reading = score_against_lyrics(phrase, line_texts[other])
+            if reading >= MIN_RATIO and reading > own_reading:
+                contesting.append(other)
+    return contesting
 
 
 def align_against_words(
@@ -303,16 +343,14 @@ def align_against_words(
         key = (line_position, start)
         if key not in claims:
             claims[key] = choose_candidate(
+                word_texts,
                 collect_with_growing_window(word_texts, start, line_texts[line_position]),
             )
         return claims[key]
 
     cursor = 0
-    lost_to_predecessor = -1
 
     for line_position, line_text in enumerate(line_texts):
-        if line_position == lost_to_predecessor:
-            continue
         claim = claim_of(line_position, cursor)
         if claim is None:
             continue
@@ -320,18 +358,12 @@ def align_against_words(
             continue
 
         first, last = matched_word_range(word_texts, claim, line_text)
-        successor = line_position + 1
-        successor_is_stranded = (
-            successor < len(line_texts) and claim_of(successor, last + 1) is None
+        stranded = any(
+            claim_of(other, last + 1) is None
+            for other in contesting_lines(word_texts, line_texts, line_position, claim)
         )
-        if successor_is_stranded:
-            contested = claim_of(successor, cursor)
-            if contested is not None and _overlaps(contested, claim):
-                if contested.score - claim.score >= AMBIGUITY_MARGIN:
-                    continue
-                if claim.score - contested.score < AMBIGUITY_MARGIN:
-                    lost_to_predecessor = successor
-                    continue
+        if stranded:
+            continue
 
         intervals[line_position] = Interval(words[first].start, words[last].end)
         cursor = last + 1
@@ -348,7 +380,7 @@ def align_against_cue_windows(
         if floor_position >= len(line_texts):
             break
         cue_text = normalize_lyrics_token(cue.text)
-        chosen = choose_candidate(collect_candidates(
+        chosen = choose_candidate(line_texts, collect_candidates(
             line_texts,
             floor_position,
             len(line_texts),
@@ -483,7 +515,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (Cue(0.0, 0.5, "year"), Cue(0.5, 3.0, LINE_1)),
     ),
     AlignmentFixture(
-        "word path: a line that opens the next one leaves both dark when only one was sung",
+        "word path: a line that opens the next one leaves those words to the sung line",
         "\n".join(["hold the line", CHORUS]),
         (_sung_cue(0.0, 0.4, CHORUS),),
     ),
@@ -508,6 +540,11 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (_sung_cue(0.0, 0.4, " ".join(
             [RIVER, RIVER, CHORUS, CHORUS, RIVER, LINE_2, CHORUS, CHORUS],
         )),),
+    ),
+    AlignmentFixture(
+        "word path: a sub-phrase of a later line never steals that line's opening",
+        "\n".join(["hold the line", LINE_3, CHORUS]),
+        (_sung_cue(0.0, 0.4, f"{LINE_3} {CHORUS}"),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

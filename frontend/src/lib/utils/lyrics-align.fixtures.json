@@ -1540,9 +1540,15 @@
 					]
 				}
 			],
-			"intervals": [null, null],
+			"intervals": [
+				null,
+				{
+					"end": 2.4,
+					"start": 0.0
+				}
+			],
 			"lyrics": "hold the line\nhold the line until the morning",
-			"name": "word path: a line that opens the next one leaves both dark when only one was sung"
+			"name": "word path: a line that opens the next one leaves those words to the sung line"
 		},
 		{
 			"cues": [
@@ -2070,6 +2076,85 @@
 			],
 			"lyrics": "the river carries every promise home\nthe river carries every promise home\nhold the line until the morning\nhold the line until the morning\nthe river carries every promise home\nwe count the fading city lights\nhold the line until the morning\nhold the line until the morning",
 			"name": "word path: a take built from repeated lines lights every one of them in order"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hold"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "line"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "until"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "hold the line\nanother mile of rusted signs\nhold the line until the morning",
+			"name": "word path: a sub-phrase of a later line never steals that line's opening"
 		},
 		{
 			"cues": [

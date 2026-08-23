@@ -297,12 +297,24 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
-	it('leaves both dark when a line is the opening of the next one and only one was sung', () => {
+	it('leaves the opening words to the line that was sung, not to its prefix', () => {
 		const lyrics = ['hold the line', CHORUS].join('\n');
 
 		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, CHORUS)]);
 
-		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 0, end: 3 }]);
+	});
+
+	it('never lets a sub-phrase steal the opening of a later, non-adjacent line', () => {
+		const lyrics = ['hold the line', LINE_3, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
 	});
 
 	it('gives two identical lines in a row their own successive renditions', () => {

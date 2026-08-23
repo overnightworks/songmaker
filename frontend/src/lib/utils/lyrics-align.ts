@@ -198,14 +198,31 @@ function overlaps(candidate: Candidate, other: Candidate): boolean {
 	return candidate.from <= other.to && candidate.to >= other.from;
 }
 
-function chooseCandidate(candidates: Candidate[]): Candidate | null {
+// Every run of units that spells the winner word for word, wherever it sits
+// in the stream — read off the stream itself rather than off the candidates
+// that happened to be collected, so a repeat just outside the search window
+// still dominates the shifted views of it that reach inside.
+function repeatsOfWinner(unitTexts: string[], winner: Candidate): Candidate[] {
+	const length = winner.to - winner.from + 1;
+	const repeats: Candidate[] = [];
+	for (let from = 0; from + length <= unitTexts.length; from++) {
+		let spellsWinner = true;
+		for (let offset = 0; offset < length && spellsWinner; offset++) {
+			spellsWinner = unitTexts[from + offset] === unitTexts[winner.from + offset];
+		}
+		if (spellsWinner) repeats.push({ ...winner, from, to: from + length - 1 });
+	}
+	return repeats;
+}
+
+function chooseCandidate(unitTexts: string[], candidates: Candidate[]): Candidate | null {
 	let best: Candidate | null = null;
 	for (const candidate of candidates) {
 		if (best === null || candidate.score > best.score) best = candidate;
 	}
 	if (best === null || best.score < MIN_RATIO) return null;
 
-	const repeats = candidates.filter((candidate) => candidate.text === best.text);
+	const repeats = repeatsOfWinner(unitTexts, best);
 	let rivalScore = -Infinity;
 	for (const candidate of candidates) {
 		if (repeats.some((repeat) => overlaps(candidate, repeat))) continue;
@@ -220,12 +237,6 @@ function chooseCandidate(candidates: Candidate[]): Candidate | null {
 // plausible reading of it or the stream runs out. A stretch of adlibbed or
 // mistranscribed words must not hide every line behind it, and only a line
 // the take has no reading for at all pays for scanning the rest of the take.
-//
-// Scanning also continues while a candidate reaches past the words looked at
-// so far. Otherwise a run that starts inside the window and ends beyond it
-// would be collected while the repeat it is a shifted view of — starting one
-// word later — would not, and that half-seen repeat would then count as a
-// rival instead of being dominated by the reading it belongs to.
 function collectWithGrowingWindow(
 	wordTexts: string[],
 	cursor: number,
@@ -234,9 +245,8 @@ function collectWithGrowingWindow(
 	const candidates: Candidate[] = [];
 	let scanned = cursor;
 	let plausible = false;
-	let furthestEnd = -1;
 
-	while (scanned < wordTexts.length) {
+	while (scanned < wordTexts.length && !plausible) {
 		const limit = Math.min(wordTexts.length, scanned + WORD_STREAM_LOOKAHEAD);
 		for (const candidate of collectCandidates(
 			wordTexts,
@@ -248,10 +258,8 @@ function collectWithGrowingWindow(
 		)) {
 			candidates.push(candidate);
 			if (candidate.score >= MIN_RATIO) plausible = true;
-			if (candidate.to > furthestEnd) furthestEnd = candidate.to;
 		}
 		scanned = limit;
-		if (plausible && furthestEnd < scanned) break;
 	}
 	return candidates;
 }
@@ -273,13 +281,51 @@ function anotherLineReadsRunAsWell(
 	return false;
 }
 
+// The converse of the rival test. This line's run can be the opening of a
+// longer phrase that a line further down sings: extending the run word by
+// word, any waiting line that reads the longer phrase at MIN_RATIO and reads
+// it better than this line does has a claim on those words. Lines carrying
+// this line's own text are not contenders — the take simply sings them again.
+function contestingLines(
+	wordTexts: string[],
+	lineTexts: string[],
+	linePosition: number,
+	run: Candidate
+): number[] {
+	const waiting: number[] = [];
+	for (let other = linePosition + 1; other < lineTexts.length; other++) {
+		if (lineTexts[other] !== lineTexts[linePosition]) waiting.push(other);
+	}
+	if (waiting.length === 0) return [];
+	const longestWaiting = Math.max(...waiting.map((other) => lineTexts[other].length));
+
+	const contesting: number[] = [];
+	let phrase = run.text;
+	for (let end = run.to + 1; end < wordTexts.length; end++) {
+		phrase = `${phrase} ${wordTexts[end]}`;
+		if (phrase.length > longestWaiting * LENGTH_FACTOR_MAX) break;
+		const ownReading = scoreAgainstLyrics(phrase, lineTexts[linePosition]);
+		for (const other of waiting) {
+			if (contesting.includes(other)) continue;
+			const lyricLength = lineTexts[other].length;
+			// ratio() cannot exceed this, so a line whose length alone rules out
+			// both MIN_RATIO and beating this line's own reading is skipped
+			// unscored. Exact, not a heuristic.
+			const reach = (2 * Math.min(phrase.length, lyricLength)) / (phrase.length + lyricLength);
+			if (reach < MIN_RATIO || reach <= ownReading) continue;
+			const reading = scoreAgainstLyrics(phrase, lineTexts[other]);
+			if (reading >= MIN_RATIO && reading > ownReading) contesting.push(other);
+		}
+	}
+	return contesting;
+}
+
 // Lines take their runs in playback order, and a run is only handed over when
-// nothing else explains it: no other waiting line reads it as well, and the
-// next line is not left without a rendition by it. That last test is what
-// stops a line from swallowing the opening of its successor — but only when
-// the successor really has nowhere else to go. Two lines that cannot both be
-// satisfied and are too close to call leave both dark; a successor that wins
-// by AMBIGUITY_MARGIN takes the words instead.
+// nothing else explains it: no other waiting line reads that run as well, and
+// no waiting line owns a longer phrase starting on it that taking these words
+// would strand. That is what stops a line from swallowing the opening of a
+// line further down — while a line that has a rendition of its own elsewhere
+// never blocks this one.
 function alignAgainstWords(
 	words: PreparedWord[],
 	lineTexts: string[],
@@ -294,6 +340,7 @@ function alignAgainstWords(
 		const known = claims.get(key);
 		if (known !== undefined) return known;
 		const claim = chooseCandidate(
+			wordTexts,
 			collectWithGrowingWindow(wordTexts, from, lineTexts[linePosition])
 		);
 		claims.set(key, claim);
@@ -301,28 +348,17 @@ function alignAgainstWords(
 	};
 
 	let cursor = 0;
-	let lostToPredecessor = -1;
 
 	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
-		if (linePosition === lostToPredecessor) continue;
 		const claim = claimOf(linePosition, cursor);
 		if (claim === null) continue;
 		if (anotherLineReadsRunAsWell(lineTexts, linePosition, claim)) continue;
 
 		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
-		const successor = linePosition + 1;
-		const successorIsStranded =
-			successor < lineTexts.length && claimOf(successor, sung.to + 1) === null;
-		if (successorIsStranded) {
-			const contested = claimOf(successor, cursor);
-			if (contested !== null && overlaps(contested, claim)) {
-				if (contested.score - claim.score >= AMBIGUITY_MARGIN) continue;
-				if (claim.score - contested.score < AMBIGUITY_MARGIN) {
-					lostToPredecessor = successor;
-					continue;
-				}
-			}
-		}
+		const stranded = contestingLines(wordTexts, lineTexts, linePosition, claim).some(
+			(other) => claimOf(other, sung.to + 1) === null
+		);
+		if (stranded) continue;
 
 		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });
 		cursor = sung.to + 1;
@@ -338,6 +374,7 @@ function alignAgainstCueWindows(
 	for (const cue of cues) {
 		if (floorPosition >= lineTexts.length) break;
 		const chosen = chooseCandidate(
+			lineTexts,
 			collectCandidates(
 				lineTexts,
 				floorPosition,
