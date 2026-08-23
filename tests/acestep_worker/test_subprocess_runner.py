@@ -83,6 +83,36 @@ def test_build_env_binds_configured_gpu() -> None:
     assert env["CUDA_VISIBLE_DEVICES"] == "1"
 
 
+def test_build_env_uses_worker_settings_defaults() -> None:
+    env = build_env("sft", port=8101, vram_budget_gb=24.0)
+    assert env["ACESTEP_DEVICE"] == "cuda"
+    assert env["ACESTEP_INIT_LLM"] == "1"
+    assert env["ACESTEP_LM_MODEL_PATH"] == "acestep-5Hz-lm-4B"
+    assert env["ACESTEP_LM_BACKEND"] == "vllm"
+    assert env["ACESTEP_COMPILE_MODEL"] == "0"
+    assert env["PYTORCH_CUDA_ALLOC_CONF"] == "expandable_segments:True"
+
+
+def test_build_env_takes_subprocess_knobs_from_worker_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ACESTEP_LM_BACKEND", "transformers")
+    monkeypatch.setenv("ACESTEP_COMPILE_MODEL", "1")
+    monkeypatch.setenv("ACESTEP_INIT_LLM", "0")
+    env = build_env("sft", port=8101, vram_budget_gb=24.0)
+    assert env["ACESTEP_LM_BACKEND"] == "transformers"
+    assert env["ACESTEP_COMPILE_MODEL"] == "1"
+    assert env["ACESTEP_INIT_LLM"] == "0"
+
+
+def test_build_env_vram_budget_wins_over_inherited_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MAX_CUDA_VRAM", "8")
+    env = build_env("sft", port=8101, vram_budget_gb=24.0)
+    assert env["MAX_CUDA_VRAM"] == "24.0"
+
+
 def test_is_acestep_healthy_true() -> None:
     mock_response = MagicMock()
     mock_response.status = 200

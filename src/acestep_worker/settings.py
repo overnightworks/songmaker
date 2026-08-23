@@ -43,6 +43,14 @@ class WorkerSettings(BaseSettings):
     hf_token: SecretStr | None = None
     log_level: str = "INFO"
 
+    # ACE-Step subprocess environment
+    acestep_device: str = "cuda"
+    acestep_init_llm: bool = True
+    acestep_lm_model_path: str = "acestep-5Hz-lm-4B"
+    acestep_lm_backend: str = "vllm"
+    acestep_compile_model: bool = False
+    pytorch_cuda_alloc_conf: str = "expandable_segments:True"
+
     # Subprocess timeouts
     acestep_startup_timeout_seconds: int = 900
     acestep_shutdown_grace_seconds: int = 15

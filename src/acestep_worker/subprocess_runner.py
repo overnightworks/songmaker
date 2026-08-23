@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO
+from typing import IO, Final
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -22,6 +22,8 @@ from acestep_worker.settings import get_worker_settings
 log = logging.getLogger(__name__)
 
 SECRET_ENV_KEYS = ("ANTHROPIC_API_KEY", "SESSION_SECRET", "SONGMAKER_INTERNAL_TOKEN")
+
+SUBPROCESS_BIND_HOST: Final = "127.0.0.1"
 
 LogLineSink = Callable[[str], None]
 
@@ -57,6 +59,10 @@ def find_uv() -> list[str] | None:
     return None
 
 
+def _as_env_flag(enabled: bool) -> str:
+    return "1" if enabled else "0"
+
+
 def build_env(
     mode: str,
     port: int,
@@ -66,18 +72,19 @@ def build_env(
     config_path = MODEL_CONFIG_PATHS.get(mode)
     if not config_path:
         raise SubprocessStartError(f"Unknown mode: {mode}")
+    settings = get_worker_settings()
     env = os.environ.copy()
     env["ACESTEP_API_PORT"] = str(port)
-    env["ACESTEP_API_HOST"] = "127.0.0.1"
+    env["ACESTEP_API_HOST"] = SUBPROCESS_BIND_HOST
     env["ACESTEP_CONFIG_PATH"] = config_path
-    env.setdefault("ACESTEP_DEVICE", "cuda")
-    env.setdefault("ACESTEP_INIT_LLM", "1")
-    env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
-    env.setdefault("ACESTEP_LM_BACKEND", "vllm")
-    env.setdefault("MAX_CUDA_VRAM", str(vram_budget_gb))
-    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    env.setdefault("ACESTEP_COMPILE_MODEL", "0")
-    env.setdefault("PYTHONUNBUFFERED", "1")
+    env["ACESTEP_DEVICE"] = settings.acestep_device
+    env["ACESTEP_INIT_LLM"] = _as_env_flag(settings.acestep_init_llm)
+    env["ACESTEP_LM_MODEL_PATH"] = settings.acestep_lm_model_path
+    env["ACESTEP_LM_BACKEND"] = settings.acestep_lm_backend
+    env["ACESTEP_COMPILE_MODEL"] = _as_env_flag(settings.acestep_compile_model)
+    env["MAX_CUDA_VRAM"] = str(vram_budget_gb)
+    env["PYTORCH_CUDA_ALLOC_CONF"] = settings.pytorch_cuda_alloc_conf
+    env["PYTHONUNBUFFERED"] = "1"
     if gpu_id is not None:
         env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     for secret in SECRET_ENV_KEYS:
