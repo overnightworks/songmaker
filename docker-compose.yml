@@ -185,6 +185,9 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - hfcache:/app/.cache/huggingface/hub
+      - ~/.local/bin/claude:/usr/local/bin/claude:ro
+      - ~/.claude:/home/songmaker/.claude
+      - ~/.claude.json:/home/songmaker/.claude.json
 
   prometheus:
     image: prom/prometheus:latest
