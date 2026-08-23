@@ -107,6 +107,7 @@ def compute_golden_ratios() -> list[dict[str, object]]:
 MIN_RATIO: Final = 0.72
 AMBIGUITY_MARGIN: Final = 0.12
 MAX_WINDOW_LINES: Final = 3
+VERBATIM_MAX_TOKENS: Final = 2
 WORD_STREAM_LOOKAHEAD: Final = 24
 RELEVANT_RATIO: Final = MIN_RATIO - AMBIGUITY_MARGIN
 LENGTH_FACTOR_MIN: Final = RELEVANT_RATIO / (2 - RELEVANT_RATIO)
@@ -170,6 +171,13 @@ def normalize_lyrics_token(text: str) -> str:
 
 def ratio(transcribed_text: str, lyric_text: str) -> float:
     return SequenceMatcher(None, transcribed_text, lyric_text).ratio()
+
+
+def score_against_lyrics(transcribed_text: str, lyric_text: str) -> float:
+    tokens = len(lyric_text.split(" ")) if lyric_text else 0
+    if tokens <= VERBATIM_MAX_TOKENS and transcribed_text != lyric_text:
+        return 0.0
+    return ratio(transcribed_text, lyric_text)
 
 
 def collect_candidates(
@@ -263,7 +271,7 @@ def collect_with_growing_window(
             limit,
             len(word_texts),
             len(line_text),
-            lambda candidate_text, line=line_text: ratio(candidate_text, line),
+            lambda candidate_text, line=line_text: score_against_lyrics(candidate_text, line),
         ):
             candidates.append(candidate)
             plausible = plausible or candidate.score >= MIN_RATIO
@@ -306,7 +314,7 @@ def align_against_cue_windows(
             len(line_texts),
             MAX_WINDOW_LINES,
             len(cue_text),
-            lambda candidate_text, text=cue_text: ratio(text, candidate_text),
+            lambda candidate_text, text=cue_text: score_against_lyrics(text, candidate_text),
         ))
         if chosen is None:
             continue
@@ -436,6 +444,21 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: a long stretch of unmatched words does not hide the lines behind it",
         "\n".join([LINE_1, LINE_2, LINE_3]),
         (_sung_cue(0.0, 0.4, f"{LINE_1} {' '.join(['la'] * 96)} {LINE_2} {LINE_3}"),),
+    ),
+    AlignmentFixture(
+        "word path: a two-word line is not lit by words that merely resemble it",
+        "\n".join(["yeah", LINE_1]),
+        (_sung_cue(0.0, 0.4, f"a year ago {LINE_1}"),),
+    ),
+    AlignmentFixture(
+        "word path: a two-word line is lit where the take sings it word for word",
+        "\n".join(["yeah", LINE_1]),
+        (_sung_cue(0.0, 0.4, f"yeah {LINE_1}"),),
+    ),
+    AlignmentFixture(
+        "cue window: a two-word line is not lit by a cue that merely resembles it",
+        "\n".join(["yeah", LINE_1]),
+        (Cue(0.0, 0.5, "year"), Cue(0.5, 3.0, LINE_1)),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

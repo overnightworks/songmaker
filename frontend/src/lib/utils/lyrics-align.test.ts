@@ -264,6 +264,25 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
+	it('leaves a two-word line dark when the take only sings something like it', () => {
+		const lyrics = ['yeah', LINE_1].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `a year ago ${LINE_1}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 1.5, end: 4 }]);
+	});
+
+	it('lights a two-word line where the take sings it word for word', () => {
+		const lyrics = ['yeah', LINE_1].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `yeah ${LINE_1}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 0.5 },
+			{ start: 0.5, end: 3 }
+		]);
+	});
+
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 

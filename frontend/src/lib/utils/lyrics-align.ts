@@ -35,6 +35,10 @@ import { SequenceMatcher } from './sequence-matcher';
 const MIN_RATIO = 0.72;
 const AMBIGUITY_MARGIN = 0.12;
 const MAX_WINDOW_LINES = 3;
+// A lyric line of one or two words is too short for a character ratio to tell
+// a real rendition from a coincidence — "yeah" already scores 0.75 against a
+// sung "year". Such a line is lit only where the take sings it word for word.
+const VERBATIM_MAX_TOKENS = 2;
 // How far past the previous line's last word the search looks before it has
 // to grow. Consecutive lines follow each other directly in the stream, so one
 // step is already room for roughly three lines of adlibs or skipped text, and
@@ -121,6 +125,15 @@ function prepareWords(cue: WhisperCue): PreparedWord[] {
 
 function ratio(transcribedText: string, lyricText: string): number {
 	return new SequenceMatcher(transcribedText, lyricText).ratio();
+}
+
+function countTokens(text: string): number {
+	return text.length === 0 ? 0 : text.split(' ').length;
+}
+
+function scoreAgainstLyrics(transcribedText: string, lyricText: string): number {
+	if (countTokens(lyricText) <= VERBATIM_MAX_TOKENS && transcribedText !== lyricText) return 0;
+	return ratio(transcribedText, lyricText);
 }
 
 // Every run of up to `maxUnits` consecutive units starting at or after
@@ -226,7 +239,7 @@ function collectWithGrowingWindow(
 			limit,
 			wordTexts.length,
 			lineText.length,
-			(candidateText) => ratio(candidateText, lineText)
+			(candidateText) => scoreAgainstLyrics(candidateText, lineText)
 		)) {
 			candidates.push(candidate);
 			if (candidate.score >= MIN_RATIO) plausible = true;
@@ -269,7 +282,7 @@ function alignAgainstCueWindows(
 				lineTexts.length,
 				MAX_WINDOW_LINES,
 				cue.normalizedText.length,
-				(candidateText) => ratio(cue.normalizedText, candidateText)
+				(candidateText) => scoreAgainstLyrics(cue.normalizedText, candidateText)
 			)
 		);
 		if (chosen === null) continue;

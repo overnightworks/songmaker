@@ -1367,6 +1367,142 @@
 		{
 			"cues": [
 				{
+					"end": 3.2,
+					"start": 0.0,
+					"text": "a year ago the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "a"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "year"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "ago"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "the"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "lantern"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hums"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "quietly"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 3.2,
+					"start": 1.2
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "word path: a two-word line is not lit by words that merely resemble it"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "yeah the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "yeah"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "lantern"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "hums"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "quietly"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 0.4,
+					"start": 0.0
+				},
+				{
+					"end": 2.4,
+					"start": 0.4
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "word path: a two-word line is lit where the take sings it word for word"
+		},
+		{
+			"cues": [
+				{
+					"end": 0.5,
+					"start": 0.0,
+					"text": "year"
+				},
+				{
+					"end": 3.0,
+					"start": 0.5,
+					"text": "the lantern hums quietly tonight"
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 3.0,
+					"start": 0.5
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "cue window: a two-word line is not lit by a cue that merely resembles it"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",
