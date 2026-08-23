@@ -218,10 +218,6 @@
 		openAlbum(album.id);
 	}
 
-	function albumPickCount(songs: SongItem[]): number {
-		return songs.filter((s) => s.generations.some((g) => g.is_picked)).length;
-	}
-
 	function onPlayAlbum(albumId: string): void {
 		void playAlbum(albumId);
 	}
@@ -354,6 +350,7 @@
 				{#each LIBRARY_FILTERS as item (item)}
 					<button
 						class="filter-chip"
+						data-hitbox="frequent"
 						class:active={filter === item}
 						role="radio"
 						id="library-filter-{item}"
@@ -366,7 +363,13 @@
 					</button>
 				{/each}
 			</div>
-			<select class="sort-select" value={createdSort} onchange={onSortChange} aria-label="Sort">
+			<select
+				class="sort-select"
+				data-hitbox="frequent"
+				value={createdSort}
+				onchange={onSortChange}
+				aria-label="Sort"
+			>
 				{#each CREATED_SORTS as option (option)}
 					<option value={option}>{CREATED_SORT_LABELS[option]}</option>
 				{/each}
@@ -448,6 +451,7 @@
 			<div class="share-filters" role="radiogroup" aria-label={LIBRARY_SHARES_FILTER_LABEL}>
 				<button
 					class="filter-chip"
+					data-hitbox="frequent"
 					class:active={sharesState.typeFilter === null}
 					role="radio"
 					aria-checked={sharesState.typeFilter === null}
@@ -458,6 +462,7 @@
 				{#each LIBRARY_SHARES_TYPES as type (type)}
 					<button
 						class="filter-chip"
+						data-hitbox="frequent"
 						class:active={sharesState.typeFilter === type}
 						role="radio"
 						aria-checked={sharesState.typeFilter === type}
@@ -555,7 +560,7 @@
 							<span class="wall-tile-meta">
 								<span class="wall-tile-title">{group.album.title}</span>
 								<span class="wall-tile-subtitle"
-									>{albumSummaryLabel(group.album.song_count, albumPickCount(group.songs))}</span
+									>{albumSummaryLabel(group.album.song_count, group.album.picked_count)}</span
 								>
 							</span>
 						</button>

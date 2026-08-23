@@ -16,14 +16,14 @@
 		selectedAlbumId,
 		loadSongsForAlbum,
 		playAlbum,
-		playAlbumFromGeneration,
+		playAlbumSong,
 		addAlbumToList,
 		addSongsToList,
 		removeAlbumFromList,
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/player';
-	import { selectSong } from '$lib/stores/navigation';
+	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
@@ -37,7 +37,7 @@
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import type { GenerationItem, SongItem } from '$lib/api/types';
+	import type { SongItem } from '$lib/api/types';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import Icon from './Icon.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -77,10 +77,6 @@
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
-
-	function bestGeneration(song: SongItem): GenerationItem | undefined {
-		return song.generations.find((g) => g.is_picked) ?? song.generations[0];
-	}
 
 	async function onCoverFile(event: Event): Promise<void> {
 		const input = event.target as HTMLInputElement;
@@ -193,9 +189,7 @@
 
 	function onRowPlay(song: SongItem): void {
 		if (!currentAlbumId) return;
-		const gen = bestGeneration(song);
-		if (!gen) return;
-		void playAlbumFromGeneration(currentAlbumId, song, gen);
+		void playAlbumSong(currentAlbumId, song);
 	}
 </script>
 
@@ -218,6 +212,7 @@
 			oncover={onCoverAction}
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
+			onaddsong={openLibraryCreate}
 		/>
 		<input
 			bind:this={coverInput}
@@ -261,7 +256,7 @@
 						<button class="item-body" onclick={() => selectSong(s.id)}>
 							<span class="item-title">{s.title}</span>
 							<span class="item-meta">
-								{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
+								{s.generation_count} take{s.generation_count !== 1 ? 's' : ''}
 							</span>
 						</button>
 					</div>
@@ -277,7 +272,7 @@
 		title={`Delete "${selectedAlbum.title}"?`}
 		items={[
 			`${albumSongs.length} song${albumSongs.length !== 1 ? 's' : ''} (${albumSongs.map((s) => s.title).join(', ')})`,
-			`${totalGens} generation${totalGens !== 1 ? 's' : ''}`,
+			`${totalGens} take${totalGens !== 1 ? 's' : ''}`,
 			'All versions, scores, and chat history'
 		]}
 		confirmLabel="Delete Album"

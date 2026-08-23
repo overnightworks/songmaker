@@ -36,13 +36,22 @@ import {
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
+	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
+	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	LIBRARY_SONG_PAGE_SIZE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST,
-	RAIL_LIBRARY_LABEL
+	RAIL_LIBRARY_LABEL,
+	SHUFFLE_SCOPE_ALBUM,
+	SHUFFLE_SCOPE_LIBRARY,
+	SHUFFLE_SCOPE_PLAYLIST
 } from '$lib/constants';
+import {
+	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
+	NOW_PLAYING_SHUFFLE_LABEL_PREFIX
+} from '$lib/constants/now-playing';
 
 // --- Data ---
 export const albumList = writable<AlbumItem[]>([]);
@@ -138,6 +147,21 @@ export async function toggleShuffle(): Promise<void> {
 	await rebuildQueueAfterShuffleToggle();
 }
 
+function shuffleScopeLabel(ctx: QueueContext): string {
+	if (ctx.type === 'playlist') return SHUFFLE_SCOPE_PLAYLIST;
+	if (ctx.type === 'album') return SHUFFLE_SCOPE_ALBUM;
+	return SHUFFLE_SCOPE_LIBRARY;
+}
+
+// Every shuffle control (transport bar, Now Playing) names the same scope
+// from the same place, so the two can never disagree about what a toggle
+// would shuffle.
+export const shuffleLabel = derived([shuffleEnabled, queueContext], ([$enabled, $ctx]) =>
+	$enabled
+		? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScopeLabel($ctx)})`
+		: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScopeLabel($ctx)}`
+);
+
 export type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
@@ -196,7 +220,7 @@ function albumTitle(albums: AlbumItem[], albumId: string): string {
 function libraryStreamFailureToast(err: unknown): string {
 	if (isEmptyPoolError(err)) return `${LIBRARY_QUEUE_EMPTY_TITLE} (${poolLabel()})`;
 	if (isUnplayableStartError(err)) return QUEUE_STREAM_UNPLAYABLE_START_DETAIL;
-	return `${poolLabel()} queue failed. Tap play to retry.`;
+	return `${poolLabel()} queue failed. Press play to retry.`;
 }
 
 // --- Playback dispatch ---
@@ -252,7 +276,7 @@ function showWindowedNotice(trackCount: number): void {
 }
 
 // A failed stream start remembers what the listener actually asked for, so the
-// "tap play to retry" affordance replays that exact intent instead of falling
+// "press play to retry" affordance replays that exact intent instead of falling
 // back to an unrotated default queue (which starts at library track 1).
 let retryPlayIntent: (() => Promise<void>) | null = null;
 
@@ -395,7 +419,7 @@ export async function playStreamEntries(
 		);
 	} catch {
 		retryPlayIntent = () => playStreamEntries(entries, startIndex, opts);
-		addToast('Stream unavailable. Tap play to retry.', 'error');
+		addToast('Stream unavailable. Press play to retry.', 'error');
 		return;
 	}
 	retryPlayIntent = null;
@@ -557,8 +581,7 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		});
 		return;
 	}
-	const currentIndex = currentPlaylistIndex(ctx, current);
-	await playPlaylistEntries(ctx.entries, currentIndex >= 0 ? currentIndex : ctx.index, {
+	await playPlaylistEntries(ctx.entries, currentPlaylistIndex(ctx, current), {
 		restart: true,
 		resumeAtTrackTime: trackTime
 	});
@@ -651,8 +674,11 @@ export function playPrevGeneration(): void {
 	}
 }
 
+// Archived takes are not playable (their rows offer no play affordance), so
+// they never stand in as a song's take in a queue either.
 function bestGen(song: SongItem): GenerationItem | undefined {
-	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
+	const playable = song.generations.filter((gen) => !gen.is_archived);
+	return playable.find((gen) => gen.is_picked) ?? playable[0];
 }
 
 function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryItem {
@@ -768,30 +794,41 @@ function nextQueueItem(items: QueueRowItem[], currentIndex: number): QueueRowIte
 	return items[(currentIndex + 1) % items.length] ?? null;
 }
 
+// Every queue row reads its length from the same place: the take's own
+// duration when the row carries one, and the song's latest-version duration
+// as the fallback for rows that do not (library-pool takes, and album rows
+// built before the take's params were loaded).
+function queueRowDurationSec(
+	takeDurationSec: number | null | undefined,
+	songs: SongItem[],
+	songId: string
+): number | null {
+	return takeDurationSec ?? songs.find((s) => s.id === songId)?.audio_duration ?? null;
+}
+
 function nativeQueueItem(take: PlaybackInfo, songs: SongItem[]): QueueRowItem {
 	return {
 		key: `${take.songId}:${take.generation.id}`,
 		songId: take.songId,
 		songTitle: take.songTitle,
 		generationId: take.generation.id,
-		// SongItem.audio_duration is the latest version's requested duration,
-		// not this specific take's actual length — PlaybackInfo carries no
-		// per-take duration (that lives only on the loaded <audio> element).
-		// Good enough for a queue row estimate; the transport's own progress
-		// bar shows the real duration once the take is playing.
-		durationSec: songs.find((s) => s.id === take.songId)?.audio_duration ?? null,
+		durationSec: queueRowDurationSec(
+			take.generation.generation_params?.audio_duration,
+			songs,
+			take.songId
+		),
 		versionNumber: take.generation.version_number,
 		generationNumber: take.generation.generation_number
 	};
 }
 
-function playlistQueueItem(entry: PlaylistEntryItem): QueueRowItem {
+function playlistQueueItem(entry: PlaylistEntryItem, songs: SongItem[]): QueueRowItem {
 	return {
 		key: entry.id,
 		songId: entry.song_id,
 		songTitle: entry.song_title,
 		generationId: entry.generation_id,
-		durationSec: entry.audio_duration,
+		durationSec: queueRowDurationSec(entry.audio_duration, songs, entry.song_id),
 		versionNumber: entry.version_number,
 		generationNumber: entry.generation_number
 	};
@@ -808,7 +845,7 @@ export function buildQueueViewModel(
 	songs: SongItem[]
 ): QueueViewModel {
 	if (ctx.type === 'playlist') {
-		const items = ctx.entries.map(playlistQueueItem);
+		const items = ctx.entries.map((entry) => playlistQueueItem(entry, songs));
 		const currentIndex = currentPlaylistIndex(ctx, current);
 		return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
 	}
@@ -1006,6 +1043,27 @@ export async function playPrevSong(): Promise<void> {
 	}
 }
 
+// The album's opening take, which is not always the opening track's:
+// `generation_count` counts archived takes too, so a track whose takes are
+// all archived is skipped rather than taken as proof the album is
+// unplayable. Returns null both when nothing is playable and when a newer
+// play start superseded this one — the caller separates the two with its
+// own playStartIsCurrent check.
+async function firstPlayableAlbumTake(
+	albumId: string,
+	seq: number
+): Promise<{ song: SongItem; gen: GenerationItem } | null> {
+	for (const song of albumSongsInOrder(albumId)) {
+		if (song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		if (!playStartIsCurrent(seq)) return null;
+		const fresh = get(songList).find((item) => item.id === song.id) ?? song;
+		const gen = bestGen(fresh);
+		if (gen) return { song: fresh, gen };
+	}
+	return null;
+}
+
 export async function playAlbum(albumId: string): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
@@ -1016,28 +1074,47 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	const startSong = albumSongsInOrder(albumId).find((song) => song.generation_count > 0);
-	if (startSong) await ensureGenerationsLoaded(startSong.id);
+	const start = await firstPlayableAlbumTake(albumId, seq);
 	if (!playStartIsCurrent(seq)) return;
-	const freshStart = startSong
-		? (get(songList).find((item) => item.id === startSong.id) ?? startSong)
-		: undefined;
-	const startGen = freshStart ? bestGen(freshStart) : undefined;
-	if (!freshStart || !startGen) {
+	if (!start) {
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
 		return;
 	}
 	playStartNotice.set('idle');
 	playNativeAlbumTakes(
 		albumId,
-		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))],
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(start.song, start.gen))],
 		0
 	);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
-	setAlbumQueueTakes(albumId, entries, startGen.id);
+	setAlbumQueueTakes(albumId, entries, start.gen.id);
+}
+
+// A song row's play button inside an album. The row only knows the song's
+// `generation_count`; the takes themselves are loaded per song, so a row
+// tapped right after switching albums has none yet and must resolve one
+// before the album queue can be built from it. Silence is the failure this
+// replaces (#141): a song with no playable take now says so.
+export async function playAlbumSong(albumId: string, song: SongItem): Promise<void> {
+	try {
+		await ensureGenerationsLoaded(song.id);
+	} catch (err) {
+		addToast(albumSongsErrorMessage(err), 'error');
+		return;
+	}
+	const fresh = get(songList).find((item) => item.id === song.id) ?? song;
+	const gen = bestGen(fresh);
+	if (!gen) {
+		addToast(
+			fresh.generations.length > 0 ? ALBUM_ROW_ARCHIVED_ONLY_TOAST : ALBUM_ROW_NO_TAKE_TOAST,
+			'error'
+		);
+		return;
+	}
+	await playAlbumFromGeneration(albumId, fresh, gen);
 }
 
 export async function playAlbumFromGeneration(
@@ -1086,6 +1163,14 @@ async function playPlaylist(playlist: PlaylistDetailItem): Promise<void> {
 	await playPlaylistEntries(playlist.entries, 0, { restart: true });
 }
 
+// A playlist entry's `position` is the playlist's order of record, so a
+// queue is always built from that order — shuffled off it while shuffle is
+// on, and restored to it the moment shuffle goes off, instead of freezing
+// whatever order the last shuffle happened to produce.
+function inPlaylistOrder(entries: PlaylistEntryItem[]): PlaylistEntryItem[] {
+	return [...entries].sort((a, b) => a.position - b.position);
+}
+
 export async function playPlaylistEntries(
 	entries: PlaylistEntryItem[],
 	startIndex = 0,
@@ -1094,7 +1179,12 @@ export async function playPlaylistEntries(
 	beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	const ordered = shuffledWithStart(entries, startIndex);
+	const startEntry = entries[startIndex];
+	const byPosition = inPlaylistOrder(entries);
+	const ordered = shuffledWithStart(
+		byPosition,
+		startEntry ? Math.max(0, byPosition.indexOf(startEntry)) : 0
+	);
 	const loadOpts: { restart?: boolean; startAt?: number } = { restart: opts.restart };
 	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
 	playPlaylistIndex(
@@ -1148,7 +1238,7 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		id: entry.generation_id,
 		song_id: entry.song_id,
 		version_id: null,
-		version_number: null,
+		version_number: entry.version_number,
 		generation_number: entry.generation_number,
 		mp3_path: entry.mp3_path,
 		wav_path: null,

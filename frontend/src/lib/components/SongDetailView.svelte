@@ -761,7 +761,6 @@
 					{draftVersionNumber}
 					{latestVersionNumber}
 					{generateJob}
-					compact
 					onagain={applyAgain}
 					onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
 					onretry={() => {

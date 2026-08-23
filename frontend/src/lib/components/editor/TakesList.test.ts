@@ -2,9 +2,20 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	HITBOX_COMPACT_PX,
+	HITBOX_FREQUENT_PX,
+	TAKE_ARCHIVED_TITLE,
+	TAKE_PLAYLIST_LABEL,
+	TAKES_MOBILE_HINT
+} from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
-import { clearSelection } from '$lib/stores/selection';
+import { get } from 'svelte/store';
+import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
+
+function enterSelectionMode(): void {
+	toggleSelection('selection-mode-seed');
+}
 
 function px(value: string): number {
 	const resolved = value.startsWith('var(')
@@ -43,13 +54,42 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import { addToast } from '$lib/stores/toast';
 import { playTakeAndShowNowPlaying } from '$lib/stores/player';
+import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesList from './TakesList.svelte';
+
+const playlist = {
+	id: 'p1',
+	title: 'Night Drive',
+	entry_count: 0,
+	is_shared: false,
+	share_slug: null,
+	created_at: '2026-01-01T00:00:00+00:00'
+};
+
+function openTakeMenu(row: HTMLElement): void {
+	row.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+}
+
+function clickMenuItem(root: ParentNode, label: string): void {
+	const item = Array.from(root.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
+		(el) => el.textContent?.trim() === label
+	);
+	if (!item) throw new Error(`No take menu item named "${label}"`);
+	item.click();
+}
+
+vi.mock('$lib/stores/playlists', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/playlists')>();
+	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
+});
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const pick = vi.fn();
 const keep = vi.fn();
 const pinSeed = vi.fn();
 const useAsSource = vi.fn();
+
+const addToPlaylist = vi.fn(async () => undefined);
 
 function mockActions(): GenerationActions {
 	return {
@@ -60,7 +100,7 @@ function mockActions(): GenerationActions {
 		rate: vi.fn(async () => undefined),
 		share: vi.fn(async () => ({ status: 'ok', share_url: '', share_slug: '' })),
 		unshare: vi.fn(async () => undefined),
-		addToPlaylist: vi.fn(async () => undefined),
+		addToPlaylist,
 		pinSeed,
 		clickVersion: vi.fn(),
 		useAsSource
@@ -129,6 +169,9 @@ beforeEach(() => {
 	keep.mockReset();
 	pinSeed.mockReset();
 	useAsSource.mockReset();
+	addToPlaylist.mockClear();
+	playlistList.set([{ ...playlist }]);
+	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	clearSelection();
@@ -268,6 +311,30 @@ describe('TakesList', () => {
 		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
 	});
 
+	it('adds the take to a playlist from its own row, without also playing it', async () => {
+		// #141/3: the picker is absolutely positioned, so it must sit inside a
+		// positioned anchor in the row — otherwise it escapes the row entirely
+		// and the menu entry looks like it does nothing.
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		if (!row) throw new Error('Expected a take row');
+		openTakeMenu(row);
+		await tick();
+		clickMenuItem(row, TAKE_PLAYLIST_LABEL);
+		await tick();
+
+		const picker = row.querySelector('.picker');
+		expect(picker, 'the playlist picker renders inside the take row').not.toBeNull();
+		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
+
+		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
+		await tick();
+		await Promise.resolve();
+
+		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
 	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {
 		const { target } = await render();
 		const pickBtn = target.querySelector<HTMLButtonElement>('.pick-btn');
@@ -279,6 +346,121 @@ describe('TakesList', () => {
 		document.documentElement.dataset.pointer = 'fine';
 		const fineStyle = getComputedStyle(pickBtn);
 		expect(px(fineStyle.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+});
+
+describe('TakesList archived takes', () => {
+	async function renderWithArchived() {
+		return render({
+			song: song({
+				generations: [
+					generation({ id: 'g1', version_number: 3, generation_number: 3 }),
+					generation({ id: 'g-arch', version_number: 3, generation_number: 2, is_archived: true })
+				]
+			})
+		});
+	}
+
+	it('offers no play affordance and does not play on click', async () => {
+		const { target } = await renderWithArchived();
+		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		if (!archivedRow) throw new Error('Expected the archived take row');
+
+		expect(archivedRow.classList.contains('archived')).toBe(true);
+		expect(archivedRow.getAttribute('title')).toBe(TAKE_ARCHIVED_TITLE);
+		expect(archivedRow.querySelector('.take-label')?.previousElementSibling).toBeNull();
+
+		archivedRow.click();
+		await tick();
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('owns and anchors its menu and playlist picker, archived or not', async () => {
+		// Vitest runs with CSS off, so the absent stacking context cannot be
+		// asserted by computed style here — the browser walkthrough covers that
+		// (R1: row opacity 1, picker bottom hit-testable). What jsdom proves is
+		// the structure: the row owns its popovers and anchors them itself.
+		const { target } = await renderWithArchived();
+		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		if (!archivedRow) throw new Error('Expected the archived take row');
+
+		openTakeMenu(archivedRow);
+		await tick();
+		expect(archivedRow.querySelector('.overflow-menu')).not.toBeNull();
+		clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL);
+		await tick();
+
+		const picker = archivedRow.querySelector('.picker');
+		expect(picker, 'the playlist picker renders inside the archived row').not.toBeNull();
+		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('stops announcing itself as a button while it cannot act', async () => {
+		const { target } = await renderWithArchived();
+		const [playable, archived] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
+		expect(playable.getAttribute('role')).toBe('button');
+		expect(archived.getAttribute('role')).toBeNull();
+		expect(archived.getAttribute('tabindex')).toBeNull();
+	});
+
+	it('is a button again in selection mode, where ticking it still does something', async () => {
+		const { target } = await renderWithArchived();
+		enterSelectionMode();
+		await tick();
+		const archived = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		expect(archived.getAttribute('role')).toBe('button');
+		archived.click();
+		await tick();
+		expect(get(selectedIds).has('g-arch')).toBe(true);
+	});
+
+	it('still plays a take that is not archived', async () => {
+		const { target } = await renderWithArchived();
+		target.querySelector<HTMLElement>('.take-row')?.click();
+		await tick();
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			expect.objectContaining({ id: 's1' })
+		);
+	});
+});
+
+describe('TakesList touch hint', () => {
+	it('shows the tap hint on a coarse pointer and hides it on a mouse', async () => {
+		// #141/11: a narrow desktop window is compact but still has a mouse.
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query.includes('coarse'),
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			}))
+		);
+		const { target: coarse } = await render();
+		expect(coarse.textContent).toContain(TAKES_MOBILE_HINT);
+
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			}))
+		);
+		const { target: fine } = await render();
+		expect(fine.textContent).not.toContain(TAKES_MOBILE_HINT);
+		vi.unstubAllGlobals();
 	});
 });
 

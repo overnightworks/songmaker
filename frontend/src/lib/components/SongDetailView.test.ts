@@ -25,7 +25,8 @@ import {
 	SONG_COVER_REPLACE_LABEL,
 	SONG_COVER_UPLOAD_LABEL,
 	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL
+	SONG_PREVIOUS_LABEL,
+	TAKE_AGAIN_LABEL
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import {
@@ -420,7 +421,7 @@ describe('SongDetailView recipe and takes', () => {
 		const takeMenuBtn = target.querySelector<HTMLButtonElement>('.overflow-btn');
 		takeMenuBtn?.click();
 		await tick();
-		clickNamed(target, 'Again');
+		clickNamed(target, TAKE_AGAIN_LABEL);
 		await tick();
 		expect(get(pinnedSeed)).toBe(11);
 		expect(get(editGenParams)).toEqual({ inference_steps: 12, guidance_scale: 2 });

@@ -52,14 +52,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playAlbumFromGeneration: vi.fn()
+		playAlbumSong: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import AlbumNode from './AlbumNode.svelte';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbumFromGeneration } from '$lib/stores/player';
+import { playAlbumSong } from '$lib/stores/player';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -148,7 +148,7 @@ beforeEach(() => {
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
 	vi.mocked(selectSong).mockReset();
-	vi.mocked(playAlbumFromGeneration).mockReset();
+	vi.mocked(playAlbumSong).mockReset();
 });
 
 afterEach(async () => {
@@ -260,36 +260,25 @@ describe('AlbumDetailView header', () => {
 });
 
 describe('AlbumDetailView song row Play', () => {
-	it('plays the picked generation when the song has one', async () => {
-		const picked = generation({ id: 'g-picked', is_picked: true });
-		const first = generation({ id: 'g-first' });
-		songList.set([song({ generations: [first, picked], generation_count: 2 })]);
+	it('plays the row inside the open album, letting the player resolve the take', async () => {
+		// The row knows the song, not which take to play — a song whose takes
+		// are not loaded yet (just switched albums, #141/4) still plays.
+		songList.set([song({ generations: [], generation_count: 2 })]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-play').click();
 		await tick();
 
-		expect(playAlbumFromGeneration).toHaveBeenCalledWith(
+		expect(playAlbumSong).toHaveBeenCalledWith(
 			'a-local',
-			expect.objectContaining({ id: 's-local' }),
-			picked
+			expect.objectContaining({ id: 's-local' })
 		);
 	});
 
-	it('falls back to the first generation when none is picked', async () => {
-		const first = generation({ id: 'g-first' });
-		const second = generation({ id: 'g-second' });
-		songList.set([song({ generations: [first, second], generation_count: 2 })]);
+	it('counts takes, not gens, on a song row', async () => {
+		songList.set([song({ generations: [], generation_count: 2 })]);
 		const target = await renderDetail();
-
-		requireElement<HTMLButtonElement>(target, '.item-play').click();
-		await tick();
-
-		expect(playAlbumFromGeneration).toHaveBeenCalledWith(
-			'a-local',
-			expect.objectContaining({ id: 's-local' }),
-			first
-		);
+		expect(requireElement(target, '.item-meta').textContent?.trim()).toBe('2 takes');
 	});
 
 	it('disables Play when the song has no generations', async () => {
@@ -320,7 +309,7 @@ describe('AlbumDetailView song row Play', () => {
 		await tick();
 
 		expect(selectSong).toHaveBeenCalledWith('s-local');
-		expect(playAlbumFromGeneration).not.toHaveBeenCalled();
+		expect(playAlbumSong).not.toHaveBeenCalled();
 	});
 });
 

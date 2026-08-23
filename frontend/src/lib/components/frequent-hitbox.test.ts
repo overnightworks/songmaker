@@ -135,7 +135,11 @@ const INVENTORY = [
 	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
 	{ name: 'drawer-trigger', selector: '.drawer-trigger[data-hitbox="frequent"]' },
-	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' }
+	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' },
+	{ name: 'library-filter-chip', selector: '.filter-chip[data-hitbox="frequent"]' },
+	{ name: 'library-sort-select', selector: '.sort-select[data-hitbox="frequent"]' },
+	{ name: 'breadcrumb-link', selector: '.crumb-link[data-hitbox="frequent"]' },
+	{ name: 'now-playing-trigger', selector: '.now-playing-btn[data-hitbox="frequent"]' }
 ] as const;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -308,8 +312,8 @@ function requireButton(
 	name: string,
 	selector: string,
 	text?: string
-): HTMLButtonElement {
-	const matches = Array.from(root.querySelectorAll<HTMLButtonElement>(selector));
+): HTMLElement {
+	const matches = Array.from(root.querySelectorAll<HTMLElement>(selector));
 	const el = text === undefined ? matches[0] : matches.find((m) => m.textContent?.trim() === text);
 	if (!el) {
 		throw new Error(`${name} is missing (${selector}${text === undefined ? '' : ` "${text}"`})`);
@@ -398,7 +402,8 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
-	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
+	const playerTarget = document.createElement('div');
+	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget, playerTarget);
 
 	const playlistPickerOnClose = vi.fn();
 
@@ -412,6 +417,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 		})
 	);
 	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
+	mounted.push(mount(PlayerBar, { target: playerTarget }));
 	await tick();
 	await Promise.resolve();
 	await tick();
@@ -438,7 +444,7 @@ describe('frequent action hitboxes', () => {
 		}
 		openEntryOverflowMenu(middleRow);
 		await tick();
-		const found: Array<{ name: string; el: HTMLButtonElement }> = [];
+		const found: Array<{ name: string; el: HTMLElement }> = [];
 
 		for (const target of INVENTORY) {
 			const el = requireButton(
@@ -447,7 +453,6 @@ describe('frequent action hitboxes', () => {
 				target.selector,
 				'text' in target ? target.text : undefined
 			);
-			expect(el.tagName, `${target.name} is a button`).toBe('BUTTON');
 			found.push({ name: target.name, el });
 		}
 
@@ -465,7 +470,7 @@ describe('frequent action hitboxes', () => {
 			expect(box.height, `${name} coarse height`).toBe(HITBOX_FREQUENT_PX);
 		}
 
-		const siblingGroups: Array<Array<{ name: string; el: HTMLButtonElement }>> = [];
+		const siblingGroups: Array<Array<{ name: string; el: HTMLElement }>> = [];
 		siblingGroups.push([
 			{
 				name: 'playlist-move-up',

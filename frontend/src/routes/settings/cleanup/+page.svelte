@@ -49,11 +49,11 @@
 </script>
 
 <div class="page">
-	<h1>Generation Retention</h1>
+	<h1>Take Retention</h1>
 	<p class="hint">
-		Generations that are neither <strong>picked</strong> nor <strong>kept</strong> are auto-archived after
-		the retention window, then permanently deleted after the hard-delete window. This cleanup also runs
-		automatically every day at 03:00 UTC.
+		Takes that are neither <strong>picked</strong> nor <strong>kept</strong> are auto-archived after the
+		retention window, then permanently deleted after the hard-delete window. This cleanup also runs automatically
+		every day at 03:00 UTC.
 	</p>
 
 	{#if loading && !report}
@@ -91,7 +91,7 @@
 		{:else}
 			<div class="confirm">
 				<p>
-					Archive <strong>{report.archived_count}</strong> generation{report.archived_count === 1
+					Archive <strong>{report.archived_count}</strong> take{report.archived_count === 1
 						? ''
 						: 's'}
 					and permanently delete <strong>{report.deleted_count}</strong> archived one{report.deleted_count ===
@@ -112,7 +112,7 @@
 
 		{#if report.deleted_ids.length > 0}
 			<details class="ids">
-				<summary>{report.deleted_ids.length} generation ids to hard-delete</summary>
+				<summary>{report.deleted_ids.length} take ids to hard-delete</summary>
 				<ul>
 					{#each report.deleted_ids as id (id)}
 						<li><code>{id}</code></li>
@@ -123,7 +123,7 @@
 
 		{#if report.archived_ids.length > 0}
 			<details class="ids">
-				<summary>{report.archived_ids.length} generation ids to archive</summary>
+				<summary>{report.archived_ids.length} take ids to archive</summary>
 				<ul>
 					{#each report.archived_ids as id (id)}
 						<li><code>{id}</code></li>

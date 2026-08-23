@@ -10,6 +10,8 @@ import {
 	queueContext,
 	selectedAlbumId,
 	selectedSongId,
+	setShuffle,
+	shuffleEnabled,
 	songList
 } from '$lib/stores/player';
 import * as playerStore from '$lib/stores/player';
@@ -165,6 +167,7 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
+	setShuffle(false);
 });
 
 afterEach(async () => {
@@ -310,6 +313,43 @@ describe('PlayerBar stream boundaries', () => {
 		await tick();
 
 		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe('PlayerBar shuffle', () => {
+	// #141/5: shuffle is transport, so it lives in the transport bar next to
+	// prev/next — not only inside the Now Playing overlay.
+	function shuffleButton(): HTMLButtonElement {
+		const button = target.querySelector<HTMLButtonElement>('.shuffle-btn');
+		if (!button) throw new Error('Expected a shuffle control in the transport bar');
+		return button;
+	}
+
+	it('toggles shuffle from the transport bar and names the queue it would shuffle', async () => {
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		albumList.set([albumItem()]);
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(shuffleButton().getAttribute('aria-pressed')).toBe('false');
+		expect(shuffleButton().getAttribute('aria-label')).toBe('Shuffle this album');
+
+		shuffleButton().click();
+		await tick();
+
+		expect(get(shuffleEnabled)).toBe(true);
+		expect(shuffleButton().getAttribute('aria-pressed')).toBe('true');
+		expect(shuffleButton().getAttribute('aria-label')).toBe('Disable shuffle (this album)');
+	});
+
+	it('survives the compact transport row that hides prev and next', async () => {
+		component = mount(PlayerBar, { target });
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.querySelector('.player-bar.mobile-transport')).not.toBeNull();
+		expect(shuffleButton().dataset.hitbox).toBe('frequent');
 	});
 });
 

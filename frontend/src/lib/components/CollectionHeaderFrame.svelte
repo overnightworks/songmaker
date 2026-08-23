@@ -85,8 +85,12 @@
 		user-select: none;
 	}
 
+	/* The title keeps a readable width instead of collapsing to a letter: the
+	   header wraps its action cluster onto a second row rather than shrinking
+	   the title past this floor. `overflow: hidden` on the title itself still
+	   ellipsises whatever does not fit. */
 	.header-titles {
-		min-width: 0;
+		min-width: 10rem;
 		flex: 1;
 	}
 

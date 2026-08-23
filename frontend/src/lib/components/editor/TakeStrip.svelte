@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SongItem } from '$lib/api/types';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import { playTake } from '$lib/stores/player';
 	import Icon from '../Icon.svelte';
 
@@ -24,12 +25,13 @@
 {#if sorted.length > 0}
 	<div class="take-strip" aria-label="Takes">
 		{#each sorted as gen (gen.id)}
+			{@const label = nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 			<button
 				type="button"
 				class="take-chip"
 				class:playing={playingGenId === gen.id}
 				onclick={() => void playTake(gen, song)}
-				title="v{gen.version_number ?? '—'} · take {gen.generation_number}"
+				title={label}
 			>
 				<Icon name={playingGenId === gen.id ? 'pause' : 'play'} size={14} />
 				{#if gen.is_picked}
@@ -37,7 +39,7 @@
 				{:else if gen.is_kept}
 					<span class="badge kept"><Icon name="heart-filled" size={10} /></span>
 				{/if}
-				<span class="take-chip-label">v{gen.version_number ?? '—'}-{gen.generation_number}</span>
+				<span class="take-chip-label">{label}</span>
 			</button>
 		{/each}
 	</div>
@@ -54,16 +56,13 @@
 	.take-chip {
 		position: relative;
 		display: flex;
-		flex-direction: column;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.3rem;
 		flex-shrink: 0;
-		width: 2.6rem;
-		padding: 0.4rem 0.2rem;
+		padding: 0.35rem 0.6rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 50%;
-		aspect-ratio: 1;
+		border-radius: var(--btn-radius-pill);
 		color: var(--text-muted);
 		cursor: pointer;
 	}
@@ -74,7 +73,7 @@
 	}
 
 	.take-chip-label {
-		font-size: 0.55rem;
+		font-size: 0.65rem;
 		font-family: var(--font-display);
 		letter-spacing: 0.2px;
 		white-space: nowrap;

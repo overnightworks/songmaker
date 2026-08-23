@@ -25,6 +25,9 @@
 		canNext: boolean;
 		onPrev: () => void;
 		onNext: () => void;
+		shuffle?: boolean;
+		shuffleLabel?: string;
+		onToggleShuffle?: () => void;
 		onTogglePlay: () => void;
 		onSeek: (seconds: number) => void;
 		trackInfo: Snippet<[titleGlowStyle: string]>;
@@ -47,6 +50,9 @@
 		canNext,
 		onPrev,
 		onNext,
+		shuffle = false,
+		shuffleLabel = '',
+		onToggleShuffle,
 		onTogglePlay,
 		onSeek,
 		trackInfo,
@@ -165,6 +171,19 @@
 	</div>
 	<div class="player-content">
 		<div class="transport-controls">
+			{#if onToggleShuffle}
+				<button
+					class="nav-btn shuffle-btn"
+					class:on={shuffle}
+					data-hitbox="frequent"
+					onclick={onToggleShuffle}
+					aria-pressed={shuffle}
+					aria-label={shuffleLabel}
+					title={shuffleLabel}
+				>
+					<Icon name="shuffle" size={18} />
+				</button>
+			{/if}
 			<button
 				class="nav-btn"
 				onclick={onPrev}
@@ -217,6 +236,7 @@
 		<button
 			bind:this={nowPlayingTrigger}
 			class="now-playing-btn"
+			data-hitbox="frequent"
 			onclick={onOpenNowPlaying}
 			disabled={nowPlayingDisabled}
 			aria-label={NOW_PLAYING_LABEL}
@@ -376,6 +396,10 @@
 		color: var(--text-disabled);
 		cursor: default;
 		opacity: 0.3;
+	}
+	.shuffle-btn.on {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 	.track-info {
 		display: flex;
@@ -560,6 +584,9 @@
 	}
 	.mobile-transport .nav-btn {
 		display: none;
+	}
+	.mobile-transport .shuffle-btn {
+		display: inline-flex;
 	}
 	.mobile-transport .play-btn {
 		width: 44px;

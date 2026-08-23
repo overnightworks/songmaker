@@ -16,7 +16,9 @@
 		{#if index === items.length - 1}
 			<span class="crumb crumb-current" aria-current="page">{item.label}</span>
 		{:else if item.onclick}
-			<button type="button" class="crumb crumb-link" onclick={item.onclick}>{item.label}</button>
+			<button type="button" class="crumb crumb-link" data-hitbox="frequent" onclick={item.onclick}
+				>{item.label}</button
+			>
 		{:else}
 			<span class="crumb">{item.label}</span>
 		{/if}
@@ -27,8 +29,9 @@
 	.breadcrumb {
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		min-width: 0;
+		overflow: hidden;
 		gap: 0;
 	}
 
@@ -57,6 +60,7 @@
 		font: inherit;
 		color: var(--text-muted);
 		cursor: pointer;
+		flex-shrink: 0;
 	}
 
 	.crumb-link:hover {

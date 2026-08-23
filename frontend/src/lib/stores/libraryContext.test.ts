@@ -226,7 +226,7 @@ describe('library history snapshot', () => {
 			songOffset: 200,
 			songId: 's1',
 			scrollAnchor: 240,
-			detailTab: 'takes'
+			detailTab: 'write'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
 	});
@@ -410,12 +410,12 @@ describe('applyLibraryHistory', () => {
 		expect(get(librarySurface)).toBe('browse');
 	});
 
-	it('defaults a missing detailTab to the takes tab without failing restore', async () => {
+	it('defaults a missing detailTab to the write tab without failing restore', async () => {
 		const { detailTab: recordedTab, ...withoutDetailTab } = libraryRootState();
-		expect(recordedTab).toBe('takes');
-		detailTab.set('write');
+		expect(recordedTab).toBe('write');
+		detailTab.set('takes');
 		await applyLibraryHistory(withoutDetailTab);
-		expect(get(detailTab)).toBe('takes');
+		expect(get(detailTab)).toBe('write');
 		expect(get(librarySurface)).toBe('browse');
 	});
 

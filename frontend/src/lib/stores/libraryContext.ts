@@ -54,9 +54,13 @@ export interface LibraryHistoryState {
 	detailTab?: DetailTab;
 }
 
+// Opening a song lands on Write — on a compact layout the tabs are the only
+// way in, and writing is what the editor is for (#141/13).
+const DEFAULT_DETAIL_TAB: DetailTab = 'write';
+
 export const libraryFilter = writable<LibraryFilter>(LIBRARY_DEFAULT_FILTER);
 export const librarySurface = writable<LibrarySurface>('browse');
-export const detailTab = writable<DetailTab>('takes');
+export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
@@ -118,7 +122,7 @@ export function libraryRootState(): LibraryHistoryState {
 		songId: null,
 		generationId: null,
 		scrollAnchor: 0,
-		detailTab: 'takes'
+		detailTab: DEFAULT_DETAIL_TAB
 	};
 }
 
@@ -335,7 +339,7 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	libraryFilter.set(LIBRARY_DEFAULT_FILTER);
 	librarySurface.set('browse');
-	detailTab.set('takes');
+	detailTab.set(DEFAULT_DETAIL_TAB);
 	libraryScrollAnchor.set(0);
 	libraryScrollByFilter.set({ ...EMPTY_FILTER_SCROLL });
 	setOpenCollection(null);
@@ -363,7 +367,7 @@ function normalizeDetailTab(value: unknown): DetailTab {
 	if (typeof value === 'string' && value in LEGACY_DETAIL_TAB_MAP) {
 		return LEGACY_DETAIL_TAB_MAP[value];
 	}
-	return 'takes';
+	return DEFAULT_DETAIL_TAB;
 }
 
 function isIdOrNull(value: unknown): value is string | null {

@@ -35,7 +35,7 @@
 
 <svelte:head>
 	<title
-		>{data ? `Gen #${data.generation_number} — ${data.title}` : 'Shared Generation'} | {APP_NAME}</title
+		>{data ? `Take ${data.generation_number} — ${data.title}` : 'Shared take'} | {APP_NAME}</title
 	>
 </svelte:head>
 

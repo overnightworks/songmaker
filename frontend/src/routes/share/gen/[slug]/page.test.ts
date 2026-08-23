@@ -84,6 +84,9 @@ describe('shared generation (take) page', () => {
 		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
 		expect(target.textContent).toContain('Artist · Album');
 		expect(target.textContent).not.toContain('take 3');
+		// #141/10: the page names a take; only the URL segment stays /share/gen/.
+		expect(document.title).toContain('Take 3 — Solo Track');
+		expect(document.title).not.toContain('Gen #');
 
 		target.querySelector<HTMLButtonElement>('.track-row')?.click();
 		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());
