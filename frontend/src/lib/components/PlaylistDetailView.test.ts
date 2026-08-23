@@ -10,6 +10,8 @@ import {
 	playlistEntryOverflowLabel
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
+import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
@@ -112,12 +114,20 @@ beforeEach(() => {
 	vi.mocked(fetchPlaylist).mockReset();
 	openPlaylistDetail(detail());
 	vi.mocked(selectSong).mockReset();
+	setShuffle(false);
+	queueContext.set({ type: 'library' });
+	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
+		audioPlayer.current = playback;
+	});
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	resetPlaylists();
+	audioPlayer.current = null;
+	queueContext.set({ type: 'library' });
+	setShuffle(false);
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -245,6 +255,33 @@ describe('PlaylistDetailView row overflow menu', () => {
 });
 
 describe('PlaylistDetailView row actions', () => {
+	it('plays a clicked row as part of this playlist, in playlist order', async () => {
+		setShuffle(true);
+		openPlaylistDetail(
+			detail({
+				entry_count: 2,
+				entries: [
+					entry({ id: 'pe1', position: 0, song_title: 'Tide' }),
+					entry({ id: 'pe2', position: 1, generation_id: 'g2', song_title: 'Ebb' })
+				]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		target.querySelectorAll<HTMLElement>('.entry-row')[1].click();
+		await tick();
+
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
+		expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe1', 'pe2']);
+		expect(ctx.index).toBe(1);
+		expect(get(shuffleEnabled)).toBe(false);
+	});
+
 	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		openPlaylistDetail(

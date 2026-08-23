@@ -10,8 +10,7 @@
 		albumSongsLoad,
 		loadSongsForAlbum,
 		playAlbum,
-		playPlaylistEntries,
-		setShuffle,
+		playPlaylistFrom,
 		songList,
 		selectedGenerationId,
 		updateAlbumInList,
@@ -226,8 +225,7 @@
 	async function onPlayPlaylist(playlist: PlaylistItem): Promise<void> {
 		try {
 			const detail = await fetchPlaylist(playlist.id);
-			setShuffle(false);
-			playPlaylistEntries(detail.entries, 0, { restart: true });
+			playPlaylistFrom(detail, 0);
 		} catch {
 			addToast('Play failed', 'error');
 		}

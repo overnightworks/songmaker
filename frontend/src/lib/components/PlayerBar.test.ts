@@ -168,7 +168,12 @@ beforeEach(() => {
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	songList.set([]);
 	albumList.set([]);
-	queueContext.set({ type: 'playlist', entries: [], index: 0 });
+	queueContext.set({
+		type: 'playlist',
+		playlist: { id: 'p1', title: 'Night Drive' },
+		entries: [],
+		index: 0
+	});
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedPlaylistDetail.set(null);

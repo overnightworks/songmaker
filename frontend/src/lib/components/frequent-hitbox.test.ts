@@ -17,7 +17,7 @@ import {
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
-import { openCollection } from '$lib/stores/collection';
+import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';
 import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
@@ -350,7 +350,9 @@ beforeEach(() => {
 	songList.set([song({ generations: [] })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
-	selectedPlaylistDetail.set(playlistDetail());
+	const playlist = playlistDetail();
+	setOpenCollection({ kind: 'playlist', id: playlist.id });
+	selectedPlaylistDetail.set(playlist);
 	theme.set('dark');
 	document.documentElement.dataset.theme = 'dark';
 	vi.stubGlobal(
@@ -380,7 +382,7 @@ afterEach(async () => {
 	selectedPlaylistDetail.set(null);
 	currentUser.set(null);
 	closeSidebar();
-	openCollection.set(null);
+	resetCollectionForTests();
 	vi.unstubAllGlobals();
 });
 
@@ -610,7 +612,7 @@ describe('PlayerBar mobile transport', () => {
 
 describe('Escape yields to an open popover before the global one-level-up shortcut', () => {
 	beforeEach(() => {
-		openCollection.set({ kind: 'album', id: 'a-local' });
+		setOpenCollection({ kind: 'album', id: 'a-local' });
 		vi.mocked(openLibraryWall).mockClear();
 		vi.mocked(backToCollection).mockClear();
 	});

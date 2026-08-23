@@ -10,6 +10,7 @@ import {
 	selectedSongId,
 	songList
 } from '$lib/stores/player';
+import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';
 
@@ -164,7 +165,9 @@ beforeEach(() => {
 	selectedAlbumId.set('a-local');
 	selectedSongId.set('s1');
 	selectedGenerationId.set('g1');
-	selectedPlaylistDetail.set(playlistDetail());
+	const playlist = playlistDetail();
+	setOpenCollection({ kind: 'playlist', id: playlist.id });
+	selectedPlaylistDetail.set(playlist);
 });
 
 afterEach(async () => {
@@ -174,6 +177,7 @@ afterEach(async () => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	selectedPlaylistDetail.set(null);
+	resetCollectionForTests();
 	albumList.set([]);
 	songList.set([]);
 });

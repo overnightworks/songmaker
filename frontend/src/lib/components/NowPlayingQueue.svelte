@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { QueueStreamSkipItem } from '$lib/api/types';
-	import type { QueueContext, QueueViewModel } from '$lib/stores/player';
+	import type { QueueViewModel } from '$lib/stores/player';
 	import {
 		LIBRARY_TAKE_POOL_LABELS,
 		LIBRARY_TAKE_POOLS,
@@ -16,24 +16,26 @@
 	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 	let {
-		ctx,
 		queue,
 		contextLabel,
 		currentSongTitle,
-		pool,
-		onChoosePool,
+		takePool,
 		onJump,
 		skipped = [],
 		skippedComplete = true,
 		windowEnded = false,
 		showTakeLabel = true
 	}: {
-		ctx: QueueContext;
 		queue: QueueViewModel;
+		// The name of what is playing, or null for the library pool, whose own
+		// heading needs no collection name.
 		contextLabel: string | null;
 		currentSongTitle: string;
-		pool?: LibraryTakePool;
-		onChoosePool?: (pool: LibraryTakePool) => void;
+		// The take-pool picker, given only by the library queue: the pool is
+		// what that queue is built from, and no other queue has one. Selection
+		// and handler travel together so a queue can never offer a picker that
+		// chooses nothing, or hide a pool it is actually built from.
+		takePool?: { selected: LibraryTakePool; onChoose: (pool: LibraryTakePool) => void };
 		onJump: (index: number) => void;
 		skipped?: QueueStreamSkipItem[];
 		skippedComplete?: boolean;
@@ -43,22 +45,22 @@
 		showTakeLabel?: boolean;
 	} = $props();
 
-	const heading = $derived(nowPlayingQueueHeading(ctx.type === 'library' ? null : contextLabel));
+	const heading = $derived(nowPlayingQueueHeading(contextLabel));
 </script>
 
 <section class="np-queue" aria-label={NOW_PLAYING_QUEUE_TAB}>
 	<div class="queue-heading-row">
 		<h3 class="queue-heading">{heading}</h3>
 		<div class="queue-heading-actions">
-			{#if ctx.type === 'library'}
+			{#if takePool}
 				<div class="pool-trio" role="group" aria-label="Take pool">
 					{#each LIBRARY_TAKE_POOLS as option (option)}
 						<button
 							type="button"
 							class="pool-pill"
-							class:on={pool === option}
-							aria-pressed={pool === option}
-							onclick={() => onChoosePool?.(option)}
+							class:on={takePool.selected === option}
+							aria-pressed={takePool.selected === option}
+							onclick={() => takePool.onChoose(option)}
 						>
 							{LIBRARY_TAKE_POOL_LABELS[option]}
 						</button>

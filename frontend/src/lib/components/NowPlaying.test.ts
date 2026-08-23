@@ -258,16 +258,21 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Nachtstrom');
 	});
 
-	it('hides the trio and names the playlist for a playlist queue context', async () => {
+	it('names the playlist the queue was built from, not the one the listener has open', async () => {
 		selectedPlaylistDetail.set({
-			id: 'p1',
-			title: 'Night Drive',
+			id: 'p2',
+			title: 'Morning Ride',
 			entry_count: 0,
 			is_shared: false,
 			created_at: '',
 			entries: []
 		});
-		queueContext.set({ type: 'playlist', entries: [], index: 0 });
+		queueContext.set({
+			type: 'playlist',
+			playlist: { id: 'p1', title: 'Night Drive' },
+			entries: [],
+			index: 0
+		});
 		await renderSurface(info());
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
 		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Night Drive');
