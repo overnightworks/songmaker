@@ -184,17 +184,11 @@ def test_repository_contains_one_tip_per_requirement_document() -> None:
     shelf = read_requirement_shelf(PROJECT_ROOT)
     acceptance = read_acceptance_manifest(PROJECT_ROOT, shelf)
 
-    superseded = {
-        revision.predecessor
-        for revision in shelf.revisions
-        if revision.predecessor != CONTRACT.GENESIS
-    }
-    tips_per_document = Counter(
-        revision.document
-        for revision in shelf.revisions
-        if revision.content_sha256 not in superseded
+    assert shelf.document_count == 5
+    revisions_per_document = Counter(revision.document for revision in shelf.revisions)
+    assert revisions_per_document == Counter(
+        {"0001": 1, "0002": 1, "0003": 1, "0004": 1, "0005": 2}
     )
-    assert tips_per_document == Counter({revision.document for revision in shelf.revisions})
 
     identifiers = {rule.identifier for rule in shelf.rules}
     assert {
