@@ -49,6 +49,7 @@ from songmaker_cli.db.queries import (
     get_playlist_by_slug,
     get_song_by_slug,
 )
+from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
@@ -132,11 +133,11 @@ def _check_rate_limit(
 
 
 def _picked_generation(song):
-    picked = [g for g in song.generations if g.is_picked and not g.is_archived]
+    picked = [g for g in song.generations if g.is_picked and is_playable_take(g)]
     if picked:
         return picked[0]
     available = sorted(
-        (g for g in song.generations if g.mp3_path and not g.is_archived),
+        (g for g in song.generations if is_playable_take(g)),
         key=lambda g: g.generation_number,
     )
     if available:

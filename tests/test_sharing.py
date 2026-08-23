@@ -84,6 +84,14 @@ def _seed_mixed_playability_album(session) -> None:
         id="g_unpicked", song_id="s_unpicked_take", generation_number=1,
         mp3_path="admin_user/g_unpicked.mp3", seed=1, is_picked=False,
     ))
+    session.add(Song(
+        id="s_empty_mp3", title="Picked Take With Empty File",
+        album_id="test_album", track_number=5,
+    ))
+    session.add(Generation(
+        id="g_empty_mp3", song_id="s_empty_mp3", generation_number=1,
+        mp3_path="", seed=1, is_picked=True,
+    ))
 
 
 def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path) -> None:
@@ -97,7 +105,27 @@ def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path) 
     assert {(item["id"], item["title"]) for item in missing} == {
         ("s_no_gen", "No Generation At All"),
         ("s_archived_only", "Only Archived Take"),
+        ("s_empty_mp3", "Picked Take With Empty File"),
     }
+
+
+def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path: Path) -> None:
+    """The owner-facing warning list and the public share page must use the
+    same playability rule -- a song can't vanish from one without showing up
+    in the other (#147)."""
+    client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
+    login_and_csrf(client, "admin", "admin12345")
+
+    share_resp = client.post("/api/albums/test_album/share")
+    slug = share_resp.json()["share_slug"]
+    warned_ids = {item["id"] for item in share_resp.json()["songs_without_playable_take"]}
+
+    unauthed = TestClient(client.app, cookies={})
+    shared_songs = unauthed.get(f"/shared/{slug}").json()["songs"]
+
+    for song in shared_songs:
+        has_audio = song["audio_url"] is not None
+        assert has_audio == (song["id"] not in warned_ids)
 
 
 def test_share_album_idempotent(sharing_app: TestClient) -> None:

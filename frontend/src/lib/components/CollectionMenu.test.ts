@@ -63,7 +63,7 @@ function shareWarningDialog(target: HTMLElement): Element | null {
 }
 
 describe('CollectionMenu share warning', () => {
-	it('opens a warning dialog listing songs without a playable take after sharing an album', async () => {
+	it('opens a warning dialog listing songs without a playable take after sharing an album, closing the menu behind it', async () => {
 		const { target } = await render({
 			onshare: vi
 				.fn<() => Promise<ShareResult>>()
@@ -77,6 +77,27 @@ describe('CollectionMenu share warning', () => {
 		const dialog = shareWarningDialog(target);
 		expect(dialog).not.toBeNull();
 		expect(dialog?.textContent).toContain('No Take Song');
+		expect(target.querySelector('.menu-panel')).toBeNull();
+	});
+
+	it('closes only the warning dialog on Escape, leaving no stacked modal behind', async () => {
+		const { target } = await render({
+			onshare: vi
+				.fn<() => Promise<ShareResult>>()
+				.mockResolvedValue(
+					shareResult({ songs_without_playable_take: [{ id: 's1', title: 'No Take Song' }] })
+				)
+		});
+
+		await openMenuAndShare(target);
+		expect(shareWarningDialog(target)).not.toBeNull();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await tick();
+
+		expect(shareWarningDialog(target)).toBeNull();
+		expect(target.querySelector('.menu-panel')).toBeNull();
+		expect(target.querySelectorAll('[role="dialog"]').length).toBe(0);
 	});
 
 	it('does not open a warning dialog when every song has a playable take', async () => {

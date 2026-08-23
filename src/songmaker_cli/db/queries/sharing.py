@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypeVar
 
+from sqlalchemy import ColumnElement, and_
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.constants import (
@@ -59,18 +60,33 @@ def disable_sharing(session: Session, model_class: type[T], entity_id: str) -> T
     return entity
 
 
-def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:
-    """Songs on the album with no non-archived generation carrying audio.
+def is_playable_take(gen: Generation) -> bool:
+    """A generation the public share page can actually play: non-archived,
+    with a real (non-empty) mp3 file. The single owner of "is this take
+    playable" -- both `_picked_generation` (sharing_api.py) and
+    `songs_without_playable_take` below must agree with this, or a song can
+    silently vanish from /shared/{slug} without the owner being warned."""
+    return bool(gen.mp3_path) and not gen.is_archived
 
-    Mirrors the predicate the public share page uses (`_picked_generation`
-    in sharing_api.py) to pick what to play for a song -- a song failing
-    this check is silently absent from the /shared/{slug} payload.
-    """
+
+def playable_take_filter() -> ColumnElement[bool]:
+    """SQLAlchemy criteria mirroring `is_playable_take()`, for queries that
+    can't load full Generation rows into Python."""
+    return and_(
+        Generation.mp3_path.isnot(None),
+        Generation.mp3_path != "",
+        Generation.is_archived.is_(False),
+    )
+
+
+def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:
+    """Songs on the album with no playable take (see `is_playable_take`) --
+    a song failing this check is silently absent from the /shared/{slug}
+    payload."""
     has_take = (
         session.query(Generation.song_id)
         .filter(Generation.song_id == Song.id)
-        .filter(Generation.mp3_path.isnot(None))
-        .filter(Generation.is_archived.is_(False))
+        .filter(playable_take_filter())
         .exists()
     )
     return (

@@ -70,6 +70,10 @@
 		const result = await onshare();
 		if (kind === 'album' && result.songs_without_playable_take.length > 0) {
 			missingTakeSongs = result.songs_without_playable_take;
+			// Close the menu so its own focus-trapped dialog doesn't stack with
+			// ShareDialog's -- two independent window keydown handlers would
+			// otherwise both react to a single Escape press.
+			closeMenu(false);
 		}
 		return result;
 	}
