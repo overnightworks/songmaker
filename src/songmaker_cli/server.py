@@ -147,8 +147,8 @@ def create_app(
     app.state.session_cache = SessionCache(ctx.redis)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   1. SelectiveGZipMiddleware    -- compress the finished response body
-    #   2. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
+    #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
+    #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
     #   4. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   5. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
@@ -157,14 +157,24 @@ def create_app(
     #   8. AccessLogMiddleware        -- log all requests (after security checks)
     #   9. SecurityHeadersMiddleware  -- add security headers to responses
     # WARNING: reordering these lines changes security behavior.
-    # SelectiveGZipMiddleware is outermost on purpose: it only inspects the
-    # outgoing Accept-Encoding/Content-Type pair and never reads or rejects
-    # the request, so its placement cannot affect the auth/CSRF/rate-limit
-    # checks below -- those already ran and could already reject the request
-    # before this middleware's compression step ever executes. Being
-    # outermost also means it compresses the fully-assembled response
-    # (headers included) exactly once, at the boundary to the client,
-    # instead of an intermediate state some inner middleware still touches.
+    # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
+    # (the true outermost layer) and outside everything else, on purpose:
+    #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
+    #     pair and never reads or rejects the request, so its placement
+    #     cannot affect the auth/CSRF/rate-limit checks below -- those
+    #     already ran and could already reject the request before this
+    #     middleware's compression step ever executes.
+    #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
+    #     means it compresses the fully-assembled response (every other
+    #     middleware's headers already set) exactly once, not an
+    #     intermediate state some inner middleware still touches.
+    #   - It stays inside ResourceStreamDeadlineMiddleware because that one
+    #     needs to observe/bound the complete raw ASGI exchange for the one
+    #     SSE path it governs. That observation is unaffected by GZip's
+    #     presence: `text/event-stream` is never on the compression
+    #     allowlist, so GZip forwards those messages one-for-one with no
+    #     buffering, exactly as if it were absent (see `middleware/gzip.py`
+    #     and `test_server_middleware.py`'s SSE test).
     script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     app.add_middleware(SecurityHeadersMiddleware, script_hashes=script_hashes)
     app.add_middleware(AccessLogMiddleware)
@@ -195,8 +205,8 @@ def create_app(
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
-    app.add_middleware(ResourceStreamDeadlineMiddleware)
     app.add_middleware(SelectiveGZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE_BYTES)
+    app.add_middleware(ResourceStreamDeadlineMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
