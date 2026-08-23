@@ -5,7 +5,8 @@
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 		NOW_PLAYING_LYRICS_ROW_LABEL
 	} from '$lib/constants/now-playing';
-	import { activeLyricLineIndices, alignLyricsToCues } from '$lib/utils/lyrics-align';
+	import { alignInWorker } from '$lib/services/lyricsAlignment.svelte';
+	import { activeLyricLineIndices, type AlignedLyricLine } from '$lib/utils/lyrics-align';
 
 	let {
 		lyrics,
@@ -27,10 +28,26 @@
 
 	const hasLyrics = $derived(lyrics != null && lyrics.length > 0);
 	const hasCues = $derived(cues != null && cues.length > 0);
-	const alignedLines = $derived.by(() => {
-		if (lyrics == null || lyrics.length === 0) return null;
-		if (cues == null || cues.length === 0) return null;
-		return alignLyricsToCues(lyrics, cues);
+	// Aligning a take is too slow for the main thread (#158), so the lines
+	// arrive from a worker and the take is read as plain text until they do.
+	// The request is keyed on the take: its lyrics and the identity of its cue
+	// list, never on a playback tick.
+	let alignedLines = $state<AlignedLyricLine[] | null>(null);
+
+	$effect(() => {
+		const takeLyrics = lyrics;
+		const takeCues = cues;
+		alignedLines = null;
+		if (takeLyrics == null || takeLyrics.length === 0) return;
+		if (takeCues == null || takeCues.length === 0) return;
+
+		let superseded = false;
+		alignInWorker(takeLyrics, takeCues).then((lines) => {
+			if (!superseded && lines) alignedLines = lines;
+		});
+		return () => {
+			superseded = true;
+		};
 	});
 	// A cue window puts one span on several lines, so more than one line can be
 	// active at a time. The scroll target is derived as a plain index so the

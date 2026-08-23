@@ -24,6 +24,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "media-src 'self' blob:; "
             "font-src 'self' https://fonts.gstatic.com; "
             "manifest-src 'self'; "
+            "worker-src 'self'; "
             "frame-ancestors 'none'"
         )
 

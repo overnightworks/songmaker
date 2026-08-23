@@ -1657,3 +1657,9 @@ def test_pwa_route_honest_404_when_file_missing(tmp_path: Path, path: str) -> No
 def test_csp_includes_manifest_src_self(server_app: TestClient) -> None:
     resp = server_app.get("/")
     assert "manifest-src 'self'" in resp.headers["Content-Security-Policy"]
+
+
+def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
+    """The lyrics alignment worker is same-origin; default-src 'none' would block it."""
+    resp = server_app.get("/")
+    assert "worker-src 'self'" in resp.headers["Content-Security-Policy"]
