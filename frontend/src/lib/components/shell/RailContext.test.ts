@@ -13,6 +13,9 @@ import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import {
 	albumList,
+	closeNowPlaying,
+	nowPlayingOpen,
+	nowPlayingPanel,
 	queueContext,
 	selectedSongId,
 	setShuffle,
@@ -172,6 +175,7 @@ beforeEach(() => {
 	selectedSongId.set(null);
 	setShuffle(false);
 	queueContext.set({ type: 'library' });
+	closeNowPlaying();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
 	});
@@ -181,6 +185,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	queueContext.set({ type: 'library' });
 	setShuffle(false);
+	closeNowPlaying();
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -242,7 +247,7 @@ describe('RailContext', () => {
 		expect(target.querySelector('.context-add')).toBeNull();
 	});
 
-	it('plays a clicked entry as part of the playlist it belongs to, in playlist order', async () => {
+	it('plays a clicked entry in playlist order and shows the take in Now Playing', async () => {
 		setShuffle(true);
 		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set(
@@ -263,6 +268,8 @@ describe('RailContext', () => {
 		expect(ctx.entries.map((queued) => queued.id)).toEqual(['e1', 'e2']);
 		expect(ctx.index).toBe(1);
 		expect(get(shuffleEnabled)).toBe(false);
+		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingPanel)).toBe('take');
 	});
 
 	it('opens the album interior from the header, replacing history, while a song inside it is open', async () => {

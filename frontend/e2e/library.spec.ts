@@ -39,7 +39,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
-	playableRows,
+	playlistEntryRows,
 	shellOf,
 	workspace,
 	type Shell
@@ -117,6 +117,40 @@ function judgingSheet(page: Page): Locator {
 	return page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
 }
 
+/**
+ * The click rule (#140): a take row plays the take and shows it in Now Playing
+ * on This take. The desktop shell docks the panel — a complementary landmark
+ * named after the playing song, with the surface underneath it left in place —
+ * while the compact shell has no room to dock and stacks into the judging
+ * sheet.
+ */
+async function expectTakeShownInNowPlaying(
+	page: Page,
+	shell: Shell,
+	playingSongTitle: string
+): Promise<void> {
+	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	if (shell === 'desktop') {
+		await expect(page.getByRole('complementary', { name: playingSongTitle })).toBeVisible();
+		return;
+	}
+	await expect(judgingSheet(page)).toBeVisible();
+}
+
+/**
+ * The one transport that is showing: beside the docked panel it stays in the
+ * bar, while the full surface hides the bar and carries the transport itself
+ * ("one player, never two").
+ */
+function shellTransport(page: Page, shell: Shell, playingSongTitle: string): Locator {
+	return shell === 'desktop'
+		? page.getByRole('contentinfo')
+		: page.getByRole('dialog', { name: playingSongTitle });
+}
+
 /** Leaves Now Playing. On mobile its sheet takes the first Escape, the overlay the second. */
 async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'desktop') {
@@ -187,11 +221,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	const takeRow = surface.getByRole('button', { name: library.takeLabel });
 	await takeRow.click();
-	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveAttribute(
-		'aria-selected',
-		'true'
-	);
-	if (shell === 'mobile') await expect(judgingSheet(page)).toBeVisible();
+	await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
 	await closeNowPlaying(page, shell);
 
 	await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
@@ -202,7 +232,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await surface.getByRole('radio', { name: LIBRARY_FILTER_LABELS.playlists }).click();
 	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
-	const entryRows = playableRows(page);
+	const entryRows = playlistEntryRows(page);
 	await expect(entryRows).toHaveText([
 		containing(firstPlaylistSong),
 		containing(secondPlaylistSong),
@@ -223,6 +253,30 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		.getByRole('button', { name: playlistEntryOverflowLabel(library.pickedSongTitle) })
 		.click();
 	await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_REMOVE_LABEL }).click();
+	await expect(entryRows).toHaveText([
+		containing(secondPlaylistSong),
+		containing(firstPlaylistSong)
+	]);
+
+	// A playlist row is a take row: it plays and judges, the same click as in
+	// the editor's takes list, and the playlist stays where it is.
+	await entryRows
+		.first()
+		.getByRole('button', { name: nameStartingWith(secondPlaylistSong) })
+		.click();
+	await expectTakeShownInNowPlaying(page, shell, secondPlaylistSong);
+	// The row played, it did not merely open: the transport that is showing
+	// offers to pause the take the row stands for.
+	await expect(
+		shellTransport(page, shell, secondPlaylistSong).getByRole('button', {
+			name: TRANSPORT_PAUSE_LABEL,
+			exact: true
+		})
+	).toBeVisible();
+	if (shell === 'desktop') {
+		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+	}
+	await closeNowPlaying(page, shell);
 	await expect(entryRows).toHaveText([
 		containing(secondPlaylistSong),
 		containing(firstPlaylistSong)

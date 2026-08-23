@@ -129,8 +129,10 @@ check that the album header still reads as a title over its breadcrumb.
 
 What a flow proves that a unit test cannot: the album pick really plays (the
 transport offers Pause, not Retry), Now Playing opens on the judged take, a
-take reaches a playlist and can be reordered and pruned there, shuffle toggles,
-and a share link serves the album to a logged-out visitor. Any 429 or 5xx
+take reaches a playlist and can be reordered and pruned there, a playlist row
+plays and judges its take the same way an editor take row does — docked beside
+the playlist on desktop, as a sheet on mobile — shuffle toggles, and a share
+link serves the album to a logged-out visitor. Any 429 or 5xx
 response, failed request, browser console error or uncaught page exception
 fails the flow, and each flow holds a named `/api` request budget per shell.
 

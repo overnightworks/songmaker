@@ -10,7 +10,14 @@ import {
 	playlistEntryOverflowLabel
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
-import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import {
+	closeNowPlaying,
+	nowPlayingOpen,
+	nowPlayingPanel,
+	queueContext,
+	setShuffle,
+	shuffleEnabled
+} from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {
 	loadPlaylistDetail,
@@ -116,6 +123,7 @@ beforeEach(() => {
 	vi.mocked(selectSong).mockReset();
 	setShuffle(false);
 	queueContext.set({ type: 'library' });
+	closeNowPlaying();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
 	});
@@ -128,6 +136,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	queueContext.set({ type: 'library' });
 	setShuffle(false);
+	closeNowPlaying();
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -254,32 +263,69 @@ describe('PlaylistDetailView row overflow menu', () => {
 	});
 });
 
+async function renderTwoEntryPlaylist(): Promise<HTMLElement> {
+	openPlaylistDetail(
+		detail({
+			entry_count: 2,
+			entries: [
+				entry({ id: 'pe1', position: 0, song_title: 'Tide' }),
+				entry({ id: 'pe2', position: 1, generation_id: 'g2', song_title: 'Ebb' })
+			]
+		})
+	);
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted.push(mount(PlaylistDetailView, { target }));
+	await tick();
+	return target;
+}
+
+function expectQueueStartsAtSecondEntry(): void {
+	const ctx = get(queueContext);
+	if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+	expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
+	expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe1', 'pe2']);
+	expect(ctx.index).toBe(1);
+	expect(get(shuffleEnabled)).toBe(false);
+}
+
 describe('PlaylistDetailView row actions', () => {
-	it('plays a clicked row as part of this playlist, in playlist order', async () => {
+	it('plays a clicked row as part of this playlist and shows the take in Now Playing', async () => {
 		setShuffle(true);
-		openPlaylistDetail(
-			detail({
-				entry_count: 2,
-				entries: [
-					entry({ id: 'pe1', position: 0, song_title: 'Tide' }),
-					entry({ id: 'pe2', position: 1, generation_id: 'g2', song_title: 'Ebb' })
-				]
-			})
-		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
+		const target = await renderTwoEntryPlaylist();
+
+		target.querySelectorAll<HTMLElement>('.entry-row .entry-info')[1].click();
 		await tick();
 
-		target.querySelectorAll<HTMLElement>('.entry-row')[1].click();
+		expectQueueStartsAtSecondEntry();
+		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingPanel)).toBe('take');
+	});
+
+	it('plays and nothing more from the row play button', async () => {
+		setShuffle(true);
+		const target = await renderTwoEntryPlaylist();
+
+		target.querySelectorAll<HTMLElement>('.entry-row .entry-play')[1].click();
 		await tick();
 
-		const ctx = get(queueContext);
-		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
-		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
-		expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe1', 'pe2']);
-		expect(ctx.index).toBe(1);
-		expect(get(shuffleEnabled)).toBe(false);
+		expectQueueStartsAtSecondEntry();
+		expect(get(nowPlayingOpen)).toBe(false);
+	});
+
+	it('pauses the playing entry from its play button instead of restarting it', async () => {
+		const target = await renderTwoEntryPlaylist();
+		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
+
+		const play = target.querySelectorAll<HTMLElement>('.entry-row .entry-play')[1];
+		play.click();
+		await tick();
+		vi.mocked(audioPlayer.load).mockClear();
+		play.click();
+		await tick();
+
+		expect(toggle).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
 	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
@@ -309,7 +355,7 @@ describe('PlaylistDetailView row actions', () => {
 		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
 	});
 
-	it('names the row and its … menu after the song they act on', async () => {
+	it('names the row play button and its … menu after the song they act on', async () => {
 		openPlaylistDetail(detail({ entries: [entry({ id: 'pe1', song_title: 'Tide' })] }));
 		const target = document.createElement('div');
 		document.body.append(target);
@@ -317,7 +363,10 @@ describe('PlaylistDetailView row actions', () => {
 		await tick();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
-		expect(row.getAttribute('aria-label')).toBe(collectionRowPlayLabel('Tide'));
+		expect(requireElement(row, '.entry-play').getAttribute('aria-label')).toBe(
+			collectionRowPlayLabel('Tide')
+		);
+		expect(requireElement(row, '.entry-info').textContent).toContain('Tide');
 		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
 			playlistEntryOverflowLabel('Tide')
 		);

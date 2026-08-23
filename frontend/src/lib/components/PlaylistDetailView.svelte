@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
-	import { playPlaylistFrom } from '$lib/stores/player';
+	import {
+		isPlaylistEntryCurrent,
+		playPlaylistEntry,
+		playPlaylistEntryAndShowNowPlaying
+	} from '$lib/stores/player';
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,
@@ -40,6 +44,7 @@
 	} from '$lib/constants';
 	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import { formatTime, titleInitials } from '$lib/utils/format';
+	import type { PlaylistEntryItem } from '$lib/api/types';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -181,37 +186,25 @@
 
 	function playEntry(index: number): void {
 		if (!playlistDetail) return;
-		const entry = playlistDetail.entries[index];
-		if (entry && isEntryCurrent(entry)) {
-			audioPlayer.toggle();
-			return;
-		}
-		playPlaylistFrom(playlistDetail, index);
+		playPlaylistEntry(playlistDetail, index);
 	}
 
-	function isEntryCurrent(entry: { generation_id: string; mp3_path: string }): boolean {
+	// The row itself is a take row, so a click on it plays the take and shows
+	// it in Now Playing; the ▶ beside it plays and nothing more.
+	function openEntry(index: number): void {
+		if (!playlistDetail) return;
+		void playPlaylistEntryAndShowNowPlaying(playlistDetail, index);
+	}
+
+	function isEntryPlaying(entry: PlaylistEntryItem): boolean {
+		return isPlaylistEntryCurrent(entry) && audioPlayer.status === 'playing';
+	}
+
+	function isEntryLoading(entry: PlaylistEntryItem): boolean {
 		return (
-			audioPlayer.current?.generation.id === entry.generation_id &&
-			audioPlayer.current?.generation.mp3_path === entry.mp3_path
-		);
-	}
-
-	function isEntryPlaying(entry: { generation_id: string; mp3_path: string }): boolean {
-		return isEntryCurrent(entry) && audioPlayer.status === 'playing';
-	}
-
-	function isEntryLoading(entry: { generation_id: string; mp3_path: string }): boolean {
-		return (
-			isEntryCurrent(entry) &&
+			isPlaylistEntryCurrent(entry) &&
 			(audioPlayer.status === 'loading' || audioPlayer.status === 'buffering')
 		);
-	}
-
-	function onEntryKeydown(e: KeyboardEvent, index: number): void {
-		if (e.target !== e.currentTarget) return;
-		if (e.key !== 'Enter' && e.key !== ' ') return;
-		e.preventDefault();
-		playEntry(index);
 	}
 
 	// ── Offline / Save for offline ──────────────────────────────────────────
@@ -326,123 +319,122 @@
 
 		<div class="entry-list">
 			{#if playlistDetail}
-				{#each playlistDetail.entries as entry, i (entry.id)}
-					<div
-						class="entry-row"
-						class:playing={isEntryCurrent(entry)}
-						onclick={() => playEntry(i)}
-						onkeydown={(e) => onEntryKeydown(e, i)}
-						role="button"
-						tabindex="0"
-						aria-label={isEntryPlaying(entry)
-							? collectionRowPauseLabel(entry.song_title)
-							: collectionRowPlayLabel(entry.song_title)}
-					>
-						<span
-							class="entry-play"
-							class:playing={isEntryPlaying(entry)}
-							class:loading={isEntryLoading(entry)}
-							aria-hidden="true"
-						>
-							{#if isEntryLoading(entry)}
-								<span class="spinner"></span>
-							{:else}
-								<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
-							{/if}
-						</span>
-						<div class="entry-info">
-							<span class="entry-title">
-								{#if entry.is_picked}<span class="picked-star">★</span>{/if}
-								{entry.song_title}
-							</span>
-							<span class="entry-meta">
-								{entry.artist} · {nowPlayingTakeLabel(
-									entry.version_number,
-									entry.generation_number
-								)}{#if entry.audio_duration !== null && entry.audio_duration > 0}
-									· {formatTime(entry.audio_duration)}{/if}
-							</span>
-						</div>
-						<div class="entry-actions">
-							<div class="entry-overflow-anchor">
-								<button
-									type="button"
-									class="overflow-btn"
-									data-hitbox="frequent"
-									data-hitbox-face
-									aria-haspopup="menu"
-									aria-expanded={overflowId === entry.id}
-									aria-label={playlistEntryOverflowLabel(entry.song_title)}
-									onclick={(e) => toggleOverflow(entry.id, e)}
-								>
-									<Icon name="more-horizontal" size={16} />
-								</button>
-								{#if overflowId === entry.id}
-									<div
-										class="entry-overflow-menu"
-										role="menu"
-										data-escape-overlay="true"
-										tabindex="-1"
-										onclick={(e) => e.stopPropagation()}
-										onkeydown={(e) => e.stopPropagation()}
-									>
-										<button
-											type="button"
-											role="menuitem"
-											class="entry-overflow-item"
-											data-hitbox="frequent"
-											onclick={() => openSongInEditor(entry.song_id)}
-										>
-											{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
-										</button>
-										{#if i > 0}
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												disabled={reorderBusy}
-												onclick={() => {
-													overflowId = null;
-													void onMoveEntry(entry.id, i - 1);
-												}}
-											>
-												{PLAYLIST_ENTRY_MOVE_UP_LABEL}
-											</button>
-										{/if}
-										{#if i < playlistDetail.entries.length - 1}
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												disabled={reorderBusy}
-												onclick={() => {
-													overflowId = null;
-													void onMoveEntry(entry.id, i + 1);
-												}}
-											>
-												{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
-											</button>
-										{/if}
-										<button
-											type="button"
-											role="menuitem"
-											class="entry-overflow-item"
-											data-hitbox="frequent"
-											onclick={() => {
-												overflowId = null;
-												void onRemoveEntry(entry.id);
-											}}
-										>
-											{PLAYLIST_ENTRY_REMOVE_LABEL}
-										</button>
-									</div>
+				<!-- The explicit role keeps the list semantics that `list-style: none`
+				     strips in Safari/VoiceOver. -->
+				<ul class="entry-rows" role="list">
+					{#each playlistDetail.entries as entry, i (entry.id)}
+						<li class="entry-row" class:playing={isPlaylistEntryCurrent(entry)}>
+							<button
+								type="button"
+								class="entry-play"
+								class:playing={isEntryPlaying(entry)}
+								class:loading={isEntryLoading(entry)}
+								data-hitbox="frequent"
+								onclick={() => playEntry(i)}
+								aria-label={isEntryPlaying(entry)
+									? collectionRowPauseLabel(entry.song_title)
+									: collectionRowPlayLabel(entry.song_title)}
+							>
+								{#if isEntryLoading(entry)}
+									<span class="spinner"></span>
+								{:else}
+									<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
 								{/if}
+							</button>
+							<button type="button" class="entry-info" onclick={() => openEntry(i)}>
+								<span class="entry-title">
+									{#if entry.is_picked}<span class="picked-star">★</span>{/if}
+									{entry.song_title}
+								</span>
+								<span class="entry-meta">
+									{entry.artist} · {nowPlayingTakeLabel(
+										entry.version_number,
+										entry.generation_number
+									)}{#if entry.audio_duration !== null && entry.audio_duration > 0}
+										· {formatTime(entry.audio_duration)}{/if}
+								</span>
+							</button>
+							<div class="entry-actions">
+								<div class="entry-overflow-anchor">
+									<button
+										type="button"
+										class="overflow-btn"
+										data-hitbox="frequent"
+										data-hitbox-face
+										aria-haspopup="menu"
+										aria-expanded={overflowId === entry.id}
+										aria-label={playlistEntryOverflowLabel(entry.song_title)}
+										onclick={(e) => toggleOverflow(entry.id, e)}
+									>
+										<Icon name="more-horizontal" size={16} />
+									</button>
+									{#if overflowId === entry.id}
+										<div
+											class="entry-overflow-menu"
+											role="menu"
+											data-escape-overlay="true"
+											tabindex="-1"
+											onclick={(e) => e.stopPropagation()}
+											onkeydown={(e) => e.stopPropagation()}
+										>
+											<button
+												type="button"
+												role="menuitem"
+												class="entry-overflow-item"
+												data-hitbox="frequent"
+												onclick={() => openSongInEditor(entry.song_id)}
+											>
+												{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
+											</button>
+											{#if i > 0}
+												<button
+													type="button"
+													role="menuitem"
+													class="entry-overflow-item"
+													data-hitbox="frequent"
+													disabled={reorderBusy}
+													onclick={() => {
+														overflowId = null;
+														void onMoveEntry(entry.id, i - 1);
+													}}
+												>
+													{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+												</button>
+											{/if}
+											{#if i < playlistDetail.entries.length - 1}
+												<button
+													type="button"
+													role="menuitem"
+													class="entry-overflow-item"
+													data-hitbox="frequent"
+													disabled={reorderBusy}
+													onclick={() => {
+														overflowId = null;
+														void onMoveEntry(entry.id, i + 1);
+													}}
+												>
+													{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+												</button>
+											{/if}
+											<button
+												type="button"
+												role="menuitem"
+												class="entry-overflow-item"
+												data-hitbox="frequent"
+												onclick={() => {
+													overflowId = null;
+													void onRemoveEntry(entry.id);
+												}}
+											>
+												{PLAYLIST_ENTRY_REMOVE_LABEL}
+											</button>
+										</div>
+									{/if}
+								</div>
 							</div>
-						</div>
-					</div>
-				{/each}
+						</li>
+					{/each}
+				</ul>
 				{#if playlistDetail.entries.length === 0}
 					<p class="empty-tab">No tracks in this playlist yet.</p>
 				{/if}
@@ -493,6 +485,15 @@
 		padding: 0 1.5rem;
 	}
 
+	.entry-rows {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
 	.entry-row {
 		display: flex;
 		align-items: center;
@@ -503,8 +504,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
 		color: var(--text);
-		cursor: pointer;
-		text-align: left;
 		transition:
 			background 0.15s,
 			border-color 0.15s,
@@ -533,6 +532,7 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
+		cursor: pointer;
 		transition:
 			border-color 0.15s,
 			color 0.15s,
@@ -571,7 +571,15 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		align-items: flex-start;
 		gap: 2px;
+		background: none;
+		border: none;
+		padding: 0;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
 	}
 
 	.entry-title {

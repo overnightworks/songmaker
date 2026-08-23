@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { openCollection } from '$lib/stores/collection';
-	import { albumList, playPlaylistFrom, selectedSongId, songList } from '$lib/stores/player';
+	import {
+		albumList,
+		isPlaylistEntryCurrent,
+		playPlaylistEntryAndShowNowPlaying,
+		selectedSongId,
+		songList
+	} from '$lib/stores/player';
 	import { compareAlbumTracks, openCollectionEntry, selectSong } from '$lib/stores/navigation';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -50,29 +56,19 @@
 		return hasPick ? `${takes} · pick` : takes;
 	}
 
-	function isEntryCurrent(entry: PlaylistEntryItem): boolean {
-		return (
-			current?.generation.id === entry.generation_id &&
-			current?.generation.mp3_path === entry.mp3_path
-		);
-	}
-
 	function isEntryPlaying(entry: PlaylistEntryItem): boolean {
-		return isEntryCurrent(entry) && playing;
+		return isPlaylistEntryCurrent(entry) && playing;
 	}
 
 	function onAlbumTrackClick(song: SongItem): void {
 		selectSong(song.id, song);
 	}
 
+	// A rail playlist row is a take row like any other: it plays the take and
+	// shows it in Now Playing, without leaving the surface the listener is on.
 	function onPlaylistEntryClick(index: number): void {
 		if (!playlistDetail) return;
-		const entry = playlistDetail.entries[index];
-		if (entry && isEntryCurrent(entry)) {
-			audioPlayer.toggle();
-			return;
-		}
-		playPlaylistFrom(playlistDetail, index);
+		void playPlaylistEntryAndShowNowPlaying(playlistDetail, index);
 	}
 
 	// A song (or take) open inside the collection covers the interior even
@@ -141,7 +137,7 @@
 				<button
 					type="button"
 					class="context-row"
-					class:selected={isEntryCurrent(entry)}
+					class:selected={isPlaylistEntryCurrent(entry)}
 					onclick={() => onPlaylistEntryClick(index)}
 				>
 					{#if isEntryPlaying(entry)}

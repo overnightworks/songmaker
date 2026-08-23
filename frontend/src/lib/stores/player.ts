@@ -962,15 +962,29 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	}
 }
 
-// TakesList's row body: play the take and surface Now Playing straight on
-// its judging panel. Distinct from playTake (used by TakeStrip's dedicated
-// play chip), which never opens Now Playing.
+// What a click on a take row means, wherever that row lives (the click rule
+// of issue #140): play the take and surface Now Playing straight on its
+// judging panel. The editor's takes list and a playlist's rows differ only in
+// how playback starts, so both hand that start to this one action. A row's
+// dedicated ▶ calls the play action underneath instead, because it promises
+// playback and nothing else.
+async function playTakeRow(startPlayback: () => void | Promise<void>): Promise<void> {
+	await startPlayback();
+	openNowPlaying('take');
+}
+
 export async function playTakeAndShowNowPlaying(
 	gen: GenerationItem,
 	song: SongItem
 ): Promise<void> {
-	await playTake(gen, song);
-	openNowPlaying('take');
+	await playTakeRow(() => playTake(gen, song));
+}
+
+export async function playPlaylistEntryAndShowNowPlaying(
+	playlist: PlaylistDetailItem,
+	index: number
+): Promise<void> {
+	await playTakeRow(() => playPlaylistEntry(playlist, index));
 }
 
 export async function playNextSong(): Promise<void> {
@@ -1216,6 +1230,28 @@ function playPlaylist(playlist: PlaylistDetailItem): void {
 export function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): void {
 	setShuffle(false);
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
+}
+
+// Whether an entry is the take the transport is holding right now: the same
+// generation played from the same file, since a re-import keeps the id but
+// changes the path.
+export function isPlaylistEntryCurrent(entry: PlaylistEntryItem): boolean {
+	const current = audioPlayer.current;
+	return (
+		current?.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
+	);
+}
+
+// A playlist row's ▶: pause or resume the entry that is already playing,
+// otherwise start the playlist from it. Every playlist surface — the
+// interior, the rail — shares this, so a row means the same thing in both.
+export function playPlaylistEntry(playlist: PlaylistDetailItem, index: number): void {
+	const entry = playlist.entries[index];
+	if (entry && isPlaylistEntryCurrent(entry)) {
+		audioPlayer.toggle();
+		return;
+	}
+	playPlaylistFrom(playlist, index);
 }
 
 // A playlist entry's `position` is the playlist's order of record, so a
