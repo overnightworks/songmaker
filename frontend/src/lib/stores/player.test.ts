@@ -1163,6 +1163,13 @@ describe('a playlist queue keeps its own identity', () => {
 			generation_id: 'g2',
 			song_title: 'Second',
 			mp3_path: 'b.mp3'
+		}),
+		makePlaylistEntry({
+			id: 'pe3',
+			position: 2,
+			generation_id: 'g3',
+			song_title: 'Third',
+			mp3_path: 'c.mp3'
 		})
 	];
 
@@ -1180,14 +1187,20 @@ describe('a playlist queue keeps its own identity', () => {
 		selectedPlaylistDetail.set(null);
 
 		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
-		expect(playingPlaylist().entries.map((entry) => entry.song_title)).toEqual(['First', 'Second']);
+		expect(playingPlaylist().entries.map((entry) => entry.song_title)).toEqual([
+			'First',
+			'Second',
+			'Third'
+		]);
 	});
 
 	it('still names the playlist it plays after a shuffle toggle reorders the queue', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
 		playPlaylistFrom(makePlaylist(entries()), 0);
 
 		await toggleShuffle();
 
+		expect(playingPlaylist().entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
 		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
 		expect(get(shuffleLabel)).toBe('Disable shuffle (this playlist)');
 	});
@@ -2309,6 +2322,38 @@ describe('playIdleStart', () => {
 			expect.objectContaining({ songTitle: 'Listed' }),
 			{ restart: true }
 		);
+	});
+
+	it('keeps shuffle on when Play starts the open playlist, unlike picking an entry', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		setShuffle(true);
+		openCollection.set({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set(
+			makePlaylist([
+				makePlaylistEntry({ id: 'pe1', position: 0, generation_id: 'g1', song_title: 'First' }),
+				makePlaylistEntry({
+					id: 'pe2',
+					position: 1,
+					generation_id: 'g2',
+					song_title: 'Second',
+					mp3_path: 'b.mp3'
+				}),
+				makePlaylistEntry({
+					id: 'pe3',
+					position: 2,
+					generation_id: 'g3',
+					song_title: 'Third',
+					mp3_path: 'c.mp3'
+				})
+			])
+		);
+
+		await playIdleStart();
+
+		expect(get(shuffleEnabled)).toBe(true);
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
 	});
 
 	it('falls back to the library pool when the open playlist detail failed to load', async () => {

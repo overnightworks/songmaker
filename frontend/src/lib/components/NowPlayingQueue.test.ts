@@ -39,8 +39,7 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 			queue,
 			contextLabel: null,
 			currentSongTitle: 'Tide',
-			pool: 'picks',
-			onChoosePool,
+			takePool: { selected: 'picks', onChoose: onChoosePool },
 			onJump,
 			...props
 		}
@@ -60,7 +59,7 @@ describe('NowPlayingQueue', () => {
 	});
 
 	it('names the collection in the heading and offers no pool when the queue has none', async () => {
-		await render({ contextLabel: 'Night Drive', pool: undefined, onChoosePool: undefined });
+		await render({ contextLabel: 'Night Drive', takePool: undefined });
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
 		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Night Drive');
 	});

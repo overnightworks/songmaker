@@ -64,8 +64,12 @@
 	const ctx = $derived($queueContext);
 	const songs = $derived($songList);
 	const shuffle = $derived($shuffleEnabled);
-	const pool = $derived($libraryTakePool);
 	const isLibraryQueue = $derived(ctx.type === 'library');
+	// Only the library queue is built from a take pool, so only it hands the
+	// panel a picker.
+	const takePool = $derived(
+		isLibraryQueue ? { selected: $libraryTakePool, onChoose: onChoosePool } : undefined
+	);
 	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
 	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
@@ -168,8 +172,7 @@
 				queue={queueVm}
 				{contextLabel}
 				currentSongTitle={info.songTitle}
-				pool={isLibraryQueue ? pool : undefined}
-				onChoosePool={isLibraryQueue ? onChoosePool : undefined}
+				{takePool}
 				onJump={jumpToQueueIndex}
 				{skipped}
 				{skippedComplete}
