@@ -214,6 +214,8 @@
 	rightPanelLabel={mobileTriggerLabel}
 	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}
 	rightPanelOpenOnMount={rightPanelTab === 'take'}
+	lyricsCues={playingGeneration?.whisper_cues ?? null}
+	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}
 />
 

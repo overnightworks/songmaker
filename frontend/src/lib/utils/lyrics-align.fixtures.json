@@ -1,0 +1,70 @@
+{
+	"fixtures": [
+		{
+			"cue": "hello there my friend",
+			"line": "hello there my friend",
+			"name": "identical short strings",
+			"ratio": 1.0
+		},
+		{
+			"cue": "hello there my friend",
+			"line": "the quick brown fox jumps",
+			"name": "completely different strings",
+			"ratio": 0.2608695652173913
+		},
+		{
+			"cue": "",
+			"line": "hello there",
+			"name": "empty cue",
+			"ratio": 0.0
+		},
+		{
+			"cue": "hello there",
+			"line": "",
+			"name": "empty line",
+			"ratio": 0.0
+		},
+		{
+			"cue": "",
+			"line": "",
+			"name": "both empty",
+			"ratio": 1.0
+		},
+		{
+			"cue": "walking down the road today",
+			"line": "walking down the road tomorrow",
+			"name": "single word difference",
+			"ratio": 0.8421052631578947
+		},
+		{
+			"cue": "sun and moon and stars above",
+			"line": "stars above and moon and sun",
+			"name": "word order swapped",
+			"ratio": 0.5714285714285714
+		},
+		{
+			"cue": "i will remember this forever",
+			"line": "i will rember this forever",
+			"name": "near duplicate with a dropped letter",
+			"ratio": 0.9629629629629629
+		},
+		{
+			"cue": "hi",
+			"line": "oh hi there my friend",
+			"name": "short substring match",
+			"ratio": 0.17391304347826086
+		},
+		{
+			"cue": "distinctive closing phrase right here",
+			"line": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz distinctive closing phrase right here",
+			"name": "one long common run plus a distinct tail",
+			"ratio": 0.2642857142857143
+		},
+		{
+			"cue": "totally unrelated short line",
+			"line": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq something else entirely different",
+			"name": "one long common run with no shared tail",
+			"ratio": 0.04964539007092199
+		}
+	]
+}

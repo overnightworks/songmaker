@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick, type Snippet } from 'svelte';
+	import type { WhisperCue } from '$lib/api/types';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
@@ -13,7 +14,6 @@
 		SONG_PREVIOUS_LABEL
 	} from '$lib/constants';
 	import {
-		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX
@@ -22,6 +22,7 @@
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
+	import NowPlayingLyrics from './NowPlayingLyrics.svelte';
 
 	let {
 		info,
@@ -41,6 +42,11 @@
 		rightPanelOpenOnMount = false,
 		showTakeLabel = true,
 		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
+		// #45: the fully-resolved take's cues/transcript, distinct from `info`
+		// (whose `generation` can still be a thin library-pool stub with no
+		// whisper data). Absent/null means "no cues yet" — static lyrics.
+		lyricsCues = null,
+		whisperText = null,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
@@ -67,6 +73,8 @@
 		// anyway; see trackPlaybackInfo()).
 		showTakeLabel?: boolean;
 		lyricsEmptyLabel?: string;
+		lyricsCues?: WhisperCue[] | null;
+		whisperText?: string | null;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -76,8 +84,6 @@
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 
-	const lyrics = $derived(info.lyrics);
-	const hasLyrics = $derived(lyrics != null && lyrics.length > 0);
 	const albumLine = $derived(
 		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
@@ -247,12 +253,12 @@
 			</section>
 
 			<section class="np-lyrics-col">
-				<p class="lyrics-heading">{NOW_PLAYING_LYRICS_ROW_LABEL}</p>
-				{#if hasLyrics}
-					<div class="lyrics">{lyrics}</div>
-				{:else}
-					<p class="lyrics-empty">{lyricsEmptyLabel}</p>
-				{/if}
+				<NowPlayingLyrics
+					lyrics={info.lyrics}
+					cues={lyricsCues}
+					{whisperText}
+					emptyLabel={lyricsEmptyLabel}
+				/>
 				{#if onGoToSong}
 					<button
 						type="button"
@@ -501,33 +507,6 @@
 		min-width: 0;
 		min-height: 0;
 		justify-content: center;
-	}
-	.lyrics-heading {
-		margin: 0;
-		font-family: var(--font-display);
-		font-size: 0.68rem;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-subtle);
-	}
-	.lyrics,
-	.lyrics-empty {
-		margin: 0;
-		min-height: 4.5rem;
-		max-height: 60vh;
-		overflow: auto;
-		overflow-wrap: anywhere;
-	}
-	.lyrics {
-		white-space: pre-wrap;
-		font-family: var(--font-body);
-		font-size: 1rem;
-		line-height: 1.6;
-		color: var(--text);
-	}
-	.lyrics-empty {
-		color: var(--text-muted);
-		font-size: 0.85rem;
 	}
 	.go-song {
 		align-self: flex-start;
