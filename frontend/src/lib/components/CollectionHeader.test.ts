@@ -16,6 +16,26 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	return element;
 }
 
+function accessibleName(element: Element): string {
+	return element.getAttribute('aria-label')?.trim() ?? element.textContent?.trim() ?? '';
+}
+
+function getByRoleHeading(root: ParentNode, name: string): HTMLHeadingElement {
+	const heading = Array.from(
+		root.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4, h5, h6')
+	).find((el) => accessibleName(el) === name);
+	if (!heading) throw new Error(`Expected a heading named "${name}"`);
+	return heading;
+}
+
+function getByRoleButton(root: ParentNode, name: string): HTMLButtonElement {
+	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+		(el) => accessibleName(el) === name
+	);
+	if (!button) throw new Error(`Expected a button named "${name}"`);
+	return button;
+}
+
 type CollectionHeaderProps = ComponentProps<typeof CollectionHeader>;
 
 function baseProps(): CollectionHeaderProps {
@@ -167,6 +187,26 @@ describe('CollectionHeader', () => {
 
 		addSong.click();
 		expect(onaddsong).toHaveBeenCalledTimes(1);
+	});
+
+	it('announces the album title as the heading name, with a separately named edit button', async () => {
+		const target = await render(baseProps());
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit album title');
+		expect(editButton.textContent?.trim()).toBe('Night Drive');
+	});
+
+	it('announces the playlist title as the heading name, with a separately named edit button', async () => {
+		const target = await render({
+			...baseProps(),
+			kind: 'playlist' as const,
+			title: 'Late Night Mix'
+		});
+		const heading = getByRoleHeading(target, 'Late Night Mix');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit playlist title');
+		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {

@@ -75,7 +75,7 @@
 </script>
 
 {#snippet titleArea()}
-	<h2 class="header-title">
+	<h2 class="header-title" aria-label={title}>
 		<EditableTitle
 			bind:this={editableTitle}
 			value={title}
