@@ -24,7 +24,6 @@
 		windowEnded
 	} from '$lib/stores/player';
 	import { libraryTakePool, type LibraryTakePool } from '$lib/stores/playbackSettings';
-	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
@@ -66,12 +65,15 @@
 	const songs = $derived($songList);
 	const shuffle = $derived($shuffleEnabled);
 	const pool = $derived($libraryTakePool);
-	const skipped = $derived(ctx.type === 'library' ? $libraryQueueSkipped : []);
-	const skippedComplete = $derived(ctx.type === 'library' ? $libraryQueueSkippedComplete : true);
+	const isLibraryQueue = $derived(ctx.type === 'library');
+	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
+	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
 	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
+	// What is playing, named by the queue itself — never by the collection the
+	// listener happens to have open, which they are free to leave mid-track.
 	const contextLabel = $derived.by(() => {
 		if (ctx.type === 'album') return $albumList.find((a) => a.id === ctx.albumId)?.title ?? null;
-		if (ctx.type === 'playlist') return $selectedPlaylistDetail?.title ?? null;
+		if (ctx.type === 'playlist') return ctx.playlist.title;
 		return null;
 	});
 
@@ -163,12 +165,11 @@
 	>
 		{#if rightPanelTab === 'queue'}
 			<NowPlayingQueue
-				{ctx}
 				queue={queueVm}
 				{contextLabel}
 				currentSongTitle={info.songTitle}
-				{pool}
-				{onChoosePool}
+				pool={isLibraryQueue ? pool : undefined}
+				onChoosePool={isLibraryQueue ? onChoosePool : undefined}
 				onJump={jumpToQueueIndex}
 				{skipped}
 				{skippedComplete}

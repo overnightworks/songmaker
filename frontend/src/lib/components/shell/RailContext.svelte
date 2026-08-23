@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { openCollection } from '$lib/stores/collection';
-	import {
-		albumList,
-		playPlaylistEntries,
-		selectedSongId,
-		setShuffle,
-		songList
-	} from '$lib/stores/player';
+	import { albumList, playPlaylistFrom, selectedSongId, songList } from '$lib/stores/player';
 	import { compareAlbumTracks, openCollectionEntry, selectSong } from '$lib/stores/navigation';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -78,8 +72,7 @@
 			audioPlayer.toggle();
 			return;
 		}
-		setShuffle(false);
-		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
+		playPlaylistFrom(playlistDetail, index);
 	}
 
 	// A song (or take) open inside the collection covers the interior even

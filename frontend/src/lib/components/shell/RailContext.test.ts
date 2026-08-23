@@ -2,11 +2,24 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
+import type {
+	GenerationItem,
+	PlaylistDetailItem,
+	PlaylistEntryItem,
+	SongItem
+} from '$lib/api/types';
 import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { albumList, selectedSongId, songList } from '$lib/stores/player';
+import {
+	albumList,
+	queueContext,
+	selectedSongId,
+	setShuffle,
+	shuffleEnabled,
+	songList
+} from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
@@ -105,6 +118,27 @@ function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDe
 	};
 }
 
+function entry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
+	return {
+		id: 'e1',
+		position: 0,
+		generation_id: 'g1',
+		song_id: 's1',
+		song_title: 'First Track',
+		album_title: 'Nachtstrom',
+		artist: 'Artist',
+		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
+		mp3_path: 'g1.mp3',
+		seed: 7,
+		model_mode: 'turbo',
+		lyrics: null,
+		...overrides
+	};
+}
+
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -136,9 +170,17 @@ beforeEach(() => {
 		song({ id: 's2', title: 'Ebb', track_number: 2 })
 	]);
 	selectedSongId.set(null);
+	setShuffle(false);
+	queueContext.set({ type: 'library' });
+	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
+		audioPlayer.current = playback;
+	});
 });
 
 afterEach(async () => {
+	audioPlayer.current = null;
+	queueContext.set({ type: 'library' });
+	setShuffle(false);
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -193,33 +235,34 @@ describe('RailContext', () => {
 
 	it('shows the open playlist title and its entries', async () => {
 		openCollection.set({ kind: 'playlist', id: 'p1' });
-		selectedPlaylistDetail.set(
-			playlistDetail({
-				entries: [
-					{
-						id: 'e1',
-						position: 0,
-						generation_id: 'g1',
-						song_id: 's1',
-						song_title: 'First Track',
-						album_title: 'Nachtstrom',
-						artist: 'Artist',
-						generation_number: 1,
-						version_number: 1,
-						is_picked: false,
-						audio_duration: 180,
-						mp3_path: 'g1.mp3',
-						seed: 7,
-						model_mode: 'turbo',
-						lyrics: null
-					}
-				]
-			})
-		);
+		selectedPlaylistDetail.set(playlistDetail({ entries: [entry()] }));
 		const target = await render();
 		expect(target.textContent).toContain('Night Drive');
 		expect(target.textContent).toContain('First Track');
 		expect(target.querySelector('.context-add')).toBeNull();
+	});
+
+	it('plays a clicked entry as part of the playlist it belongs to, in playlist order', async () => {
+		setShuffle(true);
+		openCollection.set({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set(
+			playlistDetail({
+				entry_count: 2,
+				entries: [entry({ id: 'e1', position: 0 }), entry({ id: 'e2', position: 1 })]
+			})
+		);
+		const target = await render();
+
+		const rows = target.querySelectorAll<HTMLButtonElement>('.context-row');
+		rows[1]?.click();
+		await tick();
+
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
+		expect(ctx.entries.map((queued) => queued.id)).toEqual(['e1', 'e2']);
+		expect(ctx.index).toBe(1);
+		expect(get(shuffleEnabled)).toBe(false);
 	});
 
 	it('opens the album interior from the header, replacing history, while a song inside it is open', async () => {

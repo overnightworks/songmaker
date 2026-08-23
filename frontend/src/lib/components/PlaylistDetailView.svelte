@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
-	import { playPlaylistEntries, setShuffle } from '$lib/stores/player';
+	import { playPlaylistFrom } from '$lib/stores/player';
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,
@@ -186,8 +186,7 @@
 			audioPlayer.toggle();
 			return;
 		}
-		setShuffle(false);
-		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
+		playPlaylistFrom(playlistDetail, index);
 	}
 
 	function isEntryCurrent(entry: { generation_id: string; mp3_path: string }): boolean {

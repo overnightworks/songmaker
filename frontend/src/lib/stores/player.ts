@@ -119,10 +119,25 @@ export function clearGenerationSelection(): void {
 }
 
 // --- Playback queue context ---
+
+// A playlist queue names the playlist it was built from. The queue is the
+// only owner of that name: navigation may open, close, or replace the
+// playlist detail while the queue keeps playing, so nothing downstream may
+// read the open collection to label what is playing.
+export interface PlaylistQueueSource {
+	id: string;
+	title: string;
+}
+
 export type QueueContext =
 	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
-	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
+	| {
+			type: 'playlist';
+			playlist: PlaylistQueueSource;
+			entries: PlaylistEntryItem[];
+			index: number;
+	  };
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
@@ -546,7 +561,7 @@ export async function playIdleStart(): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		await playPlaylist(playlist);
+		playPlaylist(playlist);
 		return;
 	}
 	if (target.type === 'album') {
@@ -581,7 +596,7 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		});
 		return;
 	}
-	await playPlaylistEntries(ctx.entries, currentPlaylistIndex(ctx, current), {
+	startPlaylistQueue(ctx.playlist, ctx.entries, currentPlaylistIndex(ctx, current), {
 		restart: true,
 		resumeAtTrackTime: trackTime
 	});
@@ -1145,13 +1160,18 @@ export async function playAlbumFromGeneration(
 }
 
 function playPlaylistIndex(
-	ctx: { entries: PlaylistEntryItem[]; index: number },
+	ctx: { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] },
 	newIndex: number,
 	opts: { restart?: boolean; startAt?: number } = {}
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
-	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
+	queueContext.set({
+		type: 'playlist',
+		playlist: ctx.playlist,
+		entries: ctx.entries,
+		index: newIndex
+	});
 	const info = playlistEntryToPlaybackInfo(entry);
 	if (opts.startAt !== undefined) {
 		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
@@ -1164,13 +1184,29 @@ function playPlaylistIndex(
 	audioPlayer.load(info);
 }
 
-async function playPlaylist(playlist: PlaylistDetailItem): Promise<void> {
+function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
+	return { id: playlist.id, title: playlist.title };
+}
+
+// The idle transport Play on an open playlist. It keeps the listener's
+// shuffle setting, unlike playPlaylistFrom, where picking a specific entry
+// is itself the statement that the queue should start in playlist order.
+function playPlaylist(playlist: PlaylistDetailItem): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, () => playPlaylist(playlist));
+		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
 		return;
 	}
 	playStartNotice.set('idle');
-	await playPlaylistEntries(playlist.entries, 0, { restart: true });
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, 0, { restart: true });
+}
+
+// The one way a surface starts a playlist: name the playlist and the entry
+// the listener picked. Owning the shuffle reset here is what keeps every
+// entry click honest — a row means "play from here", which no leftover
+// shuffle from a previous queue may reorder.
+export function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): void {
+	setShuffle(false);
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
 
 // A playlist entry's `position` is the playlist's order of record, so a
@@ -1181,11 +1217,12 @@ function inPlaylistOrder(entries: PlaylistEntryItem[]): PlaylistEntryItem[] {
 	return [...entries].sort((a, b) => a.position - b.position);
 }
 
-export async function playPlaylistEntries(
+function startPlaylistQueue(
+	playlist: PlaylistQueueSource,
 	entries: PlaylistEntryItem[],
-	startIndex = 0,
+	startIndex: number,
 	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
-): Promise<void> {
+): void {
 	beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
@@ -1197,11 +1234,7 @@ export async function playPlaylistEntries(
 	);
 	const loadOpts: { restart?: boolean; startAt?: number } = { restart: opts.restart };
 	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
-	playPlaylistIndex(
-		{ entries: ordered.items, index: ordered.startIndex },
-		ordered.startIndex,
-		loadOpts
-	);
+	playPlaylistIndex({ playlist, entries: ordered.items }, ordered.startIndex, loadOpts);
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {

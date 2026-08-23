@@ -1,6 +1,6 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { QueueContext, QueueRowItem, QueueViewModel } from '$lib/stores/player';
+import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
 import NowPlayingQueue from './NowPlayingQueue.svelte';
 
 type NowPlayingQueueProps = ComponentProps<typeof NowPlayingQueue>;
@@ -30,14 +30,12 @@ afterEach(async () => {
 async function render(props: Partial<NowPlayingQueueProps> = {}) {
 	target = document.createElement('div');
 	document.body.append(target);
-	const ctx: QueueContext = props.ctx ?? { type: 'library' };
 	const queue: QueueViewModel = props.queue ?? { items: [item()], currentIndex: 0, upNext: null };
 	const onChoosePool = vi.fn();
 	const onJump = vi.fn();
 	mounted = mount(NowPlayingQueue, {
 		target,
 		props: {
-			ctx,
 			queue,
 			contextLabel: null,
 			currentSongTitle: 'Tide',
@@ -52,31 +50,23 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 }
 
 describe('NowPlayingQueue', () => {
-	it('shows the pool trio only for the library context', async () => {
-		await render({ ctx: { type: 'library' } });
+	it('offers the take pool trio when the queue is built from a pool', async () => {
+		await render();
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(3);
 		expect(target.textContent).toContain('Picks');
 		expect(target.textContent).toContain('+ Keeps');
 		expect(target.textContent).toContain('All takes');
+		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue');
 	});
 
-	it('hides the pool trio for an album context and shows the album name instead', async () => {
-		await render({ ctx: { type: 'album', albumId: 'a1' }, contextLabel: 'Nachtstrom' });
-		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
-		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Nachtstrom');
-	});
-
-	it('hides the pool trio for a playlist context and shows the playlist name instead', async () => {
-		await render({
-			ctx: { type: 'playlist', entries: [], index: 0 },
-			contextLabel: 'Night Drive'
-		});
+	it('names the collection in the heading and offers no pool when the queue has none', async () => {
+		await render({ contextLabel: 'Night Drive', pool: undefined, onChoosePool: undefined });
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
 		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Night Drive');
 	});
 
 	it('calls onChoosePool when a pool pill is clicked', async () => {
-		const { onChoosePool } = await render({ ctx: { type: 'library' } });
+		const { onChoosePool } = await render();
 		const allPill = Array.from(target.querySelectorAll<HTMLButtonElement>('.pool-pill')).find(
 			(btn) => btn.textContent === 'All takes'
 		);
