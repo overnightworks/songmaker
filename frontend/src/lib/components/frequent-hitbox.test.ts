@@ -30,6 +30,11 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
+import {
+	clearComponentStyles,
+	elementScopeClass,
+	injectComponentStyles
+} from '$lib/test-utils/component-styles';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -120,37 +125,145 @@ import LibraryWall from './LibraryWall.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 import Layout from '../../routes/+layout.svelte';
+import themeToggleSource from './ThemeToggle.svelte?raw';
+import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
+import albumDetailViewSource from './AlbumDetailView.svelte?raw';
+import libraryWallSource from './LibraryWall.svelte?raw';
+import playlistPickerSource from './PlaylistPicker.svelte?raw';
+import collectionMenuSource from './CollectionMenu.svelte?raw';
+import breadcrumbSource from './Breadcrumb.svelte?raw';
+import transportBarFrameSource from './TransportBarFrame.svelte?raw';
+import layoutSource from '../../routes/+layout.svelte?raw';
+
+// Every target below is styled by exactly one of these components — never a
+// generic wrapper — so injecting that component's own compiled stylesheet
+// puts the assertion back in the cascade the app actually ships, scoped
+// rules included. Vitest never extracts a mounted component's <style> into
+// the document on its own; see test-utils/component-styles.ts.
+const COMPONENT_STYLE_SOURCES = {
+	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
+	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
+	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
+	LibraryWall: { source: libraryWallSource, filename: 'LibraryWall.svelte' },
+	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
+	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
+	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
+	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
+	Layout: { source: layoutSource, filename: '+layout.svelte' }
+} as const satisfies Record<string, { source: string; filename: string }>;
+
+type ComponentId = keyof typeof COMPONENT_STYLE_SOURCES;
 
 const INVENTORY = [
-	{ name: 'theme-toggle', selector: '[data-hitbox="frequent"][aria-label="Toggle theme"]' },
+	{
+		name: 'theme-toggle',
+		selector: '[data-hitbox="frequent"][aria-label="Toggle theme"]',
+		component: 'ThemeToggle'
+	},
 	{
 		name: 'playlist-move-up',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_MOVE_UP_LABEL
+		text: PLAYLIST_ENTRY_MOVE_UP_LABEL,
+		component: 'PlaylistDetailView'
 	},
 	{
 		name: 'playlist-move-down',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_MOVE_DOWN_LABEL
+		text: PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+		component: 'PlaylistDetailView'
 	},
 	{
 		name: 'playlist-remove',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_REMOVE_LABEL
+		text: PLAYLIST_ENTRY_REMOVE_LABEL,
+		component: 'PlaylistDetailView'
 	},
-	{ name: 'playlist-row-play', selector: '.entry-play[data-hitbox="frequent"]' },
-	{ name: 'album-row-play', selector: '.item-play[data-hitbox="frequent"]' },
-	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
-	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
-	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
-	{ name: 'drawer-trigger', selector: '.drawer-trigger[data-hitbox="frequent"]' },
-	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' },
-	{ name: 'library-filter-chip', selector: '.filter-chip[data-hitbox="frequent"]' },
-	{ name: 'library-sort-select', selector: '.sort-select[data-hitbox="frequent"]' },
-	{ name: 'library-search', selector: '.search[data-hitbox="text"]', shape: 'text' },
-	{ name: 'breadcrumb-link', selector: '.crumb-link[data-hitbox="frequent"]' },
-	{ name: 'now-playing-trigger', selector: '.now-playing-btn[data-hitbox="frequent"]' }
-] as const;
+	{
+		name: 'playlist-row-play',
+		selector: '.entry-play[data-hitbox="frequent"]',
+		component: 'PlaylistDetailView'
+	},
+	{
+		name: 'album-row-play',
+		selector: '.item-play[data-hitbox="frequent"]',
+		component: 'AlbumDetailView'
+	},
+	{
+		name: 'new-album',
+		selector: '[data-hitbox="frequent"][aria-label="New album"]',
+		component: 'LibraryWall'
+	},
+	{
+		name: 'wall-tile-play',
+		selector: '.wall-tile-play[data-hitbox="frequent"]',
+		component: 'LibraryWall'
+	},
+	{
+		name: 'playlist-picker-add',
+		selector: '.picker-add[data-hitbox="frequent"]',
+		component: 'PlaylistPicker'
+	},
+	{
+		name: 'drawer-trigger',
+		selector: '.drawer-trigger[data-hitbox="frequent"]',
+		component: 'Layout'
+	},
+	{
+		name: 'collection-menu',
+		selector: '.menu-trigger[data-hitbox="frequent"]',
+		component: 'CollectionMenu'
+	},
+	{
+		name: 'library-filter-chip',
+		selector: '.filter-chip[data-hitbox="frequent"]',
+		component: 'LibraryWall'
+	},
+	{
+		name: 'library-sort-select',
+		selector: '.sort-select[data-hitbox="frequent"]',
+		component: 'LibraryWall'
+	},
+	{
+		name: 'library-search',
+		selector: '.search[data-hitbox="text"]',
+		shape: 'text',
+		component: 'LibraryWall'
+	},
+	{
+		name: 'breadcrumb-link',
+		selector: '.crumb-link[data-hitbox="frequent"]',
+		component: 'Breadcrumb'
+	},
+	{
+		name: 'now-playing-trigger',
+		selector: '.now-playing-btn[data-hitbox="frequent"]',
+		component: 'TransportBarFrame'
+	}
+] as const satisfies ReadonlyArray<{
+	name: string;
+	selector: string;
+	text?: string;
+	shape?: string;
+	component: ComponentId;
+}>;
+
+// Each inventory target's own component owns the scope class the DOM already
+// carries, so its stylesheet only needs compiling and injecting once per
+// component even though several targets can share one file (e.g. the three
+// LibraryWall targets). A target with no scope class at all (drawer-trigger:
+// nothing in +layout.svelte's <style> matches it) has no scoped rule reaching
+// it either, so it is skipped rather than treated as a missing measurement.
+function injectInventoryComponentStyles(
+	found: ReadonlyArray<{ el: HTMLElement; component: ComponentId }>
+): void {
+	const injected = new Set<ComponentId>();
+	for (const { el, component } of found) {
+		if (injected.has(component) || !elementScopeClass(el)) continue;
+		const { source, filename } = COMPONENT_STYLE_SOURCES[component];
+		injectComponentStyles(source, filename, el);
+		injected.add(component);
+	}
+}
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -355,6 +468,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	clearHitboxStyles();
+	clearComponentStyles();
 	clearPointer();
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
@@ -437,7 +551,12 @@ describe('frequent action hitboxes', () => {
 		}
 		openEntryOverflowMenu(middleRow);
 		await tick();
-		const found: Array<{ name: string; el: HTMLElement; shape?: string }> = [];
+		const found: Array<{
+			name: string;
+			el: HTMLElement;
+			shape?: string;
+			component: ComponentId;
+		}> = [];
 
 		for (const target of INVENTORY) {
 			const el = requireButton(
@@ -446,7 +565,37 @@ describe('frequent action hitboxes', () => {
 				target.selector,
 				'text' in target ? target.text : undefined
 			);
-			found.push({ name: target.name, el, shape: 'shape' in target ? target.shape : undefined });
+			found.push({
+				name: target.name,
+				el,
+				shape: 'shape' in target ? target.shape : undefined,
+				component: target.component
+			});
+		}
+
+		// Each target's own component stylesheet joins the cascade here, so a
+		// scoped rule that would beat the hitbox floor (the Breadcrumb link's
+		// `min-width`/`flex-shrink`, #185) shows up against the real cascade
+		// rather than against the hitbox sheet alone.
+		injectInventoryComponentStyles(found);
+
+		// The pointer-simulated checks below rely on an `html[data-pointer]`
+		// override that jsdom needs because it never matches `any-pointer`
+		// media itself — but that override outranks a two-class scoped
+		// selector, which the plain `[data-hitbox='frequent']` rule shipped in
+		// production does not. That plain rule is what a fine pointer gets by
+		// default, and it is exactly as specific as the coarse media query's
+		// rule, so surviving it here catches a scoped override strong enough
+		// to beat either shipped rule (the Breadcrumb `.crumb { min-width: 0 }`
+		// regression, #185, undetectable once pointer is simulated).
+		for (const { name, el, shape } of found) {
+			expect(minHeightPx(el, name), `${name} unsimulated height`).toBeGreaterThanOrEqual(
+				HITBOX_COMPACT_PX
+			);
+			if (shape === 'text') continue;
+			expect(minSquarePx(el, name).width, `${name} unsimulated width`).toBeGreaterThanOrEqual(
+				HITBOX_COMPACT_PX
+			);
 		}
 
 		// A labelled control's width is its label's, so only its height is a

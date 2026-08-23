@@ -255,6 +255,18 @@ frontend/e2e/
   `pnpm build` runs `scripts/inject-worker-precache.mjs` to rewrite the hashed chunk paths into the
   built file. Unit tests cover the injection; the artifact itself is proven by `pnpm build` and
   `grep workers/ frontend/build/service-worker.js`
+- **Hitbox floor tests measure the real cascade, not the hitbox sheet alone.** Vitest never extracts
+  a mounted component's scoped `<style>` into the document, so a test that only injects the global
+  hitbox sheet (`test-utils/hitbox.ts`) cannot see a component's own rule outrank it — that is exactly
+  how the Breadcrumb link shrank to 0px and stayed unclickable (#185) while its hitbox test stayed
+  green. `test-utils/component-styles.ts` recompiles a component's own source and injects its `<style>`
+  pinned to the scope class already on the mounted DOM, so `frequent-hitbox.test.ts`'s inventory
+  measures every target against hitbox sheet + component sheet together. It asserts the floor twice:
+  once with `setPointer()` unset, at the exact specificity `[data-hitbox='frequent']` and its
+  `@media (any-pointer: coarse)` variant ship at in production (jsdom cannot match `any-pointer`
+  itself, hence `setPointer()`'s `html[data-pointer]` selectors exist at all — but that override is
+  more specific than a two-class scoped selector, so it would mask the exact regression this exists
+  to catch), and again through `setPointer('fine'|'coarse')` for the pixel values themselves.
 
 ## Adding Tests for New Features
 
