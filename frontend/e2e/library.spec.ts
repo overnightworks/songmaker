@@ -71,7 +71,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await page.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
 
 	await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
-	await surface.getByRole('menuitem', { name: 'Add to a playlist' }).click();
+	await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
 	await surface.getByRole('button', { name: nameStartingWith(library.playlistTitle) }).click();
 
 	await surface.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true }).click();
