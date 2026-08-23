@@ -47,6 +47,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetPlaylistsForTests();
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe('loadPlaylistDetail', () => {
@@ -68,6 +69,47 @@ describe('loadPlaylistDetail', () => {
 
 		expect(get(selectedPlaylistId)).toBe('b');
 		expect(get(selectedPlaylistDetail)?.id).toBe('b');
+	});
+
+	it('dedupes concurrent opens of the same playlist into a single fetch', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+
+		await Promise.all([loadPlaylistDetail('a'), loadPlaylistDetail('a')]);
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(1);
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+	});
+
+	it('reuses a still-fresh detail instead of refetching on reopen', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		vi.advanceTimersByTime(1_000);
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(1);
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+	});
+
+	it('refetches once the cached detail goes stale', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		vi.advanceTimersByTime(16_000);
+		await loadPlaylistDetail('a');
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+	});
+
+	it('forceRefresh bypasses a still-fresh cached detail', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+
+		await loadPlaylistDetail('a');
+		await loadPlaylistDetail('a', { forceRefresh: true });
+
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
 	});
 });
 

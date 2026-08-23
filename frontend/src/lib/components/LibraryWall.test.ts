@@ -619,3 +619,17 @@ describe('LibraryWall search', () => {
 		expect((history.state as { searchLoadedCount: number }).searchLoadedCount).toBe(2);
 	});
 });
+
+describe('LibraryWall share count request storm (#139)', () => {
+	it('does not refetch the share count on a fast remount', async () => {
+		await render();
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+
+		const first = mounted.pop();
+		if (first) await unmount(first);
+
+		await render();
+
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+	});
+});

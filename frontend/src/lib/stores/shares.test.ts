@@ -111,8 +111,50 @@ describe('share count', () => {
 		fetchShares.mockResolvedValueOnce(page({ total: 3 }));
 		await refreshShareCount();
 		fetchShares.mockRejectedValueOnce(new Error('offline'));
-		expect(await refreshShareCount()).toBe(false);
+		expect(await refreshShareCount({ force: true })).toBe(false);
 		expect(get(shareCount)).toMatchObject({ status: 'error', total: 3, error: 'offline' });
+	});
+
+	it('dedupes concurrent refreshes into a single request', async () => {
+		fetchShares.mockResolvedValueOnce(page({ total: 5 }));
+
+		await Promise.all([refreshShareCount(), refreshShareCount()]);
+
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+		expect(get(shareCount)).toMatchObject({ status: 'ready', total: 5 });
+	});
+
+	it('reuses a still-fresh count instead of refetching on remount', async () => {
+		vi.useFakeTimers();
+		fetchShares.mockResolvedValueOnce(page({ total: 2 }));
+
+		await refreshShareCount();
+		vi.advanceTimersByTime(1_000);
+		await refreshShareCount();
+
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+		vi.useRealTimers();
+	});
+
+	it('refetches once the cached count goes stale', async () => {
+		vi.useFakeTimers();
+		fetchShares.mockResolvedValue(page({ total: 2 }));
+
+		await refreshShareCount();
+		vi.advanceTimersByTime(16_000);
+		await refreshShareCount();
+
+		expect(fetchShares).toHaveBeenCalledTimes(2);
+		vi.useRealTimers();
+	});
+
+	it('force bypasses a still-fresh cached count', async () => {
+		fetchShares.mockResolvedValue(page({ total: 2 }));
+
+		await refreshShareCount();
+		await refreshShareCount({ force: true });
+
+		expect(fetchShares).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -155,6 +197,15 @@ describe('share inventory', () => {
 			items: [],
 			error: LIBRARY_SHARES_ERROR
 		});
+	});
+
+	it('dedupes concurrent loads of the same page into a single request', async () => {
+		fetchShares.mockResolvedValueOnce(page({ items: [item()], total: 1 }));
+
+		await Promise.all([loadShareInventory({ reset: true }), loadShareInventory({ reset: true })]);
+
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+		expect(get(shareInventory).items).toHaveLength(1);
 	});
 
 	it('keeps N from the server when a type filter is applied', async () => {
