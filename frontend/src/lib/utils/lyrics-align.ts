@@ -247,50 +247,74 @@ function collectWithGrowingWindow(
 	return candidates;
 }
 
-// Neighbouring lines are resolved as a pair whenever they claim the same
-// words — a line that is the opening of the next one otherwise takes that
-// opening for itself and leaves the line actually sung dark. The claim goes
-// to whichever of the two wins by AMBIGUITY_MARGIN; if neither does, the take
-// cannot say which line was sung there and both stay dark.
+// #52's rival definition covers lines, not only candidates: a run belongs to
+// this line only while no other line still waiting for one reads it just as
+// well. A line carrying the same text is never a rival — the take simply
+// sings those words more than once, and the renditions are handed out in
+// order.
+function anotherLineReadsRunAsWell(
+	lineTexts: string[],
+	linePosition: number,
+	run: Candidate
+): boolean {
+	for (let other = linePosition + 1; other < lineTexts.length; other++) {
+		if (lineTexts[other] === lineTexts[linePosition]) continue;
+		if (run.score - scoreAgainstLyrics(run.text, lineTexts[other]) < AMBIGUITY_MARGIN) return true;
+	}
+	return false;
+}
+
+// Lines take their runs in playback order, and a run is only handed over when
+// nothing else explains it: no other waiting line reads it as well, and the
+// next line is not left without a rendition by it. That last test is what
+// stops a line from swallowing the opening of its successor — but only when
+// the successor really has nowhere else to go. Two lines that cannot both be
+// satisfied and are too close to call leave both dark; a successor that wins
+// by AMBIGUITY_MARGIN takes the words instead.
 function alignAgainstWords(
 	words: PreparedWord[],
 	lineTexts: string[],
 	assign: (linePosition: number, interval: LyricLineInterval) => void
 ): void {
 	const wordTexts = words.map((word) => word.normalizedText);
+	const claims = new Map<string, Candidate | null>();
+
+	const claimOf = (linePosition: number, from: number): Candidate | null => {
+		if (linePosition >= lineTexts.length) return null;
+		const key = `${linePosition}:${from}`;
+		const known = claims.get(key);
+		if (known !== undefined) return known;
+		const claim = chooseCandidate(
+			collectWithGrowingWindow(wordTexts, from, lineTexts[linePosition])
+		);
+		claims.set(key, claim);
+		return claim;
+	};
 
 	let cursor = 0;
 	let lostToPredecessor = -1;
-	let remembered: { linePosition: number; cursor: number; candidate: Candidate | null } | null =
-		null;
-
-	const claimOf = (linePosition: number): Candidate | null => {
-		if (linePosition >= lineTexts.length) return null;
-		if (remembered?.linePosition === linePosition && remembered.cursor === cursor) {
-			return remembered.candidate;
-		}
-		const candidate = chooseCandidate(
-			collectWithGrowingWindow(wordTexts, cursor, lineTexts[linePosition])
-		);
-		remembered = { linePosition, cursor, candidate };
-		return candidate;
-	};
 
 	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
 		if (linePosition === lostToPredecessor) continue;
-		const claim = claimOf(linePosition);
+		const claim = claimOf(linePosition, cursor);
 		if (claim === null) continue;
+		if (anotherLineReadsRunAsWell(lineTexts, linePosition, claim)) continue;
 
-		const nextClaim = claimOf(linePosition + 1);
-		if (nextClaim !== null && overlaps(nextClaim, claim)) {
-			if (nextClaim.score - claim.score >= AMBIGUITY_MARGIN) continue;
-			if (claim.score - nextClaim.score < AMBIGUITY_MARGIN) {
-				lostToPredecessor = linePosition + 1;
-				continue;
+		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
+		const successor = linePosition + 1;
+		const successorIsStranded =
+			successor < lineTexts.length && claimOf(successor, sung.to + 1) === null;
+		if (successorIsStranded) {
+			const contested = claimOf(successor, cursor);
+			if (contested !== null && overlaps(contested, claim)) {
+				if (contested.score - claim.score >= AMBIGUITY_MARGIN) continue;
+				if (claim.score - contested.score < AMBIGUITY_MARGIN) {
+					lostToPredecessor = successor;
+					continue;
+				}
 			}
 		}
 
-		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
 		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });
 		cursor = sung.to + 1;
 	}

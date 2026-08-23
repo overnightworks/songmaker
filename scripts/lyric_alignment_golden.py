@@ -276,44 +276,59 @@ def collect_with_growing_window(
     return candidates
 
 
+def another_line_reads_run_as_well(
+    line_texts: list[str], line_position: int, run: Candidate,
+) -> bool:
+    return any(
+        line_texts[other] != line_texts[line_position]
+        and run.score - score_against_lyrics(run.text, line_texts[other]) < AMBIGUITY_MARGIN
+        for other in range(line_position + 1, len(line_texts))
+    )
+
+
 def align_against_words(
     words: list[WordCue], line_texts: list[str],
 ) -> dict[int, Interval]:
     word_texts = [normalize_lyrics_token(word.text) for word in words]
     intervals: dict[int, Interval] = {}
+    claims: dict[tuple[int, int], Candidate | None] = {}
+
+    def claim_of(line_position: int, start: int) -> Candidate | None:
+        if line_position >= len(line_texts):
+            return None
+        key = (line_position, start)
+        if key not in claims:
+            claims[key] = choose_candidate(
+                collect_with_growing_window(word_texts, start, line_texts[line_position]),
+            )
+        return claims[key]
 
     cursor = 0
     lost_to_predecessor = -1
-    remembered: tuple[int, int, Candidate | None] | None = None
-
-    def claim_of(line_position: int) -> Candidate | None:
-        nonlocal remembered
-        if line_position >= len(line_texts):
-            return None
-        if remembered is not None and remembered[:2] == (line_position, cursor):
-            return remembered[2]
-        candidate = choose_candidate(
-            collect_with_growing_window(word_texts, cursor, line_texts[line_position]),
-        )
-        remembered = (line_position, cursor, candidate)
-        return candidate
 
     for line_position, line_text in enumerate(line_texts):
         if line_position == lost_to_predecessor:
             continue
-        claim = claim_of(line_position)
+        claim = claim_of(line_position, cursor)
         if claim is None:
             continue
-
-        next_claim = claim_of(line_position + 1)
-        if next_claim is not None and _overlaps(next_claim, claim):
-            if next_claim.score - claim.score >= AMBIGUITY_MARGIN:
-                continue
-            if claim.score - next_claim.score < AMBIGUITY_MARGIN:
-                lost_to_predecessor = line_position + 1
-                continue
+        if another_line_reads_run_as_well(line_texts, line_position, claim):
+            continue
 
         first, last = matched_word_range(word_texts, claim, line_text)
+        successor = line_position + 1
+        successor_is_stranded = (
+            successor < len(line_texts) and claim_of(successor, last + 1) is None
+        )
+        if successor_is_stranded:
+            contested = claim_of(successor, cursor)
+            if contested is not None and _overlaps(contested, claim):
+                if contested.score - claim.score >= AMBIGUITY_MARGIN:
+                    continue
+                if claim.score - contested.score < AMBIGUITY_MARGIN:
+                    lost_to_predecessor = successor
+                    continue
+
         intervals[line_position] = Interval(words[first].start, words[last].end)
         cursor = last + 1
     return intervals
@@ -383,6 +398,10 @@ LINE_1: Final = "the lantern hums quietly tonight"
 LINE_2: Final = "we count the fading city lights"
 LINE_3: Final = "another mile of rusted signs"
 CHORUS: Final = "hold the line until the morning"
+NESTED_LONG: Final = "i wanted you to stay tonight"
+NESTED_SHORT: Final = "i wanted you to stay"
+RAIN_FALLS: Final = "silver rain falls on the roof"
+RAIN_CALLS: Final = "silver rain calls on the roof"
 
 
 def _words(start: float, per_word: float, text: str) -> tuple[WordCue, ...]:
@@ -462,6 +481,21 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: a line that opens the next one leaves both dark when only one was sung",
         "\n".join(["hold the line", CHORUS]),
         (_sung_cue(0.0, 0.4, CHORUS),),
+    ),
+    AlignmentFixture(
+        "word path: two identical lines in a row take successive renditions",
+        "\n".join([CHORUS, CHORUS]),
+        (_sung_cue(0.0, 0.4, f"{CHORUS} {CHORUS}"),),
+    ),
+    AlignmentFixture(
+        "word path: a line nested in its neighbour takes its own rendition",
+        "\n".join([NESTED_LONG, NESTED_SHORT]),
+        (_sung_cue(0.0, 0.4, f"{NESTED_LONG} {NESTED_SHORT}"),),
+    ),
+    AlignmentFixture(
+        "word path: a near-duplicate line elsewhere never takes another line's rendition",
+        "\n".join([RAIN_FALLS, LINE_3, RAIN_CALLS]),
+        (_sung_cue(0.0, 0.4, f"{LINE_3} {RAIN_CALLS}"),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

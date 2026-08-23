@@ -12,6 +12,10 @@ const LINE_2 = 'we count the fading city lights';
 const LINE_3 = 'another mile of rusted signs';
 
 const CHORUS = 'hold the line until the morning';
+const NESTED_LONG = 'i wanted you to stay tonight';
+const NESTED_SHORT = 'i wanted you to stay';
+const RAIN_FALLS = 'silver rain falls on the roof';
+const RAIN_CALLS = 'silver rain calls on the roof';
 
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
@@ -298,6 +302,40 @@ describe('alignLyricsToCues with word timestamps', () => {
 		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, CHORUS)]);
 
 		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+	});
+
+	it('gives two identical lines in a row their own successive renditions', () => {
+		const lyrics = [CHORUS, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${CHORUS} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 }
+		]);
+	});
+
+	it('gives a line nested in its neighbour its own rendition when both were sung', () => {
+		const lyrics = [NESTED_LONG, NESTED_SHORT].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${NESTED_LONG} ${NESTED_SHORT}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 5.5 }
+		]);
+	});
+
+	it('never lets an unsung line take the rendition of a near-duplicate further down', () => {
+		const lyrics = [RAIN_FALLS, LINE_3, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${RAIN_CALLS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
 	});
 
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {

@@ -1547,6 +1547,246 @@
 		{
 			"cues": [
 				{
+					"end": 4.8,
+					"start": 0.0,
+					"text": "hold the line until the morning hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "hold"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "the"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "line"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "until"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "the"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				}
+			],
+			"lyrics": "hold the line until the morning\nhold the line until the morning",
+			"name": "word path: two identical lines in a row take successive renditions"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "i wanted you to stay tonight i wanted you to stay",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "i"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "wanted"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "you"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "to"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "stay"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonight"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "i"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "wanted"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "you"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "to"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "stay"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.4
+				}
+			],
+			"lyrics": "i wanted you to stay tonight\ni wanted you to stay",
+			"name": "word path: a line nested in its neighbour takes its own rendition"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs silver rain calls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "silver"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "rain"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "calls"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "on"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "silver rain falls on the roof\nanother mile of rusted signs\nsilver rain calls on the roof",
+			"name": "word path: a near-duplicate line elsewhere never takes another line's rendition"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",
