@@ -40,9 +40,14 @@
 	.crumb {
 		display: inline-flex;
 		align-items: center;
-		min-width: 0;
 		font-size: 0.8rem;
 		color: var(--text-muted);
+	}
+
+	/* A crumb shrinks to its ellipsis; a linked one stops at the hitbox
+	   primitive's target, which stays clickable however narrow the trail. */
+	.crumb:not(.crumb-link) {
+		min-width: 0;
 	}
 
 	/* An inline-flex box cuts its overflow but never ellipsizes it, so the
@@ -62,13 +67,14 @@
 		flex-shrink: 0;
 	}
 
-	/* A linked crumb gives room up like any other: pinned at its full width it
-	   took the whole line from the current crumb, which is the one the reader
-	   needs. The hitbox primitive pins every `frequent` target, so the trail
-	   has to say otherwise here — it keeps the 24/44px target either way, and
-	   the label ellipsizes into it (#185). */
+	/* The room a narrow trail needs comes off the path the reader has already
+	   walked, not off the current crumb, which is the one they need — so a
+	   link yields many times faster than the trail's destination. Saying it at
+	   all is what matters: the hitbox primitive pins every `frequent` target,
+	   so a link kept its full width and squeezed the current crumb out of the
+	   trail entirely (#185). */
 	.crumb-link {
-		flex-shrink: 1;
+		flex-shrink: 20;
 		background: none;
 		border: none;
 		padding: 0;

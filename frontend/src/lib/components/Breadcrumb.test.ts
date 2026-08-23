@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import Breadcrumb from './Breadcrumb.svelte';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { clearHitboxStyles, injectHitboxStyles } from '$lib/test-utils/hitbox';
+import { clearHitboxStyles, injectHitboxStyles, minSquarePx } from '$lib/test-utils/hitbox';
+import { HITBOX_COMPACT_PX } from '$lib/constants';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -69,10 +70,20 @@ describe('Breadcrumb', () => {
 		return root;
 	}
 
-	it('lets a linked crumb give up the room the current crumb needs', async () => {
+	it('yields a linked crumb faster than the current crumb the reader needs', async () => {
 		const root = await renderStyledTrail();
 		const link = root.querySelector('.crumb-link');
-		expect(link && getComputedStyle(link).flexShrink).toBe('1');
+		if (!link) throw new Error('no linked crumb rendered');
+		// Pinned at 0 by the hitbox sheet, a link took the whole trail; at the
+		// default 1 it still takes its proportional share of it.
+		expect(Number(getComputedStyle(link).flexShrink)).toBeGreaterThan(1);
+	});
+
+	it('stops a shrinking link at the touch target that keeps it clickable', async () => {
+		const root = await renderStyledTrail();
+		const link = root.querySelector('.crumb-link');
+		if (!link) throw new Error('no linked crumb rendered');
+		expect(minSquarePx(link, 'crumb link').width).toBe(HITBOX_COMPACT_PX);
 	});
 
 	it('ellipsizes every crumb label in a block of its own', async () => {
