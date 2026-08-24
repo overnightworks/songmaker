@@ -42,9 +42,11 @@ export function dismissGenerationFailure(songId: string): void {
 
 // Wipes the per-song failure causes -- called both by tests and, in
 // production, by clearAuth() on logout/401 so the next session never
-// sees another user's failure.
+// sees another user's failure. Also forgets which songs have had a live
+// resolution, so the next session's hydration fetches are unblocked too.
 export function resetGenerationFailures(): void {
 	generationFailures.set({});
+	hydrationEpoch.clear();
 }
 
 function failureMessage(job: JobStatus): string {
@@ -56,18 +58,24 @@ function failureMessage(job: JobStatus): string {
  * Recovers a song's failure banner after a reload or a later visit, when
  * the live SSE stream that would have reported it (see `streamJob` below)
  * is long gone. Queries the last failed generate job for the song; the
- * backend already suppresses it once a newer non-archived take exists.
+ * backend already suppresses it once a newer job or a newer non-archived
+ * take exists.
  *
- * Never overwrites a failure a live update already set (`songId in
- * failures` check), and discards its result entirely once the song's
- * epoch has moved on from a live resolution while the fetch was in
+ * Once a song has had any live resolution this session (a dismiss, or a
+ * fresh generate starting -- both bump its epoch), hydration for it is
+ * skipped for the rest of the session: the live path is now the source of
+ * truth and a dismiss must stick without a stale re-fetch reviving it. A
+ * reload starts a fresh session (this module's state resets), so the fetch
+ * runs again then. Never overwrites a failure a live update already set
+ * (`songId in failures` check), and discards its result entirely once the
+ * song's epoch has moved on from a live resolution while the fetch was in
  * flight.
  */
 export async function hydrateGenerationFailure(songId: string): Promise<void> {
 	if (songId in get(generationFailures)) return;
-	const epoch = hydrationEpoch.get(songId) ?? 0;
+	if ((hydrationEpoch.get(songId) ?? 0) > 0) return;
 	const result = await fetchLastFailedGeneration(songId).catch(() => null);
-	if (!result?.job || (hydrationEpoch.get(songId) ?? 0) !== epoch) return;
+	if (!result?.job || (hydrationEpoch.get(songId) ?? 0) > 0) return;
 	const message = failureMessage(result.job);
 	generationFailures.update((failures) =>
 		songId in failures ? failures : { ...failures, [songId]: message }

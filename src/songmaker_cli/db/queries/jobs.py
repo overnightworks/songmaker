@@ -9,7 +9,12 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import JOB_ACTIVE_STATUSES, JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.constants import (
+    JOB_ACTIVE_STATUSES,
+    JOB_TERMINAL_STATUSES,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.db.models import Job
 
 log = logging.getLogger(__name__)
@@ -23,8 +28,10 @@ def has_active_job_of_type(session: Session, job_type: str) -> bool:
     ) is not None
 
 
-def create_job(session: Session, job_type: str, user_id: str | None = None) -> Job:
-    job = Job(type=job_type, user_id=user_id)
+def create_job(
+    session: Session, job_type: str, user_id: str | None = None, song_id: str | None = None,
+) -> Job:
+    job = Job(type=job_type, user_id=user_id, song_id=song_id)
     session.add(job)
     session.flush()
     return job
@@ -109,22 +116,19 @@ def get_job(session: Session, job_id: str) -> Job | None:
     return session.query(Job).filter_by(id=job_id).first()
 
 
-def get_last_failed_generate_job_for_song(
-    session: Session, song_id: str, job_type: str,
-) -> Job | None:
-    """Return the song's most recently completed failed generate job, if any.
+def get_last_generate_job_for_song(session: Session, song_id: str) -> Job | None:
+    """Return the song's most recent generate/repaint/cover job, regardless
+    of outcome.
 
     Used to hydrate the failure banner when a song is opened after the
-    generating job's SSE stream is long gone (page reload, new visit).
+    generating job's SSE stream is long gone (page reload, new visit): the
+    caller checks whether this job is a FAILED one to show -- any newer job
+    (queued, running, completed) means a failure, if any, is superseded.
     """
     return (
         session.query(Job)
-        .filter(
-            Job.song_id == song_id,
-            Job.type == job_type,
-            Job.status == JobStatus.FAILED,
-        )
-        .order_by(Job.completed_at.desc())
+        .filter(Job.song_id == song_id, Job.type == JobType.GENERATE)
+        .order_by(Job.started_at.desc())
         .first()
     )
 

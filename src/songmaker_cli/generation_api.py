@@ -71,7 +71,7 @@ from songmaker_cli.db.queries import (
     disable_generation_sharing,
     enable_generation_sharing,
     get_job,
-    get_last_failed_generate_job_for_song,
+    get_last_generate_job_for_song,
     get_queue_position,
     keep_generation,
     list_active_models,
@@ -275,8 +275,7 @@ async def api_generate_song(
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
-    job.song_id = song_id
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song_id)
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
         song_id, f"count={req.count}",
@@ -315,18 +314,19 @@ def api_last_failed_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> LastFailedGenerationResponse:
-    """The song's most recent failed generate/repaint/cover job, if it is
-    still the last word on the song's takes.
+    """Whether the song's last generate/repaint/cover job is a failure that
+    is still the last word on the song's takes.
 
     A failed job leaving `activeJobs` is the only place the frontend learns
     of it live (see `jobs.ts`); this lets a page reload or a later visit
-    recover the same cause. A non-archived take created after the failure
-    (from a later, successful attempt) supersedes it — the banner would be
-    stale otherwise.
+    recover the same cause. Two things supersede it: a newer job of any
+    outcome (queued, running, or completed -- the failure is no longer the
+    last attempt) and a non-archived take created after it (from an earlier
+    successful attempt the failed job didn't replace).
     """
     song = check_song_access(session, song_id, user)
-    job = get_last_failed_generate_job_for_song(session, song_id, JobType.GENERATE)
-    if job is None or job.completed_at is None:
+    job = get_last_generate_job_for_song(session, song_id)
+    if job is None or job.status != JobStatus.FAILED or job.completed_at is None:
         return LastFailedGenerationResponse(job=None)
     newest_take = next((g for g in song.generations if not g.is_archived), None)
     if newest_take is not None and _as_utc(newest_take.created_at) >= _as_utc(job.completed_at):
@@ -368,8 +368,7 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
-    job.song_id = song.id
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song.id)
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
@@ -441,8 +440,7 @@ async def api_cover_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
-    job.song_id = song.id
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song.id)
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",

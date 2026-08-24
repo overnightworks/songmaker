@@ -143,7 +143,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.jobs import create_job as create_job
 from songmaker_cli.db.queries.jobs import get_job as get_job
 from songmaker_cli.db.queries.jobs import (
-    get_last_failed_generate_job_for_song as get_last_failed_generate_job_for_song,
+    get_last_generate_job_for_song as get_last_generate_job_for_song,
 )
 from songmaker_cli.db.queries.jobs import get_queue_position as get_queue_position
 from songmaker_cli.db.queries.jobs import has_active_job_of_type as has_active_job_of_type

@@ -22,6 +22,7 @@ import {
 	generationFailures,
 	hydrateGenerationFailure,
 	removeJob,
+	resetGenerationFailures,
 	stopTracking,
 	trackJob
 } from './jobs';
@@ -82,7 +83,7 @@ function latestSource(): MockEventSource {
 
 beforeEach(() => {
 	activeJobs.set([]);
-	generationFailures.set({});
+	resetGenerationFailures();
 	mockRequestSongRefresh.mockReset();
 	mockRequestSongRefresh.mockResolvedValue(undefined);
 	mockFetchLastFailedGeneration.mockReset();
@@ -305,6 +306,21 @@ describe('jobs store', () => {
 		it('does not throw when the hydration fetch fails', async () => {
 			mockFetchLastFailedGeneration.mockRejectedValue(new Error('network down'));
 			await expect(hydrateGenerationFailure('s1')).resolves.toBeUndefined();
+			expect(get(generationFailures).s1).toBeUndefined();
+		});
+
+		it('never re-fetches for a song dismissed earlier this session', async () => {
+			mockFetchLastFailedGeneration.mockResolvedValue({
+				job: makeJob({ status: 'failed', error: VRAM_CAUSE })
+			});
+			await hydrateGenerationFailure('s1');
+			expect(get(generationFailures).s1).toBe(VRAM_CAUSE);
+
+			dismissGenerationFailure('s1');
+			mockFetchLastFailedGeneration.mockClear();
+
+			await hydrateGenerationFailure('s1');
+			expect(mockFetchLastFailedGeneration).not.toHaveBeenCalled();
 			expect(get(generationFailures).s1).toBeUndefined();
 		});
 	});

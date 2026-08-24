@@ -1052,6 +1052,7 @@ def test_last_failed_generation_returns_latest_failed_job(client: TestClient) ->
 def test_last_failed_generation_returns_the_most_recent_of_several(
     client: TestClient,
 ) -> None:
+    """Ordered by started_at -- the actual attempt order -- not completed_at."""
     factory = client.app.state.ctx.db
     with factory() as session:
         session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
@@ -1060,11 +1061,13 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
         session.add(Job(
             id="job-older", type="generate", status="failed", song_id="s1",
             error="older failure",
+            started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
         ))
         session.add(Job(
             id="job-newer", type="generate", status="failed", song_id="s1",
             error="newer failure",
+            started_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
         ))
         session.commit()
@@ -1072,6 +1075,97 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
     resp = client.get("/api/songs/s1/last-failed-generation")
     assert resp.status_code == 200
     assert resp.json()["job"]["id"] == "job-newer"
+
+
+def test_last_failed_generation_suppressed_by_a_newer_non_terminal_job(
+    client: TestClient,
+) -> None:
+    """A failure isn't the song's last word once a newer job of any outcome
+    -- queued, running, or completed -- exists; that newer job supersedes it
+    on its own, before the take-suppression check even runs."""
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
+            {"is_archived": True}, synchronize_session=False,
+        )
+        session.add(Job(
+            id="job-failed", type="generate", status="failed", song_id="s1",
+            error="stale failure",
+            started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
+        session.add(Job(
+            id="job-queued", type="generate", status="queued", song_id="s1",
+            started_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    assert resp.json()["job"] is None
+
+
+def test_last_failed_generation_recoverable_after_repaint(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
+            {"is_archived": True}, synchronize_session=False,
+        )
+        session.commit()
+
+    with _mock_worker():
+        resp = client.post("/api/generations/g1/repaint", json={
+            "src_generation_id": "g1",
+            "repainting_start": 0.0,
+            "repainting_end": 0.5,
+            "model": "sft",
+        })
+    job_id = resp.json()["id"]
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id=job_id).one()
+        assert job.song_id == "s1"
+        job.status = "failed"
+        job.error = "repaint failed"
+        job.completed_at = datetime.now(timezone.utc)
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    body = resp.json()["job"]
+    assert body["id"] == job_id
+    assert body["error"] == "repaint failed"
+
+
+def test_last_failed_generation_recoverable_after_cover(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
+            {"is_archived": True}, synchronize_session=False,
+        )
+        session.commit()
+
+    with _mock_worker():
+        resp = client.post("/api/generations/g1/cover", json={
+            "src_generation_id": "g1",
+            "audio_cover_strength": 0.7,
+            "model": "sft",
+        })
+    job_id = resp.json()["id"]
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id=job_id).one()
+        assert job.song_id == "s1"
+        job.status = "failed"
+        job.error = "cover failed"
+        job.completed_at = datetime.now(timezone.utc)
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    body = resp.json()["job"]
+    assert body["id"] == job_id
+    assert body["error"] == "cover failed"
 
 
 def test_last_failed_generation_suppressed_by_a_newer_take(client: TestClient) -> None:

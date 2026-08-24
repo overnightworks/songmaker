@@ -241,12 +241,16 @@ export function albumTrackNeighbors(
 	};
 }
 
-// The single "a song is now current" hook: loads its takes and, alongside
+// This module's single "a song is now open" hook, used by its four entry
+// points: applySelectedSong (selectSong, selectNeighborSong,
+// revealPlayingSong), the ?song= deep link and history-restore branches of
+// initNavigation, and onPopstate. Loads the song's takes and, alongside
 // that, recovers its failure banner from the last failed generate job so a
 // reload or a later visit shows the same cause a live SSE stream would have
-// (see hydrateGenerationFailure). Every place that puts a song in front of
-// the user -- selection, deep link, history restore -- must route through
-// this instead of calling ensureGenerationsLoaded directly.
+// (see hydrateGenerationFailure). A new entry point added to this module
+// should route through this instead of calling ensureGenerationsLoaded
+// directly; it does not cover song selection elsewhere (e.g. player.ts's
+// own playback-driven selectSong).
 function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
 	return ensureGenerationsLoaded(songId);
