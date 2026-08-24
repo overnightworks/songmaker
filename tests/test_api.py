@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -1007,6 +1008,108 @@ def test_generate_song_seed_invalid(client: TestClient) -> None:
         "/api/songs/s1/generate", json={"count": 1, "seed": -2, "model": "sft"},
     )
     assert resp.status_code == 422
+
+
+# ── Last failed generation ───────────────────────────────────────────
+
+
+def test_last_failed_generation_null_when_no_failed_job(client: TestClient) -> None:
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    assert resp.json()["job"] is None
+
+
+def test_last_failed_generation_returns_latest_failed_job(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        # The existing takes are older than the failure below -- archive
+        # them so the newest-take suppression rule doesn't hide it.
+        session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
+            {"is_archived": True}, synchronize_session=False,
+        )
+        session.commit()
+
+    with _mock_worker():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
+    job_id = resp.json()["id"]
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id=job_id).one()
+        assert job.song_id == "s1"
+        job.status = "failed"
+        job.error = "Insufficient free VRAM"
+        job.completed_at = datetime.now(timezone.utc)
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    body = resp.json()["job"]
+    assert body["id"] == job_id
+    assert body["status"] == "failed"
+    assert body["error"] == "Insufficient free VRAM"
+
+
+def test_last_failed_generation_returns_the_most_recent_of_several(
+    client: TestClient,
+) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
+            {"is_archived": True}, synchronize_session=False,
+        )
+        session.add(Job(
+            id="job-older", type="generate", status="failed", song_id="s1",
+            error="older failure",
+            completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
+        session.add(Job(
+            id="job-newer", type="generate", status="failed", song_id="s1",
+            error="newer failure",
+            completed_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    assert resp.json()["job"]["id"] == "job-newer"
+
+
+def test_last_failed_generation_suppressed_by_a_newer_take(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(Job(
+            id="job-stale", type="generate", status="failed", song_id="s1",
+            error="stale failure",
+            completed_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    resp = client.get("/api/songs/s1/last-failed-generation")
+    assert resp.status_code == 200
+    assert resp.json()["job"] is None
+
+
+def test_last_failed_generation_requires_ownership(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(User(
+            id="u-other", username="other_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="other", title="Other Album", artist="Them", created_by="u-other",
+        ))
+        session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
+        session.commit()
+
+    resp = client.get("/api/songs/s-other/last-failed-generation")
+    assert resp.status_code == 404
+
+
+def test_last_failed_generation_song_not_found(client: TestClient) -> None:
+    resp = client.get("/api/songs/nonexistent/last-failed-generation")
+    assert resp.status_code == 404
 
 
 # ── Repaint ─────────────────────────────────────────────────────────

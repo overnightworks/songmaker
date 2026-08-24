@@ -109,6 +109,26 @@ def get_job(session: Session, job_id: str) -> Job | None:
     return session.query(Job).filter_by(id=job_id).first()
 
 
+def get_last_failed_generate_job_for_song(
+    session: Session, song_id: str, job_type: str,
+) -> Job | None:
+    """Return the song's most recently completed failed generate job, if any.
+
+    Used to hydrate the failure banner when a song is opened after the
+    generating job's SSE stream is long gone (page reload, new visit).
+    """
+    return (
+        session.query(Job)
+        .filter(
+            Job.song_id == song_id,
+            Job.type == job_type,
+            Job.status == JobStatus.FAILED,
+        )
+        .order_by(Job.completed_at.desc())
+        .first()
+    )
+
+
 def lock_active_job(session: Session, job_id: str) -> Job | None:
     job = (
         session.query(Job)

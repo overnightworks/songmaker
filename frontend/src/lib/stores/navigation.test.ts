@@ -9,6 +9,7 @@ import { detailTab, librarySurface, resetLibraryContextForTests } from '$lib/sto
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
 import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
+import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
@@ -16,6 +17,7 @@ const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
+const fetchLastFailedGeneration = vi.fn();
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined)
@@ -45,6 +47,7 @@ vi.mock('$lib/api/client', () => ({
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
+	fetchLastFailedGeneration: (...args: unknown[]) => fetchLastFailedGeneration(...args),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -139,6 +142,9 @@ beforeEach(() => {
 	fetchAlbum.mockReset();
 	fetchPlaylists.mockReset();
 	fetchPlaylist.mockReset();
+	fetchLastFailedGeneration.mockReset();
+	fetchLastFailedGeneration.mockResolvedValue({ job: null });
+	generationFailures.set({});
 	vi.mocked(updateSong).mockReset();
 	toasts.set([]);
 	fetchPlaylists.mockResolvedValue([]);
@@ -321,6 +327,33 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		expect(track1Index).toBe(albumIndex + 1);
 		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 		expect(history.state.index).toBe(track1Index);
+	});
+});
+
+describe('opening a song recovers its failure banner', () => {
+	it('shows the cause of the last failed generation for a song opened after reload', async () => {
+		fetchLastFailedGeneration.mockResolvedValue({
+			job: {
+				id: 'j1',
+				type: 'generate',
+				status: 'failed',
+				progress: 0,
+				error: 'boom',
+				error_type: null,
+				started_at: null,
+				completed_at: '2026-01-02T00:00:00+00:00'
+			}
+		});
+		selectSong('s1');
+		await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
+		await vi.waitFor(() => expect(get(generationFailures).s1).toBe('boom'));
+	});
+
+	it('shows nothing when the API reports no failure to hydrate (e.g. a newer take supersedes it)', async () => {
+		fetchLastFailedGeneration.mockResolvedValue({ job: null });
+		selectSong('s1');
+		await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
+		expect(get(generationFailures).s1).toBeUndefined();
 	});
 });
 
@@ -524,6 +557,29 @@ describe('initNavigation', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		cleanup();
+	});
+
+	it('recovers the failure banner on a fresh page load that lands directly on a song', async () => {
+		fetchSong.mockResolvedValue(song({ id: 's1', album_id: 'a1' }));
+		fetchLastFailedGeneration.mockResolvedValue({
+			job: {
+				id: 'j1',
+				type: 'generate',
+				status: 'failed',
+				progress: 0,
+				error: 'VRAM exhausted',
+				error_type: null,
+				started_at: null,
+				completed_at: '2026-01-02T00:00:00+00:00'
+			}
+		});
+		history.replaceState(null, '', '/?song=s1');
+		const cleanup = initNavigation();
+		expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1');
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(get(generationFailures).s1).toBe('VRAM exhausted');
 		cleanup();
 	});
 

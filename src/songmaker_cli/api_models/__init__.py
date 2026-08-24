@@ -197,6 +197,13 @@ class JobResponse(BaseModel):
         )
 
 
+class LastFailedGenerationResponse(BaseModel):
+    """A song's last failed generate/repaint/cover job, if it is still the
+    last word on the song's takes (see api_last_failed_generation)."""
+
+    job: JobResponse | None = None
+
+
 class StatusResponse(BaseModel):
     status: str = "ok"
 
@@ -270,6 +277,7 @@ __all__ = [
     "GenerationRetentionReportResponse",
     "JobResponse",
     "LIBRARY_SORT_VALUES",
+    "LastFailedGenerationResponse",
     "LibraryAlbumHit",
     "LibrarySearchHit",
     "LibrarySearchResponse",

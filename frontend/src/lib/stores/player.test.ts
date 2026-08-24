@@ -17,6 +17,7 @@ import type {
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
 	createQueueStreamSnapshot,
+	fetchLastFailedGeneration,
 	fetchLibraryPoolQueue,
 	fetchSong,
 	fetchSongs
@@ -45,7 +46,8 @@ vi.mock('$lib/api/client', () => ({
 		offset: 0,
 		limit: 200,
 		has_more: false
-	})
+	}),
+	fetchLastFailedGeneration: vi.fn()
 }));
 import {
 	albumList,
@@ -296,6 +298,7 @@ beforeEach(() => {
 		has_more: false
 	});
 	vi.mocked(fetchSong).mockReset();
+	vi.mocked(fetchLastFailedGeneration).mockResolvedValue({ job: null });
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
 	});

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import uuid
 from collections.abc import AsyncGenerator, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
@@ -33,6 +34,7 @@ from songmaker_cli.api_models import (
     GenerateRequest,
     GenerationResponse,
     JobResponse,
+    LastFailedGenerationResponse,
     RateRequest,
     RateResponse,
     RepaintRequest,
@@ -69,6 +71,7 @@ from songmaker_cli.db.queries import (
     disable_generation_sharing,
     enable_generation_sharing,
     get_job,
+    get_last_failed_generate_job_for_song,
     get_queue_position,
     keep_generation,
     list_active_models,
@@ -273,6 +276,7 @@ async def api_generate_song(
     _check_version_lora_ready(session, version, user)
 
     job = create_job_with_rate_limit(session, user, JobType.GENERATE)
+    job.song_id = song_id
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
         song_id, f"count={req.count}",
@@ -299,6 +303,35 @@ async def api_generate_song(
         raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+
+
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+@router.get("/songs/{song_id}/last-failed-generation")
+def api_last_failed_generation(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> LastFailedGenerationResponse:
+    """The song's most recent failed generate/repaint/cover job, if it is
+    still the last word on the song's takes.
+
+    A failed job leaving `activeJobs` is the only place the frontend learns
+    of it live (see `jobs.ts`); this lets a page reload or a later visit
+    recover the same cause. A non-archived take created after the failure
+    (from a later, successful attempt) supersedes it — the banner would be
+    stale otherwise.
+    """
+    song = check_song_access(session, song_id, user)
+    job = get_last_failed_generate_job_for_song(session, song_id, JobType.GENERATE)
+    if job is None or job.completed_at is None:
+        return LastFailedGenerationResponse(job=None)
+    newest_take = next((g for g in song.generations if not g.is_archived), None)
+    if newest_take is not None and _as_utc(newest_take.created_at) >= _as_utc(job.completed_at):
+        return LastFailedGenerationResponse(job=None)
+    return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 
 
 @router.post("/generations/{gen_id}/repaint")
@@ -336,6 +369,7 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(session, user, JobType.GENERATE)
+    job.song_id = song.id
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
@@ -408,6 +442,7 @@ async def api_cover_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(session, user, JobType.GENERATE)
+    job.song_id = song.id
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",

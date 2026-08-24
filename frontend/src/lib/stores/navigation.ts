@@ -3,6 +3,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
 import { handleSave, isDirty } from '$lib/stores/editor';
+import { hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 import {
 	selectedSongId,
@@ -240,6 +241,17 @@ export function albumTrackNeighbors(
 	};
 }
 
+// The single "a song is now current" hook: loads its takes and, alongside
+// that, recovers its failure banner from the last failed generate job so a
+// reload or a later visit shows the same cause a live SSE stream would have
+// (see hydrateGenerationFailure). Every place that puts a song in front of
+// the user -- selection, deep link, history restore -- must route through
+// this instead of calling ensureGenerationsLoaded directly.
+function loadSongContext(songId: string): Promise<void> {
+	void hydrateGenerationFailure(songId);
+	return ensureGenerationsLoaded(songId);
+}
+
 function applySelectedSong(
 	songId: string,
 	knownSong: SongItem | undefined,
@@ -255,7 +267,7 @@ function applySelectedSong(
 		void loadSongsForAlbum(albumId);
 	}
 	playerSelectSong(songId);
-	ensureGenerationsLoaded(songId);
+	loadSongContext(songId);
 	if (tab === 'write') openWriteTab();
 	setLibrarySurface('detail');
 	closeSidebar();
@@ -421,7 +433,7 @@ export function initNavigation(): () => void {
 		if (songId) {
 			suppressPush = true;
 			playerSelectSong(songId);
-			ensureGenerationsLoaded(songId);
+			loadSongContext(songId);
 			if (genId) {
 				selectedGenerationId.set(genId);
 				openTakesTab();
@@ -432,7 +444,7 @@ export function initNavigation(): () => void {
 
 		replaceLibraryHistory();
 	} else if (existing.songId) {
-		ensureGenerationsLoaded(existing.songId);
+		loadSongContext(existing.songId);
 	}
 
 	function onPopstate(e: PopStateEvent): void {
@@ -442,7 +454,7 @@ export function initNavigation(): () => void {
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {
-					await ensureGenerationsLoaded(state.songId);
+					await loadSongContext(state.songId);
 				}
 			} else {
 				await applyLibraryHistory(libraryRootState());
