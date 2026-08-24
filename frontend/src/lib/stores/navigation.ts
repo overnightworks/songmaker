@@ -2,6 +2,7 @@ import { get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
+import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
 import { hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
@@ -25,7 +26,7 @@ import {
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
 import type { SongItem } from '$lib/api/types';
-import type { LibraryFilter } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
@@ -251,9 +252,35 @@ export function albumTrackNeighbors(
 // should route through this instead of calling ensureGenerationsLoaded
 // directly; it does not cover song selection elsewhere (e.g. player.ts's
 // own playback-driven selectSong).
-function loadSongContext(songId: string): Promise<void> {
+//
+// A dead songId (deleted between the link being shared/saved and it being
+// opened, issue #237) is a permanent, expected condition, not a transient
+// failure: it is handled here, once, for every entry point, instead of each
+// caller (none of which await this) leaking an unhandled rejection. Any
+// other failure (network, 5xx) is not this function's to swallow and
+// propagates to the caller.
+export async function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
-	return ensureGenerationsLoaded(songId);
+	try {
+		await ensureGenerationsLoaded(songId);
+	} catch (err) {
+		if (!isNotFound(err)) throw err;
+		reportSongLinkNotFound(songId);
+	}
+}
+
+// Only clears the selection if it still names the dead song: a caller may
+// have already navigated elsewhere while the fetch was in flight, and that
+// newer selection must win over this late 404.
+function reportSongLinkNotFound(songId: string): void {
+	if (get(selectedSongId) !== songId) return;
+	suppressPush = true;
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
+	suppressPush = false;
+	replaceLibraryHistory();
+	addToast(SONG_LINK_NOT_FOUND_TOAST, 'error');
 }
 
 function applySelectedSong(

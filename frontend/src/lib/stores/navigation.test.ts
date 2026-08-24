@@ -11,6 +11,8 @@ import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/
 import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import { ApiError } from '$lib/api/fetch';
+import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -67,6 +69,7 @@ import {
 	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
+	loadSongContext,
 	openAlbum,
 	openCollectionEntry,
 	openLibraryCreate,
@@ -357,6 +360,40 @@ describe('opening a song recovers its failure banner', () => {
 	});
 });
 
+describe('loadSongContext (dead song link, issue #237)', () => {
+	it('clears the selection and shows a not-found toast for a dead song, without throwing', async () => {
+		selectedSongId.set('dead');
+		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/dead'));
+
+		await expect(loadSongContext('dead')).resolves.toBeUndefined();
+
+		expect(get(selectedSongId)).toBeNull();
+		expect(
+			get(toasts).some((t) => t.type === 'error' && t.message === SONG_LINK_NOT_FOUND_TOAST)
+		).toBe(true);
+	});
+
+	it('propagates a non-404 error instead of swallowing it', async () => {
+		selectedSongId.set('s-broken');
+		fetchSong.mockRejectedValue(new ApiError(500, 'Boom', '/api/songs/s-broken'));
+
+		await expect(loadSongContext('s-broken')).rejects.toThrow('Boom');
+
+		expect(get(selectedSongId)).toBe('s-broken');
+		expect(get(toasts)).toHaveLength(0);
+	});
+
+	it('leaves a valid song selection untouched', async () => {
+		selectedSongId.set('s2');
+		fetchSong.mockResolvedValue(song({ id: 's2', album_id: 'a1' }));
+
+		await expect(loadSongContext('s2')).resolves.toBeUndefined();
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(toasts)).toHaveLength(0);
+	});
+});
+
 describe('selectNeighborSong', () => {
 	it('replaces the current history entry instead of pushing', () => {
 		selectSong('s1');
@@ -557,6 +594,23 @@ describe('initNavigation', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		cleanup();
+	});
+
+	it('reports a not-found toast and lands in the library when the ?song= deep link is dead', async () => {
+		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/dead'));
+		history.replaceState(null, '', '/?song=dead');
+
+		const cleanup = initNavigation();
+		expect(get(selectedSongId)).toBe('dead');
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(
+			get(toasts).some((t) => t.type === 'error' && t.message === SONG_LINK_NOT_FOUND_TOAST)
+		).toBe(true);
+		expect(get(librarySurface)).toBe('browse');
+		expect(window.location.search).toBe('');
 		cleanup();
 	});
 
