@@ -41,6 +41,7 @@
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
+	import { dismissGenerationFailure, generationFailures } from '$lib/stores/jobs';
 	import { handleDeleteVersion } from '$lib/stores/editor';
 	import {
 		bulkDeleteGenerations,
@@ -82,6 +83,10 @@
 	}: Props = $props();
 
 	const actions = getGenerationActions();
+
+	const GENERATION_FAILED_DISMISS_LABEL = 'Dismiss generation error';
+
+	const generationFailure = $derived($generationFailures[song.id] ?? null);
 
 	const playingGenId = $derived(audioPlayer.current?.generation.id ?? null);
 	const buffering = $derived(
@@ -326,7 +331,7 @@
 	</div>
 {:else if loadStatus === 'loading' && song.generations.length === 0}
 	<div class="empty" role="status">{TAKES_LOADING}</div>
-{:else if song.generations.length === 0 && !dirty}
+{:else if song.generations.length === 0 && !dirty && !generationFailure}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
 	<div class="takes-list">
@@ -342,6 +347,18 @@
 		{#if dirty}
 			<div class="draft-banner">
 				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
+			</div>
+		{/if}
+
+		{#if generationFailure}
+			<div class="failed-row" role="alert">
+				<span class="failed-cause" title={generationFailure}>{generationFailure}</span>
+				<button
+					type="button"
+					class="failed-dismiss"
+					onclick={() => dismissGenerationFailure(song.id)}
+					aria-label={GENERATION_FAILED_DISMISS_LABEL}>×</button
+				>
 			</div>
 		{/if}
 
@@ -570,6 +587,38 @@
 		border-radius: var(--card-radius);
 		font-size: 0.8rem;
 		color: #d8b020;
+	}
+
+	.failed-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.8rem;
+		background: rgba(220, 60, 60, 0.08);
+		border: 1px solid var(--score-bad);
+		border-radius: var(--card-radius);
+		font-size: 0.8rem;
+		color: var(--score-bad);
+	}
+
+	.failed-cause {
+		flex: 1;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+	}
+
+	.failed-dismiss {
+		background: none;
+		border: 1px solid var(--score-bad);
+		border-radius: 3px;
+		color: var(--score-bad);
+		cursor: pointer;
+		flex-shrink: 0;
+		line-height: 1;
+		padding: 0.1rem 0.35rem;
 	}
 
 	.generating-row {

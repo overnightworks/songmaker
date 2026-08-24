@@ -375,6 +375,10 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (hardcoded) | PyTorch CUDA allocator config |
 | `CUDA_VISIBLE_DEVICES` | from `GPU_ID` when set | Pins the inner ACE-Step process to the worker's configured device index |
 
+## Failure Cause Contract
+
+A failed generation carries ACE-Step's own words all the way to the take list. `/query_result` reports a failed task with `status: 2` and a result entry whose `error` (or, for analysis tasks, `status_message`) holds the server's text, e.g. `Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available`. `AceStepClient._poll_result` extracts that text and raises `GenerationFailedError` with it — never with an empty string: when the server sends no detail, the client logs the raw payload and uses the named reason `generation failed (no detail from ACE-Step)`. The worker's generate runner passes an `AceStepError` message through verbatim into the task's `error` (other exception types keep their `TypeName: message` form), the scheduler turns the worker's error event into `WorkerTaskFailed`, and the generation job writes that message into `jobs.error` instead of the generic sanitized text. The frontend job store keeps the cause per song in `generationFailures`, so the take list shows it (full text in the row's `title`) until the next generation starts or the user dismisses it. This deliberately shows raw server text to the operator — it is what makes a failure diagnosable without grepping worker logs.
+
 ## VRAM Pre-flight Note
 
 The vendored fork keeps `_vram_preflight_check()` enabled by default. Before checking, CUDA generations run `gc.collect()` and `torch.cuda.empty_cache()` so cached allocations do not cause a false rejection. This behavior comes from upstream PR [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091).

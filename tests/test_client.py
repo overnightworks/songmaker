@@ -160,17 +160,41 @@ def test_poll_result_success() -> None:
     assert result.seed == 42
 
 
-def test_poll_result_failure() -> None:
+_VRAM_CAUSE = (
+    "Music generation failed: Insufficient free VRAM: "
+    "need ~2.0 GB, only 1.3 GB available"
+)
+_NO_DETAIL = "generation failed (no detail from ACE-Step)"
+
+
+@pytest.mark.parametrize(
+    ("result", "expected_message"),
+    [
+        ([{"file": "", "error": _VRAM_CAUSE}], _VRAM_CAUSE),
+        ([{"file": "", "status_message": "Model load failed"}], "Model load failed"),
+        ([{"file": "", "error": "", "status_message": ""}], _NO_DETAIL),
+        ("not json at all", _NO_DETAIL),
+    ],
+)
+def test_poll_result_failure_reports_acestep_cause(
+    result: list | str, expected_message: str,
+) -> None:
     client = AceStepClient()
 
     response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 2, "result": "error"}],
+        "data": [{
+            "task_id": "abc",
+            "status": 2,
+            "result": json.dumps(result) if isinstance(result, list) else result,
+        }],
     }).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        with pytest.raises(GenerationFailedError, match="generation failed"):
+        with pytest.raises(GenerationFailedError) as excinfo:
             client._poll_result("abc")
+
+    assert str(excinfo.value) == expected_message
 
 
 def test_validate_audio_path_valid() -> None:

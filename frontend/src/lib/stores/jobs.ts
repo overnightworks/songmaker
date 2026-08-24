@@ -5,6 +5,7 @@ import { requestSongRefresh } from '$lib/stores/resourceSync';
 import { addToast } from '$lib/stores/toast';
 
 const MAX_POLL_ERRORS = 10;
+const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 
 export interface ActiveJob {
 	job: JobStatus;
@@ -16,6 +17,27 @@ export interface ActiveJob {
 
 export const activeJobs = writable<ActiveJob[]>([]);
 
+/**
+ * The cause of the last failed generation, per song.
+ *
+ * A failed job leaves `activeJobs` right away, so without this its
+ * error would only ever flash by in a toast. The song's take list keeps
+ * showing the cause until the next generation starts or the user
+ * dismisses it.
+ */
+export const generationFailures = writable<Record<string, string>>({});
+
+export function dismissGenerationFailure(songId: string): void {
+	generationFailures.update((failures) =>
+		Object.fromEntries(Object.entries(failures).filter(([id]) => id !== songId))
+	);
+}
+
+function failureMessage(job: JobStatus): string {
+	if (job.error_type === 'server_restart') return SERVER_RESTART_MESSAGE;
+	return job.error || `${job.type} failed`;
+}
+
 const eventSources = new Map<string, EventSource>();
 
 export function trackJob(
@@ -23,6 +45,7 @@ export function trackJob(
 	context: { songId?: string; genId?: string; workerId?: string; mode?: string }
 ): void {
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
+	if (context.songId) dismissGenerationFailure(context.songId);
 	streamJob(job.id);
 }
 
@@ -74,11 +97,11 @@ function streamJob(jobId: string): void {
 			} else if (updated.status === 'cancelled') {
 				addToast(`${updated.type} cancelled`, 'info');
 			} else {
-				const isRestart = updated.error_type === 'server_restart';
-				addToast(
-					isRestart ? 'Server restarted — please retry' : updated.error || `${updated.type} failed`,
-					'error'
-				);
+				const message = failureMessage(updated);
+				if (songId && updated.type === JOB_TYPE_GENERATE) {
+					generationFailures.update((failures) => ({ ...failures, [songId]: message }));
+				}
+				addToast(message, 'error');
 			}
 
 			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));

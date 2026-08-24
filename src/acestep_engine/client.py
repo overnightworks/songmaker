@@ -55,6 +55,32 @@ _TASK_STATUS_COMPLETE: Final[int] = 1
 _TASK_STATUS_FAILED: Final[int] = 2
 DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
 _DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
+_NO_FAILURE_DETAIL: Final[str] = "generation failed (no detail from ACE-Step)"
+
+
+def _failure_cause(result: str | list) -> str:
+    """Return ACE-Step's own text for a failed task.
+
+    A failed task carries its cause in the result entry's ``error``
+    field, or in ``status_message`` for the tasks that report there.
+    When the server sends neither, the caller still gets a named reason
+    instead of an empty string.
+    """
+    details = result
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except json.JSONDecodeError:
+            details = []
+    if isinstance(details, list):
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            cause = str(detail.get("error") or detail.get("status_message") or "").strip()
+            if cause:
+                return cause
+    log.warning("ACE-Step reported a failure without detail: %.500s", result)
+    return _NO_FAILURE_DETAIL
 
 
 def _default_host() -> str:
@@ -378,9 +404,7 @@ class AceStepClient:
                 entry = response.data[0]
 
                 if entry.status == _TASK_STATUS_FAILED:
-                    raise GenerationFailedError(
-                        f"ACE-Step generation failed: {entry.result}"
-                    )
+                    raise GenerationFailedError(_failure_cause(entry.result))
 
                 if entry.status == _TASK_STATUS_COMPLETE:
                     items = entry.parse_result_items()

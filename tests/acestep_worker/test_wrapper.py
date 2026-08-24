@@ -328,19 +328,25 @@ def test_stream_task_yields_done(tmp_path: Path) -> None:
     assert b'"state": "done"' in body or b'"state":"done"' in body
 
 
-def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_result = MagicMock(wav_bytes=b"WAV", seed=99, cot_caption="caption", cot_lyrics="lyrics")
-
-    fake_client_cls = MagicMock()
-    fake_client_cls.return_value.generate = MagicMock(return_value=fake_result)
-
-    fake_engine_client = MagicMock(AceStepClient=fake_client_cls)
-    fake_engine_models = MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw))
-
+def _patch_engine_modules(monkeypatch: pytest.MonkeyPatch, generate) -> None:
+    """Point the runner's lazy engine imports at a stub client."""
     import sys
 
-    monkeypatch.setitem(sys.modules, "acestep_engine.client", fake_engine_client)
-    monkeypatch.setitem(sys.modules, "acestep_engine.models", fake_engine_models)
+    fake_client_cls = MagicMock()
+    fake_client_cls.return_value.generate = generate
+    monkeypatch.setitem(
+        sys.modules, "acestep_engine.client", MagicMock(AceStepClient=fake_client_cls),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "acestep_engine.models",
+        MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw)),
+    )
+
+
+def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_result = MagicMock(wav_bytes=b"WAV", seed=99, cot_caption="caption", cot_lyrics="lyrics")
+    _patch_engine_modules(monkeypatch, MagicMock(return_value=fake_result))
 
     async def go():
         store = TaskStore()
@@ -378,15 +384,7 @@ def test_default_generate_runner_emits_progress(
             on_progress("25/50 [00:05<00:08]")
         return fake_result
 
-    fake_client_cls = MagicMock()
-    fake_client_cls.return_value.generate = _fake_generate
-
-    fake_engine_client = MagicMock(AceStepClient=fake_client_cls)
-    fake_engine_models = MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw))
-
-    import sys
-    monkeypatch.setitem(sys.modules, "acestep_engine.client", fake_engine_client)
-    monkeypatch.setitem(sys.modules, "acestep_engine.models", fake_engine_models)
+    _patch_engine_modules(monkeypatch, _fake_generate)
 
     async def go():
         store = TaskStore()
@@ -417,15 +415,7 @@ def test_default_generate_runner_emits_progress(
 
 
 def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_client_cls = MagicMock()
-    fake_client_cls.return_value.generate = MagicMock(side_effect=RuntimeError("kaboom"))
-    fake_engine_client = MagicMock(AceStepClient=fake_client_cls)
-    fake_engine_models = MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw))
-
-    import sys
-
-    monkeypatch.setitem(sys.modules, "acestep_engine.client", fake_engine_client)
-    monkeypatch.setitem(sys.modules, "acestep_engine.models", fake_engine_models)
+    _patch_engine_modules(monkeypatch, MagicMock(side_effect=RuntimeError("kaboom")))
 
     async def go():
         store = TaskStore()
@@ -443,7 +433,34 @@ def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.Mon
     snap = _run(go())
     assert snap is not None
     assert snap.state == "error"
-    assert "kaboom" in (snap.error or "")
+    assert snap.error == "RuntimeError: kaboom"
+
+
+def test_default_generate_runner_reports_acestep_cause_verbatim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acestep_engine.errors import GenerationFailedError
+
+    cause = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
+    _patch_engine_modules(monkeypatch, MagicMock(side_effect=GenerationFailedError(cause)))
+
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate")
+        await default_generate_runner(
+            store,
+            task_id,
+            mode="sft",
+            config={"prompt": "x", "lyrics": ""},
+            port=8101,
+            audio_output_dir=tmp_path / "audio",
+        )
+        return await store.get(task_id)
+
+    snap = _run(go())
+    assert snap is not None
+    assert snap.state == "error"
+    assert snap.error == cause
 
 
 def test_build_state_payload(tmp_path: Path) -> None:
