@@ -53,6 +53,7 @@ from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
+    ensure_sources_detachable,
     load_queue_stream_manifest,
     public_queue_stream_manifest,
     queue_stream_audio_path,
@@ -308,6 +309,9 @@ def get_shared_album_stream(
                 audio_url=f"/shared/{slug}/audio/{gen.mp3_path}",
             )
         )
+    ensure_sources_detachable(sources)
+    db.close()
+
     snapshot = build_queue_stream_snapshot(
         ctx,
         sources,
@@ -542,6 +546,9 @@ def get_shared_playlist_stream(
                 audio_url=f"/shared/playlist/{slug}/audio/{gen.mp3_path}",
             )
         )
+    ensure_sources_detachable(sources)
+    db.close()
+
     snapshot = build_queue_stream_snapshot(
         ctx,
         sources,

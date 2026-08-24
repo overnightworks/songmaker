@@ -9,8 +9,9 @@ import shutil
 import subprocess
 import threading
 import uuid
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -43,7 +44,15 @@ class PinnedBytesExceededError(Exception):
     """Pinning this snapshot would exceed the server-wide pinned bytes cap."""
 
 SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
-_build_locks: dict[str, threading.Lock] = {}
+
+
+@dataclass
+class _BuildLockEntry:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    waiters: int = 0
+
+
+_build_locks: dict[str, _BuildLockEntry] = {}
 _build_locks_guard = threading.Lock()
 _pin_lock = threading.Lock()
 
@@ -103,6 +112,24 @@ def track_source_from_generation(
     )
 
 
+def ensure_sources_detachable(sources: list[QueueStreamSource]) -> None:
+    """Force-load the ORM relations a build touches after the caller's DB
+    session closes: ``generation.song``, ``song.album``, and
+    ``generation.version``.
+
+    Call this while the request's session is still open, right before
+    closing it. Sources whose query already eager-loaded these relations
+    are unaffected -- accessing an already-loaded attribute never touches
+    the session.
+    """
+    for source in sources:
+        gen = source.generation
+        song = gen.song
+        if song is not None:
+            _ = song.album
+        _ = gen.version
+
+
 def build_queue_stream_snapshot(
     ctx: AppContext,
     sources: list[QueueStreamSource],
@@ -121,7 +148,6 @@ def build_queue_stream_snapshot(
 
     stream_dir = _stream_dir(ctx)
     stream_dir.mkdir(parents=True, exist_ok=True)
-    cleanup_expired_queue_streams(ctx)
 
     prepared_sources, windowed_by_duration = _prepare_sources(ctx, sources)
     if not prepared_sources:
@@ -285,13 +311,29 @@ def _content_hash(
     return hasher.hexdigest()
 
 
-def _build_lock(content_hash: str) -> threading.Lock:
+@contextmanager
+def _build_lock(content_hash: str) -> Iterator[None]:
+    """Serialize concurrent builds that share a content hash.
+
+    Entries are reference-counted and removed once no caller still
+    references them, so ``_build_locks`` does not grow without bound over
+    the server's lifetime. The removal is race-free: a waiter always
+    registers itself (incrementing ``waiters`` under the guard) before it
+    can block on the lock, so a builder can only delete the entry once no
+    other thread still holds a reference to it.
+    """
     with _build_locks_guard:
-        lock = _build_locks.get(content_hash)
-        if lock is None:
-            lock = threading.Lock()
-            _build_locks[content_hash] = lock
-        return lock
+        entry = _build_locks.setdefault(content_hash, _BuildLockEntry())
+        entry.waiters += 1
+    entry.lock.acquire()
+    try:
+        yield
+    finally:
+        entry.lock.release()
+        with _build_locks_guard:
+            entry.waiters -= 1
+            if entry.waiters == 0 and _build_locks.get(content_hash) is entry:
+                del _build_locks[content_hash]
 
 
 def _find_reusable_snapshot(
