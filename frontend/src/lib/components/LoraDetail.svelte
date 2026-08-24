@@ -193,8 +193,7 @@
 							onblur={(e) => {
 								const v = (e.target as HTMLTextAreaElement).value.trim();
 								if (v && v !== sample.caption) saveSample(sample, v, sample.lyrics);
-							}}
-						></textarea>
+							}}></textarea>
 					</label>
 					<label class="field">
 						<span class="field-label">Lyrics</span>
@@ -206,8 +205,7 @@
 							onblur={(e) => {
 								const v = (e.target as HTMLTextAreaElement).value.trim();
 								if (v && v !== sample.lyrics) saveSample(sample, sample.caption, v);
-							}}
-						></textarea>
+							}}></textarea>
 					</label>
 				</li>
 			{/each}

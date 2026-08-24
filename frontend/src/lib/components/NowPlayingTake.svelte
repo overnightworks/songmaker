@@ -371,8 +371,7 @@
 			class="rating-notes"
 			placeholder={NOW_PLAYING_RATING_NOTES_PLACEHOLDER}
 			bind:value={ratingNotes}
-			rows="2"
-		></textarea>
+			rows="2"></textarea>
 		{#if ratingDirty}
 			<button
 				type="button"

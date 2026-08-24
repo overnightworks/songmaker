@@ -87,15 +87,13 @@
 					<textarea
 						class="lyrics-area"
 						value={$editLyrics}
-						oninput={(e) => setDraftLyrics(e.currentTarget.value)}
-					></textarea>
+						oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 					<label class="style-field">
 						<span>{EDITOR_STYLE_LABEL}</span>
 						<textarea
 							rows="2"
 							value={$editPrompt}
-							oninput={(e) => setDraftPrompt(e.currentTarget.value)}
-						></textarea>
+							oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
 					</label>
 				</div>
 			{/if}
@@ -120,8 +118,7 @@
 				class="lyrics-area"
 				rows="15"
 				value={$editLyrics}
-				oninput={(e) => setDraftLyrics(e.currentTarget.value)}
-			></textarea>
+				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
 	</div>
 {/if}
