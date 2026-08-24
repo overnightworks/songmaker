@@ -103,6 +103,17 @@ export const NOW_PLAYING_RATING_SAVING = 'Saving…';
 export const NOW_PLAYING_PIN_SEED_PREFIX = 'Pin seed';
 export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 
+// Curation mode (issue #228): walking an album's per-song candidate takes
+// one after another, right from the cover column's transport row so it never
+// hides behind the mobile sheet tap the queue/take tabs otherwise need.
+export const NOW_PLAYING_CURATE_GROUP_LABEL = 'Curate this album';
+export const NOW_PLAYING_CURATE_SKIP_LABEL = 'Skip';
+export const NOW_PLAYING_CURATE_DONE_LABEL = 'Done curating';
+
+export function nowPlayingCurateProgress(index: number, total: number): string {
+	return `Song ${index + 1} of ${total}`;
+}
+
 export const NOW_PLAYING_Z_INDEX = 350;
 // Below this width the three columns (cover, lyrics, right panel) stack, and
 // the right panel becomes a sheet the listener opens explicitly. Matches

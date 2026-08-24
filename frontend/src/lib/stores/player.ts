@@ -866,6 +866,7 @@ export function closeNowPlaying(): void {
 	const surface = get(nowPlayingSurface);
 	if (surface === 'closed') return;
 	nowPlayingSurface.set('closed');
+	curationActive.set(false);
 	restoreNowPlayingTriggerFocus(surface === 'full');
 }
 
@@ -1157,6 +1158,46 @@ export async function playAlbumFromGeneration(
 	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, gen.id);
+}
+
+// Curation mode (issue #228): whether the listener is walking an album's
+// candidate takes one after another via curateAlbum. Reset whenever Now
+// Playing closes (closeNowPlaying), so a later open of an unrelated queue
+// never inherits it. NowPlaying also gates its curation bar on the queue
+// context still being that same album, so navigating away mid-curation just
+// hides the bar instead of acting on the wrong take.
+export const curationActive = writable(false);
+
+// The one entry point for curation: the same per-song candidate takes
+// playAlbum already builds (existing pick, else bestGen), started at the
+// first song without a pick — or track 1 once every song has one, so
+// re-curating an already-picked album still starts somewhere sensible.
+export async function curateAlbum(albumId: string): Promise<void> {
+	const { seq } = beginPlayStart();
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
+	playStartNotice.set('building');
+	await loadSongsForAlbum(albumId);
+	if (!playStartIsCurrent(seq)) return;
+	const entries = await collectAlbumEntries(albumId, seq);
+	if (entries === null || !playStartIsCurrent(seq)) return;
+	if (entries.length === 0) {
+		playStartNotice.set('idle');
+		reportNothingPlayable(albumTitle(get(albumList), albumId), () => curateAlbum(albumId));
+		return;
+	}
+	playStartNotice.set('idle');
+	const startIndex = Math.max(
+		0,
+		entries.findIndex((entry) => !entry.is_picked)
+	);
+	setAlbumQueueTakes(albumId, entries, entries[startIndex].generation_id);
+	const ctx = get(queueContext);
+	if (ctx.type === 'album' && ctx.takes) {
+		loadNativeTake(ctx.takes[ctx.index ?? 0], { restart: true });
+	}
+	curationActive.set(true);
+	openNowPlaying('take');
 }
 
 function playPlaylistIndex(

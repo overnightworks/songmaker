@@ -210,6 +210,7 @@ export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
 export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
 export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive album';
+export const COLLECTION_MENU_CURATE_LABEL = 'Curate album';
 export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
 export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';

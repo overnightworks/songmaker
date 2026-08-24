@@ -5,7 +5,8 @@
 	import {
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
-		NOW_PLAYING_TAKE_TAB
+		NOW_PLAYING_TAKE_TAB,
+		nowPlayingCurateProgress
 	} from '$lib/constants/now-playing';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import {
@@ -14,6 +15,7 @@
 		canPlayPrevSong,
 		chooseLibraryTakePool,
 		closeNowPlaying,
+		curationActive,
 		dockNowPlaying,
 		ensureGenerationsLoaded,
 		escapeNowPlaying,
@@ -34,8 +36,10 @@
 		windowEnded
 	} from '$lib/stores/player';
 	import { libraryTakePool, type LibraryTakePool } from '$lib/stores/playbackSettings';
+	import { setKeep, setPick } from '$lib/stores/takeActions';
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
+	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
 	import NowPlayingTake from './NowPlayingTake.svelte';
@@ -100,6 +104,12 @@
 		song?.generations.find((g) => g.id === info.generation.id) ?? null
 	);
 
+	// Curation mode (issue #228) only ever plays an album's own queue — gated
+	// on the queue context staying that album, not just on the store flag, so
+	// navigating away from it (e.g. to the library pool) mid-curation hides
+	// the bar and its shortcuts instead of acting on an unrelated take.
+	const curating = $derived($curationActive && ctx.type === 'album');
+
 	$effect(() => {
 		const songId = info.songId;
 		// Read so Svelte tracks this effect on a take switch too, not just a
@@ -130,6 +140,54 @@
 	function goToSong(): void {
 		closeNowPlaying();
 		void navigateToPlaying();
+	}
+
+	// Curation's three actions all act on the resolved take (song/
+	// playingGeneration), never on info.generation — an album queue entry's
+	// own generation snapshot goes stale the moment a pick or keep lands
+	// elsewhere, exactly what NowPlayingTake's badges already avoid.
+	async function onCuratePick(): Promise<void> {
+		if (!song || !playingGeneration) return;
+		await setPick(song.id, playingGeneration.id, true);
+		await playNextSong();
+	}
+
+	async function onCurateKeep(): Promise<void> {
+		if (!song || !playingGeneration) return;
+		await setKeep(song.id, playingGeneration.id, !playingGeneration.is_kept);
+	}
+
+	function onCurateSkip(): void {
+		void playNextSong();
+	}
+
+	function onCurateDone(): void {
+		closeNowPlaying();
+	}
+
+	const CURATION_KEY_HANDLERS: Record<string, () => void> = {
+		p: () => void onCuratePick(),
+		k: () => void onCurateKeep(),
+		s: onCurateSkip
+	};
+
+	// Global so Pick/Keep/Skip work from anywhere in the surface (docked or
+	// full, whichever tab is open) — but only while curation mode is active,
+	// and never while a text field has focus (the rating notes textarea, an
+	// editable title elsewhere on the page).
+	function onCurationKeydown(event: KeyboardEvent): void {
+		if (!curating) return;
+		if (event.metaKey || event.ctrlKey || event.altKey) return;
+		const target = event.target;
+		if (
+			target instanceof HTMLElement &&
+			(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+		)
+			return;
+		const handler = CURATION_KEY_HANDLERS[event.key.toLowerCase()];
+		if (!handler) return;
+		event.preventDefault();
+		handler();
 	}
 </script>
 
@@ -193,6 +251,23 @@
 	</div>
 {/snippet}
 
+{#snippet curationBar()}
+	{#if song && playingGeneration}
+		<NowPlayingCuration
+			progressLabel={nowPlayingCurateProgress(queueVm.currentIndex, queueVm.items.length)}
+			picked={playingGeneration.is_picked}
+			kept={playingGeneration.is_kept}
+			canSkip={canNext}
+			onpick={() => void onCuratePick()}
+			onkeep={() => void onCurateKeep()}
+			onskip={onCurateSkip}
+			ondone={onCurateDone}
+		/>
+	{/if}
+{/snippet}
+
+<svelte:window onkeydown={onCurationKeydown} />
+
 <NowPlayingFrame
 	{info}
 	{coverUrl}
@@ -216,6 +291,7 @@
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}
+	curationBar={curating ? curationBar : undefined}
 />
 
 <style>
