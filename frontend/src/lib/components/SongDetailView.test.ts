@@ -428,6 +428,24 @@ describe('SongDetailView header — one row, every state', () => {
 	});
 });
 
+describe('SongDetailView share link', () => {
+	it('shows a copy-link chip instead of the raw share URL when the song is shared', async () => {
+		songList.set([song({ is_shared: true, share_slug: 'abc123' })]);
+		const target = await renderView();
+
+		const chip = target.querySelector<HTMLButtonElement>('.share-link-chip');
+		expect(chip).not.toBeNull();
+		expect(chip?.textContent?.trim()).toBe('Copy link');
+		expect(chip?.title).toBe(`${window.location.origin}/share/song/abc123`);
+		expect(target.textContent).not.toContain(`${window.location.origin}/share/song/abc123`);
+	});
+
+	it('shows no share chip when the song is not shared', async () => {
+		const target = await renderView();
+		expect(target.querySelector('.share-link-chip')).toBeNull();
+	});
+});
+
 describe('SongDetailView desktop vs compact layout', () => {
 	it('shows Write and Takes as two simultaneous columns on desktop, no tab switcher', async () => {
 		const target = await renderView();
