@@ -1,3 +1,4 @@
 [submodule "vendor/acestep"]
 	path = vendor/acestep
 	url = https://github.com/FlexOr2/ACE-Step-1.5.git
+	branch = songmaker/vendor-2026-08-24
