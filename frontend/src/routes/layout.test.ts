@@ -11,7 +11,12 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface } from '$lib/stores/libraryContext';
 import { songList } from '$lib/stores/libraryData';
-import { closeNowPlaying, nowPlayingSurface, openNowPlaying, selectedSongId } from '$lib/stores/player';
+import {
+	closeNowPlaying,
+	nowPlayingSurface,
+	openNowPlaying,
+	selectedSongId
+} from '$lib/stores/player';
 import {
 	NOW_PLAYING_DOCKED_WIDTH_PX,
 	NOW_PLAYING_EXPAND_LABEL,
