@@ -370,6 +370,8 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
 | `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup (operator decision, issue #202); lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
+| `ACESTEP_LM_DIT_RESERVE_DURATION_S` | unset → GPU tier's `max_duration_with_lm` (480 on a 24GB card) | Longest track the LM keeps DiT inference room for. Lower it for a larger LM KV cache, raise it for longer tracks — see the VRAM Pre-flight Note |
+| `ACESTEP_SKIP_VRAM_PREFLIGHT` | `0` | Emergency bypass of the DiT VRAM pre-flight; a refused generation then OOMs instead — see the VRAM Pre-flight Note |
 | `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
 | `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB. ACE-Step **trusts this value as ground truth** — it does not cross-check against the physical GPU. On startup the subprocess logs `⚠️ DEBUG MODE: Simulating GPU memory as N GB (set via MAX_CUDA_VRAM)`. Setting this higher than the physical GPU lets ACE-Step's VAE stay on GPU when it should fall back, which will OOM during decode. Always set `VRAM_BUDGET_GB` ≤ physical VRAM. |
@@ -388,19 +390,32 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 
 **Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only. `docker-compose.yml` now sets it to `1` by default on the acestep-worker service (override via `ACESTEP_SKIP_VRAM_PREFLIGHT=0` in `.env`). Because the worker copies its environment when starting the ACE-Step subprocess, this reaches the subprocess the same way any other passthrough var does.
-
-**Policy (revised, operator decision, issue #202, 2026-08-24):** the opt-out is this deployment's documented default, not an emergency-only escape hatch — see "Why the preflight opt-out is on by default" below for the measured facts behind that call. An out-of-memory failure remains theoretically possible while the safety check is bypassed; the exit path is fixing the estimator, not reverting to a policy the operator has overridden. Once the fork ships a duration-aware LM reserve (`fix/duration-aware-lm-reserve` on `FlexOr2/ACE-Step-1.5`, then upstreamed to `ace-step/ACE-Step-1.5`), flip `ACESTEP_SKIP_VRAM_PREFLIGHT` back to `0`.
+**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only and back to emergency semantics: `docker-compose.yml` defaults it to `0` (override via `.env`). With the check bypassed, a generation that would have been refused runs into an OOM instead. Because the worker copies its environment when starting the ACE-Step subprocess, the flag reaches the subprocess the same way any other passthrough var does.
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
 
-### Why the preflight opt-out is on by default (issue #202)
+### How the LM leaves room for the DiT (issue #202)
 
-ACE-Step's LM allocator (`gpu_config.py:get_lm_gpu_memory_ratio`) sizes the LM's VRAM share, on GPUs at or above `tier6b` (20-24GB), against a *constant* `dit_reserve_gb = 1.5`. The preflight's own DiT requirement is duration-dependent (`DIT_INFERENCE_VRAM_PER_BATCH[dit_key] * batch * duration/60 + 0.5`). With `acestep-5Hz-lm-4B`, the allocator's 0.9 ratio clamp fills the KV cache and leaves a measured `post_kv_free` of **1.30 GB**; the preflight formula demands **~2 GB at 165s** of xl-turbo audio, so it rejects a take the estimator considers too tight.
+The pre-flight and the LM allocator used to measure the same GPU with different rulers, and that is what rejected long xl-turbo takes on this card. ACE-Step's LM allocator (`gpu_config.py:get_lm_gpu_memory_ratio`) kept a *constant* `dit_reserve_gb = 1.5` free, while the pre-flight demands `DIT_INFERENCE_VRAM_PER_BATCH[dit_key] * batch * duration/60 + 0.5`. The two agree at 120s and diverge after that, so with `acestep-5Hz-lm-4B` resident the DiT was left 1.30 GB where a 165s take needs 1.88 GB.
 
-That estimate is provably too conservative in practice: **123 historical xl-turbo takes over 120s (April–July)** ran on this exact card with 4B and never OOMed, meaning the real 1.30 GB `post_kv_free` is sufficient headroom for the DiT stage — the preflight's constant `dit_reserve_gb` just doesn't account for it. Reverting the LM default to 1.7B to satisfy the formula would silently change the sound of already-shipped productions to chase a number the estimator gets wrong, not a real VRAM shortage.
+The fork now sizes that reserve with the pre-flight's own formula (`fix/duration-aware-lm-reserve` on `FlexOr2/ACE-Step-1.5`, upstream PR tracked in issue #206). Three things changed:
 
-The actual fix is the estimator, not the LM: capture a real peak-VRAM measurement (165s / 4B / xl-turbo, with the flag on) and make the LM allocator's DiT reserve duration-aware in the fork, so the preflight can be re-enabled without lying about the risk. That work lives on `fix/duration-aware-lm-reserve` in `FlexOr2/ACE-Step-1.5`, to be upstreamed to `ace-step/ACE-Step-1.5` once verified, and is out of scope for this deployment-only change.
+- **The reserve is duration-aware.** `get_dit_inference_reserve_gb()` mirrors the pre-flight and adds `DIT_RESERVE_HEADROOM_GB = 0.5`. The LM initializes before any request, so the reserve is sized for the longest track the deployment intends to render with the LM resident — the GPU tier's `max_duration_with_lm` (480s here), overridable with `ACESTEP_LM_DIT_RESERVE_DURATION_S`. The resident DiT's checkpoint path now reaches the LM init, so an XL DiT reserves XL activations instead of the default profile.
+- **The reserve comes out of the KV cache, never out of the LM weights.** When even the LM's minimum KV cache cannot leave the reserve free, the shortfall is logged with the track length that *is* supported, instead of the DiT discovering it at OOM time. The `min(0.9, …)` ratio clamp logs a warning when it caps, too.
+- **Memory the allocator cannot see is subtracted up front.** nano-vllm sizes the KV cache against PyTorch's allocator bookkeeping, which misses the CUDA context and fragmentation the driver reports (1.24 GB in the measurement below). Without that correction every gigabyte reserved for the DiT was spent twice.
+
+Measured on this RTX 3090 (23.53 GiB usable, xl-turbo + `acestep-5Hz-lm-4B`, 165s track, pre-flight bypassed so the run could complete):
+
+| | before the fix (measured) | after the fix (same inputs) |
+|---|---|---|
+| LM ratio | 0.915 → clamped to 0.900, silently | 0.822, clamp not reached |
+| KV cache | 2.46 GB / 17.9k tokens | 0.80 GB / 5.6k tokens (above `max_model_len` 4096) |
+| free for the DiT | 1.28 GB | 2.76 GB |
+| longest xl-turbo take that passes | ~96s | ~270s |
+
+The DiT stage itself peaked at 23415 MiB of 24576 MiB against a 22813 MiB plateau while the LM ran — 0.59 GB where the pre-flight demanded 1.88 GB. The pre-flight is therefore still conservative by roughly a factor of three; the point of the fix is that the LM now respects that conservatism instead of contradicting it.
+
+`ACESTEP_LM_DIT_RESERVE_DURATION_S` is the tuning lever if a card ever ends up in the capped case: lowering it hands the LM a larger KV cache (better for long lyrics), raising it hands the DiT more room (longer tracks). This deployment leaves it unset and takes the tier default, which on a 24 GB card with the 4B LM lands in the capped case and says so once per subprocess start.
 
 ## Deferred features (blocked upstream)
 
