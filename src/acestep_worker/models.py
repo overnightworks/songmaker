@@ -76,6 +76,7 @@ class GenerationTaskResult(BaseModel):
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
+    delivered_batch_size: int | None = None
 
 
 class TrainLoraTaskResult(BaseModel):

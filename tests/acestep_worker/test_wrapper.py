@@ -345,7 +345,10 @@ def _patch_engine_modules(monkeypatch: pytest.MonkeyPatch, generate) -> None:
 
 
 def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_result = MagicMock(wav_bytes=b"WAV", seed=99, cot_caption="caption", cot_lyrics="lyrics")
+    fake_result = MagicMock(
+        wav_bytes=b"WAV", seed=99, cot_caption="caption", cot_lyrics="lyrics",
+        delivered_batch_size=None,
+    )
     _patch_engine_modules(monkeypatch, MagicMock(return_value=fake_result))
 
     async def go():
@@ -370,10 +373,46 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
     assert (tmp_path / "audio").exists()
 
 
+def test_default_generate_runner_carries_delivered_batch_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A VRAM-guard batch reduction reported by the client reaches the task result.
+
+    Issue #211: the ACE-Step server can silently shrink a requested batch;
+    the fork now reports both numbers, and the worker must not drop the
+    delivered one on the way to the task store.
+    """
+    fake_result = MagicMock(
+        wav_bytes=b"WAV", seed=1, cot_caption="", cot_lyrics="",
+        delivered_batch_size=1,
+    )
+    _patch_engine_modules(monkeypatch, MagicMock(return_value=fake_result))
+
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate")
+        await default_generate_runner(
+            store,
+            task_id,
+            mode="sft",
+            config={"prompt": "x", "lyrics": ""},
+            port=8101,
+            audio_output_dir=tmp_path / "audio",
+        )
+        return await store.get(task_id)
+
+    snap = _run(go())
+    assert snap is not None
+    assert snap.result is not None
+    assert snap.result.delivered_batch_size == 1
+
+
 def test_default_generate_runner_emits_progress(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_result = MagicMock(wav_bytes=b"WAV", seed=1, cot_caption="", cot_lyrics="")
+    fake_result = MagicMock(
+        wav_bytes=b"WAV", seed=1, cot_caption="", cot_lyrics="", delivered_batch_size=None,
+    )
 
     captured_progress: list[float] = []
 

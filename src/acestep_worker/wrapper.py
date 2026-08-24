@@ -479,6 +479,7 @@ async def default_generate_runner(
             seed=result.seed,
             cot_caption=result.cot_caption,
             cot_lyrics=result.cot_lyrics,
+            delivered_batch_size=result.delivered_batch_size,
         )
         await task_store.complete(task_id, payload)
     except Exception as exc:

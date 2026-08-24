@@ -1,3 +1,4 @@
+import type { GenerationParams } from '$lib/api/types';
 import { formatTime } from '$lib/utils/format';
 
 // Now Playing copy and layout constants (issue #101). Kept separate from
@@ -38,6 +39,20 @@ export interface TakeMetaParts {
 // it ever stopped being terse.
 export function takeModelModeLabel(modelMode: string | null | undefined): string | null {
 	return modelMode ? modelMode : null;
+}
+
+// ACE-Step's VRAM guard can quietly cut a requested batch size down before
+// generation runs — issue #211's "2 asked, 1 delivered" case. The backend
+// only ever persists delivered_batch_size when it actually diverges from
+// batch_size, so presence alone would already be a safe signal — this still
+// checks both explicitly rather than trusting that invariant from the UI.
+export function takeBatchReductionLabel(
+	generationParams: GenerationParams | null | undefined
+): string | null {
+	const requested = generationParams?.batch_size;
+	const delivered = generationParams?.delivered_batch_size;
+	if (requested == null || delivered == null || requested === delivered) return null;
+	return `${delivered} of ${requested}`;
 }
 
 // A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built

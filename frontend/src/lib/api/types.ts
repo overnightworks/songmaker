@@ -56,6 +56,7 @@ export interface GenerationParams {
 	constrained_decoding?: boolean | null;
 	cot_caption?: string | null;
 	cot_lyrics?: string | null;
+	delivered_batch_size?: number | null;
 }
 
 export interface VersionGenerationParams {

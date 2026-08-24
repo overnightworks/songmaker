@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nowPlayingTakeLabel, nowPlayingTakeMeta } from './now-playing';
+import { nowPlayingTakeLabel, nowPlayingTakeMeta, takeBatchReductionLabel } from './now-playing';
 
 describe('nowPlayingTakeLabel', () => {
 	it('names the version and the take', () => {
@@ -46,5 +46,27 @@ describe('nowPlayingTakeMeta', () => {
 
 	it.each(cases)('writes $name', ({ parts, line }) => {
 		expect(nowPlayingTakeMeta(parts)).toBe(line);
+	});
+});
+
+describe('takeBatchReductionLabel', () => {
+	it('names both numbers when the server delivered fewer takes than asked', () => {
+		expect(takeBatchReductionLabel({ batch_size: 2, delivered_batch_size: 1 })).toBe('1 of 2');
+	});
+
+	it('shows nothing when delivered matches requested', () => {
+		expect(takeBatchReductionLabel({ batch_size: 2, delivered_batch_size: 2 })).toBeNull();
+	});
+
+	it('shows nothing without a requested batch size on record', () => {
+		expect(takeBatchReductionLabel({ delivered_batch_size: 1 })).toBeNull();
+	});
+
+	it('shows nothing without a worker-reported delivered batch size', () => {
+		expect(takeBatchReductionLabel({ batch_size: 2 })).toBeNull();
+	});
+
+	it('shows nothing for a take with no generation_params at all', () => {
+		expect(takeBatchReductionLabel(null)).toBeNull();
 	});
 });

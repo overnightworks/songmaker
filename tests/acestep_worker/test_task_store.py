@@ -122,6 +122,7 @@ def test_done_event_carries_the_result_as_json() -> None:
         "seed": 99,
         "cot_caption": "",
         "cot_lyrics": "",
+        "delivered_batch_size": None,
     }
 
 
