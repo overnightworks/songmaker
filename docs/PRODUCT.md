@@ -6,4 +6,4 @@
 - Active requirement rules: 106
 - Declared acceptance sentences: 1
 
-No implementation status is claimed. Issue #42 must bind acceptance to executed tests before this view may report implementation.
+No implementation status is claimed. This view reports declared counts only; per-acceptance evidence comes from separate scripts/acceptance_evidence.py runs, not from this view.

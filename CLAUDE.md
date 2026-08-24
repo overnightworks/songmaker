@@ -24,9 +24,9 @@ Two special flags on generations: **pick** marks "this is THE one for this song 
 
 **Scoring** is auto-rating: BPM accuracy, spectral quality, silence detection, emotional dynamics, text accuracy (Whisper transcription of what was actually sung vs the lyrics). Purely informational — helps the user decide which generation sounds best. The Whisper transcript also shows the user what the AI actually sang.
 
-**Co-writer** is a multi-turn Claude conversation per song, stored in PostgreSQL (`chat_messages` table). The user discusses lyrics, brainstorming, and refinement. Full conversation history is sent to the Claude API on each turn. Claude can propose changes via `songmaker` blocks that the user applies to the current song's editor. Using @-mentions, the user can reference other songs or album context — the backend resolves mentions from the DB and builds context server-side. Claude can also create entirely new songs.
+**Co-writer** is one active multi-turn conversation per musician, not per song, stored in PostgreSQL (`chat_messages` table, scoped via `conversations`). The user discusses lyrics, brainstorming, and refinement with a chosen provider — Claude, Grok, or Codex — which share the same song read/write capabilities. When history fits the token-bounded tail it goes verbatim; over budget, a rolling summary plus that tail take its place. The model can persist an owned song's lyrics, style prompt, title, BPM, key, or duration directly, and can create entirely new songs. Using @-mentions, the user can reference other songs or album context — the backend resolves mentions from the DB and builds context server-side. Co-writer expansion (further memory or mention features) is frozen until organically needed (operator ruling 2026-08-24).
 
-**Seed pinning** lets the user reproduce a generation: pin a seed from a previous generation, regenerate with tweaked params, and get a comparable result (same random noise, different settings). This enables A/B testing of parameter changes.
+**Seed pinning** lets the user reproduce a generation: pin a seed from a previous generation and regenerate with tweaked params for a comparable result (same random noise, different settings). The capability exists in the code; whether to keep, surface, or remove it is an open decision (#230).
 
 ## Setup & Run
 
