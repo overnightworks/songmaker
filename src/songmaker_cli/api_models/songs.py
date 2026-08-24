@@ -144,6 +144,8 @@ class AlbumResponse(BaseModel):
     share_slug: str | None = None
     cover: AlbumCoverUrls | None = None
     created_at: str
+    is_archived: bool | None = None
+    archived_at: str | None = None
 
     @classmethod
     def from_orm(cls, album: Album, *, picked_count: int = 0) -> AlbumResponse:
@@ -161,6 +163,8 @@ class AlbumResponse(BaseModel):
             share_slug=album.share_slug,
             cover=cover,
             created_at=album.created_at.isoformat(),
+            is_archived=album.is_archived,
+            archived_at=album.archived_at.isoformat() if album.archived_at else None,
         )
 
 

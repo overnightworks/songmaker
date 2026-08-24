@@ -22,6 +22,8 @@ import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
+const archiveAlbum = vi.fn();
+const unarchiveAlbum = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -33,7 +35,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		shareAlbum: vi.fn(),
 		unshareAlbum: vi.fn(),
 		deleteAlbum: vi.fn().mockResolvedValue(undefined),
-		restoreAlbum: vi.fn()
+		restoreAlbum: vi.fn(),
+		archiveAlbum: (...args: unknown[]) => archiveAlbum(...args),
+		unarchiveAlbum: (...args: unknown[]) => unarchiveAlbum(...args)
 	};
 });
 vi.mock('$lib/api/songs', () => ({
@@ -162,6 +166,8 @@ beforeEach(() => {
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
 	updateAlbum.mockReset();
+	archiveAlbum.mockReset();
+	unarchiveAlbum.mockReset();
 	vi.mocked(selectSong).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 });
@@ -224,7 +230,7 @@ describe('AlbumDetailView header', () => {
 		expect(minHeightPx(play, 'album Play')).toBe(HITBOX_FREQUENT_PX);
 	});
 
-	it('names the object and lists Share, Cover, Rename, Add to playlist, Delete in the menu', async () => {
+	it('names the object and lists Share, Cover, Rename, Add to playlist, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
@@ -232,7 +238,7 @@ describe('AlbumDetailView header', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Delete album']);
+		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Archive album', 'Delete album']);
 	});
 
 	it('uploads a cover from the menu action', async () => {
@@ -283,6 +289,25 @@ describe('AlbumDetailView header', () => {
 		await Promise.resolve();
 		await tick();
 
+		expect(get(openCollection)).toBeNull();
+	});
+
+	it('archives the album through the menu without a confirmation dialog', async () => {
+		archiveAlbum.mockResolvedValue(album({ is_archived: true }));
+		openCollection.set({ kind: 'album', id: 'a-local' });
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		const archiveItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(el) => el.textContent?.trim() === 'Archive album'
+		);
+		archiveItem?.click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(archiveAlbum).toHaveBeenCalledWith('a-local');
+		expect(document.body.querySelector('.confirm-btn')).toBeNull();
+		expect(get(albumList).some((a) => a.id === 'a-local')).toBe(false);
 		expect(get(openCollection)).toBeNull();
 	});
 });

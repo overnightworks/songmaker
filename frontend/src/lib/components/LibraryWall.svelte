@@ -6,6 +6,7 @@
 	let { oncreate }: Props = $props();
 
 	import {
+		addAlbumToList,
 		albumList,
 		albumSongsLoad,
 		loadSongsForAlbum,
@@ -35,9 +36,10 @@
 		watchShareStatus,
 		watchShareView
 	} from '$lib/stores/shares';
-	import { fetchAlbum } from '$lib/api/albums';
+	import { fetchAlbum, fetchAlbums } from '$lib/api/albums';
 	import {
 		fetchPlaylist,
+		unarchiveAlbum,
 		unshareAlbum,
 		unshareGeneration,
 		unsharePlaylist,
@@ -80,8 +82,14 @@
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
+		LIBRARY_ALBUM_PAGE_SIZE,
 		LIBRARY_ALBUMS_EMPTY,
 		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_ARCHIVED_EMPTY,
+		LIBRARY_ARCHIVED_ERROR,
+		LIBRARY_ARCHIVED_LOADING,
+		LIBRARY_ARCHIVED_TOGGLE_LABEL,
+		LIBRARY_ARCHIVED_UNARCHIVE_LABEL,
 		LIBRARY_FILTERS,
 		LIBRARY_FILTER_LABELS,
 		LIBRARY_FILTER_NAV_LABEL,
@@ -136,6 +144,14 @@
 	const sharesState = $derived($shareInventory);
 	const sharesCount = $derived($shareCount);
 	let pendingUnshare = $state<ShareInventoryItem | null>(null);
+
+	type ArchivedLoadStatus = 'idle' | 'loading' | 'error' | 'ready';
+	let archivedOpen = $state(false);
+	let archivedAlbums = $state<AlbumItem[]>([]);
+	let archivedStatus = $state<ArchivedLoadStatus>('idle');
+	let archivedError = $state<string | null>(null);
+	let archivedOffset = $state(0);
+	let archivedHasMore = $state(false);
 
 	$effect(() => {
 		return watchShareStatus();
@@ -233,6 +249,41 @@
 
 	function onSelectFilter(next: LibraryFilter): void {
 		selectLibraryFilter(next);
+	}
+
+	async function loadArchivedAlbums(options?: { reset?: boolean }): Promise<void> {
+		const reset = options?.reset ?? true;
+		const offset = reset ? 0 : archivedOffset;
+		archivedStatus = 'loading';
+		archivedError = null;
+		try {
+			const page = await fetchAlbums(offset, LIBRARY_ALBUM_PAGE_SIZE, { archived: true });
+			archivedAlbums = reset ? page.items : [...archivedAlbums, ...page.items];
+			archivedOffset = offset + page.items.length;
+			archivedHasMore = page.has_more;
+			archivedStatus = 'ready';
+		} catch (e) {
+			archivedStatus = 'error';
+			archivedError = e instanceof Error ? e.message : LIBRARY_ARCHIVED_ERROR;
+		}
+	}
+
+	function toggleArchived(): void {
+		archivedOpen = !archivedOpen;
+		if (archivedOpen && archivedStatus === 'idle') {
+			void loadArchivedAlbums({ reset: true });
+		}
+	}
+
+	async function onUnarchiveAlbum(album: AlbumItem): Promise<void> {
+		try {
+			const restored = await unarchiveAlbum(album.id);
+			archivedAlbums = archivedAlbums.filter((a) => a.id !== album.id);
+			addAlbumToList(restored);
+			addToast('Album unarchived', 'success');
+		} catch {
+			addToast('Unarchive failed', 'error');
+		}
 	}
 
 	function onFilterKeydown(event: KeyboardEvent, current: LibraryFilter): void {
@@ -384,6 +435,17 @@
 				aria-busy={searching && searchState.status === 'loading'}
 			/>
 			{#if filter === 'albums'}
+				{#if !searching}
+					<button
+						class="filter-chip"
+						data-hitbox="frequent"
+						class:active={archivedOpen}
+						aria-pressed={archivedOpen}
+						onclick={toggleArchived}
+					>
+						{LIBRARY_ARCHIVED_TOGGLE_LABEL}
+					</button>
+				{/if}
 				<button
 					class="new-btn"
 					data-hitbox="frequent"
@@ -529,6 +591,62 @@
 				<button class="retry-btn" onclick={() => loadShareInventory({ reset: true })}
 					>{LIBRARY_RETRY_LABEL}</button
 				>
+			{/if}
+		{:else if filter === 'albums' && archivedOpen}
+			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
+				{#each archivedAlbums as archived (archived.id)}
+					<div class="wall-tile">
+						<div class="wall-tile-body">
+							<span class="wall-tile-cover">
+								{#if archived.cover?.card}
+									<img
+										src={archived.cover.card}
+										alt={`${ALBUM_COVER_ALT_TYPE} ${archived.title}`}
+									/>
+								{:else}
+									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
+										>{titleInitials(archived.title)}</span
+									>
+								{/if}
+							</span>
+							<span class="wall-tile-meta">
+								<span class="wall-tile-title">{archived.title}</span>
+								<span class="wall-tile-subtitle"
+									>{albumSummaryLabel(archived.song_count, archived.picked_count)}</span
+								>
+							</span>
+						</div>
+						<button
+							type="button"
+							class="wall-tile-unarchive"
+							data-hitbox="frequent"
+							onclick={() => onUnarchiveAlbum(archived)}
+						>
+							{LIBRARY_ARCHIVED_UNARCHIVE_LABEL}
+						</button>
+					</div>
+				{/each}
+			</div>
+
+			{#if archivedStatus === 'loading' && archivedAlbums.length === 0}
+				<p class="empty" role="status">{LIBRARY_ARCHIVED_LOADING}</p>
+			{:else if archivedStatus === 'error' && archivedAlbums.length === 0}
+				<p class="empty" role="alert">{archivedError || LIBRARY_ARCHIVED_ERROR}</p>
+				<button class="retry-btn" onclick={() => loadArchivedAlbums({ reset: true })}
+					>{LIBRARY_RETRY_LABEL}</button
+				>
+			{:else if archivedAlbums.length === 0}
+				<p class="empty">{LIBRARY_ARCHIVED_EMPTY}</p>
+			{/if}
+
+			{#if archivedHasMore}
+				<button
+					class="load-more"
+					onclick={() => loadArchivedAlbums({ reset: false })}
+					disabled={archivedStatus === 'loading'}
+				>
+					{LIBRARY_LOAD_MORE}
+				</button>
 			{/if}
 		{:else if filter === 'albums'}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
@@ -889,6 +1007,25 @@
 
 	.wall-tile-play:hover {
 		color: var(--primary);
+	}
+
+	.wall-tile-unarchive {
+		width: 100%;
+		padding: 6px 8px;
+		background: none;
+		border: none;
+		border-top: 1px solid var(--border);
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-family: var(--font-body);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+		cursor: pointer;
+	}
+
+	.wall-tile-unarchive:hover {
+		color: var(--primary);
+		border-color: var(--primary);
 	}
 
 	.share-filters {

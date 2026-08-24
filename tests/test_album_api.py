@@ -241,3 +241,130 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
     assert resp.status_code == 404
     with factory() as session:
         assert session.query(Album).filter_by(id="theirs").first().subtitle == "Untouched"
+
+
+def _seed_archive_scenarios(session) -> None:
+    session.add(User(
+        username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+    ))
+    session.add(Album(id="live-one", title="Live One", artist="A"))
+    session.add(Album(id="live-two", title="Live Two", artist="A"))
+    session.add(Album(id="already-archived", title="Already Archived", artist="A"))
+
+
+@pytest.fixture()
+def archive_client(tmp_path: Path):
+    client, factory = make_test_app(tmp_path, seed_db=_seed_archive_scenarios)
+    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    return client, factory
+
+
+def test_archive_album_sets_is_archived_and_archived_at(archive_client) -> None:
+    client, _ = archive_client
+    resp = client.post("/api/albums/live-one/archive")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_archived"] is True
+    assert body["archived_at"] is not None
+
+
+def test_archive_album_disappears_from_default_list(archive_client) -> None:
+    client, _ = archive_client
+    client.post("/api/albums/live-one/archive")
+    resp = client.get("/api/albums")
+    ids = [a["id"] for a in resp.json()["items"]]
+    assert "live-one" not in ids
+    assert "live-two" in ids
+
+
+def test_archived_filter_shows_only_archived_albums(archive_client) -> None:
+    client, _ = archive_client
+    client.post("/api/albums/live-one/archive")
+    resp = client.get("/api/albums", params={"archived": "true"})
+    ids = [a["id"] for a in resp.json()["items"]]
+    assert ids == ["live-one"]
+
+
+def test_unarchive_album_restores_default_visibility(archive_client) -> None:
+    client, _ = archive_client
+    client.post("/api/albums/live-one/archive")
+    resp = client.post("/api/albums/live-one/unarchive")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_archived"] is False
+    assert body["archived_at"] is None
+    ids = [a["id"] for a in client.get("/api/albums").json()["items"]]
+    assert "live-one" in ids
+
+
+def test_archive_album_reachable_directly_by_id(archive_client) -> None:
+    client, _ = archive_client
+    client.post("/api/albums/live-one/archive")
+    resp = client.get("/api/albums/live-one")
+    assert resp.status_code == 200
+    assert resp.json()["is_archived"] is True
+
+
+def test_archive_album_writes_audit_row(archive_client) -> None:
+    client, factory = archive_client
+    client.post("/api/albums/live-one/archive")
+    with factory() as session:
+        rows = session.query(AuditLog).filter_by(resource_id="live-one", action="archive").all()
+        assert len(rows) == 1
+
+
+def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
+    def _seed(session) -> None:
+        session.add(User(
+            id="u-owner", username="owner", password_hash=hash_password("owner12345"),
+            role="user",
+        ))
+        session.add(User(
+            id="u-intruder", username="intruder", password_hash=hash_password("intruder12345"),
+            role="user",
+        ))
+        session.flush()
+        session.add(Album(id="theirs", title="Theirs", artist="A", created_by="u-owner"))
+
+    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    login_and_csrf(client, "intruder", "intruder12345")
+    resp = client.post("/api/albums/theirs/archive")
+    assert resp.status_code == 404
+    with factory() as session:
+        assert session.query(Album).filter_by(id="theirs").first().is_archived is False
+
+
+def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
+    def _seed(session) -> None:
+        session.add(User(
+            id="u-owner", username="owner", password_hash=hash_password("owner12345"),
+            role="user",
+        ))
+        session.add(User(
+            id="u-intruder", username="intruder", password_hash=hash_password("intruder12345"),
+            role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="theirs", title="Theirs", artist="A", created_by="u-owner", is_archived=True,
+        ))
+
+    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    login_and_csrf(client, "intruder", "intruder12345")
+    resp = client.post("/api/albums/theirs/unarchive")
+    assert resp.status_code == 404
+    with factory() as session:
+        assert session.query(Album).filter_by(id="theirs").first().is_archived is True
+
+
+def test_archived_albums_share_link_stays_functional(archive_client) -> None:
+    client, factory = archive_client
+    share_resp = client.post("/api/albums/live-one/share")
+    assert share_resp.status_code == 200
+    slug = share_resp.json()["share_slug"]
+
+    archive_resp = client.post("/api/albums/live-one/archive")
+    assert archive_resp.status_code == 200
+
+    public_resp = client.get(f"/shared/{slug}")
+    assert public_resp.status_code == 200

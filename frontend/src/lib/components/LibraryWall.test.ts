@@ -29,6 +29,7 @@ const fetchAlbums = vi.fn();
 const fetchSong = vi.fn();
 const fetchSongs = vi.fn();
 const unshareAlbum = vi.fn();
+const unarchiveAlbum = vi.fn();
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
@@ -60,6 +61,7 @@ vi.mock('$lib/api/client', () => ({
 		created_at: '2026-01-01T00:00:00+00:00'
 	}),
 	unshareAlbum: (...args: unknown[]) => unshareAlbum(...args),
+	unarchiveAlbum: (...args: unknown[]) => unarchiveAlbum(...args),
 	unshareSong: vi.fn(),
 	unsharePlaylist: vi.fn(),
 	unshareGeneration: vi.fn()
@@ -152,6 +154,7 @@ beforeEach(() => {
 		.mockReset()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
 	unshareAlbum.mockReset().mockResolvedValue(undefined);
+	unarchiveAlbum.mockReset();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetShares();
@@ -258,6 +261,56 @@ describe('LibraryWall selection', () => {
 		expect(requireElement(root, '.wall-tile-play').getAttribute('aria-label')).toBe(
 			collectionRowPlayLabel('Night Drive')
 		);
+	});
+});
+
+describe('LibraryWall archived filter', () => {
+	it('loads and shows archived albums only after the Archived toggle is picked', async () => {
+		fetchAlbums.mockResolvedValue({
+			items: [album({ id: 'a-archived', title: 'Archived Album', is_archived: true })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+		expect(root.textContent).not.toContain('Archived Album');
+
+		requireElement<HTMLButtonElement>(root, 'button[aria-pressed]').click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(fetchAlbums).toHaveBeenCalledWith(0, expect.any(Number), { archived: true });
+		expect(root.textContent).toContain('Archived Album');
+		expect(root.textContent).not.toContain('Local Album');
+	});
+
+	it('unarchives a tile, moving it out of the archived list and back into the library', async () => {
+		fetchAlbums.mockResolvedValue({
+			items: [album({ id: 'a-archived', title: 'Archived Album', is_archived: true })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		unarchiveAlbum.mockResolvedValue(
+			album({ id: 'a-archived', title: 'Archived Album', is_archived: false })
+		);
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, 'button[aria-pressed]').click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		requireElement<HTMLButtonElement>(root, '.wall-tile-unarchive').click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(unarchiveAlbum).toHaveBeenCalledWith('a-archived');
+		expect(root.textContent).not.toContain('Archived Album');
+		expect(get(albumList).some((a) => a.id === 'a-archived')).toBe(true);
 	});
 });
 

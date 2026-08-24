@@ -41,10 +41,11 @@ def _ts(offset_seconds: int) -> datetime:
 
 def _add_album(
     session, *, album_id: str, title: str, owner: str, created_at: datetime,
+    is_archived: bool = False,
 ) -> Album:
     album = Album(
         id=album_id, title=title, artist="Artist",
-        created_by=owner, created_at=created_at,
+        created_by=owner, created_at=created_at, is_archived=is_archived,
     )
     session.add(album)
     return album
@@ -552,3 +553,107 @@ def test_search_album_hit_excludes_archived_pick(tmp_path: Path) -> None:
         if item["type"] == LIBRARY_ITEM_ALBUM and item["album"]["id"] == "archived-picks-album"
     )
     assert album_hit["album"]["picked_count"] == 0
+
+
+def test_list_albums_excludes_archived_by_default(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="arch-hidden", title="Archived Album",
+            owner=USER_A, created_at=_ts(1), is_archived=True,
+        )
+        session.commit()
+
+    resp = client.get("/api/albums")
+    ids = [a["id"] for a in resp.json()["items"]]
+    assert "arch-hidden" not in ids
+
+
+def test_list_albums_archived_filter_shows_only_archived(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="arch-visible", title="Archived Visible",
+            owner=USER_A, created_at=_ts(1), is_archived=True,
+        )
+        session.commit()
+
+    resp = client.get("/api/albums", params={"archived": "true"})
+    ids = [a["id"] for a in resp.json()["items"]]
+    assert ids == ["arch-visible"]
+    assert "nachtstrom" not in ids
+
+
+def test_search_excludes_archived_album(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="arch-search", title="Archived Search Album",
+            owner=USER_A, created_at=_ts(1), is_archived=True,
+        )
+        session.commit()
+
+    resp = client.get("/api/library/search", params={"q": "Archived Search Album"})
+    assert resp.json()["items"] == []
+
+
+def test_search_excludes_songs_of_archived_album(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="arch-song-parent", title="Archived Song Parent",
+            owner=USER_A, created_at=_ts(1), is_archived=True,
+        )
+        _add_song(
+            session, song_id="arch-song", title="Archived Child Song",
+            album_id="arch-song-parent", created_at=_ts(2),
+        )
+        session.commit()
+
+    resp = client.get("/api/library/search", params={"q": "Archived Child Song"})
+    assert resp.json()["items"] == []
+
+
+def test_pool_queue_excludes_generations_from_archived_albums(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)
+
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="pool-live", title="Pool Live",
+            owner=USER_A, created_at=_ts(1),
+        )
+        _add_song(
+            session, song_id="pool-live-song", title="Live Song",
+            album_id="pool-live", created_at=_ts(2),
+        )
+        session.add(Generation(
+            id="g-pool-live", song_id="pool-live-song", generation_number=1,
+            mp3_path=f"{USER_A}/g-pool-live.mp3", seed=1,
+        ))
+        _add_album(
+            session, album_id="pool-archived", title="Pool Archived",
+            owner=USER_A, created_at=_ts(3), is_archived=True,
+        )
+        _add_song(
+            session, song_id="pool-archived-song", title="Archived Song",
+            album_id="pool-archived", created_at=_ts(4),
+        )
+        session.add(Generation(
+            id="g-pool-archived", song_id="pool-archived-song", generation_number=1,
+            mp3_path=f"{USER_A}/g-pool-archived.mp3", seed=2,
+        ))
+        session.commit()
+
+    audio_dir = tmp_path / "audio" / USER_A
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "g-pool-live.mp3").write_bytes(b"source")
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "all"})
+    assert resp.status_code == 200
+    take_ids = [t["generation_id"] for t in resp.json()["takes"]]
+    assert take_ids == ["g-pool-live"]

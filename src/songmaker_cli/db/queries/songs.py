@@ -35,6 +35,7 @@ def list_songs(
     limit: int | None = None,
     q: str | None = None,
     sort: str | None = None,
+    exclude_archived_albums: bool = False,
 ) -> list[Song]:
     if light:
         query = session.query(Song).options(
@@ -50,7 +51,10 @@ def list_songs(
             joinedload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
-    query = _apply_song_filters(query, album_id=album_id, user_id=user_id, q=q)
+    query = _apply_song_filters(
+        query, album_id=album_id, user_id=user_id, q=q,
+        exclude_archived_albums=exclude_archived_albums,
+    )
     if sort is None:
         query = query.order_by(Song.album_id, Song.track_number, Song.id)
     else:
@@ -78,11 +82,18 @@ def _apply_song_filters(
     album_id: str | None,
     user_id: str | None,
     q: str | None,
+    exclude_archived_albums: bool = False,
 ):
     if album_id:
         query = query.filter_by(album_id=album_id)
+    joined_album = False
     if user_id:
         query = query.join(Album).filter(Album.created_by == user_id)
+        joined_album = True
+    if exclude_archived_albums:
+        if not joined_album:
+            query = query.join(Album)
+        query = query.filter(Album.is_archived.is_(False))
     if q:
         query = query.filter(title_matches(Song.title, q))
     return query

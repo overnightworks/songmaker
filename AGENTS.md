@@ -10,3 +10,6 @@
   and never touch another head's claimed scope.
 - The Atelier Auto-Runner is deprecated legacy. Never enable, arm, restore,
   recommend, or use it for fleet coordination.
+- Test albums (verify, proof, throwaway, QA runs) get a recognizable name
+  prefix and are archived — not deleted — once their purpose is verified, so
+  the library stays clean without discarding evidence.

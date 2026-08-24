@@ -38,6 +38,7 @@ export interface LibrarySearchResponse {
 export interface LibraryListOptions {
 	q?: string;
 	sort?: LibrarySort;
+	archived?: boolean;
 }
 
 export async function searchLibrary(options: {
