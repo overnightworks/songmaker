@@ -6,6 +6,7 @@ import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
 import { hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
+import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -13,10 +14,7 @@ import {
 	selectedSong,
 	selectSong as playerSelectSong,
 	clearGenerationSelection as playerClearGeneration,
-	ensureGenerationsLoaded,
-	loadSongsForAlbum,
-	albumList,
-	songList
+	ensureGenerationsLoaded
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,

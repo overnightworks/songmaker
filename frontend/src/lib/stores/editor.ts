@@ -5,7 +5,8 @@ import {
 	deleteVersion as apiDeleteVersion,
 	fetchSong
 } from '$lib/api/client';
-import { replaceSongInList, selectedSongId } from '$lib/stores/player';
+import { replaceSongInList } from '$lib/stores/libraryData';
+import { selectedSongId } from '$lib/stores/player';
 import type {
 	GenerationItem,
 	SongItem,

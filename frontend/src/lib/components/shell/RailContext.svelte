@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { openCollection } from '$lib/stores/collection';
+	import { albumList, songList } from '$lib/stores/libraryData';
 	import {
-		albumList,
 		isPlaylistEntryCurrent,
 		playPlaylistEntryAndShowNowPlaying,
-		selectedSongId,
-		songList
+		selectedSongId
 	} from '$lib/stores/player';
 	import { compareAlbumTracks, openCollectionEntry, selectSong } from '$lib/stores/navigation';
 	import { librarySurface } from '$lib/stores/libraryContext';

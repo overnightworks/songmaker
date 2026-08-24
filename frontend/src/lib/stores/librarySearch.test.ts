@@ -4,7 +4,8 @@ import { get } from 'svelte/store';
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_SEARCH_PAGE_SIZE } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
-import { albumList, selectedSongId, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
+import { selectedSongId } from '$lib/stores/player';
 
 const searchLibrary = vi.fn();
 const fetchAlbums = vi.fn();

@@ -10,8 +10,8 @@ import {
 	NOW_PLAYING_NO_LYRICS,
 	NOW_PLAYING_TAKE_PREFIX
 } from '$lib/constants';
+import { albumList, songList } from '$lib/stores/libraryData';
 import {
-	albumList,
 	libraryQueueSkipped,
 	nowPlayingDockable,
 	nowPlayingPanel,
@@ -19,8 +19,7 @@ import {
 	queueContext,
 	selectedSongId,
 	setShuffle,
-	shuffleEnabled,
-	songList
+	shuffleEnabled
 } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';

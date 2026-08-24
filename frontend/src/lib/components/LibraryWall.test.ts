@@ -17,7 +17,7 @@ import { searchQuery } from '$lib/stores/filter';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
 

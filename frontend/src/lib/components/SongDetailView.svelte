@@ -20,9 +20,6 @@
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
-		selectedSong,
-		selectedGenerationId,
-		ensureGenerationsLoaded,
 		albumList,
 		songList,
 		replaceSongInList,
@@ -32,7 +29,8 @@
 		removeSongFromList,
 		addSongsToList,
 		addAlbumToList
-	} from '$lib/stores/player';
+	} from '$lib/stores/libraryData';
+	import { selectedSong, selectedGenerationId, ensureGenerationsLoaded } from '$lib/stores/player';
 	import {
 		albumTrackNeighbors,
 		backToCollection,

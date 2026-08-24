@@ -11,7 +11,7 @@ import {
 import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '$lib/constants';
 import { pinnedSeed } from '$lib/stores/editor';
 import { activeJobs, trackJob } from '$lib/stores/jobs';
-import { upsertSongInList } from '$lib/stores/player';
+import { upsertSongInList } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
 
 // The one mutation owner for a generation's judged state (pick, keep, rating,

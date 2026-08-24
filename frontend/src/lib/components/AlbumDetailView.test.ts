@@ -17,7 +17,8 @@ import {
 	minHeightPx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
+import { selectedAlbumId } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();

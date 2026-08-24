@@ -7,8 +7,8 @@
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
 		NOW_PLAYING_TAKE_TAB
 	} from '$lib/constants/now-playing';
+	import { albumList, songList } from '$lib/stores/libraryData';
 	import {
-		albumList,
 		buildQueueViewModel,
 		canPlayNextSong,
 		canPlayPrevSong,
@@ -30,7 +30,6 @@
 		queueContext,
 		shuffleEnabled,
 		shuffleLabel,
-		songList,
 		toggleShuffle,
 		windowEnded
 	} from '$lib/stores/player';

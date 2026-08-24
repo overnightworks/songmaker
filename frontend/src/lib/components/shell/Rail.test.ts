@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { libraryBrowse } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { RAIL_SUMMARY_LOADING } from '$lib/constants';
 

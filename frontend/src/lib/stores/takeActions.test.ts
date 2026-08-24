@@ -23,7 +23,7 @@ import {
 	unpickGeneration
 } from '$lib/api/client';
 import { pinnedSeed } from '$lib/stores/editor';
-import { songList } from '$lib/stores/player';
+import { songList } from '$lib/stores/libraryData';
 import { toasts } from '$lib/stores/toast';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';

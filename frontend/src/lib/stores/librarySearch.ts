@@ -15,11 +15,10 @@ import {
 	albumList,
 	overlaySongList,
 	removeSongFromList,
-	selectedGenerationId,
-	selectedSongId,
 	songList,
 	upsertSongInList
-} from '$lib/stores/player';
+} from '$lib/stores/libraryData';
+import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { patchSharesFromSong } from '$lib/stores/shares';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';

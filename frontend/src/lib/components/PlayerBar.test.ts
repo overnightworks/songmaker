@@ -10,8 +10,8 @@ import {
 } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
+import { albumList, songList } from '$lib/stores/libraryData';
 import {
-	albumList,
 	closeNowPlaying,
 	nowPlayingDockable,
 	nowPlayingSurface,
@@ -20,8 +20,7 @@ import {
 	selectedAlbumId,
 	selectedSongId,
 	setShuffle,
-	shuffleEnabled,
-	songList
+	shuffleEnabled
 } from '$lib/stores/player';
 import * as playerStore from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';

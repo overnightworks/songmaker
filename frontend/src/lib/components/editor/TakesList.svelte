@@ -21,12 +21,8 @@
 		takeBatchReductionLabel,
 		takeModelModeLabel
 	} from '$lib/constants/now-playing';
-	import {
-		playTakeAndShowNowPlaying,
-		removeGenerationFromSong,
-		replaceSongInList,
-		selectedGenerationId
-	} from '$lib/stores/player';
+	import { removeGenerationFromSong, replaceSongInList } from '$lib/stores/libraryData';
+	import { playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	// Re-score comes straight from its owner rather than through
 	// GenerationActions: Now Playing has no such context and calls the same

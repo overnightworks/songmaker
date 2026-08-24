@@ -15,13 +15,8 @@ import {
 	restoreLibrarySearch,
 	syncLibrarySearch
 } from '$lib/stores/librarySearch';
-import {
-	albumList,
-	loadSongsForAlbum,
-	selectedGenerationId,
-	selectedSongId,
-	songList
-} from '$lib/stores/player';
+import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
+import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { deselectPlaylist, ensurePlaylistsLoaded, loadPlaylistDetail } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 

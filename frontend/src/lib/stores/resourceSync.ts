@@ -27,7 +27,8 @@ import {
 	listLoadedSongIds,
 	watchLoadedSongIds
 } from '$lib/stores/librarySearch';
-import { cancelAlbumSongLoads, selectedSongId } from '$lib/stores/player';
+import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
+import { selectedSongId } from '$lib/stores/player';
 import { clearAuth } from '$lib/stores/auth';
 
 export type ResourceSyncStatus =

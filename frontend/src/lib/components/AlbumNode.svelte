@@ -8,7 +8,7 @@
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import type { AlbumSongsLoadState } from '$lib/stores/player';
+	import type { AlbumSongsLoadState } from '$lib/stores/libraryData';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 
 	interface Props {

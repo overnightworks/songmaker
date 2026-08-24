@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { albumList, selectedSong } from '$lib/stores/player';
+	import { albumList } from '$lib/stores/libraryData';
+	import { selectedSong } from '$lib/stores/player';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import { initNavigation, openLibraryCreate } from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
