@@ -470,6 +470,30 @@ def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> Non
 # ── Rate limiting ──────────────────────────────────────────────────
 
 
+def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The public share page is LimiterFailurePolicy.FAIL_OPEN: a broken
+    limiter (Redis down) must let real listeners through rather than 503."""
+    client, _ = _make_sharing_app(tmp_path)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/albums/test_album/share")
+    slug = resp.json()["share_slug"]
+
+    class _BrokenLimiter:
+        def is_allowed(self, _ip: str) -> bool:
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr(
+        "songmaker_cli.sharing_api._get_shared_limiter",
+        lambda _request: _BrokenLimiter(),
+    )
+
+    unauthed = TestClient(client.app, cookies={})
+    resp = unauthed.get(f"/shared/{slug}")
+    assert resp.status_code == 200
+
+
 def test_shared_rate_limit(tmp_path: Path) -> None:
     import songmaker_cli.constants as consts
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
+from songmaker_cli.api_helpers import enforce_rate_limit, get_cached_limiter
 from songmaker_cli.api_models import (
     QueueStreamManifestResponse,
     SharedAlbumResponse,
@@ -33,6 +33,7 @@ from songmaker_cli.constants import (
     COVER_VERSION_QUERY,
     REDIS_RL_SHARED_PREFIX,
     REDIS_RL_SHARED_STREAM_PREFIX,
+    LimiterFailurePolicy,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -62,35 +63,34 @@ from songmaker_cli.queue_streams import (
 )
 from songmaker_cli.redis_client import RedisRateLimiter
 
-log = logging.getLogger(__name__)
-
 router = APIRouter()
 
 
+# Public, unauthenticated share endpoints fail open: blocking real listeners
+# on a transient Redis outage is worse than a brief, unenforced rate limit.
+_SHARED_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_OPEN
+
+
 def _get_shared_limiter(request: Request) -> RedisRateLimiter:
-    limiter = getattr(request.app.state, "_shared_limiter", None)
-    if limiter is None:
+    def _build() -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
-        limiter = RedisRateLimiter(
+        return RedisRateLimiter(
             ctx.redis, REDIS_RL_SHARED_PREFIX,
             _consts.SHARING_RATE_LIMIT, _consts.SHARING_RATE_WINDOW_SECONDS,
         )
-        request.app.state._shared_limiter = limiter
-    return limiter
+    return get_cached_limiter(request, "_shared_limiter", _build)
 
 
 def _get_shared_stream_limiter(request: Request) -> RedisRateLimiter:
-    limiter = getattr(request.app.state, "_shared_stream_limiter", None)
-    if limiter is None:
+    def _build() -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
-        limiter = RedisRateLimiter(
+        return RedisRateLimiter(
             ctx.redis,
             REDIS_RL_SHARED_STREAM_PREFIX,
             _consts.SHARING_STREAM_RATE_LIMIT,
             _consts.SHARING_STREAM_RATE_WINDOW_SECONDS,
         )
-        request.app.state._shared_stream_limiter = limiter
-    return limiter
+    return get_cached_limiter(request, "_shared_stream_limiter", _build)
 
 
 def _check_shared_rate_limit(request: Request) -> None:
@@ -122,16 +122,13 @@ def _check_rate_limit(
         request.headers.get("x-forwarded-for"),
         ctx.trusted_proxies,
     )
-    try:
-        allowed = limiter.is_allowed(ip)
-    except Exception:
-        log.warning("Shared rate limiter unavailable -- allowing request")
-        return
-    if not allowed:
-        raise HTTPException(
-            429, "Too many requests",
-            headers={"Retry-After": str(retry_after)},
-        )
+    enforce_rate_limit(
+        limiter, ip,
+        policy=_SHARED_LIMITER_FAILURE_POLICY,
+        reject_detail="Too many requests",
+        retry_after_seconds=retry_after,
+        unavailable_log_message="Shared rate limiter unavailable -- allowing request",
+    )
 
 
 def _picked_generation(song):
