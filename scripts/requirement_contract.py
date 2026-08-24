@@ -349,8 +349,9 @@ def render_product_view(shelf: RequirementShelf, acceptance: tuple[AcceptanceEnt
         f"- Active requirement documents: {shelf.document_count}\n"
         f"- Active requirement rules: {len(shelf.rules)}\n"
         f"- Declared acceptance sentences: {len(acceptance)}\n\n"
-        "No implementation status is claimed. Issue #42 must bind acceptance to "
-        "executed tests before this view may report implementation.\n"
+        "No implementation status is claimed. This view reports declared counts "
+        "only; per-acceptance evidence comes from separate "
+        "scripts/acceptance_evidence.py runs, not from this view.\n"
     )
 
 
