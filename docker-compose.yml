@@ -135,6 +135,10 @@ services:
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-24}"
       ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
       ACESTEP_LM_MODEL_PATH: "${ACESTEP_LM_MODEL_PATH:-acestep-5Hz-lm-4B}"
+      # Empty means "use ACE-Step's own default": the GPU tier's
+      # max_duration_with_lm, and a single sample per request.
+      ACESTEP_LM_DIT_RESERVE_DURATION_S: "${ACESTEP_LM_DIT_RESERVE_DURATION_S:-}"
+      ACESTEP_LM_DIT_RESERVE_BATCH: "${ACESTEP_LM_DIT_RESERVE_BATCH:-}"
       # The preflight is active again (#202): the fork's LM allocator now
       # keeps the DiT's duration-aware demand free, so long xl-turbo takes
       # pass it honestly. Set to 1 only as an emergency bypass — a failing

@@ -371,6 +371,7 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
 | `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup (operator decision, issue #202); lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
 | `ACESTEP_LM_DIT_RESERVE_DURATION_S` | unset → GPU tier's `max_duration_with_lm` (480 on a 24GB card) | Longest track the LM keeps DiT inference room for. Lower it for a larger LM KV cache, raise it for longer tracks — see the VRAM Pre-flight Note |
+| `ACESTEP_LM_DIT_RESERVE_BATCH` | unset → `1` | Samples per request the LM keeps DiT inference room for — see "The batch cliff" |
 | `ACESTEP_SKIP_VRAM_PREFLIGHT` | `0` | Emergency bypass of the DiT VRAM pre-flight; a refused generation then OOMs instead — see the VRAM Pre-flight Note |
 | `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
@@ -400,22 +401,36 @@ The pre-flight and the LM allocator used to measure the same GPU with different 
 
 The fork now sizes that reserve with the pre-flight's own formula (`fix/duration-aware-lm-reserve` on `FlexOr2/ACE-Step-1.5`, upstream PR tracked in issue #206). Three things changed:
 
-- **The reserve is duration-aware.** `get_dit_inference_reserve_gb()` mirrors the pre-flight and adds `DIT_RESERVE_HEADROOM_GB = 0.5`. The LM initializes before any request, so the reserve is sized for the longest track the deployment intends to render with the LM resident — the GPU tier's `max_duration_with_lm` (480s here), overridable with `ACESTEP_LM_DIT_RESERVE_DURATION_S`. The resident DiT's checkpoint path now reaches the LM init, so an XL DiT reserves XL activations instead of the default profile.
-- **The reserve comes out of the KV cache, never out of the LM weights.** When even the LM's minimum KV cache cannot leave the reserve free, the shortfall is logged with the track length that *is* supported, instead of the DiT discovering it at OOM time. The `min(0.9, …)` ratio clamp logs a warning when it caps, too.
+- **The reserve is duration- and batch-aware.** `get_dit_inference_reserve_gb()` mirrors the pre-flight and adds `DIT_RESERVE_HEADROOM_GB = 0.5`. The LM initializes before any request, so the reserve is sized for the longest track and the batch size the deployment intends to render with the LM resident — the GPU tier's `max_duration_with_lm` (480s here) and one sample, overridable with `ACESTEP_LM_DIT_RESERVE_DURATION_S` and `ACESTEP_LM_DIT_RESERVE_BATCH`. The resident DiT's checkpoint path now reaches the LM init, so an XL DiT reserves XL activations instead of the default profile.
+- **The reserve comes out of the KV cache, never out of the LM weights — and never below what the LM can legally need.** The floor is what nano-vllm's scheduler actually requires: blocks for a full `max_model_len` window, doubled because classifier-free guidance (`lm_cfg_scale > 1`, which songmaker sends on every request) schedules the conditional and the unconditional sequence as a pair. The floor is derived from the checkpoint's own `config.json` (layers × KV heads × head dim × dtype), not from an estimate table — for `acestep-5Hz-lm-4B` that is 2 × 4096 tokens × 144 KB = **1.13 GB**. When the reserve would cut into that floor, the shortfall is logged with the track length that *is* supported; when even the floor does not fit, the LM fails to initialize with that message instead of the DiT hitting an OOM or nano-vllm raising `Insufficient KV cache to schedule sequence` mid-generation. The `min(0.9, …)` ratio clamp logs a warning when it caps, too.
 - **Memory the allocator cannot see is subtracted up front.** nano-vllm sizes the KV cache against PyTorch's allocator bookkeeping, which misses the CUDA context and fragmentation the driver reports (1.24 GB in the measurement below). Without that correction every gigabyte reserved for the DiT was spent twice.
 
 Measured on this RTX 3090 (23.53 GiB usable, xl-turbo + `acestep-5Hz-lm-4B`, 165s track, pre-flight bypassed so the run could complete):
 
 | | before the fix (measured) | after the fix (same inputs) |
 |---|---|---|
-| LM ratio | 0.915 → clamped to 0.900, silently | 0.822, clamp not reached |
-| KV cache | 2.46 GB / 17.9k tokens | 0.80 GB / 5.6k tokens (above `max_model_len` 4096) |
-| free for the DiT | 1.28 GB | 2.76 GB |
-| longest xl-turbo take that passes | ~96s | ~270s |
+| LM ratio | 0.915 → clamped to 0.900, silently | 0.836, clamp not reached |
+| KV cache | 2.46 GB / 17.9k tokens (≈4 CFG pairs) | 1.13 GB / 8.2k tokens (exactly one CFG pair of 4096-token windows) |
+| free for the DiT | 1.28 GB | 2.43 GB |
+| longest xl-turbo take that passes, batch 1 | ~96s | ~232s |
 
 The DiT stage itself peaked at 23415 MiB of 24576 MiB against a 22813 MiB plateau while the LM ran — 0.59 GB where the pre-flight demanded 1.88 GB. The pre-flight is therefore still conservative by roughly a factor of three; the point of the fix is that the LM now respects that conservatism instead of contradicting it.
 
-`ACESTEP_LM_DIT_RESERVE_DURATION_S` is the tuning lever if a card ever ends up in the capped case: lowering it hands the LM a larger KV cache (better for long lyrics), raising it hands the DiT more room (longer tracks). This deployment leaves it unset and takes the tier default, which on a 24 GB card with the 4B LM lands in the capped case and says so once per subprocess start.
+The KV cache is a floor, not a budget that shrinks with track length: one CFG pair of full context windows costs the same 1.13 GB whatever the track is. The LM's own 4096-token window only becomes the binding limit near ACE-Step's 600s ceiling (the 5 Hz LM emits 5 codes per second of audio — 825 codes for the 165s take above — plus the prompt), so on this card the DiT reserve binds first, at ~232s.
+
+### The batch cliff
+
+The pre-flight's demand scales with the batch size, and so does the reserve — but the reserve is sized once, at LM init, for `ACESTEP_LM_DIT_RESERVE_BATCH` (default 1, this deployment's real usage: songmaker sends `count=1` per request). With the 2.43 GB the LM leaves on this card:
+
+| batch | pre-flight demand at 165s | longest take that passes |
+|---|---|---|
+| 1 | 1.88 GB | ~232s |
+| 2 | 3.25 GB → refused | ~116s |
+| 8 | 11.5 GB → refused | refused even at 60s (demand 4.5 GB) |
+
+A refused batch job fails cleanly and its message names the remedy — `Insufficient free VRAM: need ~X GB, only Y GB available. Reduce batch size (currently N) or audio duration (currently Ns).` Raising `ACESTEP_LM_DIT_RESERVE_BATCH` makes the LM hold that room back on a card that *has* it; on this 24 GB card with the 4B LM there is nothing left to hold back (the KV floor already binds), so the real remedies for batch work here are a shorter track or a smaller LM.
+
+`ACESTEP_LM_DIT_RESERVE_DURATION_S` is the other lever: lowering it hands the LM a larger KV cache (better for long lyrics), raising it hands the DiT more room. This deployment leaves both unset and takes the tier default, which on a 24 GB card with the 4B LM lands in the capped case and says so once per subprocess start.
 
 ## Deferred features (blocked upstream)
 
