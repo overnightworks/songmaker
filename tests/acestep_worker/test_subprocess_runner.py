@@ -86,7 +86,7 @@ def test_build_env_uses_worker_settings_defaults() -> None:
     env = build_env("sft", port=8101, vram_budget_gb=24.0)
     assert env["ACESTEP_DEVICE"] == "cuda"
     assert env["ACESTEP_INIT_LLM"] == "1"
-    assert env["ACESTEP_LM_MODEL_PATH"] == "acestep-5Hz-lm-1.7B"
+    assert env["ACESTEP_LM_MODEL_PATH"] == "acestep-5Hz-lm-4B"
     assert env["ACESTEP_LM_BACKEND"] == "vllm"
     assert env["ACESTEP_COMPILE_MODEL"] == "0"
     assert env["PYTORCH_CUDA_ALLOC_CONF"] == "expandable_segments:True"
@@ -98,12 +98,12 @@ def test_build_env_takes_subprocess_knobs_from_worker_settings(
     monkeypatch.setenv("ACESTEP_LM_BACKEND", "transformers")
     monkeypatch.setenv("ACESTEP_COMPILE_MODEL", "1")
     monkeypatch.setenv("ACESTEP_INIT_LLM", "0")
-    monkeypatch.setenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
+    monkeypatch.setenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-1.7B")
     env = build_env("sft", port=8101, vram_budget_gb=24.0)
     assert env["ACESTEP_LM_BACKEND"] == "transformers"
     assert env["ACESTEP_COMPILE_MODEL"] == "1"
     assert env["ACESTEP_INIT_LLM"] == "0"
-    assert env["ACESTEP_LM_MODEL_PATH"] == "acestep-5Hz-lm-4B"
+    assert env["ACESTEP_LM_MODEL_PATH"] == "acestep-5Hz-lm-1.7B"
 
 
 def test_build_env_vram_budget_wins_over_inherited_value(

@@ -46,14 +46,14 @@ class WorkerSettings(BaseSettings):
     # ACE-Step subprocess environment
     acestep_device: str = "cuda"
     acestep_init_llm: bool = True
-    # ACE-Step's own GPU_TIER_CONFIGS["tier6b"]["recommended_lm_model"]
+    # 4B by operator decision (issue #202, 2026-08-24): 123 historical
+    # xl-turbo takes over 120s ran on 4B without an OOM, and switching the
+    # LM would silently change the sound of existing productions. ACE-Step's
+    # own GPU_TIER_CONFIGS["tier6b"]["recommended_lm_model"]
     # (vendor/acestep/acestep/gpu_config.py, 20-24GB cards e.g. RTX 3090/4090)
-    # names 1.7B, not 4B — 4B is only recommended once VRAM is "unlimited"
-    # (>=24GB free for the LM allocator on top of the DiT). Overriding to 4B
-    # on a 20-24GB card starves the DiT's VRAM headroom and fails the
-    # generation preflight for XL modes above ~120s (issue #202). Override
-    # via ACESTEP_LM_MODEL_PATH for cards with more headroom.
-    acestep_lm_model_path: str = "acestep-5Hz-lm-1.7B"
+    # suggests 1.7B for a tighter VRAM budget — override via
+    # ACESTEP_LM_MODEL_PATH on a card that needs the smaller LM.
+    acestep_lm_model_path: str = "acestep-5Hz-lm-4B"
     acestep_lm_backend: str = "vllm"
     acestep_compile_model: bool = False
     pytorch_cuda_alloc_conf: str = "expandable_segments:True"
