@@ -28,8 +28,7 @@
 		bind:value
 		bind:this={inputRef}
 		{onkeydown}
-		{oninput}
-	></textarea>
+		{oninput}></textarea>
 	<button class="send-btn" onclick={onsend} {disabled} aria-label="Send"> ↑ </button>
 </div>
 
