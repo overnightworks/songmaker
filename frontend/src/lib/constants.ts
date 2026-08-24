@@ -3,7 +3,8 @@ export const APP_NAME = 'Hallucinai';
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
 // share failure, since the link exists and only the copy step didn't.
-export const SHARE_BUTTON_COPY_FAILED_TOAST = 'Shared — copy the link manually, clipboard write failed';
+export const SHARE_BUTTON_COPY_FAILED_TOAST =
+	'Shared — copy the link manually, clipboard write failed';
 
 export const DIALOG_CANCEL_LABEL = 'Cancel';
 export const DIALOG_CONFIRM_LABEL = 'Confirm';
