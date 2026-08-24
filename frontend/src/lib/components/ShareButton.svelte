@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ShareResult } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
+	import { SHARE_BUTTON_COPY_FAILED_TOAST } from '$lib/constants';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -22,8 +23,12 @@
 				addToast('Sharing disabled', 'success');
 			} else {
 				const result = await onshare();
-				await navigator.clipboard.writeText(result.share_url);
-				addToast('Link copied to clipboard', 'success');
+				try {
+					await navigator.clipboard.writeText(result.share_url);
+					addToast('Link copied to clipboard', 'success');
+				} catch {
+					addToast(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
+				}
 			}
 		} catch {
 			addToast('Share failed', 'error');
