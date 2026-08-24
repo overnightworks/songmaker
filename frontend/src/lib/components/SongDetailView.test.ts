@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 import type {
 	AlbumItem,
 	GenerationItem,
+	JobItem,
 	SongItem,
 	VersionGenerationParams,
 	VersionItem
@@ -15,6 +16,7 @@ import {
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_LABEL,
+	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_TAB_TAKES_LABEL,
@@ -48,6 +50,7 @@ import {
 	setDraftLyrics,
 	setDraftPrompt
 } from '$lib/stores/editor';
+import { activeJobs } from '$lib/stores/jobs';
 import {
 	detailTab,
 	initNavigation,
@@ -77,6 +80,7 @@ const uploadSongCover = vi.fn();
 const deleteSongCover = vi.fn();
 const deleteAlbumCover = vi.fn();
 const fetchHealth = vi.fn();
+const generateSong = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -136,6 +140,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		uploadSongCover: (...args: unknown[]) => uploadSongCover(...args),
 		deleteSongCover: (...args: unknown[]) => deleteSongCover(...args),
 		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
+		generateSong: (...args: unknown[]) => generateSong(...args),
 		updateSong: vi.fn(),
 		deleteVersion: vi.fn(),
 		addGenerationToPlaylist: vi.fn().mockResolvedValue(undefined),
@@ -183,6 +188,25 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
+}
+
+function jobStatus(overrides: Partial<JobItem> = {}): JobItem {
+	return {
+		id: 'job1',
+		type: 'generate',
+		status: 'completed',
+		progress: 1,
+		...overrides
+	};
+}
+
+// trackJob() opens a real EventSource once a generate call resolves; jsdom
+// ships none, so a click that lets its promise settle needs a stand-in.
+class MockEventSource {
+	closed = false;
+	close(): void {
+		this.closed = true;
+	}
 }
 
 function healthSummary(overrides: Partial<HealthSummary> = {}): HealthSummary {
@@ -350,6 +374,9 @@ beforeEach(() => {
 	deleteAlbumCover.mockReset();
 	fetchHealth.mockReset();
 	fetchHealth.mockResolvedValue(healthSummary());
+	generateSong.mockReset();
+	activeJobs.set([]);
+	vi.stubGlobal('EventSource', MockEventSource);
 	vi.mocked(addToast).mockClear();
 });
 
@@ -367,6 +394,7 @@ afterEach(async () => {
 	selectedAlbumId.set(null);
 	songList.set([]);
 	albumList.set([]);
+	activeJobs.set([]);
 	clearHitboxStyles();
 	clearPointer();
 	vi.unstubAllGlobals();
@@ -582,6 +610,96 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 		const btn = generateBtn(target);
 		expect(btn?.disabled).toBe(false);
 		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
+	});
+});
+
+describe('SongDetailView Generate double-click guard (#234)', () => {
+	beforeEach(() => {
+		recipeModel.set('turbo');
+	});
+
+	function generateBtn(target: HTMLElement): HTMLButtonElement {
+		const btn = target.querySelector<HTMLButtonElement>('.generate-btn');
+		if (!btn) throw new Error('Expected the Generate button');
+		return btn;
+	}
+
+	// Red before the fix: onGenerate only set its guard from isGenerating,
+	// which reads activeJobs — populated only once the POST's response comes
+	// back and trackJob() runs. A second synchronous click before that
+	// response landed a second POST. The fix sets a guard flag synchronously
+	// before onGenerate's first await, closing that window.
+	it('sends exactly one request when the button is clicked twice before the first response', async () => {
+		let resolveGenerate: (job: JobItem) => void = () => {};
+		generateSong.mockReturnValue(
+			new Promise<JobItem>((resolve) => {
+				resolveGenerate = resolve;
+			})
+		);
+		const target = await renderView();
+		const btn = generateBtn(target);
+
+		btn.click();
+		btn.click();
+		await tick();
+
+		expect(generateSong).toHaveBeenCalledTimes(1);
+
+		resolveGenerate(jobStatus({ status: 'completed' }));
+		await tick();
+		await Promise.resolve();
+		await tick();
+	});
+
+	it('locks the button while the request is in flight, before any job exists', async () => {
+		let resolveGenerate: (job: JobItem) => void = () => {};
+		generateSong.mockReturnValue(
+			new Promise<JobItem>((resolve) => {
+				resolveGenerate = resolve;
+			})
+		);
+		const target = await renderView();
+		const btn = generateBtn(target);
+		expect(btn.disabled).toBe(false);
+
+		btn.click();
+		await tick();
+
+		expect(btn.disabled).toBe(true);
+		expect(btn.textContent).toContain(EDITOR_GENERATING_LABEL);
+
+		resolveGenerate(jobStatus({ status: 'completed' }));
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(btn.disabled).toBe(false);
+	});
+
+	it('releases the guard after a successful response, letting the next click through', async () => {
+		generateSong.mockResolvedValue(jobStatus({ status: 'completed' }));
+		const target = await renderView();
+		const btn = generateBtn(target);
+
+		btn.click();
+		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
+		await tick();
+
+		btn.click();
+		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(2));
+	});
+
+	it('releases the guard after a failed response, letting a retry through', async () => {
+		generateSong.mockRejectedValueOnce(new Error('boom'));
+		const target = await renderView();
+		const btn = generateBtn(target);
+
+		btn.click();
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('boom', 'error'));
+
+		generateSong.mockResolvedValueOnce(jobStatus({ status: 'completed' }));
+		btn.click();
+		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(2));
 	});
 });
 

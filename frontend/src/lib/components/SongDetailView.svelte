@@ -144,6 +144,11 @@
 	let coverBusy = $state(false);
 	let requestedParentAlbumId: string | null = $state(null);
 	let stackedExpanded = $state(false);
+	// Set synchronously at the top of onGenerate, before its first await, so a
+	// second click arriving while the request round-trips (before a job lands
+	// in activeJobs and isGenerating below turns true) is rejected too. See
+	// #234: isGenerating alone left a gap between click and response.
+	let generateRequestInFlight = $state(false);
 
 	const song = $derived($selectedSong);
 	const songs = $derived($songList);
@@ -290,6 +295,7 @@
 	const isGenerating = $derived(
 		generateJob !== null && (generateJob.status === 'running' || generateJob.status === 'queued')
 	);
+	const generatePending = $derived(isGenerating || generateRequestInFlight);
 	const queueDepthCapReached = $derived($health?.queue_depth_cap_reached ?? false);
 	const gpuOffline = $derived($health?.acestep_workers_online === 0);
 
@@ -418,7 +424,8 @@
 	}
 
 	async function onGenerate(): Promise<void> {
-		if (!song || $recipeModel === null) return;
+		if (!song || $recipeModel === null || generateRequestInFlight) return;
+		generateRequestInFlight = true;
 		const model: string = $recipeModel;
 		try {
 			if (dirty) {
@@ -459,6 +466,8 @@
 			}
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
+		} finally {
+			generateRequestInFlight = false;
 		}
 	}
 
@@ -637,7 +646,7 @@
 				? `${EDITOR_QUEUED_LABEL} (#${generateJob.queue_position})`
 				: EDITOR_QUEUED_LABEL;
 		}
-		if (isGenerating) return EDITOR_GENERATING_LABEL;
+		if (generatePending) return EDITOR_GENERATING_LABEL;
 		if (gpuOffline) return EDITOR_GPU_OFFLINE_LABEL;
 		return EDITOR_GENERATE_LABEL;
 	}
@@ -678,13 +687,13 @@
 			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
 			ongenerate={onGenerate}
 			generateLabel={generateLabel()}
-			generateDisabled={isGenerating ||
+			generateDisabled={generatePending ||
 				!$editLyrics ||
 				!$editPrompt ||
 				$recipeModel === null ||
 				gpuOffline}
 			generateTitle={generateTitle()}
-			generating={isGenerating}
+			generating={generatePending}
 			{compact}
 		/>
 
