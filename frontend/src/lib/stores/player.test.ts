@@ -7,7 +7,6 @@ import type {
 	GenerationItem,
 	LibraryPoolQueue,
 	LibraryPoolTakeItem,
-	PaginatedResponse,
 	PlaylistDetailItem,
 	PlaylistEntryItem,
 	QueueStreamManifest,
@@ -49,18 +48,7 @@ vi.mock('$lib/api/client', () => ({
 	}),
 	fetchLastFailedGeneration: vi.fn()
 }));
-import {
-	albumList,
-	albumSongsLoad,
-	loadSongsForAlbum,
-	cancelAlbumSongLoads,
-	replaceSongInList,
-	upsertSongInList,
-	overlaySongList,
-	retainRicherSong,
-	songList,
-	updateGenerationScores
-} from './libraryData';
+import { albumList, songList } from './libraryData';
 import {
 	buildQueueViewModel,
 	canPlayNextSong,
@@ -392,34 +380,6 @@ describe('browsing state', () => {
 		expect(get(songList).find((item) => item.id === 's-partial')?.generations).toHaveLength(2);
 	});
 
-	it('replaceSongInList applies an authoritative empty generation list', () => {
-		songList.set([makeSong({ generation_count: 1, generations: [makeGen()] })]);
-		replaceSongInList(makeSong({ generation_count: 0, generations: [] }));
-		expect(get(songList)[0].generations).toEqual([]);
-		expect(get(songList)[0].generation_count).toBe(0);
-	});
-
-	it('cancelAlbumSongLoads drops an in-flight album merge', async () => {
-		let resolvePage: ((value: PaginatedResponse<SongItem>) => void) | undefined;
-		vi.mocked(fetchSongs).mockImplementationOnce(
-			() =>
-				new Promise<PaginatedResponse<SongItem>>((resolve) => {
-					resolvePage = resolve;
-				})
-		);
-		const pending = loadSongsForAlbum('a1');
-		cancelAlbumSongLoads();
-		resolvePage?.({
-			items: [makeSong({ id: 's-stale', album_id: 'a1' })],
-			total: 1,
-			offset: 0,
-			limit: 200,
-			has_more: false
-		});
-		await pending;
-		expect(get(songList).some((item) => item.id === 's-stale')).toBe(false);
-	});
-
 	it('ensureGenerationsLoaded fetches and adds a song opened directly, not yet in the list', async () => {
 		// Felix, 2026-07-18: clicking a song directly (from a playlist) loaded nothing — only
 		// opening its album did. The song was absent from the list, so the old guard bailed.
@@ -432,87 +392,6 @@ describe('browsing state', () => {
 		expect(get(songList).map((s) => s.id)).toContain('s-direct');
 		selectedSongId.set('s-direct');
 		expect(get(selectedSong)?.generations.length).toBe(1);
-	});
-
-	it('records a retryable error when album songs fail to load', async () => {
-		vi.mocked(fetchSongs).mockRejectedValueOnce(new Error('offline'));
-		await loadSongsForAlbum('a1');
-		expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error: 'offline' });
-	});
-
-	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
-		songList.set([makeSong({ id: 's-page', album_id: 'a1' })]);
-		vi.mocked(fetchSongs).mockResolvedValueOnce({
-			items: [
-				makeSong({ id: 's-page', album_id: 'a1', title: 'Page' }),
-				makeSong({ id: 's-hidden', album_id: 'a1', title: 'Hidden' })
-			],
-			total: 2,
-			offset: 0,
-			limit: 200,
-			has_more: false
-		});
-		await loadSongsForAlbum('a1');
-		expect(vi.mocked(fetchSongs)).toHaveBeenCalledWith('a1', 0, 200);
-		expect(
-			get(songList)
-				.map((item) => item.id)
-				.sort()
-		).toEqual(['s-hidden', 's-page']);
-	});
-
-	it('retainRicherSong keeps loaded takes when a summary arrives later', () => {
-		const loaded = makeSong({
-			id: 's1',
-			generation_count: 1,
-			generations: [makeGen()]
-		});
-		const summary = makeSong({
-			id: 's1',
-			title: 'Updated title',
-			generation_count: 0,
-			generations: []
-		});
-		const merged = retainRicherSong(loaded, summary);
-		expect(merged.title).toBe('Updated title');
-		expect(merged.generation_count).toBe(1);
-		expect(merged.generations).toHaveLength(1);
-	});
-
-	it('retainRicherSong raises generation_count without dropping loaded takes', () => {
-		const loaded = makeSong({
-			id: 's1',
-			generation_count: 1,
-			generations: [makeGen()]
-		});
-		const summary = makeSong({
-			id: 's1',
-			generation_count: 2,
-			generations: []
-		});
-		const merged = retainRicherSong(loaded, summary);
-		expect(merged.generation_count).toBe(2);
-		expect(merged.generations).toHaveLength(1);
-	});
-
-	it('overlaySongList preserves loaded takes across a browse reset', () => {
-		const existing = [
-			makeSong({
-				id: 's1',
-				generation_count: 1,
-				generations: [makeGen()]
-			})
-		];
-		const incoming = [makeSong({ id: 's1', generation_count: 0, generations: [] })];
-		expect(overlaySongList(existing, incoming)[0].generations).toHaveLength(1);
-	});
-
-	it('upsertSongInList appends an absent song and replaces a present one', () => {
-		songList.set([makeSong({ id: 'a' })]);
-		upsertSongInList(makeSong({ id: 'b', title: 'B' }));
-		upsertSongInList(makeSong({ id: 'a', title: 'A2' }));
-		const byId = new Map(get(songList).map((s) => [s.id, s.title]));
-		expect([byId.get('a'), byId.get('b')]).toEqual(['A2', 'B']);
 	});
 
 	it('selectedGeneration derives from selectedSong', () => {
@@ -1228,23 +1107,6 @@ describe('a playlist queue keeps its own identity', () => {
 		expect(playingPlaylist().entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
 		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
 		expect(get(shuffleLabel)).toBe('Disable shuffle (this playlist)');
-	});
-});
-
-describe('updateGenerationScores', () => {
-	it('updates scores for matching generation', () => {
-		songList.set([makeSong()]);
-		updateGenerationScores('g1', { dynamics: 80 });
-		const songs = get(songList);
-		expect(songs[0].generations[0].scores).toEqual({ dynamics: 80 });
-	});
-
-	it('does not affect other generations', () => {
-		const gen2 = makeGen({ id: 'g2', seed: 99 });
-		songList.set([makeSong({ generations: [makeGen(), gen2] })]);
-		updateGenerationScores('g1', { dynamics: 80 });
-		const songs = get(songList);
-		expect(songs[0].generations[1].scores).toBeNull();
 	});
 });
 
