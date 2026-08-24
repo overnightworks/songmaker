@@ -52,6 +52,10 @@ beforeEach(() => {
 afterEach(() => {
 	resetPlaylists();
 	toasts.set([]);
+	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now; the
+	// module-level vi.fn() stubs from vi.mock('$lib/api/client', ...) above
+	// need an explicit clear or their call counts leak into the next test.
+	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	vi.useRealTimers();
 });

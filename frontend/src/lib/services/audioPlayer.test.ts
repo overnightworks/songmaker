@@ -154,7 +154,9 @@ beforeEach(() => {
 	fakeAudio = new FakeAudio();
 	vi.stubGlobal(
 		'Audio',
-		vi.fn(() => fakeAudio)
+		vi.fn(function () {
+			return fakeAudio;
+		})
 	);
 	vi.stubGlobal('MediaError', {
 		MEDIA_ERR_ABORTED: 1,
@@ -1066,7 +1068,13 @@ describe('audio graph', () => {
 			resume: vi.fn(),
 			close: vi.fn()
 		};
-		return { context, analyser, constructor: vi.fn(() => context) };
+		return {
+			context,
+			analyser,
+			constructor: vi.fn(function () {
+				return context;
+			})
+		};
 	}
 
 	it('hands out one analyser for the element, however often it is asked', () => {
