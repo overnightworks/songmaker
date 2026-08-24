@@ -259,18 +259,24 @@ def test_consume_task_stream_error_missing_field_raises_protocol_error() -> None
             _run(consume_task_stream(worker, "gen-1"))
 
 
-def test_consume_task_stream_empty_error_is_a_protocol_error(
-    caplog: pytest.LogCaptureFixture,
+@pytest.mark.parametrize(
+    "consume", [consume_task_stream, consume_download_task_stream],
+    ids=["generation", "download"],
+)
+def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds(
+    consume, caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An empty 'error' field carries no cause, so it must not be relayed
-    as one: the worker always sends text, and the job layer shows a
-    WorkerGenerationFailed message verbatim."""
+    as one, for either task kind: the worker always sends text, and the job
+    layer shows the message verbatim. Download previously diverged here,
+    raising ``WorkerTaskFailed('')`` instead — issue #227 unifies both
+    consumers on the shared ``_consume_task_stream`` implementation."""
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": ""})])
     with _patch_async_client(client):
         with caplog.at_level("WARNING", logger="songmaker_cli.scheduler"):
             with pytest.raises(WorkerProtocolError, match="empty 'error'"):
-                _run(consume_task_stream(worker, "gen-1"))
+                _run(consume(worker, "task-1"))
     assert any("empty 'error'" in r.message for r in caplog.records)
 
 
