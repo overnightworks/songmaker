@@ -360,7 +360,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 
 ### ACE-Step subprocess env vars (passed by the worker)
 
-These are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step. Most are computed from the worker settings above; you don't set them directly.
+Most of these are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step, computed from the worker settings above; you don't set them directly. The three tuning vars below (`ACESTEP_LM_DIT_RESERVE_DURATION_S`, `ACESTEP_LM_DIT_RESERVE_BATCH`, `ACESTEP_SKIP_VRAM_PREFLIGHT`) are not built there — `build_env()` copies the worker container's environment, so they ride along from `docker-compose.yml` and are read by ACE-Step itself.
 
 | Var | Default / Source | Purpose |
 |-----|---|---|
@@ -403,20 +403,22 @@ The fork now sizes that reserve with the pre-flight's own formula (`fix/duration
 
 - **The reserve is duration- and batch-aware.** `get_dit_inference_reserve_gb()` mirrors the pre-flight and adds `DIT_RESERVE_HEADROOM_GB = 0.5`. The LM initializes before any request, so the reserve is sized for the longest track and the batch size the deployment intends to render with the LM resident — the GPU tier's `max_duration_with_lm` (480s here) and one sample, overridable with `ACESTEP_LM_DIT_RESERVE_DURATION_S` and `ACESTEP_LM_DIT_RESERVE_BATCH`. The resident DiT's checkpoint path now reaches the LM init, so an XL DiT reserves XL activations instead of the default profile.
 - **The reserve comes out of the KV cache, never out of the LM weights — and never below what the LM can legally need.** The floor is what nano-vllm's scheduler actually requires: blocks for a full `max_model_len` window, doubled because classifier-free guidance (`lm_cfg_scale > 1`, which songmaker sends on every request) schedules the conditional and the unconditional sequence as a pair. The floor is derived from the checkpoint's own `config.json` (layers × KV heads × head dim × dtype), not from an estimate table — for `acestep-5Hz-lm-4B` that is 2 × 4096 tokens × 144 KB = **1.13 GB**. When the reserve would cut into that floor, the shortfall is logged with the track length that *is* supported; when even the floor does not fit, the LM fails to initialize with that message instead of the DiT hitting an OOM or nano-vllm raising `Insufficient KV cache to schedule sequence` mid-generation. The `min(0.9, …)` ratio clamp logs a warning when it caps, too.
-- **Memory the allocator cannot see is subtracted up front.** nano-vllm sizes the KV cache against PyTorch's allocator bookkeeping, which misses the CUDA context and fragmentation the driver reports (1.24 GB in the measurement below). Without that correction every gigabyte reserved for the DiT was spent twice.
+- **Memory the allocator cannot see is subtracted up front.** nano-vllm sizes the KV cache against PyTorch's allocator bookkeeping, which misses the CUDA context and fragmentation the driver reports — 1.42 GB at LM init in the measurement below, and still 1.24 GB when the KV cache was allocated. Without that correction every gigabyte reserved for the DiT was spent twice.
 
 Measured on this RTX 3090 (23.53 GiB usable, xl-turbo + `acestep-5Hz-lm-4B`, 165s track, pre-flight bypassed so the run could complete):
 
 | | before the fix (measured) | after the fix (same inputs) |
 |---|---|---|
 | LM ratio | 0.915 → clamped to 0.900, silently | 0.836, clamp not reached |
-| KV cache | 2.46 GB / 17.9k tokens (≈4 CFG pairs) | 1.13 GB / 8.2k tokens (exactly one CFG pair of 4096-token windows) |
+| KV cache | 2.46 GB / 17.9k tokens (≈2 CFG pairs) | 1.13 GB / 8.2k tokens (exactly one CFG pair of 4096-token windows) |
 | free for the DiT | 1.28 GB | 2.43 GB |
 | longest xl-turbo take that passes, batch 1 | ~96s | ~232s |
 
 The DiT stage itself peaked at 23415 MiB of 24576 MiB against a 22813 MiB plateau while the LM ran — 0.59 GB where the pre-flight demanded 1.88 GB. The pre-flight is therefore still conservative by roughly a factor of three; the point of the fix is that the LM now respects that conservatism instead of contradicting it.
 
 The KV cache is a floor, not a budget that shrinks with track length: one CFG pair of full context windows costs the same 1.13 GB whatever the track is. The LM's own 4096-token window only becomes the binding limit near ACE-Step's 600s ceiling (the 5 Hz LM emits 5 codes per second of audio — 825 codes for the 165s take above — plus the prompt), so on this card the DiT reserve binds first, at ~232s.
+
+Two numbers describe that limit and they are not the same: the LM's startup warning names **~172s**, the pre-flight accepts up to **~232s**. The warning counts the reserve's own `DIT_RESERVE_HEADROOM_GB` slack, the pre-flight does not — the warning is the length that would still have half a gigabyte of margin, the pre-flight is where the estimate runs out. Tracks between the two pass, with less slack than the reserve aims for.
 
 ### The batch cliff
 
