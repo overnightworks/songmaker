@@ -6,6 +6,9 @@ export const APP_NAME = 'Hallucinai';
 export const SHARE_BUTTON_COPY_FAILED_TOAST =
 	'Shared — copy the link manually, clipboard write failed';
 
+export const SHARE_LINK_COPIED_TOAST = 'Link copied';
+export const SHARE_LINK_COPY_FAILED_TOAST = 'Copy failed';
+
 export const DIALOG_CANCEL_LABEL = 'Cancel';
 export const DIALOG_CONFIRM_LABEL = 'Confirm';
 

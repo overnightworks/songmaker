@@ -132,6 +132,7 @@
 	import EditorSheet from './editor/EditorSheet.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
+	import ShareLinkChip from './ShareLinkChip.svelte';
 
 	let showDeleteConfirm = $state(false);
 	let compact = $state(false);
@@ -697,18 +698,7 @@
 
 		<div class="editor-body">
 			{#if song.is_shared && song.share_slug}
-				<button
-					type="button"
-					class="share-link"
-					onclick={() => {
-						const url = `${window.location.origin}/share/song/${song.share_slug}`;
-						navigator.clipboard.writeText(url);
-						addToast('Link copied', 'success');
-					}}
-					title="Click to copy share link"
-				>
-					{window.location.origin}/share/song/{song.share_slug}
-				</button>
+				<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
 			{/if}
 
 			<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
@@ -943,24 +933,6 @@
 		flex: 1;
 		min-height: 0;
 		overflow: hidden auto;
-	}
-
-	.share-link {
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		padding: 0.3rem 0.6rem;
-		cursor: pointer;
-		word-break: break-all;
-		text-align: left;
-		align-self: flex-start;
-	}
-
-	.share-link:hover {
-		border-color: var(--primary);
-		color: var(--primary);
 	}
 
 	.editor-tabs {
