@@ -125,6 +125,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 		picked_count: 0,
 		is_shared: false,
 		created_at: '',
+		is_archived: false,
 		...overrides
 	};
 }

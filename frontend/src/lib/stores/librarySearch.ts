@@ -97,7 +97,8 @@ export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 					picked_count: 0,
 					is_shared: false,
 					share_slug: null,
-					created_at: hit.song.created_at
+					created_at: hit.song.created_at,
+					is_archived: false
 				},
 				songs: []
 			};

@@ -70,9 +70,13 @@ def count_songs(
     album_id: str | None = None,
     user_id: str | None = None,
     q: str | None = None,
+    exclude_archived_albums: bool = False,
 ) -> int:
     query = session.query(Song)
-    query = _apply_song_filters(query, album_id=album_id, user_id=user_id, q=q)
+    query = _apply_song_filters(
+        query, album_id=album_id, user_id=user_id, q=q,
+        exclude_archived_albums=exclude_archived_albums,
+    )
     return query.count()
 
 

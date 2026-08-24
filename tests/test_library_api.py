@@ -448,6 +448,58 @@ def test_list_songs_q_and_sort(alice: TestClient) -> None:
     assert data["items"][0]["album_title"] == "Nachtstrom"
 
 
+def test_list_songs_without_album_id_excludes_archived_album_songs(tmp_path: Path) -> None:
+    """GET /api/songs browse (no album_id) must hide songs of archived albums --
+    both from items and from total/has_more, since count_songs and list_songs
+    can drift independently if only one is filtered (#223 review finding)."""
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="visibility-live", title="Visibility Live",
+            owner=USER_A, created_at=_ts(1),
+        )
+        _add_song(
+            session, song_id="visibility-live-song", title="Visibility Case Song",
+            album_id="visibility-live", created_at=_ts(2),
+        )
+        _add_album(
+            session, album_id="visibility-archived", title="Visibility Archived",
+            owner=USER_A, created_at=_ts(3), is_archived=True,
+        )
+        _add_song(
+            session, song_id="visibility-archived-song", title="Visibility Case Song",
+            album_id="visibility-archived", created_at=_ts(4),
+        )
+        session.commit()
+
+    browse = client.get("/api/songs", params={"q": "Visibility Case Song"})
+    data = browse.json()
+    assert [s["id"] for s in data["items"]] == ["visibility-live-song"]
+    assert data["total"] == 1
+    assert data["has_more"] is False
+
+
+def test_list_songs_with_album_id_shows_songs_of_an_archived_album(tmp_path: Path) -> None:
+    """Direct-by-ID access (album_id set) must keep working for an archived
+    album's songs -- AlbumDetailView depends on this (#223 review finding)."""
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="direct-archived", title="Direct Archived",
+            owner=USER_A, created_at=_ts(1), is_archived=True,
+        )
+        _add_song(
+            session, song_id="direct-archived-song", title="Direct Archived Song",
+            album_id="direct-archived", created_at=_ts(2),
+        )
+        session.commit()
+
+    scoped = client.get("/api/songs", params={"album_id": "direct-archived"})
+    data = scoped.json()
+    assert [s["id"] for s in data["items"]] == ["direct-archived-song"]
+    assert data["total"] == 1
+
+
 def test_list_albums_offset_pagination_stable_title_sort(tmp_path: Path) -> None:
     client, factory = _make_client(tmp_path, USER_A)
     with factory() as session:

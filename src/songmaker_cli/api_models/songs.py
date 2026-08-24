@@ -144,7 +144,7 @@ class AlbumResponse(BaseModel):
     share_slug: str | None = None
     cover: AlbumCoverUrls | None = None
     created_at: str
-    is_archived: bool | None = None
+    is_archived: bool = False
     archived_at: str | None = None
 
     @classmethod

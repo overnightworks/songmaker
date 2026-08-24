@@ -207,7 +207,7 @@ export interface AlbumItem {
 	share_slug?: string | null;
 	cover?: AlbumCoverUrls | null;
 	created_at: string;
-	is_archived?: boolean | null;
+	is_archived: boolean;
 	archived_at?: string | null;
 }
 

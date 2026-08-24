@@ -197,7 +197,8 @@ function album(id: string, title: string) {
 		picked_count: 0,
 		is_shared: false,
 		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00'
+		created_at: '2026-01-01T00:00:00+00:00',
+		is_archived: false
 	};
 }
 
