@@ -16,7 +16,7 @@
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT
 	} from '$lib/constants';
-	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
+	import { nowPlayingTakeLabel, takeModelModeLabel } from '$lib/constants/now-playing';
 	import {
 		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
@@ -399,6 +399,7 @@
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
 					{@const headline = headlineScore(gen)}
+					{@const modelMode = takeModelModeLabel(gen.model_mode)}
 					<!-- `role` and `tabindex` move together with rowIsActionable, which the
 					     a11y check cannot narrow through a dynamic role. -->
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -429,6 +430,10 @@
 
 							{#if duration}
 								<span class="take-duration">{duration}</span>
+							{/if}
+
+							{#if modelMode}
+								<span class="model-badge" title="Model: {modelMode}">{modelMode}</span>
 							{/if}
 
 							{#if headline}
@@ -806,6 +811,18 @@
 		color: var(--score-bad);
 	}
 
+	.model-badge {
+		font-size: 0.6rem;
+		padding: 0.1rem 0.35rem;
+		border-radius: 3px;
+		letter-spacing: 0.3px;
+		background: var(--surface-hover);
+		border: 1px solid var(--border);
+		color: var(--text-subtle);
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
 	.rescoring-badge {
 		font-size: 0.6rem;
 		padding: 0.1rem 0.35rem;
@@ -861,7 +878,8 @@
 
 	.take-row.archived .take-label,
 	.take-row.archived .take-duration,
-	.take-row.archived .score-badge {
+	.take-row.archived .score-badge,
+	.take-row.archived .model-badge {
 		color: var(--text-disabled);
 	}
 

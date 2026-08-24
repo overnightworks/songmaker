@@ -103,6 +103,18 @@ async function render(
 }
 
 describe('NowPlayingTake', () => {
+	it("names the take's version, number, duration and model in the heading", async () => {
+		await render({
+			generation: generation({
+				version_number: 3,
+				generation_number: 3,
+				model_mode: 'xl-sft',
+				generation_params: { audio_duration: 195 }
+			})
+		});
+		expect(target.querySelector('.take-heading')?.textContent).toBe('v3 · take 3 · 3:15 · xl-sft');
+	});
+
 	it('renders scores from the generation', async () => {
 		await render({
 			generation: generation({
@@ -380,5 +392,69 @@ describe('NowPlayingTake', () => {
 		expect(get(pendingSource)).toEqual({ generation: gen, mode: 'repaint' });
 		expect(get(nowPlayingOpen)).toBe(false);
 		expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
+	});
+});
+
+describe('NowPlayingTake recipe section', () => {
+	function recipeRows(root: ParentNode): Array<[string, string]> {
+		return Array.from(root.querySelectorAll('.recipe-row')).map((row) => [
+			row.querySelector('dt')?.textContent ?? '',
+			row.querySelector('dd')?.textContent ?? ''
+		]);
+	}
+
+	it('groups everything the take carries under its own labelled section', async () => {
+		await render({
+			generation: generation({
+				model_mode: 'xl-sft',
+				seed: 48113,
+				generation_params: {
+					inference_steps: 50,
+					guidance_scale: 7.5,
+					bpm: 128,
+					audio_duration: 195,
+					key_scale: 'Am'
+				}
+			}),
+			song: song({ vocal_language: 'en' })
+		});
+
+		const groupLabels = Array.from(target.querySelectorAll('.recipe-group-label')).map(
+			(el) => el.textContent
+		);
+		expect(groupLabels).toEqual(['Model & Sampling', 'Reproducibility', 'Version']);
+		expect(recipeRows(target)).toEqual([
+			['Model', 'xl-sft'],
+			['Inference Steps', '50'],
+			['Guidance Scale', '7.5'],
+			['Seed', '48113'],
+			['BPM', '128'],
+			['Duration', '3:15'],
+			['Key', 'Am'],
+			['Language', 'en']
+		]);
+	});
+
+	it('names a param the registry does not know under Other', async () => {
+		await render({
+			generation: generation({
+				model_mode: '',
+				seed: null,
+				generation_params: { repaint_wav_crossfade_sec: 0.25 }
+			}),
+			song: song({ vocal_language: '' })
+		});
+		expect(
+			Array.from(target.querySelectorAll('.recipe-group-label')).map((el) => el.textContent)
+		).toEqual(['Other']);
+		expect(recipeRows(target)).toEqual([['Repaint Wav Crossfade Sec', '0.25']]);
+	});
+
+	it('shows no recipe section for a take that carries nothing to show', async () => {
+		await render({
+			generation: generation({ model_mode: '', seed: null }),
+			song: song({ vocal_language: '' })
+		});
+		expect(target.querySelector('.recipe-section')).toBeNull();
 	});
 });

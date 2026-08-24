@@ -2,6 +2,7 @@
 	import type { GenerationItem, SongItem } from '$lib/api/types';
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
+		RECIPE_PANEL_LABEL,
 		TAKE_RESCORE_LABEL,
 		TAKE_RESCORING_LABEL,
 		TAKE_USE_AS_REFERENCE_LABEL
@@ -23,7 +24,8 @@
 		NOW_PLAYING_SCORES_EMPTY,
 		NOW_PLAYING_SCORES_LABEL,
 		NOW_PLAYING_UNKEEP_LABEL,
-		NOW_PLAYING_UNPICK_LABEL
+		NOW_PLAYING_UNPICK_LABEL,
+		nowPlayingTakeMeta
 	} from '$lib/constants/now-playing';
 	import { revealPlayingSong } from '$lib/stores/navigation';
 	import { closeNowPlaying } from '$lib/stores/player';
@@ -38,6 +40,7 @@
 	} from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
+	import { buildTakeRecipe } from '$lib/utils/recipe-summary';
 	import { formatScore, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import Icon from './Icon.svelte';
 
@@ -227,15 +230,26 @@
 		closeNowPlaying();
 		void revealPlayingSong(song, generation.id);
 	}
+
+	// "v · take · duration · mode" — the same take-description formatter every
+	// other surface uses (TakesList's row, the queue), so this panel can never
+	// drift into describing a take differently from the rest of the app.
+	const takeMeta = $derived(
+		nowPlayingTakeMeta({
+			artist: null,
+			versionNumber: generation.version_number,
+			generationNumber: generation.generation_number,
+			durationSec: generation.generation_params?.audio_duration ?? null,
+			modelMode: generation.model_mode
+		})
+	);
+
+	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
 
 <div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
 	<div class="take-heading-row">
-		<h3 class="take-heading">
-			{#if generation.version_number != null}v{generation.version_number} ·
-			{/if}{NOW_PLAYING_TAKE_PREFIX}
-			{generation.generation_number}
-		</h3>
+		<h3 class="take-heading">{takeMeta}</h3>
 		<div class="take-badges">
 			<button
 				type="button"
@@ -316,6 +330,29 @@
 			</p>
 		{/if}
 	</section>
+
+	{#if recipeGroups.length > 0}
+		<section class="take-section">
+			<details class="recipe-section" open>
+				<summary class="section-title recipe-summary-toggle">{RECIPE_PANEL_LABEL}</summary>
+				<div class="recipe-groups">
+					{#each recipeGroups as group (group.label)}
+						<div class="recipe-group">
+							<h5 class="recipe-group-label">{group.label}</h5>
+							<dl class="recipe-list">
+								{#each group.entries as entry (entry.label)}
+									<div class="recipe-row">
+										<dt>{entry.label}</dt>
+										<dd>{entry.value}</dd>
+									</div>
+								{/each}
+							</dl>
+						</div>
+					{/each}
+				</div>
+			</details>
+		</section>
+	{/if}
 
 	<section class="take-section">
 		<div class="rating-row">
@@ -439,6 +476,61 @@
 		font-size: 0.78rem;
 		color: var(--text-subtle);
 		font-style: italic;
+	}
+	.recipe-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+	.recipe-summary-toggle {
+		cursor: pointer;
+		list-style: disclosure-closed;
+	}
+	.recipe-section[open] > .recipe-summary-toggle {
+		list-style: disclosure-open;
+	}
+	.recipe-summary-toggle:hover {
+		color: var(--text);
+	}
+	.recipe-groups {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin-top: 0.5rem;
+	}
+	.recipe-group-label {
+		margin: 0 0 0.3rem;
+		font-size: 0.64rem;
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+		font-family: var(--font-display);
+		color: var(--text-subtle);
+	}
+	.recipe-list {
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+	.recipe-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.6rem;
+		font-size: 0.78rem;
+		padding: 0.15rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+	.recipe-row:last-child {
+		border-bottom: none;
+	}
+	.recipe-row dt {
+		color: var(--text-subtle);
+	}
+	.recipe-row dd {
+		margin: 0;
+		color: var(--text);
+		font-family: var(--font-display);
+		text-align: right;
 	}
 	.rescore-hint {
 		align-self: flex-start;

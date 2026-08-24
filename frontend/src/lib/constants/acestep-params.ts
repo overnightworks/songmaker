@@ -9,8 +9,8 @@
  *   - short: ~80 char tooltip for hover / mobile long-press
  *   - long:  2–4 sentence explanation for an expanded help drawer (future)
  *
- * Form labels live next to the field definitions in ParamControls.svelte
- * and are not duplicated here.
+ * Form labels live next to the field definitions in
+ * constants/acestep-param-fields.ts and are not duplicated here.
  */
 
 export interface ParamDescription {

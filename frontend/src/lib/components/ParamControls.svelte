@@ -1,6 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { VersionGenerationParams } from '$lib/api/types';
+	import {
+		DIT_BOOL_FIELDS,
+		DIT_NUMBER_FIELDS,
+		DIT_SELECT_FIELDS,
+		LM_BOOL_FIELDS,
+		LM_NUMBER_FIELDS,
+		LM_TEXT_FIELDS,
+		type BoolParamField,
+		type NumberParamField,
+		type SelectParamField
+	} from '$lib/constants/acestep-param-fields';
 	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -33,70 +44,9 @@
 		return subscribeCompactLayout((value) => (compact = value));
 	});
 
-	interface NumberField {
-		key: keyof VersionGenerationParams;
-		label: string;
-		min: number;
-		max: number;
-		step: number;
-	}
-
-	interface SelectField {
-		key: keyof VersionGenerationParams;
-		label: string;
-		options: string[];
-	}
-
-	interface BoolField {
-		key: keyof VersionGenerationParams;
-		label: string;
-		defaultValue: boolean;
-	}
-
-	const DIT_NUMBER_FIELDS: NumberField[] = [
-		{ key: 'inference_steps', label: 'Inference Steps', min: 1, max: 200, step: 1 },
-		{ key: 'guidance_scale', label: 'Guidance Scale', min: 0, max: 20, step: 0.5 },
-		{ key: 'shift', label: 'Shift', min: 0, max: 20, step: 0.5 },
-		{ key: 'cfg_interval_start', label: 'CFG Interval Start', min: 0, max: 1, step: 0.05 },
-		{ key: 'cfg_interval_end', label: 'CFG Interval End', min: 0, max: 1, step: 0.05 },
-		{ key: 'velocity_norm_threshold', label: 'Velocity Norm', min: 0, max: 100, step: 0.5 },
-		{ key: 'velocity_ema_factor', label: 'Velocity EMA', min: 0, max: 1, step: 0.05 },
-		{ key: 'latent_shift', label: 'Latent Shift', min: -10, max: 10, step: 0.1 },
-		{ key: 'latent_rescale', label: 'Latent Rescale', min: 0.1, max: 5, step: 0.1 },
-		{ key: 'audio_cover_strength', label: 'LM Code Strength', min: 0, max: 1, step: 0.05 }
-	];
-
-	const DIT_SELECT_FIELDS: SelectField[] = [
-		{ key: 'infer_method', label: 'Infer Method', options: ['ode', 'sde'] },
-		{
-			key: 'sampler_mode',
-			label: 'Sampler',
-			options: ['euler', 'heun']
-		}
-	];
-
-	const DIT_BOOL_FIELDS: BoolField[] = [
-		{ key: 'use_adg', label: 'Adaptive Dual Guidance', defaultValue: false }
-	];
-
-	const LM_NUMBER_FIELDS: NumberField[] = [
-		{ key: 'lm_temperature', label: 'Temperature', min: 0, max: 2, step: 0.05 },
-		{ key: 'lm_top_k', label: 'Top-K', min: 0, max: 200, step: 1 },
-		{ key: 'lm_top_p', label: 'Top-P', min: 0, max: 1, step: 0.05 },
-		{ key: 'lm_cfg_scale', label: 'CFG Scale', min: 0, max: 10, step: 0.5 },
-		{ key: 'lm_repetition_penalty', label: 'Rep. Penalty', min: 0.5, max: 5, step: 0.1 },
-		{ key: 'batch_size', label: 'Batch Size', min: 1, max: 8, step: 1 }
-	];
-
-	const LM_BOOL_FIELDS: BoolField[] = [
-		{ key: 'thinking', label: 'Thinking', defaultValue: true },
-		{ key: 'use_cot_caption', label: 'CoT Caption', defaultValue: true },
-		{ key: 'use_cot_language', label: 'CoT Language', defaultValue: true }
-	];
-
 	const hiddenSet = $derived(new Set(hiddenParams));
 
-	function filterNumbers(fields: NumberField[]): NumberField[] {
+	function filterNumbers(fields: NumberParamField[]): NumberParamField[] {
 		return fields
 			.filter((f) => !hiddenSet.has(f.key))
 			.map((f) => (f.key === 'inference_steps' ? { ...f, max: maxInferenceSteps } : f));
@@ -161,7 +111,7 @@
 	</div>
 {/snippet}
 
-{#snippet numberField(f: NumberField)}
+{#snippet numberField(f: NumberParamField)}
 	<svelte:boundary onerror={reportFieldError}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
@@ -182,7 +132,7 @@
 	</svelte:boundary>
 {/snippet}
 
-{#snippet selectField(f: SelectField)}
+{#snippet selectField(f: SelectParamField)}
 	<svelte:boundary onerror={reportFieldError}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
@@ -205,7 +155,7 @@
 	</svelte:boundary>
 {/snippet}
 
-{#snippet boolField(f: BoolField)}
+{#snippet boolField(f: BoolParamField)}
 	<label class="setting toggle" title={tooltip(f.key)}>
 		<span>{f.label}</span>
 		<input
@@ -243,13 +193,13 @@
 				{@render numberField(f)}
 			{/each}
 
-			<label class="setting full-width" title={tooltip('lm_negative_prompt')}>
-				<span>Negative Prompt</span>
+			<label class="setting full-width" title={tooltip(LM_TEXT_FIELDS[0].key)}>
+				<span>{LM_TEXT_FIELDS[0].label}</span>
 				<input
 					type="text"
 					value={values.lm_negative_prompt ?? ''}
 					placeholder="e.g. bad quality, noise"
-					title={tooltip('lm_negative_prompt')}
+					title={tooltip(LM_TEXT_FIELDS[0].key)}
 					oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
 				/>
 			</label>

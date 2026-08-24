@@ -329,6 +329,22 @@ describe('TakesList', () => {
 		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
 	});
 
+	it("shows the take's model as a terse badge after the duration", async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', model_mode: 'xl-sft' })] })
+		});
+		const badge = target.querySelector<HTMLElement>('.model-badge');
+		expect(badge?.textContent?.trim()).toBe('xl-sft');
+		expect(badge?.previousElementSibling?.classList.contains('take-duration')).toBe(true);
+	});
+
+	it('shows no model badge for a take that carries no model info', async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', model_mode: '' })] })
+		});
+		expect(target.querySelector('.model-badge')).toBeNull();
+	});
+
 	it('calls pick and keep from the take actions', async () => {
 		const { target } = await render();
 		const row = target.querySelectorAll('.take-row')[1];
@@ -431,6 +447,13 @@ describe('TakesList', () => {
 		expect(body.querySelector('.take-duration')).not.toBeNull();
 		expect(body.querySelector('button')).toBeNull();
 		expect(row.querySelector('.take-actions')?.parentElement).toBe(row);
+
+		// The model badge is another descriptive fact about the take, so it
+		// belongs in the body with the rest — never in take-actions, where a
+		// row too narrow to hold both wraps actions onto their own line
+		// instead of crowding a touch target (#163/2).
+		expect(body.querySelector('.model-badge')).not.toBeNull();
+		expect(row.querySelector('.take-actions')?.querySelector('.model-badge')).toBeNull();
 
 		body.click();
 		await tick();
