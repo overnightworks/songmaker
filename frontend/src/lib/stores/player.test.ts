@@ -2018,6 +2018,68 @@ describe('curateAlbum', () => {
 
 		expect(get(curationActive)).toBe(false);
 	});
+
+	it('playing a different album while curating ends curation mode', async () => {
+		songList.set([
+			makeSong({ id: 's1', album_id: 'a1', generations: [makeGen({ id: 'g1', song_id: 's1' })] }),
+			makeSong({
+				id: 's2',
+				album_id: 'a2',
+				title: 'Two',
+				track_number: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', mp3_path: 'a2/s2.mp3' })]
+			})
+		]);
+		await curateAlbum('a1');
+		expect(get(curationActive)).toBe(true);
+
+		await playAlbum('a2');
+
+		expect(get(curationActive)).toBe(false);
+	});
+
+	it('clicking a take row in the same album while curating ends curation mode', async () => {
+		// #251 REVISE: playTake's classic path rebuilds a thin { type: 'album',
+		// albumId } context with no takes/index at all — before the fix this
+		// left curationActive true, so the bar kept showing "Song 0 of 0" and
+		// Skip acted on a queue that no longer existed.
+		const gen = makeGen({ id: 'g1', song_id: 's1' });
+		const song = makeSong({ id: 's1', album_id: 'a1', generations: [gen] });
+		songList.set([song]);
+		await curateAlbum('a1');
+		expect(get(curationActive)).toBe(true);
+		selectedAlbumId.set('a1');
+
+		await playTake(gen, song);
+
+		expect(get(curationActive)).toBe(false);
+	});
+
+	it('advancing within the curated queue keeps curation mode active', async () => {
+		songList.set([
+			makeSong({
+				id: 's1',
+				track_number: 1,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g1', song_id: 's1' })]
+			}),
+			makeSong({
+				id: 's2',
+				title: 'Two',
+				track_number: 2,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
+			})
+		]);
+		await curateAlbum('a1');
+		expect(get(curationActive)).toBe(true);
+
+		await playNextSong();
+
+		expect(get(curationActive)).toBe(true);
+		const ctx = get(queueContext);
+		expect(ctx.type === 'album' && ctx.index).toBe(1);
+	});
 });
 
 describe('shuffle rebuilds the playing queue', () => {

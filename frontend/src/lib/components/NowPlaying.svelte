@@ -39,6 +39,7 @@
 	import { setKeep, setPick } from '$lib/stores/takeActions';
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
+	import { isEditableElement } from '$lib/utils/escape-level-up';
 	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
@@ -104,10 +105,13 @@
 		song?.generations.find((g) => g.id === info.generation.id) ?? null
 	);
 
-	// Curation mode (issue #228) only ever plays an album's own queue — gated
-	// on the queue context staying that album, not just on the store flag, so
-	// navigating away from it (e.g. to the library pool) mid-curation hides
-	// the bar and its shortcuts instead of acting on an unrelated take.
+	// Curation mode (issue #228) only ever plays an album's own queue. The
+	// real guarantee lives in the player store: setQueueContext (the one
+	// writer of queueContext) turns curationActive off on every queue build
+	// that isn't curateAlbum's own — a different album, a take clicked
+	// mid-curation, a playlist — so curationActive being true here already
+	// implies an album context. The type check stays as a defensive belt for
+	// this component's own read, not the actual enforcement.
 	const curating = $derived($curationActive && ctx.type === 'album');
 
 	$effect(() => {
@@ -148,7 +152,11 @@
 	// elsewhere, exactly what NowPlayingTake's badges already avoid.
 	async function onCuratePick(): Promise<void> {
 		if (!song || !playingGeneration) return;
-		await setPick(song.id, playingGeneration.id, true);
+		// setPick reports its own failures as a toast rather than throwing, so
+		// only its return value tells a real pick from one that never landed —
+		// advancing past a failed pick would silently skip the song instead.
+		const picked = await setPick(song.id, playingGeneration.id, true);
+		if (!picked) return;
 		await playNextSong();
 	}
 
@@ -174,16 +182,13 @@
 	// Global so Pick/Keep/Skip work from anywhere in the surface (docked or
 	// full, whichever tab is open) — but only while curation mode is active,
 	// and never while a text field has focus (the rating notes textarea, an
-	// editable title elsewhere on the page).
+	// editable title elsewhere on the page). isEditableElement is the same
+	// check the app's own global Escape handling uses (utils/escape-level-up),
+	// so it also yields to a contenteditable, not just input/textarea.
 	function onCurationKeydown(event: KeyboardEvent): void {
 		if (!curating) return;
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target;
-		if (
-			target instanceof HTMLElement &&
-			(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
-		)
-			return;
+		if (isEditableElement(event.target)) return;
 		const handler = CURATION_KEY_HANDLERS[event.key.toLowerCase()];
 		if (!handler) return;
 		event.preventDefault();

@@ -37,10 +37,12 @@ import {
 
 // setPick/setKeep stay mocked so a curation click asserts the call it makes,
 // not the network + song-refresh chain behind it — takeActions.test.ts and
-// NowPlayingTake.test.ts already cover that chain.
+// NowPlayingTake.test.ts already cover that chain. setPick defaults to a
+// successful pick (true); a test that needs the swallowed-failure case
+// overrides it with mockResolvedValueOnce(false).
 vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
-	setPick: vi.fn().mockResolvedValue(undefined),
+	setPick: vi.fn().mockResolvedValue(true),
 	setKeep: vi.fn().mockResolvedValue(undefined)
 }));
 
@@ -589,6 +591,23 @@ describe('NowPlaying curation mode (#228)', () => {
 			const ctx = get(queueContext);
 			expect(ctx.type === 'album' && ctx.index).toBe(1);
 		});
+		expect(get(curationActive)).toBe(true);
+	});
+
+	it('a failed Pick does not advance to the next song', async () => {
+		// #251 REVISE: setPick reports a failed request as a toast, not a
+		// throw — onCuratePick has to read its return value or it would
+		// advance past a song that was never actually picked.
+		vi.mocked(setPick).mockResolvedValueOnce(false);
+		const takes = setupAlbumCuration();
+		await renderSurface(takes[0]);
+
+		target.querySelector<HTMLButtonElement>('button[aria-label="Pick"]')?.click();
+
+		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
+		await tick();
+		const ctx = get(queueContext);
+		expect(ctx.type === 'album' && ctx.index).toBe(0);
 	});
 
 	it('Keep toggles keep on this take without advancing', async () => {
