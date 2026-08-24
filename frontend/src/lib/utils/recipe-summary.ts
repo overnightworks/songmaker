@@ -62,7 +62,11 @@ const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; label
 //     take that carries it.
 //   - seed is handled explicitly below, next to generation.seed, so it can
 //     be compared against the stored seed_value rather than just repeated.
-const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed']);
+//   - delivered_batch_size is handled explicitly below, next to Batch Size —
+//     it isn't an editable knob (ParamControls never lets a user set it), so
+//     it doesn't belong in KNOWN_PARAM_FIELDS, but the generic Other fallback
+//     would still bury it away from the number it's a reduction of.
+const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed', 'delivered_batch_size']);
 
 function formatParamValue(key: string, rawValue: unknown): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
@@ -94,6 +98,16 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	for (const field of KNOWN_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
 		if (value !== null) modelEntries.push({ label: field.label, value });
+	}
+	// Only present at all when it diverges from the requested Batch Size row
+	// above (the backend never persists a match) — a VRAM-guard reduction,
+	// issue #211.
+	const deliveredBatchSize = formatParamValue(
+		'delivered_batch_size',
+		paramEntries.get('delivered_batch_size')
+	);
+	if (deliveredBatchSize !== null) {
+		modelEntries.push({ label: 'Delivered Batch Size', value: deliveredBatchSize });
 	}
 
 	const reproducibilityEntries: RecipeEntry[] = [];

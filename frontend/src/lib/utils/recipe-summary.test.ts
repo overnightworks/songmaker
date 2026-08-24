@@ -221,4 +221,31 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 			expect(groups).toEqual([{ label: 'Reproducibility', entries: reproducibilityEntries }]);
 		}
 	);
+
+	it('shows a VRAM-guard batch reduction next to Batch Size, not under Other', async () => {
+		const { buildTakeRecipe } = await import('./recipe-summary');
+		const groups = buildTakeRecipe(
+			generation({
+				generation_params: { batch_size: 2, delivered_batch_size: 1 }
+			}),
+			song()
+		);
+		expect(groups).toEqual([
+			{
+				label: 'Model & Sampling',
+				entries: [
+					{ label: 'Batch Size', value: '2' },
+					{ label: 'Delivered Batch Size', value: '1' }
+				]
+			}
+		]);
+	});
+
+	it('shows no Delivered Batch Size row when the take carries none', async () => {
+		const { buildTakeRecipe } = await import('./recipe-summary');
+		const groups = buildTakeRecipe(generation({ generation_params: { batch_size: 2 } }), song());
+		expect(groups).toEqual([
+			{ label: 'Model & Sampling', entries: [{ label: 'Batch Size', value: '2' }] }
+		]);
+	});
 });

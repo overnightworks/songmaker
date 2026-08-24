@@ -96,6 +96,7 @@ class StoredGenerationParams(BaseGenerationParams):
     constrained_decoding: bool | None = None
     cot_caption: str | None = None
     cot_lyrics: str | None = None
+    delivered_batch_size: int | None = None
 
     @field_validator("timesteps")
     @classmethod

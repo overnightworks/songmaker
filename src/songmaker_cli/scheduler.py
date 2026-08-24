@@ -84,6 +84,7 @@ class GenerationTaskResultDTO(BaseModel):
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
+    delivered_batch_size: int | None = None
 
 
 @dataclass(frozen=True)
