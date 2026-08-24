@@ -63,9 +63,7 @@ import {
 } from './libraryData';
 import {
 	buildQueueViewModel,
-	canPlayNextGen,
 	canPlayNextSong,
-	canPlayPrevGen,
 	canPlayPrevSong,
 	clearGenerationSelection,
 	ensureGenerationsLoaded,
@@ -890,64 +888,6 @@ describe('playback dispatch', () => {
 });
 
 describe('canPlay predicates', () => {
-	it('canPlayPrevGen false when no current', () => {
-		expect(canPlayPrevGen(null, [])).toBe(false);
-	});
-
-	it('canPlayPrevGen false when song not found', () => {
-		const cur = {
-			generation: makeGen(),
-			songId: 'unknown',
-			songTitle: '',
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		expect(canPlayPrevGen(cur, [makeSong()])).toBe(false);
-	});
-
-	it('canPlayPrevGen true when not at first generation', () => {
-		const g1 = makeGen({ id: 'g1' });
-		const g2 = makeGen({ id: 'g2' });
-		const song = makeSong({ generations: [g1, g2] });
-		const cur = {
-			generation: g2,
-			songId: 's1',
-			songTitle: '',
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		expect(canPlayPrevGen(cur, [song])).toBe(true);
-	});
-
-	it('canPlayNextGen false at last generation', () => {
-		const g1 = makeGen();
-		const song = makeSong({ generations: [g1] });
-		const cur = {
-			generation: g1,
-			songId: 's1',
-			songTitle: '',
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		expect(canPlayNextGen(cur, [song])).toBe(false);
-	});
-
-	it('canPlayNextGen false when generation not found in song', () => {
-		const song = makeSong({ generations: [makeGen({ id: 'other' })] });
-		const cur = {
-			generation: makeGen({ id: 'gone' }),
-			songId: 's1',
-			songTitle: '',
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		expect(canPlayNextGen(cur, [song])).toBe(false);
-	});
-
 	it('canPlayPrevSong false when no current', () => {
 		expect(canPlayPrevSong(null, [], { type: 'library' })).toBe(false);
 	});

@@ -566,22 +566,6 @@ function queueSongs(): SongItem[] {
 	return songs;
 }
 
-export function canPlayPrevGen(current: PlaybackInfo | null, songs: SongItem[]): boolean {
-	if (!current) return false;
-	const song = songs.find((s) => s.id === current.songId);
-	if (!song) return false;
-	const idx = song.generations.findIndex((g) => g.id === current.generation.id);
-	return idx > 0;
-}
-
-export function canPlayNextGen(current: PlaybackInfo | null, songs: SongItem[]): boolean {
-	if (!current) return false;
-	const song = songs.find((s) => s.id === current.songId);
-	if (!song) return false;
-	const idx = song.generations.findIndex((g) => g.id === current.generation.id);
-	return idx >= 0 && idx < song.generations.length - 1;
-}
-
 export function canPlayPrevSong(
 	current: PlaybackInfo | null,
 	songs: SongItem[],
@@ -618,32 +602,6 @@ export function canPlayNextSong(
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.id !== current.songId && s.generation_count > 0).length > 0;
-}
-
-export function playNextGeneration(): void {
-	const cur = audioPlayer.current;
-	if (!cur) return;
-	const songs = get(songList);
-	const song = songs.find((s) => s.id === cur.songId);
-	if (!song) return;
-	const gens = song.generations;
-	const idx = gens.findIndex((g) => g.id === cur.generation.id);
-	if (idx < gens.length - 1) {
-		playGeneration(gens[idx + 1], song);
-	}
-}
-
-export function playPrevGeneration(): void {
-	const cur = audioPlayer.current;
-	if (!cur) return;
-	const songs = get(songList);
-	const song = songs.find((s) => s.id === cur.songId);
-	if (!song) return;
-	const gens = song.generations;
-	const idx = gens.findIndex((g) => g.id === cur.generation.id);
-	if (idx > 0) {
-		playGeneration(gens[idx - 1], song);
-	}
 }
 
 // Archived takes are not playable (their rows offer no play affordance), so
