@@ -156,7 +156,9 @@ let target: HTMLDivElement;
 beforeEach(() => {
 	vi.stubGlobal(
 		'Audio',
-		vi.fn(() => new SilentAudio())
+		vi.fn(function () {
+			return new SilentAudio();
+		})
 	);
 });
 

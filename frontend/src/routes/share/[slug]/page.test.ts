@@ -135,7 +135,9 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', mockFetch);
 	vi.stubGlobal(
 		'Audio',
-		vi.fn(() => audio)
+		vi.fn(function () {
+			return audio;
+		})
 	);
 	vi.stubGlobal(
 		'matchMedia',

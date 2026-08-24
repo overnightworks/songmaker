@@ -305,6 +305,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
+	// module-level vi.fn() stubs from the vi.mock('$lib/api/client', ...)
+	// factory above need an explicit clear or their call history from one
+	// test leaks a "was it called" assertion into the next.
+	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	audioPlayer.current = null;
 	songList.set([]);

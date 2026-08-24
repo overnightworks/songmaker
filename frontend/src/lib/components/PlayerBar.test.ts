@@ -160,7 +160,9 @@ beforeEach(() => {
 	audioContextConstructor = vi.fn();
 	vi.stubGlobal(
 		'Audio',
-		vi.fn(() => audio)
+		vi.fn(function () {
+			return audio;
+		})
 	);
 	vi.stubGlobal('AudioContext', audioContextConstructor);
 	vi.stubGlobal(
@@ -509,7 +511,9 @@ describe('PlayerBar Now Playing', () => {
 			resume: vi.fn(),
 			close: vi.fn()
 		};
-		audioContextConstructor.mockImplementation(() => context);
+		audioContextConstructor.mockImplementation(function () {
+			return context;
+		});
 		// A fine pointer on a wide viewport: the only shape that draws a
 		// visualizer at all, and so the only one that builds a graph.
 		vi.stubGlobal(

@@ -142,7 +142,9 @@ beforeEach(() => {
 	fakeAudio = new FakeAudio();
 	vi.stubGlobal(
 		'Audio',
-		vi.fn(() => fakeAudio)
+		vi.fn(function () {
+			return fakeAudio;
+		})
 	);
 	vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 	audioPlayer.destroy();
