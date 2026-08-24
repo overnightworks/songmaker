@@ -220,6 +220,10 @@ export interface JobItem {
 	completed_at?: string | null;
 }
 
+export interface LastFailedGenerationResult {
+	job?: JobItem | null;
+}
+
 export interface ResourceHelloEvent {
 	high_water_mark: string;
 }

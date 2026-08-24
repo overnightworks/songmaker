@@ -1,5 +1,5 @@
 import { apiFetch } from './fetch';
-import type { AlbumItem } from './types';
+import type { AlbumItem, LastFailedGenerationResult } from './types';
 
 export { ApiError, type JobStatus } from './fetch';
 export {
@@ -160,4 +160,10 @@ export async function uploadAlbumCover(albumId: string, file: File): Promise<Alb
 
 export async function deleteAlbumCover(albumId: string): Promise<AlbumItem> {
 	return apiFetch<AlbumItem>(`/api/albums/${albumId}/cover`, { method: 'DELETE' });
+}
+
+export async function fetchLastFailedGeneration(
+	songId: string
+): Promise<LastFailedGenerationResult> {
+	return apiFetch<LastFailedGenerationResult>(`/api/songs/${songId}/last-failed-generation`);
 }

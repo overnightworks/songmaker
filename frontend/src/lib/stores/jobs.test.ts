@@ -10,11 +10,19 @@ vi.mock('$lib/stores/resourceSync', () => ({
 	requestSongRefresh: (...args: unknown[]) => mockRequestSongRefresh(...args)
 }));
 
+const mockFetchLastFailedGeneration = vi.fn();
+
+vi.mock('$lib/api/client', () => ({
+	fetchLastFailedGeneration: (...args: unknown[]) => mockFetchLastFailedGeneration(...args)
+}));
+
 import {
 	activeJobs,
 	dismissGenerationFailure,
 	generationFailures,
+	hydrateGenerationFailure,
 	removeJob,
+	resetGenerationFailures,
 	stopTracking,
 	trackJob
 } from './jobs';
@@ -75,9 +83,10 @@ function latestSource(): MockEventSource {
 
 beforeEach(() => {
 	activeJobs.set([]);
-	generationFailures.set({});
+	resetGenerationFailures();
 	mockRequestSongRefresh.mockReset();
 	mockRequestSongRefresh.mockResolvedValue(undefined);
+	mockFetchLastFailedGeneration.mockReset();
 	MockEventSource.instances = [];
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.useFakeTimers();
@@ -255,5 +264,64 @@ describe('jobs store', () => {
 		expect(all).toHaveLength(1);
 		expect(all[0].type).toBe('error');
 		expect(all[0].message).toBe('Server restarted — please retry');
+	});
+
+	describe('hydrateGenerationFailure', () => {
+		it("shows the cause of the song's last failed generation on page load", async () => {
+			mockFetchLastFailedGeneration.mockResolvedValue({
+				job: makeJob({ status: 'failed', error: VRAM_CAUSE })
+			});
+			await hydrateGenerationFailure('s1');
+			expect(mockFetchLastFailedGeneration).toHaveBeenCalledWith('s1');
+			expect(get(generationFailures).s1).toBe(VRAM_CAUSE);
+		});
+
+		it('shows nothing when a newer take suppressed the failure server-side', async () => {
+			mockFetchLastFailedGeneration.mockResolvedValue({ job: null });
+			await hydrateGenerationFailure('s1');
+			expect(get(generationFailures).s1).toBeUndefined();
+		});
+
+		it('never overwrites a failure a live SSE update already set', async () => {
+			generationFailures.set({ s1: 'live failure' });
+			await hydrateGenerationFailure('s1');
+			expect(mockFetchLastFailedGeneration).not.toHaveBeenCalled();
+			expect(get(generationFailures).s1).toBe('live failure');
+		});
+
+		it('discards a stale result once a live generate has started for the song', async () => {
+			let resolveFetch: (value: { job: JobStatus | null }) => void = () => {};
+			mockFetchLastFailedGeneration.mockReturnValue(
+				new Promise((resolve) => {
+					resolveFetch = resolve;
+				})
+			);
+			const hydration = hydrateGenerationFailure('s1');
+			trackJob(makeJob({ id: 'j-live' }), { songId: 's1' });
+			resolveFetch({ job: makeJob({ error: 'stale failure' }) });
+			await hydration;
+			expect(get(generationFailures).s1).toBeUndefined();
+		});
+
+		it('does not throw when the hydration fetch fails', async () => {
+			mockFetchLastFailedGeneration.mockRejectedValue(new Error('network down'));
+			await expect(hydrateGenerationFailure('s1')).resolves.toBeUndefined();
+			expect(get(generationFailures).s1).toBeUndefined();
+		});
+
+		it('never re-fetches for a song dismissed earlier this session', async () => {
+			mockFetchLastFailedGeneration.mockResolvedValue({
+				job: makeJob({ status: 'failed', error: VRAM_CAUSE })
+			});
+			await hydrateGenerationFailure('s1');
+			expect(get(generationFailures).s1).toBe(VRAM_CAUSE);
+
+			dismissGenerationFailure('s1');
+			mockFetchLastFailedGeneration.mockClear();
+
+			await hydrateGenerationFailure('s1');
+			expect(mockFetchLastFailedGeneration).not.toHaveBeenCalled();
+			expect(get(generationFailures).s1).toBeUndefined();
+		});
 	});
 });

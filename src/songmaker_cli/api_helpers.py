@@ -111,7 +111,7 @@ _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
 
 
 def create_job_with_rate_limit(
-    session: Session, user: AuthenticatedUser, job_type: JobType,
+    session: Session, user: AuthenticatedUser, job_type: JobType, song_id: str | None = None,
 ) -> Job:
     """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
 
@@ -162,7 +162,7 @@ def create_job_with_rate_limit(
         session.rollback()
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
 
-    return create_job(session, job_type, user_id=user.id)
+    return create_job(session, job_type, user_id=user.id, song_id=song_id)
 
 
 def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
