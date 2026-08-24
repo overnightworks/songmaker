@@ -246,6 +246,7 @@ def post_process_generation(
     worker_seed: int,
     worker_cot_caption: str,
     worker_cot_lyrics: str,
+    worker_delivered_batch_size: int | None,
     ctx: GenerationContext,
     generation_id: str,
     db_factory: sessionmaker[Session],
@@ -293,6 +294,7 @@ def post_process_generation(
             seed=worker_seed,
             cot_caption=worker_cot_caption,
             cot_lyrics=worker_cot_lyrics,
+            delivered_batch_size=worker_delivered_batch_size,
             mp3_path=mp3_path,
             wav_path=wav_path,
             job_id=job_id,
@@ -312,6 +314,7 @@ def _persist_generation_row(
     seed: int,
     cot_caption: str,
     cot_lyrics: str,
+    delivered_batch_size: int | None,
     mp3_path: Path,
     wav_path: Path,
     job_id: str,
@@ -398,6 +401,8 @@ def _persist_generation_row(
         cot_caption=cot_caption or None,
         cot_lyrics=cot_lyrics or None,
         user_lora_id=_extract_user_lora_id(ctx.base_params),
+        batch_size=ctx.ace_config.batch_size if ctx.ace_config.batch_size != 1 else None,
+        delivered_batch_size=delivered_batch_size,
     )
     gen_params = stored.model_dump(exclude_none=True)
 
@@ -657,6 +662,7 @@ async def run_generation_job(
                         worker_seed=worker_result.seed,
                         worker_cot_caption=worker_result.cot_caption,
                         worker_cot_lyrics=worker_result.cot_lyrics,
+                        worker_delivered_batch_size=worker_result.delivered_batch_size,
                         ctx=ctx,
                         generation_id=gen_id,
                         db_factory=db_factory,

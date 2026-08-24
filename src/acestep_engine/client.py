@@ -47,6 +47,8 @@ class _PollResult:
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
+    requested_batch_size: int | None = None
+    delivered_batch_size: int | None = None
 
 
 POLL_INTERVAL: Final[float] = 3.0
@@ -261,12 +263,13 @@ class AceStepClient:
             task_id = self._submit_task(config)
             poll_result = self._poll_result(task_id, on_progress=on_progress)
             result = self._download_audio(poll_result.audio_path, poll_result.seed)
-            if poll_result.cot_caption or poll_result.cot_lyrics:
-                result = replace(
-                    result,
-                    cot_caption=poll_result.cot_caption,
-                    cot_lyrics=poll_result.cot_lyrics,
-                )
+            result = replace(
+                result,
+                cot_caption=poll_result.cot_caption,
+                cot_lyrics=poll_result.cot_lyrics,
+                requested_batch_size=poll_result.requested_batch_size,
+                delivered_batch_size=poll_result.delivered_batch_size,
+            )
             return result
         finally:
             if lora_loaded_by_us:
@@ -422,6 +425,8 @@ class AceStepClient:
                             seed=item.seed,
                             cot_caption=item.cot_caption,
                             cot_lyrics=item.cot_lyrics,
+                            requested_batch_size=item.requested_batch_size,
+                            delivered_batch_size=item.delivered_batch_size,
                         )
                     raise GenerationFailedError(
                         f"ACE-Step completed but no audio returned: {entry.result}"

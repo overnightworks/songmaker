@@ -116,6 +116,8 @@ class AceStepResult:
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
+    requested_batch_size: int | None = None
+    delivered_batch_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,8 @@ class ResultItem(BaseModel):
     cot_lyrics: str = ""
     error: str | None = None
     status_message: str | None = None
+    requested_batch_size: int | None = None
+    delivered_batch_size: int | None = None
 
     @property
     def seed(self) -> int:

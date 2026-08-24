@@ -48,10 +48,14 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _make_dto(seed: int = 42, audio_path: str = "/tmp/fake.wav") -> GenerationTaskResultDTO:
+def _make_dto(
+    seed: int = 42, audio_path: str = "/tmp/fake.wav",
+    delivered_batch_size: int | None = None,
+) -> GenerationTaskResultDTO:
     return GenerationTaskResultDTO(
         mode="turbo", audio_path=audio_path, seed=seed,
         cot_caption="", cot_lyrics="",
+        delivered_batch_size=delivered_batch_size,
     )
 
 
@@ -63,6 +67,7 @@ def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
         seed=kwargs.get("worker_seed", 0),
         cot_caption=kwargs.get("worker_cot_caption", ""),
         cot_lyrics=kwargs.get("worker_cot_lyrics", ""),
+        delivered_batch_size=kwargs.get("worker_delivered_batch_size"),
         mp3_path=Path(f"/tmp/{generation_id}.mp3"),
         wav_path=Path(f"/tmp/{generation_id}.wav"),
         job_id=kwargs["job_id"],
@@ -427,6 +432,65 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
         gen = session.query(Generation).filter_by(song_id="s1").first()
         assert gen.generation_params["inference_steps"] == 50
         assert gen.generation_params["shift"] == 2.0
+
+
+def test_generation_job_persists_vram_guard_batch_reduction(seeded_db, tmp_path: Path) -> None:
+    """A worker-reported batch reduction lands on the generation, never silently.
+
+    Requested batch_size comes from the version's own generation_params
+    (what songmaker asked ACE-Step for); delivered_batch_size comes from
+    the worker's task result (what ACE-Step's VRAM guard actually
+    rendered). Both must be visible on the persisted row so nothing about
+    "asked for 2, got 1" disappears between the two.
+    """
+    with seeded_db() as session:
+        ver = session.query(Version).filter_by(id="v1").first()
+        ver.generation_params = {"batch_size": 2}
+        session.commit()
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        _make_dto(delivered_batch_size=1),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        gen = session.query(Generation).filter_by(song_id="s1").first()
+        assert gen.generation_params["batch_size"] == 2
+        assert gen.generation_params["delivered_batch_size"] == 1
+
+
+def test_generation_job_omits_delivered_batch_size_when_worker_silent(
+    seeded_db, tmp_path: Path,
+) -> None:
+    """No reduction signal from the worker means no field on the row.
+
+    A worker that has not been updated to report `delivered_batch_size`
+    yet (today's default) must not make the generation look reduced —
+    the field stays absent rather than being coerced to a false 0/None
+    claim of equality.
+    """
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        gen = session.query(Generation).filter_by(song_id="s1").first()
+        assert "delivered_batch_size" not in gen.generation_params
 
 
 def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> None:

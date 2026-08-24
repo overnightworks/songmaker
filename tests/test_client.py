@@ -161,6 +161,33 @@ def test_poll_result_success() -> None:
     assert result.seed == 42
 
 
+def test_poll_result_surfaces_batch_reduction() -> None:
+    """A VRAM-guard batch reduction on the server must reach the caller.
+
+    The server can silently cut the requested batch size down; the poll
+    result has to carry both numbers so nothing downstream has to infer
+    a reduction happened from a missing audio file.
+    """
+    client = AceStepClient()
+
+    result_items = json.dumps([{
+        "file": "/v1/audio?path=test.wav",
+        "seed_value": "42",
+        "requested_batch_size": 2,
+        "delivered_batch_size": 1,
+    }])
+    response_data = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        result = client._poll_result("abc")
+
+    assert result.requested_batch_size == 2
+    assert result.delivered_batch_size == 1
+
+
 _VRAM_CAUSE = (
     "Music generation failed: Insufficient free VRAM: "
     "need ~2.0 GB, only 1.3 GB available"
@@ -385,6 +412,43 @@ def test_generate_full_flow() -> None:
 
     assert result.seed == 7
     assert len(result.wav_bytes) > 44
+    assert result.requested_batch_size is None
+    assert result.delivered_batch_size is None
+
+
+def test_generate_full_flow_surfaces_batch_reduction() -> None:
+    """`generate()` must return the server's requested/delivered batch size.
+
+    Confirms the field survives the whole submit -> poll -> download path,
+    not just the isolated `_poll_result` step.
+    """
+    client = AceStepClient()
+    config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
+    wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
+
+    submit_resp = json.dumps({
+        "data": {"task_id": "t1", "status": "queued"}, "code": 200,
+    }).encode()
+    result_items = json.dumps([{
+        "file": "/v1/audio?path=test.wav",
+        "seed_value": "7",
+        "requested_batch_size": 2,
+        "delivered_batch_size": 1,
+    }])
+    poll_resp = json.dumps({
+        "data": [{"task_id": "t1", "status": 1, "result": result_items}],
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = [
+            _mock_response(submit_resp),
+            _mock_response(poll_resp),
+            _mock_response(wav_header),
+        ]
+        result = client.generate(config)
+
+    assert result.requested_batch_size == 2
+    assert result.delivered_batch_size == 1
 
 
 def test_server_info_success() -> None:
