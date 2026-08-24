@@ -1,19 +1,16 @@
-"""Generation, scoring, rating, pick, and job API endpoints."""
+"""Generation, scoring, rating, and pick API endpoints."""
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import shutil
 import subprocess
 import uuid
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -51,26 +48,21 @@ from songmaker_cli.arq_pool import (
     is_music_worker_healthy,
     is_scoring_worker_healthy,
 )
-from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
-    JOB_ACTIVE_STATUSES,
-    JOB_TERMINAL_STATUSES,
-    SSE_POLL_INTERVAL_SECONDS,
     AuditAction,
     JobFunction,
     JobStatus,
     JobType,
     ResourceType,
 )
-from songmaker_cli.db.models import Generation, Job
+from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries import (
     bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
     enable_generation_sharing,
-    get_job,
     get_last_generate_job_for_song,
     get_queue_position,
     keep_generation,
@@ -511,88 +503,6 @@ async def api_score_generation(
         raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
-
-
-# ── Jobs ────────────────────────────────────────────────────────────
-
-
-@router.get("/jobs/{job_id}")
-def api_get_job(
-    job_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> JobResponse:
-    job = _check_job_access(session, job_id, user)
-    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
-
-
-@router.get("/jobs/{job_id}/stream")
-async def api_stream_job(
-    job_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
-) -> StreamingResponse:
-    _check_job_access(session, job_id, user)
-    return StreamingResponse(
-        _job_event_generator(ctx, job_id),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[str, None]:
-    previous_status: str | None = None
-    previous_progress: float | None = None
-    try:
-        while True:
-            with ctx.db() as db_session:
-                job = get_job(db_session, job_id)
-                if not job:
-                    return
-                response = JobResponse.from_orm(job)
-
-            status_changed = (
-                response.status != previous_status
-                or response.progress != previous_progress
-            )
-            if status_changed:
-                previous_status = response.status
-                previous_progress = response.progress
-                yield f"data: {json.dumps(response.model_dump())}\n\n"
-
-            if response.status in JOB_TERMINAL_STATUSES:
-                return
-
-            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
-    except asyncio.CancelledError:
-        return
-
-
-@router.post("/jobs/{job_id}/cancel")
-def api_cancel_job(
-    job_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> JobResponse:
-    job = _check_job_access(session, job_id, user)
-    if job.status not in JOB_ACTIVE_STATUSES:
-        raise HTTPException(409, "Only queued or running jobs can be cancelled")
-    if not update_job_status(session, job_id, JobStatus.CANCELLED):
-        raise HTTPException(409, "Only queued or running jobs can be cancelled")
-    record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
-    session.commit()
-    job = get_job(session, job_id)
-    return JobResponse.from_orm(job)
-
-
-def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
-    job = get_job(session, job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    if user.role != ROLE_ADMIN and job.user_id != user.id:
-        raise HTTPException(404, "Job not found")
-    return job
 
 
 # ── Ratings ──────────────────────────────────────────────────────────

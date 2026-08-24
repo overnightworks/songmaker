@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
@@ -38,6 +39,7 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_PAGE_SIZE,
     RESOURCE_EVENT_STREAM_PATH,
     RESOURCE_EVENT_STREAM_POLL_SECONDS,
+    LimiterFailurePolicy,
     ResourceEventKind,
 )
 from songmaker_cli.db.queries import (
@@ -250,23 +252,28 @@ async def _resource_event_generator(
         await asyncio.sleep(min(RESOURCE_EVENT_STREAM_POLL_SECONDS, remaining))
 
 
+# The resource-event SSE stream fails closed: it holds a DB connection for
+# its whole (long) lifetime, so an unenforced connection lease could starve
+# the pool. Unlike the simple is_allowed limiters, this policy is enforced
+# by _acquire_stream_lease's own try/except below (open-limiter check and
+# lease acquisition share one failure path), not by api_helpers.enforce_rate_limit.
+_STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
+
+
 def _get_open_limiter(request: Request) -> RedisRateLimiter:
-    limiter = getattr(request.app.state, "_resource_stream_open_limiter", None)
-    if limiter is None:
+    def _build() -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
-        limiter = RedisRateLimiter(
+        return RedisRateLimiter(
             ctx.redis,
             REDIS_RL_RESOURCE_STREAM_PREFIX,
             RESOURCE_EVENT_STREAM_OPEN_LIMIT,
             RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
         )
-        request.app.state._resource_stream_open_limiter = limiter
-    return limiter
+    return get_cached_limiter(request, "_resource_stream_open_limiter", _build)
 
 
 def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
-    limiter = getattr(request.app.state, "_resource_stream_lease_limiter", None)
-    if limiter is None:
+    def _build() -> RedisConcurrentLeaseLimiter:
         ctx: AppContext = request.app.state.ctx
         settings = get_settings()
         pool_capacity = settings.database_pool_size + settings.database_max_overflow
@@ -274,7 +281,7 @@ def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
         if spare_capacity <= 0:
             raise HTTPException(503, RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE)
         global_limit = min(RESOURCE_EVENT_STREAM_MAX_GLOBAL, spare_capacity)
-        limiter = RedisConcurrentLeaseLimiter(
+        return RedisConcurrentLeaseLimiter(
             ctx.redis,
             scope_prefix=REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
             global_key=REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
@@ -282,14 +289,19 @@ def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
             max_global=global_limit,
             lease_seconds=RESOURCE_EVENT_STREAM_LEASE_SECONDS,
         )
-        request.app.state._resource_stream_lease_limiter = limiter
-    return limiter
+    return get_cached_limiter(request, "_resource_stream_lease_limiter", _build)
 
 
 def _acquire_stream_lease(
     request: Request,
     user_id: str,
 ) -> tuple[RedisConcurrentLeaseLimiter, str]:
+    """Check the open-connection rate limit, then acquire a lease.
+
+    Enforces ``_STREAM_LEASE_FAILURE_POLICY`` (FAIL_CLOSED): either the
+    limiter itself erroring out, or the limiter deliberately saying no,
+    rejects the request rather than letting an unmetered stream through.
+    """
     try:
         if not _get_open_limiter(request).is_allowed(user_id):
             raise HTTPException(

@@ -1,8 +1,13 @@
 """Scheduler — routes generation jobs to ACE-Step workers.
 
 Stateless picker that lives inside the music-worker arq job. Reads worker
-identity from PG and ephemeral state from Redis, atomically claims a slot
-via INCR queue_depth, then dispatches via HTTP/SSE to the chosen worker.
+identity from PG and ephemeral state from Redis, picks the worker with the
+lowest queue_depth, then dispatches via HTTP/SSE to the chosen worker.
+Picking is check-then-act, not an atomic claim: ``pick_worker`` reads each
+worker's queue_depth and ``incr_queue_depth`` bumps the chosen worker's
+counter as a separate later step, so two concurrent picks can briefly land
+on the same worker before either increment is visible to the other. INCR is
+only a load counter for the next picker, not a lock.
 
 The scheduler does not commit DB or own any persistent state — it's a
 pure dispatch layer between ``run_generation_job`` and the worker pool.
@@ -21,7 +26,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -85,6 +90,9 @@ class GenerationTaskResultDTO(BaseModel):
     cot_caption: str = ""
     cot_lyrics: str = ""
     delivered_batch_size: int | None = None
+
+
+_TaskResultT = TypeVar("_TaskResultT", bound=BaseModel)
 
 
 @dataclass(frozen=True)
@@ -298,17 +306,28 @@ async def _iterate_task_events(
             await asyncio.sleep(backoff)
 
 
-async def consume_task_stream(
+async def _consume_task_stream(
     worker: _PickedWorker,
     task_id: str,
     *,
+    result_type: type[_TaskResultT],
+    invalid_result_label: str,
+    error_exception_type: type[WorkerTaskFailed],
     on_progress: ProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
-) -> GenerationTaskResultDTO:
-    """Consume a worker generate task stream. Returns the validated DTO.
+) -> _TaskResultT:
+    """Consume a worker task stream. Returns the validated ``result_type`` DTO.
 
-    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    ``error_exception_type`` is raised for a real (non-empty) ``error``
+    event, so a caller can distinguish a generation failure — whose message
+    is ACE-Step's own cause, shown verbatim to the user — from any other
+    task kind's failure.
+
+    Raises ``WorkerProtocolError`` when an SSE event violates the wire
+    contract: a ``done`` event missing ``result``, an ``error`` event
+    missing ``error``, or an ``error`` event whose ``error`` field is empty
+    (the worker is required to always attach a cause).
     """
     async for event_type, data in _iterate_task_events(worker, task_id, options=options):
         await _maybe_invoke(on_heartbeat)
@@ -321,10 +340,10 @@ async def consume_task_stream(
                     "Worker done event missing 'result' field",
                 )
             try:
-                return GenerationTaskResultDTO.model_validate(data["result"])
+                return result_type.model_validate(data["result"])
             except ValidationError as exc:
                 raise WorkerTaskFailed(
-                    f"Worker returned invalid result: {exc}",
+                    f"Worker returned {invalid_result_label}: {exc}",
                 ) from exc
         elif event_type == "error":
             if "error" not in data:
@@ -337,8 +356,31 @@ async def consume_task_stream(
                 raise WorkerProtocolError(
                     "Worker error event has an empty 'error' field",
                 )
-            raise WorkerGenerationFailed(message)
+            raise error_exception_type(message)
     raise WorkerTaskFailed("SSE stream ended without done/error event")
+
+
+async def consume_task_stream(
+    worker: _PickedWorker,
+    task_id: str,
+    *,
+    on_progress: ProgressCallback | None = None,
+    on_heartbeat: HeartbeatCallback | None = None,
+    options: DispatchOptions = DispatchOptions(),
+) -> GenerationTaskResultDTO:
+    """Consume a worker generate task stream. Returns the validated DTO.
+
+    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    """
+    return await _consume_task_stream(
+        worker, task_id,
+        result_type=GenerationTaskResultDTO,
+        invalid_result_label="invalid result",
+        error_exception_type=WorkerGenerationFailed,
+        on_progress=on_progress,
+        on_heartbeat=on_heartbeat,
+        options=options,
+    )
 
 
 async def consume_download_task_stream(
@@ -353,32 +395,15 @@ async def consume_download_task_stream(
 
     Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
     """
-    async for event_type, data in _iterate_task_events(worker, task_id, options=options):
-        await _maybe_invoke(on_heartbeat)
-        if event_type == "progress":
-            fraction = float(data.get("progress", 0.0))
-            await _maybe_invoke(on_progress, fraction)
-        elif event_type == "done":
-            if "result" not in data:
-                raise WorkerProtocolError(
-                    "Worker done event missing 'result' field",
-                )
-            try:
-                return DownloadTaskResultDTO.model_validate(data["result"])
-            except ValidationError as exc:
-                raise WorkerTaskFailed(
-                    f"Worker returned invalid download result: {exc}",
-                ) from exc
-        elif event_type == "error":
-            if "error" not in data:
-                raise WorkerProtocolError(
-                    "Worker error event missing 'error' field",
-                )
-            message = data["error"]
-            if not message:
-                log.warning("Worker error event has empty 'error' field")
-            raise WorkerTaskFailed(message)
-    raise WorkerTaskFailed("SSE stream ended without done/error event")
+    return await _consume_task_stream(
+        worker, task_id,
+        result_type=DownloadTaskResultDTO,
+        invalid_result_label="invalid download result",
+        error_exception_type=WorkerTaskFailed,
+        on_progress=on_progress,
+        on_heartbeat=on_heartbeat,
+        options=options,
+    )
 
 
 async def dispatch_generation(

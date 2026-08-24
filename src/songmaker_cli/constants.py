@@ -477,6 +477,22 @@ LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
     LoraStatus.EXPORTING,
 })
 
+
+class LimiterFailurePolicy(StrEnum):
+    """Named fallback for when a rate/lease limiter's Redis backend errors.
+
+    FAIL_OPEN lets the request through — used for public, unauthenticated
+    endpoints (album/song/playlist share pages) where blocking real traffic
+    on a transient Redis outage outweighs the abuse risk. FAIL_CLOSED
+    rejects the request with 503 — used where an unenforced limit could let
+    resource exhaustion through unbounded (queue-stream creation, the
+    resource-event SSE stream's connection lease).
+    """
+
+    FAIL_OPEN = "fail_open"
+    FAIL_CLOSED = "fail_closed"
+
+
 # Env var names stripped from the environment of every child process this
 # package spawns (currently the Claude CLI, in claude/provider.py). The
 # acestep_worker package keeps an identical tuple of the same name in

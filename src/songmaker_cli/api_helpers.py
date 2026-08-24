@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeVar
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -29,6 +30,7 @@ from songmaker_cli.constants import (
     SETTING_MAX_USER_ACTIVE_JOBS,
     SETTING_SCORING_RATE_LIMIT,
     JobType,
+    LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import (
     Album,
@@ -51,6 +53,7 @@ from songmaker_cli.db.queries import (
     resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
+from songmaker_cli.redis_client import RedisRateLimiter
 from songmaker_cli.settings import get_settings
 
 _RATE_LIMIT_LOCK_ID = 1
@@ -365,6 +368,62 @@ def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
             delete_generation_files(audio_dir, rel_path)
         except Exception:
             _log.warning("Orphaned file after delete: %s", rel_path)
+
+
+# ── Rate limiting ────────────────────────────────────────────────────
+
+_LimiterT = TypeVar("_LimiterT")
+
+
+def get_cached_limiter(
+    request: Request,
+    state_attr: str,
+    build: Callable[[], _LimiterT],
+) -> _LimiterT:
+    """Return the limiter cached on ``request.app.state``, building it via
+    ``build`` on first use.
+
+    One limiter instance lives per FastAPI app process (cached on
+    ``app.state`` rather than a module global, so tests that create a fresh
+    app per case get a fresh limiter too), avoiding the Redis connection
+    setup ``build`` does on every request.
+    """
+    limiter = getattr(request.app.state, state_attr, None)
+    if limiter is None:
+        limiter = build()
+        setattr(request.app.state, state_attr, limiter)
+    return limiter
+
+
+def enforce_rate_limit(
+    limiter: RedisRateLimiter,
+    key: str,
+    *,
+    policy: LimiterFailurePolicy,
+    reject_detail: str,
+    retry_after_seconds: int,
+    unavailable_log_message: str,
+    unavailable_detail: str | None = None,
+) -> None:
+    """Check ``limiter.is_allowed(key)`` and enforce the result as a 429.
+
+    ``policy`` names what happens when the limiter's Redis backend itself
+    errors out: FAIL_OPEN logs and lets the request through, FAIL_CLOSED
+    logs and rejects it with 503 (``unavailable_detail`` defaults to
+    ``reject_detail`` if not given separately).
+    """
+    try:
+        allowed = limiter.is_allowed(key)
+    except Exception as exc:
+        _log.warning(unavailable_log_message)
+        if policy is LimiterFailurePolicy.FAIL_OPEN:
+            return
+        raise HTTPException(503, unavailable_detail or reject_detail) from exc
+    if not allowed:
+        raise HTTPException(
+            429, reject_detail,
+            headers={"Retry-After": str(retry_after_seconds)},
+        )
 
 
 # ── Pagination ───────────────────────────────────────────────────────

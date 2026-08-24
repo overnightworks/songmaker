@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -13,7 +12,11 @@ from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
 from songmaker_cli import queue_streams
-from songmaker_cli.api_helpers import check_generation_access
+from songmaker_cli.api_helpers import (
+    check_generation_access,
+    enforce_rate_limit,
+    get_cached_limiter,
+)
 from songmaker_cli.api_models.queue_streams import (
     LibraryTakePool,
     QueueStreamLibraryRequest,
@@ -23,7 +26,11 @@ from songmaker_cli.api_models.queue_streams import (
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.constants import AUDIO_MEDIA_TYPES, REDIS_RL_QUEUE_STREAM_PREFIX
+from songmaker_cli.constants import (
+    AUDIO_MEDIA_TYPES,
+    REDIS_RL_QUEUE_STREAM_PREFIX,
+    LimiterFailurePolicy,
+)
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import list_songs
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -41,36 +48,35 @@ from songmaker_cli.queue_streams import (
 from songmaker_cli.redis_client import RedisRateLimiter
 
 router = APIRouter()
-log = logging.getLogger(__name__)
 LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
 
 
+# Authenticated queue-stream creation fails closed: an unenforced limit here
+# could let one user exhaust storage or worker capacity unbounded.
+_QUEUE_STREAM_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
+
+
 def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
-    limiter = getattr(request.app.state, "_queue_stream_limiter", None)
-    if limiter is None:
+    def _build() -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
-        limiter = RedisRateLimiter(
+        return RedisRateLimiter(
             ctx.redis,
             REDIS_RL_QUEUE_STREAM_PREFIX,
             _consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
             _consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
         )
-        request.app.state._queue_stream_limiter = limiter
-    return limiter
+    return get_cached_limiter(request, "_queue_stream_limiter", _build)
 
 
 def check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
-    try:
-        allowed = _get_queue_stream_limiter(request).is_allowed(user.id)
-    except Exception as exc:
-        log.warning("Queue stream rate limiter unavailable -- rejecting request")
-        raise HTTPException(503, "Queue stream rate limiter unavailable") from exc
-    if not allowed:
-        raise HTTPException(
-            429,
-            "Too many queue stream requests",
-            headers={"Retry-After": str(_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)},
-        )
+    enforce_rate_limit(
+        _get_queue_stream_limiter(request), user.id,
+        policy=_QUEUE_STREAM_LIMITER_FAILURE_POLICY,
+        reject_detail="Too many queue stream requests",
+        retry_after_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
+        unavailable_log_message="Queue stream rate limiter unavailable -- rejecting request",
+        unavailable_detail="Queue stream rate limiter unavailable",
+    )
 
 
 @router.post("/queue-streams")
