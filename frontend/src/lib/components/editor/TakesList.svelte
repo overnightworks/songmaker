@@ -16,11 +16,7 @@
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT
 	} from '$lib/constants';
-	import {
-		nowPlayingTakeLabel,
-		takeBatchReductionLabel,
-		takeModelModeLabel
-	} from '$lib/constants/now-playing';
+	import { nowPlayingTakeLabel, takeModelModeLabel } from '$lib/constants/now-playing';
 	import {
 		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
@@ -404,7 +400,6 @@
 					{@const duration = formatDuration(gen)}
 					{@const headline = headlineScore(gen)}
 					{@const modelMode = takeModelModeLabel(gen.model_mode)}
-					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
 					<!-- `role` and `tabindex` move together with rowIsActionable, which the
 					     a11y check cannot narrow through a dynamic role. -->
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -439,15 +434,6 @@
 
 							{#if modelMode}
 								<span class="model-badge" title="Model: {modelMode}">{modelMode}</span>
-							{/if}
-
-							{#if batchNotice}
-								<span
-									class="batch-badge"
-									title="Batch size reduced by ACE-Step due to available VRAM: delivered {batchNotice}"
-								>
-									⚠ {batchNotice}
-								</span>
 							{/if}
 
 							{#if headline}
@@ -849,18 +835,6 @@
 		flex-shrink: 0;
 	}
 
-	.batch-badge {
-		font-size: 0.6rem;
-		padding: 0.1rem 0.35rem;
-		border-radius: 3px;
-		letter-spacing: 0.3px;
-		background: rgba(220, 140, 20, 0.15);
-		border: 1px solid rgba(220, 140, 20, 0.5);
-		color: #f0a030;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
 	.expiry-badge {
 		font-size: 0.6rem;
 		padding: 0.1rem 0.35rem;
@@ -905,8 +879,7 @@
 	.take-row.archived .take-label,
 	.take-row.archived .take-duration,
 	.take-row.archived .score-badge,
-	.take-row.archived .model-badge,
-	.take-row.archived .batch-badge {
+	.take-row.archived .model-badge {
 		color: var(--text-disabled);
 	}
 

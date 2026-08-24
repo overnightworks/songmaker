@@ -345,40 +345,6 @@ describe('TakesList', () => {
 		expect(target.querySelector('.model-badge')).toBeNull();
 	});
 
-	it('shows a batch-reduction badge when the worker delivered fewer takes than asked', async () => {
-		const { target } = await render({
-			song: song({
-				generations: [
-					generation({
-						id: 'g1',
-						generation_params: { batch_size: 2, delivered_batch_size: 1 }
-					})
-				]
-			})
-		});
-		const badge = target.querySelector<HTMLElement>('.batch-badge');
-		expect(badge?.textContent?.trim()).toBe('⚠ 1 of 2');
-	});
-
-	it('shows no batch-reduction badge when the worker delivered exactly what was asked', async () => {
-		const { target } = await render({
-			song: song({
-				generations: [
-					generation({
-						id: 'g1',
-						generation_params: { batch_size: 2, delivered_batch_size: 2 }
-					})
-				]
-			})
-		});
-		expect(target.querySelector('.batch-badge')).toBeNull();
-	});
-
-	it('shows no batch-reduction badge for a take with no batch-size info at all', async () => {
-		const { target } = await render();
-		expect(target.querySelector('.batch-badge')).toBeNull();
-	});
-
 	it('calls pick and keep from the take actions', async () => {
 		const { target } = await render();
 		const row = target.querySelectorAll('.take-row')[1];
