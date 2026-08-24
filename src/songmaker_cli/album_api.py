@@ -50,6 +50,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.queries import (
     UNSET,
     RestoreWindowExpiredError,
+    archive_album,
     cleanup_album,
     count_albums,
     count_picked_songs_by_album,
@@ -62,6 +63,7 @@ from songmaker_cli.db.queries import (
     restore_album,
     set_album_cover_key,
     soft_delete_album,
+    unarchive_album,
     update_album,
 )
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
@@ -77,15 +79,16 @@ def api_list_albums(
     page: Pagination,
     q: str | None = Query(None),
     sort: LibrarySort | None = Query(None),
+    archived: bool = Query(False),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[AlbumResponse]:
     query = parse_optional_search_query(q)
     uid = owner_filter(user)
-    total = count_albums(session, user_id=uid, q=query)
+    total = count_albums(session, user_id=uid, q=query, archived=archived)
     albums = list_albums(
         session, user_id=uid, offset=page.offset, limit=page.limit,
-        q=query, sort=sort,
+        q=query, sort=sort, archived=archived,
     )
     picked_counts = count_picked_songs_by_album(session, [a.id for a in albums])
     items = [
@@ -203,6 +206,42 @@ def api_restore_album(
     session.commit()
     picked_counts = count_picked_songs_by_album(session, [restored.id])
     return AlbumResponse.from_orm(restored, picked_count=picked_counts.get(restored.id, 0))
+
+
+@router.post("/albums/{album_id}/archive")
+def api_archive_album(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> AlbumResponse:
+    """Hide the album from the default library, search, and mix/pool.
+
+    A visibility flag, not a soft-delete: songs and any existing share
+    links stay intact (see get_album_by_slug) and the album remains
+    reachable directly by ID until unarchive_album reverses it.
+    """
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    album = archive_album(session, album_id)
+    record_audit(session, user.id, AuditAction.ARCHIVE, ResourceType.ALBUM, album_id)
+    session.commit()
+    picked_counts = count_picked_songs_by_album(session, [album.id])
+    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+
+
+@router.post("/albums/{album_id}/unarchive")
+def api_unarchive_album(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> AlbumResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    album = unarchive_album(session, album_id)
+    record_audit(session, user.id, AuditAction.UNARCHIVE, ResourceType.ALBUM, album_id)
+    session.commit()
+    picked_counts = count_picked_songs_by_album(session, [album.id])
+    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
 
 
 @router.post("/albums/{album_id}/cleanup")

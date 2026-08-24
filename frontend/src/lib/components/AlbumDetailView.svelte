@@ -1,9 +1,11 @@
 <script lang="ts">
 	import {
+		archiveAlbum,
 		deleteAlbum,
 		deleteAlbumCover,
 		restoreAlbum,
 		shareAlbum,
+		unarchiveAlbum,
 		unshareAlbum,
 		updateAlbum,
 		uploadAlbumCover
@@ -208,6 +210,34 @@
 		}
 	}
 
+	async function onAlbumArchive(): Promise<void> {
+		if (!selectedAlbum) return;
+		const album = selectedAlbum;
+		const albumId = album.id;
+		try {
+			await archiveAlbum(albumId);
+			removeAlbumFromList(albumId);
+			removeSongsForAlbum(albumId);
+			setOpenCollection(null);
+			addUndoToast('Album archived', {
+				label: 'Undo',
+				handler: async () => {
+					try {
+						const restored = await unarchiveAlbum(albumId);
+						addAlbumToList(restored);
+						const resp = await fetchSongs(albumId);
+						addSongsToList(resp.items);
+						addToast('Album unarchived', 'success');
+					} catch {
+						addToast('Unarchive failed', 'error');
+					}
+				}
+			});
+		} catch {
+			addToast('Archive failed', 'error');
+		}
+	}
+
 	async function onAddToPlaylist(playlistId: string): Promise<void> {
 		if (!currentAlbumId) return;
 		try {
@@ -246,6 +276,7 @@
 			onshare={onAlbumShareEnable}
 			onunshare={onAlbumShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
+			onarchive={onAlbumArchive}
 			oncover={onCoverAction}
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}

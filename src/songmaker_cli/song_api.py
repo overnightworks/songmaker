@@ -103,10 +103,18 @@ def api_list_songs(
 ) -> PaginatedResponse[SongSummaryResponse]:
     query = parse_optional_search_query(q)
     uid = owner_filter(user)
-    total = count_songs(session, album_id=album_id, user_id=uid, q=query)
+    # Direct-by-ID (album_id set) must still surface an archived album's
+    # songs — AlbumDetailView relies on this. Only the unscoped browse
+    # case hides songs of archived albums, matching the library/mix/pool.
+    exclude_archived_albums = album_id is None
+    total = count_songs(
+        session, album_id=album_id, user_id=uid, q=query,
+        exclude_archived_albums=exclude_archived_albums,
+    )
     songs = list_songs(
         session, album_id=album_id, user_id=uid, light=True,
         offset=page.offset, limit=page.limit, q=query, sort=sort,
+        exclude_archived_albums=exclude_archived_albums,
     )
     items = [SongSummaryResponse.from_orm(s) for s in songs]
     return PaginatedResponse(

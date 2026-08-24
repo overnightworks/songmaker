@@ -22,6 +22,7 @@
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		ondelete: () => void;
+		onarchive?: () => void;
 		oncover?: () => void;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
@@ -48,6 +49,7 @@
 		onshare,
 		onunshare,
 		ondelete,
+		onarchive,
 		oncover,
 		onremovecover,
 		onaddtoplaylist,
@@ -113,6 +115,7 @@
 		{onshare}
 		{onunshare}
 		{ondelete}
+		{onarchive}
 		{oncover}
 		hasCover={showCover}
 		{onremovecover}

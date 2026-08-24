@@ -1,6 +1,7 @@
 """Database query functions — split by domain, re-exported here for compatibility."""
 
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
+from songmaker_cli.db.queries.albums import archive_album as archive_album
 from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
 from songmaker_cli.db.queries.albums import count_albums as count_albums
 from songmaker_cli.db.queries.albums import (
@@ -17,6 +18,7 @@ from songmaker_cli.db.queries.albums import list_expired_albums as list_expired_
 from songmaker_cli.db.queries.albums import restore_album as restore_album
 from songmaker_cli.db.queries.albums import set_album_cover_key as set_album_cover_key
 from songmaker_cli.db.queries.albums import soft_delete_album as soft_delete_album
+from songmaker_cli.db.queries.albums import unarchive_album as unarchive_album
 from songmaker_cli.db.queries.albums import update_album as update_album
 from songmaker_cli.db.queries.auth import (
     LOGIN_ATTEMPT_RETENTION_DAYS as LOGIN_ATTEMPT_RETENTION_DAYS,

@@ -11,6 +11,8 @@ export {
 	unshareAlbum,
 	deleteAlbum,
 	restoreAlbum,
+	archiveAlbum,
+	unarchiveAlbum,
 	cleanupAlbum
 } from './albums';
 export {

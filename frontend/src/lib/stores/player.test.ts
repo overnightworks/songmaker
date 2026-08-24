@@ -153,6 +153,7 @@ function makeAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
 		share_slug: null,
 		cover: null,
 		created_at: '',
+		is_archived: false,
 		...overrides
 	};
 }

@@ -30,8 +30,9 @@ def list_albums(
     limit: int | None = None,
     q: str | None = None,
     sort: str | None = None,
+    archived: bool = False,
 ) -> list[Album]:
-    query = _album_query(session, user_id=user_id, q=q)
+    query = _album_query(session, user_id=user_id, q=q, archived=archived)
     query = query.options(joinedload(Album.songs))
     if sort is None:
         query = query.order_by(Album.title, Album.id)
@@ -47,16 +48,18 @@ def count_albums(
     session: Session,
     user_id: str | None = None,
     q: str | None = None,
+    archived: bool = False,
 ) -> int:
-    return _album_query(session, user_id=user_id, q=q).count()
+    return _album_query(session, user_id=user_id, q=q, archived=archived).count()
 
 
 def _album_query(
     session: Session,
     user_id: str | None = None,
     q: str | None = None,
+    archived: bool = False,
 ):
-    query = session.query(Album)
+    query = session.query(Album).filter(Album.is_archived.is_(archived))
     if user_id:
         query = query.filter_by(created_by=user_id)
     if q:
@@ -292,6 +295,33 @@ def delete_album(session: Session, album_id: str) -> list[str]:
 
     log.info("Hard-deleted album %s", album_id)
     return paths
+
+
+def archive_album(session: Session, album_id: str) -> Album:
+    """Hide an album from the default library, search, and mix/pool.
+
+    A visibility flag, not a soft-delete: the album's data, songs, and any
+    existing share links are untouched and keep working (see get_album_by_slug).
+    """
+    album = get_album(session, album_id)
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+    album.is_archived = True
+    album.archived_at = datetime.now(timezone.utc)
+    session.flush()
+    log.info("Archived album %s", album_id)
+    return album
+
+
+def unarchive_album(session: Session, album_id: str) -> Album:
+    album = get_album(session, album_id)
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+    album.is_archived = False
+    album.archived_at = None
+    session.flush()
+    log.info("Unarchived album %s", album_id)
+    return album
 
 
 def list_expired_albums(session: Session, cutoff: datetime) -> list[Album]:

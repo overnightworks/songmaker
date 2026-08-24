@@ -332,6 +332,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 		share_slug: null,
 		cover: null,
 		created_at: '2026-01-01T00:00:00+00:00',
+		is_archived: false,
 		...overrides
 	};
 }

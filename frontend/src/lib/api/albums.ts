@@ -14,6 +14,7 @@ export async function fetchAlbums(
 	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
 	if (options?.q) params.set('q', options.q);
 	if (options?.sort) params.set('sort', options.sort);
+	if (options?.archived) params.set('archived', 'true');
 	return apiFetch<PaginatedResponse<AlbumItem>>(`/api/albums?${params}`);
 }
 
@@ -55,6 +56,14 @@ export async function deleteAlbum(albumId: string): Promise<void> {
 
 export async function restoreAlbum(albumId: string): Promise<AlbumItem> {
 	return apiFetch<AlbumItem>(`/api/albums/${albumId}/restore`, { method: 'POST' });
+}
+
+export async function archiveAlbum(albumId: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/archive`, { method: 'POST' });
+}
+
+export async function unarchiveAlbum(albumId: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/unarchive`, { method: 'POST' });
 }
 
 export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {

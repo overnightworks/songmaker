@@ -97,6 +97,10 @@ class Album(ShareMixin, Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
     deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        TZDateTime, nullable=True, index=True,
+    )
 
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")
 

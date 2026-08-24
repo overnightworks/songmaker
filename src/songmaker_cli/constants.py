@@ -422,6 +422,8 @@ class AuditAction(StrEnum):
     UPDATE = "update"
     DELETE = "delete"
     RESTORE = "restore"
+    ARCHIVE = "archive"
+    UNARCHIVE = "unarchive"
     HARD_DELETE = "hard_delete"
     DEACTIVATE = "deactivate"
     CANCEL = "cancel"

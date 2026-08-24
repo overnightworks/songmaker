@@ -4,6 +4,7 @@
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
+		COLLECTION_MENU_ARCHIVE_LABEL,
 		COLLECTION_MENU_CLOSE_LABEL,
 		COLLECTION_MENU_COVER_LABEL,
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
@@ -28,6 +29,7 @@
 		onunshare: () => Promise<void>;
 		onrename: () => void;
 		ondelete: () => void;
+		onarchive?: () => void;
 		oncover?: () => void;
 		hasCover?: boolean;
 		onremovecover?: () => void;
@@ -47,6 +49,7 @@
 		onunshare,
 		onrename,
 		ondelete,
+		onarchive,
 		oncover,
 		hasCover = false,
 		onremovecover,
@@ -177,6 +180,11 @@
 			{#if kind === 'album' && onaddtoplaylist}
 				<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
 					>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button
+				>
+			{/if}
+			{#if kind === 'album' && onarchive}
+				<button class="menu-item" onclick={() => runAndClose(onarchive)}
+					>{COLLECTION_MENU_ARCHIVE_LABEL}</button
 				>
 			{/if}
 			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
