@@ -547,7 +547,7 @@ def test_full_app_preserves_resource_sse_headers_and_other_api_cache_policy(
         yield 'data: {"status":"completed"}\n\n'
 
     monkeypatch.setattr(
-        "songmaker_cli.generation_api._job_event_generator",
+        "songmaker_cli.jobs_api._job_event_generator",
         _finite_job,
     )
     resource_response = clients["alice"].get("/api/resource-events/stream")

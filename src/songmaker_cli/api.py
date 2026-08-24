@@ -3,7 +3,8 @@
 Sub-modules:
     album_api       — album CRUD + cleanup
     song_api        — song + version CRUD
-    generation_api  — generation, scoring, rating, pick, job endpoints
+    generation_api  — generation, scoring, rating, pick endpoints
+    jobs_api        — job status, streaming, cancellation endpoints
     chat_api        — Claude chat, capabilities
     settings_api    — generation presets, builtins, global defaults
 
@@ -21,6 +22,7 @@ from songmaker_cli.chat_api import router as chat_router
 from songmaker_cli.conversation_api import router as conversation_router
 from songmaker_cli.generation_api import router as generation_router
 from songmaker_cli.internal_api import router as internal_router
+from songmaker_cli.jobs_api import router as jobs_router
 from songmaker_cli.library_api import router as library_router
 from songmaker_cli.lora_api import router as lora_router
 from songmaker_cli.playlist_api import router as playlist_router
@@ -37,6 +39,7 @@ router.include_router(album_router)
 router.include_router(song_router)
 router.include_router(library_router)
 router.include_router(generation_router)
+router.include_router(jobs_router)
 router.include_router(internal_router)
 router.include_router(lora_router)
 router.include_router(playlist_router)

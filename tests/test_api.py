@@ -2073,7 +2073,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     import json
 
     from songmaker_cli.db.queries import create_job, update_job_status
-    from songmaker_cli.generation_api import _job_event_generator
+    from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
