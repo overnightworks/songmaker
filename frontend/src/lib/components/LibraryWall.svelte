@@ -10,14 +10,12 @@
 		albumList,
 		albumSongsLoad,
 		loadSongsForAlbum,
-		playAlbum,
-		playPlaylistFrom,
 		songList,
-		selectedGenerationId,
 		updateAlbumInList,
 		updateGenerationInList,
 		updateSongInList
-	} from '$lib/stores/player';
+	} from '$lib/stores/libraryData';
+	import { playAlbum, playPlaylistFrom, selectedGenerationId } from '$lib/stores/player';
 	import {
 		openAlbum,
 		openPlaylist,

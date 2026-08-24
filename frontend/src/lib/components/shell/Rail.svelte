@@ -1,6 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { albumList } from '$lib/stores/player';
+	import { albumList } from '$lib/stores/libraryData';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { libraryBrowse } from '$lib/stores/librarySearch';
 	import { ensurePlaylistsLoaded, playlistList, playlistLoad } from '$lib/stores/playlists';

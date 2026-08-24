@@ -3,13 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
-import {
-	albumList,
-	selectedAlbumId,
-	selectedGenerationId,
-	selectedSongId,
-	songList
-} from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';

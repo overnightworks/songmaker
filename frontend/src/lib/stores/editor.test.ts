@@ -8,10 +8,12 @@ vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn()
 }));
 
+vi.mock('$lib/stores/libraryData', () => ({
+	replaceSongInList: vi.fn()
+}));
 vi.mock('$lib/stores/player', async () => {
 	const { writable } = await import('svelte/store');
 	return {
-		replaceSongInList: vi.fn(),
 		selectedSongId: writable('s1')
 	};
 });

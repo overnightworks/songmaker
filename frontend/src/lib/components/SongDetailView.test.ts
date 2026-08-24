@@ -59,13 +59,8 @@ import {
 	selectSong,
 	switchTab
 } from '$lib/stores/navigation';
-import {
-	albumList,
-	selectedAlbumId,
-	selectedGenerationId,
-	selectedSongId,
-	songList
-} from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
 import {
 	pendingSource,

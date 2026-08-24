@@ -11,7 +11,8 @@ import {
 	librarySort,
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
-import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
+import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { playlistLoad, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { resetShares, sharesViewOpen } from '$lib/stores/shares';
 

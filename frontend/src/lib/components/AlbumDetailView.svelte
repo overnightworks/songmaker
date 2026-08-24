@@ -15,16 +15,14 @@
 		albumList,
 		albumSongsLoad,
 		songList,
-		selectedAlbumId,
 		loadSongsForAlbum,
-		playAlbum,
-		playAlbumSong,
 		addAlbumToList,
 		addSongsToList,
 		removeAlbumFromList,
 		removeSongsForAlbum,
 		updateAlbumInList
-	} from '$lib/stores/player';
+	} from '$lib/stores/libraryData';
+	import { selectedAlbumId, playAlbum, playAlbumSong } from '$lib/stores/player';
 	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';

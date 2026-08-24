@@ -51,13 +51,6 @@ vi.mock('$lib/api/client', () => ({
 }));
 import {
 	albumList,
-	buildQueueViewModel,
-	canPlayNextGen,
-	canPlayNextSong,
-	canPlayPrevGen,
-	canPlayPrevSong,
-	clearGenerationSelection,
-	ensureGenerationsLoaded,
 	albumSongsLoad,
 	loadSongsForAlbum,
 	cancelAlbumSongLoads,
@@ -65,6 +58,17 @@ import {
 	upsertSongInList,
 	overlaySongList,
 	retainRicherSong,
+	songList,
+	updateGenerationScores
+} from './libraryData';
+import {
+	buildQueueViewModel,
+	canPlayNextGen,
+	canPlayNextSong,
+	canPlayPrevGen,
+	canPlayPrevSong,
+	clearGenerationSelection,
+	ensureGenerationsLoaded,
 	filteredSongs,
 	handlePlaybackEnded,
 	idlePlayTarget,
@@ -113,9 +117,7 @@ import {
 	setShuffle,
 	shuffleEnabled,
 	shuffleLabel,
-	songList,
 	toggleShuffle,
-	updateGenerationScores,
 	windowEnded
 } from './player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';

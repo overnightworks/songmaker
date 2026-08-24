@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fetchAlbums, createAlbum, createSong } from '$lib/api/client';
-	import { albumList, addSongToList } from '$lib/stores/player';
+	import { albumList, addSongToList } from '$lib/stores/libraryData';
 	import { openWriteTab, selectSong } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
 	import type { AlbumItem } from '$lib/api/types';

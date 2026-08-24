@@ -11,16 +11,15 @@ import type {
 import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { albumList, songList } from '$lib/stores/libraryData';
 import {
-	albumList,
 	closeNowPlaying,
 	nowPlayingOpen,
 	nowPlayingPanel,
 	queueContext,
 	selectedSongId,
 	setShuffle,
-	shuffleEnabled,
-	songList
+	shuffleEnabled
 } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';

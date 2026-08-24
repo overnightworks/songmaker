@@ -16,7 +16,7 @@ import {
 } from '$lib/constants';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';

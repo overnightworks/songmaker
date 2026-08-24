@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { albumList, songList } from '$lib/stores/libraryData';
 	import {
-		albumList,
 		closeNowPlaying,
 		idlePlayTarget,
 		nowPlayingOpen,
@@ -17,7 +17,6 @@
 		retryLastPlayIntent,
 		shuffleEnabled,
 		shuffleLabel,
-		songList,
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
