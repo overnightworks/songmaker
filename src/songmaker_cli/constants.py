@@ -226,6 +226,16 @@ RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
 SESSION_SYNC_LOCK_KEY = f"{REDIS_KEY_PREFIX}:session_sync_lock"
 SESSION_SYNC_LOCK_TTL_SECONDS = 60
 
+# Score backfill (issue #222): catches up generations that predate
+# auto-scoring, or that an auto-score attempt could not reach (worker down,
+# enqueue failure). Small batch on a short interval so a large backlog is
+# worked off gradually rather than as one big-bang burst against the CPU-only
+# scoring worker.
+SCORE_BACKFILL_INTERVAL_SECONDS = 120
+SCORE_BACKFILL_BATCH_SIZE = 5
+SCORE_BACKFILL_LOCK_KEY = f"{REDIS_KEY_PREFIX}:score_backfill_lock"
+SCORE_BACKFILL_LOCK_TTL_SECONDS = 60
+
 # Startup error messages
 REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "

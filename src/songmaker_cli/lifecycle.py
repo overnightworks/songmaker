@@ -7,7 +7,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
+from arq.connections import ArqRedis
 from fastapi import FastAPI
+from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -63,6 +65,81 @@ async def resource_event_cleanup_loop(app: FastAPI) -> None:
                 await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
             except Exception:
                 log.exception("Queue stream cleanup failed")
+
+
+def _pick_unscored_generations(session: Session, limit: int) -> list[tuple[str, str]]:
+    """Return (generation_id, song_id) for up to ``limit`` scoreless generations.
+
+    Oldest first, so a long-standing backlog (issue #222: generations that
+    predate auto-scoring) drains before generations an auto-score attempt
+    recently failed to reach.
+    """
+    from songmaker_cli.db.models import Generation, Score
+
+    rows = (
+        session.query(Generation.id, Generation.song_id)
+        .outerjoin(Score, Score.generation_id == Generation.id)
+        .filter(Score.id.is_(None))
+        .order_by(Generation.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    return [(gen_id, song_id) for gen_id, song_id in rows]
+
+
+async def backfill_unscored_generations(ctx: AppContext, redis: ArqRedis) -> int:
+    """Auto-score one throttled batch of generations that still have no score.
+
+    Covers both a generation that predates auto-scoring and one an earlier
+    auto-score attempt could not reach (worker down, enqueue failure) — both
+    look identical here: no ``Score`` row yet. Each generation is handled
+    independently so one bad row cannot stop the rest of the batch.
+    """
+    from songmaker_cli.constants import SCORE_BACKFILL_BATCH_SIZE
+    from songmaker_cli.jobs import _auto_score_generation
+
+    with ctx.db() as session:
+        candidates = _pick_unscored_generations(session, SCORE_BACKFILL_BATCH_SIZE)
+
+    scored = 0
+    for gen_id, song_id in candidates:
+        try:
+            await _auto_score_generation(redis, ctx.db, gen_id, song_id)
+            scored += 1
+        except Exception:
+            log.exception("Score backfill failed for generation %s — continuing", gen_id)
+    return scored
+
+
+async def score_backfill_loop(app: FastAPI) -> None:
+    """Run the throttled score-backfill tick for the server lifetime.
+
+    Uses the same single-flight Redis lock idiom as ``session_sync_loop`` so
+    only one web replica dispatches a given tick's batch.
+    """
+    from songmaker_cli.arq_pool import get_arq_pool
+    from songmaker_cli.constants import (
+        SCORE_BACKFILL_INTERVAL_SECONDS,
+        SCORE_BACKFILL_LOCK_KEY,
+        SCORE_BACKFILL_LOCK_TTL_SECONDS,
+    )
+
+    ctx: AppContext = app.state.ctx
+    while True:
+        await asyncio.sleep(SCORE_BACKFILL_INTERVAL_SECONDS)
+        try:
+            acquired = await asyncio.to_thread(
+                ctx.redis.set,
+                SCORE_BACKFILL_LOCK_KEY, "1",
+                ex=SCORE_BACKFILL_LOCK_TTL_SECONDS, nx=True,
+            )
+            if not acquired:
+                continue
+            scored = await backfill_unscored_generations(ctx, get_arq_pool())
+            if scored:
+                log.info("Score backfill: dispatched %d generation(s)", scored)
+        except Exception:
+            log.exception("Score backfill tick failed")
 
 
 def reconcile_crashed_loras(ctx: AppContext) -> int:

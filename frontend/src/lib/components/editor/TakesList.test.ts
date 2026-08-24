@@ -379,6 +379,56 @@ describe('TakesList', () => {
 		expect(target.querySelector('.batch-badge')).toBeNull();
 	});
 
+	it('flags a take with no vocals detected', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [
+					generation({
+						id: 'g1',
+						scores: { lyrical_coherence: 0, lyrical_summary: 'Whisper found no vocals' }
+					})
+				]
+			})
+		});
+		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
+		expect(badge?.textContent?.trim()).toBe('⚠ No vocals');
+		expect(badge?.title).toBe('Whisper found no vocals');
+	});
+
+	it('flags a take with a long silent gap', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [generation({ id: 'g1', scores: { silence_gaps: 1, silence_longest: 20 } })]
+			})
+		});
+		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
+		expect(badge?.textContent?.trim()).toBe('⚠ Long silence');
+		expect(badge?.title).toBe('20s of silence detected');
+	});
+
+	it('shows no quality flag for a short, ordinary silence gap', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [generation({ id: 'g1', scores: { silence_gaps: 1, silence_longest: 3 } })]
+			})
+		});
+		expect(target.querySelector('.quality-flag-badge')).toBeNull();
+	});
+
+	it('shows no quality flag for a take with no scores yet', async () => {
+		const { target } = await render();
+		expect(target.querySelector('.quality-flag-badge')).toBeNull();
+	});
+
+	it('shows no quality flag for a take with a merely low, non-zero coherence score', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [generation({ id: 'g1', scores: { lyrical_coherence: 2 } })]
+			})
+		});
+		expect(target.querySelector('.quality-flag-badge')).toBeNull();
+	});
+
 	it('calls pick and keep from the take actions', async () => {
 		const { target } = await render();
 		const row = target.querySelectorAll('.take-row')[1];

@@ -11,6 +11,7 @@ import pytest
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, JobFunction, JobType
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -22,7 +23,12 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import get_generation, get_job, update_job_status
+from songmaker_cli.db.queries import (
+    count_user_jobs_in_window,
+    get_generation,
+    get_job,
+    update_job_status,
+)
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_cover_overrides,
@@ -60,7 +66,7 @@ def _make_dto(
 
 
 def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
-    _persist_generation_row(
+    return _persist_generation_row(
         db_factory=db_factory,
         ctx=ctx,
         generation_id=generation_id,
@@ -371,6 +377,7 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
         assert job.error == "Internal error during processing"
         assert session.query(Generation).count() == 0
         assert session.query(ResourceEvent).count() == 0
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == 0
 
 
 def test_generation_event_failure_rolls_back_generation(
@@ -409,6 +416,95 @@ def test_generation_event_failure_rolls_back_generation(
         assert session.query(Generation).count() == 0
         assert session.query(ResourceEvent).count() == 0
     assert list((tmp_path / "audio" / "u1").glob("*")) == []
+
+
+# ── Auto-score trigger (issue #222) ────────────────────────────────
+
+
+def _healthy_scoring_redis() -> MagicMock:
+    redis = MagicMock()
+    redis.exists = AsyncMock(return_value=1)
+    redis.enqueue_job = AsyncMock()
+    return redis
+
+
+def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path) -> None:
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+    redis = _healthy_scoring_redis()
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=redis,
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        gen = session.query(Generation).filter_by(song_id="s1").one()
+        score_job = session.query(Job).filter_by(type="score", song_id="s1").one()
+        assert score_job.user_id is None
+        assert score_job.status == "queued"
+        gen_id = gen.id
+        score_job_id = score_job.id
+
+    redis.enqueue_job.assert_awaited_once()
+    args, kwargs = redis.enqueue_job.await_args
+    assert args[0] == JobFunction.SCORE
+    assert args[1] == score_job_id
+    assert args[2] == gen_id
+    assert kwargs["_queue_name"] == ARQ_SCORING_QUEUE_NAME
+
+
+def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
+    seeded_db, tmp_path: Path,
+) -> None:
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=_healthy_scoring_redis(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == 1
+        # count_user_jobs_in_window always filters on a specific user id, so
+        # the auto-score job's user_id=None keeps it out of this count —
+        # the manual re-score button's own budget stays untouched.
+        assert count_user_jobs_in_window(session, "u1", JobType.SCORE, 3600) == 0
+
+
+def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
+    seeded_db, tmp_path: Path,
+) -> None:
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    redis = MagicMock()
+    redis.exists = AsyncMock(return_value=0)
+    redis.enqueue_job = AsyncMock()
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=redis,
+            target_model="sft",
+        ))
+
+    redis.enqueue_job.assert_not_awaited()
+    with seeded_db() as session:
+        score_job = session.query(Job).filter_by(type="score", song_id="s1").one()
+        assert score_job.status == "failed"
+        assert score_job.error_type == "setup_error"
+        # The generation itself is unaffected by the down scoring worker —
+        # only the follow-up auto-score job failed.
+        assert get_job(session, "j1").status == "completed"
+        assert session.query(Generation).filter_by(song_id="s1").count() == 1
 
 
 def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> None:
@@ -632,10 +728,11 @@ def test_generation_job_cancel_after_first_variant_skips_rest(
     seeded_db, tmp_path: Path,
 ) -> None:
     def persist_then_cancel(*, ctx, generation_id, db_factory, **kwargs):
-        _persist_via_post_process(
+        result = _persist_via_post_process(
             ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
         )
         _cancel_job(db_factory, "j1")
+        return result
 
     dispatch = AsyncMock(side_effect=[_make_dto(seed=100 + i) for i in range(3)])
     with (

@@ -95,3 +95,43 @@ export function scoreReadings(scores: TrackScores | null): ScoreReading[] {
 	}
 	return readings;
 }
+
+// A take at or above this much uninterrupted silence reads as broken rather
+// than merely quiet — well past an intentional dramatic pause, which rarely
+// runs this long (issue #222).
+export const QUALITY_FLAG_SILENCE_SECONDS = 15;
+
+// lyrical_coherence only ever lands on exactly 0 when Whisper's transcript
+// came back empty (scoring/lyrical_coherence.py) — the one case that is a
+// hard "no vocals" failure rather than merely weak or garbled singing, which
+// already shows through the score badge's own color.
+export const QUALITY_FLAG_VOCAL_FAILURE_COHERENCE = 0;
+
+export interface QualityFlag {
+	label: string;
+	title: string;
+}
+
+// The one hard-failure flag a take can carry, read off the same score table
+// as the headline pill but independent of it — a take can carry a good
+// headline score (e.g. a listener's own rating) while still having produced
+// no vocals or gone silent partway through.
+export function qualityFlag(scores: TrackScores | null): QualityFlag | null {
+	if (!scores) return null;
+	if (scores.lyrical_coherence === QUALITY_FLAG_VOCAL_FAILURE_COHERENCE) {
+		return {
+			label: 'No vocals',
+			title: scores.lyrical_summary || 'No vocals detected in this take'
+		};
+	}
+	if (
+		scores.silence_longest !== undefined &&
+		scores.silence_longest >= QUALITY_FLAG_SILENCE_SECONDS
+	) {
+		return {
+			label: 'Long silence',
+			title: `${Math.round(scores.silence_longest)}s of silence detected`
+		};
+	}
+	return null;
+}
