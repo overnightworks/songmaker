@@ -27,6 +27,17 @@ export interface TakeMetaParts {
 	versionNumber: number | null;
 	generationNumber: number;
 	durationSec: number | null;
+	// Omitted by rows that don't carry per-take model info (e.g. a playlist
+	// entry) — those rows read exactly as before (#212).
+	modelMode?: string | null;
+}
+
+// The one place that decides what a take's model_mode reads as everywhere a
+// take names its model — today the raw value already is the terse label
+// (turbo, xl-turbo, xl-sft, sft, xl-base); this is where that would change if
+// it ever stopped being terse.
+export function takeModelModeLabel(modelMode: string | null | undefined): string | null {
+	return modelMode ? modelMode : null;
 }
 
 // A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built
@@ -39,6 +50,7 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 	if (parts.durationSec !== null && parts.durationSec > 0) {
 		written.push(formatTime(parts.durationSec));
 	}
+	written.push(takeModelModeLabel(parts.modelMode));
 	return written.filter((part): part is string => Boolean(part)).join(META_SEPARATOR);
 }
 
