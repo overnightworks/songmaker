@@ -101,10 +101,12 @@ export function scoreReadings(scores: TrackScores | null): ScoreReading[] {
 // runs this long (issue #222).
 export const QUALITY_FLAG_SILENCE_SECONDS = 15;
 
-// lyrical_coherence only ever lands on exactly 0 when Whisper's transcript
-// came back empty (scoring/lyrical_coherence.py) — the one case that is a
-// hard "no vocals" failure rather than merely weak or garbled singing, which
-// already shows through the score badge's own color.
+// lyrical_coherence lands on exactly 0 in the clear no-vocals case —
+// Whisper's transcript came back empty — and, as a defensive fallback, when
+// the judge's own response couldn't be parsed (scoring/lyrical_coherence.py).
+// Either way it is a hard failure worth flagging, unlike merely weak or
+// garbled singing (score 1+), which already shows through the score badge's
+// own color.
 export const QUALITY_FLAG_VOCAL_FAILURE_COHERENCE = 0;
 
 export interface QualityFlag {

@@ -23,13 +23,13 @@ from songmaker_cli.api_models import (
     StoredGenerationParams,
 )
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
+from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import (
     audio_file_path,
     build_ace_config,
     resolve_model_mode,
 )
 from songmaker_cli.constants import (
-    ARQ_SCORING_HEALTH_KEY,
     ARQ_SCORING_QUEUE_NAME,
     WORKER_SHARED_TMP_DIRNAME,
     JobFunction,
@@ -516,9 +516,14 @@ async def _dispatch_auto_score(
     clear reason instead of queuing indefinitely — the generation still has
     no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
     once a worker comes back.
+
+    Health is checked via the passed-in ``redis`` connection, not the
+    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
+    this runs inside the music worker process, which never calls
+    ``init_arq_pool()``.
     """
     try:
-        worker_healthy = await redis.exists(ARQ_SCORING_HEALTH_KEY) > 0
+        worker_healthy = await is_scoring_worker_healthy(redis)
         if not worker_healthy:
             _update_job(
                 db_factory, job_id, JobStatus.FAILED,
