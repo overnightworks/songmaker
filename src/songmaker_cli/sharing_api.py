@@ -52,6 +52,7 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
+    QueueStreamManifest,
     build_queue_stream_snapshot,
     ensure_sources_detachable,
     load_queue_stream_manifest,
@@ -160,10 +161,10 @@ def _resolve_audio_path(audio_dir: Path, rel_path: str) -> Path:
     return audio_path
 
 
-def _validate_shared_queue_manifest(manifest: dict, db: Session) -> None:
-    scope = manifest.get("scope")
-    slug = str(manifest.get("scope_id") or "")
-    tracks = manifest.get("tracks") or []
+def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
+    scope = manifest.scope
+    slug = manifest.scope_id
+    tracks = manifest.tracks
     if scope == "shared-playlist":
         playlist = get_playlist_by_slug(db, slug)
         if not playlist:
@@ -173,10 +174,7 @@ def _validate_shared_queue_manifest(manifest: dict, db: Session) -> None:
             for entry in playlist.entries
             if entry.generation is not None
         }
-        if any(
-            (track.get("entry_id"), track.get("generation_id")) not in valid_tracks
-            for track in tracks
-        ):
+        if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, "Queue stream not found")
         return
 
@@ -189,10 +187,7 @@ def _validate_shared_queue_manifest(manifest: dict, db: Session) -> None:
             for song in album.songs
             if (gen := _picked_generation(song)) is not None
         }
-        if any(
-            (track.get("song_id"), track.get("generation_id")) not in valid_tracks
-            for track in tracks
-        ):
+        if any((track.song_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, "Queue stream not found")
         return
 

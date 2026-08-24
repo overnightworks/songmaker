@@ -9,15 +9,15 @@ import shutil
 import subprocess
 import threading
 import uuid
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from songmaker_cli.api_models.queue_streams import (
     QueueStreamManifestResponse,
@@ -57,24 +57,47 @@ _build_locks_guard = threading.Lock()
 _pin_lock = threading.Lock()
 
 
-def _load_manifest_json(manifest_path: Path) -> dict[str, object] | None:
-    try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return payload
+class QueueStreamManifest(BaseModel):
+    """The on-disk record for one queue-stream snapshot.
 
+    ``load``/``save`` are the only (de)serializers for the manifest file --
+    every read or write of a snapshot's ``.json`` file goes through this
+    model, so a truncated or field-missing file fails validation once, in
+    one place, instead of raising a raw ``KeyError`` deep in a caller.
+    """
 
-def _manifest_expiry(manifest: Mapping[str, object]) -> datetime | None:
-    raw = manifest.get("expires_at")
-    if raw is None:
-        return None
-    try:
-        return datetime.fromisoformat(str(raw))
-    except (TypeError, ValueError):
-        return None
+    snapshot_id: str
+    scope: SnapshotScope
+    scope_id: str
+    content_hash: str
+    expires_at: datetime
+    total_duration: float
+    tracks: list[QueueStreamTrackResponse]
+    windowed: bool = False
+    pinned: bool = False
+    pinned_at: datetime | None = None
+
+    @classmethod
+    def load(cls, manifest_path: Path) -> QueueStreamManifest | None:
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            log.warning("Queue stream manifest %s unreadable: %s", manifest_path, exc)
+            return None
+        try:
+            return cls.model_validate(payload)
+        except ValidationError as exc:
+            log.warning("Queue stream manifest %s failed validation: %s", manifest_path, exc)
+            return None
+
+    def save(self, manifest_path: Path) -> None:
+        """Write the manifest atomically via a temp file, then rename into place."""
+        tmp_path = manifest_path.with_name(f"{manifest_path.name}.tmp")
+        try:
+            tmp_path.write_text(self.model_dump_json(), encoding="utf-8")
+            tmp_path.replace(manifest_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True)
@@ -216,26 +239,26 @@ def _build_queue_stream_snapshot(
         output_tmp_path.unlink(missing_ok=True)
 
     expires_at = datetime.now(timezone.utc) + QUEUE_STREAM_TTL
-    manifest = {
-        "snapshot_id": snapshot_id,
-        "scope": scope,
-        "scope_id": scope_id,
-        "content_hash": content_hash,
-        "expires_at": expires_at.isoformat(),
-        "total_duration": round(offset, 3),
-        "windowed": windowed,
-        "pinned": False,
-        "pinned_at": None,
-        "tracks": [t.model_dump() for t in tracks],
-    }
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest = QueueStreamManifest(
+        snapshot_id=snapshot_id,
+        scope=scope,
+        scope_id=scope_id,
+        content_hash=content_hash,
+        expires_at=expires_at,
+        total_duration=round(offset, 3),
+        windowed=windowed,
+        pinned=False,
+        pinned_at=None,
+        tracks=tracks,
+    )
+    manifest.save(manifest_path)
     _enforce_cache_quota(stream_dir, protected_snapshot_ids={snapshot_id})
 
     return QueueStreamManifestResponse(
         snapshot_id=snapshot_id,
         stream_url=stream_url,
-        expires_at=manifest["expires_at"],
-        total_duration=manifest["total_duration"],
+        expires_at=manifest.expires_at.isoformat(),
+        total_duration=manifest.total_duration,
         windowed=windowed,
         tracks=tracks,
     )
@@ -351,50 +374,37 @@ def _find_reusable_snapshot(
         reverse=True,
     )
     for manifest_path in manifests:
-        manifest = _load_manifest_json(manifest_path)
+        manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
             continue
-        expires_at = _manifest_expiry(manifest)
-        if expires_at is None:
+        if manifest.content_hash != content_hash or manifest.expires_at < now:
             continue
-        if manifest.get("content_hash") != content_hash or expires_at < now:
-            continue
-        snapshot_id = str(manifest.get("snapshot_id") or manifest_path.stem)
-        audio_path = queue_stream_audio_path(ctx, snapshot_id)
+        audio_path = queue_stream_audio_path(ctx, manifest.snapshot_id)
         if not audio_path.exists():
             continue
-        try:
-            tracks = [
-                QueueStreamTrackResponse.model_validate(track)
-                for track in manifest.get("tracks", [])
-            ]
-        except (TypeError, ValidationError):
-            continue
         return QueueStreamManifestResponse(
-            snapshot_id=snapshot_id,
+            snapshot_id=manifest.snapshot_id,
             stream_url=stream_url,
-            expires_at=str(manifest["expires_at"]),
-            total_duration=float(manifest["total_duration"]),
-            windowed=bool(manifest.get("windowed", False)),
-            tracks=tracks,
+            expires_at=manifest.expires_at.isoformat(),
+            total_duration=manifest.total_duration,
+            windowed=manifest.windowed,
+            tracks=manifest.tracks,
         )
     return None
 
 
-def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
+def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     if not _valid_snapshot_id(snapshot_id):
         raise HTTPException(404, "Queue stream not found")
     manifest_path = _stream_dir(ctx) / f"{snapshot_id}.json"
     if not manifest_path.exists():
         raise HTTPException(404, "Queue stream not found")
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    manifest = QueueStreamManifest.load(manifest_path)
+    if manifest is None:
         raise HTTPException(404, "Queue stream not found")
 
-    expires_at = datetime.fromisoformat(str(manifest["expires_at"]))
     now = datetime.now(timezone.utc)
-    if expires_at < now and not _is_active_pin(manifest, now):
+    if manifest.expires_at < now and not _is_active_pin(manifest, now):
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")
 
@@ -422,9 +432,8 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
     live_snapshot_ids: set[str] = set()
     for manifest_path in stream_dir.glob("*.json"):
         snapshot_id = manifest_path.stem
-        manifest = _load_manifest_json(manifest_path)
-        expires_at = _manifest_expiry(manifest) if manifest is not None else None
-        if expires_at is not None and expires_at >= now:
+        manifest = QueueStreamManifest.load(manifest_path)
+        if manifest is not None and manifest.expires_at >= now:
             live_snapshot_ids.add(snapshot_id)
         elif manifest is not None and _is_active_pin(manifest, now):
             # Pinned and not abandoned — exempt from TTL sweep
@@ -639,25 +648,18 @@ def _escape_concat_path(path: Path) -> str:
     return str(path).replace("'", r"'\''")
 
 
-def _is_active_pin(manifest: Mapping[str, object], now: datetime) -> bool:
+def _is_active_pin(manifest: QueueStreamManifest, now: datetime) -> bool:
     """Return True when the manifest is pinned and the pin has not been abandoned."""
-    if not manifest.get("pinned", False):
+    if not manifest.pinned or manifest.pinned_at is None:
         return False
-    pinned_at_str = manifest.get("pinned_at")
-    if not pinned_at_str:
-        return False
-    try:
-        pinned_at = datetime.fromisoformat(str(pinned_at_str))
-        return pinned_at >= now - QUEUE_STREAM_PIN_MAX_AGE
-    except (ValueError, TypeError):
-        return False
+    return manifest.pinned_at >= now - QUEUE_STREAM_PIN_MAX_AGE
 
 
 def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
     """Return the IDs of all snapshots that are currently pinned and not abandoned."""
     pinned: set[str] = set()
     for manifest_path in stream_dir.glob("*.json"):
-        manifest = _load_manifest_json(manifest_path)
+        manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
             continue
         if _is_active_pin(manifest, now):
@@ -669,7 +671,7 @@ def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
     """Sum the audio bytes of all currently pinned, non-abandoned snapshots."""
     total = 0
     for manifest_path in stream_dir.glob("*.json"):
-        manifest = _load_manifest_json(manifest_path)
+        manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
             continue
         if not _is_active_pin(manifest, now):
@@ -682,20 +684,7 @@ def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
     return total
 
 
-def _atomic_write_manifest(
-    stream_dir: Path, snapshot_id: str, manifest: Mapping[str, object],
-) -> None:
-    """Write manifest atomically via a temp file, then rename into place."""
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-    tmp_path = stream_dir / f"{snapshot_id}.json.tmp"
-    try:
-        tmp_path.write_text(json.dumps(manifest), encoding="utf-8")
-        tmp_path.replace(manifest_path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-
-def pin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
+def pin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     """Pin a snapshot, exempting it from TTL expiry and quota eviction.
 
     Raises PinnedBytesExceededError when the pinned-bytes cap would be exceeded.
@@ -707,22 +696,20 @@ def pin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
     manifest_path = stream_dir / f"{snapshot_id}.json"
     if not manifest_path.exists():
         raise HTTPException(404, "Queue stream not found")
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    manifest = QueueStreamManifest.load(manifest_path)
+    if manifest is None:
         raise HTTPException(404, "Queue stream not found")
 
-    if manifest.get("pinned", False):
+    if manifest.pinned:
         return manifest  # Already pinned — idempotent fast-path (no lock needed)
 
     with _pin_lock:
         # Re-read under the lock: another thread may have pinned between the check above and here
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+        manifest = QueueStreamManifest.load(manifest_path)
+        if manifest is None:
             raise HTTPException(404, "Queue stream not found")
 
-        if manifest.get("pinned", False):
+        if manifest.pinned:
             return manifest  # Already pinned — idempotent
 
         audio_path = stream_dir / f"{snapshot_id}.mp3"
@@ -737,13 +724,12 @@ def pin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
         if _sum_pinned_bytes(stream_dir, now) + new_bytes > QUEUE_STREAM_PINNED_MAX_BYTES:
             raise PinnedBytesExceededError()
 
-        manifest["pinned"] = True
-        manifest["pinned_at"] = now.isoformat()
-        _atomic_write_manifest(stream_dir, snapshot_id, manifest)
+        manifest = manifest.model_copy(update={"pinned": True, "pinned_at": now})
+        manifest.save(manifest_path)
     return manifest
 
 
-def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
+def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     """Remove a pin from a snapshot.
 
     Idempotent: has no effect when the snapshot is already unpinned.
@@ -754,12 +740,10 @@ def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
     manifest_path = stream_dir / f"{snapshot_id}.json"
     if not manifest_path.exists():
         raise HTTPException(404, "Queue stream not found")
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    manifest = QueueStreamManifest.load(manifest_path)
+    if manifest is None:
         raise HTTPException(404, "Queue stream not found")
 
-    manifest["pinned"] = False
-    manifest["pinned_at"] = None
-    _atomic_write_manifest(stream_dir, snapshot_id, manifest)
+    manifest = manifest.model_copy(update={"pinned": False, "pinned_at": None})
+    manifest.save(manifest_path)
     return manifest
