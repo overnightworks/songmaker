@@ -24,6 +24,17 @@ log = logging.getLogger(__name__)
 
 SUBPROCESS_BIND_HOST: Final = "127.0.0.1"
 
+# One inner port per model mode, derived deterministically from the mode's
+# position in MODEL_CONFIG_PATHS (not a hash — stable across restarts and
+# easy to reason about). Without this, two loaded modes would share one
+# port: the second subprocess dies at EADDRINUSE while wait_for_health sees
+# the FIRST subprocess's still-running /health and reports "ready" anyway
+# (issue #205), so generations for the second mode silently ran on the
+# first mode's model.
+MODEL_INNER_PORT_OFFSETS: Final[dict[str, int]] = {
+    mode: offset for offset, mode in enumerate(MODEL_CONFIG_PATHS)
+}
+
 LogLineSink = Callable[[str], None]
 
 
@@ -126,6 +137,14 @@ def wait_for_health(
     raise SubprocessStartError(
         f"ACE-Step did not become healthy within {timeout}s{suffix}",
     )
+
+
+def inner_port_for_mode(base_port: int, mode: str) -> int:
+    try:
+        offset = MODEL_INNER_PORT_OFFSETS[mode]
+    except KeyError as exc:
+        raise SubprocessStartError(f"Unknown mode: {mode}") from exc
+    return base_port + offset
 
 
 def _read_stderr_tail(path: Path | None, max_chars: int = 500) -> str:
@@ -272,10 +291,11 @@ def make_acestep_runner(
     on_log_line: LogLineSink | None = None,
 ) -> tuple[Loader, Unloader]:
     async def loader(mode: str) -> LoadedModel:
+        port = inner_port_for_mode(base_port, mode)
         handle = await asyncio.to_thread(
             start_acestep_subprocess,
             mode,
-            port=base_port,
+            port=port,
             checkpoint_dir=checkpoint_dir,
             vram_budget_gb=vram_budget_gb,
             gpu_id=gpu_id,
@@ -293,12 +313,14 @@ def make_acestep_runner(
 
 
 __all__ = [
+    "MODEL_INNER_PORT_OFFSETS",
     "LogLineSink",
     "SubprocessHandle",
     "SubprocessStartError",
     "_read_stderr_tail",
     "build_env",
     "find_uv",
+    "inner_port_for_mode",
     "is_acestep_healthy",
     "make_acestep_runner",
     "start_acestep_subprocess",

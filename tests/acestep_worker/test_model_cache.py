@@ -390,6 +390,36 @@ def test_release_unknown_mode_no_op() -> None:
     assert cache.in_use_count("sft") == 0
 
 
+def test_acquire_for_use_returns_each_modes_own_port() -> None:
+    """Two loaded modes keep distinct ports (#205): the wrapper's
+    ``/generate`` endpoint reads ``loaded.port`` per request, so a request
+    for mode B must resolve to mode B's own server, never mode A's."""
+    ports = {"sft": 8101, "xl-sft": 8102}
+
+    async def loader(mode: str) -> LoadedModel:
+        return LoadedModel(mode=mode, handle=f"handle-{mode}", port=ports[mode])
+
+    async def unloader(_: LoadedModel) -> None:
+        return None
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0, "xl-sft": 12.0},
+        loader=loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-sft"))
+
+    loaded_sft = _run(cache.acquire_for_use("sft"))
+    loaded_xl_sft = _run(cache.acquire_for_use("xl-sft"))
+
+    assert loaded_sft is not None
+    assert loaded_xl_sft is not None
+    assert loaded_sft.port == 8101
+    assert loaded_xl_sft.port == 8102
+
+
 def test_evict_to_fit_skips_in_use_then_capacity_error() -> None:
     cache, _, unloaded_log = _make_cache(
         budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0},

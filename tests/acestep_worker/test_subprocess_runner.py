@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.constants import SECRET_ENV_KEYS
 from acestep_worker.model_cache import LoadedModel
 from acestep_worker.subprocess_runner import (
@@ -17,6 +18,7 @@ from acestep_worker.subprocess_runner import (
     _stream_subprocess_logs,
     build_env,
     find_uv,
+    inner_port_for_mode,
     is_acestep_healthy,
     make_acestep_runner,
     start_acestep_subprocess,
@@ -391,7 +393,8 @@ def test_stop_acestep_subprocess_handles_close_error() -> None:
 
 
 def test_make_acestep_runner_loader_unloader(tmp_path: Path) -> None:
-    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=8101)
+    expected_port = inner_port_for_mode(8101, "sft")
+    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=expected_port)
 
     with patch(
         "acestep_worker.subprocess_runner.start_acestep_subprocess",
@@ -405,7 +408,7 @@ def test_make_acestep_runner_loader_unloader(tmp_path: Path) -> None:
         loaded = _run(loader("sft"))
     assert isinstance(loaded, LoadedModel)
     assert loaded.mode == "sft"
-    assert loaded.port == 8101
+    assert loaded.port == expected_port
     assert loaded.handle is fake_handle
 
     stops: list = []
@@ -425,6 +428,107 @@ def test_make_acestep_runner_unload_non_handle(tmp_path: Path) -> None:
     )
     model = LoadedModel(mode="sft", handle="not-a-handle", port=8101)
     _run(unloader(model))
+
+
+def test_inner_port_for_mode_unknown_mode_raises() -> None:
+    with pytest.raises(SubprocessStartError, match="Unknown mode"):
+        inner_port_for_mode(8101, "ghost")
+
+
+@pytest.mark.parametrize("mode", list(MODEL_CONFIG_PATHS))
+def test_make_acestep_runner_derives_a_distinct_port_per_mode(
+    tmp_path: Path, mode: str,
+) -> None:
+    """Regression pin for #205: each mode must get its own inner port so a
+    second load's health check can never be satisfied by a different mode's
+    still-running server."""
+    expected_port = inner_port_for_mode(8101, mode)
+    captured_ports: list[int] = []
+
+    def fake_start(mode_arg: str, **kwargs):
+        captured_ports.append(kwargs["port"])
+        return SubprocessHandle(process=MagicMock(), stderr_path=None, port=kwargs["port"])
+
+    with patch(
+        "acestep_worker.subprocess_runner.start_acestep_subprocess",
+        side_effect=fake_start,
+    ):
+        loader, _ = make_acestep_runner(
+            checkpoint_dir=tmp_path, base_port=8101, vram_budget_gb=24.0,
+        )
+        loaded = _run(loader(mode))
+
+    assert captured_ports == [expected_port]
+    assert loaded.port == expected_port
+
+
+def test_two_different_modes_get_two_different_ports(tmp_path: Path) -> None:
+    started_ports: list[int] = []
+
+    def fake_start(mode_arg: str, **kwargs):
+        started_ports.append(kwargs["port"])
+        return SubprocessHandle(process=MagicMock(), stderr_path=None, port=kwargs["port"])
+
+    with patch(
+        "acestep_worker.subprocess_runner.start_acestep_subprocess",
+        side_effect=fake_start,
+    ):
+        loader, _ = make_acestep_runner(
+            checkpoint_dir=tmp_path, base_port=8101, vram_budget_gb=24.0,
+        )
+        loaded_turbo = _run(loader("turbo"))
+        loaded_sft = _run(loader("sft"))
+
+    assert loaded_turbo.port != loaded_sft.port
+    assert started_ports[0] != started_ports[1]
+
+
+def test_second_mode_load_is_not_fooled_by_first_modes_leftover_health(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression pin for #205.
+
+    Before the fix every mode shared one inner port, so loading a second
+    mode's health check saw the FIRST mode's still-running server answer
+    200 and reported itself ready — even though its own subprocess never
+    bound the port (EADDRINUSE). This test fails red against the pre-fix
+    code (which always requests ``base_port`` regardless of mode, so the
+    stale 200 makes the second load succeed instantly) and passes green
+    once each mode gets its own port and must wait out its own timeout.
+
+    Mutation check: reverting subprocess_runner.py's loader to
+    ``port=base_port`` turns this red again — verified locally.
+    """
+    monkeypatch.setenv("ACESTEP_STARTUP_TIMEOUT_SECONDS", "1")
+    monkeypatch.setenv("ACESTEP_HEALTH_POLL_SECONDS", "0.05")
+
+    proc_turbo = _proc_with_empty_stdout()
+    proc_turbo.pid = 111
+    proc_sft = _proc_with_empty_stdout()
+    proc_sft.pid = 222
+    procs = iter([proc_turbo, proc_sft])
+
+    healthy_ports = {inner_port_for_mode(8101, "turbo")}
+
+    def fake_is_healthy(port: int, timeout: float = 5.0) -> bool:
+        return port in healthy_ports
+
+    with (
+        patch("acestep_worker.subprocess_runner.find_uv", return_value=["uv"]),
+        patch("subprocess.Popen", side_effect=lambda *a, **k: next(procs)),
+        patch(
+            "acestep_worker.subprocess_runner.is_acestep_healthy",
+            side_effect=fake_is_healthy,
+        ),
+    ):
+        loader, _ = make_acestep_runner(
+            checkpoint_dir=tmp_path, base_port=8101, vram_budget_gb=24.0,
+        )
+        loaded_turbo = _run(loader("turbo"))
+        assert loaded_turbo.port == 8101
+
+        with pytest.raises(SubprocessStartError, match="did not become healthy"):
+            _run(loader("sft"))
 
 
 def test_make_acestep_runner_passes_on_log_line(tmp_path: Path) -> None:
