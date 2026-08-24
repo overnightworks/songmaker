@@ -68,7 +68,8 @@ XL models (4B DiT) require ~12GB VRAM with offload, 20GB+ recommended.
 
 LM models (text planner):
 - `acestep-5Hz-lm-0.6B` — creative, good structure
-- `acestep-5Hz-lm-4B` — more thorough planning (recommended with XL)
+- `acestep-5Hz-lm-1.7B` — deployment default (`WorkerSettings.acestep_lm_model_path`). ACE-Step's own `GPU_TIER_CONFIGS["tier6b"]` (`vendor/acestep/acestep/gpu_config.py`, 20-24GB cards, e.g. RTX 3090/4090) names this the `recommended_lm_model` for that VRAM class
+- `acestep-5Hz-lm-4B` — more thorough planning, but only recommended once VRAM is `"unlimited"` (≥24GB free for the LM allocator on top of the DiT). On a 20-24GB card, forcing 4B leaves the DiT stage with too little VRAM headroom and fails the generation preflight on XL modes above ~120s (issue #202). Override via `ACESTEP_LM_MODEL_PATH` only on a card with that headroom
 
 ### Downloading models
 
@@ -368,7 +369,7 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_DEVICE` | `cuda` | GPU/CPU device (override to `cpu` for non-GPU testing) |
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
-| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name |
+| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-1.7B` | LM model name. Default matches ACE-Step's own `tier6b` `recommended_lm_model` for 20-24GB cards; raising to 4B needs headroom beyond that tier (see Model Variants above and issue #202) |
 | `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
 | `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB. ACE-Step **trusts this value as ground truth** — it does not cross-check against the physical GPU. On startup the subprocess logs `⚠️ DEBUG MODE: Simulating GPU memory as N GB (set via MAX_CUDA_VRAM)`. Setting this higher than the physical GPU lets ACE-Step's VAE stay on GPU when it should fall back, which will OOM during decode. Always set `VRAM_BUDGET_GB` ≤ physical VRAM. |
@@ -392,6 +393,12 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 **Policy:** Do not enable the opt-out as a normal deployment default. If generation only succeeds with the flag, capture the reported free/required VRAM and the actual peak usage, then adjust the estimator or deployment budget. An out-of-memory failure remains possible while the safety check is bypassed.
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
+
+### Why the LM default is 1.7B, not 4B (issue #202)
+
+ACE-Step's LM allocator (`gpu_config.py:get_lm_gpu_memory_ratio`) sizes the LM's VRAM share, on GPUs at or above `tier6b` (20-24GB), against a *constant* `dit_reserve_gb = 1.5`. The preflight's own DiT requirement is duration-dependent (`DIT_INFERENCE_VRAM_PER_BATCH[dit_key] * batch * duration/60 + 0.5`). With `acestep-5Hz-lm-4B` the allocator's 0.9 ratio clamp fills the KV cache to within ~1.3GB of the card, which only covers the DiT preflight up to ~120s of XL audio — longer XL takes fail the preflight even though the LM itself loads and runs fine.
+
+With `acestep-5Hz-lm-1.7B` (`LM_VRAM["1.7B"]` ≈ 4.7GB vs. 4B's ~9.9GB) the same allocator leaves ~6.8GB free after the KV cache, which covers the DiT preflight up to ~758s — above ACE-Step's own `tier6b.max_duration_with_lm` (480s), so every XL duration the tier supports passes. This is why the deployment default follows ACE-Step's own `tier6b.recommended_lm_model` instead of overriding it to 4B.
 
 ## Deferred features (blocked upstream)
 
