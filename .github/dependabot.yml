@@ -27,10 +27,6 @@ updates:
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-      # prettier-plugin-svelte 4.x reformats existing .svelte/.ts files,
-      # breaking `prettier --check .` in CI (see PR #109)
-      - dependency-name: "prettier-plugin-svelte"
-        update-types: ["version-update:semver-major"]
       # vitest 4 invokes `new` on vi.fn() arrow implementations, breaking
       # Audio-mock stubs (`new Audio()` throws "not a constructor") in ~7
       # frontend test files (see PR #114, issue #112)
