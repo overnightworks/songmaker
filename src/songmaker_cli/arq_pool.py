@@ -75,9 +75,18 @@ async def is_music_worker_healthy() -> bool:
         return False
 
 
-async def is_scoring_worker_healthy() -> bool:
+async def is_scoring_worker_healthy(pool: ArqRedis | None = None) -> bool:
+    """Check the scoring worker's heartbeat key.
+
+    ``pool`` defaults to this process's own singleton (the web process,
+    where every existing caller runs). A caller running outside that
+    process — the music worker, dispatching an auto-score job right after a
+    generation completes — has no singleton to fall back to and must pass
+    its own arq redis connection explicitly.
+    """
     try:
-        return await get_arq_pool().exists(ARQ_SCORING_HEALTH_KEY) > 0
+        redis = pool if pool is not None else get_arq_pool()
+        return await redis.exists(ARQ_SCORING_HEALTH_KEY) > 0
     except Exception:
         return False
 

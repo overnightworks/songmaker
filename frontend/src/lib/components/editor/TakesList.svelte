@@ -34,7 +34,7 @@
 	// path to the same mutation back in the tree.
 	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { formatScore, scoreColor, scoreReadings } from '$lib/utils/scores';
+	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
 	import {
 		selectionMode,
@@ -403,6 +403,7 @@
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
 					{@const headline = headlineScore(gen)}
+					{@const flag = qualityFlag(gen.scores)}
 					{@const modelMode = takeModelModeLabel(gen.model_mode)}
 					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
 					<!-- `role` and `tabindex` move together with rowIsActionable, which the
@@ -456,6 +457,12 @@
 									title={`${headline.label} ${headline.text}`}
 								>
 									{headline.text}
+								</span>
+							{/if}
+
+							{#if flag}
+								<span class="quality-flag-badge" title={flag.title}>
+									⚠ {flag.label}
 								</span>
 							{/if}
 
@@ -861,6 +868,18 @@
 		flex-shrink: 0;
 	}
 
+	.quality-flag-badge {
+		font-size: 0.6rem;
+		padding: 0.1rem 0.35rem;
+		border-radius: 3px;
+		letter-spacing: 0.3px;
+		background: rgba(220, 60, 60, 0.12);
+		border: 1px solid var(--score-bad);
+		color: var(--score-bad);
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
 	.expiry-badge {
 		font-size: 0.6rem;
 		padding: 0.1rem 0.35rem;
@@ -906,7 +925,8 @@
 	.take-row.archived .take-duration,
 	.take-row.archived .score-badge,
 	.take-row.archived .model-badge,
-	.take-row.archived .batch-badge {
+	.take-row.archived .batch-badge,
+	.take-row.archived .quality-flag-badge {
 		color: var(--text-disabled);
 	}
 

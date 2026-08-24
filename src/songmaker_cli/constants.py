@@ -226,6 +226,29 @@ RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
 SESSION_SYNC_LOCK_KEY = f"{REDIS_KEY_PREFIX}:session_sync_lock"
 SESSION_SYNC_LOCK_TTL_SECONDS = 60
 
+# Score backfill (issue #222): catches up generations that predate
+# auto-scoring, or that an auto-score attempt could not reach (worker down,
+# enqueue failure). Small batch on a short interval so a large backlog is
+# worked off gradually rather than as one big-bang burst against the CPU-only
+# scoring worker.
+SCORE_BACKFILL_INTERVAL_SECONDS = 120
+SCORE_BACKFILL_BATCH_SIZE = 5
+SCORE_BACKFILL_LOCK_KEY = f"{REDIS_KEY_PREFIX}:score_backfill_lock"
+SCORE_BACKFILL_LOCK_TTL_SECONDS = 60
+# A chronically-unscorable generation (corrupt file, scorer bug) must not
+# starve the rest of the backlog by winning the same oldest-first batch every
+# tick forever. Redis tracks a per-generation attempt count (no schema
+# change); once a generation hits SCORE_BACKFILL_MAX_ATTEMPTS it is skipped
+# until its counter's TTL lapses, letting it try again later (e.g. after a
+# scorer fix). The candidate pool is read wider than one batch so exhausted
+# generations at the front of the oldest-first list don't crowd out eligible
+# ones behind them.
+SCORE_BACKFILL_MAX_ATTEMPTS = 3
+SCORE_BACKFILL_ATTEMPT_TTL_SECONDS = 7 * 24 * 60 * 60
+SCORE_BACKFILL_CANDIDATE_POOL_SIZE = SCORE_BACKFILL_BATCH_SIZE * 4
+SCORE_BACKFILL_ATTEMPTS_KEY_PREFIX = f"{REDIS_KEY_PREFIX}:score_backfill:attempts"
+SCORE_BACKFILL_TRACKED_SET_KEY = f"{REDIS_KEY_PREFIX}:score_backfill:tracked"
+
 # Startup error messages
 REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "

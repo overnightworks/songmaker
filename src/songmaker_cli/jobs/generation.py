@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from redis.asyncio import Redis
+from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
@@ -23,13 +23,16 @@ from songmaker_cli.api_models import (
     StoredGenerationParams,
 )
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
+from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import (
     audio_file_path,
     build_ace_config,
     resolve_model_mode,
 )
 from songmaker_cli.constants import (
+    ARQ_SCORING_QUEUE_NAME,
     WORKER_SHARED_TMP_DIRNAME,
+    JobFunction,
     JobStatus,
     JobType,
 )
@@ -37,7 +40,9 @@ from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
     create_generation_created_event,
+    create_job,
     get_default_preset,
+    get_generation,
     get_song,
     get_version,
     lock_active_job,
@@ -251,12 +256,18 @@ def post_process_generation(
     generation_id: str,
     db_factory: sessionmaker[Session],
     job_id: str,
-) -> None:
+) -> str | None:
     """Read worker WAV, decode/splice/master/encode, persist DB row.
 
     Synchronous (CPU-bound). Caller wraps in ``asyncio.to_thread`` from
     the async run_generation_job. Mastering + MP3 encoding release the
     GIL but still block the asyncio event loop if called directly.
+
+    Returns the persisted ``Generation.id`` — a fresh id the row's own
+    default assigns, distinct from ``generation_id`` (used only to name the
+    audio files) — or ``None`` when the job was cancelled before the row
+    could be written. Callers that need to act on the actual generation
+    (e.g. auto-scoring it) must use this return value, not the parameter.
     """
     src_wav = Path(worker_audio_path)
     try:
@@ -287,7 +298,7 @@ def post_process_generation(
         _write_output(
             decoded, worker_seed, mp3_path, wav_path, ctx.meta, ctx.album_meta,
         )
-        _persist_generation_row(
+        return _persist_generation_row(
             db_factory=db_factory,
             ctx=ctx,
             generation_id=generation_id,
@@ -318,7 +329,7 @@ def _persist_generation_row(
     mp3_path: Path,
     wav_path: Path,
     job_id: str,
-) -> None:
+) -> str | None:
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
     raw_wav_rel = f"{ctx.user_id}/{generation_id}.raw.wav"
@@ -417,7 +428,7 @@ def _persist_generation_row(
                 _cleanup_orphaned_files(
                     ctx.audio_dir, mp3_rel, wav_rel, raw_wav_rel,
                 )
-                return
+                return None
             generation = create_generation(
                 session,
                 song_id=ctx.song_id,
@@ -429,11 +440,12 @@ def _persist_generation_row(
                 model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
             )
+            persisted_id = generation.id
             create_generation_created_event(
                 session,
                 user_id=ctx.user_id,
                 song_id=ctx.song_id,
-                generation_id=generation.id,
+                generation_id=persisted_id,
             )
             session.commit()
     except Exception:
@@ -441,6 +453,7 @@ def _persist_generation_row(
         raise
 
     log.info("Generated: %s (seed=%s)", mp3_rel, seed)
+    return persisted_id
 
 
 def _finalize_generation_job(
@@ -465,6 +478,87 @@ def _finalize_generation_job(
             error=_sanitize_error(last_error),
             error_type="generation_error",
         )
+
+
+def _create_auto_score_job(
+    db_factory: sessionmaker[Session], gen_id: str, song_id: str,
+) -> str | None:
+    """Create the DB row for an automatic post-generation score job.
+
+    Returns ``None`` (creating nothing) when the generation row itself never
+    made it into the DB — the narrow race where the generation job was
+    cancelled while ``post_process_generation`` was writing it — since
+    scoring a generation that does not exist would only fail immediately.
+
+    ``user_id=None`` is the origin marker that keeps this job out of the
+    manual re-score button's budget: ``count_user_jobs_in_window`` always
+    filters on a specific user id, so a row with no user never counts
+    against anyone's rate limit. The generation job's own completion path is
+    the only caller, once per successfully persisted generation, so there is
+    no retry loop here that could turn this into a flood.
+    """
+    with db_factory() as session:
+        if get_generation(session, gen_id) is None:
+            return None
+        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id)
+        session.commit()
+        return job.id
+
+
+async def _dispatch_auto_score(
+    redis: ArqRedis, db_factory: sessionmaker[Session], job_id: str, gen_id: str,
+) -> None:
+    """Hand an auto-score job to the scoring queue, or fail it cleanly.
+
+    Never raises: this runs right after a generation has already succeeded,
+    and a scoring hiccup must not turn that success into a failure. A
+    scoring worker that is down when we check leaves this job FAILED with a
+    clear reason instead of queuing indefinitely — the generation still has
+    no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
+    once a worker comes back.
+
+    Health is checked via the passed-in ``redis`` connection, not the
+    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
+    this runs inside the music worker process, which never calls
+    ``init_arq_pool()``.
+    """
+    try:
+        worker_healthy = await is_scoring_worker_healthy(redis)
+        if not worker_healthy:
+            _update_job(
+                db_factory, job_id, JobStatus.FAILED,
+                error="Scoring worker not running", error_type="setup_error",
+            )
+            return
+        await redis.enqueue_job(
+            JobFunction.SCORE, job_id, gen_id, None,
+            _queue_name=ARQ_SCORING_QUEUE_NAME,
+        )
+    except Exception:
+        log.exception("Auto-score dispatch failed for generation %s", gen_id)
+        _update_job(
+            db_factory, job_id, JobStatus.FAILED,
+            error="Failed to enqueue auto-score job", error_type="setup_error",
+        )
+
+
+async def _auto_score_generation(
+    redis: ArqRedis, db_factory: sessionmaker[Session], gen_id: str, song_id: str,
+) -> None:
+    """Create and dispatch this generation's auto-score job, or do nothing.
+
+    Never raises: called from the generation job's own success path, right
+    after ``completed`` is already counted, so a problem here must stay a
+    scoring-side concern and never turn a successful generation into a
+    reported failure.
+    """
+    try:
+        job_id = await asyncio.to_thread(_create_auto_score_job, db_factory, gen_id, song_id)
+    except Exception:
+        log.exception("Auto-score job creation failed for generation %s", gen_id)
+        return
+    if job_id:
+        await _dispatch_auto_score(redis, db_factory, job_id, gen_id)
 
 
 def _make_generation_progress_callback(
@@ -578,7 +672,7 @@ async def run_generation_job(
     db_factory: sessionmaker[Session],
     audio_dir: Path,
     data_dir: Path,
-    redis: Redis,
+    redis: ArqRedis,
     seed: int | None = None,
     repaint_params: RepaintTaskParams | None = None,
     cover_params: CoverTaskParams | None = None,
@@ -661,7 +755,7 @@ async def run_generation_job(
                             "Generation job %s stopping because job is terminal", job_id,
                         )
                         return
-                    await asyncio.to_thread(
+                    persisted_gen_id = await asyncio.to_thread(
                         jobs.post_process_generation,
                         worker_audio_path=worker_result.audio_path,
                         worker_seed=worker_result.seed,
@@ -674,6 +768,10 @@ async def run_generation_job(
                         job_id=job_id,
                     )
                     completed += 1
+                    if persisted_gen_id:
+                        await _auto_score_generation(
+                            redis, db_factory, persisted_gen_id, song_id,
+                        )
                 except (NoCapacityError, WorkerTaskFailed) as exc:
                     log.warning("Generation %d/%d failed: %s", i + 1, count, exc)
                     last_error = exc

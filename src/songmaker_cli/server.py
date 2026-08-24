@@ -36,6 +36,7 @@ from songmaker_cli.lifecycle import (
     cleanup_expired_resource_events,
     reconcile_crashed_loras,
     resource_event_cleanup_loop,
+    score_backfill_loop,
     session_sync_loop,
 )
 from songmaker_cli.middleware import (
@@ -96,12 +97,16 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.startup_time = datetime.now(timezone.utc)
     sync_task = asyncio.create_task(session_sync_loop(app))
     event_cleanup_task = asyncio.create_task(resource_event_cleanup_loop(app))
+    score_backfill_task = asyncio.create_task(score_backfill_loop(app))
     try:
         yield
     finally:
         sync_task.cancel()
         event_cleanup_task.cancel()
-        await asyncio.gather(sync_task, event_cleanup_task, return_exceptions=True)
+        score_backfill_task.cancel()
+        await asyncio.gather(
+            sync_task, event_cleanup_task, score_backfill_task, return_exceptions=True,
+        )
         await close_arq_pool()
 
 

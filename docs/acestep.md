@@ -44,12 +44,32 @@ music worker (songmaker_cli.music_worker.MusicWorkerSettings)
       → read worker WAV from shared volume
       → decode + splice (if repaint) + master + encode MP3
       → INSERT generation row
+      → auto-enqueue a score job for it (own budget, not the user's
+        rate limit — see below)
 
 scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
   → on score job:
     → load faster-whisper + AudioBox on demand
     → BPM, silence, spectral, text accuracy, aesthetics
 ```
+
+**Auto-scoring (issue #222).** Every successfully persisted generation gets a
+score job automatically — `jobs.generation._auto_score_generation`, called
+from the generation job's own success path. This job is created with
+`user_id=None` so it never counts against the manual re-score button's
+per-user rate limit (`count_user_jobs_in_window` always filters on a
+specific user id). If the scoring worker is down when the check runs, the
+job is marked FAILED cleanly instead of queuing indefinitely — the
+generation still has no score row, so `lifecycle.score_backfill_loop`
+(throttled, `SCORE_BACKFILL_BATCH_SIZE` generations every
+`SCORE_BACKFILL_INTERVAL_SECONDS`) picks it up later, the same path that
+also catches up generations that predate auto-scoring. A generation the
+backfill loop cannot get scored is retried up to `SCORE_BACKFILL_MAX_ATTEMPTS`
+times (tracked per generation in Redis, TTL `SCORE_BACKFILL_ATTEMPT_TTL_SECONDS`)
+before it is skipped, so one chronically-broken take cannot starve the rest
+of the backlog out of every batch. Auto-score `Job` rows are system-owned
+(`user_id=None`) — intentionally invisible and not cancelable through the
+regular per-user job endpoints.
 
 Client: `src/acestep_engine/client.py` (HTTP client with retry, polling, model info)
 Config: `src/songmaker_cli/config.py` (`build_ace_config()` merges defaults + user settings + song params)
