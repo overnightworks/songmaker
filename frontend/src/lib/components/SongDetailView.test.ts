@@ -9,11 +9,14 @@ import type {
 	VersionGenerationParams,
 	VersionItem
 } from '$lib/api/types';
+import type { HealthSummary } from '$lib/api/client';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_LABEL,
+	EDITOR_GPU_OFFLINE_LABEL,
+	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_TAB_WRITE_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -73,6 +76,7 @@ const fetchAlbum = vi.fn();
 const uploadSongCover = vi.fn();
 const deleteSongCover = vi.fn();
 const deleteAlbumCover = vi.fn();
+const fetchHealth = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -90,7 +94,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
-		fetchHealth: vi.fn().mockResolvedValue(null),
+		fetchHealth: (...args: unknown[]) => fetchHealth(...args),
 		fetchSong: vi.fn(async (id: string) => ({
 			id,
 			title: 'Local Only',
@@ -177,6 +181,19 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		scores: null,
 		generation_params: { inference_steps: 8, guidance_scale: 1.5 },
 		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
+function healthSummary(overrides: Partial<HealthSummary> = {}): HealthSummary {
+	return {
+		status: 'ok',
+		queue_depth_cap_reached: false,
+		queue_depth: 0,
+		music_queue_depth: 0,
+		scoring_queue_depth: 0,
+		acestep_workers_online: 1,
+		acestep_workers_total: 1,
 		...overrides
 	};
 }
@@ -331,6 +348,8 @@ beforeEach(() => {
 	uploadSongCover.mockReset();
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
+	fetchHealth.mockReset();
+	fetchHealth.mockResolvedValue(healthSummary());
 	vi.mocked(addToast).mockClear();
 });
 
@@ -519,6 +538,50 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		await tick();
 
 		expect(generateBtn()?.disabled).toBe(false);
+	});
+});
+
+describe('SongDetailView Generate reacts to ACE-Step worker availability', () => {
+	beforeEach(() => {
+		recipeModel.set('turbo');
+	});
+
+	function generateBtn(target: HTMLElement): HTMLButtonElement | null {
+		return target.querySelector<HTMLButtonElement>('.generate-btn');
+	}
+
+	it('disables Generate with a reason when no ACE-Step worker is online', async () => {
+		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 0 }));
+		const target = await renderView();
+
+		const btn = generateBtn(target);
+		expect(btn?.disabled).toBe(true);
+		expect(btn?.textContent).toContain(EDITOR_GPU_OFFLINE_LABEL);
+		expect(btn?.title).toBe(EDITOR_GPU_OFFLINE_TITLE);
+	});
+
+	it('keeps Generate enabled when at least one ACE-Step worker is online', async () => {
+		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 2 }));
+		const target = await renderView();
+
+		const btn = generateBtn(target);
+		expect(btn?.disabled).toBe(false);
+		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
+	});
+
+	it('re-enables Generate without a reload once a worker comes back online', async () => {
+		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 0 }));
+		const target = await renderView();
+		expect(generateBtn(target)?.disabled).toBe(true);
+
+		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 1 }));
+		const { refreshHealth } = await import('$lib/stores/health');
+		await refreshHealth();
+		await tick();
+
+		const btn = generateBtn(target);
+		expect(btn?.disabled).toBe(false);
+		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
 	});
 });
 

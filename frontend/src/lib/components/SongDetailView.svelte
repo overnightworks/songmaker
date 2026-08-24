@@ -103,6 +103,8 @@
 		SONG_COVER_UPLOAD_LABEL,
 		EDITOR_GENERATE_LABEL,
 		EDITOR_GENERATING_LABEL,
+		EDITOR_GPU_OFFLINE_LABEL,
+		EDITOR_GPU_OFFLINE_TITLE,
 		EDITOR_MISSING_CONTENT_TITLE,
 		EDITOR_NETWORK_ERROR,
 		EDITOR_NO_MODELS_WARNING,
@@ -289,6 +291,7 @@
 		generateJob !== null && (generateJob.status === 'running' || generateJob.status === 'queued')
 	);
 	const queueDepthCapReached = $derived($health?.queue_depth_cap_reached ?? false);
+	const gpuOffline = $derived($health?.acestep_workers_online === 0);
 
 	const expiringSoon = $derived.by(() => {
 		if (!song) return { count: 0, minDays: 0 };
@@ -624,6 +627,7 @@
 		if ($recipeModel === null) {
 			return $activeModels.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
 		}
+		if (gpuOffline) return EDITOR_GPU_OFFLINE_TITLE;
 		return queueDepthCapReached ? EDITOR_QUEUE_BUSY_TITLE : '';
 	}
 
@@ -633,7 +637,9 @@
 				? `${EDITOR_QUEUED_LABEL} (#${generateJob.queue_position})`
 				: EDITOR_QUEUED_LABEL;
 		}
-		return isGenerating ? EDITOR_GENERATING_LABEL : EDITOR_GENERATE_LABEL;
+		if (isGenerating) return EDITOR_GENERATING_LABEL;
+		if (gpuOffline) return EDITOR_GPU_OFFLINE_LABEL;
+		return EDITOR_GENERATE_LABEL;
 	}
 </script>
 
@@ -672,7 +678,11 @@
 			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
 			ongenerate={onGenerate}
 			generateLabel={generateLabel()}
-			generateDisabled={isGenerating || !$editLyrics || !$editPrompt || $recipeModel === null}
+			generateDisabled={isGenerating ||
+				!$editLyrics ||
+				!$editPrompt ||
+				$recipeModel === null ||
+				gpuOffline}
 			generateTitle={generateTitle()}
 			generating={isGenerating}
 			{compact}
