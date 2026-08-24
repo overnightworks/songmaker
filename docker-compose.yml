@@ -134,6 +134,12 @@ services:
       NVIDIA_VISIBLE_DEVICES: "0"
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-24}"
       ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
+      ACESTEP_LM_MODEL_PATH: "${ACESTEP_LM_MODEL_PATH:-acestep-5Hz-lm-4B}"
+      # Operator decision 2026-08-24 (#202): the preflight's constant DiT
+      # reserve underestimates headroom left by the 4B LM allocator on this
+      # card, rejecting proven-safe long xl-turbo takes. Opt out until the
+      # fork's duration-aware LM reserve lands, then re-enable the preflight.
+      ACESTEP_SKIP_VRAM_PREFLIGHT: "${ACESTEP_SKIP_VRAM_PREFLIGHT:-1}"
       ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"
       ACESTEP_LOG_DIR: "/opt/acestep/logs"

@@ -46,6 +46,13 @@ class WorkerSettings(BaseSettings):
     # ACE-Step subprocess environment
     acestep_device: str = "cuda"
     acestep_init_llm: bool = True
+    # 4B by operator decision (issue #202, 2026-08-24): 123 historical
+    # xl-turbo takes over 120s ran on 4B without an OOM, and switching the
+    # LM would silently change the sound of existing productions. ACE-Step's
+    # own GPU_TIER_CONFIGS["tier6b"]["recommended_lm_model"]
+    # (vendor/acestep/acestep/gpu_config.py, 20-24GB cards e.g. RTX 3090/4090)
+    # suggests 1.7B for a tighter VRAM budget — override via
+    # ACESTEP_LM_MODEL_PATH on a card that needs the smaller LM.
     acestep_lm_model_path: str = "acestep-5Hz-lm-4B"
     acestep_lm_backend: str = "vllm"
     acestep_compile_model: bool = False

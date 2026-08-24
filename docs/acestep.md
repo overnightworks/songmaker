@@ -68,7 +68,8 @@ XL models (4B DiT) require ~12GB VRAM with offload, 20GB+ recommended.
 
 LM models (text planner):
 - `acestep-5Hz-lm-0.6B` — creative, good structure
-- `acestep-5Hz-lm-4B` — more thorough planning (recommended with XL)
+- `acestep-5Hz-lm-1.7B` — ACE-Step's own `GPU_TIER_CONFIGS["tier6b"]` (`vendor/acestep/acestep/gpu_config.py`, 20-24GB cards, e.g. RTX 3090/4090) names this the `recommended_lm_model` for that VRAM class; a reasonable choice for a tighter card via `ACESTEP_LM_MODEL_PATH`
+- `acestep-5Hz-lm-4B` — this deployment's default (`WorkerSettings.acestep_lm_model_path`), by operator decision (issue #202, 2026-08-24): 123 historical xl-turbo takes over 120s ran on this card with 4B and never OOMed, and switching the LM would silently change the sound of existing productions. ACE-Step's own tier6b table only recommends 4B once VRAM is `"unlimited"` (≥24GB free for the LM allocator on top of the DiT) — see the VRAM Pre-flight Note below for how this deployment reconciles that gap
 
 ### Downloading models
 
@@ -368,7 +369,7 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_DEVICE` | `cuda` | GPU/CPU device (override to `cpu` for non-GPU testing) |
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
-| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name |
+| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup (operator decision, issue #202); lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
 | `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
 | `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB. ACE-Step **trusts this value as ground truth** — it does not cross-check against the physical GPU. On startup the subprocess logs `⚠️ DEBUG MODE: Simulating GPU memory as N GB (set via MAX_CUDA_VRAM)`. Setting this higher than the physical GPU lets ACE-Step's VAE stay on GPU when it should fall back, which will OOM during decode. Always set `VRAM_BUDGET_GB` ≤ physical VRAM. |
@@ -387,11 +388,19 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 
 **Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only, is disabled by default, and is not set in `docker-compose.yml`. Because the worker copies its environment when starting the ACE-Step subprocess, an operator can pass it through the worker container temporarily while diagnosing a false positive.
+**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only. `docker-compose.yml` now sets it to `1` by default on the acestep-worker service (override via `ACESTEP_SKIP_VRAM_PREFLIGHT=0` in `.env`). Because the worker copies its environment when starting the ACE-Step subprocess, this reaches the subprocess the same way any other passthrough var does.
 
-**Policy:** Do not enable the opt-out as a normal deployment default. If generation only succeeds with the flag, capture the reported free/required VRAM and the actual peak usage, then adjust the estimator or deployment budget. An out-of-memory failure remains possible while the safety check is bypassed.
+**Policy (revised, operator decision, issue #202, 2026-08-24):** the opt-out is this deployment's documented default, not an emergency-only escape hatch — see "Why the preflight opt-out is on by default" below for the measured facts behind that call. An out-of-memory failure remains theoretically possible while the safety check is bypassed; the exit path is fixing the estimator, not reverting to a policy the operator has overridden. Once the fork ships a duration-aware LM reserve (`fix/duration-aware-lm-reserve` on `FlexOr2/ACE-Step-1.5`, then upstreamed to `ace-step/ACE-Step-1.5`), flip `ACESTEP_SKIP_VRAM_PREFLIGHT` back to `0`.
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
+
+### Why the preflight opt-out is on by default (issue #202)
+
+ACE-Step's LM allocator (`gpu_config.py:get_lm_gpu_memory_ratio`) sizes the LM's VRAM share, on GPUs at or above `tier6b` (20-24GB), against a *constant* `dit_reserve_gb = 1.5`. The preflight's own DiT requirement is duration-dependent (`DIT_INFERENCE_VRAM_PER_BATCH[dit_key] * batch * duration/60 + 0.5`). With `acestep-5Hz-lm-4B`, the allocator's 0.9 ratio clamp fills the KV cache and leaves a measured `post_kv_free` of **1.30 GB**; the preflight formula demands **~2 GB at 165s** of xl-turbo audio, so it rejects a take the estimator considers too tight.
+
+That estimate is provably too conservative in practice: **123 historical xl-turbo takes over 120s (April–July)** ran on this exact card with 4B and never OOMed, meaning the real 1.30 GB `post_kv_free` is sufficient headroom for the DiT stage — the preflight's constant `dit_reserve_gb` just doesn't account for it. Reverting the LM default to 1.7B to satisfy the formula would silently change the sound of already-shipped productions to chase a number the estimator gets wrong, not a real VRAM shortage.
+
+The actual fix is the estimator, not the LM: capture a real peak-VRAM measurement (165s / 4B / xl-turbo, with the flag on) and make the LM allocator's DiT reserve duration-aware in the fork, so the preflight can be re-enabled without lying about the risk. That work lives on `fix/duration-aware-lm-reserve` in `FlexOr2/ACE-Step-1.5`, to be upstreamed to `ace-step/ACE-Step-1.5` once verified, and is out of scope for this deployment-only change.
 
 ## Deferred features (blocked upstream)
 
