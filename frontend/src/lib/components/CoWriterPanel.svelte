@@ -23,6 +23,10 @@
 	} from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
 	import {
+		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
+		COWRITER_TOOL_CALL_TARGET_PREFIX
+	} from '$lib/constants';
+	import {
 		collectPendingProposals,
 		proposalKey,
 		proposalTargetForMemory,
@@ -41,6 +45,7 @@
 	import {
 		cowriterHeaderLabel,
 		cowriterThinkingLabel,
+		cowriterToolCallTarget,
 		cowriterUnavailableLabel
 	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
@@ -569,9 +574,23 @@
 					{#if msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0}
 						<div class="tool-calls">
 							{#each msg.toolCalls as call, ci (ci)}
+								{@const target = cowriterToolCallTarget(
+									call.name,
+									call.input,
+									allSongs,
+									currentSongId
+								)}
 								<div class="tool-call" title={JSON.stringify(call.input)}>
 									<span class="tool-dot" aria-hidden="true">▸</span>
 									<span class="tool-name">ran tool: {call.name}</span>
+									{#if target}
+										<span
+											class="tool-target"
+											class:foreign={target.foreign}
+											title={target.foreign ? COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE : undefined}
+											>{COWRITER_TOOL_CALL_TARGET_PREFIX} {target.title}</span
+										>
+									{/if}
 								</div>
 							{/each}
 						</div>
@@ -931,9 +950,27 @@
 	}
 
 	.tool-name {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.tool-target {
+		flex-shrink: 0;
+		font-family: var(--font-body);
+		color: var(--text-subtle);
+	}
+
+	.tool-target.foreign {
+		display: inline-flex;
+		align-items: center;
+		padding: 1px 7px;
+		border: 1px solid var(--accent);
+		border-radius: 10px;
+		color: var(--accent);
+		font-weight: 600;
 	}
 
 	.chat-error {

@@ -100,6 +100,14 @@ export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
+
+// The co-writer is one global conversation (REQ-COWRITER-01): a proposal
+// streamed while song X is open can target song Y. Every tool-call badge
+// that attributes a proposal to its target song shares this copy.
+export const COWRITER_TOOL_CALL_TARGET_PREFIX = 'for:';
+export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
+	'This proposal applies to a different song than the one you have open';
+
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
 export const EDITOR_QUEUED_LABEL = 'Queued...';
