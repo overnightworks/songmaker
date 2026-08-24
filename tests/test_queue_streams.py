@@ -1314,12 +1314,12 @@ def test_shared_scope_snapshot_pin_returns_404(tmp_path: Path, monkeypatch) -> N
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
-    """A leftover .json.tmp file from a crashed _atomic_write_manifest must be
+    """A leftover .json.tmp file from a crashed QueueStreamManifest.save must be
     recognised as belonging to its (orphaned) snapshot and removed by the sweep.
 
-    The real scenario: _atomic_write_manifest crashed before the rename, so the
-    .json manifest was never written. The snapshot_id is therefore not live and
-    the .json.tmp file is a plain orphan.
+    The real scenario: QueueStreamManifest.save crashed before the rename, so
+    the .json manifest was never written. The snapshot_id is therefore not
+    live and the .json.tmp file is a plain orphan.
     """
     import os
     import time
@@ -1349,25 +1349,54 @@ def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch)
 
 
 def test_unreadable_manifest_json_is_ignored(tmp_path: Path) -> None:
-    from songmaker_cli.queue_streams import _load_manifest_json, _manifest_expiry
+    from songmaker_cli.queue_streams import QueueStreamManifest
 
     missing = tmp_path / "missing.json"
-    assert _load_manifest_json(missing) is None
+    assert QueueStreamManifest.load(missing) is None
 
     garbage = tmp_path / "garbage.json"
     garbage.write_text("{not-json", encoding="utf-8")
-    assert _load_manifest_json(garbage) is None
+    assert QueueStreamManifest.load(garbage) is None
 
     not_object = tmp_path / "list.json"
     not_object.write_text("[]", encoding="utf-8")
-    assert _load_manifest_json(not_object) is None
+    assert QueueStreamManifest.load(not_object) is None
 
     bad_expiry = tmp_path / "expiry.json"
     bad_expiry.write_text('{"expires_at": "not-a-date"}', encoding="utf-8")
-    manifest = _load_manifest_json(bad_expiry)
-    assert manifest is not None
-    assert _manifest_expiry(manifest) is None
-    assert _manifest_expiry({}) is None
+    assert QueueStreamManifest.load(bad_expiry) is None, (
+        "an unparseable expires_at alongside other missing required fields "
+        "must fail validation, not silently produce a partial manifest"
+    )
+
+
+@pytest.mark.parametrize(
+    "corrupt_manifest_text",
+    [
+        pytest.param('{"snapshot_id": "abc"}', id="missing_required_fields"),
+        pytest.param("{not-json", id="malformed_json"),
+    ],
+)
+def test_corrupt_manifest_file_returns_404_not_500(
+    tmp_path: Path, monkeypatch, corrupt_manifest_text: str
+) -> None:
+    """A manifest file that fails to parse or is missing a required field (a
+    truncated write, disk corruption) must surface as a clean 404 -- never a
+    raw KeyError/500 from indexing into an unvalidated dict."""
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    assert resp.status_code == 200
+    snapshot_id = resp.json()["snapshot_id"]
+    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
+    manifest_path.write_text(corrupt_manifest_text, encoding="utf-8")
+
+    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
+
+    assert audio.status_code == 404
 
 
 def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:

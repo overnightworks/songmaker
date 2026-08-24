@@ -369,7 +369,7 @@ def api_get_queue_stream_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
-    if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
+    if manifest.scope != "auth" or manifest.scope_id != user.id:
         raise HTTPException(404, "Queue stream not found")
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
@@ -385,7 +385,7 @@ def api_pin_queue_stream(
 ) -> QueueStreamPinResponse:
     check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
-    if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
+    if manifest.scope != "auth" or manifest.scope_id != user.id:
         raise HTTPException(404, "Queue stream not found")
     try:
         updated = pin_snapshot(ctx, snapshot_id)
@@ -393,8 +393,8 @@ def api_pin_queue_stream(
         raise HTTPException(409, "Pinned storage cap reached")
     return QueueStreamPinResponse(
         snapshot_id=snapshot_id,
-        pinned=bool(updated.get("pinned", False)),
-        pinned_at=updated.get("pinned_at"),
+        pinned=updated.pinned,
+        pinned_at=updated.pinned_at.isoformat() if updated.pinned_at else None,
     )
 
 
@@ -407,11 +407,11 @@ def api_unpin_queue_stream(
 ) -> QueueStreamPinResponse:
     check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
-    if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
+    if manifest.scope != "auth" or manifest.scope_id != user.id:
         raise HTTPException(404, "Queue stream not found")
     updated = unpin_snapshot(ctx, snapshot_id)
     return QueueStreamPinResponse(
         snapshot_id=snapshot_id,
-        pinned=bool(updated.get("pinned", False)),
-        pinned_at=updated.get("pinned_at"),
+        pinned=updated.pinned,
+        pinned_at=updated.pinned_at.isoformat() if updated.pinned_at else None,
     )
