@@ -19,6 +19,7 @@ from songmaker_cli.scheduler import (
     DownloadTaskResultDTO,
     GenerationTaskResultDTO,
     NoCapacityError,
+    WorkerGenerationFailed,
     WorkerProtocolError,
     WorkerTaskFailed,
     _iterate_task_events,
@@ -203,12 +204,13 @@ def test_consume_task_stream_done_returns_dto() -> None:
     assert result.audio_path.endswith(".wav")
 
 
-def test_consume_task_stream_error_raises() -> None:
+def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": "GPU OOM"})])
     with _patch_async_client(client):
-        with pytest.raises(WorkerTaskFailed, match="GPU OOM"):
+        with pytest.raises(WorkerGenerationFailed) as exc_info:
             _run(consume_task_stream(worker, "gen-1"))
+    assert str(exc_info.value) == "GPU OOM"
 
 
 def test_consume_task_stream_progress_calls_callback() -> None:
@@ -257,16 +259,18 @@ def test_consume_task_stream_error_missing_field_raises_protocol_error() -> None
             _run(consume_task_stream(worker, "gen-1"))
 
 
-def test_consume_task_stream_error_empty_string_logs_and_raises(
+def test_consume_task_stream_empty_error_is_a_protocol_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """An empty 'error' field carries no cause, so it must not be relayed
+    as one: the worker always sends text, and the job layer shows a
+    WorkerGenerationFailed message verbatim."""
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": ""})])
     with _patch_async_client(client):
         with caplog.at_level("WARNING", logger="songmaker_cli.scheduler"):
-            with pytest.raises(WorkerTaskFailed) as exc_info:
+            with pytest.raises(WorkerProtocolError, match="empty 'error'"):
                 _run(consume_task_stream(worker, "gen-1"))
-    assert str(exc_info.value) == ""
     assert any("empty 'error'" in r.message for r in caplog.records)
 
 

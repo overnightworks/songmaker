@@ -11,6 +11,7 @@ import pytest
 from conftest import mock_http_response as _mock_response
 
 from acestep_engine.client import (
+    _MAX_CAUSE_CHARS,
     AceStepClient,
     is_acestep_available,
     validate_audio_path,
@@ -160,17 +161,92 @@ def test_poll_result_success() -> None:
     assert result.seed == 42
 
 
-def test_poll_result_failure() -> None:
+_VRAM_CAUSE = (
+    "Music generation failed: Insufficient free VRAM: "
+    "need ~2.0 GB, only 1.3 GB available"
+)
+_VRAM_TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "/opt/acestep/acestep/api/job_execution_runtime.py", line 79, in _run\n'
+    "    result = run_fn()\n"
+    f"RuntimeError: {_VRAM_CAUSE}"
+)
+_NO_DETAIL = "generation failed (no detail from ACE-Step)"
+
+
+def _failed_cache_entry(**overrides: object) -> str:
+    """The failure payload ACE-Step caches for a failed job.
+
+    Mirrors ``update_local_cache`` in the vendored fork, which serves
+    ``/query_result`` before the job store does.
+    """
+    entry: dict[str, object] = {
+        "file": "",
+        "wave": "",
+        "status": 2,
+        "create_time": 1755000000,
+        "env": "development",
+        "progress": 0.0,
+        "stage": "failed",
+        "error": None,
+    }
+    entry.update(overrides)
+    return json.dumps([entry])
+
+
+@pytest.mark.parametrize(
+    ("result", "expected_message"),
+    [
+        (_failed_cache_entry(error=_VRAM_TRACEBACK), f"RuntimeError: {_VRAM_CAUSE}"),
+        (_failed_cache_entry(error=_VRAM_CAUSE), _VRAM_CAUSE),
+        (_failed_cache_entry(error=None), _NO_DETAIL),
+        (_failed_cache_entry(error=""), _NO_DETAIL),
+        (_failed_cache_entry(error=None, status_message="Model load failed"),
+         "Model load failed"),
+        ("not json at all", _NO_DETAIL),
+    ],
+)
+def test_poll_result_failure_reports_acestep_cause(
+    result: str, expected_message: str,
+) -> None:
     client = AceStepClient()
 
     response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 2, "result": "error"}],
+        "data": [{"task_id": "abc", "status": 2, "result": result}],
     }).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        with pytest.raises(GenerationFailedError, match="generation failed"):
+        with pytest.raises(GenerationFailedError) as excinfo:
             client._poll_result("abc")
+
+    assert str(excinfo.value) == expected_message
+
+
+def test_poll_result_failure_caps_the_cause_and_logs_it_in_full(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = AceStepClient()
+    long_cause = "RuntimeError: " + "x" * 1000
+    response_data = json.dumps({
+        "data": [{
+            "task_id": "abc",
+            "status": 2,
+            "result": _failed_cache_entry(error=long_cause),
+        }],
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        with caplog.at_level("ERROR", logger="acestep_engine.client"):
+            with pytest.raises(GenerationFailedError) as excinfo:
+                client._poll_result("abc")
+
+    message = str(excinfo.value)
+    assert len(message) == _MAX_CAUSE_CHARS
+    assert message.startswith("RuntimeError: x")
+    assert message.endswith("\u2026")
+    assert any(long_cause in record.getMessage() for record in caplog.records)
 
 
 def test_validate_audio_path_valid() -> None:

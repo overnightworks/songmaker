@@ -54,7 +54,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import { scoreGeneration } from '$lib/api/client';
 import { addToast } from '$lib/stores/toast';
-import { activeJobs } from '$lib/stores/jobs';
+import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import { playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesList from './TakesList.svelte';
@@ -84,6 +84,9 @@ vi.mock('$lib/stores/playlists', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/playlists')>();
 	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
 });
+
+const VRAM_CAUSE =
+	'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const pick = vi.fn();
@@ -181,6 +184,7 @@ beforeEach(() => {
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	activeJobs.set([]);
+	generationFailures.set({});
 	// The scoring job streams its progress over server-sent events jsdom does
 	// not implement.
 	vi.stubGlobal(
@@ -199,6 +203,7 @@ afterEach(async () => {
 	clearHitboxStyles();
 	clearPointer();
 	activeJobs.set([]);
+	generationFailures.set({});
 	vi.unstubAllGlobals();
 	clearSelection();
 });
@@ -242,6 +247,34 @@ describe('TakesList', () => {
 
 		const { target: dirty } = await render({ dirty: true, draftVersionNumber: 4 });
 		expect(dirty.querySelector('.draft-banner')?.textContent).toContain('v4');
+	});
+
+	it('shows why the last generation failed, with the full cause in the title', async () => {
+		generationFailures.set({ s1: VRAM_CAUSE });
+		const { target } = await render();
+		const cause = target.querySelector<HTMLElement>('.failed-cause');
+		expect(cause?.textContent).toBe(VRAM_CAUSE);
+		expect(cause?.title).toBe(VRAM_CAUSE);
+	});
+
+	it('shows the failure even when the song has no takes yet', async () => {
+		generationFailures.set({ s1: VRAM_CAUSE });
+		const { target } = await render({ song: song({ generations: [] }) });
+		expect(target.querySelector('.failed-cause')?.textContent).toBe(VRAM_CAUSE);
+	});
+
+	it('hides the failure once the user dismisses it', async () => {
+		generationFailures.set({ s1: VRAM_CAUSE });
+		const { target } = await render();
+		target.querySelector<HTMLButtonElement>('.failed-dismiss')?.click();
+		await tick();
+		expect(target.querySelector('.failed-row')).toBeNull();
+	});
+
+	it('shows no failure row for another song', async () => {
+		generationFailures.set({ s2: VRAM_CAUSE });
+		const { target } = await render();
+		expect(target.querySelector('.failed-row')).toBeNull();
 	});
 
 	it('shows a generating row while a generate job runs for this song', async () => {

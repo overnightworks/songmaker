@@ -447,6 +447,7 @@ async def default_generate_runner(
     audio_output_dir: Path,
 ) -> None:
     from acestep_engine.client import AceStepClient
+    from acestep_engine.errors import AceStepError
     from acestep_engine.models import AceStepConfig
     from acestep_worker.models import GenerationTaskResult
     from acestep_worker.progress import parse_step_fraction
@@ -482,4 +483,5 @@ async def default_generate_runner(
         await task_store.complete(task_id, payload)
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
-        await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
+        cause = str(exc) if isinstance(exc, AceStepError) else f"{type(exc).__name__}: {exc}"
+        await task_store.fail(task_id, cause)

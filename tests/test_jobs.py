@@ -297,11 +297,38 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
         assert job.error == "No ACE-Step workers available"
 
 
-def test_generation_job_worker_task_failed_message(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.scheduler import WorkerTaskFailed
+def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import WorkerGenerationFailed
+
+    cause = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        WorkerGenerationFailed(cause),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert job.error == cause
+
+
+def test_generation_job_keeps_worker_protocol_failures_generic(
+    seeded_db, tmp_path: Path,
+) -> None:
+    """Only ACE-Step's own cause reaches the user; a broken worker event
+    is our bug and stays behind the generic message."""
+    from songmaker_cli.scheduler import WorkerProtocolError
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        WorkerTaskFailed("GPU OOM on worker"),
+        WorkerProtocolError("Worker done event missing 'result' field"),
     )
     with dispatch, post_process, defaults:
         _run(run_generation_job(

@@ -33,6 +33,7 @@ from acestep_engine.models import (
     AceStepConfig,
     AceStepResult,
     ServerInfo,
+    TaskQueryEntry,
     TaskQueryResponse,
     TaskSubmitResponse,
 )
@@ -55,6 +56,36 @@ _TASK_STATUS_COMPLETE: Final[int] = 1
 _TASK_STATUS_FAILED: Final[int] = 2
 DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
 _DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
+_NO_FAILURE_DETAIL: Final[str] = "generation failed (no detail from ACE-Step)"
+_MAX_CAUSE_CHARS: Final[int] = 300
+
+
+def _failure_cause(entry: TaskQueryEntry) -> str:
+    """Return ACE-Step's own text for a failed task, short enough to show.
+
+    A failed task carries its cause in the result entry's ``error``
+    field. The server records it as a full traceback, so only its last
+    line — the exception type and message — is user-facing; the full
+    text goes to the log. When the server sends no detail at all, the
+    caller still gets a named reason instead of an empty string.
+    """
+    for item in entry.parse_result_items():
+        detail = (item.error or item.status_message or "").strip()
+        if detail:
+            log.error("ACE-Step task %s failed: %s", entry.task_id, detail)
+            return _shorten_cause(detail)
+    log.error(
+        "ACE-Step task %s failed without detail: %.500s", entry.task_id, entry.result,
+    )
+    return _NO_FAILURE_DETAIL
+
+
+def _shorten_cause(detail: str) -> str:
+    """Reduce a recorded traceback to a single capped line."""
+    last_line = detail.splitlines()[-1].strip()
+    if len(last_line) <= _MAX_CAUSE_CHARS:
+        return last_line
+    return last_line[: _MAX_CAUSE_CHARS - 1] + "\u2026"
 
 
 def _default_host() -> str:
@@ -378,9 +409,7 @@ class AceStepClient:
                 entry = response.data[0]
 
                 if entry.status == _TASK_STATUS_FAILED:
-                    raise GenerationFailedError(
-                        f"ACE-Step generation failed: {entry.result}"
-                    )
+                    raise GenerationFailedError(_failure_cause(entry))
 
                 if entry.status == _TASK_STATUS_COMPLETE:
                     items = entry.parse_result_items()

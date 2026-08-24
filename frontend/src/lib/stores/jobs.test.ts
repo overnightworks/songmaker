@@ -1,13 +1,23 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 
+const VRAM_CAUSE =
+	'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
+
 const mockRequestSongRefresh = vi.fn();
 
 vi.mock('$lib/stores/resourceSync', () => ({
 	requestSongRefresh: (...args: unknown[]) => mockRequestSongRefresh(...args)
 }));
 
-import { activeJobs, trackJob, removeJob, stopTracking } from './jobs';
+import {
+	activeJobs,
+	dismissGenerationFailure,
+	generationFailures,
+	removeJob,
+	stopTracking,
+	trackJob
+} from './jobs';
 import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
 
@@ -65,6 +75,7 @@ function latestSource(): MockEventSource {
 
 beforeEach(() => {
 	activeJobs.set([]);
+	generationFailures.set({});
 	mockRequestSongRefresh.mockReset();
 	mockRequestSongRefresh.mockResolvedValue(undefined);
 	MockEventSource.instances = [];
@@ -199,6 +210,38 @@ describe('jobs store', () => {
 
 	it('stopTracking is safe for unknown jobId', () => {
 		expect(() => stopTracking('unknown')).not.toThrow();
+	});
+
+	it('keeps the cause of a failed generation for its song', async () => {
+		trackJob(makeJob(), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ status: 'failed', error: VRAM_CAUSE }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(generationFailures).s1).toBe(VRAM_CAUSE);
+	});
+
+	it('forgets the previous cause when the song generates again', () => {
+		generationFailures.set({ s1: 'old failure' });
+		trackJob(makeJob({ id: 'j2' }), { songId: 's1' });
+		expect(get(generationFailures).s1).toBeUndefined();
+	});
+
+	it('keeps the cause while another job type runs for the song', () => {
+		generationFailures.set({ s1: 'old failure' });
+		trackJob(makeJob({ id: 'j3', type: 'score' }), { songId: 's1' });
+		expect(get(generationFailures).s1).toBe('old failure');
+	});
+
+	it('forgets the cause when the user dismisses it', () => {
+		generationFailures.set({ s1: 'boom', s2: 'other' });
+		dismissGenerationFailure('s1');
+		expect(get(generationFailures)).toEqual({ s2: 'other' });
+	});
+
+	it('keeps no cause for a failed job of another type', async () => {
+		trackJob(makeJob({ type: 'score' }), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ type: 'score', status: 'failed', error: 'boom' }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(generationFailures).s1).toBeUndefined();
 	});
 
 	it('shows server restart message for restart errors', async () => {
