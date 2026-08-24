@@ -225,6 +225,12 @@ describe('jobs store', () => {
 		expect(get(generationFailures).s1).toBeUndefined();
 	});
 
+	it('keeps the cause while another job type runs for the song', () => {
+		generationFailures.set({ s1: 'old failure' });
+		trackJob(makeJob({ id: 'j3', type: 'score' }), { songId: 's1' });
+		expect(get(generationFailures).s1).toBe('old failure');
+	});
+
 	it('forgets the cause when the user dismisses it', () => {
 		generationFailures.set({ s1: 'boom', s2: 'other' });
 		dismissGenerationFailure('s1');

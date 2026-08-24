@@ -53,6 +53,15 @@ class WorkerTaskFailed(RuntimeError):
     """Raised when the worker emits an `error` SSE event."""
 
 
+class WorkerGenerationFailed(WorkerTaskFailed):
+    """Raised when a worker reports that its generate task failed.
+
+    Its message is ACE-Step's own cause for the failure and is written
+    for the operator: the job layer stores it and the UI shows it
+    verbatim, so nothing generic may be raised as this type.
+    """
+
+
 class WorkerProtocolError(WorkerTaskFailed):
     """Raised when a worker SSE event violates the wire contract.
 
@@ -324,7 +333,10 @@ async def consume_task_stream(
             message = data["error"]
             if not message:
                 log.warning("Worker error event has empty 'error' field")
-            raise WorkerTaskFailed(message)
+                raise WorkerProtocolError(
+                    "Worker error event has an empty 'error' field",
+                )
+            raise WorkerGenerationFailed(message)
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 

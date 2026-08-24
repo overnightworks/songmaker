@@ -433,19 +433,6 @@ def _persist_generation_row(
     log.info("Generated: %s (seed=%s)", mp3_rel, seed)
 
 
-def _generation_failure_message(exc: Exception | None) -> str:
-    """Return what to show the user for a failed generation.
-
-    A worker failure already carries ACE-Step's own cause (VRAM
-    shortage, model error) — the one thing that makes the failure
-    diagnosable — so it is passed through verbatim. Everything else
-    goes through the generic sanitizer.
-    """
-    if isinstance(exc, WorkerTaskFailed) and str(exc):
-        return str(exc)
-    return _sanitize_error(exc)
-
-
 def _finalize_generation_job(
     db_factory: sessionmaker[Session], job_id: str,
     count: int, completed: int, last_error: Exception | None,
@@ -459,13 +446,13 @@ def _finalize_generation_job(
         _update_job(
             db_factory, job_id, JobStatus.PARTIAL, progress=completed / count,
             error=f"{completed}/{count} completed, {count - completed} failed: "
-                  f"{_generation_failure_message(last_error)}",
+                  f"{_sanitize_error(last_error)}",
             error_type="generation_error",
         )
     else:
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_generation_failure_message(last_error),
+            error=_sanitize_error(last_error),
             error_type="generation_error",
         )
 
@@ -703,7 +690,7 @@ async def run_generation_job(
         log.exception("Generation job failed: %s", exc)
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_generation_failure_message(exc), error_type="generation_error",
+            error=_sanitize_error(exc), error_type="generation_error",
         )
 
 

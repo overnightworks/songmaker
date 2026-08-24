@@ -298,11 +298,11 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.scheduler import WorkerTaskFailed
+    from songmaker_cli.scheduler import WorkerGenerationFailed
 
     cause = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        WorkerTaskFailed(cause),
+        WorkerGenerationFailed(cause),
     )
     with dispatch, post_process, defaults:
         _run(run_generation_job(
@@ -320,12 +320,16 @@ def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path)
         assert job.error == cause
 
 
-def test_generation_job_names_the_failure_when_the_worker_sent_no_cause(
+def test_generation_job_keeps_worker_protocol_failures_generic(
     seeded_db, tmp_path: Path,
 ) -> None:
-    from songmaker_cli.scheduler import WorkerTaskFailed
+    """Only ACE-Step's own cause reaches the user; a broken worker event
+    is our bug and stays behind the generic message."""
+    from songmaker_cli.scheduler import WorkerProtocolError
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(WorkerTaskFailed(""))
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        WorkerProtocolError("Worker done event missing 'result' field"),
+    )
     with dispatch, post_process, defaults:
         _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",

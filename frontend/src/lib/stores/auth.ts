@@ -6,6 +6,7 @@ import {
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
+import { resetGenerationFailures } from '$lib/stores/jobs';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
 
@@ -88,6 +89,7 @@ export async function login(username: string, password: string): Promise<AuthUse
 // briefly serve the previous user's cached playlist or share data.
 export function clearAuth(): void {
 	currentUser.set(null);
+	resetGenerationFailures();
 	resetPlaylists();
 	resetShares();
 }

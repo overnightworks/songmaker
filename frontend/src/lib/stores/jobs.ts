@@ -33,6 +33,13 @@ export function dismissGenerationFailure(songId: string): void {
 	);
 }
 
+// Wipes the per-song failure causes -- called both by tests and, in
+// production, by clearAuth() on logout/401 so the next session never
+// sees another user's failure.
+export function resetGenerationFailures(): void {
+	generationFailures.set({});
+}
+
 function failureMessage(job: JobStatus): string {
 	if (job.error_type === 'server_restart') return SERVER_RESTART_MESSAGE;
 	return job.error || `${job.type} failed`;
@@ -45,7 +52,7 @@ export function trackJob(
 	context: { songId?: string; genId?: string; workerId?: string; mode?: string }
 ): void {
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
-	if (context.songId) dismissGenerationFailure(context.songId);
+	if (context.songId && job.type === JOB_TYPE_GENERATE) dismissGenerationFailure(context.songId);
 	streamJob(job.id);
 }
 

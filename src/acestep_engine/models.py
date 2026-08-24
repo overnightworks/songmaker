@@ -148,6 +148,8 @@ class ResultItem(BaseModel):
     seed_value: str = ""
     cot_caption: str = ""
     cot_lyrics: str = ""
+    error: str | None = None
+    status_message: str | None = None
 
     @property
     def seed(self) -> int:

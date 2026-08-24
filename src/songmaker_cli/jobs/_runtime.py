@@ -7,7 +7,11 @@ import logging
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import JOB_TERMINAL_STATUSES
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
-from songmaker_cli.scheduler import NoCapacityError, WorkerTaskFailed
+from songmaker_cli.scheduler import (
+    NoCapacityError,
+    WorkerGenerationFailed,
+    WorkerTaskFailed,
+)
 
 log = logging.getLogger(__name__)
 
@@ -25,9 +29,21 @@ class GenerationSetupError(Exception):
     pass
 
 
+_PASSTHROUGH_ERRORS: tuple[type[Exception], ...] = (
+    GenerationSetupError,
+    WorkerGenerationFailed,
+)
+
+
 def _sanitize_error(exc: Exception) -> str:
-    """Return a user-safe error message, logging the full exception."""
-    if isinstance(exc, GenerationSetupError):
+    """Return a user-safe error message, logging the full exception.
+
+    A passthrough error's message is already written for the user — our
+    own setup validation, or ACE-Step's cause for a failed generation —
+    and is the only thing that makes the failure diagnosable, so it is
+    kept verbatim.
+    """
+    if isinstance(exc, _PASSTHROUGH_ERRORS):
         return str(exc)
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
