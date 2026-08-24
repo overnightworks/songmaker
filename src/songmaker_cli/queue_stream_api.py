@@ -31,6 +31,7 @@ from songmaker_cli.queue_streams import (
     PinnedBytesExceededError,
     QueueStreamSource,
     build_queue_stream_snapshot,
+    ensure_sources_detachable,
     load_queue_stream_manifest,
     pin_snapshot,
     queue_stream_audio_path,
@@ -94,6 +95,9 @@ def api_create_queue_stream(
                 audio_url=f"/audio/{gen.mp3_path}",
             )
         )
+
+    ensure_sources_detachable(sources)
+    session.close()
 
     snapshot = build_queue_stream_snapshot(
         ctx,
@@ -341,6 +345,9 @@ def api_create_library_queue_stream(
         start_generation_id=req.start_generation_id,
         shuffle=req.shuffle,
     )
+    ensure_sources_detachable(membership.sources)
+    session.close()
+
     snapshot = build_queue_stream_snapshot(
         ctx,
         membership.sources,

@@ -300,6 +300,188 @@ def test_authenticated_queue_stream_rate_limited(
     assert second.headers["Retry-After"] == str(consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)
 
 
+# ── DB session / build lifecycle tests ──────────────────────────────────────
+
+
+def test_queue_stream_build_closes_db_session_before_ffmpeg_runs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The request's DB session must be released before the (potentially
+    multi-hour) ffmpeg cold build runs, so it never holds a pooled connection
+    for the duration of the build."""
+    import songmaker_cli.queue_stream_api as qs_api
+    import songmaker_cli.queue_streams as qs
+
+    captured: dict[str, object] = {}
+    original_check = qs_api.check_generation_access
+
+    def _capturing_check(session, gen_id, user):
+        captured["session"] = session
+        return original_check(session, gen_id, user)
+
+    monkeypatch.setattr(qs_api, "check_generation_access", _capturing_check)
+    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
+
+    def _fake_concat(_concat_path: Path, output_path: Path) -> None:
+        session = captured["session"]
+        assert session.in_transaction() is False, (
+            "DB session must be closed before the ffmpeg build runs"
+        )
+        output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+
+    assert resp.status_code == 200
+    assert "session" in captured
+
+
+def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Cleanup used to run inline before every build; a snapshot request must
+    no longer sweep an unrelated expired snapshot out of the cache -- that is
+    now the periodic background loop's job (see lifecycle.py)."""
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    stream_dir = tmp_path / "data" / "queue-streams"
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    stale_id = "0" * 32
+    stale_manifest = stream_dir / f"{stale_id}.json"
+    stale_manifest.write_text(
+        json.dumps(
+            {
+                "snapshot_id": stale_id,
+                "scope": "auth",
+                "scope_id": "owner-id",
+                "content_hash": "unrelated",
+                "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+                "total_duration": 1.0,
+                "windowed": False,
+                "pinned": False,
+                "pinned_at": None,
+                "tracks": [],
+            }
+        )
+    )
+    (stream_dir / f"{stale_id}.mp3").write_bytes(b"stale")
+
+    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+
+    assert resp.status_code == 200
+    assert stale_manifest.exists(), "the request path must no longer sweep expired snapshots"
+
+
+def test_build_lock_entries_do_not_accumulate_across_builds(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """_build_locks must not grow without bound -- each per-content-hash lock
+    entry is removed once the build (or cache hit) using it has finished."""
+    import songmaker_cli.queue_streams as qs
+
+    _patch_audio_build(monkeypatch)
+    client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+
+    with factory() as session:
+        for gen_id in ("g1", "g2"):
+            gen = session.get(Generation, gen_id)
+            source = track_source_from_generation(
+                gen, key=gen_id, index=0, entry_id=None,
+                audio_url=f"/audio/{gen.mp3_path}",
+            )
+            build_queue_stream_snapshot(
+                client.app.state.ctx, [source],
+                scope="auth", scope_id="owner-id", stream_url="",
+            )
+
+    assert qs._build_locks == {}, "lock table must not grow with each distinct build"
+
+
+def test_concurrent_builds_for_same_content_hash_do_not_race_lock_removal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Two threads racing to build the same content hash must not corrupt the
+    lock table: the second thread reuses the first's result instead of
+    rebuilding, and the lock entry is removed exactly once, after both are
+    done -- never dropped out from under a still-waiting thread."""
+    import threading
+    import time
+
+    import songmaker_cli.queue_streams as qs
+
+    build_started = threading.Event()
+    release_build = threading.Event()
+    build_count = 0
+    build_count_lock = threading.Lock()
+
+    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
+
+    def _slow_concat(_concat_path: Path, output_path: Path) -> None:
+        nonlocal build_count
+        with build_count_lock:
+            build_count += 1
+        build_started.set()
+        assert release_build.wait(timeout=5), "test setup did not release the build in time"
+        output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    monkeypatch.setattr(qs, "run_ffmpeg_concat", _slow_concat)
+
+    client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+
+    with factory() as session:
+        gen = session.get(Generation, "g1")
+        source = track_source_from_generation(
+            gen, key="g1", index=0, entry_id=None, audio_url=f"/audio/{gen.mp3_path}",
+        )
+
+        results: list[object] = []
+
+        def _build() -> None:
+            results.append(
+                build_queue_stream_snapshot(
+                    client.app.state.ctx, [source],
+                    scope="auth", scope_id="owner-id", stream_url="",
+                )
+            )
+
+        first = threading.Thread(target=_build)
+        second = threading.Thread(target=_build)
+        first.start()
+        assert build_started.wait(timeout=5), "first builder never started"
+        second.start()
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            entries = list(qs._build_locks.values())
+            if entries and entries[0].waiters == 2:
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("second builder never registered as a waiter on the shared lock")
+
+        release_build.set()
+        first.join(timeout=5)
+        second.join(timeout=5)
+
+    assert build_count == 1, "the second builder must reuse the cached snapshot, not rebuild"
+    assert results[0].snapshot_id == results[1].snapshot_id
+    assert qs._build_locks == {}, "lock entry must be removed once both builders are done"
+
+
 def test_shared_playlist_queue_stream_snapshot_and_audio(
     tmp_path: Path,
     monkeypatch,
@@ -1030,7 +1212,7 @@ def test_pinned_snapshot_excluded_from_quota_eviction(tmp_path: Path, monkeypatc
     manifest_a["pinned_at"] = datetime.now(timezone.utc).isoformat()
     manifest_path_a.write_text(json.dumps(manifest_a))
 
-    # Build snapshot B (unpinned) — cleanup runs before each build
+    # Build snapshot B (unpinned) — quota enforcement runs on every build
     resp_b = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g2"}]})
     assert resp_b.status_code == 200
     snapshot_b = resp_b.json()["snapshot_id"]

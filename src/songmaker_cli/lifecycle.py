@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 from fastapi import FastAPI
 
@@ -16,6 +17,11 @@ from songmaker_cli.constants import (
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
+
+QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS: Final = 4 * 60 * 60
+_QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
+    1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
+)
 
 
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
@@ -32,14 +38,31 @@ def cleanup_expired_resource_events(ctx: AppContext) -> int:
 
 
 async def resource_event_cleanup_loop(app: FastAPI) -> None:
-    """Run resource-event retention hourly for the server lifetime."""
+    """Run periodic background maintenance for the server lifetime.
+
+    Sweeps expired resource-event history every tick and the queue-stream
+    snapshot cache every ``_QUEUE_STREAM_CLEANUP_EVERY_N_TICKS`` ticks. The
+    queue-stream sweep used to run inline on every snapshot request, holding
+    that request's DB session for the duration; it now runs here instead so
+    request latency is decoupled from cache-directory size.
+    """
+    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
+
     ctx: AppContext = app.state.ctx
+    tick = 0
     while True:
         await asyncio.sleep(RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS)
+        tick += 1
         try:
             await asyncio.to_thread(cleanup_expired_resource_events, ctx)
         except Exception:
             log.exception("Resource event cleanup failed")
+
+        if tick % _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS == 0:
+            try:
+                await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
+            except Exception:
+                log.exception("Queue stream cleanup failed")
 
 
 def reconcile_crashed_loras(ctx: AppContext) -> int:
