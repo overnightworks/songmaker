@@ -175,3 +175,50 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		]);
 	});
 });
+
+describe('buildTakeRecipe deduplicating what the take already shows', () => {
+	it('does not repeat acestep_model under Other — it is the Model row shown already', async () => {
+		const { buildTakeRecipe } = await import('./recipe-summary');
+		const groups = buildTakeRecipe(
+			generation({
+				model_mode: 'xl-sft',
+				generation_params: { acestep_model: 'xl-sft' }
+			}),
+			song()
+		);
+		expect(groups).toEqual([
+			{ label: 'Model & Sampling', entries: [{ label: 'Model', value: 'xl-sft' }] }
+		]);
+	});
+
+	it.each([
+		{
+			name: 'matches the stored seed_value',
+			seed: 48113,
+			requestedSeed: 48113,
+			reproducibilityEntries: [{ label: 'Seed', value: '48113' }]
+		},
+		{
+			name: 'diverges from the stored seed_value',
+			seed: 48113,
+			requestedSeed: -1,
+			reproducibilityEntries: [
+				{ label: 'Seed', value: '48113' },
+				{ label: 'Requested Seed', value: '-1' }
+			]
+		}
+	])(
+		'shows a requested seed only when it $name',
+		async ({ seed, requestedSeed, reproducibilityEntries }) => {
+			const { buildTakeRecipe } = await import('./recipe-summary');
+			const groups = buildTakeRecipe(
+				generation({
+					seed,
+					generation_params: { seed: requestedSeed }
+				}),
+				song()
+			);
+			expect(groups).toEqual([{ label: 'Reproducibility', entries: reproducibilityEntries }]);
+		}
+	);
+});

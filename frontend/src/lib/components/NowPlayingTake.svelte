@@ -333,7 +333,7 @@
 
 	{#if recipeGroups.length > 0}
 		<section class="take-section">
-			<details class="recipe-section" open>
+			<details class="recipe-section">
 				<summary class="section-title recipe-summary-toggle">{RECIPE_PANEL_LABEL}</summary>
 				<div class="recipe-groups">
 					{#each recipeGroups as group (group.label)}

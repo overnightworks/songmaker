@@ -14,10 +14,10 @@ import { formatTime } from '$lib/utils/format';
 // bpm/duration/key. Grouped for a listener deciding "why does this take
 // sound like this", not for editing (NowPlayingTake, #212).
 
-export const RECIPE_TAKE_GROUP_MODEL_LABEL = 'Model & Sampling';
-export const RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL = 'Reproducibility';
-export const RECIPE_TAKE_GROUP_VERSION_LABEL = 'Version';
-export const RECIPE_TAKE_GROUP_OTHER_LABEL = 'Other';
+const RECIPE_TAKE_GROUP_MODEL_LABEL = 'Model & Sampling';
+const RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL = 'Reproducibility';
+const RECIPE_TAKE_GROUP_VERSION_LABEL = 'Version';
+const RECIPE_TAKE_GROUP_OTHER_LABEL = 'Other';
 
 export interface RecipeEntry {
 	label: string;
@@ -46,8 +46,23 @@ const KNOWN_PARAM_FIELDS = [
 
 // bpm/audio_duration/key_scale live in generation_params (the DiT's actual
 // request) but read out under the Version group, not Model & Sampling — they
-// describe the song, not how the model rendered it.
-const VERSION_PARAM_KEYS = new Set(['bpm', 'audio_duration', 'key_scale']);
+// describe the song, not how the model rendered it. One list: the loop that
+// builds the Version group and the "already accounted for" check below both
+// read it, so there's never a second place that has to agree with this one.
+const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; label: string }[] = [
+	{ key: 'bpm', label: 'BPM' },
+	{ key: 'audio_duration', label: 'Duration' },
+	{ key: 'key_scale', label: 'Key' }
+];
+
+// generation_params keys that name something this summary already shows from
+// elsewhere on the take, so they'd otherwise duplicate an existing row
+// instead of adding information:
+//   - acestep_model mirrors generation.model_mode (the Model row) on every
+//     take that carries it.
+//   - seed is handled explicitly below, next to generation.seed, so it can
+//     be compared against the stored seed_value rather than just repeated.
+const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed']);
 
 function formatParamValue(key: string, rawValue: unknown): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
@@ -85,26 +100,31 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	if (generation.seed != null) {
 		reproducibilityEntries.push({ label: 'Seed', value: String(generation.seed) });
 	}
+	// The requested seed only earns its own row when it diverges from the
+	// stored seed_value above — on a fixed-seed take the two always match, so
+	// showing both would just repeat the same number twice.
+	const requestedSeed = paramEntries.get('seed');
+	if (typeof requestedSeed === 'number' && requestedSeed !== generation.seed) {
+		reproducibilityEntries.push({ label: 'Requested Seed', value: String(requestedSeed) });
+	}
 
 	const versionEntries: RecipeEntry[] = [];
-	for (const key of ['bpm', 'audio_duration', 'key_scale'] as const) {
-		const value = formatParamValue(key, paramEntries.get(key));
-		if (value !== null) {
-			const label = key === 'bpm' ? 'BPM' : key === 'audio_duration' ? 'Duration' : 'Key';
-			versionEntries.push({ label, value });
-		}
+	for (const field of VERSION_PARAM_FIELDS) {
+		const value = formatParamValue(field.key, paramEntries.get(field.key));
+		if (value !== null) versionEntries.push({ label: field.label, value });
 	}
 	if (song.vocal_language) {
 		versionEntries.push({ label: 'Language', value: song.vocal_language });
 	}
 
-	const knownKeys = new Set<string>([
+	const accountedForKeys = new Set<string>([
 		...KNOWN_PARAM_FIELDS.map((field) => field.key),
-		...VERSION_PARAM_KEYS
+		...VERSION_PARAM_FIELDS.map((field) => field.key),
+		...DUPLICATE_PARAM_KEYS
 	]);
 	const otherEntries: RecipeEntry[] = [];
 	for (const [key, rawValue] of paramEntries) {
-		if (knownKeys.has(key)) continue;
+		if (accountedForKeys.has(key)) continue;
 		const value = formatParamValue(key, rawValue);
 		if (value !== null) otherEntries.push({ label: prettifyParamKey(key), value });
 	}

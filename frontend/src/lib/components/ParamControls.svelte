@@ -10,7 +10,8 @@
 		LM_TEXT_FIELDS,
 		type BoolParamField,
 		type NumberParamField,
-		type SelectParamField
+		type SelectParamField,
+		type TextParamField
 	} from '$lib/constants/acestep-param-fields';
 	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
@@ -155,6 +156,19 @@
 	</svelte:boundary>
 {/snippet}
 
+{#snippet textField(f: TextParamField)}
+	<label class="setting full-width" title={tooltip(f.key)}>
+		<span>{f.label}</span>
+		<input
+			type="text"
+			value={(values[f.key] as string | null | undefined) ?? ''}
+			placeholder={f.placeholder}
+			title={tooltip(f.key)}
+			oninput={(e) => setParam(f.key, e.currentTarget.value || undefined)}
+		/>
+	</label>
+{/snippet}
+
 {#snippet boolField(f: BoolParamField)}
 	<label class="setting toggle" title={tooltip(f.key)}>
 		<span>{f.label}</span>
@@ -193,16 +207,9 @@
 				{@render numberField(f)}
 			{/each}
 
-			<label class="setting full-width" title={tooltip(LM_TEXT_FIELDS[0].key)}>
-				<span>{LM_TEXT_FIELDS[0].label}</span>
-				<input
-					type="text"
-					value={values.lm_negative_prompt ?? ''}
-					placeholder="e.g. bad quality, noise"
-					title={tooltip(LM_TEXT_FIELDS[0].key)}
-					oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
-				/>
-			</label>
+			{#each LM_TEXT_FIELDS as f (f.key)}
+				{@render textField(f)}
+			{/each}
 
 			{#each lmBools as f (f.key)}
 				{@render boolField(f)}

@@ -30,6 +30,7 @@ export interface BoolParamField {
 export interface TextParamField {
 	key: keyof VersionGenerationParams;
 	label: string;
+	placeholder: string;
 }
 
 export const DIT_NUMBER_FIELDS: NumberParamField[] = [
@@ -74,5 +75,5 @@ export const LM_BOOL_FIELDS: BoolParamField[] = [
 ];
 
 export const LM_TEXT_FIELDS: TextParamField[] = [
-	{ key: 'lm_negative_prompt', label: 'Negative Prompt' }
+	{ key: 'lm_negative_prompt', label: 'Negative Prompt', placeholder: 'e.g. bad quality, noise' }
 ];

@@ -457,4 +457,10 @@ describe('NowPlayingTake recipe section', () => {
 		});
 		expect(target.querySelector('.recipe-section')).toBeNull();
 	});
+
+	it('starts collapsed — the listener opens it, it does not open on them', async () => {
+		await render({ generation: generation({ model_mode: 'xl-sft' }) });
+		const details = target.querySelector<HTMLDetailsElement>('.recipe-section');
+		expect(details?.open).toBe(false);
+	});
 });
