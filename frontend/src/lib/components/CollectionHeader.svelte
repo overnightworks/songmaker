@@ -27,6 +27,7 @@
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		onaddsong?: () => void;
+		oncurate?: () => void;
 		onsaveoffline?: () => void;
 		offlineSaved?: boolean;
 		offlineSaving?: boolean;
@@ -54,6 +55,7 @@
 		onremovecover,
 		onaddtoplaylist,
 		onaddsong,
+		oncurate,
 		onsaveoffline,
 		offlineSaved = false,
 		offlineSaving = false,
@@ -120,6 +122,7 @@
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}
+		{oncurate}
 		{onsaveoffline}
 		{offlineSaved}
 		{offlineSaving}

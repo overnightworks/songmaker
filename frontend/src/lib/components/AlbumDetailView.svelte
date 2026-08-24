@@ -22,7 +22,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
-	import { selectedAlbumId, playAlbum, playAlbumSong } from '$lib/stores/player';
+	import { curateAlbum, selectedAlbumId, playAlbum, playAlbumSong } from '$lib/stores/player';
 	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
@@ -256,6 +256,11 @@
 		if (!currentAlbumId) return;
 		void playAlbumSong(currentAlbumId, song);
 	}
+
+	function onCurate(): void {
+		if (!currentAlbumId) return;
+		void curateAlbum(currentAlbumId);
+	}
 </script>
 
 {#if selectedAlbum}
@@ -279,6 +284,7 @@
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			onaddsong={openLibraryCreate}
+			oncurate={onCurate}
 		>
 			{#snippet metaEditor()}
 				<AlbumMetaEditor

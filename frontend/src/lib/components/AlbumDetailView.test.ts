@@ -18,7 +18,7 @@ import {
 	setPointer
 } from '$lib/test-utils/hitbox';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { selectedAlbumId } from '$lib/stores/player';
+import { curationActive, nowPlayingSurface, selectedAlbumId } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();
@@ -183,6 +183,8 @@ afterEach(async () => {
 	albumList.set([]);
 	songList.set([]);
 	openCollection.set(null);
+	curationActive.set(false);
+	nowPlayingSurface.set('closed');
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -240,7 +242,27 @@ describe('AlbumDetailView header', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Archive album', 'Delete album']);
+		expect(items).toEqual([
+			'Cover…',
+			'Rename',
+			'Add to playlist',
+			'Curate album',
+			'Archive album',
+			'Delete album'
+		]);
+	});
+
+	it('opens curation mode from the menu', async () => {
+		songList.set([song({ generation_count: 1, generations: [generation()] })]);
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(el) => el.textContent?.trim() === 'Curate album'
+		);
+		curateItem?.click();
+		await tick();
+
+		await vi.waitFor(() => expect(get(curationActive)).toBe(true));
 	});
 
 	it('uploads a cover from the menu action', async () => {

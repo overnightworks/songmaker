@@ -145,6 +145,22 @@ export type QueueContext =
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
+// Curation mode (issue #228): whether the listener is walking an album's
+// candidate takes one after another via curateAlbum. setQueueContext is the
+// one writer of queueContext and owns turning this off — every fresh queue
+// build clears it (a different album, a take clicked mid-curation that
+// rebuilds a thin context, a playlist) unless the caller opts back in, which
+// only curateAlbum's own write does. A bare index move within the queue
+// that is already playing (Skip's playNextSong, a queue-row jump) never
+// goes through this funnel — see playNativeIndex — so it carries curation
+// forward instead of ending it on every single advance.
+export const curationActive = writable(false);
+
+function setQueueContext(ctx: QueueContext, opts: { curating?: boolean } = {}): void {
+	queueContext.set(ctx);
+	curationActive.set(opts.curating ?? false);
+}
+
 const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
 
 function readStoredShuffle(): boolean {
@@ -358,7 +374,7 @@ function playNativeLibraryTakes(
 	index: number,
 	resumeAtTrackTime?: number
 ): void {
-	queueContext.set({ type: 'library', takes, index });
+	setQueueContext({ type: 'library', takes, index });
 	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
 }
 
@@ -368,7 +384,7 @@ function playNativeAlbumTakes(
 	index: number,
 	resumeAtTrackTime?: number
 ): void {
-	queueContext.set({ type: 'album', albumId, takes, index });
+	setQueueContext({ type: 'album', albumId, takes, index });
 	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
 }
 
@@ -394,6 +410,11 @@ function nativeTakeIndex(
 	);
 }
 
+// Moves the index within the queue that is already playing (Skip and Pick's
+// auto-advance during curation, a queue-row jump, plain Previous/Next) —
+// deliberately bypassing setQueueContext, so an advance never ends curation
+// mode the way building a genuinely different queue does; a queue that
+// wasn't curating stays not-curating either way.
 function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
 	const takes = ctx.takes;
 	if (!takes || index < 0 || index >= takes.length) return;
@@ -410,7 +431,7 @@ export async function playLibraryFromGeneration(
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
-	queueContext.set({ type: 'library' });
+	setQueueContext({ type: 'library' });
 	playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
@@ -447,7 +468,7 @@ export async function playLibraryFromGeneration(
 
 export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
 	const { seq, signal } = beginPlayStart();
-	queueContext.set({ type: 'library' });
+	setQueueContext({ type: 'library' });
 	playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
@@ -663,7 +684,8 @@ async function collectAlbumEntries(
 function setAlbumQueueTakes(
 	albumId: string,
 	entries: PlaylistEntryItem[],
-	startGenerationId: string | undefined
+	startGenerationId: string | undefined,
+	opts: { curating?: boolean } = {}
 ): void {
 	if (entries.length === 0) return;
 	const startIndex = startGenerationId
@@ -673,12 +695,15 @@ function setAlbumQueueTakes(
 			)
 		: 0;
 	const ordered = shuffledWithStart(entries, startIndex);
-	queueContext.set({
-		type: 'album',
-		albumId,
-		takes: ordered.items.map(playlistEntryToPlaybackInfo),
-		index: ordered.startIndex
-	});
+	setQueueContext(
+		{
+			type: 'album',
+			albumId,
+			takes: ordered.items.map(playlistEntryToPlaybackInfo),
+			index: ordered.startIndex
+		},
+		opts
+	);
 }
 
 export function currentPlaylistIndex(
@@ -866,6 +891,7 @@ export function closeNowPlaying(): void {
 	const surface = get(nowPlayingSurface);
 	if (surface === 'closed') return;
 	nowPlayingSurface.set('closed');
+	curationActive.set(false);
 	restoreNowPlayingTriggerFocus(surface === 'full');
 }
 
@@ -914,7 +940,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 			await playLibraryFromGeneration(gen);
 			return;
 		}
-		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+		setQueueContext(albumId ? { type: 'album', albumId } : { type: 'library' });
 		playGeneration(gen, song, { restart: true });
 	} catch (e) {
 		addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
@@ -1085,7 +1111,7 @@ export async function playAlbum(albumId: string): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	queueContext.set({ type: 'album', albumId });
+	setQueueContext({ type: 'album', albumId });
 	playStartNotice.set('building');
 	if (albumSongsInOrder(albumId).length === 0) {
 		await loadSongsForAlbum(albumId);
@@ -1159,6 +1185,37 @@ export async function playAlbumFromGeneration(
 	setAlbumQueueTakes(albumId, entries, gen.id);
 }
 
+// The one entry point for curation: the same per-song candidate takes
+// playAlbum already builds (existing pick, else bestGen), started at the
+// first song without a pick — or track 1 once every song has one, so
+// re-curating an already-picked album still starts somewhere sensible.
+export async function curateAlbum(albumId: string): Promise<void> {
+	const { seq } = beginPlayStart();
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
+	playStartNotice.set('building');
+	await loadSongsForAlbum(albumId);
+	if (!playStartIsCurrent(seq)) return;
+	const entries = await collectAlbumEntries(albumId, seq);
+	if (entries === null || !playStartIsCurrent(seq)) return;
+	if (entries.length === 0) {
+		playStartNotice.set('idle');
+		reportNothingPlayable(albumTitle(get(albumList), albumId), () => curateAlbum(albumId));
+		return;
+	}
+	playStartNotice.set('idle');
+	const startIndex = Math.max(
+		0,
+		entries.findIndex((entry) => !entry.is_picked)
+	);
+	setAlbumQueueTakes(albumId, entries, entries[startIndex].generation_id, { curating: true });
+	const ctx = get(queueContext);
+	if (ctx.type === 'album' && ctx.takes) {
+		loadNativeTake(ctx.takes[ctx.index ?? 0], { restart: true });
+	}
+	openNowPlaying('take');
+}
+
 function playPlaylistIndex(
 	ctx: { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] },
 	newIndex: number,
@@ -1166,7 +1223,7 @@ function playPlaylistIndex(
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
-	queueContext.set({
+	setQueueContext({
 		type: 'playlist',
 		playlist: ctx.playlist,
 		entries: ctx.entries,

@@ -60,7 +60,8 @@
 		// public queue-stream manifest, which redacts `lyrics` — the text
 		// comes from the share payload instead.
 		lyricsText = null,
-		rightPanel
+		rightPanel,
+		curationBar
 	}: {
 		info: PlaybackInfo;
 		coverUrl: string | null;
@@ -104,6 +105,11 @@
 		whisperText?: string | null;
 		lyricsText?: string | null;
 		rightPanel: Snippet;
+		// Curation mode's Pick/Keep/Skip strip (issue #228). Rendered in the
+		// cover column, which stays visible in every layout (docked, full,
+		// and mobile stacked) — unlike the queue/take tabs, which mobile
+		// hides behind an extra sheet-opening tap.
+		curationBar?: Snippet;
 	} = $props();
 
 	const isDocked = $derived(surface === 'docked');
@@ -235,6 +241,7 @@
 					{#if albumLine}<span class="cover-line">{albumLine}</span>{/if}
 					{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
 				</div>
+				{#if curationBar}{@render curationBar()}{/if}
 				<!-- The docked panel has no transport of its own: the bar beside it
 					stays visible and keeps carrying seek, shuffle, prev/next and play. -->
 				{#if !isDocked}
