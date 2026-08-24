@@ -27,7 +27,8 @@ Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
 Redis with a 15s TTL. The `acestep_engine.client.AceStepClient` lives inside
 the worker container and talks to the upstream ACE-Step subprocess on
-`127.0.0.1:8101`.
+`127.0.0.1:8101` (default base port; each loaded model mode gets its own
+port — see `ACESTEP_INNER_PORT` below).
 
 ```
 music worker (songmaker_cli.music_worker.MusicWorkerSettings)
@@ -350,7 +351,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
 | `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
-| `ACESTEP_INNER_PORT` | 8101 | Port the ACE-Step subprocess listens on (inside the container) |
+| `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready (issue #205) |
 | `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 900 | Max seconds to wait for the subprocess to become healthy. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
 | `ACESTEP_SHUTDOWN_GRACE_SECONDS` | 15 | SIGTERM grace period before SIGKILL |
 | `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
@@ -365,7 +366,7 @@ Most of these are set on the subprocess by `subprocess_runner.py:build_env()` wh
 | Var | Default / Source | Purpose |
 |-----|---|---|
 | `ACESTEP_API_HOST` | `127.0.0.1` (hardcoded) | Bind address (subprocess only listens on loopback inside the container) |
-| `ACESTEP_API_PORT` | from `ACESTEP_INNER_PORT` (default 8101) | Port the subprocess listens on |
+| `ACESTEP_API_PORT` | `ACESTEP_INNER_PORT` + this mode's offset (default base 8101) | Port this mode's subprocess listens on — unique per loaded mode, see `ACESTEP_INNER_PORT` above |
 | `ACESTEP_DEVICE` | `cuda` | GPU/CPU device (override to `cpu` for non-GPU testing) |
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
