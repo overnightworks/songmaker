@@ -2481,3 +2481,43 @@ def test_list_expired_for_delete_skips_recent_archives(seeded_session: Session) 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     expired = list_generations_expired_for_delete(seeded_session, cutoff)
     assert expired == []
+
+
+def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) -> None:
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.migrations.versions import (
+        b8e3f1c07a25_add_slug_to_songs as mig,
+    )
+    from songmaker_cli.db.models import Album, Song
+
+    factory = init_db(f"sqlite:///{tmp_path / 'slugs.db'}")
+    with factory() as session:
+        session.add_all([
+            Album(id="a1", title="A", artist="X"),
+            Album(id="a2", title="B", artist="X"),
+            Song(id="s1", title="Intro", album_id="a1", track_number=1),
+            Song(id="s2", title="Intro", album_id="a1", track_number=2),
+            Song(id="s3", title="Intro", album_id="a2", track_number=1),
+            Song(id="s4", title="!!!", album_id="a2", track_number=2),
+        ])
+        session.commit()
+
+    engine = factory.kw["bind"]
+    with engine.begin() as conn:
+        original_get_bind = mig.op.get_bind
+        mig.op.get_bind = lambda: conn
+        try:
+            mig._backfill_song_slugs()
+        finally:
+            mig.op.get_bind = original_get_bind
+
+    with factory() as session:
+        slugs = {song.id: song.slug for song in session.query(Song).all()}
+
+    assert slugs == {
+        "s1": "intro",
+        "s2": "intro-2",
+        "s3": "intro",
+        "s4": "untitled",
+    }
+    engine.dispose()

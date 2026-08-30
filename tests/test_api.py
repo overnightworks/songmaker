@@ -15,6 +15,7 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
+    SONG_SLUG_MAX_LENGTH,
     Album,
     AvailableModel,
     Generation,
@@ -305,6 +306,101 @@ def test_rename_song_rejects_too_long(client: TestClient) -> None:
 def test_rename_song_not_found(client: TestClient) -> None:
     resp = client.put("/api/songs/nonexistent/title", json={"title": "Storm"})
     assert resp.status_code == 404
+
+
+def _song_slug(client: TestClient, song_id: str) -> str:
+    with client.app.state.ctx.db() as session:
+        return session.query(Song).filter_by(id=song_id).one().slug
+
+
+def _post_song(client: TestClient, title: str, album_id: str = "rock") -> str:
+    resp = client.post("/api/songs", json={"title": title, "album_id": album_id})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["id"]
+
+
+def _post_album(client: TestClient, title: str) -> str:
+    resp = client.post("/api/albums", json={"title": title, "artist": "TestBand"})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["id"]
+
+
+def test_new_song_gets_a_slug_from_its_title(client: TestClient) -> None:
+    song_id = _post_song(client, "Stadion Lauf A!")
+    assert _song_slug(client, song_id) == "stadion-lauf-a"
+
+
+def test_two_songs_titled_alike_in_one_album_get_distinct_slugs(
+    client: TestClient,
+) -> None:
+    first = _post_song(client, "Intro")
+    second = _post_song(client, "Intro")
+    assert _song_slug(client, first) == "intro"
+    assert _song_slug(client, second) == "intro-2"
+
+
+def test_another_album_may_carry_the_same_song_slug(client: TestClient) -> None:
+    other_album = _post_album(client, "Pop Album")
+    here = _post_song(client, "Intro")
+    there = _post_song(client, "Intro", album_id=other_album)
+    assert _song_slug(client, here) == "intro"
+    assert _song_slug(client, there) == "intro"
+
+
+def test_renaming_a_song_pulls_its_slug_along(client: TestClient) -> None:
+    song_id = _post_song(client, "Intro")
+    resp = client.put(f"/api/songs/{song_id}/title", json={"title": "Outro Reprise"})
+    assert resp.status_code == 200
+    assert _song_slug(client, song_id) == "outro-reprise"
+
+
+def test_renaming_a_song_to_its_own_title_keeps_its_slug(client: TestClient) -> None:
+    song_id = _post_song(client, "Intro")
+    resp = client.put(f"/api/songs/{song_id}/title", json={"title": "Intro"})
+    assert resp.status_code == 200
+    assert _song_slug(client, song_id) == "intro"
+
+
+def test_renaming_onto_a_taken_title_yields_a_distinct_slug(client: TestClient) -> None:
+    _post_song(client, "Intro")
+    latecomer = _post_song(client, "Bridge")
+    resp = client.put(f"/api/songs/{latecomer}/title", json={"title": "Intro"})
+    assert resp.status_code == 200
+    assert _song_slug(client, latecomer) == "intro-2"
+
+
+def test_moving_a_song_reslugs_it_inside_the_target_album(client: TestClient) -> None:
+    target_album = _post_album(client, "Pop Album")
+    _post_song(client, "Intro", album_id=target_album)
+    travelling = _post_song(client, "Intro")
+    assert _song_slug(client, travelling) == "intro"
+
+    resp = client.put(
+        f"/api/songs/{travelling}/album", json={"album_id": target_album},
+    )
+    assert resp.status_code == 200
+    assert _song_slug(client, travelling) == "intro-2"
+
+
+def test_a_soft_deleted_song_keeps_holding_its_slug(client: TestClient) -> None:
+    deleted = _post_song(client, "Intro")
+    assert client.delete(f"/api/songs/{deleted}").status_code == 200
+
+    successor = _post_song(client, "Intro")
+    assert _song_slug(client, successor) == "intro-2"
+
+    assert client.post(f"/api/songs/{deleted}/restore").status_code == 200
+    assert _song_slug(client, deleted) == "intro"
+
+
+def test_a_title_that_transliterates_long_still_fits_the_column(
+    client: TestClient,
+) -> None:
+    """A 200-character CJK title expands to ~800 ASCII characters unslugged."""
+    song_id = _post_song(client, "音" * 200)
+    slug = _song_slug(client, song_id)
+    assert slug.startswith("yin-yin")
+    assert len(slug) <= SONG_SLUG_MAX_LENGTH
 
 
 def test_rename_album(client: TestClient) -> None:
