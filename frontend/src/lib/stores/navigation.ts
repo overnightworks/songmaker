@@ -28,7 +28,9 @@ import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
+	currentLibraryHistoryState,
 	detailTab,
+	isAlbumRoutePath,
 	isLibraryHistoryState,
 	libraryHistoryUrl,
 	librarySurface,
@@ -37,6 +39,7 @@ import {
 	setLibraryFilter,
 	setLibrarySurface,
 	snapshotLibraryHistory,
+	writeLibraryHistory,
 	type DetailTab,
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
@@ -51,24 +54,28 @@ function urlFromState(state: LibraryHistoryState): string {
 }
 
 function currentHistoryIndex(): number {
-	const state = history.state;
+	const state = currentLibraryHistoryState();
 	return isLibraryHistoryState(state) ? state.index : 0;
 }
 
-function replaceLibraryHistory(): void {
-	if (suppressPush) return;
+// Every history write in this module goes through writeLibraryHistory, which
+// owns the choice between a raw write and a router navigation; see the note on
+// it in libraryContext.ts. The promise matters only to a caller that writes
+// again straight afterwards -- a crossing write is asynchronous.
+function replaceLibraryHistory(): Promise<void> {
+	if (suppressPush) return Promise.resolve();
 	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());
-	history.replaceState(next, '', urlFromState(next));
+	return writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
-function pushLibraryHistory(): void {
-	if (suppressPush) return;
+function pushLibraryHistory(): Promise<void> {
+	if (suppressPush) return Promise.resolve();
 	cancelLibraryHistoryApply();
-	const current = history.state;
+	const current = currentLibraryHistoryState();
 	if (isLibraryHistoryState(current)) {
 		const leaving = snapshotLibraryHistory(current.index);
-		history.replaceState(
+		void writeLibraryHistory(
 			{
 				...current,
 				scrollAnchor: leaving.scrollAnchor,
@@ -80,26 +87,30 @@ function pushLibraryHistory(): void {
 				sort: leaving.sort,
 				filter: leaving.filter
 			},
-			'',
-			urlFromState(current)
+			urlFromState(current),
+			'replace'
 		);
 	}
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
-	history.pushState(next, '', urlFromState(next));
+	return writeLibraryHistory(next, urlFromState(next), 'push');
 }
 
 export function selectLibraryFilter(filter: LibraryFilter): void {
 	const next = setLibraryFilter(filter);
 	if (suppressPush) return;
-	history.replaceState(next, '', urlFromState(next));
+	void writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
 export function persistLibraryHistory(): void {
-	replaceLibraryHistory();
+	void replaceLibraryHistory();
 }
 
+// The routes that mount the library workspace: the home path and, since
+// issue #269, an album address. Both render the same workspace, so nothing
+// has to be pushed off /album/<slug> to make a song, a playlist or the wall
+// visible — the address a surface owns is written by libraryHistoryUrl.
 export function isLibraryWorkspacePath(pathname: string): boolean {
-	return pathname === '/';
+	return pathname === '/' || isAlbumRoutePath(pathname);
 }
 
 // Every entry point that opens a collection or a song onto the library
@@ -162,7 +173,7 @@ export async function openAlbum(albumId: string): Promise<void> {
 	void loadSongsForAlbum(albumId);
 	setLibrarySurface('detail');
 	closeSidebar();
-	pushLibraryHistory();
+	await pushLibraryHistory();
 }
 
 export async function openPlaylist(playlistId: string): Promise<void> {
@@ -177,7 +188,7 @@ export async function openPlaylist(playlistId: string): Promise<void> {
 	void ensurePlaylistsLoaded();
 	setLibrarySurface('detail');
 	closeSidebar();
-	pushLibraryHistory();
+	await pushLibraryHistory();
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb
@@ -201,14 +212,14 @@ export function backToCollection(): void {
 		openTakesTab();
 		setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
 		suppressPush = false;
-		replaceLibraryHistory();
+		void replaceLibraryHistory();
 	});
 }
 
-export function openLibraryCreate(): void {
+export async function openLibraryCreate(): Promise<void> {
 	setLibrarySurface('create');
 	closeSidebar();
-	pushLibraryHistory();
+	await pushLibraryHistory();
 }
 
 // The rail's "Library" link: leaves the open song (if any) but keeps the
@@ -222,7 +233,7 @@ export async function openLibraryWall(): Promise<void> {
 		selectedGenerationId.set(null);
 		setLibrarySurface('browse');
 		closeSidebar();
-		pushLibraryHistory();
+		await pushLibraryHistory();
 	});
 }
 
@@ -291,7 +302,7 @@ function reportSongLinkNotFound(songId: string): void {
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
 	suppressPush = false;
-	replaceLibraryHistory();
+	void replaceLibraryHistory();
 	addToast(SONG_LINK_NOT_FOUND_TOAST, 'error');
 }
 
@@ -300,7 +311,7 @@ function applySelectedSong(
 	knownSong: SongItem | undefined,
 	historyMode: 'stack' | 'replace',
 	tab: 'keep' | 'write'
-): void {
+): Promise<void> {
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
 	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
@@ -314,11 +325,8 @@ function applySelectedSong(
 	if (tab === 'write') openWriteTab();
 	setLibrarySurface('detail');
 	closeSidebar();
-	if (historyMode === 'replace') {
-		replaceLibraryHistory();
-		return;
-	}
-	pushLibraryHistory();
+	if (historyMode === 'replace') return replaceLibraryHistory();
+	return pushLibraryHistory();
 }
 
 // Opening a song from the album interior (no song selected yet) always
@@ -351,14 +359,14 @@ export function selectSong(songId: string, knownSong?: SongItem): Promise<void> 
 	const historyMode = selectSongHistoryMode(songId, knownSong);
 	return guardDirtyNavigation(async () => {
 		await ensureLibraryWorkspaceRoute();
-		applySelectedSong(songId, knownSong, historyMode, 'write');
+		await applySelectedSong(songId, knownSong, historyMode, 'write');
 	});
 }
 
 export function selectNeighborSong(song: SongItem): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await ensureLibraryWorkspaceRoute();
-		applySelectedSong(song.id, song, 'replace', 'keep');
+		await applySelectedSong(song.id, song, 'replace', 'keep');
 	});
 }
 
@@ -386,7 +394,7 @@ export function backToSong(): void {
 	openTakesTab();
 	setLibrarySurface('detail');
 	suppressPush = false;
-	replaceLibraryHistory();
+	void replaceLibraryHistory();
 }
 
 export function clearGenerationSelection(): void {
@@ -412,8 +420,8 @@ export function openTakesTab(): void {
 
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
 	await ensureLibraryWorkspaceRoute();
-	await guardDirtyNavigation(() => {
-		applySelectedSong(song.id, song, 'stack', 'write');
+	await guardDirtyNavigation(async () => {
+		await applySelectedSong(song.id, song, 'stack', 'write');
 		selectedGenerationId.set(generationId);
 		persistLibraryHistory();
 	});
@@ -421,16 +429,16 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 
 export function goBack(): void {
 	if (get(librarySurface) === 'create') {
-		const createState = history.state;
+		const createState = currentLibraryHistoryState();
 		if (isLibraryHistoryState(createState) && createState.index > 0) {
 			history.back();
 			return;
 		}
 		setLibrarySurface('browse');
-		replaceLibraryHistory();
+		void replaceLibraryHistory();
 		return;
 	}
-	const state = history.state;
+	const state = currentLibraryHistoryState();
 	if (isLibraryHistoryState(state) && state.index > 0) {
 		history.back();
 		return;
@@ -441,7 +449,7 @@ export function goBack(): void {
 	openTakesTab();
 	setLibrarySurface('browse');
 	suppressPush = false;
-	replaceLibraryHistory();
+	void replaceLibraryHistory();
 }
 
 // Browser Back/Forward has already committed the history change by the time
@@ -478,7 +486,7 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 }
 
 export function initNavigation(): () => void {
-	const existing = history.state;
+	const existing = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(existing)) {
 		const params = new URLSearchParams(window.location.search);
 		const songId = params.get('song');
@@ -496,7 +504,7 @@ export function initNavigation(): () => void {
 			suppressPush = false;
 		}
 
-		replaceLibraryHistory();
+		void replaceLibraryHistory();
 	} else if (existing.songId) {
 		loadSongContext(existing.songId);
 	}

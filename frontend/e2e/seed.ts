@@ -40,6 +40,8 @@ export interface SeededTake {
 /** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
 	albumTitle: string;
+	/** Also the album's address: an album id is its slug (issue #269). */
+	albumId: string;
 	albumShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
@@ -152,6 +154,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	return {
 		albumTitle,
+		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
 		playlistTakes: playlistSongTitles.map((songTitle) => ({

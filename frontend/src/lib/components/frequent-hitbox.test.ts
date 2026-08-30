@@ -103,6 +103,14 @@ vi.mock('$app/environment', () => ({
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://songmaker.test/') }
 }));
+// The shell owns the live library stream since issue #269; jsdom has no
+// EventSource and this file measures hitboxes, not the stream.
+vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),
+	startLibraryResourceSync: vi.fn(),
+	stopLibraryResourceSync: vi.fn(),
+	waitForResourceReady: vi.fn(async () => false)
+}));
 vi.mock('$lib/stores/auth', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/auth')>();
 	return {

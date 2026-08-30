@@ -1,4 +1,5 @@
 import { get, writable } from 'svelte/store';
+import { goto } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
@@ -69,7 +70,12 @@ const FILTERS: ReadonlySet<string> = new Set(['albums', 'playlists', 'shared']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
+const ALBUM_ROUTE_PREFIX = '/album/';
+
 let historyApplyGeneration = 0;
+let historyWrites: Promise<void> = Promise.resolve();
+let queuedHistoryWrites = 0;
+let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
 
 export function isLibraryFilter(value: unknown): value is LibraryFilter {
 	return typeof value === 'string' && FILTERS.has(value);
@@ -132,10 +138,170 @@ export function libraryWallStateFrom(state: LibraryHistoryState): LibraryHistory
 	};
 }
 
+export function albumRoutePath(albumId: string): string {
+	return `${ALBUM_ROUTE_PREFIX}${encodeURIComponent(albumId)}`;
+}
+
+export function isAlbumRoutePath(pathname: string): boolean {
+	return pathname.startsWith(ALBUM_ROUTE_PREFIX) && pathname.length > ALBUM_ROUTE_PREFIX.length;
+}
+
 export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	if (state.songId && state.generationId) return `/?song=${state.songId}&gen=${state.generationId}`;
 	if (state.songId) return `/?song=${state.songId}`;
+	if (state.surface === 'detail' && state.collection?.kind === 'album') {
+		return albumRoutePath(state.collection.id);
+	}
 	return '/';
+}
+
+export type HistoryWriteMode = 'push' | 'replace';
+
+// The one place that decides how a library history entry reaches the browser.
+//
+// SvelteKit reconciles its mounted route tree only on a real navigation, so a
+// raw history write is invisible to the router. That was harmless while every
+// library address was `/` or `/?song=…` — always the same route. Since an open
+// album addresses `/album/<slug>` (issue #269) a write can change the route
+// pattern, and a raw one would leave the router mounting the route it last
+// saw while the address names another: the next real navigation or
+// Back/Forward that disagrees tears the workspace down mid-session, with an
+// unsaved draft still in it. So a write that crosses the boundary goes through
+// `goto`, which uses the same History API but keeps the router in step, while
+// the frequent same-route churn (filter, sort, scroll, search cursor) keeps
+// the cheap synchronous write.
+//
+// `goto` puts its own `state` option in `page.state`, not in `history.state`,
+// which is where every reader of the library's restore state looks — so the
+// state is written onto the entry after the navigation lands, and `goto`'s
+// state option is deliberately unused.
+//
+// Writes are serialized because a crossing one is asynchronous: a caller that
+// writes twice in a row (open a song, then pin its take) must not have its
+// second write overtake the first, and must see the entry the first one is
+// going to install rather than the stale one it would still read from
+// `history.state` — which is what `currentLibraryHistoryState` answers.
+export function writeLibraryHistory(
+	state: LibraryHistoryState,
+	url: string,
+	mode: HistoryWriteMode
+): Promise<void> {
+	const pathname = new URL(url, window.location.origin).pathname;
+	const from = plannedHistory?.pathname ?? window.location.pathname;
+	const crossesRoutes = isAlbumRoutePath(from) !== isAlbumRoutePath(pathname);
+	if (!crossesRoutes && queuedHistoryWrites === 0) {
+		applyHistoryWrite(state, url, mode);
+		return Promise.resolve();
+	}
+	plannedHistory = { pathname, state };
+	queuedHistoryWrites += 1;
+	const write = historyWrites.then(async () => {
+		if (crossesRoutes) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
+			applyHistoryWrite(state, url, 'replace');
+			return;
+		}
+		applyHistoryWrite(state, url, mode);
+	});
+	historyWrites = write
+		.catch(() => undefined)
+		.finally(() => {
+			queuedHistoryWrites -= 1;
+			if (queuedHistoryWrites === 0) plannedHistory = null;
+		});
+	return write;
+}
+
+// The library history entry as it will stand once every queued write has
+// landed. Every reader of the restore state goes through this instead of
+// `history.state`, which lags while a crossing write navigates.
+export function currentLibraryHistoryState(): unknown {
+	return plannedHistory ? plannedHistory.state : history.state;
+}
+
+function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: HistoryWriteMode): void {
+	if (mode === 'push') history.pushState(state, '', url);
+	else history.replaceState(state, '', url);
+}
+
+export type AlbumAddress = 'found' | 'unknown';
+
+// The entry point of the /album/<slug> route (issue #269). A pasted address is
+// the only thing a cold tab knows, so the slug is checked against the API
+// first — an unknown one is a verdict the route states, never a silent fall
+// back to the wall — and a known one becomes the library's own restore state
+// and is then applied through the very path every reload and Back take, unless
+// the library already shows that album. Going through applyLibraryHistory
+// rather than setting the stores by hand is what keeps the album present even
+// when the browse listing that loads alongside it does not carry it, and it is
+// applied here rather than left to the live stream's snapshot load because the
+// two start independently: whichever runs second re-applies the same state, so
+// the address wins either way.
+//
+// An existing restore state that already opens this album is richer than the
+// address (it carries sort, scroll and offsets) and wins; the address only
+// overrules a state that disagrees with it.
+//
+// The write goes through writeLibraryHistory like every other one, so that a
+// write which changes the route pattern reaches the router instead of only the
+// address bar — see the note there before turning any of these back into a
+// bare history.replaceState.
+export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
+	if (!(await albumIsKnown(albumId))) return 'unknown';
+	const opened = historyAlreadyOpens(albumId);
+	const state = opened
+		? (currentLibraryHistoryState() as LibraryHistoryState)
+		: albumAddressState(albumId);
+	if (!opened) {
+		await writeLibraryHistory(state, albumRoutePath(albumId), 'replace');
+	}
+	if (!albumAlreadyShown(albumId)) await applyLibraryHistory(state);
+	return 'found';
+}
+
+// Both short circuits keep the address from re-asking what the library has
+// already answered, which is what the in-app route to this album -- the wall,
+// which loaded the album list and then opened the album before the address
+// changed -- always has. A cold tab has neither and pays for both.
+async function albumIsKnown(albumId: string): Promise<boolean> {
+	if (get(albumList).some((album) => album.id === albumId)) return true;
+	return albumExists(albumId);
+}
+
+function albumAlreadyShown(albumId: string): boolean {
+	const collection = get(openCollection);
+	return (
+		get(librarySurface) === 'detail' && collection?.kind === 'album' && collection.id === albumId
+	);
+}
+
+function historyAlreadyOpens(albumId: string): boolean {
+	const state = currentLibraryHistoryState();
+	return (
+		isLibraryHistoryState(state) &&
+		state.surface === 'detail' &&
+		state.collection?.kind === 'album' &&
+		state.collection.id === albumId
+	);
+}
+
+function albumAddressState(albumId: string): LibraryHistoryState {
+	return {
+		...libraryRootState(),
+		surface: 'detail',
+		collection: { kind: 'album', id: albumId }
+	};
+}
+
+async function albumExists(albumId: string): Promise<boolean> {
+	try {
+		await fetchAlbum(albumId);
+		return true;
+	} catch (err) {
+		if (isNotFound(err)) return false;
+		throw err;
+	}
 }
 
 export function snapshotLibraryHistory(index: number): LibraryHistoryState {
@@ -268,12 +434,12 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 }
 
 export async function hydrateLibraryFromHistory(): Promise<boolean> {
-	const existing = history.state;
+	const existing = currentLibraryHistoryState();
 	if (isLibraryHistoryState(existing)) {
 		const applied = await applyLibraryHistory(existing);
 		if (applied) {
 			const restored = snapshotLibraryHistory(existing.index);
-			history.replaceState(restored, '', libraryHistoryUrl(restored));
+			await writeLibraryHistory(restored, libraryHistoryUrl(restored), 'replace');
 		}
 		if (existing.query.trim()) return get(librarySearch).status !== 'error';
 		return get(libraryBrowse).status !== 'error';
@@ -332,6 +498,9 @@ export function albumIsExpanded(options: { searching: boolean; songHits: number 
 
 export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
+	historyWrites = Promise.resolve();
+	queuedHistoryWrites = 0;
+	plannedHistory = null;
 	libraryFilter.set(LIBRARY_DEFAULT_FILTER);
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
@@ -341,7 +510,7 @@ export function resetLibraryContextForTests(): void {
 }
 
 function libraryHistoryIndex(): number {
-	const state = history.state;
+	const state = currentLibraryHistoryState();
 	return isLibraryHistoryState(state) ? state.index : 0;
 }
 

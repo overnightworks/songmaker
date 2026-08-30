@@ -57,8 +57,11 @@ import {
 	captureLibraryScroll,
 	detailTab,
 	hydrateLibraryFromHistory,
+	isAlbumRoutePath,
 	isLibraryHistoryState,
+	libraryHistoryUrl,
 	librarySurface,
+	openAlbumAddress,
 	libraryRootState,
 	libraryScrollAnchor,
 	libraryFilter,
@@ -449,5 +452,102 @@ describe('hydrateLibraryFromHistory', () => {
 		await hydrateLibraryFromHistory();
 		expect(history.state.collection).toBeNull();
 		expect(history.state.surface).toBe('browse');
+	});
+});
+
+describe('libraryHistoryUrl', () => {
+	it('addresses an open album by its slug', () => {
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'friday-at-murphy-s' }
+			})
+		).toBe('/album/friday-at-murphy-s');
+	});
+
+	it('addresses an open song, not its album', () => {
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'anfield' },
+				songId: 's1'
+			})
+		).toBe('/?song=s1');
+	});
+
+	it('addresses the library itself while an album is only the rail context', () => {
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'browse',
+				collection: { kind: 'album', id: 'anfield' }
+			})
+		).toBe('/');
+	});
+});
+
+describe('isAlbumRoutePath', () => {
+	it('is an album address only with a slug behind it', () => {
+		expect(isAlbumRoutePath('/album/anfield')).toBe(true);
+		expect(isAlbumRoutePath('/album/')).toBe(false);
+		expect(isAlbumRoutePath('/')).toBe(false);
+		expect(isAlbumRoutePath('/settings/voices')).toBe(false);
+	});
+});
+
+describe('openAlbumAddress', () => {
+	it('makes the library restore the addressed album on a tab that knows nothing else', async () => {
+		history.replaceState(null, '', '/album/a9');
+
+		await expect(openAlbumAddress('a9')).resolves.toBe('found');
+
+		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(history.state.surface).toBe('detail');
+	});
+
+	it('reports an unknown slug without opening anything', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
+		history.replaceState(null, '', '/album/ghost');
+
+		await expect(openAlbumAddress('ghost')).resolves.toBe('unknown');
+
+		expect(get(openCollection)).toBeNull();
+		expect(history.state).toBeNull();
+	});
+
+	it('keeps a richer restore state that already opens the addressed album', async () => {
+		const restored = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a9' },
+			scrollAnchor: 320
+		};
+		history.replaceState(restored, '', '/album/a9');
+
+		await expect(openAlbumAddress('a9')).resolves.toBe('found');
+
+		expect(history.state.scrollAnchor).toBe(320);
+	});
+
+	it('lets the address overrule a restore state that opens a different album', async () => {
+		history.replaceState(
+			{ ...libraryRootState(), surface: 'detail', collection: { kind: 'album', id: 'other' } },
+			'',
+			'/album/a9'
+		);
+
+		await expect(openAlbumAddress('a9')).resolves.toBe('found');
+
+		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+	});
+
+	it('propagates a failure that is not a missing album instead of calling it unknown', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		fetchAlbum.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/albums/a9'));
+
+		await expect(openAlbumAddress('a9')).rejects.toThrow('boom');
 	});
 });

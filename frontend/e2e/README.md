@@ -6,9 +6,18 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File              | Covers                                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library.spec.ts` | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out |
+| File                    | Covers                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out |
+| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track → Back → Forward, with the shell standing throughout (issue #269)                                           |
+
+`album-address.spec.ts` runs on **desktop only**: what it pins is the router's
+behaviour across an address that changes the route, which is the same code on
+both shells, and both projects share one rate-limit window. It is here rather
+than in the unit suite because jsdom has no router — only a real browser shows
+whether moving between `/` and `/album/<slug>` keeps the workspace standing or
+tears it down. Its evidence that nothing was torn down is that the page opened
+the live event stream exactly once.
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -52,9 +61,14 @@ ffmpeg -y -f lavfi -i "sine=frequency=440:sample_rate=22050:duration=3" \
 browser console error, and on any uncaught page exception. It also counts what
 the flow costs the API and holds it under a named budget.
 
-**The budget is a ceiling, not a knob.** Each shell has its own, measured on a
-green run and carrying headroom: 25 `/api` requests measured per shell, 32
-budgeted. A flow that suddenly needs more round trips is a regression
+**The budget is a ceiling, not a knob.** Each flow has its own, measured on a
+green run and carrying headroom: the library flow measures 28 `/api` requests
+per shell against a budget of 32, and the album-address flow 24 against 30.
+(The library flow measured 25 before album addresses: opening a track from an
+album address changes the route, so the editor mounts once on the way out of
+the album route and once on the way into `/`. That second mount goes away in
+#265's S3, when a song has an address of its own and opening one is a single
+navigation.) A flow that suddenly needs more round trips is a regression
 — find the extra requests instead of raising the number. The measured count is
 printed on every run.
 

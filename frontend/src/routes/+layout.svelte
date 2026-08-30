@@ -12,7 +12,17 @@
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
-	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+	import {
+		backToCollection,
+		initNavigation,
+		isLibraryWorkspacePath,
+		openLibraryWall
+	} from '$lib/stores/navigation';
+	import {
+		startLibraryResourceSync,
+		stopLibraryResourceSync,
+		waitForResourceReady
+	} from '$lib/stores/resourceSync';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		escapeNowPlaying,
@@ -39,6 +49,18 @@
 	);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);
+
+	// Whether the library session should be live. Two addresses mount the
+	// library workspace (`/` and `/album/<slug>`, issue #269) and a raw history
+	// write can move between them without a route change, so this is one
+	// boolean rather than a URL: it stays true across the whole workspace and
+	// only flips when the browser genuinely leaves it. Signed out, and on
+	// login, setup, share and Settings, it is false — exactly the routes on
+	// which the workspace page used to be unmounted, which is what owned this
+	// before.
+	const libraryRouteActive = $derived(
+		hasPrivatePlayer && isLibraryWorkspacePath(page.url.pathname)
+	);
 	const authRetryable = $derived($authCheckError !== null && me === null);
 
 	let compact = $state(false);
@@ -80,6 +102,27 @@
 		if (barHidden) root.dataset.nowPlaying = 'full';
 		else delete root.dataset.nowPlaying;
 		return () => delete root.dataset.nowPlaying;
+	});
+
+	// The live-sync stream and the history listener outlive a route swap
+	// between the library's two addresses, so the layout owns them: the
+	// workspace page used to, and a swap tore them down and rebuilt them under
+	// the user. `initNavigation` still waits for the first snapshot — it
+	// normalises the history entry from the live stores, so running it before
+	// they are hydrated would overwrite a restorable entry with an empty one.
+	$effect(() => {
+		if (!libraryRouteActive) return;
+		startLibraryResourceSync();
+		let left = false;
+		let stopNavigation: (() => void) | undefined;
+		void waitForResourceReady().then((ready) => {
+			if (ready && !left) stopNavigation = initNavigation();
+		});
+		return () => {
+			left = true;
+			stopNavigation?.();
+			stopLibraryResourceSync();
+		};
 	});
 
 	$effect(() => {

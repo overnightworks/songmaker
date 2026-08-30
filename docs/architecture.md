@@ -152,6 +152,45 @@ of the current user's public slugs (`GET /api/library/shares`) as before,
 just reached via the Shared chip; membership, `N`, and the DELETE endpoints
 are unchanged.
 
+An open album has an address of its own, `/album/<slug>` (issue #269; album
+ids are already readable slugs). Both `/` and `/album/<slug>` render
+`components/LibraryWorkspace.svelte` — the bootstrap gate and the surface
+switch — while `routes/+layout.svelte` owns the live event stream and the
+history listener, so swapping between the two addresses neither rebuilds the
+workspace nor re-runs its bootstrap. The layout starts the stream only for a
+signed-in browser on a library route, which is the reach the workspace page
+had when it owned this; Settings, login, setup and the share pages leave it
+off. The workspace itself gates on `resourceSync.ready` rather than on a
+promise resolved once per mount, so a mount that finds the stream already live
+shows the library on its first frame. `libraryHistoryUrl` in
+`stores/libraryContext.ts` maps library state to that address — an open song
+still wins with `/?song=…`, and an album that is only the rail context behind
+the wall stays on `/` — so opening an album, or leaving a song for its album,
+writes the album's address. Both `/` and `/album/<slug>` mount the same
+library workspace (`routes/album/[slug]/+page.svelte` renders
+`routes/+page.svelte`), which is why `isLibraryWorkspacePath` counts both and
+`ensureLibraryWorkspaceRoute` never pushes anything off an album address. A
+cold tab opened on an album address resolves the slug against the API first:
+an unknown slug is stated as such instead of falling back to the wall, and a
+known one is written into the library's own restore state, so the album is
+restored by `hydrateLibraryFromHistory` — the same path a reload and Back
+take — and stays present even when it is not on the first browse page. Because an
+address can now change the route pattern, `writeLibraryHistory` in
+`stores/libraryContext.ts` is the single owner of every library history write:
+SvelteKit reconciles its mounted route tree only on a real navigation, so a
+write that crosses `/` ⇄ `/album/<slug>` goes through `goto` (which keeps the
+router in step and, since `goto`'s own `state` lands in `page.state`, has the
+restore state written onto the entry afterwards), while the frequent
+same-route churn — filter, sort, scroll, search cursor — keeps the cheap
+synchronous write. Turning one of those crossing writes back into a bare
+`history.pushState` would leave the router mounting the route it last saw and
+let the next Back/Forward tear the workspace down mid-edit. Crossing writes
+are asynchronous and therefore serialized, and `currentLibraryHistoryState()`
+— not `history.state` — answers what the entry will be, so a caller that
+writes twice in a row (open a song, then pin its take) is not read against a
+stale entry. The remaining hand-built history and the route guard fall away
+once songs and takes have addresses too (issue #265, S7).
+
 The single source of navigation truth for "what collection is open" is the
 leaf store `stores/collection.ts` (`openCollection: {kind: 'album'|'playlist',
 id} | null`), which nothing but `openAlbum`/`openPlaylist`/history restore in
@@ -289,7 +328,7 @@ root.
 
 | Layer | What | Key files |
 |-------|------|-----------|
-| Routes | Pages: main view, login, setup, settings, public share pages (`share/[slug]`, `share/playlist`/`song`/`gen`) | `src/routes/` |
+| Routes | Pages: main view, album address (`album/[slug]`), login, setup, settings, public share pages (`share/[slug]`, `share/playlist`/`song`/`gen`) | `src/routes/` |
 | Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeChips`, `RecipePanel`, `EditorStacked`, `WriteColumn`, `TakeStrip`, `TakesList`, `TakeMenu`, `EditorSheet`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |

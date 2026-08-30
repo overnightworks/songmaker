@@ -27,8 +27,13 @@ import type { GenerationItem, SongItem } from '$lib/api/types';
 import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
-const { pageState } = vi.hoisted(() => ({
-	pageState: { url: new URL('https://songmaker.test/') }
+const { pageState, liveStream } = vi.hoisted(() => ({
+	pageState: { url: new URL('https://songmaker.test/') },
+	liveStream: {
+		start: vi.fn(),
+		stop: vi.fn(),
+		waitForReady: vi.fn(async () => true)
+	}
 }));
 
 vi.mock('$app/state', () => ({
@@ -61,6 +66,15 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchCapabilities: vi.fn().mockResolvedValue({}),
 		checkSetupRequired: vi.fn(),
 		logout: vi.fn()
+	};
+});
+vi.mock('$lib/stores/resourceSync', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/resourceSync')>();
+	return {
+		...actual,
+		startLibraryResourceSync: liveStream.start,
+		stopLibraryResourceSync: liveStream.stop,
+		waitForResourceReady: liveStream.waitForReady
 	};
 });
 vi.mock('$lib/api/library', () => ({
@@ -177,6 +191,8 @@ beforeEach(() => {
 		return USER;
 	});
 	openCollection.set({ kind: 'album', id: 'a1' });
+	liveStream.start.mockClear();
+	liveStream.stop.mockClear();
 	vi.mocked(goto).mockClear();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
@@ -629,5 +645,49 @@ describe('auth check failure', () => {
 		await tick();
 
 		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+	});
+});
+
+// The live library stream and the history listener used to belong to the
+// workspace page. Two routes mount that workspace now (`/` and
+// `/album/<slug>`, issue #269) and the layout survives a swap between them,
+// so it owns their lifetime -- while keeping the reach the page had: signed
+// in, and only where the library is actually shown.
+describe('the live library stream', () => {
+	it.each([
+		['the library route', '/'],
+		['an album address', '/album/anfield']
+	])('runs on %s', async (_name, path) => {
+		await renderLayout(path);
+		expect(liveStream.start).toHaveBeenCalled();
+	});
+
+	it.each([
+		['Settings', '/settings/voices'],
+		['the login page', '/login'],
+		['a public share page', '/share/some-slug']
+	])('stays off %s, as it did before the layout owned it', async (_name, path) => {
+		await renderLayout(path);
+		expect(liveStream.start).not.toHaveBeenCalled();
+	});
+
+	it('stays off while nobody is signed in', async () => {
+		currentUser.set(null);
+		authLoading.set(false);
+		vi.mocked(checkAuth).mockImplementation(async () => null);
+		mountLayout('/');
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(liveStream.start).not.toHaveBeenCalled();
+	});
+
+	it('shuts down when the browser leaves the library', async () => {
+		await renderLayout('/');
+		expect(liveStream.stop).not.toHaveBeenCalled();
+
+		await unmountCurrentLayout();
+
+		expect(liveStream.stop).toHaveBeenCalled();
 	});
 });
