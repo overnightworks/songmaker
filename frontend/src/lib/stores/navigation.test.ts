@@ -22,8 +22,14 @@ const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 const fetchLastFailedGeneration = vi.fn();
 
+// goto actually changes the URL (via the History API, like the real
+// SvelteKit goto) so tests can assert the landed-on route, not just that
+// goto was called with some argument (see issue #264's done-when).
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined)
+	goto: vi.fn((url: string) => {
+		history.pushState(null, '', url);
+		return Promise.resolve();
+	})
 }));
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
@@ -212,9 +218,9 @@ describe('isLibraryWorkspacePath', () => {
 });
 
 describe('openAlbum / openPlaylist', () => {
-	it('opens an album collection and pushes one history entry', () => {
+	it('opens an album collection and pushes one history entry', async () => {
 		const before = history.state?.index ?? 0;
-		openAlbum('a1');
+		await openAlbum('a1');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 		expect(get(librarySurface)).toBe('detail');
 		expect(history.state.index).toBe(before + 1);
@@ -222,18 +228,45 @@ describe('openAlbum / openPlaylist', () => {
 
 	it('opens a playlist collection and pushes one history entry', async () => {
 		const before = history.state?.index ?? 0;
-		openPlaylist('p1');
-		await Promise.resolve();
+		await openPlaylist('p1');
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
 		expect(get(selectedPlaylistId)).toBe('p1');
 		expect(history.state.index).toBe(before + 1);
 	});
 
-	it('clears the open song when a new collection opens', () => {
-		selectSong('s1');
-		openAlbum('a2');
+	it('clears the open song when a new collection opens', async () => {
+		await selectSong('s1');
+		await openAlbum('a2');
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' });
+	});
+});
+
+describe('opening a collection from off the library route (issue #264)', () => {
+	it('openAlbum lands on the library route with the album open', async () => {
+		history.replaceState(null, '', '/settings/voices');
+		await openAlbum('a1');
+		expect(window.location.pathname).toBe('/');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		expect(get(librarySurface)).toBe('detail');
+	});
+
+	it('openPlaylist lands on the library route with the playlist open', async () => {
+		history.replaceState(null, '', '/settings/voices');
+		await openPlaylist('p1');
+		expect(window.location.pathname).toBe('/');
+		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
+		expect(get(librarySurface)).toBe('detail');
+	});
+
+	// The Rail keeps rendering the open album's tracks on every route (issue
+	// #264's review found selectSong missing the same guard as openAlbum):
+	// clicking a track from Settings must land on the library route too.
+	it('selectSong lands on the library route with the song selected', async () => {
+		history.replaceState(null, '', '/settings/voices');
+		selectSong('s1');
+		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
+		expect(window.location.pathname).toBe('/');
 	});
 });
 
@@ -252,86 +285,85 @@ describe.each([
 });
 
 describe('selectSong keeps the rail context pinned to the song album', () => {
-	it('opens a song and sets the collection to that song album, even with no prior collection', () => {
+	it('opens a song and sets the collection to that song album, even with no prior collection', async () => {
 		expect(get(openCollection)).toBeNull();
-		selectSong('s1');
+		await selectSong('s1');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('switches the collection when the open collection is a different album', () => {
-		openAlbum('a2');
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+	it('switches the collection when the open collection is a different album', async () => {
+		await openAlbum('a2');
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
 	it('switches the collection when a playlist was open (song open beats playlist context)', async () => {
-		openPlaylist('p1');
-		await Promise.resolve();
+		await openPlaylist('p1');
 		expect(get(openCollection)?.kind).toBe('playlist');
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 		expect(get(selectedPlaylistId)).toBeNull();
 	});
 
-	it('leaves the collection untouched when it already matches the song album', () => {
-		openAlbum('a1');
+	it('leaves the collection untouched when it already matches the song album', async () => {
+		await openAlbum('a1');
 		const stateBefore = get(openCollection);
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		expect(get(openCollection)).toBe(stateBefore);
 	});
 
-	it('opens the editor on Write, the only tab a compact layout starts on', () => {
+	it('opens the editor on Write, the only tab a compact layout starts on', async () => {
 		// #141/13: Takes was the landing tab, which hid the editor behind a tab
 		// switch on every phone-width open.
 		detailTab.set('takes');
-		selectSong('s1');
+		await selectSong('s1');
 		expect(get(detailTab)).toBe('write');
 	});
 
-	it('pushes a new history entry per selectSong call', () => {
+	it('pushes a new history entry per selectSong call', async () => {
 		const before = history.state?.index ?? 0;
-		selectSong('s1');
+		await selectSong('s1');
 		expect(history.state.index).toBe(before + 1);
 	});
 
-	it('pushes a new history entry when opening the first song from the album interior', () => {
+	it('pushes a new history entry when opening the first song from the album interior', async () => {
 		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
-		openAlbum('a1');
+		await openAlbum('a1');
 		const afterOpen = history.state.index;
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		expect(history.state.index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
-	it('replaces the current history entry when moving to another song already inside the open collection', () => {
+	it('replaces the current history entry when moving to another song already inside the open collection', async () => {
 		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
-		openAlbum('a1');
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		await openAlbum('a1');
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		const afterFirstSong = history.state.index;
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 		expect(history.state.index).toBe(afterFirstSong);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
-	it('pushes a new history entry when the song is outside the open collection', () => {
+	it('pushes a new history entry when the song is outside the open collection', async () => {
 		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a2' })]);
-		openAlbum('a1');
+		await openAlbum('a1');
 		const afterOpen = history.state.index;
-		selectSong('s2', song({ id: 's2', album_id: 'a2' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a2' }));
 		expect(history.state.index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
-	it('lands back on the album, not the wall, after opening two tracks in a row (issue #99)', () => {
+	it('lands back on the album, not the wall, after opening two tracks in a row (issue #99)', async () => {
 		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
 		const wallIndex = history.state?.index ?? 0;
-		openAlbum('a1');
+		await openAlbum('a1');
 		const albumIndex = history.state.index;
 		expect(albumIndex).toBe(wallIndex + 1);
-		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
 		const track1Index = history.state.index;
 		expect(track1Index).toBe(albumIndex + 1);
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 		expect(history.state.index).toBe(track1Index);
 	});
 });
@@ -350,14 +382,14 @@ describe('opening a song recovers its failure banner', () => {
 				completed_at: '2026-01-02T00:00:00+00:00'
 			}
 		});
-		selectSong('s1');
+		await selectSong('s1');
 		await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
 		await vi.waitFor(() => expect(get(generationFailures).s1).toBe('boom'));
 	});
 
 	it('shows nothing when the API reports no failure to hydrate (e.g. a newer take supersedes it)', async () => {
 		fetchLastFailedGeneration.mockResolvedValue({ job: null });
-		selectSong('s1');
+		await selectSong('s1');
 		await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
 		expect(get(generationFailures).s1).toBeUndefined();
 	});
@@ -398,27 +430,27 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 });
 
 describe('selectNeighborSong', () => {
-	it('replaces the current history entry instead of pushing', () => {
-		selectSong('s1');
+	it('replaces the current history entry instead of pushing', async () => {
+		await selectSong('s1');
 		const afterFirst = history.state.index;
-		selectNeighborSong(song({ id: 's2', album_id: 'a1' }));
+		await selectNeighborSong(song({ id: 's2', album_id: 'a1' }));
 		expect(history.state.index).toBe(afterFirst);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 });
 
 describe('backToCollection', () => {
-	it('leaves the song and returns to the open collection detail', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('leaves the song and returns to the open collection detail', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		backToCollection();
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('detail');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('falls back to the wall when there is no open collection', () => {
-		selectSong('s1');
+	it('falls back to the wall when there is no open collection', async () => {
+		await selectSong('s1');
 		openCollection.set(null);
 		backToCollection();
 		expect(get(librarySurface)).toBe('browse');
@@ -430,40 +462,40 @@ describe('a dirty draft guards song switch / leave', () => {
 		discardDraft();
 	});
 
-	it('defers selectSong instead of switching while the draft is dirty', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('defers selectSong instead of switching while the draft is dirty', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
-	it('runs the deferred switch on Discard', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('runs the deferred switch on Discard', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 		songList.set([song({ id: 's1' }), song({ id: 's2', album_id: 'a1' })]);
 
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 		discardDraft();
-		void get(pendingDirtyNavigation)?.();
+		await get(pendingDirtyNavigation)?.();
 		pendingDirtyNavigation.set(null);
 
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
-	it('stays put on Cancel', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('stays put on Cancel', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 		pendingDirtyNavigation.set(null);
 
 		expect(get(selectedSongId)).toBe('s1');
@@ -471,8 +503,8 @@ describe('a dirty draft guards song switch / leave', () => {
 	});
 
 	it('defers backToCollection and openLibraryWall the same way', async () => {
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
@@ -486,13 +518,13 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
-	it('defers selectNeighborSong the same way', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('defers selectNeighborSong the same way', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		selectNeighborSong(song({ id: 's2', album_id: 'a1' }));
+		await selectNeighborSong(song({ id: 's2', album_id: 'a1' }));
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
@@ -500,8 +532,8 @@ describe('a dirty draft guards song switch / leave', () => {
 
 	it('defers revealPlayingSong the same way', async () => {
 		history.replaceState(null, '', '/');
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
@@ -512,12 +544,12 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
-	it('never prompts when the draft is clean', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('never prompts when the draft is clean', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 
-		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(pendingDirtyNavigation)).toBeNull();
@@ -525,32 +557,33 @@ describe('a dirty draft guards song switch / leave', () => {
 });
 
 describe('openCollectionEntry', () => {
-	it('goes back to the collection when a song inside it is open', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('goes back to the collection when a song inside it is open', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		openCollectionEntry({ kind: 'album', id: 'a1' });
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('opens the collection when no song is open', () => {
+	it('opens the collection when no song is open', async () => {
 		openCollectionEntry({ kind: 'playlist', id: 'p1' });
+		await Promise.resolve();
 		expect(get(openCollection)?.kind).toBe('playlist');
 	});
 });
 
 describe('goBack', () => {
-	it('defers to the browser history when a predecessor exists', () => {
-		openAlbum('a1');
-		selectSong('s1');
+	it('defers to the browser history when a predecessor exists', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
 		const backSpy = vi.spyOn(history, 'back').mockImplementation(() => undefined);
 		goBack();
 		expect(backSpy).toHaveBeenCalledTimes(1);
 		backSpy.mockRestore();
 	});
 
-	it('returns to the wall and clears selection when there is no predecessor', () => {
-		selectSong('s1');
+	it('returns to the wall and clears selection when there is no predecessor', async () => {
+		await selectSong('s1');
 		history.replaceState(null, '', '/');
 		goBack();
 		expect(get(librarySurface)).toBe('browse');
@@ -642,8 +675,8 @@ describe('initNavigation', () => {
 
 	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
 		history.replaceState(null, '', '/');
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 		vi.mocked(updateSong).mockResolvedValue(song({ id: 's1', lyrics: 'unsaved edit' }));
@@ -661,8 +694,8 @@ describe('initNavigation', () => {
 
 	it('saves a dirty draft once when two popstates fire before the first save settles', async () => {
 		history.replaceState(null, '', '/');
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 		let resolveSave: (value: SongItem) => void = () => undefined;
@@ -684,8 +717,8 @@ describe('initNavigation', () => {
 
 	it('still applies the browser-back navigation when the auto-save fails', async () => {
 		history.replaceState(null, '', '/');
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 		vi.mocked(updateSong).mockRejectedValue(new Error('Network error'));
@@ -700,8 +733,8 @@ describe('initNavigation', () => {
 
 	it('does not attempt a save on browser-back when the draft is clean', async () => {
 		history.replaceState(null, '', '/');
-		openAlbum('a1');
-		selectSong('s1');
+		await openAlbum('a1');
+		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 
 		const cleanup = initNavigation();

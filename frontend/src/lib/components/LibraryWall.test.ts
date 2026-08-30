@@ -17,6 +17,7 @@ import { searchQuery } from '$lib/stores/filter';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
+import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
@@ -52,6 +53,9 @@ vi.mock('$lib/api/client', () => ({
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
+	// Exercised by loadSongContext's hydrateGenerationFailure fire-and-forget
+	// call whenever a test drives a real selectSong through this component.
+	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null }),
 	createPlaylist: vi.fn().mockResolvedValue({
 		id: 'new-playlist',
 		title: 'Playlist',
@@ -165,6 +169,8 @@ beforeEach(() => {
 	songList.set([]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
 	history.replaceState(null, '', '/');
 });
 
@@ -399,6 +405,38 @@ describe('LibraryWall shared filter', () => {
 		expect(fetchAlbum).toHaveBeenCalledWith('a-remote');
 		expect(get(albumList).some((item) => item.id === 'a-remote')).toBe(true);
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-remote' });
+	});
+
+	// Regression coverage for issue #264's review: onOpenShare's generation
+	// branch used to set selectedGenerationId right after firing selectSong
+	// without awaiting it, so the still-pending song switch cleared the take
+	// selection a microtask later (player.ts's selectSong resets it to null).
+	it('opens a shared take with the song selected and that take pinned', async () => {
+		songList.set([song({ id: 's-shared', title: 'Undertow', album_id: 'a-local' })]);
+		fetchShares.mockResolvedValue({
+			items: [
+				shareItem({
+					type: 'generation',
+					id: 'g-shared',
+					title: 'Undertow',
+					song_id: 's-shared',
+					generation_number: 3
+				})
+			],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
+		await tick();
+		await tick();
+
+		requireElement<HTMLButtonElement>(root, '.share-open').click();
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-shared'));
+		expect(get(selectedGenerationId)).toBe('g-shared');
 	});
 
 	it('renders the share inventory with open and unshare actions', async () => {

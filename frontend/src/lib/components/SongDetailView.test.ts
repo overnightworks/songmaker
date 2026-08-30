@@ -783,12 +783,9 @@ describe('SongDetailView unsaved-draft guard', () => {
 		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
 		await tick();
 		clickNamed(target, 'Save');
-		await tick();
-		await Promise.resolve();
-		await tick();
 
+		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-last'));
 		expect(updateSong).toHaveBeenCalled();
-		expect(get(selectedSongId)).toBe('s-last');
 	});
 
 	it('saves a version from the song menu without switching songs', async () => {
