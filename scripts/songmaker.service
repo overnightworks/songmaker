@@ -1,0 +1,25 @@
+[Unit]
+Description=Songmaker stack (docker compose up -d) after boot
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# WorkingDirectory and User below are placeholders (this repo's canonical
+# checkout/owner), kept concrete only so `systemd-analyze verify` can check
+# an absolute path. scripts/install-autostart.sh always overwrites both
+# with the real project root and invoking user at install time — copying
+# this file by hand instead of running that script inherits these values
+# as-is, which is very likely wrong for a different checkout or operator.
+WorkingDirectory=/home/felix-hummert/git/songmaker
+ExecStart=/usr/bin/docker compose up -d
+Restart=on-failure
+RestartSec=10
+User=felix-hummert
+Group=docker
+
+[Install]
+WantedBy=multi-user.target

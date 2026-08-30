@@ -17,8 +17,16 @@ docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
 # (see CLAUDE.md "Docker" section for the full reasoning).
 
-# 2. That's it — survives reboots automatically.
+# 2. Install the boot autostart unit (one-time, needs sudo)
+./scripts/install-autostart.sh
 ```
+
+`restart: unless-stopped` alone does not survive every reboot: a container that
+was created but never started (e.g. a mid-boot GPU driver mismatch) is never
+retried by Docker on its own, no matter how many times the host reboots.
+`scripts/install-autostart.sh` installs a systemd unit that runs
+`docker compose up -d` after every boot, which does retry it — see
+[docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
 
 The first start downloads ~3.5 GB of ACE-Step model weights into the `songmaker_hfcache` Docker volume (one-time). All persistent state (PostgreSQL DB, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and `--build` rebuilds.
 
@@ -35,7 +43,7 @@ docker compose logs -f songmaker-scoring-worker     # scoring jobs (arq)
 docker compose logs -f songmaker-acestep-worker-0   # GPU subprocess (ACE-Step)
 
 # Container status
-docker compose ps                                   # all services + health
+docker compose ps -a                                # all services + health (-a: includes a Created-but-never-started container, which plain `ps` hides)
 
 # Stop / start the stack (preserves volumes)
 docker compose stop

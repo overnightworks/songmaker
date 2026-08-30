@@ -205,11 +205,41 @@ The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container 
 
 The Worker Pool admin panel has a **Restart** button per card. Clicking it (after a confirm dialog) calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`.
 
-The container is running with `restart: unless-stopped`, so docker compose brings it back up automatically. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
+The container is already running when the SIGTERM lands, so the Docker daemon's `restart: unless-stopped` policy restarts *that same container* automatically — this narrow in-process case needs neither docker compose nor a reboot. See [Restart-policy limits and boot autostart](#restart-policy-limits-and-boot-autostart) below for what `unless-stopped` does **not** cover. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
 
 **In-flight generations fail.** Restarting kills the worker process, including any subprocess holding a generate task. Affected jobs surface as `error_type=worker_unreachable` in the user's job list. Restart only when the operator is willing to lose the in-flight work.
 
 To verify the restart cycle from the admin UI: the Worker Pool card flips `online → offline → loading → online` over the cycle. The transitions are visible because the heartbeat TTL (15 s) outlasts the brief downtime.
+
+### Restart-policy limits and boot autostart
+
+`restart: unless-stopped` is a per-container Docker Engine policy, not a docker-compose feature: the daemon consults it whenever a container's own process exits, and again for every container whose last recorded state was `running` when the daemon itself restarts. It has one hard limit — **it only ever applies to a container that has been started at least once.** A container docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as the NVIDIA driver mismatch in #252) sits in state `Created` with `RestartCount: 0`. Docker ignores `Created` containers on every daemon start and every host reboot, indefinitely — there is no timeout and no self-heal. The only way out is an explicit `docker start <container>` or `docker compose up -d`.
+
+**`docker compose ps` hides this.** Without `-a` it omits containers in `Created`, so the stack can look fully up when a container has in fact never run once. Diagnose a suspected stuck container with:
+
+```bash
+docker compose ps -a
+```
+
+**Boot autostart.** Since neither dockerd nor compose retries a `Created` container on its own, the host runs a systemd unit (`scripts/songmaker.service`) that runs `docker compose up -d` (no `--build`) once per boot, after `docker.service` is up. `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which is exactly what the restart policy cannot do. Install it once with:
+
+```bash
+./scripts/install-autostart.sh
+```
+
+The script copies the unit into `/etc/systemd/system/` (deriving `WorkingDirectory` from wherever the script itself lives, so running it from a worktree doesn't silently point the unit at the main checkout, and `User` from whoever is running the installer — `$SUDO_USER` under `sudo`, otherwise the current user, refusing outright if that resolves to `root` — so the unit runs as the stack owner, not as whoever happened to invoke it) and runs `systemctl enable` — it does **not** touch the currently running stack. `enable` only takes effect on the *next* boot; the script's own output names the explicit `systemctl start` command for applying it immediately, and warns that doing so recreates containers (killing an in-flight generation) if `.env` or code changed since the containers last started, so that should happen in a maintenance window, not as a side effect of installing the unit. Rerunning the script is a no-op only if the unit file content is unchanged; if it changed, `daemon-reload` picks up the new file immediately, but `RemainAfterExit=yes` means an already-active unit only picks up the new `ExecStart` on the next boot or an explicit `systemctl restart songmaker.service`.
+
+**Verifying the fix.** To reproduce and confirm the exact failure this closes, without disturbing the live stack for longer than a deliberate maintenance window:
+
+```bash
+docker compose stop songmaker-acestep-worker-0
+docker compose rm -f songmaker-acestep-worker-0
+docker compose create songmaker-acestep-worker-0   # creates but does not start it
+docker compose ps -a                                # confirm: State = created
+sudo reboot
+# after the host comes back:
+docker compose ps -a                                # confirm: State = running, no manual `docker start` needed
+```
 
 ### pin_model semantics
 
