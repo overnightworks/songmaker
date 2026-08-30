@@ -106,8 +106,18 @@ def _seed_owners(session) -> None:
     bob = create_user(session, "bob", hash_password(BOB_PASSWORD), role="user")
     session.add(Album(id="alice-album", title="Alice Album", artist="Alice", created_by=alice.id))
     session.add(Album(id="bob-album", title="Bob Album", artist="Bob", created_by=bob.id))
-    session.add(Song(id="alice-song", title="Alice Song", album_id="alice-album", track_number=1))
-    session.add(Song(id="bob-song", title="Bob Song", album_id="bob-album", track_number=1))
+    session.add(
+        Song(
+            id="alice-song", title="Alice Song", album_id="alice-album",
+            track_number=1, slug="alice-song",
+        ),
+    )
+    session.add(
+        Song(
+            id="bob-song", title="Bob Song", album_id="bob-album", track_number=1,
+            slug="bob-song",
+        ),
+    )
 
 
 def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
@@ -426,10 +436,22 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) ->
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
         session.add(
-            Song(id="expired-song", title="Expired", album_id="expired-album", track_number=1),
+            Song(
+                id="expired-song", title="Expired", album_id="expired-album", track_number=1,
+                slug="expired",
+            ),
         )
-        session.add(Song(id="orphan-song", title="Orphan", album_id="live-album", track_number=1))
-        session.add(Song(id="live-song", title="Live", album_id="live-album", track_number=2))
+        session.add(
+            Song(
+                id="orphan-song", title="Orphan", album_id="live-album", track_number=1,
+                slug="orphan",
+            ),
+        )
+        session.add(
+            Song(
+                id="live-song", title="Live", album_id="live-album", track_number=2, slug="live",
+            ),
+        )
         session.commit()
 
     write_album_cover(audio_dir, "expired-album", _jpeg_bytes())
@@ -473,8 +495,16 @@ def test_hard_delete_user_unlinks_song_covers_including_soft_deleted(tmp_path: P
         create_user(session, "admin", hash_password("admin12345"), role="admin")
         victim = create_user(session, "victim", hash_password("victimpass1"), role="user")
         session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
-        session.add(Song(id="live-song", title="Live", album_id="live-album", track_number=1))
-        session.add(Song(id="gone-song", title="Gone", album_id="live-album", track_number=2))
+        session.add(
+            Song(
+                id="live-song", title="Live", album_id="live-album", track_number=1, slug="live",
+            ),
+        )
+        session.add(
+            Song(
+                id="gone-song", title="Gone", album_id="live-album", track_number=2, slug="gone",
+            ),
+        )
 
     client, factory = make_test_app(tmp_path, seed_db=seed)
     audio_dir = tmp_path / "audio"

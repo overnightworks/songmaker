@@ -43,8 +43,12 @@ def _seed(session, user_id: str) -> None:
     ))
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
-    session.add(Song(id="s1", title="Thunder", album_id="alb1", track_number=1))
-    session.add(Song(id="s2", title="Rain", album_id="alb1", track_number=2))
+    session.add(
+        Song(id="s1", title="Thunder", album_id="alb1", track_number=1, slug="thunder"),
+    )
+    session.add(
+        Song(id="s2", title="Rain", album_id="alb1", track_number=2, slug="rain"),
+    )
     session.add(Version(
         id="v1", song_id="s1", version_number=1,
         lyrics="thunder lyrics", prompt="rock", bpm=120, key_scale="Am",

@@ -38,9 +38,15 @@ def _seed_queue_data(session) -> None:
     session.add(Album(id="a1", title="Album", artist="Artist", created_by=owner.id))
     session.add(Album(id="a2", title="Other", artist="Other", created_by=other.id))
     session.flush()
-    session.add(Song(id="s1", title="One", album_id="a1", track_number=1))
-    session.add(Song(id="s2", title="Two", album_id="a1", track_number=2))
-    session.add(Song(id="s3", title="Other", album_id="a2", track_number=1))
+    session.add(
+        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
+    )
+    session.add(
+        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
+    )
+    session.add(
+        Song(id="s3", title="Other", album_id="a2", track_number=1, slug="other"),
+    )
     session.flush()
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="one"))
     session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="two"))
@@ -132,7 +138,9 @@ def _seed_versioned_lyrics(session) -> None:
     session.flush()
     session.add(Album(id="a1", title="Nachtstrom", artist="Artist", created_by=owner.id))
     session.flush()
-    session.add(Song(id="s1", title="Tide", album_id="a1", track_number=1))
+    session.add(
+        Song(id="s1", title="Tide", album_id="a1", track_number=1, slug="tide"),
+    )
     session.flush()
     session.add(Version(id="v-old", song_id="s1", version_number=1, lyrics="old verse"))
     session.add(Version(id="v-new", song_id="s1", version_number=2, lyrics="latest draft"))
@@ -794,11 +802,21 @@ def _seed_library_data(session) -> None:
     session.add(Album(id="a3", title="B Album", artist="B", created_by="user-b"))
     session.flush()
 
-    session.add(Song(id="s1", title="One", album_id="a1", track_number=1))
-    session.add(Song(id="s2", title="Two", album_id="a1", track_number=2))
-    session.add(Song(id="s3", title="Three", album_id="a2", track_number=1))
-    session.add(Song(id="s4", title="Four", album_id="a2", track_number=2))
-    session.add(Song(id="s5", title="Five", album_id="a3", track_number=1))
+    session.add(
+        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
+    )
+    session.add(
+        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
+    )
+    session.add(
+        Song(id="s3", title="Three", album_id="a2", track_number=1, slug="three"),
+    )
+    session.add(
+        Song(id="s4", title="Four", album_id="a2", track_number=2, slug="four"),
+    )
+    session.add(
+        Song(id="s5", title="Five", album_id="a3", track_number=1, slug="five"),
+    )
     session.flush()
 
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics=""))
@@ -1494,7 +1512,12 @@ def _seed_library_shuffle_data(session) -> None:
     session.add(Album(id="a1", title="Album", artist="A", created_by="user-a"))
     session.flush()
     for index in range(1, 5):
-        session.add(Song(id=f"s{index}", title=f"Song {index}", album_id="a1", track_number=index))
+        session.add(
+            Song(
+                id=f"s{index}", title=f"Song {index}", album_id="a1",
+                track_number=index, slug=f"song-{index}",
+            ),
+        )
     session.flush()
     for index in range(1, 5):
         session.add(Version(id=f"v{index}", song_id=f"s{index}", version_number=1, lyrics=""))
@@ -1866,9 +1889,15 @@ def _seed_library_pool_data(session) -> None:
     session.add(Album(id="a1", title="Alpha", artist="A", created_by="user-a"))
     session.add(Album(id="a2", title="Beta", artist="A", created_by="user-a"))
     session.flush()
-    session.add(Song(id="s1", title="One", album_id="a1", track_number=1))
-    session.add(Song(id="s2", title="Two", album_id="a1", track_number=2))
-    session.add(Song(id="s3", title="Three", album_id="a2", track_number=1))
+    session.add(
+        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
+    )
+    session.add(
+        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
+    )
+    session.add(
+        Song(id="s3", title="Three", album_id="a2", track_number=1, slug="three"),
+    )
     session.flush()
     for index, song_id in enumerate(("s1", "s2", "s3"), start=1):
         session.add(Version(id=f"v{index}", song_id=song_id, version_number=1, lyrics=""))

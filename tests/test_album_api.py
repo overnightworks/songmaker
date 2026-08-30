@@ -42,7 +42,9 @@ def _add_song_with_generation(
     is_picked: bool = False,
     is_archived: bool = False,
 ) -> None:
-    session.add(Song(id=song_id, title=song_id, album_id=album_id, track_number=1))
+    session.add(
+        Song(id=song_id, title=song_id, album_id=album_id, track_number=1, slug=song_id),
+    )
     session.add(Version(id=f"v-{song_id}", song_id=song_id, version_number=1, lyrics="l"))
     session.add(Generation(
         id=f"g-{song_id}", song_id=song_id, version_id=f"v-{song_id}",

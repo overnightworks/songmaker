@@ -67,8 +67,12 @@ def db_session(tmp_path: Path) -> Session:
 
 def _seed(session: Session, owner: str | None = None) -> None:
     session.add(Album(id="rock", title="Rock", artist="A", created_by=owner))
-    session.add(Song(id="s1", title="Song1", album_id="rock", track_number=1))
-    session.add(Song(id="s2", title="Song2", album_id="rock", track_number=2))
+    session.add(
+        Song(id="s1", title="Song1", album_id="rock", track_number=1, slug="song1"),
+    )
+    session.add(
+        Song(id="s2", title="Song2", album_id="rock", track_number=2, slug="song2"),
+    )
     session.add(Version(id="v1", song_id="s1", version_number=1))
     session.add(Version(id="v2", song_id="s2", version_number=1))
     session.add(Generation(
@@ -199,7 +203,7 @@ def test_restore_album_idempotent_on_live(seeded: Session) -> None:
 def test_create_song_after_soft_delete_no_track_collision(seeded: Session) -> None:
     soft_delete_song(seeded, "s2")
     seeded.commit()
-    new_song = create_song(seeded, title="Song3", album_id="rock")
+    new_song = create_song(seeded, title="Song3", album_id="rock", slug="song3")
     seeded.commit()
     assert new_song.track_number == 3
 
@@ -210,14 +214,14 @@ def test_move_song_target_filtered_when_album_soft_deleted(seeded: Session) -> N
     soft_delete_album(seeded, "other")
     seeded.commit()
     with pytest.raises(ValueError, match="Album not found"):
-        move_song(seeded, "s1", "other")
+        move_song(seeded, "s1", "other", slug="song1")
 
 
 def test_move_song_source_filtered_when_song_soft_deleted(seeded: Session) -> None:
     soft_delete_song(seeded, "s1")
     seeded.commit()
     with pytest.raises(ValueError, match="Song not found"):
-        move_song(seeded, "s1", "rock")
+        move_song(seeded, "s1", "rock", slug="song1")
 
 
 def test_list_expired_finds_only_past_cutoff(seeded: Session) -> None:

@@ -152,8 +152,8 @@ def api_create_song(
         audio_duration=req.audio_duration, key_scale=req.key_scale,
         vocal_language=req.vocal_language,
         generation_params=gen_params_to_json(req.generation_params),
+        slug=slug,
     )
-    song.slug = slug
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -198,10 +198,9 @@ def api_rename_song(
         session, song.album_id, title, exclude_song_id=song_id,
     )
     try:
-        song = rename_song(session, song_id, title)
+        song = rename_song(session, song_id, title, slug=slug)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    song.slug = slug
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -220,10 +219,9 @@ def api_move_song(
         session, req.album_id, song.title, exclude_song_id=song_id,
     )
     try:
-        song = move_song(session, song_id, req.album_id)
+        song = move_song(session, song_id, req.album_id, slug=slug)
     except ValueError:
         raise HTTPException(404, "Song or album not found")
-    song.slug = slug
     record_audit(
         session, user.id, AuditAction.MOVE, ResourceType.SONG,
         song_id, f"album={req.album_id}",

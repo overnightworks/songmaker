@@ -22,6 +22,7 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     check_song_access,
     owner_filter,
+    unique_song_slug,
 )
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import get_album, list_albums
@@ -167,8 +168,10 @@ def tool_create_song(
         check_album_access(album, user)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
+    slug = unique_song_slug(session, album_id, title)
     song = db_create_song(
         session, title=title, album_id=album_id, lyrics=lyrics, prompt=prompt,
+        slug=slug,
     )
     refreshed = _reload_song(session, song.id)
     return WriteResult(
@@ -251,10 +254,11 @@ def tool_rename_song(
     if not title.strip():
         raise MCPToolError("title cannot be empty")
     try:
-        check_song_access(session, song_id, user)
+        song = check_song_access(session, song_id, user)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
-    db_rename_song(session, song_id=song_id, title=title)
+    slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
+    db_rename_song(session, song_id=song_id, title=title, slug=slug)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,

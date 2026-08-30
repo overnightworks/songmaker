@@ -112,7 +112,7 @@ class Album(ShareMixin, Base):
 class Song(ShareMixin, Base):
     __tablename__ = "songs"
     __table_args__ = (
-        Index("ix_songs_album_id_slug", "album_id", "slug"),
+        Index("ix_songs_album_id_slug", "album_id", "slug", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

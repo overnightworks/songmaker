@@ -55,8 +55,12 @@ def _seed_test_data(session: Session) -> None:
     session.add(User(id=_DEFAULT_USER_ID, username="test", password_hash="x", role="user"))
     session.flush()
     session.add(Album(id="a1", title="Album One", artist="Artist", created_by=_DEFAULT_USER_ID))
-    session.add(Song(id="s1", title="Song One", album_id="a1", track_number=1))
-    session.add(Song(id="s2", title="Song Two", album_id="a1", track_number=2))
+    session.add(
+        Song(id="s1", title="Song One", album_id="a1", track_number=1, slug="song-one"),
+    )
+    session.add(
+        Song(id="s2", title="Song Two", album_id="a1", track_number=2, slug="song-two"),
+    )
     session.flush()
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi", prompt="rock"))
     session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="hi", prompt="pop"))
@@ -555,7 +559,9 @@ def _seed_sharing_data(session) -> None:
     admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="a1", title="Album", artist="Artist"))
-    session.add(Song(id="s1", title="Song One", album_id="a1", track_number=1))
+    session.add(
+        Song(id="s1", title="Song One", album_id="a1", track_number=1, slug="song-one"),
+    )
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi"))
     session.add(Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,

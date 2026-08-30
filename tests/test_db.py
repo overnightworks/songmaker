@@ -101,7 +101,9 @@ def seeded_session(db_session: Session) -> Session:
     album = Album(id="test", title="Test Album", artist="TestArtist")
     db_session.add(album)
 
-    song = Song(id="s1", title="Song One", album_id="test", track_number=1)
+    song = Song(
+        id="s1", title="Song One", album_id="test", track_number=1, slug="song-one",
+    )
     db_session.add(song)
 
     ver = Version(id="v1", song_id="s1", version_number=1, lyrics="verse one", prompt="rock")
@@ -227,7 +229,9 @@ def test_save_rating_update(seeded_session: Session) -> None:
 
 
 def test_create_song(seeded_session: Session) -> None:
-    song = create_song(seeded_session, "Song Two", "test", lyrics="hello", bpm=140)
+    song = create_song(
+        seeded_session, "Song Two", "test", slug="song-two", lyrics="hello", bpm=140,
+    )
     seeded_session.commit()
     assert song.track_number == 2
     assert song.latest_version.lyrics == "hello"
@@ -240,7 +244,7 @@ def test_create_song_first_in_album_uses_initial_track_number(
 
     db_session.add(Album(id="empty", title="E", artist="X"))
     db_session.flush()
-    song = create_song(db_session, "First Song", "empty")
+    song = create_song(db_session, "First Song", "empty", slug="first-song")
     db_session.commit()
     assert song.track_number == INITIAL_TRACK_NUMBER
 
@@ -532,32 +536,32 @@ def test_move_song(seeded_session: Session) -> None:
     seeded_session.add(Album(id="other", title="Other Album", artist="A"))
     seeded_session.commit()
 
-    song = move_song(seeded_session, "s1", "other")
+    song = move_song(seeded_session, "s1", "other", slug="song-one")
     seeded_session.commit()
     assert song.album_id == "other"
     assert get_song(seeded_session, "s1").album_id == "other"
 
 
 def test_move_song_same_album(seeded_session: Session) -> None:
-    song = move_song(seeded_session, "s1", "test")
+    song = move_song(seeded_session, "s1", "test", slug="song-one")
     assert song.album_id == "test"
 
 
 def test_move_song_not_found(seeded_session: Session) -> None:
     with pytest.raises(ValueError, match="Song not found"):
-        move_song(seeded_session, "nonexistent", "test")
+        move_song(seeded_session, "nonexistent", "test", slug="song-one")
 
 
 def test_move_song_target_not_found(seeded_session: Session) -> None:
     with pytest.raises(ValueError, match="Album not found"):
-        move_song(seeded_session, "s1", "nonexistent")
+        move_song(seeded_session, "s1", "nonexistent", slug="song-one")
 
 
 def test_move_song_updates_album(seeded_session: Session) -> None:
     seeded_session.add(Album(id="other", title="Other", artist="A"))
     seeded_session.commit()
 
-    move_song(seeded_session, "s1", "other")
+    move_song(seeded_session, "s1", "other", slug="song-one")
     seeded_session.commit()
 
     gen = get_generation(seeded_session, "g1")
@@ -1037,7 +1041,7 @@ def test_create_song_with_generation_params(db_session: Session) -> None:
     db_session.add(Album(id="a1", title="A", artist="X"))
     db_session.flush()
     params = {"inference_steps": 50, "guidance_scale": 5.5}
-    song = create_song(db_session, "S", "a1", generation_params=params)
+    song = create_song(db_session, "S", "a1", slug="s", generation_params=params)
     db_session.commit()
     ver = song.latest_version
     assert ver.generation_params == params
@@ -1046,7 +1050,7 @@ def test_create_song_with_generation_params(db_session: Session) -> None:
 def test_create_song_without_generation_params(db_session: Session) -> None:
     db_session.add(Album(id="a1", title="A", artist="X"))
     db_session.flush()
-    song = create_song(db_session, "S", "a1")
+    song = create_song(db_session, "S", "a1", slug="s")
     db_session.commit()
     assert song.latest_version.generation_params is None
 
@@ -1064,6 +1068,7 @@ def test_version_validator_rejects_unknown_key(db_session: Session) -> None:
             db_session,
             "S",
             "a1",
+            slug="s",
             generation_params={"infrence_steps": 50},
         )
 
@@ -1173,7 +1178,7 @@ def test_list_songs_with_unknown_album_filter(seeded_session: Session) -> None:
 
 def test_create_song_album_not_found(db_session: Session) -> None:
     with pytest.raises(ValueError, match="Album not found"):
-        create_song(db_session, "Test", "nonexistent")
+        create_song(db_session, "Test", "nonexistent", slug="test")
 
 
 def test_update_song_not_found(db_session: Session) -> None:
@@ -2483,14 +2488,35 @@ def test_list_expired_for_delete_skips_recent_archives(seeded_session: Session) 
     assert expired == []
 
 
+def _alembic_config(url: str):
+    from alembic.config import Config
+
+    from songmaker_cli.db.engine import MIGRATIONS_DIR
+
+    cfg = Config()
+    cfg.set_main_option("script_location", MIGRATIONS_DIR)
+    cfg.set_main_option("sqlalchemy.url", url)
+    return cfg
+
+
 def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) -> None:
-    from songmaker_cli.db.engine import init_db
+    from alembic import command
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
     from songmaker_cli.db.migrations.versions import (
         b8e3f1c07a25_add_slug_to_songs as mig,
     )
     from songmaker_cli.db.models import SONG_SLUG_MAX_LENGTH, Album, Song
 
-    factory = init_db(f"sqlite:///{tmp_path / 'slugs.db'}")
+    # Pinned to b8e3f1c07a25, the revision that introduced this backfill —
+    # c9d4a2f18e37 promotes the index to UNIQUE afterwards, which the seeded
+    # rows below (multiple empty slugs per album) would violate.
+    url = f"sqlite:///{tmp_path / 'slugs.db'}"
+    command.upgrade(_alembic_config(url), "b8e3f1c07a25")
+
+    engine = create_engine(url)
+    factory = sessionmaker(bind=engine)
     with factory() as session:
         session.add_all([
             Album(id="a1", title="A", artist="X"),
@@ -2504,7 +2530,6 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
         ])
         session.commit()
 
-    engine = factory.kw["bind"]
     with engine.begin() as conn:
         original_get_bind = mig.op.get_bind
         mig.op.get_bind = lambda: conn
@@ -2525,4 +2550,61 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
     cjk_slug = slugs["s5"]
     assert cjk_slug.startswith("yin-yin")
     assert len(cjk_slug) <= SONG_SLUG_MAX_LENGTH
+    engine.dispose()
+
+
+def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -> None:
+    """c9d4a2f18e37: repair pre-existing slug='' rows, then enforce UNIQUE.
+
+    Simulates a song the co-writer created or renamed before #270 landed
+    (slug='' surviving next to a sibling that already has a real slug),
+    proving the migration both repairs the straggler and then blocks any
+    new collision. downgrade() restores the plain, non-unique index.
+    """
+    from alembic import command
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import sessionmaker
+
+    from songmaker_cli.db.models import Album, Song
+
+    url = f"sqlite:///{tmp_path / 'unique_slug.db'}"
+    cfg = _alembic_config(url)
+    command.upgrade(cfg, "b8e3f1c07a25")
+
+    engine = create_engine(url)
+    factory = sessionmaker(bind=engine)
+    with factory() as session:
+        session.add_all([
+            Album(id="a1", title="A", artist="X"),
+            Song(id="s1", title="Intro", album_id="a1", track_number=1, slug="intro"),
+            # Straggler: created via the co-writer MCP path before #270.
+            Song(id="s2", title="Reprise", album_id="a1", track_number=2, slug=""),
+        ])
+        session.commit()
+    engine.dispose()
+
+    command.upgrade(cfg, "c9d4a2f18e37")
+
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        rows = dict(
+            conn.execute(text("SELECT id, slug FROM songs")).fetchall(),
+        )
+    assert rows == {"s1": "intro", "s2": "reprise"}
+
+    factory = sessionmaker(bind=engine)
+    with factory() as session:
+        session.add(Song(id="s3", title="Dup", album_id="a1", track_number=3, slug="intro"))
+        with pytest.raises(IntegrityError):
+            session.commit()
+    engine.dispose()
+
+    command.downgrade(cfg, "b8e3f1c07a25")
+
+    engine = create_engine(url)
+    factory = sessionmaker(bind=engine)
+    with factory() as session:
+        session.add(Song(id="s3", title="Dup", album_id="a1", track_number=3, slug="intro"))
+        session.commit()
     engine.dispose()

@@ -213,6 +213,27 @@ def test_create_song_tool_hits_canonical_function(admin_client):
         assert "FromDirect" in titles
 
 
+def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
+    """The catalog's rename_song runs on the same shared session a real
+    co-writer turn holds open for the whole SSE response (unlike the
+    isolated-session tool_rename_song coverage elsewhere) — pin that the
+    slug still follows the title through execute_cowriter_tool's commit."""
+    _, factory = admin_client
+    user = AuthenticatedUser(
+        id="u-test", username="u-u-test", role="admin", is_active=True,
+    )
+    with factory() as session:
+        _, err = execute_cowriter_tool(
+            session, user, "rename_song",
+            {"song_id": "s1", "title": "Renamed Track"},
+        )
+        assert err is False
+    with factory() as session:
+        song = session.query(Song).filter_by(id="s1").one()
+        assert song.title == "Renamed Track"
+        assert song.slug == "renamed-track"
+
+
 def test_cowriter_provider_switch_keeps_scoring_model(admin_client):
     client, factory = admin_client
     with factory() as session:

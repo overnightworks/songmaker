@@ -27,7 +27,9 @@ def _seed_server_data(session) -> None:
     )
     session.add(admin)
     session.add(Album(id="test_album", title="Test", artist="Test"))
-    session.add(Song(id="s1", title="Song", album_id="test_album", track_number=1))
+    session.add(
+        Song(id="s1", title="Song", album_id="test_album", track_number=1, slug="song"),
+    )
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="Hello"))
     session.add(Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,

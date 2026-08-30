@@ -9,6 +9,7 @@ import pytest
 from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from slugify import slugify
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -57,7 +58,7 @@ def _add_song(
 ) -> Song:
     song = Song(
         id=song_id, title=title, album_id=album_id,
-        track_number=track_number, created_at=created_at,
+        track_number=track_number, created_at=created_at, slug=slugify(title),
     )
     session.add(song)
     session.add(Version(

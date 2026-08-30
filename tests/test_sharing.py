@@ -21,7 +21,9 @@ def _seed_sharing_data(session) -> None:
     admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(Song(id="s1", title="Song One", album_id="test_album", track_number=1))
+    session.add(
+        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
+    )
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="Hello"))
     session.add(Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,
@@ -62,16 +64,23 @@ def _seed_mixed_playability_album(session) -> None:
     admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(Song(id="s_playable", title="Has A Take", album_id="test_album", track_number=1))
+    session.add(
+        Song(
+            id="s_playable", title="Has A Take", album_id="test_album", track_number=1,
+            slug="has-a-take",
+        ),
+    )
     session.add(Generation(
         id="g_playable", song_id="s_playable", generation_number=1,
         mp3_path="admin_user/g_playable.mp3", seed=1, is_picked=True,
     ))
     session.add(Song(
         id="s_no_gen", title="No Generation At All", album_id="test_album", track_number=2,
+        slug="no-generation-at-all",
     ))
     session.add(Song(
         id="s_archived_only", title="Only Archived Take", album_id="test_album", track_number=3,
+        slug="only-archived-take",
     ))
     session.add(Generation(
         id="g_archived", song_id="s_archived_only", generation_number=1,
@@ -79,6 +88,7 @@ def _seed_mixed_playability_album(session) -> None:
     ))
     session.add(Song(
         id="s_unpicked_take", title="Unpicked But Playable", album_id="test_album", track_number=4,
+        slug="unpicked-but-playable",
     ))
     session.add(Generation(
         id="g_unpicked", song_id="s_unpicked_take", generation_number=1,
@@ -86,7 +96,7 @@ def _seed_mixed_playability_album(session) -> None:
     ))
     session.add(Song(
         id="s_empty_mp3", title="Picked Take With Empty File",
-        album_id="test_album", track_number=5,
+        album_id="test_album", track_number=5, slug="picked-take-with-empty-file",
     ))
     session.add(Generation(
         id="g_empty_mp3", song_id="s_empty_mp3", generation_number=1,
@@ -226,7 +236,9 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
         session.add(admin)
         album = Album(id="test_album", title="Test Album", artist="Test Artist")
         session.add(album)
-        song = Song(id="s1", title="No Pick", album_id="test_album", track_number=1)
+        song = Song(
+            id="s1", title="No Pick", album_id="test_album", track_number=1, slug="no-pick",
+        )
         session.add(song)
         gen = Generation(
             id="g1", song_id="s1", generation_number=1,
@@ -289,7 +301,10 @@ def _seed_multi_track_album(session) -> None:
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     for i in range(4):
         song_id = f"s{i}"
-        session.add(Song(id=song_id, title=f"Song {i}", album_id="test_album", track_number=i))
+        session.add(Song(
+            id=song_id, title=f"Song {i}", album_id="test_album", track_number=i,
+            slug=f"song-{i}",
+        ))
         session.add(Version(
             id=f"v{i}", song_id=song_id, version_number=1,
             lyrics=f"Lyrics {i}", audio_duration=100 + i,
@@ -299,7 +314,12 @@ def _seed_multi_track_album(session) -> None:
             mp3_path=f"admin_user/g{i}.mp3", seed=1, is_picked=True,
             audio_duration_sec=100 + i,
         ))
-    session.add(Song(id="s_no_pick", title="No Pick", album_id="test_album", track_number=4))
+    session.add(
+        Song(
+            id="s_no_pick", title="No Pick", album_id="test_album", track_number=4,
+            slug="no-pick",
+        ),
+    )
 
 
 def test_shared_album_view_includes_pick_media(tmp_path: Path) -> None:
@@ -352,7 +372,9 @@ def _seed_song_with_pick(session) -> None:
     admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(Song(id="s1", title="Song One", album_id="test_album", track_number=1))
+    session.add(
+        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
+    )
     session.add(Version(
         id="v1", song_id="s1", version_number=1, lyrics="Hello", audio_duration=180,
     ))
@@ -382,7 +404,9 @@ def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> Non
         admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
         session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-        session.add(Song(id="s1", title="No Pick", album_id="test_album", track_number=1))
+        session.add(
+            Song(id="s1", title="No Pick", album_id="test_album", track_number=1, slug="no-pick"),
+        )
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
     login_and_csrf(client, "admin", "admin12345")
@@ -437,7 +461,10 @@ def _seed_playlist_with_entries(session) -> None:
     session.add(Playlist(id="pl1", title="My Playlist"))
     for i in range(3):
         song_id = f"s{i}"
-        session.add(Song(id=song_id, title=f"Song {i}", album_id="test_album", track_number=i))
+        session.add(Song(
+            id=song_id, title=f"Song {i}", album_id="test_album", track_number=i,
+            slug=f"song-{i}",
+        ))
         session.add(Version(
             id=f"v{i}", song_id=song_id, version_number=1,
             lyrics=f"Lyrics {i}", audio_duration=100 + i,
@@ -686,7 +713,7 @@ def _seed_inventory(session) -> None:
         is_shared=True, share_slug="slug-album",
     ))
     session.add(Song(
-        id="alice-song", title="Alice Song", album_id="alice-album",
+        id="alice-song", title="Alice Song", album_id="alice-album", slug="alice-song",
         created_at=_ts(30), is_shared=True, share_slug="slug-song",
     ))
     session.add(Version(id="alice-v1", song_id="alice-song", version_number=1, lyrics="Hi"))
@@ -940,7 +967,9 @@ def _seed_song_with_two_takes(session) -> None:
     admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(Song(id="s1", title="Song One", album_id="test_album", track_number=1))
+    session.add(
+        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
+    )
     session.add(Version(
         id="v1", song_id="s1", version_number=1, lyrics="the lantern hums", audio_duration=187,
     ))

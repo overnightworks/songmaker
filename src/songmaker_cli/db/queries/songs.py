@@ -154,6 +154,7 @@ def create_song(
     session: Session,
     title: str,
     album_id: str,
+    slug: str,
     lyrics: str = "",
     prompt: str = "",
     bpm: int = 0,
@@ -162,6 +163,13 @@ def create_song(
     vocal_language: str = "",
     generation_params: dict | None = None,
 ) -> Song:
+    """Create a song and its first version.
+
+    ``slug`` must already be reserved (e.g. via unique_song_slug()) and is
+    set on the row before its first flush, not after — the row's default
+    slug='' would otherwise briefly exist under album_id's unique index and
+    collide with a sibling that also has not been assigned a real slug yet.
+    """
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
@@ -179,7 +187,7 @@ def create_song(
 
     song = Song(
         title=title, album_id=album_id, vocal_language=vocal_language,
-        track_number=track_number,
+        track_number=track_number, slug=slug,
     )
     session.add(song)
     session.flush()
@@ -335,17 +343,32 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
-def rename_song(session: Session, song_id: str, title: str) -> Song:
+def rename_song(session: Session, song_id: str, title: str, slug: str) -> Song:
+    """Rename a song, moving its slug along in the same flush.
+
+    ``slug`` (already reserved via unique_song_slug()) changes together
+    with the title so both change atomically in one flush — setting it in
+    a later, separate flush would briefly leave the row on its old slug,
+    next to whatever sibling has just claimed it.
+    """
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
     song.title = title
+    song.slug = slug
     session.flush()
     log.info("Renamed song %s to %r", song_id, title)
     return song
 
 
-def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
+def move_song(session: Session, song_id: str, new_album_id: str, slug: str) -> Song:
+    """Move a song to another album, re-slugging in the same flush.
+
+    ``slug`` (already reserved via unique_song_slug() against the target
+    album) moves together with the album_id change in one flush — the
+    song's old slug may already be taken by a sibling in the target album,
+    and a separate later flush would briefly collide with it.
+    """
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
@@ -359,6 +382,7 @@ def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
 
     old_album_id = song.album_id
     song.album_id = new_album_id
+    song.slug = slug
     session.flush()
     log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
     return song

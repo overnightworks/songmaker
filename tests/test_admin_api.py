@@ -475,7 +475,7 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
 
         user = create_user(session, username, hash_password("t3stP@ssw0rd"))
         album = create_album(session, f"{username}-album", "Test Album", created_by=user.id)
-        song = create_song(session, "Test Song", album.id)
+        song = create_song(session, "Test Song", album.id, slug="test-song")
         mp3_rel = f"{user.id}/{song.id}.mp3"
         wav_rel = f"{user.id}/{song.id}.wav"
         create_generation(

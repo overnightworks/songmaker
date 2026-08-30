@@ -212,7 +212,7 @@ def _make_authed_client(
 def _seed_db(session, owner_id: str | None = None) -> None:
     album = Album(id="rock", title="Rock Album", artist="TestBand", created_by=owner_id)
     session.add(album)
-    song = Song(id="s1", title="Thunder", album_id="rock", track_number=1)
+    song = Song(id="s1", title="Thunder", album_id="rock", track_number=1, slug="thunder")
     session.add(song)
     ver = Version(id="v1", song_id="s1", version_number=1, lyrics="boom", prompt="hard rock")
     session.add(ver)
@@ -1025,7 +1025,7 @@ def test_generate_song_no_lyrics(client: TestClient) -> None:
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         session.add(Song(
-            id="s_empty", title="Empty", album_id="rock",
+            id="s_empty", title="Empty", album_id="rock", slug="empty",
         ))
         session.add(Version(
             id="v_empty", song_id="s_empty",

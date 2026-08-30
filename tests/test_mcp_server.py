@@ -262,6 +262,16 @@ def test_create_song_persists_and_returns_state(db_session: Session):
     assert result.song.current_prompt == "disco"
     stored = db_session.query(Song).filter_by(id=result.song_id).one()
     assert stored.track_number == 2  # seeded song took track 1
+    assert stored.slug == "second-song"
+
+
+def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
+    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner = _owner(db_session, owner_id)
+    tools.tool_create_song(db_session, owner, album_id=album_id, title="Twin")
+    result = tools.tool_create_song(db_session, owner, album_id=album_id, title="Twin")
+    stored = db_session.query(Song).filter_by(id=result.song_id).one()
+    assert stored.slug == "twin-2"
 
 
 def test_update_lyrics_in_place_when_no_generations(db_session: Session):
@@ -338,6 +348,17 @@ def test_rename_song(db_session: Session):
         db_session, owner, song_id=song_id, title="Renamed Track",
     )
     assert result.song.title == "Renamed Track"
+    stored = db_session.query(Song).filter_by(id=song_id).one()
+    assert stored.slug == "renamed-track"
+
+
+def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    owner = _owner(db_session, owner_id)
+    tools.tool_create_song(db_session, owner, album_id=album_id, title="Rival")
+    result = tools.tool_rename_song(db_session, owner, song_id=song_id, title="Rival")
+    stored = db_session.query(Song).filter_by(id=result.song_id).one()
+    assert stored.slug == "rival-2"
 
 
 def test_rename_song_rejects_empty(db_session: Session):
