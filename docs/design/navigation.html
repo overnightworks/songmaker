@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eine Navigation statt zwei</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+	:root {
+		--paper: #f6f5f8;
+		--panel: #ffffff;
+		--panel-sunk: #f1eff4;
+		--ink: #1b1a20;
+		--ink-soft: #56525f;
+		--muted: #8b8794;
+		--rule: #e2dfe8;
+		--rule-strong: #cbc6d4;
+		--violet: #4b2fd1;
+		--crimson: #a81e2e;
+		--good: #1f7a4d;
+		--warn-bg: #fdf3e3;
+		--warn-ink: #7a5312;
+		--shadow: 0 1px 2px rgba(27, 26, 32, .06), 0 8px 24px rgba(27, 26, 32, .05);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--paper: #131218;
+			--panel: #1c1a22;
+			--panel-sunk: #232029;
+			--ink: #eeecf2;
+			--ink-soft: #b3aebe;
+			--muted: #857f92;
+			--rule: #302c3a;
+			--rule-strong: #443e52;
+			--violet: #a794ff;
+			--crimson: #ef8090;
+			--good: #5fc994;
+			--warn-bg: #2e2416;
+			--warn-ink: #e2bb70;
+			--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--paper: #131218;
+		--panel: #1c1a22;
+		--panel-sunk: #232029;
+		--ink: #eeecf2;
+		--ink-soft: #b3aebe;
+		--muted: #857f92;
+		--rule: #302c3a;
+		--rule-strong: #443e52;
+		--violet: #a794ff;
+		--crimson: #ef8090;
+		--good: #5fc994;
+		--warn-bg: #2e2416;
+		--warn-ink: #e2bb70;
+		--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+	}
+
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		line-height: 1.55;
+	}
+
+	.wrap {
+		max-width: 1140px;
+		margin: 0 auto;
+		padding: 3rem 1.5rem 5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 3rem;
+	}
+
+	.eyebrow {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .14em;
+		font-size: .82rem;
+		font-weight: 600;
+		color: var(--violet);
+	}
+
+	h1 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: clamp(2.1rem, 5vw, 3rem);
+		font-weight: 600;
+		letter-spacing: .01em;
+		margin: .35rem 0 0;
+		text-wrap: balance;
+	}
+
+	.lede {
+		max-width: 62ch;
+		color: var(--ink-soft);
+		margin: .85rem 0 0;
+	}
+
+	h2 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: 1.05rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+
+	.states {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.state {
+		display: flex;
+		flex-direction: column;
+		gap: .9rem;
+	}
+
+	.state-head {
+		display: flex;
+		align-items: baseline;
+		gap: .6rem;
+		flex-wrap: wrap;
+	}
+
+	.tag {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: .74rem;
+		font-weight: 600;
+		padding: .1rem .5rem;
+		border-radius: 2px;
+	}
+
+	.tag-now { background: var(--warn-bg); color: var(--warn-ink); }
+	.tag-next { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+
+	.state-note {
+		color: var(--ink-soft);
+		font-size: .92rem;
+		min-height: 3.1em;
+		margin: 0;
+	}
+
+	/* ── the schematic app window ───────────────────────────── */
+	.app {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		box-shadow: var(--shadow);
+		overflow: hidden;
+		display: grid;
+		height: 430px;
+	}
+
+	.app-now { grid-template-columns: 148px 118px 1fr; }
+	.app-next { grid-template-columns: 172px 1fr; }
+
+	.col {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		border-right: 1px solid var(--rule);
+	}
+
+	.col:last-child { border-right: 0; }
+	.col-nav { background: var(--panel); }
+	.col-subnav { background: var(--panel-sunk); }
+	.col-body { background: var(--panel); padding: 1rem .9rem; overflow: hidden; }
+
+	.brand {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .22em;
+		font-size: .78rem;
+		font-weight: 600;
+		color: var(--violet);
+		padding: .8rem .75rem .6rem;
+	}
+
+	.nav-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.row {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .09em;
+		font-size: .78rem;
+		font-weight: 500;
+		color: var(--ink-soft);
+		padding: .42rem .75rem;
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+		border: 0;
+		background: none;
+		width: 100%;
+		text-align: left;
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+	}
+
+	.row-sub {
+		padding-left: 1.55rem;
+		font-size: .74rem;
+		text-transform: none;
+		letter-spacing: .02em;
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		color: var(--muted);
+	}
+
+	.row-active {
+		color: var(--crimson);
+		box-shadow: inset 2px 0 0 var(--crimson);
+		background: color-mix(in srgb, var(--crimson) 6%, transparent);
+	}
+
+	.meta {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .68rem;
+		color: var(--muted);
+		text-transform: none;
+		letter-spacing: 0;
+		margin-left: auto;
+	}
+
+	.spacer { flex: 1; }
+
+	.foot {
+		border-top: 1px solid var(--rule);
+		padding: .5rem .75rem;
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .7rem;
+		color: var(--muted);
+		display: flex;
+		justify-content: space-between;
+		gap: .5rem;
+	}
+
+	.body-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: var(--crimson);
+		margin: 0 0 .7rem;
+	}
+
+	.ghost {
+		height: 8px;
+		border-radius: 2px;
+		background: var(--panel-sunk);
+		margin-bottom: .5rem;
+	}
+
+	:root[data-theme="dark"] .ghost,
+	:root:not([data-theme="light"]) .ghost { background: var(--panel-sunk); }
+
+	.ghost-60 { width: 60%; }
+	.ghost-80 { width: 80%; }
+	.ghost-40 { width: 40%; }
+
+	/* interactive settings disclosure in the proposal */
+	.disclose {
+		cursor: pointer;
+		transition: background .12s ease;
+	}
+
+	.disclose:hover { background: color-mix(in srgb, var(--violet) 8%, transparent); }
+	.disclose:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+
+	.caret {
+		display: inline-block;
+		transition: transform .16s ease;
+		font-size: .6rem;
+		color: var(--muted);
+	}
+
+	.disclose[aria-expanded="true"] .caret { transform: rotate(90deg); }
+
+	.sub-group {
+		display: grid;
+		grid-template-rows: 0fr;
+		transition: grid-template-rows .2s ease;
+	}
+
+	.sub-group[data-open="true"] { grid-template-rows: 1fr; }
+	.sub-group > div { overflow: hidden; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.caret, .sub-group { transition: none; }
+	}
+
+	.hint {
+		font-size: .78rem;
+		color: var(--muted);
+		margin: .2rem 0 0;
+		font-style: italic;
+	}
+
+	/* ── decisions ──────────────────────────────────────────── */
+	.decisions {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.decision {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-left: 3px solid var(--violet);
+		border-radius: 3px;
+		padding: 1rem 1.15rem;
+	}
+
+	.decision h3 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .92rem;
+		font-weight: 600;
+		margin: 0 0 .35rem;
+	}
+
+	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
+	.decision p + p { margin-top: .5rem; }
+	.rec { color: var(--ink); }
+	.rec strong { color: var(--violet); }
+
+	.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+	.foot-note {
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 62ch;
+	}
+
+	.freeze-note {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 62ch;
+		margin: 0 auto;
+		padding: .75rem 1.5rem 0;
+	}
+</style>
+</head>
+<body>
+<p class="freeze-note">
+	Eingefrorener Bildbesitzer — vom Operator freigegeben am 30.08.2026, Issue #263.
+	Änderungen an dieser Datei brauchen eine neue Freigabe.
+</p>
+<div class="wrap">
+	<header>
+		<div class="eyebrow">Songmaker · Target UI · Entwurf zur Freigabe</div>
+		<h1>Eine Navigation statt zwei</h1>
+		<p class="lede">
+			Heute stehen zwei senkrechte Navigationsleisten nebeneinander, sobald die Einstellungen offen
+			sind. Beide führen, beide sind gleichzeitig sichtbar — die zweite existiert nur, weil man sich
+			gerade in den Einstellungen befindet. Genau der Modus, den diese Milestone abschaffen will.
+		</p>
+	</header>
+
+	<section class="states">
+		<div class="state">
+			<div class="state-head">
+				<h2>Heute</h2>
+				<span class="tag tag-now">Ist-Zustand</span>
+			</div>
+			<p class="state-note">
+				Die Bibliothek links, daneben eine eigene Spalte für die sieben Unterpunkte der
+				Einstellungen. Der Inhalt beginnt erst in der dritten Spalte.
+			</p>
+
+			<div class="app app-now">
+				<div class="col col-nav">
+					<div class="brand">Hallucinai</div>
+					<ul class="nav-list">
+						<li class="row">Library <span class="meta">42</span></li>
+						<li class="row">Anfield <span class="meta">›</span></li>
+						<li class="row row-sub">Stadion — Lauf A</li>
+						<li class="row row-sub">Stadion — Lauf B</li>
+					</ul>
+					<div class="spacer"></div>
+					<div class="foot"><span>Settings</span><span>felix</span></div>
+				</div>
+
+				<div class="col col-subnav">
+					<ul class="nav-list" style="padding-top:.5rem">
+						<li class="row row-active">Generation</li>
+						<li class="row">Playback</li>
+						<li class="row">Voices</li>
+						<li class="row">Account</li>
+						<li class="row">Admin</li>
+						<li class="row">Cleanup</li>
+						<li class="row">Legal</li>
+					</ul>
+				</div>
+
+				<div class="col col-body">
+					<p class="body-title">Generation</p>
+					<div class="ghost ghost-80"></div>
+					<div class="ghost ghost-60"></div>
+					<div class="ghost ghost-40"></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>Vorschlag</h2>
+				<span class="tag tag-next">Zur Freigabe</span>
+			</div>
+			<p class="state-note">
+				Die Einstellungen klappen an derselben Stelle auf, an der ein Album seine Songs zeigt.
+				Eine Leiste, eine Hierarchie — der Inhalt rückt eine Spalte nach links.
+			</p>
+
+			<div class="app app-next">
+				<div class="col col-nav">
+					<div class="brand">Hallucinai</div>
+					<ul class="nav-list">
+						<li class="row">Library <span class="meta">42</span></li>
+						<li class="row row-sub">Anfield</li>
+						<li class="row row-sub">Kaltes Licht</li>
+					</ul>
+					<button class="row disclose" id="toggle" aria-expanded="true" aria-controls="settings-group">
+						<span class="caret">▶</span> Settings
+					</button>
+					<div class="sub-group" id="settings-group" data-open="true">
+						<div>
+							<ul class="nav-list">
+								<li class="row row-sub row-active">Generation</li>
+								<li class="row row-sub">Playback</li>
+								<li class="row row-sub">Voices</li>
+								<li class="row row-sub">Account</li>
+								<li class="row row-sub">Admin</li>
+								<li class="row row-sub">Cleanup</li>
+								<li class="row row-sub">Legal</li>
+							</ul>
+						</div>
+					</div>
+					<div class="spacer"></div>
+					<div class="foot"><span>felix</span><span>Logout</span></div>
+				</div>
+
+				<div class="col col-body">
+					<p class="body-title">Generation</p>
+					<div class="ghost ghost-80"></div>
+					<div class="ghost ghost-60"></div>
+					<div class="ghost ghost-40"></div>
+				</div>
+			</div>
+			<p class="hint">Auf „Settings" klicken — so verhält sich die Leiste.</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Drei Entscheidungen, die noch dir gehören</h2>
+
+		<div class="decision">
+			<h3>Aufklappen oder Leiste wechseln?</h3>
+			<p>
+				Der Entwurf zeigt das Aufklappen: Die Einstellungen bleiben ein Eintrag unter der
+				Bibliothek, wie ein Album seine Songs zeigt. Die Alternative wäre, dass die Leiste
+				ihren Inhalt ganz gegen die Einstellungen tauscht und ein Zurück-Weg nötig wird.
+			</p>
+			<p class="rec">
+				<strong>Empfehlung:</strong> Aufklappen. Die Bibliothek bleibt sichtbar, du kommst mit
+				einem Klick zurück ins Album — und genau dieser Weg ist heute kaputt (#264).
+			</p>
+		</div>
+
+		<div class="decision">
+			<h3>Wohin mit Konto und Logout?</h3>
+			<p>
+				Heute stehen „Settings", der Benutzername und „Logout" gemeinsam am unteren Rand.
+				Klappen die Einstellungen dort auf, drängen sieben Zeilen gegen diese Leiste.
+			</p>
+			<p class="rec">
+				<strong>Empfehlung:</strong> Benutzername und Logout bleiben unten stehen, die
+				Einstellungen klappen darüber auf. „Account" ist ohnehin einer der Unterpunkte — der
+				Name unten wird damit reine Anzeige, kein zweiter Weg zur selben Seite.
+			</p>
+		</div>
+
+		<div class="decision">
+			<h3>Was passiert auf dem Telefon?</h3>
+			<p>
+				Auf schmalen Fenstern ist die Leiste heute ausgeblendet und die Einstellungen zeigen
+				stattdessen ein Auswahlmenü. Das ist bereits eine dritte Form derselben Navigation.
+			</p>
+			<p class="rec">
+				<strong>Empfehlung:</strong> Dieselbe aufklappende Liste, nur in der eingeblendeten
+				Leiste. Ein Verhalten für alle Breiten — sonst tauschen wir zwei Hierarchien gegen
+				drei Varianten.
+			</p>
+		</div>
+	</section>
+
+	<p class="foot-note">
+		Dieser Entwurf ist noch nichts Gebautes. Wenn du ihn freigibst, wird er im Repository
+		eingefroren und ist damit das Bild, gegen das gebaut wird — die Milestone verweist derzeit auf
+		ein Artefakt, das es nicht mehr gibt.
+	</p>
+</div>
+
+<script>
+	const toggle = document.getElementById('toggle');
+	const group = document.getElementById('settings-group');
+	toggle.addEventListener('click', () => {
+		const open = toggle.getAttribute('aria-expanded') === 'true';
+		toggle.setAttribute('aria-expanded', String(!open));
+		group.dataset.open = String(!open);
+	});
+</script>
+</body>
+</html>
