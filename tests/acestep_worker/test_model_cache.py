@@ -542,6 +542,191 @@ def test_loading_last_log_line_visible_during_load_then_cleared() -> None:
     assert final.target_loading is None
 
 
+# ── measured VRAM decides capacity, not the declared-size table ──
+
+
+def _reader_reporting_high_once_loaded(
+    cache_box: dict[str, ModelCache], mode: str, *, low: VramStats, high: VramStats,
+):
+    """Simulates ACE-Step's lazy loading: real usage stays low until ``mode``
+    has actually been loaded into the cache, then jumps to its true (larger
+    than declared) footprint — never a NVML reading taken before the model
+    could possibly have grown into it."""
+
+    def reader() -> VramStats:
+        return high if mode in cache_box["cache"].loaded_modes() else low
+
+    return reader
+
+
+def test_load_rejects_second_model_when_measured_vram_leaves_no_room() -> None:
+    """A model already loaded can occupy far more real VRAM than its declared
+    size suggests (e.g. ACE-Step's lazily-loaded 4B LM). The declared sizes
+    alone would say plenty of room remains; the measurement says otherwise,
+    and the measurement must win."""
+    cache_box: dict[str, ModelCache] = {}
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0, "sft": 6.0},
+        vram_reader=_reader_reporting_high_once_loaded(
+            cache_box, "turbo",
+            low=VramStats(used_gb=2.0, total_gb=24.0),
+            high=VramStats(used_gb=22.0, total_gb=24.0),
+        ),
+    )
+    cache_box["cache"] = cache
+    _run(cache.load("turbo"))
+    _run(cache.pin("turbo"))
+    with pytest.raises(CapacityError, match="measured"):
+        _run(cache.load("sft"))
+    assert cache.loaded_modes() == ["turbo"]
+    assert unloaded_log == []
+
+
+def test_load_evicts_using_declared_floor_even_when_measurement_lags() -> None:
+    """A model that has not generated yet can measure near-zero on NVML even
+    though it is genuinely loaded (ACE-Step lazy-loads on first request).
+    Capacity planning must still credit its declared size, or successive
+    "cold" loads would all stay resident well past budget — the mirror
+    image of the original declared-size-only bug."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0, "xl-sft": 12.0, "xl-base": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("turbo"))
+    _run(cache.load("xl-sft"))
+    result = _run(cache.load("xl-base"))
+    assert result.evicted == ["turbo"]
+    assert sorted(cache.loaded_modes()) == ["xl-base", "xl-sft"]
+    assert len(unloaded_log) == 1
+    assert unloaded_log[0].mode == "turbo"
+
+
+def test_load_evicts_every_planned_victim_even_when_the_reading_stays_cold() -> None:
+    """A plan with more than one victim must run to completion: the floor
+    that decides whether enough has been freed comes from the declared
+    sizes of what is still loaded, not from a reader that never reflects
+    the earlier evictions in this same call."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"s1": 6.0, "s2": 6.0, "big": 12.0, "incoming": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("s1"))
+    _run(cache.load("s2"))
+    _run(cache.load("big"))
+    result = _run(cache.load("incoming"))
+    assert result.evicted == ["s1", "s2"]
+    assert len(unloaded_log) == 2
+    declared_resident_gb = sum(info.size_gb for info in cache.snapshot().loaded)
+    assert declared_resident_gb <= cache.vram_budget_gb
+
+
+def test_load_rejects_without_destroying_anything_when_plan_would_still_fail() -> None:
+    """If evicting every eligible model still would not make room, nothing
+    may be evicted at all — deciding must happen before any destruction, not
+    interleaved with it."""
+    cache, _, unloaded_log = _make_cache(
+        budget=20.0,
+        sizes={"sft": 6.0, "xl-base": 12.0, "xl-sft": 12.0},
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-base"))
+    _run(cache.pin("xl-base"))
+    with pytest.raises(CapacityError):
+        _run(cache.load("xl-sft"))
+    assert cache.loaded_modes() == ["sft", "xl-base"]
+    assert unloaded_log == []
+
+
+def test_load_rejects_without_destroying_anything_when_measured_and_plan_would_still_fail() -> None:
+    """The same no-partial-destruction guarantee must hold on the measured
+    path, not only when falling back to declared-size estimates."""
+    cache, _, unloaded_log = _make_cache(
+        budget=20.0,
+        sizes={"sft": 6.0, "xl-base": 12.0, "xl-sft": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-base"))
+    _run(cache.pin("xl-base"))
+    with pytest.raises(CapacityError, match="measured"):
+        _run(cache.load("xl-sft"))
+    assert cache.loaded_modes() == ["sft", "xl-base"]
+    assert unloaded_log == []
+
+
+def test_load_does_not_destroy_both_loaded_models_when_reader_never_moves() -> None:
+    """A reader stuck at a constant reading (NVML lag, or a subprocess
+    whose child never fully released VRAM) must not force more evictions
+    than the plan calls for, and must not raise after having already
+    destroyed everything eligible — the eviction count comes from a plan
+    built once, up front, from declared sizes."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"sft": 6.0, "turbo": 6.0, "xl-sft": 12.0},
+        vram_reader=lambda: VramStats(used_gb=16.4, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("turbo"))
+    result = _run(cache.load("xl-sft"))
+    assert result.evicted == ["sft"]
+    assert cache.loaded_modes() == ["turbo", "xl-sft"]
+    assert len(unloaded_log) == 1
+    assert unloaded_log[0].mode == "sft"
+
+
+def test_load_does_not_evict_when_measured_vram_already_fits() -> None:
+    """Declared sizes alone would demand an eviction; the measurement shows
+    real headroom, so nothing is evicted."""
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0,
+        sizes={"turbo": 6.0, "sft": 6.0},
+        vram_reader=lambda: VramStats(used_gb=2.0, total_gb=24.0),
+    )
+    _run(cache.load("turbo"))
+    result = _run(cache.load("sft"))
+    assert sorted(result.loaded) == ["sft", "turbo"]
+    assert result.evicted == []
+    assert unloaded_log == []
+
+
+def test_load_rejects_when_gpu_already_full_with_nothing_tracked_loaded() -> None:
+    """Stray VRAM usage the cache never loaded (a leaked subprocess, another
+    process) must still block a load — capacity planning cannot assume an
+    empty ``_loaded`` means an empty GPU."""
+    cache, loaded_log, _ = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0},
+        vram_reader=lambda: VramStats(used_gb=23.0, total_gb=24.0),
+    )
+    with pytest.raises(CapacityError, match="measured"):
+        _run(cache.load("turbo"))
+    assert cache.loaded_modes() == []
+    assert loaded_log == []
+
+
+def test_snapshot_reports_vram_measured_true_when_reader_available() -> None:
+    cache, _, _ = _make_cache(
+        vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is True
+
+
+def test_snapshot_reports_vram_measured_false_without_reader() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is False
+
+
+def test_snapshot_reports_vram_measured_false_when_reader_returns_none() -> None:
+    cache, _, _ = _make_cache(vram_reader=lambda: None)
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is False
+
+
 def test_loading_last_log_line_cleared_on_loader_failure() -> None:
     async def failing_loader(mode: str) -> LoadedModel:
         cache.set_loading_log_line("about to crash")

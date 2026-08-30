@@ -114,6 +114,7 @@ class LoadedModelsResponse(BaseModel):
     queue_depth: int
     vram_used_gb: float
     vram_total_gb: float
+    vram_measured: bool
     available_modes: list[str]
     pinned: list[str] = []
 

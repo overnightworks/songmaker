@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
-from acestep_worker.model_cache import LoadedModel, ModelCache
+from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
 from acestep_worker.models import GenerationTaskResult, WorkerTaskEvent
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
@@ -27,7 +27,9 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _make_deps(tmp_path: Path) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis]:
+def _make_deps(
+    tmp_path: Path, *, vram_reader: VramReader | None = None,
+) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis]:
     redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
     loaded_log: list[str] = []
 
@@ -43,6 +45,7 @@ def _make_deps(tmp_path: Path) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis
         model_sizes={"sft": 6.0, "xl-sft": 12.0},
         loader=loader,
         unloader=unloader,
+        vram_reader=vram_reader,
     )
     task_store = TaskStore()
 
@@ -134,8 +137,21 @@ def test_loaded_models_initial(tmp_path: Path) -> None:
     assert body["target_loading"] is None
     assert body["queue_depth"] == 0
     assert body["vram_total_gb"] == 24.0
+    assert body["vram_measured"] is False
     assert body["available_modes"] == []
     assert body["loading_last_log_line"] is None
+
+
+def test_loaded_models_reports_vram_measured_true_with_a_reader(tmp_path: Path) -> None:
+    deps, _ = _make_deps(
+        tmp_path, vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
+    )
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.get("/loaded_models")
+    body = resp.json()
+    assert body["vram_measured"] is True
+    assert body["vram_used_gb"] == 15.3
 
 
 def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
@@ -515,6 +531,7 @@ def test_build_state_payload(tmp_path: Path) -> None:
     assert payload["loaded"] == []
     assert payload["queue_depth"] == 4
     assert payload["vram_total_gb"] == 24.0
+    assert payload["vram_measured"] is False
     assert payload["target_loading"] is None
     assert payload["available_modes"] == []
     assert payload["pinned"] == []

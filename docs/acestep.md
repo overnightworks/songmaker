@@ -161,7 +161,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 
 | Key pattern | Set by | Read by | TTL | Purpose |
 |---|---|---|---|---|
-| `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, `/health`, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `available_modes`, `queue_depth`, `last_heartbeat_at` |
+| `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, `/health`, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `last_heartbeat_at` |
 | `songmaker:acestep:queue:{worker_id}` | `scheduler.incr_queue_depth` / `decr_queue_depth` (per generation dispatch) | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
 | `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job (atomic SET-NX) | admin endpoint pre-check, arq job duplicate guard | 1800 s | Download-in-progress flag; value is the job_id of the arq job that owns it |
 
@@ -243,13 +243,13 @@ docker compose ps -a                                # confirm: State = running, 
 
 ### pin_model semantics
 
-The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. **Pinning** marks a loaded model as exempt from LRU eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded).
+The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. Capacity is planned against `max(measured VRAM used, sum of declared sizes of what's currently loaded)`, not the declared-size table alone: ACE-Step loads lazily, so a model that hasn't served its first generation yet can measure almost nothing on NVML even though it is genuinely resident, and without that floor the cache would read it as free and overbook the GPU. The full eviction plan — which models, in what order — is computed and checked against the budget before anything is actually unloaded; a load the plan can't satisfy is rejected outright, with nothing destroyed. **Pinning** marks a loaded model as exempt from eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded).
 
 How pinning interacts with the cache:
 
 - `POST /api/admin/workers/{id}/pin_model` requires the model to already be loaded (returns 409 otherwise).
-- `_evict_to_fit` skips pinned **and** in-use models when picking an LRU victim.
-- If **all** loaded models are pinned and a new load doesn't fit, the cache raises `CapacityError` with a clear message naming the pinned set. The admin must explicitly unpin one before the next load can succeed.
+- `_evict_to_fit` builds the eviction plan in LRU order, skipping pinned **and** in-use models, and only executes it once the plan proves sufficient.
+- If **all** loaded models are pinned (or otherwise ineligible) and the plan still doesn't fit, the cache raises `CapacityError` with a clear message naming the loaded, in-use, and pinned sets — without evicting anything. The admin must explicitly unpin one before the next load can succeed.
 - Explicit `evict_model` (the admin "Evict X" button) unpins implicitly — the operator asked for it. `_evict_to_fit` (LRU) does not unpin.
 - Worker shutdown (`evict_all`) drains everything regardless of pin state.
 
@@ -264,7 +264,7 @@ Generations and model loads share the same cache. Without coordination, an admin
 - `_evict_to_fit` skips both pinned and in-use models (refcount > 0). If no eligible victim exists, the load fails with `CapacityError`.
 - Explicit `evict_model` refuses to evict a mode with refcount > 0 (returns 409 with the in-flight count).
 
-The user-visible failure mode: if an admin tries to load a model that would require evicting an in-use one, the load job ends `failed` with a clear "all eligible models are in use or pinned" message in the job-tracking UI. The running generation continues unharmed.
+The user-visible failure mode: if an admin tries to load a model that would require evicting an in-use one, the load job ends `failed` with a message naming the loaded, in-use, and pinned sets in the job-tracking UI. The running generation continues unharmed.
 
 ### Download auto-retry
 
@@ -299,7 +299,7 @@ On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.rese
 
 **"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
 
-**"Load fails with CapacityError"** — the message includes the loaded set, the pinned set, and the in-use set. If the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. The Worker Pool card's per-mode buttons make this directly actionable.
+**"Load fails with CapacityError"** — two distinct messages, both actionable. If the worker has models loaded, the message names the loaded/pinned/in-use sets and how much VRAM is already in use (measured or, without a reader, estimated from declared sizes); if the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. If the worker has **nothing** loaded and still can't fit the request, the message says so explicitly — VRAM outside this cache's tracking (a stray process, an unreleased subprocess) is holding the GPU; check `nvidia-smi` on the worker host before retrying. The Worker Pool card's per-mode buttons make the first case directly actionable; the second needs a host-level check.
 
 **"Stale-job reaper killed my long generation"** — the reaper looks at `Job.last_heartbeat_at`. The arq job calls `_touch_heartbeat` on every SSE progress event from the worker (which fires every ~2 s for downloads, every ~1–5 s for generation steps). If a long task is being killed unexpectedly, check whether the on_progress callback is wired into the SSE consumer — the contract is that *every* yielded event refreshes the heartbeat, not just the milestone events.
 

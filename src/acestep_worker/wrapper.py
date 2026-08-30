@@ -100,6 +100,7 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
         "loading_last_log_line": snapshot.loading_last_log_line,
         "vram_used_gb": snapshot.vram_used_gb,
         "vram_total_gb": snapshot.vram_total_gb,
+        "vram_measured": snapshot.vram_measured,
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
         "pinned": list(snapshot.pinned),
@@ -136,6 +137,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             queue_depth=await read_queue_depth(deps.redis, deps.worker_id),
             vram_used_gb=snapshot.vram_used_gb,
             vram_total_gb=snapshot.vram_total_gb,
+            vram_measured=snapshot.vram_measured,
             available_modes=list_available_modes(deps.checkpoint_dir),
             pinned=list(snapshot.pinned),
         )
