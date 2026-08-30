@@ -127,6 +127,9 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_delete as list_generations_expired_for_delete,
 )
+from songmaker_cli.db.queries.generations import (
+    measure_generation_audio_duration as measure_generation_audio_duration,
+)
 from songmaker_cli.db.queries.generations import pick_generation as pick_generation
 from songmaker_cli.db.queries.generations import save_rating as save_rating
 from songmaker_cli.db.queries.generations import save_scores as save_scores

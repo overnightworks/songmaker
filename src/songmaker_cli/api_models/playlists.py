@@ -41,7 +41,7 @@ class PlaylistEntryResponse(BaseModel):
     generation_number: int
     version_number: int | None
     is_picked: bool
-    audio_duration: int | None
+    audio_duration: float | None
     mp3_path: str
     seed: int | None
     model_mode: str
@@ -63,7 +63,7 @@ class PlaylistEntryResponse(BaseModel):
             generation_number=gen.generation_number,
             version_number=gen.version.version_number if gen.version else None,
             is_picked=gen.is_picked,
-            audio_duration=gen.version.audio_duration if gen.version else None,
+            audio_duration=gen.audio_duration_sec,
             mp3_path=gen.mp3_path,
             seed=gen.seed,
             model_mode=gen.model_mode,
@@ -154,7 +154,7 @@ class SharedPlaylistEntryResponse(BaseModel):
     generation_number: int
     audio_url: str | None
     generation_id: str | None
-    audio_duration: int | None
+    audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 

@@ -55,6 +55,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 			task_type: 'text2music',
 			seed: 7
 		},
+		audio_duration_sec: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};

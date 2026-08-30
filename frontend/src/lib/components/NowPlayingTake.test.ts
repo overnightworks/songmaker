@@ -47,6 +47,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: 'la la',
 		scores: null,
 		generation_params: null,
+		audio_duration_sec: null,
 		created_at: '',
 		...overrides
 	};
@@ -109,10 +110,39 @@ describe('NowPlayingTake', () => {
 				version_number: 3,
 				generation_number: 3,
 				model_mode: 'xl-sft',
-				generation_params: { audio_duration: 195 }
+				audio_duration_sec: 195
 			})
 		});
 		expect(target.querySelector('.take-heading')?.textContent).toBe('v3 · take 3 · 3:15 · xl-sft');
+	});
+
+	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
+		await render({
+			generation: generation({
+				version_number: 4,
+				generation_number: 4,
+				model_mode: 'xl-turbo',
+				generation_params: { audio_duration: 0 },
+				audio_duration_sec: 188
+			})
+		});
+		expect(target.querySelector('.take-heading')?.textContent).toBe(
+			'v4 · take 4 · 3:08 · xl-turbo'
+		);
+	});
+
+	it('names no duration at all for a take whose length has not been measured', async () => {
+		await render({
+			generation: generation({
+				version_number: 1,
+				generation_number: 1,
+				model_mode: 'sft',
+				audio_duration_sec: null
+			})
+		});
+		const heading = target.querySelector('.take-heading')?.textContent ?? '';
+		expect(heading).toBe('v1 · take 1 · sft');
+		expect(heading).not.toContain('0:00');
 	});
 
 	it('renders scores from the generation', async () => {

@@ -137,6 +137,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: null,
 		scores: null,
 		generation_params: { audio_duration: 195 },
+		audio_duration_sec: 195,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
@@ -336,6 +337,30 @@ describe('TakesList', () => {
 		const badge = target.querySelector<HTMLElement>('.model-badge');
 		expect(badge?.textContent?.trim()).toBe('xl-sft');
 		expect(badge?.previousElementSibling?.classList.contains('take-duration')).toBe(true);
+	});
+
+	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [
+					generation({
+						id: 'g1',
+						generation_params: { audio_duration: 0 },
+						audio_duration_sec: 188
+					})
+				]
+			})
+		});
+		expect(target.querySelector('.take-duration')?.textContent).toBe('3:08');
+	});
+
+	it('shows no duration at all for a take whose length has not been measured', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [generation({ id: 'g1', audio_duration_sec: null })]
+			})
+		});
+		expect(target.querySelector('.take-duration')).toBeNull();
 	});
 
 	it('shows no model badge for a take that carries no model info', async () => {

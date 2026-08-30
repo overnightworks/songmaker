@@ -412,7 +412,24 @@ def test_api_add_generation_to_playlist(client: TestClient) -> None:
     assert entries[0]["album_title"] == "Album One"
     assert entries[0]["is_picked"] is True
     assert entries[0]["version_number"] == 1
-    assert entries[0]["audio_duration"] == 0
+    # audio_duration is the take's own measured length (#258), never the
+    # requested parameter -- unmeasured is None here, not 0.
+    assert entries[0]["audio_duration"] is None
+
+
+def test_playlist_entry_reports_the_takes_measured_duration(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        gen = session.query(Generation).filter_by(id="g1").one()
+        gen.audio_duration_sec = 141.0
+        session.commit()
+
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    client.post(f"/api/playlists/{pid}/entries/generation", json={"generation_id": "g1"})
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert resp.json()["entries"][0]["audio_duration"] == 141.0
 
 
 def test_api_add_song_to_playlist(client: TestClient) -> None:

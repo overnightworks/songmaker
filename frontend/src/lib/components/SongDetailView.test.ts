@@ -180,6 +180,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: null,
 		scores: null,
 		generation_params: { inference_steps: 8, guidance_scale: 1.5 },
+		audio_duration_sec: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};

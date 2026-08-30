@@ -239,7 +239,7 @@
 			artist: null,
 			versionNumber: generation.version_number,
 			generationNumber: generation.generation_number,
-			durationSec: generation.generation_params?.audio_duration ?? null,
+			durationSec: generation.audio_duration_sec ?? null,
 			modelMode: generation.model_mode
 		})
 	);

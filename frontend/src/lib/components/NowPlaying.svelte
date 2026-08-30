@@ -79,7 +79,7 @@
 	);
 	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
-	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
+	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current));
 	// What is playing, named by the queue itself — never by the collection the
 	// listener happens to have open, which they are free to leave mid-track.
 	const contextLabel = $derived.by(() => {

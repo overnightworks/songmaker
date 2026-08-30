@@ -10,6 +10,7 @@ from typing import Final
 
 from sqlalchemy.orm import Session, aliased, joinedload
 
+from songmaker_cli import queue_streams
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
@@ -17,6 +18,33 @@ from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 log = logging.getLogger(__name__)
 
 INITIAL_GENERATION_NUMBER: Final[int] = 1
+
+
+def _probe_audio_duration_or_none(audio_dir: Path, mp3_rel: str) -> float | None:
+    """Measure a generation's real audio length, logging if it can't be read."""
+    duration = queue_streams.read_audio_duration(audio_dir / mp3_rel)
+    if duration is None:
+        log.warning("Could not measure audio duration for %s", mp3_rel)
+    return duration
+
+
+def measure_generation_audio_duration(
+    session: Session, audio_dir: Path, generation: Generation,
+) -> float | None:
+    """Backfill a generation's measured duration if it doesn't have one yet.
+
+    Skips re-probing a generation that already carries a measured duration.
+    A failed probe stores None, same as an unmeasured generation, so a later
+    call retries rather than getting stuck on a transient read failure —
+    this is deliberately not idempotent across a failure.
+    """
+    if generation.audio_duration_sec is not None:
+        return generation.audio_duration_sec
+    generation.audio_duration_sec = _probe_audio_duration_or_none(
+        audio_dir, generation.mp3_path,
+    )
+    session.flush()
+    return generation.audio_duration_sec
 
 
 def get_generation(session: Session, gen_id: str) -> Generation | None:
@@ -51,7 +79,17 @@ def create_generation(
     wav_path: str | None = None,
     src_generation_id: str | None = None,
     generation_id: str | None = None,
+    audio_dir: Path | None = None,
 ) -> Generation:
+    """Create the row for a completed generation.
+
+    ``audio_dir``, when given, measures the produced file's real length via
+    :func:`_probe_audio_duration_or_none` and stores it on
+    ``audio_duration_sec`` — the take's own length, never the requested
+    ``generation_params.audio_duration`` parameter it was asked for. Omitted
+    (the default), the generation is created without a measured duration,
+    same as any other row that hasn't had one measured yet.
+    """
     max_num = (
         session.query(Generation.generation_number)
         .filter_by(song_id=song_id)
@@ -74,6 +112,8 @@ def create_generation(
     )
     if generation_id is not None:
         gen.id = generation_id
+    if audio_dir is not None:
+        gen.audio_duration_sec = _probe_audio_duration_or_none(audio_dir, mp3_path)
     session.add(gen)
     session.flush()
     log.info("Created generation #%d for song %s (seed=%s)", gen_number, song_id, seed)

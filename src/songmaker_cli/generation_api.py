@@ -67,6 +67,7 @@ from songmaker_cli.db.queries import (
     get_queue_position,
     keep_generation,
     list_active_models,
+    measure_generation_audio_duration,
     pick_generation,
     record_audit,
     save_rating,
@@ -195,8 +196,11 @@ def api_get_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> GenerationResponse:
     gen = check_generation_access(session, gen_id, user)
+    measure_generation_audio_duration(session, ctx.audio_dir, gen)
+    session.commit()
     return GenerationResponse.from_orm(gen)
 
 

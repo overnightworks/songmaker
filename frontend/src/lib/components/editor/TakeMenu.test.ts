@@ -58,6 +58,7 @@ function gen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: null,
 		scores: null,
 		generation_params: null,
+		audio_duration_sec: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};

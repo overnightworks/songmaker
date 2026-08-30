@@ -439,6 +439,7 @@ def _persist_generation_row(
                 wav_path=wav_rel,
                 model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
+                audio_dir=ctx.audio_dir,
             )
             persisted_id = generation.id
             create_generation_created_event(

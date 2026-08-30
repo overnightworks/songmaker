@@ -190,6 +190,7 @@ class Generation(ShareMixin, Base):
     src_generation_id: Mapped[str | None] = mapped_column(
         ForeignKey("generations.id", ondelete="SET NULL"), nullable=True,
     )
+    audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")

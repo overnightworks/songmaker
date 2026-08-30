@@ -435,6 +435,43 @@ def test_get_generation(client: TestClient) -> None:
     assert body["whisper_cues"] is None
 
 
+def test_get_generation_measures_and_persists_audio_duration(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A take that has never had its length measured gets it measured on
+    view, and the measurement is persisted (#258) -- not just returned once."""
+    import songmaker_cli.queue_streams as qs
+
+    probed: list[Path] = []
+
+    def _read(path: Path) -> float:
+        probed.append(path)
+        return 188.0
+
+    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    assert resp.json()["audio_duration_sec"] == 188.0
+    assert probed == [client.app.state.ctx.audio_dir / "u-test/g1.mp3"]
+
+    monkeypatch.undo()
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    assert resp.json()["audio_duration_sec"] == 188.0
+
+
+def test_get_generation_reports_unmeasurable_duration_as_null(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable file is reported as unknown, never as a 0-second take."""
+    import songmaker_cli.queue_streams as qs
+
+    monkeypatch.setattr(qs, "read_audio_duration", lambda _path: None)
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    assert resp.json()["audio_duration_sec"] is None
+
+
 def test_get_generation_returns_typed_whisper_cues(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:

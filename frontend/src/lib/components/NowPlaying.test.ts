@@ -70,6 +70,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: 'old verse',
 		scores: null,
 		generation_params: null,
+		audio_duration_sec: null,
 		created_at: '',
 		...overrides
 	};

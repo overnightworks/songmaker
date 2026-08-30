@@ -57,7 +57,7 @@ class SharePickMedia:
     """
 
     generation_id: str | None
-    audio_duration: int | None
+    audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
@@ -68,11 +68,14 @@ _NO_SHARE_PICK_MEDIA = SharePickMedia(
 
 
 def share_pick_media(gen: Generation | None) -> SharePickMedia:
+    """The picked take's own measured length -- never the request parameter
+    it was generated with (#258): a listener sees what the take actually
+    plays for, not what it was asked to render."""
     if gen is None or not gen.mp3_path:
         return _NO_SHARE_PICK_MEDIA
     return SharePickMedia(
         generation_id=gen.id,
-        audio_duration=gen.version.audio_duration if gen.version else None,
+        audio_duration=gen.audio_duration_sec,
         lyrics=generation_version_lyrics(gen),
         whisper_cues=generation_whisper_cues(gen.whisper_cues),
     )
@@ -189,7 +192,7 @@ class SharedSongItem(BaseModel):
     track_number: int
     audio_url: str | None
     generation_id: str | None
-    audio_duration: int | None
+    audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
@@ -226,7 +229,7 @@ class SharedSongResponse(BaseModel):
     album_title: str
     audio_url: str | None
     generation_id: str | None
-    audio_duration: int | None
+    audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
@@ -241,7 +244,7 @@ class SharedGenerationResponse(BaseModel):
     seed: int | None
     audio_url: str | None
     generation_id: str | None
-    audio_duration: int | None
+    audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
@@ -286,6 +289,7 @@ class GenerationResponse(BaseModel):
     version_lyrics: str | None
     scores: dict | None
     generation_params: dict | None
+    audio_duration_sec: float | None
     created_at: str
 
     @classmethod
@@ -344,6 +348,7 @@ class GenerationResponse(BaseModel):
             version_lyrics=generation_version_lyrics(gen),
             scores=scores if scores else None,
             generation_params=generation_params,
+            audio_duration_sec=gen.audio_duration_sec,
             created_at=gen.created_at.isoformat(),
         )
 

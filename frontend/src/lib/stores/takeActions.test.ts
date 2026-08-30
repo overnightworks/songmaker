@@ -69,6 +69,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: 'la la',
 		scores: null,
 		generation_params: null,
+		audio_duration_sec: null,
 		created_at: '',
 		...overrides
 	};

@@ -80,6 +80,33 @@ def test_reimport_mp3(seeded_db, tmp_path: Path) -> None:
         assert event.resource_id == SONG_ID
 
 
+def test_reimport_mp3_measures_audio_duration(
+    seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import songmaker_cli.queue_streams as qs
+
+    audio_dir = tmp_path / "audio"
+    mp3_src = tmp_path / "source.mp3"
+    mp3_src.write_bytes(b"fake-mp3-data")
+
+    probed: list[Path] = []
+
+    def _read(path: Path) -> float:
+        probed.append(path)
+        return 188.0
+
+    monkeypatch.setattr(qs, "read_audio_duration", _read)
+
+    with seeded_db() as session:
+        gen_id = reimport_files(session, audio_dir, USER_ID, SONG_ID, mp3_file=mp3_src)
+        session.commit()
+
+    with seeded_db() as session:
+        gen = get_generation(session, gen_id)
+        assert gen.audio_duration_sec == 188.0
+        assert probed == [audio_dir / gen.mp3_path]
+
+
 def test_reimport_wav(seeded_db, tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     wav_src = tmp_path / "source.wav"

@@ -224,7 +224,7 @@ describe('PlaylistDetailView row take traits', () => {
 		expect(meta).toBe('Artist · take 1');
 	});
 
-	it('omits duration when the version has none, since audio_duration defaults to 0', async () => {
+	it('omits duration for a take with no measured length (audio_duration 0 or null)', async () => {
 		openPlaylistDetail(
 			detail({
 				entries: [entry({ version_number: 1, audio_duration: 0, is_picked: false })]

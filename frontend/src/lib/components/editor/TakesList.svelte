@@ -162,7 +162,7 @@
 	}
 
 	function formatDuration(gen: GenerationItem): string | null {
-		const seconds = gen.generation_params?.audio_duration;
+		const seconds = gen.audio_duration_sec;
 		if (seconds == null) return null;
 		const whole = Math.round(seconds);
 		const m = Math.floor(whole / 60);

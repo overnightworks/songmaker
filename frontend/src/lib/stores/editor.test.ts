@@ -103,6 +103,7 @@ function makeGeneration(overrides: Partial<GenerationItem> = {}): GenerationItem
 		version_lyrics: null,
 		scores: null,
 		generation_params: null,
+		audio_duration_sec: null,
 		created_at: '',
 		...overrides
 	};

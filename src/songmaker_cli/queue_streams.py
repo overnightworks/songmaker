@@ -476,15 +476,26 @@ def resolve_audio_path(audio_dir: Path, rel_path: str) -> Path:
     return audio_path
 
 
-def probe_audio_duration(audio_path: Path) -> float:
+def read_audio_duration(audio_path: Path) -> float | None:
+    """Read a file's real length in seconds, or None if it can't be read.
+
+    Pure: no HTTP dependency, no request-boundary shape. Safe to call from
+    any layer, including a background job or the DB query layer.
+    """
     try:
         from mutagen import File as MutagenFile
 
         audio = MutagenFile(audio_path)
         duration = float(getattr(getattr(audio, "info", None), "length", 0) or 0)
-    except Exception as exc:
-        raise HTTPException(422, "Could not read audio duration") from exc
-    if duration <= 0:
+    except Exception:
+        return None
+    return duration if duration > 0 else None
+
+
+def probe_audio_duration(audio_path: Path) -> float:
+    """Request-boundary wrapper: an unreadable file is a 422, not a None."""
+    duration = read_audio_duration(audio_path)
+    if duration is None:
         raise HTTPException(422, "Could not read audio duration")
     return duration
 

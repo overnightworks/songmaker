@@ -118,4 +118,26 @@ describe('NowPlayingQueue', () => {
 		expect(label).toBe('take 4');
 		expect(label).not.toContain('vnull');
 	});
+
+	it('formats a row with its own measured duration', async () => {
+		const queue: QueueViewModel = {
+			items: [item({ durationSec: 195 })],
+			currentIndex: 0,
+			upNext: null
+		};
+		await render({ queue });
+		expect(target.querySelector('.queue-duration')?.textContent).toBe('3:15');
+	});
+
+	it('shows no duration at all for a row whose length has not been measured (#258)', async () => {
+		const queue: QueueViewModel = {
+			items: [item({ durationSec: null })],
+			currentIndex: 0,
+			upNext: null
+		};
+		await render({ queue });
+		const text = target.querySelector('.queue-duration')?.textContent ?? '';
+		expect(text).toBe('');
+		expect(text).not.toContain('0:00');
+	});
 });

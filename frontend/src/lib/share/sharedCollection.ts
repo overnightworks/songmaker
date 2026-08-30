@@ -176,6 +176,7 @@ export function trackPlaybackInfo(
 		wav_path: null,
 		seed: null,
 		status: 'completed',
+		audio_duration_sec: track.durationSec,
 		is_archived: false,
 		is_picked: false,
 		is_kept: true,

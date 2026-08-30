@@ -177,6 +177,7 @@ function streamTrackToGeneration(track: QueueStreamTrackItem): GenerationItem {
 		wav_path: null,
 		seed: track.seed,
 		status: 'completed',
+		audio_duration_sec: track.duration,
 		is_archived: false,
 		is_picked: false,
 		is_kept: true,

@@ -297,6 +297,7 @@ def _seed_multi_track_album(session) -> None:
         session.add(Generation(
             id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
             mp3_path=f"admin_user/g{i}.mp3", seed=1, is_picked=True,
+            audio_duration_sec=100 + i,
         ))
     session.add(Song(id="s_no_pick", title="No Pick", album_id="test_album", track_number=4))
 
@@ -358,6 +359,7 @@ def _seed_song_with_pick(session) -> None:
     session.add(Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,
         mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
+        audio_duration_sec=180.0,
     ))
 
 
@@ -404,8 +406,28 @@ def test_shared_generation_view_includes_pick_media(sharing_app: TestClient) -> 
     data = unauthed.get(f"/shared/gen/{slug}").json()
 
     assert data["generation_id"] == "g1"
-    assert data["audio_duration"] == 0
+    # audio_duration is the take's own measured length (#258), never the
+    # requested parameter -- unmeasured is None here, not 0.
+    assert data["audio_duration"] is None
     assert data["lyrics"] == "Hello"
+
+
+def test_shared_generation_reports_the_takes_measured_duration(
+    sharing_app: TestClient,
+) -> None:
+    factory = sharing_app.app.state.ctx.db
+    with factory() as session:
+        gen = session.query(Generation).filter_by(id="g1").one()
+        gen.audio_duration_sec = 188.0
+        session.commit()
+
+    resp = sharing_app.post("/api/generations/g1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(sharing_app.app, cookies={})
+    data = unauthed.get(f"/shared/gen/{slug}").json()
+
+    assert data["audio_duration"] == 188.0
 
 
 def _seed_playlist_with_entries(session) -> None:
@@ -423,6 +445,7 @@ def _seed_playlist_with_entries(session) -> None:
         session.add(Generation(
             id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
             mp3_path=f"admin_user/g{i}.mp3", seed=1,
+            audio_duration_sec=100 + i,
         ))
         session.add(PlaylistEntry(id=f"e{i}", playlist_id="pl1", generation_id=f"g{i}", position=i))
 
