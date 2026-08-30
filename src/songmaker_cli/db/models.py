@@ -8,6 +8,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime, timezone
+from typing import Final
 
 from sqlalchemy import (
     JSON,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -29,6 +31,8 @@ from songmaker_cli.api_models.generation_params import (
 )
 from songmaker_cli.api_models.whisper import stored_whisper_cues
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
+
+SONG_SLUG_MAX_LENGTH: Final = 220
 
 
 def _validate_base_generation_params(value: object) -> dict | None:
@@ -107,10 +111,16 @@ class Album(ShareMixin, Base):
 
 class Song(ShareMixin, Base):
     __tablename__ = "songs"
+    __table_args__ = (
+        Index("ix_songs_album_id_slug", "album_id", "slug"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     title: Mapped[str] = mapped_column(String(200))
-    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
+    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"))
+    slug: Mapped[str] = mapped_column(
+        String(SONG_SLUG_MAX_LENGTH), default="", server_default="",
+    )
     vocal_language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
     cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)

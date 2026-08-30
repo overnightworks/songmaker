@@ -18,6 +18,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
+    unique_song_slug,
 )
 from songmaker_cli.api_models import (
     CleanupResponse,
@@ -144,6 +145,7 @@ def api_create_song(
     album = get_album(session, req.album_id)
     check_album_access(album, user)
     _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
+    slug = unique_song_slug(session, req.album_id, req.title)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
@@ -151,6 +153,7 @@ def api_create_song(
         vocal_language=req.vocal_language,
         generation_params=gen_params_to_json(req.generation_params),
     )
+    song.slug = slug
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -187,14 +190,18 @@ def api_rename_song(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
-    check_song_access(session, song_id, user)
+    song = check_song_access(session, song_id, user)
     title = req.title.strip()
     if not title:
         raise HTTPException(422, "Title is required")
+    slug = unique_song_slug(
+        session, song.album_id, title, exclude_song_id=song_id,
+    )
     try:
         song = rename_song(session, song_id, title)
     except ValueError:
         raise HTTPException(404, "Song not found")
+    song.slug = slug
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -206,13 +213,17 @@ def api_move_song(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
-    check_song_access(session, song_id, user)
+    song = check_song_access(session, song_id, user)
     target_album = get_album(session, req.album_id)
     check_album_access(target_album, user)
+    slug = unique_song_slug(
+        session, req.album_id, song.title, exclude_song_id=song_id,
+    )
     try:
         song = move_song(session, song_id, req.album_id)
     except ValueError:
         raise HTTPException(404, "Song or album not found")
+    song.slug = slug
     record_audit(
         session, user.id, AuditAction.MOVE, ResourceType.SONG,
         song_id, f"album={req.album_id}",

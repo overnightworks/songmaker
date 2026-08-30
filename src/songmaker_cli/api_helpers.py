@@ -33,6 +33,7 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import (
+    SONG_SLUG_MAX_LENGTH,
     Album,
     Generation,
     Job,
@@ -60,6 +61,11 @@ _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
 _LORA_SLUG_LOCK_ID = 3
 _SESSION_CAP_LOCK_ID = 4
+_SONG_SLUG_LOCK_ID = 5
+
+_UNBOUNDED_SLUG_LENGTH = 0
+_SLUG_COUNTER_SUFFIX_BUDGET = 20
+_SONG_SLUG_BASE_MAX_LENGTH = SONG_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
@@ -179,56 +185,92 @@ def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
     return dumped or None
 
 
-def slugify(value: str) -> str:
-    return _slugify(value) or "untitled"
+def slugify(value: str, max_length: int = _UNBOUNDED_SLUG_LENGTH) -> str:
+    """Turn a human title into a URL-safe slug, never empty."""
+    return _slugify(value, max_length=max_length) or "untitled"
+
+
+def _acquire_unique_slug(
+    session: Session,
+    caller: str,
+    lock_id: int,
+    base_slug: str,
+    is_taken: Callable[[str], bool],
+) -> str:
+    """Serialize the search for a free slug, appending -2, -3, etc. if needed.
+
+    Commits the current transaction before acquiring an exclusive lock, so
+    the check-then-act sequence cannot interleave with a competing request.
+    Same caveats as create_job_with_rate_limit — no prior uncommitted
+    mutations besides auth-layer session renewal, because the commit() below
+    would persist them unconditionally.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        f"{caller}: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    session.commit()
+    _begin_exclusive(session, lock_id)
+    candidate = base_slug
+    counter = 1
+    while is_taken(candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
 
 
 def unique_album_id(session: Session, base_slug: str) -> str:
-    """Atomically find a unique album ID, appending -2, -3, etc. if needed.
+    """Find an album ID unique across all albums, including deleted ones."""
+    def is_taken(candidate: str) -> bool:
+        return get_album(session, candidate, include_deleted_rows=True) is not None
 
-    Commits the current transaction before acquiring an exclusive lock.
-    Same caveats as create_job_with_rate_limit — no prior uncommitted
-    mutations besides auth-layer session renewal.
-    """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "unique_album_id: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
+    return _acquire_unique_slug(
+        session, "unique_album_id", _ALBUM_ID_LOCK_ID, base_slug, is_taken,
     )
-    session.commit()
-    _begin_exclusive(session, _ALBUM_ID_LOCK_ID)
-    candidate = base_slug
-    counter = 1
-    while get_album(session, candidate, include_deleted_rows=True):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
 
 
-def unique_lora_slug(
-    session: Session, user_id: str, base_slug: str,
+def unique_lora_slug(session: Session, user_id: str, base_slug: str) -> str:
+    """Find a LoRA slug unique within one user's LoRAs."""
+    def is_taken(candidate: str) -> bool:
+        return (
+            session.query(UserLora)
+            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+            .first()
+        ) is not None
+
+    return _acquire_unique_slug(
+        session, "unique_lora_slug", _LORA_SLUG_LOCK_ID, base_slug, is_taken,
+    )
+
+
+def unique_song_slug(
+    session: Session,
+    album_id: str,
+    title: str,
+    exclude_song_id: str | None = None,
 ) -> str:
-    """Atomically find a slug unique per user, appending -2, -3, etc. if needed.
+    """Derive a song slug from its title, unique within its album.
 
-    Commits the current transaction before acquiring an exclusive lock.
-    Same caveats as create_job_with_rate_limit — no prior uncommitted
-    mutations besides auth-layer session renewal.
+    The address is hierarchical, so /album/a/intro and /album/b/intro are
+    different songs — uniqueness is scoped to album_id, never global.
+    Soft-deleted songs keep holding their slug so a restore cannot collide
+    with a song created in the meantime. Pass exclude_song_id when the song
+    already owns a row, so a rename or a move does not collide with itself.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "unique_lora_slug: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
+    def is_taken(candidate: str) -> bool:
+        query = (
+            session.query(Song)
+            .execution_options(include_deleted=True)
+            .filter(Song.album_id == album_id, Song.slug == candidate)
+        )
+        if exclude_song_id is not None:
+            query = query.filter(Song.id != exclude_song_id)
+        return query.first() is not None
+
+    base_slug = slugify(title, max_length=_SONG_SLUG_BASE_MAX_LENGTH)
+    return _acquire_unique_slug(
+        session, "unique_song_slug", _SONG_SLUG_LOCK_ID, base_slug, is_taken,
     )
-    session.commit()
-    _begin_exclusive(session, _LORA_SLUG_LOCK_ID)
-    candidate = base_slug
-    counter = 1
-    while (
-        session.query(UserLora)
-        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-        .first()
-    ):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
 
 
 def owner_filter(user: AuthenticatedUser) -> str | None:
