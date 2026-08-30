@@ -414,7 +414,7 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 ```
 User (username, role: admin|user, bcrypt hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
-  │     └── Song (title, track_number, share_slug?, is_shared)
+  │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
   │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)

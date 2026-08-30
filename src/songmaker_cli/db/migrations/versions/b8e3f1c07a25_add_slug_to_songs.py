@@ -14,6 +14,19 @@ Backfill walks each album's songs oldest first and de-duplicates against the
 slugs already handed out inside that album, so two songs titled "Intro" in one
 album come out as "intro" and "intro-2" instead of colliding.
 
+The empty server default stays on the column and is mirrored by the model, so
+the deployed schema and Base.metadata.create_all() agree and autogenerate sees
+no drift. It is not a safety net: the model also carries a Python-side default,
+so every ORM insert already sends the column and dropping the server default
+could not surface a write path that forgets the slug. It is simply the honest
+declaration that the column is NOT NULL and that rows written outside the REST
+API (see #270) really do land with an empty slug today.
+
+ix_songs_album_id from the baseline schema is dropped here: it became a strict
+prefix of ix_songs_album_id_slug, so Postgres can answer every album_id lookup
+from the composite index and the old one is pure write cost. downgrade()
+recreates it under its original name.
+
 Revision ID: b8e3f1c07a25
 Revises: a7c2d9e14b03
 Create Date: 2026-08-30 00:00:00.000000
@@ -69,11 +82,13 @@ def upgrade() -> None:
     op.add_column('songs', sa.Column(
         'slug', sa.String(length=_SLUG_MAX_LENGTH), nullable=False, server_default='',
     ))
-    op.create_index('ix_songs_album_id_slug', 'songs', ['album_id', 'slug'])
     _backfill_song_slugs()
+    op.create_index('ix_songs_album_id_slug', 'songs', ['album_id', 'slug'])
+    op.drop_index(op.f('ix_songs_album_id'), table_name='songs')
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.create_index(op.f('ix_songs_album_id'), 'songs', ['album_id'])
     op.drop_index('ix_songs_album_id_slug', table_name='songs')
     op.drop_column('songs', 'slug')

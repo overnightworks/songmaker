@@ -2488,7 +2488,7 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
     from songmaker_cli.db.migrations.versions import (
         b8e3f1c07a25_add_slug_to_songs as mig,
     )
-    from songmaker_cli.db.models import Album, Song
+    from songmaker_cli.db.models import SONG_SLUG_MAX_LENGTH, Album, Song
 
     factory = init_db(f"sqlite:///{tmp_path / 'slugs.db'}")
     with factory() as session:
@@ -2499,6 +2499,8 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
             Song(id="s2", title="Intro", album_id="a1", track_number=2),
             Song(id="s3", title="Intro", album_id="a2", track_number=1),
             Song(id="s4", title="!!!", album_id="a2", track_number=2),
+            Song(id="s5", title="音" * 200, album_id="a2", track_number=3),
+            Song(id="s6", title="???", album_id="a2", track_number=4),
         ])
         session.commit()
 
@@ -2514,10 +2516,13 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
     with factory() as session:
         slugs = {song.id: song.slug for song in session.query(Song).all()}
 
-    assert slugs == {
-        "s1": "intro",
-        "s2": "intro-2",
-        "s3": "intro",
-        "s4": "untitled",
-    }
+    assert slugs["s1"] == "intro"
+    assert slugs["s2"] == "intro-2"
+    assert slugs["s3"] == "intro"
+    assert slugs["s4"] == "untitled"
+    assert slugs["s6"] == "untitled-2"
+
+    cjk_slug = slugs["s5"]
+    assert cjk_slug.startswith("yin-yin")
+    assert len(cjk_slug) <= SONG_SLUG_MAX_LENGTH
     engine.dispose()

@@ -117,8 +117,10 @@ class Song(ShareMixin, Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     title: Mapped[str] = mapped_column(String(200))
-    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
-    slug: Mapped[str] = mapped_column(String(SONG_SLUG_MAX_LENGTH), default="")
+    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"))
+    slug: Mapped[str] = mapped_column(
+        String(SONG_SLUG_MAX_LENGTH), default="", server_default="",
+    )
     vocal_language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
     cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
