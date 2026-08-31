@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
+from songmaker_cli.middleware.rate_limit import RateLimitClass, _classify_path
 
 
 def _seed_rate_limit_data(session) -> None:
@@ -267,6 +268,199 @@ def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -
     resp = ip_limited_client.get("/api/auth/check")
 
     assert resp.status_code != 429
+
+
+# ── Path classification (_classify_path) ────────────────────────────
+
+# Media: `/audio/*`, the authenticated queue-stream audio route (review
+# finding 2a: previously untested), and every public share's audio route.
+# Stream: the two SSE endpoints. Everything else, including a slug that
+# literally reads "audio" hitting a real metadata route, is API -- fail
+# closed, and the documented exception (finding 2b: previously untested)
+# that `/shared/{slug}/cover` and `/shared/{slug}/stream` stay API however
+# their slug is spelled.
+@pytest.mark.parametrize(("path", "expected_class"), [
+    ("/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/api/queue-streams/some-id/audio", RateLimitClass.MEDIA),
+    ("/shared/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/shared/song/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/shared/gen/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/shared/playlist/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/shared/queue-streams/some-id/audio", RateLimitClass.MEDIA),
+    ("/api/resource-events/stream", RateLimitClass.STREAM),
+    ("/api/jobs/some-job-id/stream", RateLimitClass.STREAM),
+    ("/this-path-does-not-exist", RateLimitClass.API),
+    ("/api/auth/check", RateLimitClass.API),
+    ("/api/audio/upload", RateLimitClass.API),
+    ("/api/queue-streams", RateLimitClass.API),
+    ("/api/queue-streams/library", RateLimitClass.API),
+    ("/api/queue-streams/some-id/pin", RateLimitClass.API),
+    ("/shared/realslug", RateLimitClass.API),
+    ("/shared/realslug/cover", RateLimitClass.API),
+    ("/shared/realslug/stream", RateLimitClass.API),
+    ("/shared/song/realslug", RateLimitClass.API),
+    ("/shared/song/realslug/cover", RateLimitClass.API),
+    ("/shared/gen/realslug", RateLimitClass.API),
+    ("/shared/playlist/realslug", RateLimitClass.API),
+    ("/shared/playlist/realslug/stream", RateLimitClass.API),
+    # Regression (review finding 1): a slug that literally reads "audio"
+    # must not slide a real metadata route into Media by shape alone.
+    ("/shared/audio", RateLimitClass.API),
+    ("/shared/audio/cover", RateLimitClass.API),
+    ("/shared/audio/stream", RateLimitClass.API),
+    ("/shared/song/audio", RateLimitClass.API),
+    ("/shared/gen/audio", RateLimitClass.API),
+    ("/shared/playlist/audio", RateLimitClass.API),
+    # Blocker fix: the router resolves this to the playlist manifest POST
+    # (`/shared/playlist/{slug}/stream`, slug="audio"), a metadata handler
+    # -- not the bare-slug audio route ([^/]+="playlist", filename="stream").
+    ("/shared/playlist/audio/stream", RateLimitClass.API),
+    # ...but the genuine media route for a slug literally named "audio"
+    # still classifies as Media -- it has a filename segment after "audio/".
+    ("/shared/audio/audio/owner/file.mp3", RateLimitClass.MEDIA),
+])
+def test_classify_path(path: str, expected_class: RateLimitClass) -> None:
+    assert _classify_path(path) == expected_class
+
+
+# ── Rate limit classes (issue #257) ─────────────────────────────────
+
+
+@pytest.fixture()
+def class_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("IP_RATE_LIMIT", "2")
+    monkeypatch.setenv("MEDIA_RATE_LIMIT", "2")
+    monkeypatch.setenv("STREAM_RATE_LIMIT", "2")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+    yield client
+    get_settings.cache_clear()
+
+
+def test_media_budget_exhausted_does_not_block_api_class(
+    class_limited_client: TestClient,
+) -> None:
+    for _ in range(3):
+        class_limited_client.get("/audio/someone/missing.mp3")
+
+    resp = class_limited_client.get("/audio/someone/missing.mp3")
+    assert resp.status_code == 429
+
+    api_resp = class_limited_client.get("/api/auth/check")
+    assert api_resp.status_code != 429
+
+
+def test_api_budget_exhausted_does_not_block_media_class(
+    class_limited_client: TestClient,
+) -> None:
+    for _ in range(3):
+        class_limited_client.get("/api/auth/check")
+
+    api_resp = class_limited_client.get("/api/auth/check")
+    assert api_resp.status_code == 429
+
+    media_resp = class_limited_client.get("/audio/someone/missing.mp3")
+    assert media_resp.status_code != 429
+
+
+def test_stream_budget_exhausted_does_not_block_api_class(
+    class_limited_client: TestClient,
+) -> None:
+    for _ in range(3):
+        class_limited_client.get("/api/resource-events/stream")
+
+    stream_resp = class_limited_client.get("/api/resource-events/stream")
+    assert stream_resp.status_code == 429
+
+    api_resp = class_limited_client.get("/api/auth/check")
+    assert api_resp.status_code != 429
+
+
+def test_job_stream_path_is_in_stream_class(class_limited_client: TestClient) -> None:
+    for _ in range(3):
+        class_limited_client.get("/api/jobs/some-job-id/stream")
+
+    resp = class_limited_client.get("/api/jobs/some-job-id/stream")
+    assert resp.status_code == 429
+
+    api_resp = class_limited_client.get("/api/auth/check")
+    assert api_resp.status_code != 429
+
+
+def test_unknown_path_falls_back_to_api_class(class_limited_client: TestClient) -> None:
+    for _ in range(2):
+        class_limited_client.get("/this-path-does-not-exist")
+
+    resp = class_limited_client.get("/api/auth/check")
+
+    assert resp.status_code == 429
+
+
+# ── Shared audio is Media, shared metadata stays API (issue #257) ──
+
+
+def _seed_shared_album_data(session) -> None:
+    session.add(Album(id="shared_album", title="Shared Album", artist="Band"))
+    session.add(Song(id="ss1", title="Song", album_id="shared_album", track_number=1))
+    session.add(Version(
+        id="sv1", song_id="ss1", version_number=1, lyrics="hi", prompt="pop",
+    ))
+    session.add(Generation(
+        id="sg1", song_id="ss1", version_id="sv1", generation_number=1,
+        mp3_path="admin_user/g1.mp3", is_picked=True,
+    ))
+
+
+@pytest.fixture()
+def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
+    # Setup itself spends 2 API-class calls (login + share), so the budget
+    # needs headroom above that before the test's own assertions run.
+    monkeypatch.setenv("IP_RATE_LIMIT", "5")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+    client, _ = make_test_app(tmp_path, seed_db=_seed_shared_album_data)
+    admin_audio_dir = tmp_path / "audio" / "admin_user"
+    admin_audio_dir.mkdir(parents=True, exist_ok=True)
+    (admin_audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        admin = create_user(session, "admin", hash_password("t3stP@ssw0rd"), role="admin")
+        album = session.query(Album).filter_by(id="shared_album").first()
+        album.created_by = admin.id
+        session.commit()
+    from conftest import login_and_csrf
+    login_and_csrf(client, "admin", "t3stP@ssw0rd")
+    slug = client.post("/api/albums/shared_album/share").json()["share_slug"]
+    client.cookies.clear()
+    yield client, slug
+    get_settings.cache_clear()
+
+
+def test_shared_audio_does_not_consume_api_budget(
+    shared_slug_client: tuple[TestClient, str],
+) -> None:
+    client, slug = shared_slug_client
+
+    for _ in range(5):
+        audio_resp = client.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
+        assert audio_resp.status_code != 429
+
+    metadata_resp = client.get(f"/shared/{slug}")
+    assert metadata_resp.status_code != 429
+
+
+def test_shared_metadata_still_shares_the_api_budget(
+    shared_slug_client: tuple[TestClient, str],
+) -> None:
+    client, slug = shared_slug_client
+
+    for _ in range(6):
+        client.get(f"/shared/{slug}")
+
+    metadata_resp = client.get(f"/shared/{slug}")
+    assert metadata_resp.status_code == 429
 
 
 # ── Job gets user_id ────────────────────────────────────────────────

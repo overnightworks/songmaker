@@ -114,6 +114,36 @@ class Settings(BaseSettings):
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120
+    # Range-request media (`/audio/*` and its Media-class siblings, see
+    # `middleware/rate_limit.py`) is a distinct budget class from plain API
+    # calls (issue #257): a single MP3 played with normal scrubbing is
+    # estimated at roughly 40 range requests (order-of-magnitude from
+    # typical browser Range-chunking behavior -- estimated, not measured; no
+    # cheap existing e2e report captured real counts). A user comparing
+    # takes can move through several songs within a minute -- 40 * 5 songs =
+    # 200 requests/min in ordinary use. 600 leaves 3x headroom for
+    # aggressive seeking while still bounding disk I/O per IP (not
+    # unlimited).
+    media_rate_limit: int = 600
+    # SSE connection *opens* (issue #257), sized between the legitimate
+    # worst case and the observed storm rate:
+    #   legitimate worst case: a normal page load opens one resource-events
+    #   stream plus one job stream per active job. At the
+    #   `max_user_active_jobs` default (10) that is 11 opens/load; 3 loads
+    #   within a minute (full queue, operator reloads) = 33.
+    #   storm rate: the operator incident's reconnect storm ran at roughly
+    #   80 opens/min. It self-terminates, but not via a backoff -- there
+    #   isn't one yet (that's the still-open #257 frontend slice).
+    #   `MAX_POLL_ERRORS` (`frontend/src/lib/stores/jobs.ts`) is a plain
+    #   error counter with no delay, closing the EventSource after 10
+    #   failures; a 429 to an EventSource is also fatal per spec (no
+    #   browser auto-reconnect), so the burst is short-lived either way.
+    # 45 sits clearly above 33 and clearly below 80. This has no live
+    # dependency on `max_user_active_jobs` -- raising that setting should
+    # prompt re-checking this comment's math, not a settings cross-reference.
+    # The resource-events endpoint additionally enforces its own tighter
+    # per-user open limit (`RESOURCE_EVENT_STREAM_OPEN_LIMIT`).
+    stream_rate_limit: int = 45
 
     # ── arq workers ───────────────────────────────────────────────────
     arq_job_timeout: int = 1000
