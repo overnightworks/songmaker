@@ -1,16 +1,18 @@
 // An album's address, driven the way the operator described it: paste it into
-// a tab that knows nothing else and see the album (issue #269) -- and a
-// song's own address one segment deeper, reached the same way (issue #275).
+// a tab that knows nothing else and see the album (issue #269) -- a song's own
+// address one segment deeper, reached the same way (issue #275) -- and a
+// selected take's address one segment deeper still (issue #281).
 //
 // These are the paths jsdom structurally cannot see. SvelteKit reconciles its
 // mounted route tree only in a real browser, so only here does it show whether
-// moving between the workspace's three addresses (`/`, `/album/<slug>` and
-// `/album/<slug>/<song-slug>`) keeps the workspace standing or tears it down
-// and builds it again -- since issue #276, it does not: the three sit inside
-// one `(library)` route group whose own layout mounts LibraryWorkspace once,
-// so a crossing swaps only the thin leaf page underneath. That the app writes
-// these addresses when an album or a song opens is pinned in the unit suite
-// (stores/navigation.test.ts), which costs the stack nothing.
+// moving between the workspace's four addresses (`/`, `/album/<slug>`,
+// `/album/<slug>/<song-slug>` and `/album/<slug>/<song-slug>/take/<n>`) keeps
+// the workspace standing or tears it down and builds it again -- since issue
+// #276, it does not: the four sit inside one `(library)` route group whose own
+// layout mounts LibraryWorkspace once, so a crossing swaps only the thin leaf
+// page underneath. That the app writes these addresses when an album, a song
+// or a take opens is pinned in the unit suite (stores/navigation.test.ts),
+// which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
@@ -21,10 +23,11 @@ import { readSeededLibrary } from './seed';
  * What each test costs the API, measured on a green run: 22 for the cold
  * album open + one-step track click + Back/Forward (down from 24 before issue
  * #276 folded the workspace remount away), 16 for the standalone cold song
- * open, unchanged since it never crosses a route to begin with. One shared
- * ceiling, sized to the larger with the same headroom the library flow
- * carries — both flows share one 60-second IP rate-limit window, so a jump
- * here is a regression to find, not a number to raise.
+ * open and 16 for the standalone cold take open, both unchanged from each
+ * other since neither crosses a route to begin with. One shared ceiling,
+ * sized to the largest with the same headroom the library flow carries — all
+ * three flows share one 60-second IP rate-limit window, so a jump here is a
+ * regression to find, not a number to raise.
  */
 const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 30;
 
@@ -128,6 +131,29 @@ test('a song address opens cold, in a tab that knows nothing else', async ({ pag
 	const surface = workspace(page);
 
 	await page.goto(songAddress);
+
+	await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
+	await expectWorkspaceStanding(page);
+});
+
+test('a take address opens cold, in a tab that knows nothing else', async ({ page, isMobile }) => {
+	// Same reasoning as the two cold-opens above: shell-independent router
+	// behaviour, and the three tests already share a budget window. Which take
+	// is selected has no desktop-visible marker to assert on (the compact
+	// shell's own Write/Takes tab split is walked by library.spec.ts) --
+	// what only a real browser can show is the router-level contract: the
+	// address resolves cold, under its song, without tearing the workspace
+	// down. That the address seeds selectedGenerationId and the Takes tab is
+	// pinned in the unit suite (route page.test.ts).
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+
+	const library = readSeededLibrary();
+	// The seed imports exactly one take per song (issue #281's seed.ts note on
+	// takeLabel), so the picked song's only take is always generation_number 1.
+	const takeAddress = `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}/take/1`;
+	const surface = workspace(page);
+
+	await page.goto(takeAddress);
 
 	await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 	await expectWorkspaceStanding(page);

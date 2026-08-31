@@ -40,7 +40,7 @@
 	);
 	const initials = $derived(title ? titleInitials(title) : ALBUM_ART_EMPTY_INITIALS);
 	// The interior (AlbumDetailView/PlaylistDetailView) is the visible surface
-	// only once a song stops covering it — see routes/+page.svelte's
+	// only once a song stops covering it — see LibraryWorkspace.svelte's
 	// song-first precedence.
 	const isInteriorVisible = $derived($librarySurface === 'detail' && currentSongId === null);
 

@@ -6,18 +6,19 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File                    | Covers                                                                                                                                                                                                                                                    |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                     |
-| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275) |
+| File                    | Covers                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                                                                                                        |
+| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281) |
 
 `album-address.spec.ts` runs on **desktop only**: what it pins is the router's
 behaviour across an address that changes the route, which is the same code on
 both shells, and both projects share one rate-limit window. It is here rather
 than in the unit suite because jsdom has no router — only a real browser shows
-whether moving between `/`, `/album/<slug>` and `/album/<slug>/<song-slug>`
-keeps the workspace standing or tears it down. Its evidence that nothing was
-torn down is that the page opened the live event stream exactly once.
+whether moving between `/`, `/album/<slug>`, `/album/<slug>/<song-slug>` and
+`/album/<slug>/<song-slug>/take/<n>` keeps the workspace standing or tears it
+down. Its evidence that nothing was torn down is that the page opened the
+live event stream exactly once.
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -63,32 +64,54 @@ the flow costs the API and holds it under a named budget.
 
 **The budget is a ceiling, not a knob.** Each flow has its own, measured on a
 green run and carrying headroom: the library flow measures 26 `/api` requests
-per shell against a budget of 32, and `album-address.spec.ts` carries two —
+per shell against a budget of 32, and `album-address.spec.ts` carries three —
 22 for the cold album open, one-step track click and Back/Forward, 16 for a
-standalone cold song open — against a shared budget of 30. A flow that
-suddenly needs more round trips is a regression — find the extra requests
-instead of raising the number. The measured count is printed on every run.
+standalone cold song open, 16 for a standalone cold take open — against a
+shared budget of 30. Every cold open (song or take) races the live stream's
+own bootstrap the same way — whichever of the two restores the library state
+finishes second re-applies the same state (documented on `openAlbumAddress`
+in `stores/libraryContext.ts`) — so a green run can measure a request or two
+either side of these numbers; the budget's headroom is sized for exactly that,
+not for a real regression. A flow that suddenly needs several more round
+trips is a regression — find the extra requests instead of raising the
+number. The measured count is printed on every run.
 
 Opening a track from an open album address is still a route-file crossing
 (issue #269): a song addresses `/album/<slug>/<song-slug>` instead of the
-address-less `/?song=…`, and each of the three library addresses is still a
+address-less `/?song=…`, and each of the four library addresses is still a
 different `+page.svelte`. #265's S3 (issue #275) measured what that crossing
 cost the library flow — 28 requests instead of a pre-address 25, because each
 address mounted its own `LibraryWorkspace` and a crossing tore the previous
-one down — without removing the cause; #276 did. `/`, `/album/[slug]` and
-`/album/[slug]/[song]` now sit inside one `(library)` route group whose own
-`+layout.svelte` mounts `LibraryWorkspace` once, so a crossing swaps only the
-thin leaf page under it instead of tearing the workspace down and rebuilding
-it. That folded the library flow to 26 (from 28) and the album-address flow's
+one down — without removing the cause; #276 did. `/`, `/album/[slug]`,
+`/album/[slug]/[song]` and, since #281, `/album/[slug]/[song]/take/[n]` now
+sit inside one `(library)` route group whose own `+layout.svelte` mounts
+`LibraryWorkspace` once, so a crossing swaps only the thin leaf page under it
+instead of tearing the workspace down and rebuilding it. That folded the
+library flow to 26 (from 28) and the album-address flow's
 cold-open-plus-crossing case to 22 (from 24) — not all the way back to the
 pre-address 25, since a route-file crossing is still a real SvelteKit
 navigation with its own cost, just no longer a workspace rebuild on top of
-it. The standalone cold song open stays at 16: it never crosses a route to
-begin with, so there was never a rebuild to fold away. What #275 bought
-stands unchanged: the address itself (a song is linkable and survives a cold
-open on its own, 404s honestly on an unknown slug, and follows a rename) and
-the crossing-detection fix that keeps the router in step one segment deeper
-(`libraryRouteShape` in `stores/libraryContext.ts`).
+it. The standalone cold song and cold take opens stay at 16: neither crosses
+a route to begin with, so there was never a rebuild to fold away for either.
+What #275 bought stands unchanged: the address itself (a song is linkable and
+survives a cold open on its own, 404s honestly on an unknown slug, and
+follows a rename) and the crossing-detection fix that keeps the router in
+step one segment deeper (`libraryRouteShape` in `stores/libraryContext.ts`).
+
+Chasing the cold-take-open flow against a real stack is what found a real
+defect in that race, not just its request count: `hydrateLibraryFromHistory`
+(`stores/libraryContext.ts`) used to read `restoreLibraryBrowse`'s own return
+value as the live stream's bootstrap success signal, but a `false` from a
+restore that lost the race to a newer one is not a failure — only a
+genuinely failed one is. Treating it as one closed the live stream and showed
+"Library sync failed" on a cold take open every time: a take's extra hop
+(loading the rest of the song's generations to find the requested number
+before it can address anything at all) reliably loses that race, where a
+song's faster resolution usually wins it — which is why this surfaced on the
+take address and not, so far, on the album or song ones, even though the same
+latent bug sat in their shared code path too. Fixed by reading
+`libraryBrowse`'s own final status instead, the same way the branch beside it
+already did.
 
 Selectors are roles and accessible names, imported from `src/lib/constants.ts`
 — never `data-testid`. A flow that cannot find an element by its accessible

@@ -9,6 +9,7 @@ import {
 	libraryBrowse,
 	librarySearch,
 	librarySort,
+	loadLibraryBrowse,
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -37,10 +38,15 @@ vi.mock('$lib/api/songs', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
+// player.ts's ensureGenerationsLoaded, which openTakeAddress uses to resolve
+// a take number against the song's full generations, fetches through this
+// module's fetchSong rather than $lib/api/songs's -- both share the fetchSong
+// spy below so a test only has to program one mocked response either way.
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -60,10 +66,12 @@ import {
 	isAlbumRoutePath,
 	isLibraryHistoryState,
 	isSongRoutePath,
+	isTakeRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
 	openSongAddress,
+	openTakeAddress,
 	libraryRootState,
 	libraryScrollAnchor,
 	libraryFilter,
@@ -456,6 +464,32 @@ describe('hydrateLibraryFromHistory', () => {
 		expect(history.state.collection).toBeNull();
 		expect(history.state.surface).toBe('browse');
 	});
+
+	// Regression for issue #281: on a cold tab with no LibraryHistoryState yet,
+	// this falls back to its own restoreLibraryBrowse -- which a concurrent,
+	// newer browse load (an address's own resolution racing the same bootstrap,
+	// exactly like the branch above) can supersede. A superseded restore's own
+	// `false` return is not a bootstrap failure; only libraryBrowse's own final
+	// status says whether the library actually loaded. Getting this wrong
+	// closed the live stream and showed "Library sync failed" on a real stack
+	// every time a cold take open's extra generations fetch let it lose this
+	// race -- see e2e/README.md's Guard rails section for the full story.
+	it('reports success even when its own browse restore loses the race to a newer one', async () => {
+		let resolveSuperseded: (() => void) | undefined;
+		fetchAlbums.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveSuperseded = () => resolve(emptyPage());
+				})
+		);
+
+		const hydrate = hydrateLibraryFromHistory();
+		await loadLibraryBrowse({ reset: true });
+		resolveSuperseded?.();
+
+		await expect(hydrate).resolves.toBe(true);
+		expect(get(libraryBrowse).status).toBe('ready');
+	});
 });
 
 describe('libraryHistoryUrl', () => {
@@ -482,7 +516,28 @@ describe('libraryHistoryUrl', () => {
 		).toBe('/album/anfield/tide');
 	});
 
-	it('carries a selected take as the same query appendage as before', () => {
+	it('addresses a selected take by its number under the song, not the query string', () => {
+		songList.set([
+			song({
+				id: 's1',
+				slug: 'tide',
+				album_id: 'anfield',
+				generations: [generation({ id: 'g1', song_id: 's1', generation_number: 3 })]
+			})
+		]);
+
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'anfield' },
+				songId: 's1',
+				generationId: 'g1'
+			})
+		).toBe('/album/anfield/tide/take/3');
+	});
+
+	it('falls back to the query appendage while the take is not yet among the loaded generations', () => {
 		songList.set([song({ id: 's1', slug: 'tide', album_id: 'anfield' })]);
 
 		expect(
@@ -526,12 +581,14 @@ describe('isAlbumRoutePath', () => {
 		expect(isAlbumRoutePath('/settings/voices')).toBe(false);
 	});
 
-	// A song address is one segment deeper than its album's (issue #275) and
-	// must still read as an album route: isLibraryWorkspacePath (navigation.ts)
-	// leans on this boolean alone to decide whether the workspace mounts here,
-	// and a song address is a third entrance to it.
-	it('is also true one segment deeper, where a song lives', () => {
+	// A song address is one segment deeper than its album's (issue #275), and a
+	// take address one segment deeper still (issue #281), and both must still
+	// read as an album route: isLibraryWorkspacePath (navigation.ts) leans on
+	// this boolean alone to decide whether the workspace mounts here, and a
+	// song or take address is a third and fourth entrance to it.
+	it('is also true two and three segments deeper, where a song and its takes live', () => {
 		expect(isAlbumRoutePath('/album/anfield/stadion-lauf-a')).toBe(true);
+		expect(isAlbumRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
 	});
 });
 
@@ -541,6 +598,23 @@ describe('isSongRoutePath', () => {
 		expect(isSongRoutePath('/album/anfield')).toBe(false);
 		expect(isSongRoutePath('/album/anfield/')).toBe(false);
 		expect(isSongRoutePath('/')).toBe(false);
+	});
+
+	// A take address is one segment deeper than its song's (issue #281) and,
+	// like isAlbumRoutePath above, still reads as a song route -- syncSongAddressToRename
+	// (navigation.ts) leans on that to pull a rename along under a take address too.
+	it('is also true one segment deeper, where a take lives', () => {
+		expect(isSongRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
+	});
+});
+
+describe('isTakeRoutePath', () => {
+	it('is a take address only with an album, a song, and a take number', () => {
+		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
+		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a')).toBe(false);
+		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a/take/')).toBe(false);
+		expect(isTakeRoutePath('/album/anfield')).toBe(false);
+		expect(isTakeRoutePath('/')).toBe(false);
 	});
 });
 
@@ -612,6 +686,110 @@ describe('openSongAddress', () => {
 
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(get(detailTab)).toBe('takes');
+	});
+});
+
+describe('openTakeAddress', () => {
+	it('makes the library restore the addressed take on a tab that knows nothing else', async () => {
+		fetchSongs.mockResolvedValueOnce({
+			...emptyPage([
+				song({
+					id: 's9',
+					slug: 'tide',
+					album_id: 'a9',
+					album_title: 'Remote',
+					generation_count: 1,
+					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 3 })]
+				})
+			]),
+			limit: 200
+		});
+		history.replaceState(null, '', '/album/a9/tide/take/3');
+
+		await expect(openTakeAddress('a9', 'tide', 3)).resolves.toBe('found');
+
+		expect(history.state.songId).toBe('s9');
+		expect(history.state.generationId).toBe('g1');
+		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(get(selectedSongId)).toBe('s9');
+		expect(get(selectedGenerationId)).toBe('g1');
+		expect(get(detailTab)).toBe('takes');
+	});
+
+	it('loads the rest of the song generations to find a take the listing did not carry yet', async () => {
+		fetchSongs.mockResolvedValueOnce({
+			...emptyPage([
+				song({
+					id: 's9',
+					slug: 'tide',
+					album_id: 'a9',
+					generation_count: 2,
+					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 1 })]
+				})
+			]),
+			limit: 200
+		});
+		fetchSong.mockResolvedValueOnce(
+			song({
+				id: 's9',
+				slug: 'tide',
+				album_id: 'a9',
+				generation_count: 2,
+				generations: [
+					generation({ id: 'g1', song_id: 's9', generation_number: 1 }),
+					generation({ id: 'g2', song_id: 's9', generation_number: 2 })
+				]
+			})
+		);
+		history.replaceState(null, '', '/album/a9/tide/take/2');
+
+		await expect(openTakeAddress('a9', 'tide', 2)).resolves.toBe('found');
+
+		expect(fetchSong).toHaveBeenCalledWith('s9');
+		expect(get(selectedGenerationId)).toBe('g2');
+	});
+
+	it('reports an unknown take number within a known song, without opening anything', async () => {
+		fetchSongs.mockResolvedValueOnce({
+			...emptyPage([
+				song({
+					id: 's9',
+					slug: 'tide',
+					album_id: 'a9',
+					generation_count: 1,
+					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 1 })]
+				})
+			]),
+			limit: 200
+		});
+		history.replaceState(null, '', '/album/a9/tide/take/9');
+
+		await expect(openTakeAddress('a9', 'tide', 9)).resolves.toBe('unknown-take');
+
+		expect(get(selectedSongId)).toBeNull();
+		expect(history.state).toBeNull();
+	});
+
+	it('reports an unknown song slug within a known album, without opening anything', async () => {
+		fetchSongs.mockResolvedValueOnce({
+			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			limit: 200
+		});
+		history.replaceState(null, '', '/album/a9/ghost-song/take/1');
+
+		await expect(openTakeAddress('a9', 'ghost-song', 1)).resolves.toBe('unknown-song');
+
+		expect(get(selectedSongId)).toBeNull();
+	});
+
+	it('reports an unknown album even when the song lookup also comes back empty', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
+		history.replaceState(null, '', '/album/ghost/tide/take/1');
+
+		await expect(openTakeAddress('ghost', 'tide', 1)).resolves.toBe('unknown-album');
+
+		expect(get(selectedSongId)).toBeNull();
 	});
 });
 

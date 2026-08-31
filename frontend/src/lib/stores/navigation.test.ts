@@ -280,8 +280,10 @@ describe('history writes across the route boundary (issue #269)', () => {
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
 
+		// Pinning the take crosses a second time (issue #281: the take is its
+		// own route file too), queued behind the song's own crossing write.
 		await vi.waitFor(() => expect(history.state.generationId).toBe('g1'));
-		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1?gen=g1');
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
 	// Issue #275: an album address becomes a song address one segment deeper
@@ -315,6 +317,70 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s2');
+	});
+
+	// #275-review bycatch, pinned here as issue #281 promised: a song-to-song
+	// move across album boundaries is still the same route file
+	// (/album/[slug]/[song]/+page.svelte matches both, whichever album the
+	// slug names), so it stays the frequent-churn raw write too -- only the
+	// route.id shape decides a crossing, never which resource it names.
+	it('writes a song-to-song move across album boundaries straight to history too', async () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a2' })]);
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		vi.mocked(goto).mockClear();
+
+		await selectSong('s2', song({ id: 's2', album_id: 'a2' }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/album/a2/s2');
+	});
+
+	// Issue #281: a take address is one segment deeper than its song's own
+	// (/album/x/y -> /album/x/y/take/n), a route-file boundary again -- the
+	// same isSongRoutePath boolean stays true on both sides, so this crossing
+	// check must tell song and take apart too, not just album and song.
+	it('crosses through the router from a song address to one of its takes', async () => {
+		songList.set([song({ id: 's1', album_id: 'a1' })]);
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		vi.mocked(goto).mockClear();
+
+		selectedGenerationId.set('g1');
+		persistLibraryHistory();
+
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1/take/1', {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	});
+
+	// Moving between two takes of the same open song stays the same route
+	// file (/take/[n] matches both, whichever number it names), so it is the
+	// frequent-churn case, not a crossing -- the same rule the album<->song
+	// and song<->song cases above already carry one segment shallower.
+	it('writes a take-to-take move inside the same song straight to history', async () => {
+		songList.set([
+			song({
+				id: 's1',
+				album_id: 'a1',
+				generations: [
+					generation({ id: 'g1', generation_number: 1 }),
+					generation({ id: 'g2', generation_number: 2 })
+				]
+			})
+		]);
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		selectedGenerationId.set('g1');
+		persistLibraryHistory();
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
+		vi.mocked(goto).mockClear();
+
+		selectedGenerationId.set('g2');
+		persistLibraryHistory();
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/album/a1/s1/take/2');
 	});
 });
 
@@ -768,18 +834,21 @@ describe('selectLibraryFilter', () => {
 });
 
 describe('revealPlayingSong', () => {
-	it('opens the song at its own address in one step when already on the library workspace', async () => {
+	it('opens the song at its own address, then crosses again to the take', async () => {
 		history.replaceState(null, '', '/');
 		await revealPlayingSong(song({ id: 's1' }), 'g1');
-		// The song's own address crosses the route boundary exactly once; the
-		// take then rides along as a raw write, since it does not change which
-		// route file is mounted.
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual(['/album/a1/s1']);
+		// The song's own address crosses the route boundary once; the take is
+		// its own route file too (issue #281), so pinning it crosses a second
+		// time, queued behind the first.
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
-			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1?gen=g1')
+			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
 		);
+		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+			'/album/a1/s1',
+			'/album/a1/s1/take/1'
+		]);
 	});
 
 	it('navigates home first from another route', async () => {
