@@ -709,7 +709,13 @@ describe('the library route group', () => {
 		expect(readdirSync(libraryGroupDir).sort()).toEqual([
 			'+layout.svelte',
 			'+page.svelte',
-			'album'
+			'album',
+			// The root address's own test harness and spec (issue #284's legacy
+			// `?song=` redirect) -- listed here rather than left to break this
+			// assertion silently, the same way `album/[slug]` already carries its
+			// own harness.svelte/page.test.ts one level down.
+			'harness.svelte',
+			'page.test.ts'
 		]);
 		expect(readFileSync(join(libraryGroupDir, '+layout.svelte'), 'utf8')).toContain(
 			'LibraryWorkspace'

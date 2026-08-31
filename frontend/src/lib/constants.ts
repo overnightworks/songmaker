@@ -41,6 +41,14 @@ export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are
 
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
+// A legacy `/?song=<id>&gen=<id>` link whose take is gone still opens the
+// song (issue #284) -- the song is the durable value, and takes are pruned
+// by ordinary cleanup, so a dead take is not the same failure a dead song
+// is. Falling back silently would still hide a fact the app knows, so this
+// says so instead of just landing on the song.
+export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
+	'This take no longer exists — opened the song instead';
+
 // A collection row announces the action its click performs, then the title:
 // "Play Tide", "Pause Tide". Every surface that renders such a row, and every
 // flow that finds one by name, builds the label here.

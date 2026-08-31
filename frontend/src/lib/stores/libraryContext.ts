@@ -212,11 +212,15 @@ function libraryRouteShape(pathname: string): LibraryRouteShape {
 // take addresses onto its own path one segment deeper (issue #281), by its
 // generation_number rather than its uuid -- but only once that take is among
 // the song's loaded generations; a take selected before its number is known
-// (the legacy `?gen=<uuid>` entry point, still only read, or a song whose
-// generations have not loaded yet) keeps writing the query appendage until it
-// is. A song not yet hydrated into songList (the legacy `?song=` entry point)
-// keeps writing that older form for the same reason -- migrating live
-// `?song=`/`?gen=` addresses to the new ones is S6, not this slice.
+// keeps writing the query appendage until it is. A song not yet hydrated
+// into songList -- a search hit or a playlist row opened by id alone
+// (PlaylistDetailView, LibraryWall), before its own upsert lands -- keeps
+// writing the legacy `/?song=<uuid>`/`&gen=<uuid>` form for the same reason:
+// there is no slug yet to build the canonical path from, and the very next
+// write, once the song has loaded, replaces it. A stale bookmark that still
+// carries that older form is a different case: it never reaches this
+// function's songId branch at all -- (library)/+page.svelte resolves and
+// redirects it onto the canonical address first (issue #284).
 export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	if (state.songId) {
 		const song = get(songList).find((item) => item.id === state.songId);
@@ -472,6 +476,61 @@ export async function openTakeAddress(
 	}
 	if (!takeAlreadyShown(song.id, generation.id)) await applyLibraryHistory(state);
 	return 'found';
+}
+
+export type LegacySongQueryAddress =
+	{ kind: 'found'; path: string; droppedUnknownTake: boolean } | { kind: 'unknown-song' };
+
+// The legacy `/?song=<uuid>` and `/?song=<uuid>&gen=<uuid>` entry points
+// (issue #284): a bookmark or a link shared before S3/S4 (#275/#281) gave the
+// library its own song and take addresses still carries only ids, not the
+// slug/number those canonical addresses name a song or take by. fetchSong
+// resolves both in the one call it already needs for its own id -- it
+// returns the full generation list (see ensureGenerationsLoaded's own
+// assumption of that), so no separate takes fetch is needed to find a
+// requested generation's number -- and the song is upserted into songList
+// the same way resolveSongInAlbum already does for a slug-based hit, so the
+// canonical route's own resolution that (library)/+page.svelte hands the
+// redirect to (openSongAddress / openTakeAddress) finds it there instead of
+// fetching it again.
+//
+// This only resolves the address; it does not write history or apply it --
+// (library)/+page.svelte's own `goto` does that by landing on the resolved
+// path itself, the same route-file crossing writeLibraryHistory already
+// carries a direct hit on that path through, replacing the query form in
+// place rather than pushing a new entry over it. An unknown song id is the
+// same honest verdict an unknown slug already gets; an unknown generation id
+// on an otherwise known song is not -- the song still exists -- so it is
+// dropped rather than reported, landing on the song's own address instead of
+// a 404 for a page that is there -- but silently, per the operator's own
+// standard, would hide a fact the surface knows: `droppedUnknownTake` tells
+// the caller a take was requested and not found, so it can say so (a toast,
+// after the redirect lands -- see (library)/+page.svelte).
+export async function resolveLegacySongQueryAddress(
+	songId: string,
+	generationId: string | null
+): Promise<LegacySongQueryAddress> {
+	let resolvedSong: SongItem;
+	try {
+		resolvedSong = await fetchSong(songId);
+	} catch (err) {
+		if (isNotFound(err)) return { kind: 'unknown-song' };
+		throw err;
+	}
+	upsertSongInList(resolvedSong);
+	const takeNumber = generationId
+		? resolvedSong.generations.find((generation) => generation.id === generationId)
+				?.generation_number
+		: undefined;
+	const path =
+		takeNumber !== undefined
+			? takeRoutePath(resolvedSong.album_id, resolvedSong.slug, takeNumber)
+			: songRoutePath(resolvedSong.album_id, resolvedSong.slug);
+	return {
+		kind: 'found',
+		path,
+		droppedUnknownTake: generationId !== null && takeNumber === undefined
+	};
 }
 
 // Checks the already-loaded songs of this album first -- the in-app route to

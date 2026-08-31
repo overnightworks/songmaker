@@ -6,10 +6,10 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File                    | Covers                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                                                                                                        |
-| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281) |
+| File                    | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                                                                                                                                                                                                                              |
+| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284) |
 
 `album-address.spec.ts` runs on **desktop only**: what it pins is the router's
 behaviour across an address that changes the route, which is the same code on
@@ -64,17 +64,19 @@ the flow costs the API and holds it under a named budget.
 
 **The budget is a ceiling, not a knob.** Each flow has its own, measured on a
 green run and carrying headroom: the library flow measures 26 `/api` requests
-per shell against a budget of 32, and `album-address.spec.ts` carries three —
+per shell against a budget of 32, and `album-address.spec.ts` carries four —
 22 for the cold album open, one-step track click and Back/Forward, 16 for a
-standalone cold song open, 16 for a standalone cold take open — against a
-shared budget of 30. Every cold open (song or take) races the live stream's
-own bootstrap the same way — whichever of the two restores the library state
-finishes second re-applies the same state (documented on `openAlbumAddress`
-in `stores/libraryContext.ts`) — so a green run can measure a request or two
-either side of these numbers; the budget's headroom is sized for exactly that,
-not for a real regression. A flow that suddenly needs several more round
-trips is a regression — find the extra requests instead of raising the
-number. The measured count is printed on every run.
+standalone cold song open, 16 for a standalone cold take open, 15 for the
+legacy `/?song=` bookmark redirect (issue #284, two full cold page loads: a
+genuine earlier page, then the bookmark) — against a shared budget of 30.
+Every cold open (song, take, or the redirected legacy bookmark) races the
+live stream's own bootstrap the same way — whichever of the two restores the
+library state finishes second re-applies the same state (documented on
+`openAlbumAddress` in `stores/libraryContext.ts`) — so a green run can
+measure a request or two either side of these numbers; the budget's headroom
+is sized for exactly that, not for a real regression. A flow that suddenly
+needs several more round trips is a regression — find the extra requests
+instead of raising the number. The measured count is printed on every run.
 
 Opening a track from an open album address is still a route-file crossing
 (issue #269): a song addresses `/album/<slug>/<song-slug>` instead of the

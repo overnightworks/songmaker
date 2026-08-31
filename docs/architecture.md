@@ -184,13 +184,34 @@ one of the four: an open song addresses `/album/<slug>/<song-slug>` once the
 song's slug is known from `songList`, a selected take addresses one segment
 deeper still, `/album/<slug>/<song-slug>/take/<n>`, once that take's
 `generation_number` is known among the song's loaded generations — a take
-selected before its number is known (the legacy `?gen=<uuid>` entry point, or
-a song whose generations have not loaded yet) keeps writing the `?gen=…`
-appendage until it is — an album that is the visible surface but has no song
-open addresses `/album/<slug>`, and an album that is only the rail context
-behind the wall stays on `/`. The legacy `/?song=<id>[&gen=…]` form is still
-read (a bookmarked or shared link keeps working) but no longer written;
-migrating it once resolved into the new address is issue #265's S6, not this.
+selected before its number is known keeps writing the `?gen=…` appendage
+until it is (a search hit or a playlist row opened by id alone, before its
+own upsert into `songList` lands — see `libraryHistoryUrl`'s own comment) —
+an album that is the visible surface but has no song open addresses
+`/album/<slug>`, and an album that is only the rail context behind the wall
+stays on `/`. The legacy `/?song=<id>[&gen=…]` form a pre-#275/#281 bookmark
+or shared link still carries is no longer read as its own entry point:
+`(library)/+page.svelte` resolves it (`resolveLegacySongQueryAddress` in
+`stores/libraryContext.ts` — one `fetchSong` call gets both the slug and,
+when `?gen=` names a generation the song still has, its `generation_number`)
+and redirects, `replaceState`, onto the canonical song or take address —
+issue #284 — so Back does not step back through the query form, and an
+unknown song id gets the same honest 404 treatment `openSongAddress`'s
+unknown-song case does rather than a silent landing on the wall. An unknown `?gen=` on an
+otherwise known song is dropped rather than 404ed — the song still exists,
+and takes are pruned by ordinary cleanup, so a dead take is not the song's
+own failure — but not silently: dropping it without saying so would still
+hide a fact the surface knows, so the page toasts
+`LEGACY_TAKE_LINK_NOT_FOUND_TOAST` once the redirect has landed on the song
+address (never before — the bar must already read the new address when the
+toast explains why it isn't the take one). A tab whose `history.state`
+already names this exact legacy entry from before this redirect existed
+(Back/Forward onto it) has `onPopstate` apply that state instantly while
+this same resolution reruns over the network in parallel; both converge on
+the same address, so the only cost is one redundant fetch and a brief
+overlay flash — self-healing, and #265's S7 (removing the hand-built
+history this page resolves against, once every address goes through the
+router) removes the case entirely.
 `isLibraryWorkspacePath` still counts all four by pathname (it leans on
 `isAlbumRoutePath`, true for `/album/<slug>` and every segment deeper) rather
 than by the route group, since `routes/+layout.svelte` sits outside
@@ -245,7 +266,7 @@ id} | null`), which nothing but `openAlbum`/`openPlaylist`/history restore in
 `stores/navigation.ts` and `loadPlaylistDetail` in `stores/playlists.ts`
 write. `playlists.ts`'s `selectedPlaylistId` is derived from it, not
 independently writable. Opening a song — whatever the entry point (rail row,
-search hit, `?song=` deep link, history restore) — always leaves the rail
+search hit, a redirected legacy `?song=` link, history restore) — always leaves the rail
 context pointing at that song's album: a module-level subscription in
 `navigation.ts` sets `openCollection` to the song's album whenever it doesn't
 already match, so the album is never unreachable while a song is open (the

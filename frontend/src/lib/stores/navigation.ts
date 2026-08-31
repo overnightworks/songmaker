@@ -150,7 +150,8 @@ async function guardDirtyNavigation(action: () => void | Promise<void>): Promise
 }
 
 // The rail context (and every other "song open" entry point — search hits,
-// ?song= deep links, history restore) never leaves the rail empty: whenever
+// history restore, and, since issue #284, a redirected legacy `?song=` link
+// once its canonical route mounts) never leaves the rail empty: whenever
 // the selected song's album is not the open collection, the collection
 // follows the song. Opening a collection explicitly (openAlbum/openPlaylist)
 // is unaffected — this only reacts to a *song* becoming current.
@@ -167,8 +168,9 @@ function ensureCollectionMatchesSong(song: SongItem): void {
 // the address along -- it fires only on a slug change of the *same* song,
 // never on an ordinary selection (that already writes its own entry) or on
 // unrelated song edits (lyrics/prompt autosave), and only while the address
-// bar is already a song address; a legacy `?song=` entry migrates on its own
-// next real navigation, not here (see the note on libraryHistoryUrl).
+// bar is already a song address; a legacy `?song=` entry never reaches this
+// function at all -- (library)/+page.svelte redirects it onto its canonical
+// address first (issue #284) -- see the note on libraryHistoryUrl.
 let addressedSong: { id: string; slug: string } | null = null;
 
 function syncSongAddressToRename(song: SongItem): void {
@@ -289,10 +291,10 @@ export function albumTrackNeighbors(
 	};
 }
 
-// This module's single "a song is now open" hook, used by its four entry
+// This module's single "a song is now open" hook, used by its three entry
 // points: applySelectedSong (selectSong, selectNeighborSong,
-// revealPlayingSong), the ?song= deep link and history-restore branches of
-// initNavigation, and onPopstate. Loads the song's takes and, alongside
+// revealPlayingSong), the history-restore branch of initNavigation, and
+// onPopstate. Loads the song's takes and, alongside
 // that, recovers its failure banner from the last failed generate job so a
 // reload or a later visit shows the same cause a live SSE stream would have
 // (see hydrateGenerationFailure). A new entry point added to this module
@@ -509,25 +511,16 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
+// A cold tab's history.state carries no LibraryHistoryState until something
+// writes one -- this seeds a fresh root entry for that case (a plain `/` or
+// `/album/<slug>` visit). A legacy `/?song=<uuid>` (or `&gen=<uuid>`) query
+// used to be read and applied right here; since issue #284,
+// (library)/+page.svelte owns that instead -- it resolves the ids and
+// redirects onto the canonical song/take address before this ever runs, so
+// there is nothing left for this branch to special-case.
 export function initNavigation(): () => void {
 	const existing = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(existing)) {
-		const params = new URLSearchParams(window.location.search);
-		const songId = params.get('song');
-		const genId = params.get('gen');
-
-		if (songId) {
-			suppressPush = true;
-			playerSelectSong(songId);
-			loadSongContext(songId);
-			if (genId) {
-				selectedGenerationId.set(genId);
-				openTakesTab();
-			}
-			setLibrarySurface('detail');
-			suppressPush = false;
-		}
-
 		void replaceLibraryHistory();
 	} else if (existing.songId) {
 		loadSongContext(existing.songId);

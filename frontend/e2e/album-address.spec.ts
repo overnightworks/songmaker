@@ -12,7 +12,13 @@
 // layout mounts LibraryWorkspace once, so a crossing swaps only the thin leaf
 // page underneath. That the app writes these addresses when an album, a song
 // or a take opens is pinned in the unit suite (stores/navigation.test.ts),
-// which costs the stack nothing.
+// which costs the stack nothing. The fifth address this file drives, the
+// legacy `/?song=<uuid>` a pre-#275 bookmark or link still carries, is not a
+// fifth route -- (library)/+page.svelte redirects it onto the song address
+// above (issue #284) -- so what only a real browser and router show is that
+// the redirect actually lands there and that Back does not step back through
+// the query form; the id -> slug lookup itself is pinned in the unit suite
+// (resolveLegacySongQueryAddress in stores/libraryContext.test.ts).
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
@@ -24,10 +30,16 @@ import { readSeededLibrary } from './seed';
  * album open + one-step track click + Back/Forward (down from 24 before issue
  * #276 folded the workspace remount away), 16 for the standalone cold song
  * open and 16 for the standalone cold take open, both unchanged from each
- * other since neither crosses a route to begin with. One shared ceiling,
- * sized to the largest with the same headroom the library flow carries — all
- * three flows share one 60-second IP rate-limit window, so a jump here is a
- * regression to find, not a number to raise.
+ * other since neither crosses a route to begin with, and 15 for the legacy
+ * `/?song=` bookmark redirect (issue #284) -- two full cold page loads (a
+ * genuine earlier page, then the bookmark) yet still under the standalone
+ * cold song open above, since the second load's own snapshot bootstrap can
+ * lose its race against the redirect's own fetch the way a cold take open's
+ * already does (see the note further down on that race) — it isn't a fixed
+ * cost either way. One shared ceiling, sized to the largest with the same
+ * headroom the library flow carries — all four flows share one 60-second IP
+ * rate-limit window, so a jump here is a regression to find, not a number to
+ * raise.
  */
 const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 30;
 
@@ -157,4 +169,42 @@ test('a take address opens cold, in a tab that knows nothing else', async ({ pag
 
 	await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 	await expectWorkspaceStanding(page);
+});
+
+test('a legacy /?song= bookmark redirects onto the song address, and Back skips the old form', async ({
+	page,
+	isMobile
+}) => {
+	// Same reasoning as the three cold-opens above: shell-independent router
+	// behaviour, and the four flows already share a budget window. The redirect
+	// itself -- resolving the id, dropping an unknown ?gen=, and 404ing an
+	// unknown song id -- is pinned cheaply in the unit suite
+	// (resolveLegacySongQueryAddress in stores/libraryContext.test.ts); what
+	// only a real browser and a real router show is that the address bar
+	// actually lands on the canonical form and that Back does not step back
+	// through the query one -- issue #284's own done-when.
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+
+	const library = readSeededLibrary();
+	const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
+	const songs = (await songsResponse.json()).items as { id: string; title: string }[];
+	const pickedSong = songs.find((item) => item.title === library.pickedSongTitle);
+	if (!pickedSong) {
+		throw new Error(`Seeded song "${library.pickedSongTitle}" was not in the album listing`);
+	}
+	const songAddress = `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`;
+	const surface = workspace(page);
+
+	// A genuine earlier page first, so Back has somewhere honest to land --
+	// the legacy address itself must not be that place.
+	await page.goto('/');
+	await expectWorkspaceStanding(page);
+
+	await page.goto(`/?song=${pickedSong.id}`);
+	await expect(page).toHaveURL(songAddress);
+	await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
+	await expectWorkspaceStanding(page);
+
+	await page.goBack();
+	await expect(page).toHaveURL('/');
 });

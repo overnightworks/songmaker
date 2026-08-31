@@ -434,7 +434,7 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
 
-	it('leaves a legacy ?song= address as-is -- migrating it is issue #265 S6, not this', async () => {
+	it("leaves a legacy ?song= address alone -- redirecting it onto its canonical address is (library)/+page.svelte's job (issue #284), not this rename-follow", async () => {
 		history.replaceState(null, '', '/?song=s1');
 		selectedSongId.set('s1');
 
@@ -858,58 +858,12 @@ describe('revealPlayingSong', () => {
 	});
 });
 
+// A legacy `/?song=<uuid>` (and `&gen=<uuid>`) deep link used to be read and
+// applied right here; since issue #284, (library)/+page.svelte owns that
+// instead -- resolveLegacySongQueryAddress (libraryContext.test.ts) covers
+// the id -> slug/number lookup and its unknown-song 404, and
+// e2e/album-address.spec.ts covers the redirect landing on the real router.
 describe('initNavigation', () => {
-	it('opens the song from a ?song= deep link and pins the collection once loaded', async () => {
-		fetchSong.mockResolvedValue(song({ id: 's1', album_id: 'a1' }));
-		history.replaceState(null, '', '/?song=s1');
-		const cleanup = initNavigation();
-		expect(get(selectedSongId)).toBe('s1');
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
-		cleanup();
-	});
-
-	it('reports a not-found toast and lands in the library when the ?song= deep link is dead', async () => {
-		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/dead'));
-		history.replaceState(null, '', '/?song=dead');
-
-		const cleanup = initNavigation();
-		expect(get(selectedSongId)).toBe('dead');
-
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-
-		expect(
-			get(toasts).some((t) => t.type === 'error' && t.message === SONG_LINK_NOT_FOUND_TOAST)
-		).toBe(true);
-		expect(get(librarySurface)).toBe('browse');
-		expect(window.location.search).toBe('');
-		cleanup();
-	});
-
-	it('recovers the failure banner on a fresh page load that lands directly on a song', async () => {
-		fetchSong.mockResolvedValue(song({ id: 's1', album_id: 'a1' }));
-		fetchLastFailedGeneration.mockResolvedValue({
-			job: {
-				id: 'j1',
-				type: 'generate',
-				status: 'failed',
-				progress: 0,
-				error: 'VRAM exhausted',
-				error_type: null,
-				started_at: null,
-				completed_at: '2026-01-02T00:00:00+00:00'
-			}
-		});
-		history.replaceState(null, '', '/?song=s1');
-		const cleanup = initNavigation();
-		expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1');
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(get(generationFailures).s1).toBe('VRAM exhausted');
-		cleanup();
-	});
-
 	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
