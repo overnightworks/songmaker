@@ -156,30 +156,39 @@ An open album has an address of its own, `/album/<slug>` (issue #269; album
 ids are already readable slugs), and an open song one segment deeper,
 `/album/<slug>/<song-slug>` (issue #275; songs carry their own album-unique,
 DB-enforced slug — issues #272/#274). All three of `/`, `/album/<slug>` and
-`/album/<slug>/<song-slug>` render `components/LibraryWorkspace.svelte` — the
-bootstrap gate and the surface switch — while `routes/+layout.svelte` owns the
-live event stream and the history listener, so swapping between any of the
-three addresses neither rebuilds the workspace nor re-runs its bootstrap. The
-layout starts the stream only for a signed-in browser on a library route,
-which is the reach the workspace page had when it owned this; Settings, login,
-setup and the share pages leave it off. The workspace itself gates on
-`resourceSync.ready` rather than on a promise resolved once per mount, so a
-mount that finds the stream already live shows the library on its first
-frame. `libraryHistoryUrl` in `stores/libraryContext.ts` maps library state to
-one of the three: an open song addresses `/album/<slug>/<song-slug>` (its take,
-if any, riding along as the unchanged `?gen=…` appendage) once the song's slug
-is known from `songList`, an album that is the visible surface but has no
-song open addresses `/album/<slug>`, and an album that is only the rail
-context behind the wall stays on `/`. The legacy `/?song=<id>[&gen=…]` form is
-still read (a bookmarked or shared link keeps working) but no longer written;
-migrating it once resolved into the new address is issue #265's S6, not
-this. All three addresses mount the same library workspace
-(`routes/album/[slug]/+page.svelte` and
-`routes/album/[slug]/[song]/+page.svelte` both render
-`components/LibraryWorkspace.svelte`, exactly like `routes/+page.svelte`),
-which is why `isLibraryWorkspacePath` counts all three (it leans on
-`isAlbumRoutePath`, true for both `/album/<slug>` and one segment deeper) and
-`ensureLibraryWorkspaceRoute` never pushes anything off either address. A cold
+`/album/<slug>/<song-slug>` sit inside the `routes/(library)` route group,
+whose own `+layout.svelte` mounts `components/LibraryWorkspace.svelte` — the
+bootstrap gate and the surface switch — exactly once for as long as the
+browser stays on any of the three (issue #276); the three route files
+underneath are thin, each resolving its own address and rendering only an
+overlay (loading / unknown / unreachable) stacked over the standing workspace
+while it does. Before #276 each of the three mounted the workspace itself, so
+a crossing between any two swapped the leaf `+page.svelte` and tore the
+component down with it — the sync stream survived (`routes/+layout.svelte`,
+next paragraph) but the workspace, and everything under it (`SongDetailView`
+included), did not; measuring the cost (issue #275, then #276) is what forced
+the route group. The outer `routes/+layout.svelte` still owns the live event
+stream and the history listener, so swapping between any of the three
+addresses neither rebuilds the workspace nor re-runs its bootstrap, and it
+starts the stream only for a signed-in browser on a library route — the reach
+the workspace page had when it owned this; Settings, login, setup and the
+share pages leave it off. The workspace itself gates on `resourceSync.ready`
+rather than on a promise resolved once per mount, so a mount that finds the
+stream already live (returning to the library after leaving it) shows the
+library on its first frame. `libraryHistoryUrl` in `stores/libraryContext.ts`
+maps library state to one of the three: an open song addresses
+`/album/<slug>/<song-slug>` (its take, if any, riding along as the unchanged
+`?gen=…` appendage) once the song's slug is known from `songList`, an album
+that is the visible surface but has no song open addresses `/album/<slug>`,
+and an album that is only the rail context behind the wall stays on `/`. The
+legacy `/?song=<id>[&gen=…]` form is still read (a bookmarked or shared link
+keeps working) but no longer written; migrating it once resolved into the new
+address is issue #265's S6, not this. `isLibraryWorkspacePath` still counts
+all three by pathname (it leans on `isAlbumRoutePath`, true for both
+`/album/<slug>` and one segment deeper) rather than by the route group, since
+`routes/+layout.svelte` sits outside `(library)` and needs the same three
+addresses for its own, separate reach decision; `ensureLibraryWorkspaceRoute`
+never pushes anything off either address. A cold
 tab opened on an album or song address resolves it against the API first
 (`openAlbumAddress` / `openSongAddress`): an unknown album slug, or an unknown
 song slug within a known album, is stated as such — the song case links back
@@ -350,7 +359,7 @@ root.
 
 | Layer | What | Key files |
 |-------|------|-----------|
-| Routes | Pages: main view, album address (`album/[slug]`), song address (`album/[slug]/[song]`), login, setup, settings, public share pages (`share/[slug]`, `share/playlist`/`song`/`gen`) | `src/routes/` |
+| Routes | Pages: the `(library)` route group (main view, album address `album/[slug]`, song address `album/[slug]/[song]`, one shared `LibraryWorkspace` mount — issue #276), login, setup, settings, public share pages (`share/[slug]`, `share/playlist`/`song`/`gen`) | `src/routes/` |
 | Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeChips`, `RecipePanel`, `EditorStacked`, `WriteColumn`, `TakeStrip`, `TakesList`, `TakeMenu`, `EditorSheet`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |

@@ -50,14 +50,16 @@
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);
 
-	// Whether the library session should be live. Two addresses mount the
-	// library workspace (`/` and `/album/<slug>`, issue #269) and a raw history
-	// write can move between them without a route change, so this is one
-	// boolean rather than a URL: it stays true across the whole workspace and
-	// only flips when the browser genuinely leaves it. Signed out, and on
-	// login, setup, share and Settings, it is false — exactly the routes on
-	// which the workspace page used to be unmounted, which is what owned this
-	// before.
+	// Whether the library session should be live. Three addresses share the
+	// library workspace (`/`, `/album/<slug>` and `/album/<slug>/<song-slug>`,
+	// issues #269, #275, #276) and a raw history write can move between them
+	// without a route change, so this is one boolean rather than a URL: it
+	// stays true across the whole workspace and only flips when the browser
+	// genuinely leaves it. Signed out, and on login, setup, share and
+	// Settings, it is false — exactly the routes outside the `(library)` route
+	// group, which owns the workspace's own mount (issue #276); this layout
+	// keeps the stream and the history listener, which outlive a route swap
+	// inside that group the same way they always have.
 	const libraryRouteActive = $derived(
 		hasPrivatePlayer && isLibraryWorkspacePath(page.url.pathname)
 	);
@@ -105,9 +107,10 @@
 	});
 
 	// The live-sync stream and the history listener outlive a route swap
-	// between the library's two addresses, so the layout owns them: the
-	// workspace page used to, and a swap tore them down and rebuilt them under
-	// the user. `initNavigation` still waits for the first snapshot — it
+	// between the library's three addresses, so this layout owns them rather
+	// than the `(library)` route group below it: the workspace page used to
+	// own them, and a swap tore them down and rebuilt them under the user.
+	// `initNavigation` still waits for the first snapshot — it
 	// normalises the history entry from the live stores, so running it before
 	// they are hydrated would overwrite a restorable entry with an empty one.
 	$effect(() => {

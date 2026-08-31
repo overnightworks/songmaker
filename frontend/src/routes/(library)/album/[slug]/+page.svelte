@@ -2,11 +2,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { openAlbumAddress } from '$lib/stores/libraryContext';
-	// An album address is a second entrance to the one library workspace, not
-	// a surface of its own; `/` is the other. The component is shared so a
-	// route swap between them neither rebuilds the workspace nor re-runs its
-	// bootstrap.
-	import LibraryWorkspace from '$lib/components/LibraryWorkspace.svelte';
+	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 
 	type AddressState = 'resolving' | 'open' | 'unknown' | 'unreachable';
 
@@ -27,6 +23,18 @@
 		void openAddress(slug);
 	});
 
+	// The overlay above hides a stale workspace visually (`position: absolute`)
+	// but not from the accessibility tree or the tab order -- `inert` on the
+	// workspace wrapper is what actually does that, and it lives one level up
+	// in `(library)/+layout.svelte`, so this bridges the address state across
+	// with a store. Active whenever this page isn't showing the open workspace,
+	// including the (route-change-only) unmount below: leaving this page for
+	// `/` or another address must not leave the workspace inert behind it.
+	$effect(() => {
+		libraryAddressOverlayActive.set(addressState !== 'open');
+		return () => libraryAddressOverlayActive.set(false);
+	});
+
 	async function openAddress(albumId: string): Promise<void> {
 		const request = ++openRequests;
 		addressState = 'resolving';
@@ -43,29 +51,29 @@
 	}
 </script>
 
-{#if addressState === 'open'}
-	<LibraryWorkspace />
-{:else if addressState === 'unknown'}
-	<div class="address-state" role="alert">
+{#if addressState === 'unknown'}
+	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
 		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
 		<a class="address-action" href={resolve('/')}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
 {:else if addressState === 'unreachable'}
-	<div class="address-state" role="alert">
+	<div class="address-overlay" role="alert">
 		<p>{failure ?? UNREACHABLE_ALBUM_MESSAGE}</p>
 		<button class="address-action" type="button" onclick={() => openAddress(slug)}
 			>{RETRY_LABEL}</button
 		>
 	</div>
-{:else}
-	<div class="address-state">{RESOLVING_LABEL}</div>
+{:else if addressState === 'resolving'}
+	<div class="address-overlay">{RESOLVING_LABEL}</div>
 {/if}
 
 <style>
-	.address-state {
+	.address-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
 		display: flex;
-		flex: 1;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
@@ -73,16 +81,17 @@
 		padding: 0 24px;
 		text-align: center;
 		color: var(--text-muted);
+		background: var(--bg);
 	}
 
-	.address-state h1 {
+	.address-overlay h1 {
 		margin: 0;
 		font-family: var(--font-display);
 		font-size: 1.4rem;
 		color: var(--text);
 	}
 
-	.address-state p {
+	.address-overlay p {
 		margin: 0;
 	}
 

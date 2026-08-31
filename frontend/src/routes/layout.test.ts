@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
@@ -650,14 +650,16 @@ describe('auth check failure', () => {
 });
 
 // The live library stream and the history listener used to belong to the
-// workspace page. Two routes mount that workspace now (`/` and
-// `/album/<slug>`, issue #269) and the layout survives a swap between them,
-// so it owns their lifetime -- while keeping the reach the page had: signed
-// in, and only where the library is actually shown.
+// workspace page. Three addresses share that workspace now (`/`,
+// `/album/<slug>` and `/album/<slug>/<song-slug>`, issues #269, #275, #276)
+// and this layout survives a swap between any of them, so it owns their
+// lifetime -- while keeping the reach the page had: signed in, and only where
+// the library is actually shown.
 describe('the live library stream', () => {
 	it.each([
 		['the library route', '/'],
-		['an album address', '/album/anfield']
+		['an album address', '/album/anfield'],
+		['a song address', '/album/anfield/stadion-lauf-a']
 	])('runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
@@ -690,5 +692,40 @@ describe('the live library stream', () => {
 		await unmountCurrentLayout();
 
 		expect(liveStream.stop).toHaveBeenCalled();
+	});
+});
+
+// The single-mount fix (issue #276) lives in a route group, not in this
+// layout: `(library)/+layout.svelte` owns the one LibraryWorkspace mount, and
+// only the three library addresses sit inside it. SvelteKit resolves a route
+// group at build time, invisible to a mounted-component test, so this reads
+// the routes tree directly instead -- the same way this file already reads
+// app.css from disk.
+describe('the library route group', () => {
+	const routesDir = join(process.cwd(), 'src/routes');
+	const libraryGroupDir = join(routesDir, '(library)');
+
+	it('owns the workspace mount for the three library addresses', () => {
+		expect(readdirSync(libraryGroupDir).sort()).toEqual([
+			'+layout.svelte',
+			'+page.svelte',
+			'album'
+		]);
+		expect(readFileSync(join(libraryGroupDir, '+layout.svelte'), 'utf8')).toContain(
+			'LibraryWorkspace'
+		);
+		expect(readdirSync(join(libraryGroupDir, 'album/[slug]'))).toContain('+page.svelte');
+		expect(readdirSync(join(libraryGroupDir, 'album/[slug]/[song]'))).toContain('+page.svelte');
+	});
+
+	it('leaves settings, auth, share and legal pages outside the group', () => {
+		const topLevelDirs = readdirSync(routesDir, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+
+		expect(topLevelDirs).toEqual(
+			expect.arrayContaining(['(library)', 'settings', 'login', 'setup', 'legal', 'share', 'loras'])
+		);
+		expect(topLevelDirs).not.toContain('album');
 	});
 });

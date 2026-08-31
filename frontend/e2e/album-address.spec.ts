@@ -6,9 +6,11 @@
 // mounted route tree only in a real browser, so only here does it show whether
 // moving between the workspace's three addresses (`/`, `/album/<slug>` and
 // `/album/<slug>/<song-slug>`) keeps the workspace standing or tears it down
-// and builds it again. That the app writes these addresses when an album or a
-// song opens is pinned in the unit suite (stores/navigation.test.ts), which
-// costs the stack nothing.
+// and builds it again -- since issue #276, it does not: the three sit inside
+// one `(library)` route group whose own layout mounts LibraryWorkspace once,
+// so a crossing swaps only the thin leaf page underneath. That the app writes
+// these addresses when an album or a song opens is pinned in the unit suite
+// (stores/navigation.test.ts), which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
@@ -16,12 +18,13 @@ import { FlowGuard, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
- * What each test costs the API, measured on a green run: 24 for the cold
- * album open + one-step track click + Back/Forward, 16 for the standalone
- * cold song open. One shared ceiling, sized to the larger with the same
- * headroom the library flow carries — both flows share one 60-second IP
- * rate-limit window, so a jump here is a regression to find, not a number to
- * raise.
+ * What each test costs the API, measured on a green run: 22 for the cold
+ * album open + one-step track click + Back/Forward (down from 24 before issue
+ * #276 folded the workspace remount away), 16 for the standalone cold song
+ * open, unchanged since it never crosses a route to begin with. One shared
+ * ceiling, sized to the larger with the same headroom the library flow
+ * carries — both flows share one 60-second IP rate-limit window, so a jump
+ * here is a regression to find, not a number to raise.
  */
 const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 30;
 
@@ -83,10 +86,11 @@ test('an album address opens cold, a track click is one step to the song address
 
 	// A track click lands under the song's own address, its slug, in one
 	// navigation step — `/album/<slug>/<song-slug>` rather than the address-less
-	// `/?song=…` issue #269 left this on. Both are still a route-file crossing
-	// (a different +page.svelte owns each of the three addresses), so the
-	// editor still remounts once on the way there — measured, not eliminated;
-	// see the request-budget note on ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET.
+	// `/?song=…` issue #269 left this on. Both are a route-file crossing (a
+	// different +page.svelte owns each of the three addresses), but the
+	// `(library)` route group's own layout keeps LibraryWorkspace standing
+	// across it (issue #276), so the editor no longer remounts on the way
+	// there — see the request-budget note on ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET.
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
 	await expectWorkspaceStanding(page);

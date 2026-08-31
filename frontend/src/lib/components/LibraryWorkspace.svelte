@@ -1,9 +1,13 @@
 <script module lang="ts">
-	// One models fetch per page load, not per mount: `/` and `/album/<slug>`
-	// mount this same component (issue #269), so swapping between those routes
-	// must not re-fetch it, nor flash the Loading gate over a library that is
-	// already on screen. The live stream needs no such flag — its own store is
-	// session state, and routes/+layout.svelte owns its lifetime.
+	// One models fetch per page load, not per mount. The `(library)` route
+	// group mounts this component exactly once for as long as the browser
+	// stays on any of the three library addresses (issue #276); this guard
+	// only matters for the boundary it does still cross — leaving the library
+	// entirely (Settings, sign-out) and coming back unmounts and remounts it,
+	// and that return must not re-fetch, nor flash the Loading gate over a
+	// library that is already on screen. The live stream needs no such flag —
+	// its own store is session state, and routes/+layout.svelte owns its
+	// lifetime.
 	let activeModelsLoaded = false;
 </script>
 
@@ -34,9 +38,9 @@
 	// The live stream's own state is the gate, rather than a promise resolved
 	// once per mount. `ready` turns true when the first snapshot has landed and
 	// stays true while a later error is only a banner over a workspace that
-	// already works — so a mount that finds the stream live (the workspace's
-	// other address) shows the library at once, and no mount depends on being
-	// ordered after the layout that starts the stream.
+	// already works — so a mount that finds the stream already live (returning
+	// to the library after leaving it) shows the library at once, and no mount
+	// depends on being ordered after the layout that starts the stream.
 	const workspaceReady = $derived(sync.ready && modelsReady);
 	const bootstrapFailed = $derived(!sync.ready && sync.status === 'error');
 

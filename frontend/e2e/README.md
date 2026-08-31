@@ -62,28 +62,33 @@ browser console error, and on any uncaught page exception. It also counts what
 the flow costs the API and holds it under a named budget.
 
 **The budget is a ceiling, not a knob.** Each flow has its own, measured on a
-green run and carrying headroom: the library flow measures 28 `/api` requests
+green run and carrying headroom: the library flow measures 26 `/api` requests
 per shell against a budget of 32, and `album-address.spec.ts` carries two —
-24 for the cold album open, one-step track click and Back/Forward, 16 for a
+22 for the cold album open, one-step track click and Back/Forward, 16 for a
 standalone cold song open — against a shared budget of 30. A flow that
 suddenly needs more round trips is a regression — find the extra requests
 instead of raising the number. The measured count is printed on every run.
 
 Opening a track from an open album address is still a route-file crossing
-(issue #269), and #265's S3 (issue #275) did not remove that: a song now
-addresses `/album/<slug>/<song-slug>` instead of the address-less
-`/?song=…`, but both are a different `+page.svelte` from the album's own, so
-the editor still remounts once on the way there — 28 and 24 measure the same
-as before #275, not lower. What #275 actually bought is the address itself
-(a song is linkable and survives a cold open on its own, 404s honestly on an
-unknown slug, and follows a rename) and the crossing-detection fix that keeps
-the router in step one segment deeper (`libraryRouteShape` in
-`stores/libraryContext.ts`). Folding the remount away for real would need
-`/album/[slug]` and `/album/[slug]/[song]` to share one mounted
-`LibraryWorkspace` instance across the crossing — a `+layout.svelte` moving
-the workspace out of both leaf pages — which is a route-structure change
-beyond this slice's file scope, not something this suite can paper over by
-adjusting a number.
+(issue #269): a song addresses `/album/<slug>/<song-slug>` instead of the
+address-less `/?song=…`, and each of the three library addresses is still a
+different `+page.svelte`. #265's S3 (issue #275) measured what that crossing
+cost the library flow — 28 requests instead of a pre-address 25, because each
+address mounted its own `LibraryWorkspace` and a crossing tore the previous
+one down — without removing the cause; #276 did. `/`, `/album/[slug]` and
+`/album/[slug]/[song]` now sit inside one `(library)` route group whose own
+`+layout.svelte` mounts `LibraryWorkspace` once, so a crossing swaps only the
+thin leaf page under it instead of tearing the workspace down and rebuilding
+it. That folded the library flow to 26 (from 28) and the album-address flow's
+cold-open-plus-crossing case to 22 (from 24) — not all the way back to the
+pre-address 25, since a route-file crossing is still a real SvelteKit
+navigation with its own cost, just no longer a workspace rebuild on top of
+it. The standalone cold song open stays at 16: it never crosses a route to
+begin with, so there was never a rebuild to fold away. What #275 bought
+stands unchanged: the address itself (a song is linkable and survives a cold
+open on its own, 404s honestly on an unknown slug, and follows a rename) and
+the crossing-detection fix that keeps the router in step one segment deeper
+(`libraryRouteShape` in `stores/libraryContext.ts`).
 
 Selectors are roles and accessible names, imported from `src/lib/constants.ts`
 — never `data-testid`. A flow that cannot find an element by its accessible

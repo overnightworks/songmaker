@@ -4,15 +4,17 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
+import { EDITOR_LYRICS_LABEL } from '$lib/constants';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { detailTab, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
 const ALBUM_SLUG = 'anfield';
 const ALBUM_TITLE = 'Anfield';
+const SONG_SLUG = 'stadion-lauf-a';
 const TRACK_TITLE = 'Stadion Lauf A';
 
 const api = vi.hoisted(() => ({
@@ -25,9 +27,17 @@ const api = vi.hoisted(() => ({
 	fetchActiveModels: vi.fn()
 }));
 
-const routeParams = vi.hoisted(() => ({ slug: 'anfield' }));
+const routeParams = vi.hoisted(() => ({ slug: 'anfield', song: 'stadion-lauf-a' }));
+const routeSearch = vi.hoisted(() => new URLSearchParams());
 
-vi.mock('$app/state', () => ({ page: { params: routeParams } }));
+vi.mock('$app/state', () => ({
+	page: {
+		params: routeParams,
+		get url() {
+			return { searchParams: routeSearch };
+		}
+	}
+}));
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
 vi.mock('$app/navigation', () => ({
@@ -62,7 +72,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	fetchActiveModels: api.fetchActiveModels
 }));
 
-import AlbumAddressPage from './+page.svelte';
+import SongAddressHarness from './harness.svelte';
 
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
@@ -118,7 +128,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 'song-1',
-		slug: 'stadion-lauf-a',
+		slug: SONG_SLUG,
 		title: TRACK_TITLE,
 		album_id: ALBUM_SLUG,
 		album_title: ALBUM_TITLE,
@@ -155,19 +165,31 @@ function requireElement(root: HTMLElement, selector: string): HTMLElement {
 	return found;
 }
 
+// The workspace wrapper `(library)/+layout.svelte` marks `inert` while an
+// overlay is up (issue #276 review fix) -- `inert` itself, not tab order,
+// carries the contract here: jsdom has no `inert` IDL property, so a real
+// keyboard-navigation probe would only prove jsdom's gap, not the app's.
+function workspaceWrapper(root: HTMLElement): HTMLElement {
+	return requireElement(root, '.workspace-wrapper');
+}
+
 function openAddress(): HTMLElement {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted.push(mount(AlbumAddressPage, { target }));
+	mounted.push(mount(SongAddressHarness, { target }));
 	return target;
 }
 
 // A tab that knows nothing but the address: no library stores, no history
-// state, nothing opened before — with the live library stream running, which
+// state, nothing opened before -- with the live library stream running, which
 // routes/+layout.svelte starts for every signed-in library route.
-function coldTabAt(pathname: string): void {
-	routeParams.slug = pathname.slice('/album/'.length);
-	history.replaceState(null, '', pathname);
+function coldTabAt(pathname: string, search = ''): void {
+	const [, , albumSlug, songSlug] = pathname.split('/');
+	routeParams.slug = albumSlug;
+	routeParams.song = songSlug ?? '';
+	routeSearch.forEach((_, key) => routeSearch.delete(key));
+	new URLSearchParams(search).forEach((value, key) => routeSearch.set(key, value));
+	history.replaceState(null, '', pathname + search);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);
@@ -188,7 +210,7 @@ beforeEach(() => {
 	api.fetchVersions.mockReset().mockResolvedValue([]);
 	api.fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
 	api.fetchActiveModels.mockReset().mockResolvedValue([]);
-	coldTabAt(`/album/${ALBUM_SLUG}`);
+	coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
 });
 
 afterEach(() => {
@@ -201,72 +223,60 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('/album/<slug> opened cold', () => {
-	it('shows the album named by the address', async () => {
+describe('/album/<slug>/<song-slug> opened cold', () => {
+	it('shows the song in the editor', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
-		expect(target.textContent).toContain(TRACK_TITLE);
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(target.textContent).toContain(EDITOR_LYRICS_LABEL);
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 
 	it('keeps the address it was opened with', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
-		expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}`);
-	});
-
-	// The address is a full entrance, not a read-only preview: what the
-	// operator does next has to work from here too (issue #269).
-	it('opens a track from the album into the editor, under the song address', async () => {
-		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
-
-		requireElement(target, '.item-body').click();
-
-		await vi.waitFor(() =>
-			expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/stadion-lauf-a`)
-		);
-		await vi.waitFor(() => expect(target.querySelector('.item-body')).toBeNull());
-	});
-
-	it('opens the addressed album even when the browse listing does not carry it', async () => {
-		api.fetchAlbums.mockResolvedValue(page([album({ id: 'other', title: 'Other Album' })]));
-
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
 		expect(get(openCollection)).toEqual({ kind: 'album', id: ALBUM_SLUG });
 	});
-});
 
-describe('/album/<slug> whose album cannot be reached', () => {
-	beforeEach(() => {
-		api.fetchAlbum.mockRejectedValue(new ApiError(500, 'Album service is down', '/api/albums'));
-	});
+	it('opens the addressed song even when the album listing does not carry it yet', async () => {
+		api.fetchAlbums.mockResolvedValue(page([]));
+		api.fetchSongs.mockResolvedValue(page([song()]));
 
-	it('states the failure instead of claiming the album does not exist', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		expect(target.textContent).not.toContain('No such album');
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(get(selectedSongId)).toBe('song-1');
 	});
 
-	it('shows the album after Try again once the failure is over', async () => {
+	it('opens the take named by ?gen alongside the song', async () => {
+		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, '?gen=gen-9');
+
 		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		api.fetchAlbum.mockResolvedValue(album());
 
-		requireElement(target, 'button.address-action').click();
-
-		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
-		expect(target.textContent).toContain(TRACK_TITLE);
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(get(selectedGenerationId)).toBe('gen-9');
+		expect(get(detailTab)).toBe('takes');
 	});
 });
 
-describe('/album/<slug> naming no album', () => {
+describe('/album/<slug>/<song-slug> naming no song in a known album', () => {
+	it('says the address names no song, with a way back to the album', async () => {
+		coldTabAt(`/album/${ALBUM_SLUG}/ghost-song`);
+
+		const target = openAddress();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));
+		const back = requireElement(target, 'a.address-action');
+		expect(back.getAttribute('href')).toBe(`/album/${ALBUM_SLUG}`);
+		expect(get(openCollection)).toBeNull();
+	});
+});
+
+describe('/album/<slug>/<song-slug> naming no album', () => {
 	beforeEach(() => {
-		coldTabAt('/album/ghost');
+		coldTabAt('/album/ghost/some-song');
 		api.fetchAlbum.mockRejectedValue(new ApiError(404, 'Album not found', '/api/albums/ghost'));
 	});
 
@@ -281,7 +291,41 @@ describe('/album/<slug> naming no album', () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain('No such album'));
-		expect(window.location.pathname).toBe('/album/ghost');
-		expect(get(openCollection)).toBeNull();
+		expect(window.location.pathname).toBe('/album/ghost/some-song');
+	});
+});
+
+describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
+	beforeEach(() => {
+		api.fetchAlbum.mockRejectedValue(new ApiError(500, 'Album service is down', '/api/albums'));
+	});
+
+	it('states the failure instead of claiming the song does not exist', async () => {
+		const target = openAddress();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
+		expect(target.textContent).not.toContain('No such');
+	});
+
+	it('shows the song after Try again once the failure is over', async () => {
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
+		api.fetchAlbum.mockResolvedValue(album());
+
+		requireElement(target, 'button.address-action').click();
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+	});
+
+	it('marks the workspace behind it inert, and lifts that once Try again succeeds', async () => {
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
+
+		api.fetchAlbum.mockResolvedValue(album());
+		requireElement(target, 'button.address-action').click();
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 });
