@@ -27,6 +27,15 @@ services:
   songmaker-web:
     build:
       <<: *gha_cache
+    # CI runs four Playwright specs sequentially from one runner IP inside a
+    # single 60s window (login/seeding plus the specs' own /api budgets add
+    # up to ~96 requests/min per e2e/README.md) — a real production default
+    # of 120/min 429s pure /api traffic here even though media and stream
+    # requests now sit in their own budgets since #278. 300 covers that
+    # single-IP burst without touching the production default. Grow this
+    # number if the e2e suite gains more specs.
+    environment:
+      IP_RATE_LIMIT: "300"
     ports: !override
       - "${WEB_PORT:-8080}:8080"
     # !override drops the host Claude-CLI bind mounts — CI has no host
