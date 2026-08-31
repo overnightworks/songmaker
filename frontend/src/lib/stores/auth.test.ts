@@ -177,6 +177,7 @@ describe('clearAuth', () => {
 			{
 				id: 'p1',
 				title: 'Leftover',
+				slug: 'leftover',
 				entry_count: 1,
 				is_shared: false,
 				share_slug: null,
@@ -186,6 +187,7 @@ describe('clearAuth', () => {
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Leftover',
+			slug: 'leftover',
 			entry_count: 1,
 			is_shared: false,
 			share_slug: null,

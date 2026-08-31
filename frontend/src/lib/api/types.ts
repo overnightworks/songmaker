@@ -527,6 +527,7 @@ export interface PlaylistEntryItem {
 export interface PlaylistItem {
 	id: string;
 	title: string;
+	slug: string;
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
@@ -536,6 +537,7 @@ export interface PlaylistItem {
 export interface PlaylistDetailItem {
 	id: string;
 	title: string;
+	slug: string;
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;

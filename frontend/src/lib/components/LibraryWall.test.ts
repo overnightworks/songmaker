@@ -98,6 +98,7 @@ function playlist(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
 	return {
 		id: 'p-local',
 		title: 'Night Drive',
+		slug: 'night-drive',
 		entry_count: 2,
 		is_shared: false,
 		share_slug: null,

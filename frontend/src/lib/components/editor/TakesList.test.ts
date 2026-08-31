@@ -62,6 +62,7 @@ import TakesList from './TakesList.svelte';
 const playlist = {
 	id: 'p1',
 	title: 'Night Drive',
+	slug: 'night-drive',
 	entry_count: 0,
 	is_shared: false,
 	share_slug: null,

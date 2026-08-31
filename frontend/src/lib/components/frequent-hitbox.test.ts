@@ -389,6 +389,7 @@ function playlistDetail(): PlaylistDetailItem {
 	return {
 		id: 'p1',
 		title: 'Night Drive',
+		slug: 'night-drive',
 		entry_count: 3,
 		is_shared: false,
 		share_slug: null,

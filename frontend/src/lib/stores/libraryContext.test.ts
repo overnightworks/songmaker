@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
+import type {
+	AlbumItem,
+	GenerationItem,
+	PlaylistDetailItem,
+	PlaylistItem,
+	SongItem
+} from '$lib/api/types';
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { searchQuery } from '$lib/stores/filter';
@@ -14,7 +20,12 @@ import {
 } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { playlistLoad, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	playlistList,
+	playlistLoad,
+	resetPlaylists,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { resetShares, sharesViewOpen } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
@@ -65,13 +76,16 @@ import {
 	hydrateLibraryFromHistory,
 	isAlbumRoutePath,
 	isLibraryHistoryState,
+	isPlaylistRoutePath,
 	isSongRoutePath,
 	isTakeRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
+	openPlaylistAddress,
 	openSongAddress,
 	openTakeAddress,
+	playlistRoutePath,
 	resolveLegacySongQueryAddress,
 	libraryRootState,
 	libraryScrollAnchor,
@@ -131,11 +145,25 @@ function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDe
 	return {
 		id: 'p1',
 		title: 'P',
+		slug: 'p',
 		entry_count: 0,
 		is_shared: false,
 		share_slug: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		entries: [],
+		...overrides
+	};
+}
+
+function playlistItem(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
+	return {
+		id: 'p1',
+		title: 'P',
+		slug: 'p',
+		entry_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
 }
@@ -572,6 +600,28 @@ describe('libraryHistoryUrl', () => {
 			})
 		).toBe('/');
 	});
+
+	it('addresses an open playlist by its slug, not its id', () => {
+		playlistList.set([playlistItem({ id: 'p1', slug: 'friday-night' })]);
+
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'playlist', id: 'p1' }
+			})
+		).toBe('/playlist/friday-night');
+	});
+
+	it('falls back to the library while the open playlist is not yet in playlistList', () => {
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'playlist', id: 'p1' }
+			})
+		).toBe('/');
+	});
 });
 
 describe('isAlbumRoutePath', () => {
@@ -616,6 +666,21 @@ describe('isTakeRoutePath', () => {
 		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a/take/')).toBe(false);
 		expect(isTakeRoutePath('/album/anfield')).toBe(false);
 		expect(isTakeRoutePath('/')).toBe(false);
+	});
+});
+
+describe('isPlaylistRoutePath', () => {
+	it('is a playlist address only with a slug behind it', () => {
+		expect(isPlaylistRoutePath('/playlist/friday-night')).toBe(true);
+		expect(isPlaylistRoutePath('/playlist/')).toBe(false);
+		expect(isPlaylistRoutePath('/')).toBe(false);
+		expect(isPlaylistRoutePath('/album/anfield')).toBe(false);
+	});
+});
+
+describe('playlistRoutePath', () => {
+	it('names a playlist by its slug, one path segment, no nesting under an album', () => {
+		expect(playlistRoutePath('friday-night')).toBe('/playlist/friday-night');
 	});
 });
 
@@ -918,5 +983,78 @@ describe('openAlbumAddress', () => {
 		fetchAlbum.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/albums/a9'));
 
 		await expect(openAlbumAddress('a9')).rejects.toThrow('boom');
+	});
+});
+
+describe('openPlaylistAddress', () => {
+	it('makes the library restore the addressed playlist on a tab that knows nothing else', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p9', title: 'Friday Night' }));
+		history.replaceState(null, '', '/playlist/friday-night');
+
+		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
+
+		expect(history.state.collection).toEqual({ kind: 'playlist', id: 'p9' });
+		expect(history.state.surface).toBe('detail');
+		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p9' });
+	});
+
+	it('reports an unknown slug without opening anything', async () => {
+		fetchPlaylists.mockResolvedValueOnce([]);
+		history.replaceState(null, '', '/playlist/ghost');
+
+		await expect(openPlaylistAddress('ghost')).resolves.toBe('unknown');
+
+		expect(get(openCollection)).toBeNull();
+		expect(history.state).toBeNull();
+	});
+
+	it('keeps a richer restore state that already opens the addressed playlist', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		const restored = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'playlist' as const, id: 'p9' },
+			scrollAnchor: 320
+		};
+		history.replaceState(restored, '', '/playlist/friday-night');
+
+		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
+
+		expect(history.state.scrollAnchor).toBe(320);
+	});
+
+	it('lets the address overrule a restore state that opens a different playlist', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'playlist', id: 'other' }
+			},
+			'',
+			'/playlist/friday-night'
+		);
+
+		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
+
+		expect(history.state.collection).toEqual({ kind: 'playlist', id: 'p9' });
+	});
+
+	it('propagates a failure that is not a missing playlist instead of calling it unknown', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		fetchPlaylists.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/playlists'));
+
+		await expect(openPlaylistAddress('friday-night')).rejects.toThrow('boom');
+	});
+
+	it('reuses an already-loaded playlistList instead of fetching again', async () => {
+		playlistList.set([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p9', title: 'Friday Night' }));
+		history.replaceState(null, '', '/playlist/friday-night');
+
+		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
+
+		expect(fetchPlaylists).not.toHaveBeenCalled();
 	});
 });

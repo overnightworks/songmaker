@@ -2608,3 +2608,73 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -
         session.add(Song(id="s3", title="Dup", album_id="a1", track_number=3, slug="intro"))
         session.commit()
     engine.dispose()
+
+
+def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path: Path) -> None:
+    """d5f8a3b21c46: unlike the two-phase song migration (b8e3f1c07a25 then
+    c9d4a2f18e37), playlists have no second write path to guard a window
+    for, so backfill and UNIQUE(slug) land in one migration. Proves the
+    throwaway-DB upgrade dedupes existing (pre-migration) playlists sharing
+    a title, handles a wide CJK title within the length budget, then blocks
+    a real collision — and that downgrade() cleanly drops the column again.
+    """
+    from alembic import command
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import sessionmaker
+
+    from songmaker_cli.db.models import PLAYLIST_SLUG_MAX_LENGTH, Playlist
+
+    url = f"sqlite:///{tmp_path / 'playlist_slugs.db'}"
+    cfg = _alembic_config(url)
+    # Pinned to the revision before this one: at this point 'playlists' has
+    # no slug column yet, matching real pre-existing rows.
+    command.upgrade(cfg, "c9d4a2f18e37")
+
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO playlists (id, title, is_shared, created_at, updated_at) "
+                "VALUES (:id, :title, 0, :ts, :ts)"
+            ),
+            [
+                {"id": "p1", "title": "Favorites", "ts": "2026-01-01T00:00:00+00:00"},
+                {"id": "p2", "title": "Favorites", "ts": "2026-01-02T00:00:00+00:00"},
+                {"id": "p3", "title": "音" * 200, "ts": "2026-01-03T00:00:00+00:00"},
+            ],
+        )
+    engine.dispose()
+
+    command.upgrade(cfg, "d5f8a3b21c46")
+
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        rows = dict(conn.execute(text("SELECT id, slug FROM playlists")).fetchall())
+    engine.dispose()
+
+    assert rows["p1"] == "favorites"
+    assert rows["p2"] == "favorites-2"
+    cjk_slug = rows["p3"]
+    assert cjk_slug.startswith("yin-yin")
+    assert len(cjk_slug) <= PLAYLIST_SLUG_MAX_LENGTH
+
+    engine = create_engine(url)
+    factory = sessionmaker(bind=engine)
+    with factory() as session:
+        session.add(Playlist(id="p4", title="Dup", slug="favorites"))
+        with pytest.raises(IntegrityError):
+            session.commit()
+    engine.dispose()
+
+    command.downgrade(cfg, "c9d4a2f18e37")
+
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO playlists (id, title, is_shared, created_at, updated_at) "
+                "VALUES ('p5', 'Dup', 0, '2026-01-04T00:00:00+00:00', '2026-01-04T00:00:00+00:00')"
+            )
+        )
+    engine.dispose()

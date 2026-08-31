@@ -74,6 +74,7 @@ class PlaylistEntryResponse(BaseModel):
 class PlaylistResponse(BaseModel):
     id: str
     title: str
+    slug: str
     entry_count: int
     is_shared: bool = False
     share_slug: str | None = None
@@ -88,6 +89,7 @@ class PlaylistResponse(BaseModel):
         return cls(
             id=playlist.id,
             title=playlist.title,
+            slug=playlist.slug,
             entry_count=len(live_entries),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,

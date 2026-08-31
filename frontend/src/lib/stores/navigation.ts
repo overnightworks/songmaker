@@ -19,11 +19,12 @@ import {
 import {
 	deselectPlaylist as storeDeselectPlaylist,
 	ensurePlaylistsLoaded,
-	loadPlaylistDetail
+	loadPlaylistDetail,
+	selectedPlaylist
 } from '$lib/stores/playlists';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
-import type { SongItem } from '$lib/api/types';
+import type { PlaylistItem, SongItem } from '$lib/api/types';
 import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
 import {
 	applyLibraryHistory,
@@ -32,6 +33,7 @@ import {
 	detailTab,
 	isAlbumRoutePath,
 	isLibraryHistoryState,
+	isPlaylistRoutePath,
 	isSongRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
@@ -106,12 +108,13 @@ export function persistLibraryHistory(): void {
 	void replaceLibraryHistory();
 }
 
-// The routes that mount the library workspace: the home path and, since
-// issue #269, an album address. Both render the same workspace, so nothing
-// has to be pushed off /album/<slug> to make a song, a playlist or the wall
-// visible — the address a surface owns is written by libraryHistoryUrl.
+// The routes that mount the library workspace: the home path, an album
+// address (issue #269) and, since issue #286, a playlist address. All three
+// render the same workspace, so nothing has to be pushed off /album/<slug>
+// or /playlist/<slug> to make a song, a playlist or the wall visible — the
+// address a surface owns is written by libraryHistoryUrl.
 export function isLibraryWorkspacePath(pathname: string): boolean {
-	return pathname === '/' || isAlbumRoutePath(pathname);
+	return pathname === '/' || isAlbumRoutePath(pathname) || isPlaylistRoutePath(pathname);
 }
 
 // Every entry point that opens a collection or a song onto the library
@@ -190,6 +193,28 @@ selectedSong.subscribe((song) => {
 	syncSongAddressToRename(song);
 });
 
+// The playlist address names its playlist by slug (issue #286), and a
+// rename changes that slug server-side (unique_playlist_slug follows the
+// title, mirroring unique_song_slug) — the same gap syncSongAddressToRename
+// closes for songs above, mirrored here for the currently open playlist.
+let addressedPlaylist: { id: string; slug: string } | null = null;
+
+function syncPlaylistAddressToRename(playlist: PlaylistItem): void {
+	const previous = addressedPlaylist;
+	addressedPlaylist = { id: playlist.id, slug: playlist.slug };
+	if (!previous || previous.id !== playlist.id || previous.slug === playlist.slug) return;
+	if (!isPlaylistRoutePath(window.location.pathname)) return;
+	void replaceLibraryHistory();
+}
+
+selectedPlaylist.subscribe((playlist) => {
+	if (!playlist) {
+		addressedPlaylist = null;
+		return;
+	}
+	syncPlaylistAddressToRename(playlist);
+});
+
 export async function openAlbum(albumId: string): Promise<void> {
 	await ensureLibraryWorkspaceRoute();
 	storeDeselectPlaylist();
@@ -210,8 +235,12 @@ export async function openPlaylist(playlistId: string): Promise<void> {
 	// A playlist can be opened before playlistList is populated (Shares
 	// inventory, a deep link, mobile without the Rail mounted) --
 	// PlaylistDetailView falls back to the detail fetch for its header
-	// meanwhile, but this backfills the canonical list-backed entry too.
-	void ensurePlaylistsLoaded();
+	// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
+	// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
+	// to build the /playlist/<slug> address — without it, the write would
+	// fall back to '/' for exactly the callers that need it most (issue
+	// #286).
+	await ensurePlaylistsLoaded();
 	setLibrarySurface('detail');
 	closeSidebar();
 	await pushLibraryHistory();
@@ -512,16 +541,30 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 }
 
 // A cold tab's history.state carries no LibraryHistoryState until something
-// writes one -- this seeds a fresh root entry for that case (a plain `/` or
-// `/album/<slug>` visit). A legacy `/?song=<uuid>` (or `&gen=<uuid>`) query
-// used to be read and applied right here; since issue #284,
-// (library)/+page.svelte owns that instead -- it resolves the ids and
-// redirects onto the canonical song/take address before this ever runs, so
-// there is nothing left for this branch to special-case.
+// writes one -- this seeds a fresh root entry for that case, but only on a
+// plain `/` visit, which is the one library workspace path with no address
+// route of its own to resolve one instead. Every other library path
+// (`/album/<slug>` and every segment deeper, `/playlist/<slug>`) is owned by
+// its own leaf page, whose `$effect` calls the matching openXAddress and
+// writes the real entry once resolution lands -- found or, honestly, not.
+// Racing this seed against that resolution used to cost more than a redundant
+// write: found and not-yet-written are indistinguishable to
+// isLibraryHistoryState, so on an *unknown* address (nothing else ever
+// writes) this branch would unconditionally win the race once the live
+// stream's own bootstrap finished, replacing the honest 404 overlay with a
+// crossing `goto('/')` back to the wall -- discovered against a real stack
+// (playlist-address.spec.ts, issue #286), not caught by jsdom, whose harness
+// mounts only the `(library)` group layout and never exercises this one.
+//
+// A legacy `/?song=<uuid>` (or `&gen=<uuid>`) query used to be read and
+// applied right here; since issue #284, (library)/+page.svelte owns that
+// instead -- it resolves the ids and redirects onto the canonical song/take
+// address before this ever runs, so there is nothing left for this branch to
+// special-case.
 export function initNavigation(): () => void {
 	const existing = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(existing)) {
-		void replaceLibraryHistory();
+		if (window.location.pathname === '/') void replaceLibraryHistory();
 	} else if (existing.songId) {
 		loadSongContext(existing.songId);
 	}

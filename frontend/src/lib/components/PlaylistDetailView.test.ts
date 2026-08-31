@@ -87,6 +87,7 @@ function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem
 	return {
 		id: 'p1',
 		title: 'Night Drive',
+		slug: 'night-drive',
 		entry_count: 1,
 		is_shared: false,
 		share_slug: null,
@@ -106,6 +107,7 @@ function openPlaylistDetail(d: PlaylistDetailItem): void {
 		{
 			id: d.id,
 			title: d.title,
+			slug: d.slug,
 			entry_count: d.entry_count,
 			is_shared: d.is_shared,
 			share_slug: d.share_slug,
@@ -429,6 +431,7 @@ function addPlaylistToList(item: { id: string; title: string; entry_count: numbe
 		{
 			id: item.id,
 			title: item.title,
+			slug: item.title.toLowerCase().replace(/\s+/g, '-'),
 			entry_count: item.entry_count,
 			is_shared: false,
 			share_slug: null,

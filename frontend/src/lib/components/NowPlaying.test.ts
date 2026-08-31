@@ -396,6 +396,7 @@ describe('NowPlaying', () => {
 		selectedPlaylistDetail.set({
 			id: 'p2',
 			title: 'Morning Ride',
+			slug: 'morning-ride',
 			entry_count: 0,
 			is_shared: false,
 			created_at: '',

@@ -33,6 +33,7 @@ from songmaker_cli.api_models.whisper import stored_whisper_cues
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
 
 SONG_SLUG_MAX_LENGTH: Final = 220
+PLAYLIST_SLUG_MAX_LENGTH: Final = 220
 
 
 def _validate_base_generation_params(value: object) -> dict | None:
@@ -229,6 +230,10 @@ class Playlist(ShareMixin, Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     title: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(
+        String(PLAYLIST_SLUG_MAX_LENGTH), unique=True, index=True,
+        default="", server_default="",
+    )
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

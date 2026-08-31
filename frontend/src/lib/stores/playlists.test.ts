@@ -35,6 +35,7 @@ function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): Pl
 	return {
 		id,
 		title: id,
+		slug: id,
 		entry_count: 0,
 		is_shared: false,
 		share_slug: null,
@@ -241,6 +242,7 @@ describe('loadPlaylists', () => {
 		vi.mocked(createPlaylist).mockResolvedValueOnce({
 			id: 'new',
 			title: 'New',
+			slug: 'new',
 			entry_count: 0,
 			is_shared: false,
 			share_slug: null,

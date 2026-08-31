@@ -7,7 +7,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import check_generation_access, check_song_access
+from songmaker_cli.api_helpers import (
+    check_generation_access,
+    check_song_access,
+    unique_playlist_slug,
+)
 from songmaker_cli.api_models import (
     AddAlbumToPlaylistRequest,
     AddAlbumToPlaylistResponse,
@@ -78,7 +82,8 @@ def api_create_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PlaylistResponse:
-    playlist = create_playlist(session, req.title, user.id)
+    slug = unique_playlist_slug(session, req.title)
+    playlist = create_playlist(session, req.title, user.id, slug=slug)
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
     return PlaylistResponse.from_orm(playlist)
@@ -102,8 +107,9 @@ def api_update_playlist(
     session: Session = Depends(get_db_session),
 ) -> PlaylistResponse:
     _check_playlist_access(session, playlist_id, user)
+    slug = unique_playlist_slug(session, req.title, exclude_playlist_id=playlist_id)
     try:
-        playlist = update_playlist(session, playlist_id, req.title)
+        playlist = update_playlist(session, playlist_id, req.title, slug=slug)
     except ValueError:
         raise HTTPException(404, "Playlist not found")
     session.commit()

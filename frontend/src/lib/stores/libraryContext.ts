@@ -1,10 +1,11 @@
 import { get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
+import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong, fetchSongs } from '$lib/api/songs';
-import type { SongItem } from '$lib/api/types';
+import type { PlaylistItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_DEFAULT_FILTER,
 	LIBRARY_HISTORY_KIND,
@@ -24,7 +25,12 @@ import {
 } from '$lib/stores/librarySearch';
 import { albumList, loadSongsForAlbum, songList, upsertSongInList } from '$lib/stores/libraryData';
 import { ensureGenerationsLoaded, selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { deselectPlaylist, ensurePlaylistsLoaded, loadPlaylistDetail } from '$lib/stores/playlists';
+import {
+	deselectPlaylist,
+	ensurePlaylistsLoaded,
+	loadPlaylistDetail,
+	playlistList
+} from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
 // 'browse' shows the library wall (the LibraryWall component); 'detail' shows
@@ -78,6 +84,7 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 const ALBUM_ROUTE_PREFIX = '/album/';
 const TAKE_ROUTE_SEGMENT = '/take/';
+const PLAYLIST_ROUTE_PREFIX = '/playlist/';
 
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
@@ -186,7 +193,20 @@ export function isTakeRoutePath(pathname: string): boolean {
 	return takeIndex !== -1 && pathname.length > takeIndex + TAKE_ROUTE_SEGMENT.length;
 }
 
-// The four shapes a library address can take. Distinct from the
+// A playlist's own address (issue #286), a sibling of /album/<slug> rather
+// than a segment under it -- playlists have no album to nest inside. Named
+// by its slug, not its id, matching every other library address.
+export function playlistRoutePath(slug: string): string {
+	return `${PLAYLIST_ROUTE_PREFIX}${encodeURIComponent(slug)}`;
+}
+
+export function isPlaylistRoutePath(pathname: string): boolean {
+	return (
+		pathname.startsWith(PLAYLIST_ROUTE_PREFIX) && pathname.length > PLAYLIST_ROUTE_PREFIX.length
+	);
+}
+
+// The five shapes a library address can take. Distinct from the
 // isAlbumRoutePath boolean below, which answers "is this under /album/" for
 // isLibraryWorkspacePath — that boolean is deliberately true for 'album',
 // 'album-song' and 'album-song-take' alike, since all three mount the
@@ -199,10 +219,14 @@ export function isTakeRoutePath(pathname: string): boolean {
 // next Back/Forward. A take opened from another take in the same song stays
 // 'album-song-take' on both sides, so that move is the frequent-churn case,
 // not a crossing -- it is still the same route file, /take/[n], with only the
-// param changed.
-type LibraryRouteShape = 'root' | 'album' | 'album-song' | 'album-song-take';
+// param changed. 'playlist' is its own shape for the same reason: switching
+// from one open playlist to another stays 'playlist' on both sides (frequent
+// churn, not a crossing), while every move between it and the four
+// /album/... shapes crosses route files and must go through goto.
+type LibraryRouteShape = 'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist';
 
 function libraryRouteShape(pathname: string): LibraryRouteShape {
+	if (isPlaylistRoutePath(pathname)) return 'playlist';
 	if (!isAlbumRoutePath(pathname)) return 'root';
 	if (!isSongRoutePath(pathname)) return 'album';
 	return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
@@ -240,6 +264,18 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	}
 	if (state.surface === 'detail' && state.collection?.kind === 'album') {
 		return albumRoutePath(state.collection.id);
+	}
+	// A playlist is named by its slug (issue #286), matching every other
+	// library address; playlistList carries it once ensurePlaylistsLoaded()
+	// or openPlaylistAddress's own resolution has run, which every entry
+	// point that opens a playlist already awaits before writing history. The
+	// rare case where it genuinely hasn't yet (the collection was restored
+	// from a stale history entry whose playlist has since vanished) falls
+	// back to '/' rather than a broken address -- the wall is always a safe
+	// landing, unlike a guessed path that names no playlist.
+	if (state.surface === 'detail' && state.collection?.kind === 'playlist') {
+		const playlist = get(playlistList).find((item) => item.id === state.collection?.id);
+		if (playlist) return playlistRoutePath(playlist.slug);
 	}
 	return '/';
 }
@@ -476,6 +512,77 @@ export async function openTakeAddress(
 	}
 	if (!takeAlreadyShown(song.id, generation.id)) await applyLibraryHistory(state);
 	return 'found';
+}
+
+export type PlaylistAddress = 'found' | 'unknown';
+
+// The entry point of the /playlist/<slug> route (issue #286), the last new
+// address of the chain -- same shape as openAlbumAddress: an unknown slug is
+// a verdict the route states, never a silent fall back. A playlist has no
+// album to nest inside, so unlike openSongAddress there is only the one
+// resolution, not two run concurrently.
+export async function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
+	const playlist = await resolvePlaylistBySlug(slug);
+	if (!playlist) return 'unknown';
+	const opened = historyAlreadyOpensPlaylist(playlist.id);
+	const state = opened
+		? (currentLibraryHistoryState() as LibraryHistoryState)
+		: playlistAddressState(playlist.id);
+	if (!opened) {
+		await writeLibraryHistory(state, playlistRoutePath(slug), 'replace');
+	}
+	if (!playlistAlreadyShown(playlist.id)) await applyLibraryHistory(state);
+	return 'found';
+}
+
+// Checks the already-loaded playlists first -- the in-app route to a
+// playlist (a Rail row, a shares-inventory link) already has the list
+// loaded. A cold tab has neither and pays for the fetch: playlists have no
+// pagination (unlike fetchSongBySlug's paged album scan), so the one list
+// call either finds the slug or the address is unknown. Found is upserted
+// into playlistList the same way resolveSongInAlbum upserts a slug-based
+// song hit, so libraryHistoryUrl's own by-id lookup finds it without a
+// second fetch.
+async function resolvePlaylistBySlug(slug: string): Promise<PlaylistItem | null> {
+	const known = get(playlistList).find((item) => item.slug === slug);
+	if (known) return known;
+	const items = await fetchPlaylists();
+	const found = items.find((item) => item.slug === slug) ?? null;
+	if (found) {
+		playlistList.update((list) =>
+			list.some((item) => item.id === found.id)
+				? list.map((item) => (item.id === found.id ? found : item))
+				: [...list, found]
+		);
+	}
+	return found;
+}
+
+function playlistAlreadyShown(playlistId: string): boolean {
+	const collection = get(openCollection);
+	return (
+		get(librarySurface) === 'detail' &&
+		collection?.kind === 'playlist' &&
+		collection.id === playlistId
+	);
+}
+
+function historyAlreadyOpensPlaylist(playlistId: string): boolean {
+	const state = currentLibraryHistoryState();
+	return (
+		isLibraryHistoryState(state) &&
+		state.surface === 'detail' &&
+		state.collection?.kind === 'playlist' &&
+		state.collection.id === playlistId
+	);
+}
+
+function playlistAddressState(playlistId: string): LibraryHistoryState {
+	return {
+		...libraryRootState(),
+		surface: 'detail',
+		collection: { kind: 'playlist', id: playlistId }
+	};
 }
 
 export type LegacySongQueryAddress =

@@ -659,7 +659,8 @@ describe('the live library stream', () => {
 	it.each([
 		['the library route', '/'],
 		['an album address', '/album/anfield'],
-		['a song address', '/album/anfield/stadion-lauf-a']
+		['a song address', '/album/anfield/stadion-lauf-a'],
+		['a playlist address', '/playlist/friday-night']
 	])('runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
@@ -697,15 +698,16 @@ describe('the live library stream', () => {
 
 // The single-mount fix (issue #276) lives in a route group, not in this
 // layout: `(library)/+layout.svelte` owns the one LibraryWorkspace mount, and
-// only the three library addresses sit inside it. SvelteKit resolves a route
-// group at build time, invisible to a mounted-component test, so this reads
-// the routes tree directly instead -- the same way this file already reads
-// app.css from disk.
+// every library address sits inside it -- the root, an album (and its song
+// and take, one and two segments deeper) and, since issue #286, a playlist.
+// SvelteKit resolves a route group at build time, invisible to a mounted-
+// component test, so this reads the routes tree directly instead -- the same
+// way this file already reads app.css from disk.
 describe('the library route group', () => {
 	const routesDir = join(process.cwd(), 'src/routes');
 	const libraryGroupDir = join(routesDir, '(library)');
 
-	it('owns the workspace mount for the three library addresses', () => {
+	it('owns the workspace mount for every library address', () => {
 		expect(readdirSync(libraryGroupDir).sort()).toEqual([
 			'+layout.svelte',
 			'+page.svelte',
@@ -715,13 +717,15 @@ describe('the library route group', () => {
 			// assertion silently, the same way `album/[slug]` already carries its
 			// own harness.svelte/page.test.ts one level down.
 			'harness.svelte',
-			'page.test.ts'
+			'page.test.ts',
+			'playlist'
 		]);
 		expect(readFileSync(join(libraryGroupDir, '+layout.svelte'), 'utf8')).toContain(
 			'LibraryWorkspace'
 		);
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]/[song]'))).toContain('+page.svelte');
+		expect(readdirSync(join(libraryGroupDir, 'playlist/[slug]'))).toContain('+page.svelte');
 	});
 
 	it('leaves settings, auth, share and legal pages outside the group', () => {
@@ -733,5 +737,6 @@ describe('the library route group', () => {
 			expect.arrayContaining(['(library)', 'settings', 'login', 'setup', 'legal', 'share', 'loras'])
 		);
 		expect(topLevelDirs).not.toContain('album');
+		expect(topLevelDirs).not.toContain('playlist');
 	});
 });

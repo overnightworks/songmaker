@@ -33,10 +33,12 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import (
+    PLAYLIST_SLUG_MAX_LENGTH,
     SONG_SLUG_MAX_LENGTH,
     Album,
     Generation,
     Job,
+    Playlist,
     Song,
     User,
     UserLora,
@@ -62,10 +64,12 @@ _ALBUM_ID_LOCK_ID = 2
 _LORA_SLUG_LOCK_ID = 3
 _SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
+_PLAYLIST_SLUG_LOCK_ID = 6
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
 _SONG_SLUG_BASE_MAX_LENGTH = SONG_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
+_PLAYLIST_SLUG_BASE_MAX_LENGTH = PLAYLIST_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
@@ -270,6 +274,29 @@ def unique_song_slug(
     base_slug = slugify(title, max_length=_SONG_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
         session, "unique_song_slug", _SONG_SLUG_LOCK_ID, base_slug, is_taken,
+    )
+
+
+def unique_playlist_slug(
+    session: Session,
+    title: str,
+    exclude_playlist_id: str | None = None,
+) -> str:
+    """Derive a playlist slug from its title, unique across all playlists.
+
+    Playlists have no album to scope by — like an album's own id, the slug
+    is global (the album precedent from #268). Pass exclude_playlist_id when
+    the playlist already owns a row, so a rename does not collide with itself.
+    """
+    def is_taken(candidate: str) -> bool:
+        query = session.query(Playlist).filter(Playlist.slug == candidate)
+        if exclude_playlist_id is not None:
+            query = query.filter(Playlist.id != exclude_playlist_id)
+        return query.first() is not None
+
+    base_slug = slugify(title, max_length=_PLAYLIST_SLUG_BASE_MAX_LENGTH)
+    return _acquire_unique_slug(
+        session, "unique_playlist_slug", _PLAYLIST_SLUG_LOCK_ID, base_slug, is_taken,
     )
 
 

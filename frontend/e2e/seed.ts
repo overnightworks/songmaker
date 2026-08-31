@@ -54,11 +54,17 @@ export interface SeededLibrary {
 /** Seeded per attempt, because the flow reorders and prunes it. */
 export interface SeededPlaylist {
 	title: string;
+	/** Also the playlist's address: /playlist/<slug> (issue #286). */
+	slug: string;
 	songTitles: string[];
 }
 
 interface CreatedResource {
 	id: string;
+}
+
+interface CreatedPlaylist extends CreatedResource {
+	slug: string;
 }
 
 interface ShareLink {
@@ -181,13 +187,17 @@ export async function seedPlaylist(
 ): Promise<SeededPlaylist> {
 	const seed = await SeedApi.fromSession(api);
 	const title = `${PLAYLIST_TITLE_PREFIX} ${runMarker()}`;
-	const playlist = await seed.postJson<CreatedResource>('/api/playlists', { title });
+	const playlist = await seed.postJson<CreatedPlaylist>('/api/playlists', { title });
 	for (const take of library.playlistTakes) {
 		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
 			generation_id: take.takeId
 		});
 	}
-	return { title, songTitles: library.playlistTakes.map((take) => take.songTitle) };
+	return {
+		title,
+		slug: playlist.slug,
+		songTitles: library.playlistTakes.map((take) => take.songTitle)
+	};
 }
 
 export function writeSeededLibrary(library: SeededLibrary): void {

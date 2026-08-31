@@ -5,16 +5,21 @@ import { resolve } from '$app/paths';
 
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { detailTab, librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	detailTab,
+	isLibraryHistoryState,
+	librarySurface,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
+import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
 import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, PlaylistItem, SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
@@ -151,6 +156,19 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
+function playlistItem(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
+	return {
+		id: 'p1',
+		title: 'Night Drive',
+		slug: 'night-drive',
+		entry_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
 beforeEach(() => {
 	fetchSong.mockReset();
 	fetchAlbum.mockReset();
@@ -165,6 +183,7 @@ beforeEach(() => {
 	fetchPlaylist.mockResolvedValue({
 		id: 'p1',
 		title: 'Night Drive',
+		slug: 'night-drive',
 		entry_count: 0,
 		is_shared: false,
 		share_slug: null,
@@ -214,10 +233,11 @@ function album(id: string, title: string) {
 }
 
 describe('isLibraryWorkspacePath', () => {
-	it('is the home path and every album and song address', () => {
+	it('is the home path and every album, song, and playlist address', () => {
 		expect(isLibraryWorkspacePath('/')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield/stadion-lauf-a')).toBe(true);
+		expect(isLibraryWorkspacePath('/playlist/friday-night')).toBe(true);
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
@@ -382,6 +402,44 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s1/take/2');
 	});
+
+	// Issue #286: /playlist/<slug> is its own route file, a sibling of /
+	// and /album/<slug> rather than nested under it -- opening one from an
+	// album address must cross through the router the same way the album
+	// <-> song boundary already does above.
+	it('crosses through the router from an album address to a playlist', async () => {
+		await openAlbum('a1');
+		vi.mocked(goto).mockClear();
+		fetchPlaylists.mockResolvedValueOnce([playlistItem()]);
+
+		await openPlaylist('p1');
+
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true
+		});
+		expect(window.location.pathname).toBe('/playlist/night-drive');
+	});
+
+	// Moving between two open playlists stays the same route file
+	// (/playlist/[slug] matches both), so it is the frequent-churn case, not
+	// a crossing -- the same rule album<->album and song<->song already
+	// carry (Playlist<->Playlist is the one pair the crossing matrix does
+	// not cross).
+	it('writes a playlist-to-playlist move straight to history, not through the router', async () => {
+		fetchPlaylists.mockResolvedValue([
+			playlistItem({ id: 'p1', slug: 'night-drive' }),
+			playlistItem({ id: 'p2', slug: 'morning-run', title: 'Morning Run' })
+		]);
+		await openPlaylist('p1');
+		vi.mocked(goto).mockClear();
+
+		await openPlaylist('p2');
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/playlist/morning-run');
+	});
 });
 
 describe('the address an open album carries (issue #269)', () => {
@@ -400,6 +458,21 @@ describe('the address an open album carries (issue #269)', () => {
 
 	it('gives the wall back the home address when the album is only the rail context', async () => {
 		await openAlbum('a1');
+		await openLibraryWall();
+		expect(window.location.pathname).toBe('/');
+	});
+});
+
+describe('the address an open playlist carries (issue #286)', () => {
+	it('sets the playlist address when a playlist is opened', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem()]);
+		await openPlaylist('p1');
+		expect(window.location.pathname).toBe('/playlist/night-drive');
+	});
+
+	it('gives the wall back the home address when the playlist is only the rail context', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem()]);
+		await openPlaylist('p1');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
 	});
@@ -442,6 +515,35 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname + window.location.search).toBe('/?song=s1');
+	});
+});
+
+// The open playlist's address names it by slug (issue #286), and a rename
+// changes that slug server-side (unique_playlist_slug follows the title) --
+// the same gap syncSongAddressToRename closes for songs above, mirrored here
+// via updatePlaylistInList, the playlist equivalent of updateSongInList.
+describe("a rename pulls the open playlist's address along (issue #286)", () => {
+	it('replaces the address when the open playlist is renamed', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem()]);
+		await openPlaylist('p1');
+		const indexBeforeRename = history.state.index;
+		vi.mocked(goto).mockClear();
+
+		updatePlaylistInList('p1', (p) => ({ ...p, slug: 'renamed' }));
+
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/playlist/renamed'));
+		expect(history.state.index).toBe(indexBeforeRename);
+	});
+
+	it('leaves the address alone for an edit that is not a rename', async () => {
+		fetchPlaylists.mockResolvedValueOnce([playlistItem()]);
+		await openPlaylist('p1');
+		vi.mocked(goto).mockClear();
+
+		updatePlaylistInList('p1', (p) => ({ ...p, entry_count: 3 }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/playlist/night-drive');
 	});
 });
 
@@ -933,6 +1035,35 @@ describe('initNavigation', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
 		expect(updateSong).not.toHaveBeenCalled();
+		cleanup();
+	});
+
+	// Issue #286 (found against a real stack, not jsdom -- see
+	// playlist-address.spec.ts): a cold tab on an address route has no
+	// LibraryHistoryState yet, same as a cold `/`, but every one of those
+	// routes owns its own resolver (openAlbumAddress / openSongAddress /
+	// openTakeAddress / openPlaylistAddress) that writes the real entry once
+	// it lands -- found or, honestly, not. This branch used to seed a default
+	// root entry unconditionally on that same "no state yet" signal, which
+	// raced an *unknown* address (nothing else ever writes for it) and always
+	// won once the live stream's own bootstrap finished, replacing the
+	// intended 404 overlay with a crossing `goto('/')` back to the wall.
+	it('does not seed a default root entry on an address route, leaving its own resolver the only writer', () => {
+		history.replaceState(null, '', '/album/ghost');
+
+		const cleanup = initNavigation();
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(history.state).toBeNull();
+		cleanup();
+	});
+
+	it('still seeds a default root entry on a genuinely cold "/" visit', async () => {
+		history.replaceState(null, '', '/');
+
+		const cleanup = initNavigation();
+
+		await vi.waitFor(() => expect(isLibraryHistoryState(history.state)).toBe(true));
 		cleanup();
 	});
 });

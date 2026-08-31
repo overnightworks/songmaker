@@ -6,19 +6,23 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File                    | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                                                                                                                                                                                                                              |
-| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284) |
+| File                       | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `library.spec.ts`          | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                                                                                                                                                                                                                              |
+| `album-address.spec.ts`    | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284) |
+| `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                |
 
-`album-address.spec.ts` runs on **desktop only**: what it pins is the router's
-behaviour across an address that changes the route, which is the same code on
-both shells, and both projects share one rate-limit window. It is here rather
-than in the unit suite because jsdom has no router — only a real browser shows
-whether moving between `/`, `/album/<slug>`, `/album/<slug>/<song-slug>` and
-`/album/<slug>/<song-slug>/take/<n>` keeps the workspace standing or tears it
-down. Its evidence that nothing was torn down is that the page opened the
-live event stream exactly once.
+`album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
+only**: what they pin is the router's behaviour across an address that
+changes the route, which is the same code on both shells, and both projects
+share one rate-limit window. They are here rather than in the unit suite
+because jsdom has no router — only a real browser shows whether moving
+between `/`, `/album/<slug>`, `/album/<slug>/<song-slug>`,
+`/album/<slug>/<song-slug>/take/<n>` and `/playlist/<slug>` keeps the
+workspace standing or tears it down. `album-address.spec.ts`'s evidence that
+nothing was torn down is that the page opened the live event stream exactly
+once; `playlist-address.spec.ts` is a standalone cold open with nothing to
+cross from, the same shape as the standalone cold song and take opens below.
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -64,19 +68,31 @@ the flow costs the API and holds it under a named budget.
 
 **The budget is a ceiling, not a knob.** Each flow has its own, measured on a
 green run and carrying headroom: the library flow measures 26 `/api` requests
-per shell against a budget of 32, and `album-address.spec.ts` carries four —
+per shell against a budget of 32, `album-address.spec.ts` carries four —
 22 for the cold album open, one-step track click and Back/Forward, 16 for a
 standalone cold song open, 16 for a standalone cold take open, 15 for the
 legacy `/?song=` bookmark redirect (issue #284, two full cold page loads: a
-genuine earlier page, then the bookmark) — against a shared budget of 30.
-Every cold open (song, take, or the redirected legacy bookmark) races the
-live stream's own bootstrap the same way — whichever of the two restores the
-library state finishes second re-applies the same state (documented on
-`openAlbumAddress` in `stores/libraryContext.ts`) — so a green run can
-measure a request or two either side of these numbers; the budget's headroom
-is sized for exactly that, not for a real regression. A flow that suddenly
-needs several more round trips is a regression — find the extra requests
-instead of raising the number. The measured count is printed on every run.
+genuine earlier page, then the bookmark) — against a shared budget of 30, and
+`playlist-address.spec.ts` carries two — 11 for the cold playlist open, 9 for
+the unknown-slug open — against a shared budget of 15. Every cold open (song,
+take, playlist, or the redirected legacy bookmark) races the live stream's
+own bootstrap the same way — whichever of the two restores the library state
+finishes second re-applies the same state (documented on `openAlbumAddress`
+in `stores/libraryContext.ts`) — so a green run can measure a request or two
+either side of these numbers; the budget's headroom is sized for exactly
+that, not for a real regression. A flow that suddenly needs several more
+round trips is a regression — find the extra requests instead of raising the
+number. The measured count is printed on every run.
+
+Measured together on a clean isolated stack (one run, both projects, nothing
+else hitting it): the full suite costs 116 `/api` requests on **desktop**
+(all four album-address tests, both playlist-address tests, and the library
+flow) and 26 on **mobile** (`library.spec.ts` only — the address specs are
+desktop-only, see above) — 142 total, comfortably under the CI stack's
+`IP_RATE_LIMIT: "300"` override (`docker-compose.ci.yml`) for one IP's
+60-second window. Re-running the suite repeatedly against the same stack
+inside that window is cumulative, not reset per run — see "Running it
+locally" below.
 
 Opening a track from an open album address is still a route-file crossing
 (issue #269): a song addresses `/album/<slug>/<song-slug>` instead of the
@@ -142,8 +158,11 @@ cd .. && docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit
-(120 requests per window) and the flow will report 429s — that is the guard
-working, not a flaky test. Wait out the window or reset the stack.
+— `IP_RATE_LIMIT: "300"` per 60-second window under this CI recipe (see the
+budget note above; the production default is 120) — and the flow will report
+429s — that is the guard working, not a flaky test. Wait out the window or
+reset the stack; a fresh run right after a previous one still counts against
+the same window, so back-to-back reruns add up rather than starting over.
 
 Artifacts (`playwright-report/`, `test-results/`) are written on failure only
 and uploaded by CI on a failing run. `retries: 1` in CI, with a trace on the

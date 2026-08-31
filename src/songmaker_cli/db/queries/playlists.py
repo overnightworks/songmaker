@@ -80,8 +80,15 @@ def get_playlist(session: Session, playlist_id: str) -> Playlist | None:
     )
 
 
-def create_playlist(session: Session, title: str, user_id: str) -> Playlist:
-    playlist = Playlist(title=title, created_by=user_id)
+def create_playlist(session: Session, title: str, user_id: str, slug: str) -> Playlist:
+    """Create a playlist.
+
+    ``slug`` must already be reserved (e.g. via unique_playlist_slug()) and
+    is set on the row before its one flush, not after — the row's default
+    slug='' would otherwise briefly exist under the global unique index and
+    collide with a sibling that also has not been assigned a real slug yet.
+    """
+    playlist = Playlist(title=title, created_by=user_id, slug=slug)
     session.add(playlist)
     session.flush()
     log.info("Created playlist '%s' (id=%s, owner=%s)", title, playlist.id, user_id)
@@ -97,11 +104,19 @@ def delete_playlist(session: Session, playlist_id: str) -> None:
     log.info("Deleted playlist %s", playlist_id)
 
 
-def update_playlist(session: Session, playlist_id: str, title: str) -> Playlist:
+def update_playlist(session: Session, playlist_id: str, title: str, slug: str) -> Playlist:
+    """Rename a playlist, moving its slug along in the same flush.
+
+    ``slug`` (already reserved via unique_playlist_slug()) changes together
+    with ``title`` in one write — a later, separate flush would briefly leave
+    the row on its old slug, and a concurrent create could then reserve that
+    slug out from under it (the #270 lesson, global rather than per-album).
+    """
     playlist = session.query(Playlist).filter_by(id=playlist_id).first()
     if not playlist:
         raise ValueError(f"Playlist not found: {playlist_id}")
     playlist.title = title
+    playlist.slug = slug
     session.flush()
     return playlist
 

@@ -234,6 +234,7 @@ function makePlaylist(
 	return {
 		id: QUEUE_PLAYLIST.id,
 		title: QUEUE_PLAYLIST.title,
+		slug: QUEUE_PLAYLIST.title.toLowerCase().replace(/\s+/g, '-'),
 		entry_count: entries.length,
 		is_shared: false,
 		share_slug: null,
@@ -1187,6 +1188,7 @@ describe('native first play ignores stream settings', () => {
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',
+			slug: 'night-drive',
 			entry_count: 0,
 			is_shared: false,
 			share_slug: null,
@@ -2309,6 +2311,7 @@ describe('idlePlayTarget', () => {
 	const playlist = {
 		id: 'p1',
 		title: 'Night Drive',
+		slug: 'night-drive',
 		entry_count: 0,
 		is_shared: false,
 		share_slug: null,
@@ -2383,6 +2386,7 @@ describe('playIdleStart', () => {
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',
+			slug: 'night-drive',
 			entry_count: 1,
 			is_shared: false,
 			share_slug: null,

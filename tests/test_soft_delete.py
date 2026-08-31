@@ -297,7 +297,7 @@ def test_chat_messages_survive_soft_delete_and_restore(seeded: Session) -> None:
 def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> None:
     seeded.add(User(id="owner", username="o", password_hash="x", role="user"))
     seeded.commit()
-    pl = create_playlist(seeded, "Mix", "owner")
+    pl = create_playlist(seeded, "Mix", "owner", slug="mix")
     pick_generation(seeded, "g1")
     pick_generation(seeded, "g2")
     add_song_to_playlist(seeded, pl.id, "s1")
