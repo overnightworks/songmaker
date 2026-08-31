@@ -172,6 +172,7 @@ export interface AlbumCoverUrls {
 
 export interface SongItem {
 	id: string;
+	slug: string;
 	title: string;
 	album_id: string;
 	album_title: string;

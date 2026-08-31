@@ -19,6 +19,7 @@ describe('co-writer provider copy', () => {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'open-song',
 		title: 'Open Song',
 		album_id: 'a1',
 		album_title: 'Album',

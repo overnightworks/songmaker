@@ -6,18 +6,18 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File                    | Covers                                                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out |
-| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track → Back → Forward, with the shell standing throughout (issue #269)                                           |
+| File                    | Covers                                                                                                                                                                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library.spec.ts`       | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out                                                                     |
+| `album-address.spec.ts` | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275) |
 
 `album-address.spec.ts` runs on **desktop only**: what it pins is the router's
 behaviour across an address that changes the route, which is the same code on
 both shells, and both projects share one rate-limit window. It is here rather
 than in the unit suite because jsdom has no router — only a real browser shows
-whether moving between `/` and `/album/<slug>` keeps the workspace standing or
-tears it down. Its evidence that nothing was torn down is that the page opened
-the live event stream exactly once.
+whether moving between `/`, `/album/<slug>` and `/album/<slug>/<song-slug>`
+keeps the workspace standing or tears it down. Its evidence that nothing was
+torn down is that the page opened the live event stream exactly once.
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -63,14 +63,27 @@ the flow costs the API and holds it under a named budget.
 
 **The budget is a ceiling, not a knob.** Each flow has its own, measured on a
 green run and carrying headroom: the library flow measures 28 `/api` requests
-per shell against a budget of 32, and the album-address flow 24 against 30.
-(The library flow measured 25 before album addresses: opening a track from an
-album address changes the route, so the editor mounts once on the way out of
-the album route and once on the way into `/`. That second mount goes away in
-#265's S3, when a song has an address of its own and opening one is a single
-navigation.) A flow that suddenly needs more round trips is a regression
-— find the extra requests instead of raising the number. The measured count is
-printed on every run.
+per shell against a budget of 32, and `album-address.spec.ts` carries two —
+24 for the cold album open, one-step track click and Back/Forward, 16 for a
+standalone cold song open — against a shared budget of 30. A flow that
+suddenly needs more round trips is a regression — find the extra requests
+instead of raising the number. The measured count is printed on every run.
+
+Opening a track from an open album address is still a route-file crossing
+(issue #269), and #265's S3 (issue #275) did not remove that: a song now
+addresses `/album/<slug>/<song-slug>` instead of the address-less
+`/?song=…`, but both are a different `+page.svelte` from the album's own, so
+the editor still remounts once on the way there — 28 and 24 measure the same
+as before #275, not lower. What #275 actually bought is the address itself
+(a song is linkable and survives a cold open on its own, 404s honestly on an
+unknown slug, and follows a rename) and the crossing-detection fix that keeps
+the router in step one segment deeper (`libraryRouteShape` in
+`stores/libraryContext.ts`). Folding the remount away for real would need
+`/album/[slug]` and `/album/[slug]/[song]` to share one mounted
+`LibraryWorkspace` instance across the crossing — a `+layout.svelte` moving
+the workspace out of both leaf pages — which is a route-structure change
+beyond this slice's file scope, not something this suite can paper over by
+adjusting a number.
 
 Selectors are roles and accessible names, imported from `src/lib/constants.ts`
 — never `data-testid`. A flow that cannot find an element by its accessible

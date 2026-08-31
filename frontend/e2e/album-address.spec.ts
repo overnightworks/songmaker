@@ -1,12 +1,14 @@
 // An album's address, driven the way the operator described it: paste it into
-// a tab that knows nothing else and see the album (issue #269).
+// a tab that knows nothing else and see the album (issue #269) -- and a
+// song's own address one segment deeper, reached the same way (issue #275).
 //
 // These are the paths jsdom structurally cannot see. SvelteKit reconciles its
 // mounted route tree only in a real browser, so only here does it show whether
-// moving between the workspace's two addresses (`/` and `/album/<slug>`) keeps
-// the workspace standing or tears it down and builds it again. That the app
-// writes this address when an album opens is pinned in the unit suite
-// (stores/navigation.test.ts), which costs the stack nothing.
+// moving between the workspace's three addresses (`/`, `/album/<slug>` and
+// `/album/<slug>/<song-slug>`) keeps the workspace standing or tears it down
+// and builds it again. That the app writes these addresses when an album or a
+// song opens is pinned in the unit suite (stores/navigation.test.ts), which
+// costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
@@ -14,8 +16,10 @@ import { FlowGuard, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
- * What this flow costs the API: 24 measured on a green run, budgeted with the
- * headroom the library flow carries. Both flows share one 60-second IP
+ * What each test costs the API, measured on a green run: 24 for the cold
+ * album open + one-step track click + Back/Forward, 16 for the standalone
+ * cold song open. One shared ceiling, sized to the larger with the same
+ * headroom the library flow carries — both flows share one 60-second IP
  * rate-limit window, so a jump here is a regression to find, not a number to
  * raise.
  */
@@ -30,7 +34,9 @@ test.beforeEach(({ page }) => {
 	guard = new FlowGuard(page);
 });
 
-test.afterEach(() => {
+// eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
+test.afterEach(({}, testInfo) => {
+	console.log(`Album-address flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
 	guard.assertClean();
 	guard.assertWithinBudget(ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET);
 });
@@ -54,7 +60,7 @@ async function expectWorkspaceStanding(page: Page): Promise<void> {
 	await expect(page.getByText(RESOURCE_SYNC_ERROR, { exact: true })).toHaveCount(0);
 }
 
-test('an album address opens cold and survives Back and Forward across the route', async ({
+test('an album address opens cold, a track click is one step to the song address, and both survive Back and Forward', async ({
 	page,
 	isMobile
 }) => {
@@ -66,18 +72,23 @@ test('an album address opens cold and survives Back and Forward across the route
 
 	const library = readSeededLibrary();
 	const albumAddress = `/album/${library.albumId}`;
+	const songAddress = new RegExp(`${albumAddress}/[^/]+$`);
 	const surface = workspace(page);
 	const streamOpens = countLiveStreamOpens(page);
 
-	// The address, pasted into a tab that knows nothing else.
+	// The album address, pasted into a tab that knows nothing else.
 	await page.goto(albumAddress);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	await expectWorkspaceStanding(page);
 
-	// A track opens under the song address, and the workspace stands through
-	// it and through the way back and forward over that route boundary.
+	// A track click lands under the song's own address, its slug, in one
+	// navigation step — `/album/<slug>/<song-slug>` rather than the address-less
+	// `/?song=…` issue #269 left this on. Both are still a route-file crossing
+	// (a different +page.svelte owns each of the three addresses), so the
+	// editor still remounts once on the way there — measured, not eliminated;
+	// see the request-budget note on ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET.
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
-	await expect(page).toHaveURL(/\/\?song=/);
+	await expect(page).toHaveURL(songAddress);
 	await expectWorkspaceStanding(page);
 
 	await page.goBack();
@@ -86,9 +97,34 @@ test('an album address opens cold and survives Back and Forward across the route
 	await expectWorkspaceStanding(page);
 
 	await page.goForward();
-	await expect(page).toHaveURL(/\/\?song=/);
+	await expect(page).toHaveURL(songAddress);
 	await expectWorkspaceStanding(page);
 
-	// One page load, one stream: nothing tore the shell down on the way.
+	// One page load, one stream: nothing tore the shell down on the way,
+	// across either route boundary. Back/Forward stay client-side (SvelteKit
+	// intercepts `popstate`); a genuine second page load, which would abort
+	// this stream, is a separate test below rather than a further step here.
 	expect(streamOpens()).toBe(1);
+});
+
+// Python's slugify() (api_helpers.unique_song_slug) mirrored only for the
+// plain-ASCII seeded titles: lowercase, spaces to hyphens. Not a general
+// implementation -- the seed's SONG_TITLES never need one.
+function expectedSongSlug(title: string): string {
+	return title.toLowerCase().replace(/\s+/g, '-');
+}
+
+test('a song address opens cold, in a tab that knows nothing else', async ({ page, isMobile }) => {
+	// Same reasoning as the album cold-open above: shell-independent router
+	// behaviour, and the two shells already share a budget window.
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+
+	const library = readSeededLibrary();
+	const songAddress = `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`;
+	const surface = workspace(page);
+
+	await page.goto(songAddress);
+
+	await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
+	await expectWorkspaceStanding(page);
 });

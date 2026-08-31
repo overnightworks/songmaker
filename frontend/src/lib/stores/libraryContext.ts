@@ -3,8 +3,14 @@ import { goto } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
-import { fetchSong } from '$lib/api/songs';
-import { LIBRARY_DEFAULT_FILTER, LIBRARY_HISTORY_KIND, type LibraryFilter } from '$lib/constants';
+import { fetchSong, fetchSongs } from '$lib/api/songs';
+import type { SongItem } from '$lib/api/types';
+import {
+	LIBRARY_DEFAULT_FILTER,
+	LIBRARY_HISTORY_KIND,
+	LIBRARY_SONG_PAGE_SIZE,
+	type LibraryFilter
+} from '$lib/constants';
 import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
 import { closeSharesInventory, openSharesInventory } from '$lib/stores/shares';
 import { searchQuery } from '$lib/stores/filter';
@@ -16,7 +22,7 @@ import {
 	restoreLibrarySearch,
 	syncLibrarySearch
 } from '$lib/stores/librarySearch';
-import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
+import { albumList, loadSongsForAlbum, songList, upsertSongInList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { deselectPlaylist, ensurePlaylistsLoaded, loadPlaylistDetail } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
@@ -146,9 +152,53 @@ export function isAlbumRoutePath(pathname: string): boolean {
 	return pathname.startsWith(ALBUM_ROUTE_PREFIX) && pathname.length > ALBUM_ROUTE_PREFIX.length;
 }
 
+// A song's own address (issue #275), one segment under its album's. The song
+// is named by its slug, not its id — matching how the album segment already
+// names the album by slug rather than a surrogate key.
+export function songRoutePath(albumId: string, songSlug: string): string {
+	return `${albumRoutePath(albumId)}/${encodeURIComponent(songSlug)}`;
+}
+
+export function isSongRoutePath(pathname: string): boolean {
+	if (!isAlbumRoutePath(pathname)) return false;
+	const rest = pathname.slice(ALBUM_ROUTE_PREFIX.length);
+	const slashIndex = rest.indexOf('/');
+	return slashIndex !== -1 && rest.length > slashIndex + 1;
+}
+
+// The three shapes a library address can take. Distinct from the
+// isAlbumRoutePath boolean below, which answers "is this under /album/" for
+// isLibraryWorkspacePath — that boolean is deliberately true for both 'album'
+// and 'album-song', since both mount the workspace. This finer distinction is
+// what writeLibraryHistory needs: it must treat album <-> album-song as a
+// route crossing too, not just root <-> album, or a track opened from an
+// album address would leave the router still believing it is on
+// /album/[slug]/+page.svelte while the bar reads one segment deeper -- see
+// the note on writeLibraryHistory for what a stale router does on the next
+// Back/Forward.
+type LibraryRouteShape = 'root' | 'album' | 'album-song';
+
+function libraryRouteShape(pathname: string): LibraryRouteShape {
+	if (!isAlbumRoutePath(pathname)) return 'root';
+	return isSongRoutePath(pathname) ? 'album-song' : 'album';
+}
+
+// An open song's own address once its slug is known (issue #275); the
+// generation query, like every other library appendage, rides along
+// unchanged. A song not yet hydrated into songList (the legacy `?song=`
+// entry point, still only read) keeps writing that older form until it is —
+// migrating live `?song=` addresses to the new one is S6, not this slice.
 export function libraryHistoryUrl(state: LibraryHistoryState): string {
-	if (state.songId && state.generationId) return `/?song=${state.songId}&gen=${state.generationId}`;
-	if (state.songId) return `/?song=${state.songId}`;
+	if (state.songId) {
+		const song = get(songList).find((item) => item.id === state.songId);
+		if (song) {
+			const path = songRoutePath(song.album_id, song.slug);
+			return state.generationId ? `${path}?gen=${state.generationId}` : path;
+		}
+		return state.generationId
+			? `/?song=${state.songId}&gen=${state.generationId}`
+			: `/?song=${state.songId}`;
+	}
 	if (state.surface === 'detail' && state.collection?.kind === 'album') {
 		return albumRoutePath(state.collection.id);
 	}
@@ -162,14 +212,18 @@ export type HistoryWriteMode = 'push' | 'replace';
 // SvelteKit reconciles its mounted route tree only on a real navigation, so a
 // raw history write is invisible to the router. That was harmless while every
 // library address was `/` or `/?song=…` — always the same route. Since an open
-// album addresses `/album/<slug>` (issue #269) a write can change the route
-// pattern, and a raw one would leave the router mounting the route it last
-// saw while the address names another: the next real navigation or
+// album addresses `/album/<slug>` (issue #269) and an open song addresses one
+// segment deeper, `/album/<slug>/<song>` (issue #275), a write can change
+// which of the three route files (`/`, `/album/[slug]`, `/album/[slug]/[song]`)
+// the address names, and a raw one would leave the router mounting the file it
+// last saw while the address names another: the next real navigation or
 // Back/Forward that disagrees tears the workspace down mid-session, with an
-// unsaved draft still in it. So a write that crosses the boundary goes through
-// `goto`, which uses the same History API but keeps the router in step, while
-// the frequent same-route churn (filter, sort, scroll, search cursor) keeps
-// the cheap synchronous write.
+// unsaved draft still in it. `libraryRouteShape` names which of the three a
+// pathname is, and a write that changes it goes through `goto`, which uses the
+// same History API but keeps the router in step, while the frequent
+// same-shape churn (filter, sort, scroll, search cursor, and — since #275 —
+// switching to another song within the same open album) keeps the cheap
+// synchronous write.
 //
 // `goto` puts its own `state` option in `page.state`, not in `history.state`,
 // which is where every reader of the library's restore state looks — so the
@@ -188,7 +242,7 @@ export function writeLibraryHistory(
 ): Promise<void> {
 	const pathname = new URL(url, window.location.origin).pathname;
 	const from = plannedHistory?.pathname ?? window.location.pathname;
-	const crossesRoutes = isAlbumRoutePath(from) !== isAlbumRoutePath(pathname);
+	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
 	if (!crossesRoutes && queuedHistoryWrites === 0) {
 		applyHistoryWrite(state, url, mode);
 		return Promise.resolve();
@@ -302,6 +356,98 @@ async function albumExists(albumId: string): Promise<boolean> {
 		if (isNotFound(err)) return false;
 		throw err;
 	}
+}
+
+export type SongAddress = 'found' | 'unknown-song' | 'unknown-album';
+
+// The entry point of the /album/<slug>/<song-slug> route (issue #275), one
+// level under openAlbumAddress above -- same shape, same reasoning: an
+// unknown album or an unknown song within a known one is a verdict the route
+// states, never a silent fall back. The album and the song-in-album lookups
+// run concurrently rather than the album gating the song fetch: a scoped
+// `/api/songs?album_id=` for an album that turns out not to exist costs one
+// wasted round trip, cheaper than the extra latency of running them in
+// series on the one path with nothing cached yet -- a cold tab.
+//
+// `generationId` is the take query appendage (`?gen=…`), read from the
+// address the same way the legacy `/?song=&gen=` entry point already reads
+// it -- a cold paste of a song address that names a take must not silently
+// drop it. It only seeds a fresh open; an address that already opens this
+// song keeps whatever take the session already has selected.
+export async function openSongAddress(
+	albumId: string,
+	songSlug: string,
+	generationId: string | null = null
+): Promise<SongAddress> {
+	const [albumKnown, song] = await Promise.all([
+		albumIsKnown(albumId),
+		resolveSongInAlbum(albumId, songSlug)
+	]);
+	if (!albumKnown) return 'unknown-album';
+	if (!song) return 'unknown-song';
+	const opened = historyAlreadyOpensSong(song.id);
+	const state = opened
+		? (currentLibraryHistoryState() as LibraryHistoryState)
+		: songAddressState(song, generationId);
+	if (!opened) {
+		await writeLibraryHistory(state, songRoutePath(albumId, songSlug), 'replace');
+	}
+	if (!songAlreadyShown(song.id)) await applyLibraryHistory(state);
+	return 'found';
+}
+
+// Checks the already-loaded songs of this album first -- the in-app route to
+// a song (a track click from an open album, a rail row) always has them. A
+// cold tab has neither and pays for the fetch: a direct one, not
+// loadSongsForAlbum, whose fetch the live stream's own first snapshot can
+// cancel out from under it. A cold tab starts both at once (this resolution
+// and the stream's own bootstrap, which calls cancelAlbumSongLoads as part
+// of beginning its epoch) and loadSongsForAlbum silently drops a cancelled
+// fetch's results instead of failing it, which read as an honest
+// "unknown-song" verdict for a song that plainly exists -- discovered the
+// hard way against a real stack (#275), not caught by jsdom, which has no
+// live stream to race. Once found, the song is upserted into songList the
+// same way a song opened directly from a search hit or a share link already
+// is, so applyLibraryHistory's own loadSongsForAlbum call for the rest of the
+// album does not have to carry it too.
+async function resolveSongInAlbum(albumId: string, slug: string): Promise<SongItem | null> {
+	const known = get(songList).find((song) => song.album_id === albumId && song.slug === slug);
+	if (known) return known;
+	const song = await fetchSongBySlug(albumId, slug);
+	if (song) upsertSongInList(song);
+	return song;
+}
+
+async function fetchSongBySlug(albumId: string, slug: string): Promise<SongItem | null> {
+	let offset = 0;
+	for (;;) {
+		const page = await fetchSongs(albumId, offset, LIBRARY_SONG_PAGE_SIZE);
+		const found = page.items.find((song) => song.slug === slug);
+		if (found) return found;
+		offset += page.items.length;
+		if (!page.has_more || page.items.length === 0) return null;
+	}
+}
+
+function songAlreadyShown(songId: string): boolean {
+	return get(selectedSongId) === songId && get(librarySurface) === 'detail';
+}
+
+function historyAlreadyOpensSong(songId: string): boolean {
+	const state = currentLibraryHistoryState();
+	return isLibraryHistoryState(state) && state.songId === songId;
+}
+
+function songAddressState(song: SongItem, generationId: string | null): LibraryHistoryState {
+	const base = libraryRootState();
+	return {
+		...base,
+		surface: 'detail',
+		collection: { kind: 'album', id: song.album_id },
+		songId: song.id,
+		generationId,
+		detailTab: generationId ? 'takes' : base.detailTab
+	};
 }
 
 export function snapshotLibraryHistory(index: number): LibraryHistoryState {

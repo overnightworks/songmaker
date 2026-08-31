@@ -37,6 +37,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 function makeSong(): SongItem {
 	return {
 		id: 's1',
+		slug: 'test',
 		title: 'Test',
 		album_id: 'a1',
 		album_title: 'Album',

@@ -29,6 +29,7 @@ afterEach(async () => {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'sommerlicht',
 		title: 'Sommerlicht',
 		album_id: 'a1',
 		album_title: 'Album',

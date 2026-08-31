@@ -5,6 +5,7 @@ import { cleanDisplayText, extractAllApplyData, isCurrentSong } from './chat-con
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 'song-1',
+		slug: 'test-song',
 		title: 'Test Song',
 		album_id: 'album-1',
 		album_title: 'Test Album',

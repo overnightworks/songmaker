@@ -19,6 +19,7 @@ import {
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'test-song',
 		title: 'Test Song',
 		album_id: 'a1',
 		album_title: 'Album',

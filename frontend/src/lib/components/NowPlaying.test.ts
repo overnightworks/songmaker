@@ -40,6 +40,19 @@ import {
 // NowPlayingTake.test.ts already cover that chain. setPick defaults to a
 // successful pick (true); a test that needs the swallowed-failure case
 // overrides it with mockResolvedValueOnce(false).
+// Stands in for the router the way the real one behaves for this app (issue
+// #275): a song selection can now cross from the wall's `/` into the song's
+// own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
+// through `goto` -- unmocked, that call needs a live SvelteKit router this
+// harness never mounts.
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
+		if (options?.replaceState) history.replaceState(null, '', url);
+		else history.pushState(null, '', url);
+		return Promise.resolve();
+	})
+}));
+
 vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
 	setPick: vi.fn().mockResolvedValue(true),
@@ -80,6 +93,7 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	const gen = generation();
 	return {
 		id: 's1',
+		slug: 'tide',
 		title: 'Tide',
 		album_id: 'a1',
 		album_title: 'Nachtstrom',

@@ -244,6 +244,7 @@ const TAKE: GenerationItem = {
 
 const PLAYING_SONG: SongItem = {
 	id: 's1',
+	slug: 'tide',
 	title: 'Tide',
 	album_id: 'a1',
 	album_title: 'Nachtstrom',

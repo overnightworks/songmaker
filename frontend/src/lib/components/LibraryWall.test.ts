@@ -120,6 +120,7 @@ function shareItem(overrides: Partial<ShareInventoryItem> = {}): ShareInventoryI
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's-tide',
+		slug: 'tide',
 		title: 'Tide',
 		album_id: 'a-local',
 		album_title: 'Local Album',

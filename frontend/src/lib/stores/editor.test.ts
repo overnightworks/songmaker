@@ -43,6 +43,7 @@ import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'test',
 		title: 'Test',
 		album_id: 'a1',
 		album_title: 'Album',

@@ -49,6 +49,18 @@ vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()
 }));
+// Stands in for the router the way the real one behaves for this app (issue
+// #275): a song selection can now cross from the wall's `/` into the song's
+// own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
+// through `goto` -- unmocked, that call needs a live SvelteKit router this
+// harness never mounts.
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
+		if (options?.replaceState) history.replaceState(null, '', url);
+		else history.pushState(null, '', url);
+		return Promise.resolve();
+	})
+}));
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://songmaker.test/settings') }
 }));
@@ -90,6 +102,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'local-only',
 		title: 'Local Only',
 		album_id: 'a-local',
 		album_title: 'Local Album',
@@ -210,7 +223,9 @@ describe('detail views own no content back', () => {
 		resetNavigationForTests();
 		history.replaceState(null, '', '/?song=s1&gen=g1');
 		const cleanup = initNavigation();
-		expect(history.state.index).toBe(0);
+		// The write crosses into the song's own address (issue #275) and is
+		// therefore asynchronous -- see the note on writeLibraryHistory.
+		await vi.waitFor(() => expect(history.state.index).toBe(0));
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		goBack();

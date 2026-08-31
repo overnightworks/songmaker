@@ -78,6 +78,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'tide',
 		title: 'Tide',
 		album_id: 'a1',
 		album_title: 'Nachtstrom',

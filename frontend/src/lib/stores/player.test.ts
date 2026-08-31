@@ -151,6 +151,7 @@ function makeAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'song',
 		title: 'Song',
 		album_id: 'a1',
 		album_title: 'Album',

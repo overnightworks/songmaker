@@ -77,6 +77,18 @@ const deleteAlbumCover = vi.fn();
 const fetchHealth = vi.fn();
 const generateSong = vi.fn();
 
+// Stands in for the router the way the real one behaves for this app (issue
+// #275): a song selection can now cross from the wall's `/` into the song's
+// own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
+// through `goto` -- unmocked, that call needs a live SvelteKit router this
+// harness never mounts.
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
+		if (options?.replaceState) history.replaceState(null, '', url);
+		else history.pushState(null, '', url);
+		return Promise.resolve();
+	})
+}));
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
 }));
@@ -237,6 +249,7 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	const gen = generation();
 	return {
 		id: 's1',
+		slug: 'local-only',
 		title: 'Local Only',
 		album_id: 'a-local',
 		album_title: 'Local Album',
@@ -552,7 +565,9 @@ describe('SongDetailView recipe and takes', () => {
 	it('clears the open take from history when bulk delete includes it', async () => {
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
-		expect(history.state.generationId).toBe('g1');
+		// The write crosses into the song's own address (issue #275) and is
+		// therefore asynchronous -- see the note on writeLibraryHistory.
+		await vi.waitFor(() => expect(history.state.generationId).toBe('g1'));
 		const target = await renderView();
 		toggleSelection('g1');
 		await tick();

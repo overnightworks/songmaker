@@ -408,6 +408,7 @@ class VersionResponse(BaseModel):
 
 class SongSummaryResponse(BaseModel):
     id: str
+    slug: str
     title: str
     album_id: str
     album_title: str = ""
@@ -439,6 +440,7 @@ class SongSummaryResponse(BaseModel):
         cover = song_cover_urls(song.id, song.cover_key) if song.cover_key else None
         return cls(
             id=song.id,
+            slug=song.slug,
             title=song.title,
             album_id=song.album_id,
             album_title=song.album.title if song.album else "",

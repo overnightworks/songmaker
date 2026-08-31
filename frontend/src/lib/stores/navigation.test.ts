@@ -7,7 +7,7 @@ import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { detailTab, librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/libraryData';
+import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetPlaylists, selectedPlaylistId } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
@@ -126,6 +126,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: overrides.id ?? 's1',
 		title: 'Tide',
 		album_id: 'a1',
 		album_title: 'Nachtstrom',
@@ -213,18 +214,20 @@ function album(id: string, title: string) {
 }
 
 describe('isLibraryWorkspacePath', () => {
-	it('is the home path and every album address', () => {
+	it('is the home path and every album and song address', () => {
 		expect(isLibraryWorkspacePath('/')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield')).toBe(true);
+		expect(isLibraryWorkspacePath('/album/anfield/stadion-lauf-a')).toBe(true);
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
-	// Issue #269: the guard must leave an album address alone, or opening a
-	// song from an album would take a detour through the wall on the way there.
+	// Issue #269 (and #275 one segment deeper): the guard must leave an album
+	// address alone, or opening a song from an album would take a detour
+	// through the wall on the way there.
 	it('goes straight from an album address to the song, without a detour', async () => {
 		history.replaceState(null, '', '/album/a1');
 		await selectSong('s1');
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual(['/?song=s1']);
+		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual(['/album/a1/s1']);
 	});
 });
 
@@ -278,7 +281,40 @@ describe('history writes across the route boundary (issue #269)', () => {
 		persistLibraryHistory();
 
 		await vi.waitFor(() => expect(history.state.generationId).toBe('g1'));
-		expect(window.location.pathname + window.location.search).toBe('/?song=s1&gen=g1');
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1?gen=g1');
+	});
+
+	// Issue #275: an album address becomes a song address one segment deeper
+	// (/album/x -> /album/x/y), which is a route-file boundary too -- the
+	// naive isAlbumRoutePath boolean stays true on both sides of it, so the
+	// crossing check must tell the two shapes apart, not just "under /album/".
+	it('crosses through the router from an album address to a song inside it', async () => {
+		await openAlbum('a1');
+		vi.mocked(goto).mockClear();
+
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true
+		});
+		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	// Moving between two songs of the same open album stays the same route
+	// file (/album/[slug]/[song]/+page.svelte matches both), so it is the
+	// frequent-churn case, not a crossing.
+	it('writes a song-to-song move inside the same album straight to history', async () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
+		await openAlbum('a1');
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		vi.mocked(goto).mockClear();
+
+		await selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/album/a1/s2');
 	});
 });
 
@@ -288,10 +324,10 @@ describe('the address an open album carries (issue #269)', () => {
 		expect(window.location.pathname).toBe('/album/a1');
 	});
 
-	it('sets the album address when a song is left for its album', async () => {
+	it('sets the song address when a song is opened, and the album address when it is left', async () => {
 		await openAlbum('a1');
 		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe('/album/a1/s1');
 		backToCollection();
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1'));
 	});
@@ -300,6 +336,46 @@ describe('the address an open album carries (issue #269)', () => {
 		await openAlbum('a1');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
+	});
+});
+
+// The open song's address names it by slug (issue #275). A rename changes
+// that slug server-side, and SongDetailView writes the renamed song straight
+// back into songList (see onRenameSong) -- the same write every other song
+// edit (lyrics, prompt, cover) already makes. This is the one place that can
+// tell a slug change apart from those and pull the address along.
+describe("a rename pulls the open song's address along (issue #275)", () => {
+	it('replaces the address when the open song is renamed', async () => {
+		await openAlbum('a1');
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		const indexBeforeRename = history.state.index;
+		vi.mocked(goto).mockClear();
+
+		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
+
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/renamed'));
+		expect(history.state.index).toBe(indexBeforeRename);
+	});
+
+	it('leaves the address alone for an edit that is not a rename', async () => {
+		await openAlbum('a1');
+		await selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		vi.mocked(goto).mockClear();
+
+		updateSongInList('s1', (s) => ({ ...s, lyrics: 'a new verse' }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	it('leaves a legacy ?song= address as-is -- migrating it is issue #265 S6, not this', async () => {
+		history.replaceState(null, '', '/?song=s1');
+		selectedSongId.set('s1');
+
+		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname + window.location.search).toBe('/?song=s1');
 	});
 });
 
@@ -348,11 +424,11 @@ describe('opening a collection from off the library route (issue #264)', () => {
 	// The Rail keeps rendering the open album's tracks on every route (issue
 	// #264's review found selectSong missing the same guard as openAlbum):
 	// clicking a track from Settings must land on the library route too.
-	it('selectSong lands on the library route with the song selected', async () => {
+	it('selectSong lands on the song address with the song selected', async () => {
 		history.replaceState(null, '', '/settings/voices');
 		selectSong('s1');
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
 });
 
@@ -692,12 +768,18 @@ describe('selectLibraryFilter', () => {
 });
 
 describe('revealPlayingSong', () => {
-	it('opens the song in place when already on the library workspace', async () => {
+	it('opens the song at its own address in one step when already on the library workspace', async () => {
 		history.replaceState(null, '', '/');
 		await revealPlayingSong(song({ id: 's1' }), 'g1');
-		expect(goto).not.toHaveBeenCalled();
+		// The song's own address crosses the route boundary exactly once; the
+		// take then rides along as a raw write, since it does not change which
+		// route file is mounted.
+		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual(['/album/a1/s1']);
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
+		await vi.waitFor(() =>
+			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1?gen=g1')
+		);
 	});
 
 	it('navigates home first from another route', async () => {

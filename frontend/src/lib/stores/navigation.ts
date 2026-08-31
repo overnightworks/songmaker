@@ -32,6 +32,7 @@ import {
 	detailTab,
 	isAlbumRoutePath,
 	isLibraryHistoryState,
+	isSongRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
 	libraryRootState,
@@ -159,9 +160,32 @@ function ensureCollectionMatchesSong(song: SongItem): void {
 	setOpenCollection({ kind: 'album', id: song.album_id });
 }
 
+// The song address names its song by slug (issue #275), and a rename changes
+// that slug server-side. The song's own view is what triggers the rename and
+// already writes the renamed song back into songList, so this is the one
+// place that can notice the slug moved on the currently open song and pull
+// the address along -- it fires only on a slug change of the *same* song,
+// never on an ordinary selection (that already writes its own entry) or on
+// unrelated song edits (lyrics/prompt autosave), and only while the address
+// bar is already a song address; a legacy `?song=` entry migrates on its own
+// next real navigation, not here (see the note on libraryHistoryUrl).
+let addressedSong: { id: string; slug: string } | null = null;
+
+function syncSongAddressToRename(song: SongItem): void {
+	const previous = addressedSong;
+	addressedSong = { id: song.id, slug: song.slug };
+	if (!previous || previous.id !== song.id || previous.slug === song.slug) return;
+	if (!isSongRoutePath(window.location.pathname)) return;
+	void replaceLibraryHistory();
+}
+
 selectedSong.subscribe((song) => {
-	if (!song) return;
+	if (!song) {
+		addressedSong = null;
+		return;
+	}
 	ensureCollectionMatchesSong(song);
+	syncSongAddressToRename(song);
 });
 
 export async function openAlbum(albumId: string): Promise<void> {
@@ -532,4 +556,5 @@ export function resetNavigationForTests(): void {
 	suppressPush = false;
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
+	addressedSong = null;
 }

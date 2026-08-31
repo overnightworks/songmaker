@@ -118,6 +118,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 'song-1',
+		slug: 'stadion-lauf-a',
 		title: TRACK_TITLE,
 		album_id: ALBUM_SLUG,
 		album_title: ALBUM_TITLE,
@@ -223,7 +224,9 @@ describe('/album/<slug> opened cold', () => {
 
 		requireElement(target, '.item-body').click();
 
-		await vi.waitFor(() => expect(window.location.search).toBe('?song=song-1'));
+		await vi.waitFor(() =>
+			expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/stadion-lauf-a`)
+		);
 		await vi.waitFor(() => expect(target.querySelector('.item-body')).toBeNull());
 	});
 

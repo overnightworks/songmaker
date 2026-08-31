@@ -60,6 +60,7 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'local-only',
 		title: 'Local Only',
 		album_id: 'a-local',
 		album_title: 'Local Album',

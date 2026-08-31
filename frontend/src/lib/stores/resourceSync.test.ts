@@ -62,6 +62,7 @@ class MockEventSource implements ResourceEventSource {
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
+		slug: 'track',
 		title: 'Track',
 		album_id: 'a1',
 		album_title: 'Album',
