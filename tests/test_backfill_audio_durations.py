@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import wave
 from pathlib import Path
 
 import numpy as np
@@ -118,7 +117,7 @@ def test_main_dry_run_prints_counts_and_writes_nothing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     factory, audio_dir = seeded_backfill_db
-    monkeypatch.setattr(backfill, "init_db", lambda _url: factory)
+    monkeypatch.setattr(backfill, "connect_db", lambda _url: factory)
     monkeypatch.setattr(backfill, "resolve_database_url", lambda: "sqlite:///fake")
     monkeypatch.setattr(backfill, "_resolve_audio_dir", lambda: audio_dir)
 
@@ -141,7 +140,7 @@ def test_main_apply_writes_and_reports_filled(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     factory, audio_dir = seeded_backfill_db
-    monkeypatch.setattr(backfill, "init_db", lambda _url: factory)
+    monkeypatch.setattr(backfill, "connect_db", lambda _url: factory)
     monkeypatch.setattr(backfill, "resolve_database_url", lambda: "sqlite:///fake")
     monkeypatch.setattr(backfill, "_resolve_audio_dir", lambda: audio_dir)
 
@@ -158,47 +157,74 @@ def test_main_apply_writes_and_reports_filled(
         )
 
 
-def test_apply_commits_in_batches(
+def test_apply_survives_an_interruption_after_the_first_commit_batch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """A partial commit checkpoint every COMMIT_BATCH_SIZE rows means a run
-    interrupted mid-way keeps what it already wrote."""
+    """The done-when promise, pinned instead of counted: an aborted run keeps
+    the batches it already committed, and a rerun fills exactly the rest.
+
+    COMMIT_BATCH_SIZE=2 over 5 rows (processed in id order) means the first
+    commit lands after g0 and g1. The probe is made to blow up on the 3rd
+    call (g2) to simulate a mid-run crash — g0/g1 must survive that crash
+    already written; g2..g4 must still be NULL until the rerun fills them.
+    """
     monkeypatch.setattr(backfill, "COMMIT_BATCH_SIZE", 2)
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     factory = init_test_db(tmp_path / "batched.db")
 
+    generation_ids = [f"g{i}" for i in range(5)]
     with factory() as session:
         session.add(Album(id="a1", title="A", artist="X"))
         session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
-        for i in range(5):
+        for i, gen_id in enumerate(generation_ids):
             session.add(Generation(
-                id=f"g{i}", song_id="s1", generation_number=i + 1,
+                id=gen_id, song_id="s1", generation_number=i + 1,
                 mp3_path=f"take{i}.wav",
             ))
         session.commit()
         for i in range(5):
-            _write_short_wav(audio_dir / f"take{i}.wav")
+            write_wav(audio_dir / f"take{i}.wav", np.zeros(4410), 44100)
 
-    commit_calls = []
+    real_read_audio_duration = backfill.queue_streams.read_audio_duration
+    calls_made = 0
+
+    def _probe_that_crashes_on_the_third_call(path: Path) -> float | None:
+        nonlocal calls_made
+        calls_made += 1
+        if calls_made == 3:
+            raise RuntimeError("simulated crash mid-run")
+        return real_read_audio_duration(path)
+
+    monkeypatch.setattr(
+        backfill.queue_streams, "read_audio_duration",
+        _probe_that_crashes_on_the_third_call,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated crash mid-run"), factory() as session:
+        backfill.run_backfill(session, audio_dir, apply=True)
+
     with factory() as session:
-        original_commit = session.commit
+        measured_after_crash = {
+            gen_id: session.get(Generation, gen_id).audio_duration_sec
+            for gen_id in generation_ids
+        }
+    assert measured_after_crash["g0"] is not None
+    assert measured_after_crash["g1"] is not None
+    assert measured_after_crash["g2"] is None
+    assert measured_after_crash["g3"] is None
+    assert measured_after_crash["g4"] is None
 
-        def _counting_commit() -> None:
-            commit_calls.append(1)
-            original_commit()
+    monkeypatch.setattr(
+        backfill.queue_streams, "read_audio_duration", real_read_audio_duration,
+    )
+    with factory() as session:
+        rerun_report = backfill.run_backfill(session, audio_dir, apply=True)
 
-        session.commit = _counting_commit
-        report = backfill.run_backfill(session, audio_dir, apply=True)
+    assert rerun_report.filled == 3
+    assert rerun_report.skipped_already_measured == 2
 
-    assert report.filled == 5
-    assert len(commit_calls) >= 2
-
-
-def _write_short_wav(path: Path) -> None:
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(44100)
-        wf.writeframes(np.zeros(4410, dtype=np.int16).tobytes())
+    with factory() as session:
+        for gen_id in generation_ids:
+            assert session.get(Generation, gen_id).audio_duration_sec is not None

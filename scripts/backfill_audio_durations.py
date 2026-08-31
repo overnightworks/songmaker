@@ -19,6 +19,16 @@ Modes:
   ``audio_duration_sec IS NULL`` rows are touched, so a rerun after a partial
   or complete run is harmless — already-filled rows are skipped.
 
+This connects to the database only — it never runs schema migrations,
+even implicitly. A one-time data script must not drag the schema to head
+as a side effect of connecting: if a deploy migration failed or is still
+pending, this script fails or reports on the schema as it finds it,
+never advances it. See ``connect_db()`` in ``db/engine.py``.
+
+Two runs racing against the same not-yet-measured row can both probe and
+write it; harmless, since both read the same file on disk and write the
+same value, so the final row is correct either way.
+
 Run inside the web container, where ``DATABASE_URL`` and the audio volume
 are mounted:
 
@@ -41,7 +51,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli import queue_streams
 from songmaker_cli.config import find_project_root
-from songmaker_cli.db.engine import init_db, resolve_database_url
+from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Generation
 from songmaker_cli.settings import get_settings
 
@@ -130,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     audio_dir = _resolve_audio_dir()
-    factory = init_db(resolve_database_url())
+    factory = connect_db(resolve_database_url())
     with factory() as session:
         report = run_backfill(session, audio_dir, apply=args.apply)
 
