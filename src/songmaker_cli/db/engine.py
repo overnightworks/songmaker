@@ -51,10 +51,15 @@ def _run_migrations(url: str) -> None:
     command.upgrade(cfg, "head")
 
 
-def init_db(url: str) -> sessionmaker[Session]:
-    """Create the PostgreSQL engine, run migrations, and return a session factory."""
-    _run_migrations(url)
+def connect_db(url: str) -> sessionmaker[Session]:
+    """Create the PostgreSQL engine and a session factory — no migrations.
 
+    Pure connection setup: no DDL, no schema check. Use this from anything
+    that must never touch the schema as a side effect of connecting — a
+    one-time data script is the reason this exists, since running it after
+    a failed deploy migration must not silently drag the schema to head
+    before the script has even reported what it would do.
+    """
     settings = get_settings()
     engine = create_engine(
         url, echo=False,
@@ -65,6 +70,12 @@ def init_db(url: str) -> sessionmaker[Session]:
 
     log.info("Database initialized: %s", url.split("@")[-1] if "@" in url else url)
     return sessionmaker(bind=engine)
+
+
+def init_db(url: str) -> sessionmaker[Session]:
+    """Create the PostgreSQL engine, run migrations, and return a session factory."""
+    _run_migrations(url)
+    return connect_db(url)
 
 
 # ── Test-only (SQLite) ───────────────────────────────────────────────
