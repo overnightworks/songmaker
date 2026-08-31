@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { albumList } from '$lib/stores/libraryData';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { libraryBrowse } from '$lib/stores/librarySearch';
@@ -7,11 +6,12 @@
 	import {
 		APP_NAME,
 		RAIL_LIBRARY_LABEL,
-		RAIL_SETTINGS_LABEL,
+		RAIL_NAV_LABEL,
 		RAIL_SUMMARY_LOADING
 	} from '$lib/constants';
 	import { librarySummaryLabel } from '$lib/utils/format';
 	import RailContext from './RailContext.svelte';
+	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
@@ -38,7 +38,7 @@
 	});
 </script>
 
-<nav class="rail" aria-label="Primary">
+<nav class="rail" aria-label={RAIL_NAV_LABEL}>
 	<div class="rail-top">
 		<button
 			type="button"
@@ -77,8 +77,9 @@
 		<RailContext />
 	</div>
 
+	<RailSettings />
+
 	<div class="rail-bottom">
-		<a class="settings-link" href="/settings">{RAIL_SETTINGS_LABEL}</a>
 		<UserRow {username} {onlogout} />
 	</div>
 </nav>
@@ -170,18 +171,5 @@
 		flex-shrink: 0;
 		border-top: 1px solid var(--border);
 		padding: 4px 0;
-	}
-
-	.settings-link {
-		display: block;
-		padding: 8px 16px;
-		color: var(--text-muted);
-		font-size: 0.85rem;
-		text-decoration: none;
-	}
-
-	.settings-link:hover {
-		background: var(--surface-hover);
-		color: var(--text);
 	}
 </style>

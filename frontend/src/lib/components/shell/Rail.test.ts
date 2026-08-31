@@ -92,7 +92,7 @@ afterEach(async () => {
 });
 
 describe('Rail', () => {
-	it('renders the brand, library summary, settings link, and user row', async () => {
+	it('renders the brand, library summary, settings disclosure, and user row', async () => {
 		albumList.set([
 			{
 				id: 'a1',
@@ -113,7 +113,9 @@ describe('Rail', () => {
 		const target = await render();
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
 		expect(target.textContent).toContain('1 album');
-		expect(requireElement<HTMLAnchorElement>(target, 'a[href="/settings"]')).toBeTruthy();
+		expect(requireElement<HTMLButtonElement>(target, 'button.disclose').textContent).toContain(
+			'Settings'
+		);
 		expect(target.textContent).toContain('felix');
 	});
 

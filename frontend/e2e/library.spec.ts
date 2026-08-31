@@ -21,6 +21,8 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_NAV_LABEL,
+	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	TRANSPORT_PAUSE_LABEL
@@ -177,6 +179,53 @@ async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	await expect(drawer).toBeHidden();
 }
 
+/**
+ * The one navigation landmark (#263): on desktop it stands on its own, on
+ * mobile it only exists once the header opens its drawer — a navigation to
+ * a settings section closes that drawer again (`RailDrawer`'s
+ * `afterNavigate`), so a caller that keeps interacting with the rail after
+ * such a click must open it again.
+ */
+async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
+	if (shell === 'mobile') await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+}
+
+/**
+ * One navigation, no modes (#263): Settings is a disclosure inside the same
+ * rail the album lives in, not a second column beside the content. Opening a
+ * section is a real navigation (#265), and the rail's own album context row
+ * is the way back — the "click back into the album" promise that made the
+ * disclosure worth building in the first place (#264).
+ */
+async function expectSettingsRailRoundTrip(
+	page: Page,
+	shell: Shell,
+	surface: Locator,
+	albumTitle: string
+): Promise<void> {
+	let rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
+	await rail.getByRole('link', { name: 'Voices', exact: true }).click();
+
+	await expect(page).toHaveURL(/\/settings\/voices$/);
+	// The removed second column — the old `.settings-sidebar` — is gone, and
+	// so is any other navigation landmark inside the content area; the rail
+	// stays the one navigation on the page.
+	await expect(page.locator('.settings-sidebar')).toHaveCount(0);
+	await expect(surface.getByRole('navigation')).toHaveCount(0);
+
+	if (shell === 'desktop') {
+		// No gap for a second column: the content starts right where the rail ends.
+		const [railBox, mainBox] = await boundingBoxes(rail, surface);
+		expect(Math.abs(mainBox.x - (railBox.x + railBox.width))).toBeLessThanOrEqual(2);
+	}
+
+	rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: containing(albumTitle) }).click();
+	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
+}
+
 /** The compact transport: one short row, with a thumb-sized play control. */
 async function expectCompactTransport(transport: Locator): Promise<void> {
 	const play = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
@@ -202,6 +251,8 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	if (shell === 'mobile') await expectHeaderReadsAtNarrowest(page, library.albumTitle);
+
+	await expectSettingsRailRoundTrip(page, shell, surface, library.albumTitle);
 
 	await surface
 		.getByRole('button', { name: collectionRowPlayLabel(library.pickedSongTitle) })

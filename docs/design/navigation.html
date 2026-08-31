@@ -175,6 +175,19 @@
 	.col-subnav { background: var(--panel-sunk); }
 	.col-body { background: var(--panel); padding: 1rem .9rem; overflow: hidden; }
 
+	.addr {
+		font-family: ui-monospace, monospace;
+		font-size: .62rem;
+		color: var(--muted);
+		padding: 0 .75rem .45rem;
+		border-bottom: 1px solid var(--rule);
+		margin-bottom: .3rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.addr span { color: var(--violet); }
+
 	.brand {
 		font-family: "Barlow Condensed", system-ui, sans-serif;
 		text-transform: uppercase;
@@ -359,7 +372,8 @@
 </head>
 <body>
 <p class="freeze-note">
-	Eingefrorener Bildbesitzer — vom Operator freigegeben am 30.08.2026, Issue #263.
+	Eingefrorener Bildbesitzer — vom Operator freigegeben am 30.08.2026, zweite Fassung
+	(gegen die gelandete Adressstruktur #265 gehalten) am 31.08.2026 freigegeben, Issue #263.
 	Änderungen an dieser Datei brauchen eine neue Freigabe.
 </p>
 <div class="wrap">
@@ -370,6 +384,12 @@
 			Heute stehen zwei senkrechte Navigationsleisten nebeneinander, sobald die Einstellungen offen
 			sind. Beide führen, beide sind gleichzeitig sichtbar — die zweite existiert nur, weil man sich
 			gerade in den Einstellungen befindet. Genau der Modus, den diese Milestone abschaffen will.
+			<br><br>
+			<strong>Stand nach #265:</strong> Jede Zeile der Leiste ist inzwischen eine echte Adresse —
+			Anfield ist <code>/album/anfield</code>, ein Song ist <code>/album/anfield/stadion-lauf-a</code>,
+			und die Einstellungen waren es schon immer (<code>/settings/voices</code>). Ein Klick in der
+			Leiste ist damit eine Navigation, kein Zustandswechsel. Dieser Entwurf ist die zweite Fassung,
+			gehalten gegen diese neue Realität.
 		</p>
 	</header>
 
@@ -424,18 +444,20 @@
 				<span class="tag tag-next">Zur Freigabe</span>
 			</div>
 			<p class="state-note">
-				Die Einstellungen klappen an derselben Stelle auf, an der ein Album seine Songs zeigt.
-				Eine Leiste, eine Hierarchie — der Inhalt rückt eine Spalte nach links.
+				Settings bleibt, wo es heute wohnt — links unten — und klappt dort an Ort und Stelle
+				auf, wie bei GitLab. Eine Leiste, eine Hierarchie, keine zweite Spalte.
 			</p>
 
 			<div class="app app-next">
 				<div class="col col-nav">
 					<div class="brand">Hallucinai</div>
+					<div class="addr" aria-hidden="true">hallucinai.de<span>/settings/generation</span></div>
 					<ul class="nav-list">
-						<li class="row">Library <span class="meta">42</span></li>
+						<li class="row">Library <span class="meta">/</span></li>
 						<li class="row row-sub">Anfield</li>
 						<li class="row row-sub">Kaltes Licht</li>
 					</ul>
+					<div class="spacer"></div>
 					<button class="row disclose" id="toggle" aria-expanded="true" aria-controls="settings-group">
 						<span class="caret">▶</span> Settings
 					</button>
@@ -452,7 +474,6 @@
 							</ul>
 						</div>
 					</div>
-					<div class="spacer"></div>
 					<div class="foot"><span>felix</span><span>Logout</span></div>
 				</div>
 
@@ -463,25 +484,62 @@
 					<div class="ghost ghost-40"></div>
 				</div>
 			</div>
-			<p class="hint">Auf „Settings" klicken — so verhält sich die Leiste.</p>
+			<p class="hint">Auf „Settings" klicken — es klappt an Ort und Stelle auf, unten wo es heute schon wohnt. Das GitLab-Muster.</p>
 		</div>
 	</section>
 
 	<hr class="rule">
 
 	<section class="decisions">
-		<h2>Drei Entscheidungen, die noch dir gehören</h2>
+		<h2>Wie es die Profis machen — und wem wir folgen</h2>
+		<div class="decision">
+			<h3>GitLab: genau dieses Muster</h3>
+			<p>
+				Settings ist der unterste Eintrag der einen linken Leiste und klappt an Ort und
+				Stelle auf (General, Members, …). Keine zweite Spalte, kein Kontextwechsel.
+			</p>
+			<p class="rec"><strong>Dem folgen wir</strong> — deine Leiste steht ohnehin dauerhaft,
+			also gehört Settings hinein: unten, wo es heute ist, nur aufklappend.</p>
+		</div>
+		<div class="decision">
+			<h3>GitHub &amp; claude.ai: Settings hinterm Avatar</h3>
+			<p>
+				Beide verstecken Settings im Avatar-Menü und öffnen eine eigene Seite. Legitim —
+				aber zwei Klicks, und die Hauptnavigation dieser Seiten ist horizontal oder minimal.
+				Für eine dauerhaft stehende Seitenleiste ist GitLabs Form die ehrlichere.
+			</p>
+		</div>
+		<div class="decision">
+			<h3>Und „Library" ist bereits eine Seite</h3>
+			<p>
+				Sie ist <code>/</code> — die Wurzeladresse, die Album-Wand. Genau wie GitHubs
+				Dashboard auf <code>/</code> liegt. Der Library-Eintrag der Leiste ist ihr Link;
+				eine separate <code>/library</code>-Adresse wäre eine zweite Tür zum selben Raum.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Die drei Entscheidungen — am 30.08. gesegnet, gegen #265 gehalten</h2>
+		<p class="state-note" style="min-height:auto">
+			Alle drei überleben die neue Adressstruktur unverändert; was sich geklärt hat, steht jeweils dabei.
+		</p>
 
 		<div class="decision">
 			<h3>Aufklappen oder Leiste wechseln?</h3>
 			<p>
-				Der Entwurf zeigt das Aufklappen: Die Einstellungen bleiben ein Eintrag unter der
-				Bibliothek, wie ein Album seine Songs zeigt. Die Alternative wäre, dass die Leiste
-				ihren Inhalt ganz gegen die Einstellungen tauscht und ein Zurück-Weg nötig wird.
+				Der Entwurf zeigt das Aufklappen an der heutigen Position (links unten), nach dem
+				GitLab-Muster. Verworfen wurden: die zweite Spalte (der heutige Modus), der
+				Leisten-Tausch (bräuchte einen Zurück-Weg) und Settings oben neben Library
+				(Fassung 2 — vom Operator zurecht als deplatziert unter den Alben empfunden).
 			</p>
 			<p class="rec">
-				<strong>Empfehlung:</strong> Aufklappen. Die Bibliothek bleibt sichtbar, du kommst mit
-				einem Klick zurück ins Album — und genau dieser Weg ist heute kaputt (#264).
+				<strong>Gesegnet: Aufklappen.</strong> Durch #265 geklärt: Das Aufklappen ist reine
+				Darstellung — die Unterpunkte behalten ihre echten Adressen (<code>/settings/…</code>),
+				ein Klick ist ein normaler Routenwechsel. Der damals kaputte Rückweg ins Album (#264)
+				ist längst repariert und inzwischen durch echte Adressen ersetzt.
 			</p>
 		</div>
 
@@ -492,9 +550,9 @@
 				Klappen die Einstellungen dort auf, drängen sieben Zeilen gegen diese Leiste.
 			</p>
 			<p class="rec">
-				<strong>Empfehlung:</strong> Benutzername und Logout bleiben unten stehen, die
-				Einstellungen klappen darüber auf. „Account" ist ohnehin einer der Unterpunkte — der
-				Name unten wird damit reine Anzeige, kein zweiter Weg zur selben Seite.
+				<strong>Gesegnet und jetzt exakt umgesetzt:</strong> Settings wohnt direkt über der
+				Name/Logout-Zeile und klappt nach oben hin auf — die Fußzeile bleibt stehen. Logout
+				ist die einzige Zeile ohne Adresse und bleibt deshalb außerhalb der Navigation.
 			</p>
 		</div>
 
@@ -505,17 +563,17 @@
 				stattdessen ein Auswahlmenü. Das ist bereits eine dritte Form derselben Navigation.
 			</p>
 			<p class="rec">
-				<strong>Empfehlung:</strong> Dieselbe aufklappende Liste, nur in der eingeblendeten
-				Leiste. Ein Verhalten für alle Breiten — sonst tauschen wir zwei Hierarchien gegen
-				drei Varianten.
+				<strong>Gesegnet:</strong> Dieselbe aufklappende Liste auf allen Breiten. Durch #265
+				leichter geworden: Weil jede Zeile eine Adresse ist, ist die mobile Leiste nur noch
+				dieselbe Linkliste in schmal — das heutige Auswahlmenü der Einstellungen entfällt.
 			</p>
 		</div>
 	</section>
 
 	<p class="foot-note">
-		Dieser Entwurf ist noch nichts Gebautes. Wenn du ihn freigibst, wird er im Repository
-		eingefroren und ist damit das Bild, gegen das gebaut wird — die Milestone verweist derzeit auf
-		ein Artefakt, das es nicht mehr gibt.
+		Zweite Fassung, 31.08.2026: gegen die gelandete Adressstruktur (#265) gehalten. Die erste
+		Fassung ist als <code>docs/design/navigation.html</code> eingefroren; gibst du diese Fassung
+		frei, ersetzt sie den eingefrorenen Stand und der Bau von #263 beginnt dagegen.
 	</p>
 </div>
 

@@ -236,6 +236,9 @@ export const ALBUM_YEAR_MIN = 1900;
 export const ALBUM_YEAR_MAX = 2100;
 export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 
+// The rail's own accessible name — the one navigation landmark that stands on
+// every private route, settings included (issue #263).
+export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_SUMMARY_LOADING = '…';
@@ -246,6 +249,9 @@ export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
 export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
+// Remembers whether the rail's Settings disclosure was left open, so it
+// doesn't snap shut the moment the viewer navigates back into the library.
+export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';
 
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];

@@ -1,6 +1,7 @@
 // Shared guards, shell facts and name matchers for the browser flows.
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -19,9 +20,14 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * flow that suddenly needs more round trips is a regression — find the extra
  * requests instead of raising these numbers.
  */
+// Includes the settings-rail round trip (#263): disclose Settings in the
+// rail, land on a section, then use the rail's own album context row to
+// return — no second page load, so no second stream open beyond that one
+// extra round trip. Measured 33 on a green run with the round trip folded
+// in (was 26 without it), budget raised from 32 with the same headroom.
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 32,
-	mobile: 32
+	desktop: 39,
+	mobile: 39
 };
 
 const API_PATH_PREFIX = '/api';
@@ -93,9 +99,17 @@ export class FlowGuard {
 			if (new URL(request.url()).pathname.startsWith(API_PATH_PREFIX)) this.apiRequests += 1;
 		});
 		page.on('requestfailed', (request) => {
-			this.failures.push(
-				`request failed: ${request.url()} (${request.failure()?.errorText ?? 'unknown'})`
-			);
+			const errorText = request.failure()?.errorText ?? 'unknown';
+			// Leaving the library route (Settings, sign-out) intentionally closes
+			// the live resource-event stream (`ResourceSyncController.stop()`);
+			// Chromium reports the cancelled in-flight GET as a failed request
+			// with exactly this error, indistinguishable from any other
+			// intentional client-side abort. Every other reason still fails the
+			// flow, including a 429 or 5xx on the same path (handled below).
+			if (errorText === 'net::ERR_ABORTED' && request.url().endsWith(RESOURCE_EVENT_STREAM_PATH)) {
+				return;
+			}
+			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
 			const status = response.status();

@@ -14,6 +14,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
 
 ## Inhalt
 
-- `navigation.html` — die Navigation (#263), freigegeben am 30.08.2026. Die
-  Adressstruktur (#265) wird davor entschieden, die endgültige Form der
-  Navigation danach noch einmal gegen dieses Bild gehalten.
+- `navigation.html` — die Navigation (#263). Erste Fassung freigegeben am
+  30.08.2026, zweite Fassung freigegeben am 31.08.2026 — gegen die inzwischen
+  gelandete Adressstruktur (#265) gehalten: jede Zeile der Leiste ist jetzt
+  eine echte Adresse, das Aufklappen ist reine Darstellung.
