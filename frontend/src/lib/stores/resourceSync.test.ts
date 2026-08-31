@@ -7,7 +7,10 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
-	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	SSE_RECONNECT_BASE_DELAY_MS,
+	SSE_RECONNECT_JITTER_RATIO,
+	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
 import {
 	EMPTY_RESOURCE_SYNC,
@@ -20,6 +23,13 @@ import {
 	type ResourceSyncDeps,
 	type ResourceSyncState
 } from './resourceSync';
+
+// Jitter only adds to the exponential delay (never subtracts, see
+// `sseReconnect.ts`), so a delay at the backoff ceiling can run up to
+// `SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)` -- the
+// safe amount to advance fake timers by when a test just needs "long enough
+// for any pending reconnect, at any attempt count, to have fired".
+const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
 
 class MockEventSource implements ResourceEventSource {
 	static instances: MockEventSource[] = [];
@@ -583,6 +593,7 @@ describe('resource sync owner', () => {
 	});
 
 	it('retries failed live refreshes on the next hello instead of hiding them', async () => {
+		vi.useFakeTimers();
 		let fail = true;
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
@@ -600,6 +611,10 @@ describe('resource sync owner', () => {
 		latestSource(sources).error();
 		await flush();
 		expect(get(store).status).toBe('error');
+		// The dropped connection reconnects itself after a backoff delay
+		// (issue #257) instead of relying on the browser's native retry.
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		await flush();
 		fail = false;
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
@@ -670,6 +685,75 @@ describe('resource sync owner', () => {
 		await flush();
 		expect(fetchCalls.slice(before)).toEqual(['s1']);
 		vi.useRealTimers();
+	});
+
+	it('reopens the live stream only after a backoff delay, not immediately', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, store } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const beforeError = sources.length;
+
+		latestSource(sources).error();
+		await flush();
+		expect(get(store).status).toBe('reconnecting');
+		expect(sources.length).toBe(beforeError);
+
+		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS - 1);
+		expect(sources.length).toBe(beforeError);
+
+		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
+		expect(sources.length).toBe(beforeError + 1);
+	});
+
+	it('grows the backoff delay on successive live drops and resets after a hello', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources.length).toBe(2);
+
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(
+			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
+		);
+		expect(sources.length).toBe(2);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources.length).toBe(3);
+
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(
+			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
+		);
+		expect(sources.length).toBe(4);
+	});
+
+	it('cancels a pending reconnect when the owner stops', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const beforeError = sources.length;
+
+		latestSource(sources).error();
+		await flush();
+		controller.stop();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources.length).toBe(beforeError);
 	});
 
 	it('drops a 404 song instead of retrying it forever', async () => {

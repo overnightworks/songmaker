@@ -30,6 +30,7 @@ import {
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 import { clearAuth } from '$lib/stores/auth';
+import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
 export type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
@@ -96,6 +97,8 @@ export class ResourceSyncController {
 	private syncedOnce = false;
 	private bootstrapErrors = 0;
 	private probeGeneration = 0;
+	private reconnectAttempt = 0;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(
 		private readonly deps: ResourceSyncDeps,
@@ -164,6 +167,8 @@ export class ResourceSyncController {
 	}
 
 	private restartConnection(): void {
+		this.clearReconnectTimer();
+		this.reconnectAttempt = 0;
 		this.closeSource();
 		this.abandonEpoch();
 		this.syncedOnce = false;
@@ -198,8 +203,33 @@ export class ResourceSyncController {
 		this.source = null;
 	}
 
+	/**
+	 * Reopens the stream after a live (post-bootstrap) drop, with the same
+	 * backoff `jobs.ts` uses for its job streams -- an unbounded flat native
+	 * EventSource retry here is what produced the operator's ERR_QUIC storm
+	 * (issue #257). `reconnectAttempt` resets on the next successful `hello`
+	 * (see `handleHello`), so a connection that recovers goes back to the
+	 * short delay on its next drop.
+	 */
+	private scheduleReconnect(): void {
+		this.reconnectAttempt += 1;
+		const delay = nextReconnectDelayMs(this.reconnectAttempt);
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = null;
+			if (!this.started) return;
+			this.openSource();
+		}, delay);
+	}
+
+	private clearReconnectTimer(): void {
+		if (this.reconnectTimer === null) return;
+		clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = null;
+	}
+
 	private teardown(options: { resetStore: boolean }): void {
 		this.started = false;
+		this.clearReconnectTimer();
 		this.closeSource();
 		this.unbindVisibility();
 		this.clearVisibilityTimer();
@@ -251,6 +281,7 @@ export class ResourceSyncController {
 			this.failBootstrap(errorMessage(err));
 			return;
 		}
+		this.reconnectAttempt = 0;
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
 		this.invalidateInflightProbes();
 		if (this.syncedOnce && this.state.status !== 'bootstrapping') {
@@ -317,8 +348,11 @@ export class ResourceSyncController {
 			this.setStatus('reconnecting');
 			return;
 		}
-		if (this.failedSongIds.size > 0 || this.state.status === 'error') return;
-		this.setStatus('reconnecting');
+		this.closeSource();
+		if (!(this.failedSongIds.size > 0 || this.state.status === 'error')) {
+			this.setStatus('reconnecting');
+		}
+		this.scheduleReconnect();
 	}
 
 	private async recoverLiveConnection(): Promise<void> {

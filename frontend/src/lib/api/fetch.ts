@@ -1,4 +1,7 @@
+import { get } from 'svelte/store';
 import type { JobItem } from './types';
+import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
+import { addToast, toasts } from '$lib/stores/toast';
 
 export const API_TIMEOUT_MS = 30_000;
 export const CHAT_TIMEOUT_MS = 600_000;
@@ -39,6 +42,39 @@ function getCsrfToken(): string {
 
 const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/setup'];
 
+// A path whose own 429 is already visible some other way, so the generic
+// toast below would only repeat it. Kept as its own literal list, not
+// derived from `AUTH_ENDPOINTS` above (that one exists for the unrelated
+// 401-redirect suppression) -- a future path added there for its 401 reason
+// should not silently also lose this toast.
+//   - '/api/auth/login': `stores/auth.ts`'s `login()` turns a 429 into
+//     "Too many attempts. Try again later." under the login form.
+//   - '/api/auth/me': `stores/auth.ts`'s `checkAuth()` turns a 429 into the
+//     full-page session-check retry banner.
+//   - '/api/auth/setup': not auth.ts -- `routes/setup/+page.svelte`'s own
+//     catch block shows the error inline via `err.message`.
+const RATE_LIMIT_TOAST_EXEMPT_PATHS = new Set([
+	'/api/auth/login',
+	'/api/auth/me',
+	'/api/auth/setup'
+]);
+
+/**
+ * Never more than one throttle toast on screen at once, not one per
+ * rejected request: a 429 burst calls this many times in a row, but a
+ * toast already showing the same message is left alone instead of being
+ * duplicated (issue #257). The toast auto-dismisses after 5s (`addToast`'s
+ * 'info' type), so a burst that outlasts that raises a fresh toast every
+ * ~5s for as long as it's still being throttled -- which reads as "still
+ * throttled", not as a bug.
+ */
+function notifyIfRateLimited(status: number, path: string): void {
+	if (status !== 429 || RATE_LIMIT_TOAST_EXEMPT_PATHS.has(path)) return;
+	const alreadyShown = get(toasts).some((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+	if (alreadyShown) return;
+	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
+}
+
 function abortOnCallerOrTimeout(
 	callerSignal: AbortSignal | null | undefined,
 	timeoutSignal: AbortSignal
@@ -78,6 +114,7 @@ export async function apiFetch<T>(
 			} catch {
 				// response body not JSON — use empty detail
 			}
+			notifyIfRateLimited(resp.status, path);
 			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
 				const { clearAuth } = await import('$lib/stores/auth');
 				const { goto } = await import('$app/navigation');
@@ -130,6 +167,7 @@ export async function* sseFetch<T = unknown>(
 			} catch {
 				// non-JSON body on error
 			}
+			notifyIfRateLimited(resp.status, path);
 			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
 				const { clearAuth } = await import('$lib/stores/auth');
 				const { goto } = await import('$app/navigation');

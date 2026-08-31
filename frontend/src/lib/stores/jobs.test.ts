@@ -28,6 +28,18 @@ import {
 } from './jobs';
 import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
+import {
+	SSE_RECONNECT_BASE_DELAY_MS,
+	SSE_RECONNECT_JITTER_RATIO,
+	SSE_RECONNECT_MAX_DELAY_MS
+} from '$lib/constants';
+
+// Jitter only adds to the exponential delay (never subtracts, see
+// `sseReconnect.ts`), so a delay at the backoff ceiling can run up to
+// `SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)` -- the
+// safe amount to advance fake timers by when a test just needs "long enough
+// for any pending reconnect, at any attempt count, to have fired".
+const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
 
 type EventSourceHandler = ((event: MessageEvent) => void) | null;
 type ErrorHandler = (() => void) | null;
@@ -162,22 +174,82 @@ describe('jobs store', () => {
 
 	it('removes job after max connection errors', async () => {
 		trackJob(makeJob(), {});
-		const source = latestSource();
-		for (let i = 0; i < 10; i++) {
+		// One error per connection: each of the first 9 closes the failing
+		// connection and reopens a new one after its backoff delay; the 10th
+		// gives up instead of reopening.
+		for (let i = 0; i < 9; i++) {
+			const source = latestSource();
 			source.simulateError();
+			expect(source.closed).toBe(true);
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		}
-		expect(source.closed).toBe(true);
+		expect(MockEventSource.instances).toHaveLength(10);
+		const last = latestSource();
+		last.simulateError();
+		expect(last.closed).toBe(true);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('tolerates errors below max threshold', () => {
+	it('tolerates errors below max threshold, reconnecting with backoff each time', async () => {
 		trackJob(makeJob(), {});
-		const source = latestSource();
 		for (let i = 0; i < 5; i++) {
-			source.simulateError();
+			latestSource().simulateError();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		}
-		expect(source.closed).toBe(false);
+		expect(MockEventSource.instances).toHaveLength(6);
+		expect(latestSource().closed).toBe(false);
 		expect(get(activeJobs)[0].job.status).toBe('queued');
+	});
+
+	it('does not reconnect before the first backoff delay elapses', async () => {
+		trackJob(makeJob(), {});
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS - 1);
+		expect(MockEventSource.instances).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
+		expect(MockEventSource.instances).toHaveLength(2);
+	});
+
+	it('grows the backoff delay on successive failures', async () => {
+		trackJob(makeJob(), {});
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(2);
+
+		latestSource().simulateError();
+		// The second attempt's floor (base * factor) is well past the first
+		// attempt's ceiling (base * (1 + jitter)) -- advancing only to the
+		// first attempt's ceiling must not be enough for the second retry.
+		await vi.advanceTimersByTimeAsync(
+			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
+		);
+		expect(MockEventSource.instances).toHaveLength(2);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(3);
+	});
+
+	it('resets the backoff to the first interval after a successful message', async () => {
+		trackJob(makeJob(), {});
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(3);
+
+		latestSource().simulateMessage(makeJob({ status: 'running' }));
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(
+			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
+		);
+		expect(MockEventSource.instances).toHaveLength(4);
+	});
+
+	it('stopTracking cancels a pending reconnect', async () => {
+		trackJob(makeJob(), {});
+		latestSource().simulateError();
+		stopTracking('j1');
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(1);
 	});
 
 	it('does not load the song for a completed generation job', async () => {

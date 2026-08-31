@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -7,6 +8,8 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
+import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
+import { dismissToast, toasts } from '$lib/stores/toast';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -119,6 +122,78 @@ describe('apiFetch 429 classification', () => {
 
 		expect((err as ApiError).retryAfterSeconds).toBeNull();
 		expect(isRateLimited(err)).toBe(false);
+	});
+});
+
+describe('429 throttle toast', () => {
+	function rateLimitedResponse() {
+		return {
+			ok: false,
+			status: 429,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: 'Too many requests' })
+		};
+	}
+
+	beforeEach(() => {
+		toasts.set([]);
+	});
+
+	it('shows exactly one toast for a burst of 429s', async () => {
+		mockFetch.mockResolvedValue(rateLimitedResponse());
+
+		await Promise.all(
+			Array.from({ length: 5 }, () => apiFetch('/api/songs').catch((e: unknown) => e))
+		);
+
+		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+		expect(shown).toHaveLength(1);
+	});
+
+	it('raises a fresh toast once the earlier one is gone', async () => {
+		mockFetch.mockResolvedValue(rateLimitedResponse());
+
+		await apiFetch('/api/songs').catch((e: unknown) => e);
+		const first = get(toasts).find((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+		if (!first) throw new Error('expected a throttle toast');
+		dismissToast(first.id);
+
+		await apiFetch('/api/songs').catch((e: unknown) => e);
+		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+		expect(shown).toHaveLength(1);
+		expect(shown[0].id).not.toBe(first.id);
+	});
+
+	it('does not toast for a path auth.ts already surfaces its own 429 copy for', async () => {
+		mockFetch.mockResolvedValue(rateLimitedResponse());
+
+		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
+		await apiFetch('/api/auth/me').catch((e: unknown) => e);
+
+		expect(get(toasts)).toHaveLength(0);
+	});
+
+	it('does not toast for a non-429 error', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: 'boom' })
+		});
+
+		await apiFetch('/api/songs').catch((e: unknown) => e);
+
+		expect(get(toasts)).toHaveLength(0);
+	});
+
+	it('shows the same throttle toast through sseFetch', async () => {
+		mockFetch.mockResolvedValueOnce(rateLimitedResponse());
+
+		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
+		await gen.next().catch((e: unknown) => e);
+
+		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+		expect(shown).toHaveLength(1);
 	});
 });
 

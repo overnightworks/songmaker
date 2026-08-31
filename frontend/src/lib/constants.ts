@@ -320,3 +320,70 @@ export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
+
+// Shown when the backend's IP rate limiter (`middleware/rate_limit.py`)
+// rejects a request with 429 — the budget classes it enforces
+// (API/Media/Stream) mean this is now rare during ordinary use, but a
+// burst can still happen, and a client that silently stalls reads as
+// broken. A few paths already surface their own 429 copy some other way
+// and are exempted from this toast — see `RATE_LIMIT_TOAST_EXEMPT_PATHS`
+// in `lib/api/fetch.ts` for exactly which, and why.
+export const RATE_LIMITED_TOAST_MESSAGE =
+	'Too many requests — hang on, it will continue in a moment.';
+
+// SSE reconnection backoff (issue #257): jobs.ts (one EventSource per job)
+// and resourceSync.ts (the one live-sync stream) both own their `/api/*`
+// stream connection and must not lean on the browser's flat ~3s native
+// EventSource retry, which is what produced the operator's ERR_QUIC storm
+// (~80 opens/min across a handful of concurrently-reconnecting streams).
+// Both close the failed connection themselves and reopen it after
+// `nextReconnectDelayMs(attempt)` (see `lib/stores/sseReconnect.ts`):
+// doubling from a floor up to a 30s ceiling, plus 0-20% jitter so
+// concurrently-failing streams don't all reopen in lockstep. Jitter only
+// adds to the delay, never subtracts, so it can only slow a stream down
+// relative to the math below, never speed it up.
+//
+// Both curves below matter, not just the saturated one — the pre-saturation
+// ramp during a synchronized failure's first minute is its own worst case
+// and is checked separately from the long-run steady state.
+//
+// Steady state, against the backend's Stream class (45 opens/min/IP,
+// `stream_rate_limit` in settings.py): once backoff has saturated at the
+// ceiling, a stream reopens at most 60_000 / SSE_RECONNECT_MAX_DELAY_MS = 2
+// times/min, independent of the base delay below. The reported incident (4
+// concurrently-failing job streams -- four `/api/jobs/{id}/stream`
+// connections with `ERR_QUIC_PROTOCOL_ERROR` -- alongside the one
+// resource-events stream = 5 streams) is 5 * 2 = 10 opens/min in steady
+// state. The theoretical ceiling (`max_user_active_jobs` (10) concurrent
+// job streams plus the resource stream = 11) is 11 * 2 = 22/min. Both well
+// under the 45/min budget and the 33/min legitimate-use baseline the
+// backend sized that budget against.
+//
+// Minute-1 transient, i.e. before the ceiling is reached: a stream that
+// starts failing reconnects faster than the saturated rate until backoff
+// catches up, so the first 60 seconds after a synchronized failure need
+// their own check -- checking only the saturated rate above missed this
+// and is why the base delay was 1000ms before an #257 review caught it.
+// With BASE=2000ms, FACTOR=2, CEILING=30000ms, a failing stream's reopen
+// delays are 2000, 4000, 8000, 16000, 32000(capped to 30000)ms, landing at
+// cumulative t = 2s, 6s, 14s, 30s, 60s after it starts failing. Four of
+// those (2s, 6s, 14s, 30s) land inside the first 60 seconds; the fifth
+// lands right at the boundary. Counting only these storm-driven reopens
+// (each stream's own one-time initial connection is a separate,
+// already-legitimate open, already priced into the 33/min legitimate-use
+// baseline above, not into this reconnect-storm's own contribution), the
+// theoretical ceiling of 11 concurrently-failing streams contributes
+// 11 * 4 = 44 reopens in that first minute -- under the 45/min budget, with
+// 1 to spare. The reported incident's 5 streams contribute 5 * 4 = 20 in
+// that same window, comfortably under budget.
+//
+// At the previous BASE=1000ms, the same transient was 5 reopens/stream (at
+// t = 1s, 3s, 7s, 15s, 31s): 11 * 5 = 55, already over the 45/min budget by
+// the time the fourth reopen lands around t=15s -- the actual bug this
+// constant's value fixes. Do not lower this base delay again without
+// re-deriving both curves above; the steady-state math alone will look
+// fine right up until the next synchronized failure's first minute.
+export const SSE_RECONNECT_BASE_DELAY_MS = 2000;
+export const SSE_RECONNECT_BACKOFF_FACTOR = 2;
+export const SSE_RECONNECT_MAX_DELAY_MS = 30_000;
+export const SSE_RECONNECT_JITTER_RATIO = 0.2;

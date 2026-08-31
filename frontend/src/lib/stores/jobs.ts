@@ -2,6 +2,7 @@ import { writable, get } from 'svelte/store';
 import { fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
 import { JOB_TYPE_GENERATE } from '$lib/constants';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
+import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 import { addToast } from '$lib/stores/toast';
 
 const MAX_POLL_ERRORS = 10;
@@ -83,6 +84,7 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 }
 
 const eventSources = new Map<string, EventSource>();
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function trackJob(
 	job: JobStatus,
@@ -99,6 +101,11 @@ export function removeJob(jobId: string): void {
 }
 
 export function stopTracking(jobId: string): void {
+	const timer = reconnectTimers.get(jobId);
+	if (timer !== undefined) {
+		clearTimeout(timer);
+		reconnectTimers.delete(jobId);
+	}
 	const source = eventSources.get(jobId);
 	if (source) {
 		source.close();
@@ -106,14 +113,23 @@ export function stopTracking(jobId: string): void {
 	}
 }
 
-function streamJob(jobId: string): void {
-	let errorCount = 0;
+/**
+ * Opens the job's SSE connection and owns its reconnection: a dropped
+ * connection closes itself here rather than leaning on the browser's flat
+ * native EventSource retry (that flat retry across several concurrently
+ * failing job streams is what produced the operator's ERR_QUIC storm --
+ * issue #257) and reopens after `nextReconnectDelayMs`, counting up `attempt`
+ * the same way `errorCount` used to. Any message resets the count, so a
+ * connection that recovers goes back to the short delay on its next drop.
+ */
+function streamJob(jobId: string, attempt = 0): void {
+	let currentAttempt = attempt;
 
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
 	eventSources.set(jobId, source);
 
 	source.onmessage = (event: MessageEvent) => {
-		errorCount = 0;
+		currentAttempt = 0;
 		const updated: JobStatus = JSON.parse(event.data);
 
 		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
@@ -153,12 +169,21 @@ function streamJob(jobId: string): void {
 	};
 
 	source.onerror = () => {
-		errorCount++;
-		if (errorCount >= MAX_POLL_ERRORS) {
-			source.close();
-			eventSources.delete(jobId);
+		source.close();
+		eventSources.delete(jobId);
+		const nextAttempt = currentAttempt + 1;
+		if (nextAttempt >= MAX_POLL_ERRORS) {
 			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 			addToast('Lost connection to server', 'error');
+			return;
 		}
+		const delay = nextReconnectDelayMs(nextAttempt);
+		reconnectTimers.set(
+			jobId,
+			setTimeout(() => {
+				reconnectTimers.delete(jobId);
+				streamJob(jobId, nextAttempt);
+			}, delay)
+		);
 	};
 }
