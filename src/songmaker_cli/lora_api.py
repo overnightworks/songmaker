@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
-    slugify,
     unique_lora_slug,
 )
 from songmaker_cli.api_models import (
@@ -88,8 +87,7 @@ def api_create_lora(
     name = data.name.strip()
     if not name:
         raise HTTPException(422, "Name is required")
-    base_slug = slugify(name)
-    slug = unique_lora_slug(session, user.id, base_slug)
+    slug = unique_lora_slug(session, user.id, name)
     try:
         lora = create_user_lora(session, user.id, name, slug)
         record_audit(session, user.id, AuditAction.CREATE, ResourceType.LORA, lora.id)

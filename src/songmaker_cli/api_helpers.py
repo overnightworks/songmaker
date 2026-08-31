@@ -33,6 +33,8 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import (
+    ALBUM_SLUG_MAX_LENGTH,
+    LORA_SLUG_MAX_LENGTH,
     PLAYLIST_SLUG_MAX_LENGTH,
     SONG_SLUG_MAX_LENGTH,
     Album,
@@ -70,6 +72,8 @@ _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
 _SONG_SLUG_BASE_MAX_LENGTH = SONG_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 _PLAYLIST_SLUG_BASE_MAX_LENGTH = PLAYLIST_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
+_ALBUM_SLUG_BASE_MAX_LENGTH = ALBUM_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
+_LORA_SLUG_BASE_MAX_LENGTH = LORA_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
@@ -223,17 +227,18 @@ def _acquire_unique_slug(
     return candidate
 
 
-def unique_album_id(session: Session, base_slug: str) -> str:
+def unique_album_id(session: Session, title: str) -> str:
     """Find an album ID unique across all albums, including deleted ones."""
     def is_taken(candidate: str) -> bool:
         return get_album(session, candidate, include_deleted_rows=True) is not None
 
+    base_slug = slugify(title, max_length=_ALBUM_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
         session, "unique_album_id", _ALBUM_ID_LOCK_ID, base_slug, is_taken,
     )
 
 
-def unique_lora_slug(session: Session, user_id: str, base_slug: str) -> str:
+def unique_lora_slug(session: Session, user_id: str, name: str) -> str:
     """Find a LoRA slug unique within one user's LoRAs."""
     def is_taken(candidate: str) -> bool:
         return (
@@ -242,6 +247,7 @@ def unique_lora_slug(session: Session, user_id: str, base_slug: str) -> str:
             .first()
         ) is not None
 
+    base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
         session, "unique_lora_slug", _LORA_SLUG_LOCK_ID, base_slug, is_taken,
     )

@@ -16,7 +16,6 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
-    slugify,
     unique_album_id,
 )
 from songmaker_cli.api_models import (
@@ -122,7 +121,7 @@ def api_create_album(
     title = data.title.strip()
     if not title:
         raise HTTPException(422, "Title is required")
-    album_id = unique_album_id(session, slugify(title))
+    album_id = unique_album_id(session, title)
     try:
         album = create_album(
             session, album_id, title,

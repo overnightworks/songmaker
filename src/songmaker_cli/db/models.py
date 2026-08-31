@@ -34,6 +34,8 @@ from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
 
 SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220
+ALBUM_SLUG_MAX_LENGTH: Final = 64
+LORA_SLUG_MAX_LENGTH: Final = 120
 
 
 def _validate_base_generation_params(value: object) -> dict | None:
@@ -89,7 +91,7 @@ class ShareMixin:
 class Album(ShareMixin, Base):
     __tablename__ = "albums"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[str] = mapped_column(String(ALBUM_SLUG_MAX_LENGTH), primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
     artist: Mapped[str] = mapped_column(String(200))
     subtitle: Mapped[str] = mapped_column(String(400), default="")
@@ -586,7 +588,7 @@ class UserLora(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True,
     )
     name: Mapped[str] = mapped_column(String(100))
-    slug: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(LORA_SLUG_MAX_LENGTH))
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tensor_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

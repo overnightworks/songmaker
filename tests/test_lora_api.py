@@ -20,7 +20,7 @@ from songmaker_cli.constants import (
     LoraStatus,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
+from songmaker_cli.db.models import LORA_SLUG_MAX_LENGTH, Job, User, UserLora, UserLoraSample
 from songmaker_cli.db.queries import (
     add_user_lora_sample,
     create_user_lora,
@@ -117,6 +117,42 @@ def test_create_lora_slug_collision_appends_suffix(client_a: TestClient) -> None
 def test_create_lora_empty_name_rejected(client_a: TestClient) -> None:
     resp = client_a.post("/api/loras", json={"name": "   "})
     assert resp.status_code == 422
+
+
+def test_create_lora_with_100_char_name_succeeds(client_a: TestClient) -> None:
+    resp = client_a.post("/api/loras", json={"name": "a" * 100})
+    assert resp.status_code == 200
+    assert len(resp.json()["slug"]) <= LORA_SLUG_MAX_LENGTH
+
+
+def test_create_lora_with_cjk_name_succeeds(client_a: TestClient) -> None:
+    resp = client_a.post("/api/loras", json={"name": "音" * 100})
+    assert resp.status_code == 200
+    assert len(resp.json()["slug"]) <= LORA_SLUG_MAX_LENGTH
+
+
+def test_create_lora_slug_collision_at_budget_edge_appends_suffix(
+    client_a: TestClient,
+) -> None:
+    """Two CJK names that only differ in their last character collide on
+    the same base slug: 99 CJK characters transliterate to far more than
+    LORA_SLUG_MAX_LENGTH characters, so truncation always lands inside the
+    shared 99-character prefix regardless of the exact budget — the second
+    create must still fit within LORA_SLUG_MAX_LENGTH once the "-2" counter
+    suffix is appended."""
+    name_a = "音" * 99 + "A"
+    name_b = "音" * 99 + "B"
+
+    first = client_a.post("/api/loras", json={"name": name_a})
+    assert first.status_code == 200
+    first_slug = first.json()["slug"]
+    assert len(first_slug) <= LORA_SLUG_MAX_LENGTH
+
+    second = client_a.post("/api/loras", json={"name": name_b})
+    assert second.status_code == 200
+    second_slug = second.json()["slug"]
+    assert second_slug == f"{first_slug}-2"
+    assert len(second_slug) <= LORA_SLUG_MAX_LENGTH
 
 
 def test_create_lora_integrity_error(
