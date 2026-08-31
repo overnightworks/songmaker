@@ -7,7 +7,7 @@ import { ApiError } from '$lib/api/fetch';
 import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { libraryRootState, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -315,6 +315,62 @@ describe('a legacy /?song= address redirects', () => {
 
 		resolveFetch?.(song());
 		await vi.waitFor(() => expect(goto).toHaveBeenCalled());
+	});
+});
+
+// Issue #265's S7: a song not yet in songList when its address was first
+// written keeps the legacy query form as writeLibraryHistory's own
+// same-shape fallback (libraryHistoryUrl's comment on the songId branch), so
+// a later Back/Forward can land back on it. onPopstate (navigation.ts)
+// applies that restore state instantly from history.state -- this page used
+// to re-resolve the same address over the network in parallel every time,
+// a redundant round trip and a brief overlay flash this check now skips.
+describe('a legacy /?song= address whose history.state already carries the answer', () => {
+	it('skips the network resolution once a matching restore state is already applied', async () => {
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: ALBUM_SLUG },
+				songId: SONG_ID,
+				generationId: null
+			},
+			'',
+			`/?song=${SONG_ID}`
+		);
+
+		const target = openAddress();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(api.fetchSong).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+		expect(target.querySelector('.address-overlay')).toBeNull();
+	});
+
+	it('still resolves over the network when the restore state names a different song', async () => {
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: ALBUM_SLUG },
+				songId: 'some-other-song',
+				generationId: null
+			},
+			'',
+			`/?song=${SONG_ID}`
+		);
+		api.fetchSong.mockResolvedValue(song());
+
+		openAddress();
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
+				replaceState: true,
+				noScroll: true,
+				keepFocus: true
+			})
+		);
 	});
 });
 

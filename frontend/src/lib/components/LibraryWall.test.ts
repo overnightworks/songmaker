@@ -14,8 +14,10 @@ import {
 	collectionRowPlayLabel
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { openCollection } from '$lib/stores/collection';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -56,6 +58,9 @@ vi.mock('$lib/api/client', () => ({
 	// Exercised by loadSongContext's hydrateGenerationFailure fire-and-forget
 	// call whenever a test drives a real selectSong through this component.
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null }),
+	// Exercised by stores/editor.ts's loadSongData -- the dirty-draft test
+	// below drives that directly to arrange a dirty draft on the open song.
+	fetchVersions: vi.fn().mockResolvedValue([]),
 	createPlaylist: vi.fn().mockResolvedValue({
 		id: 'new-playlist',
 		title: 'Playlist',
@@ -179,6 +184,8 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetShares();
@@ -413,6 +420,10 @@ describe('LibraryWall shared filter', () => {
 	// branch used to set selectedGenerationId right after firing selectSong
 	// without awaiting it, so the still-pending song switch cleared the take
 	// selection a microtask later (player.ts's selectSong resets it to null).
+	// selectedSongId itself updates synchronously (well before the pin, which
+	// waits on the song's own history write), so the wait below is on the pin
+	// -- the later of the two -- rather than on the song id, or this could
+	// pass on a song switch that never finishes pinning the take at all.
 	it('opens a shared take with the song selected and that take pinned', async () => {
 		songList.set([song({ id: 's-shared', title: 'Undertow', album_id: 'a-local' })]);
 		fetchShares.mockResolvedValue({
@@ -437,7 +448,55 @@ describe('LibraryWall shared filter', () => {
 
 		requireElement<HTMLButtonElement>(root, '.share-open').click();
 
-		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-shared'));
+		await vi.waitFor(() => expect(get(selectedGenerationId)).toBe('g-shared'));
+		expect(get(selectedSongId)).toBe('s-shared');
+	});
+
+	// Regression coverage for issue #265's review of #264: a dirty draft on the
+	// open song used to let the switch park while the take pin ran anyway
+	// (selectSong's promise resolves the instant guardDirtyNavigation parks
+	// it), so the pin landed on the still-open old song. revealSharedTake
+	// folds the switch and the pin into one guarded action instead.
+	it('parks a shared-take open behind a dirty draft, without pinning the take on the old song', async () => {
+		songList.set([
+			song({ id: 's-open', title: 'Open Song', album_id: 'a-local' }),
+			song({ id: 's-shared', title: 'Undertow', album_id: 'a-local' })
+		]);
+		selectedSongId.set('s-open');
+		loadSongData(song({ id: 's-open', title: 'Open Song', album_id: 'a-local' }));
+		setDraftLyrics('unsaved edit');
+		fetchShares.mockResolvedValue({
+			items: [
+				shareItem({
+					type: 'generation',
+					id: 'g-shared',
+					title: 'Undertow',
+					song_id: 's-shared',
+					generation_number: 3
+				})
+			],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
+		await tick();
+		await tick();
+
+		requireElement<HTMLButtonElement>(root, '.share-open').click();
+		await tick();
+
+		expect(get(selectedSongId)).toBe('s-open');
+		expect(get(selectedGenerationId)).toBeNull();
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+
+		discardDraft();
+		await get(pendingDirtyNavigation)?.();
+		pendingDirtyNavigation.set(null);
+
+		expect(get(selectedSongId)).toBe('s-shared');
 		expect(get(selectedGenerationId)).toBe('g-shared');
 	});
 

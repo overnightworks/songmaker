@@ -1,6 +1,4 @@
 import { get, writable } from 'svelte/store';
-import { goto } from '$app/navigation';
-import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
@@ -112,23 +110,18 @@ export function persistLibraryHistory(): void {
 // address (issue #269) and, since issue #286, a playlist address. All three
 // render the same workspace, so nothing has to be pushed off /album/<slug>
 // or /playlist/<slug> to make a song, a playlist or the wall visible — the
-// address a surface owns is written by libraryHistoryUrl.
+// address a surface owns is written by libraryHistoryUrl. Used only by
+// routes/+layout.svelte now (to decide whether to start the live event
+// stream) — every entry point below used to route a stale-route precondition
+// through this first (issue #264's ensureLibraryWorkspaceRoute), but since
+// #269 gave every write its own address, writeLibraryHistory's own crossing
+// check (libraryRouteShape in libraryContext.ts) already reaches the router
+// for a write landing on any of these three paths from anywhere else,
+// including a non-library one; a second, separate guard here would only ever
+// duplicate that check, never catch something it misses (#265's S7 proved
+// this per entry point rather than assuming it — see navigation.test.ts).
 export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/' || isAlbumRoutePath(pathname) || isPlaylistRoutePath(pathname);
-}
-
-// Every entry point that opens a collection or a song onto the library
-// workspace (openLibraryWall, openAlbum, openPlaylist, revealPlayingSong)
-// needs this precondition first: the browser may be sitting on an unrelated
-// route (e.g. Settings), and mutating the library stores without also
-// switching the route leaves the change invisible behind whatever layout is
-// still mounted (issue #264). Route through this instead of re-testing
-// isLibraryWorkspacePath at each call site — a copy is exactly what got two
-// of the four entry points forgotten in the first place.
-async function ensureLibraryWorkspaceRoute(): Promise<void> {
-	if (!isLibraryWorkspacePath(window.location.pathname)) {
-		await goto(resolve('/'));
-	}
 }
 
 // A dirty editor draft blocks a song switch or leave (rail row, prev/next,
@@ -216,7 +209,6 @@ selectedPlaylist.subscribe((playlist) => {
 });
 
 export async function openAlbum(albumId: string): Promise<void> {
-	await ensureLibraryWorkspaceRoute();
 	storeDeselectPlaylist();
 	setOpenCollection({ kind: 'album', id: albumId });
 	selectedSongId.set(null);
@@ -228,7 +220,6 @@ export async function openAlbum(albumId: string): Promise<void> {
 }
 
 export async function openPlaylist(playlistId: string): Promise<void> {
-	await ensureLibraryWorkspaceRoute();
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	void loadPlaylistDetail(playlistId);
@@ -283,7 +274,6 @@ export async function openLibraryCreate(): Promise<void> {
 // entry so the browser back button returns to whatever was open before.
 export async function openLibraryWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		await ensureLibraryWorkspaceRoute();
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
 		setLibrarySurface('browse');
@@ -402,26 +392,46 @@ function selectSongHistoryMode(
 	return song?.album_id === collection.id ? 'replace' : 'stack';
 }
 
-// Returns a promise instead of firing void: a caller that sets follow-up
-// state after the selected song is current (e.g. LibraryWall's shared-take
-// open, which needs the song in place before it can pin the generation) must
-// await this. Most callers are fire-and-forget rail/list clicks and simply
-// don't await it, which is fine for them.
+// Returns a promise, though every current caller (rail/list clicks) is
+// fire-and-forget: a caller that needs follow-up state set once the song is
+// actually current must not await this and add the follow-up after it —
+// guardDirtyNavigation resolves immediately once it parks a dirty draft,
+// before applySelectedSong ever runs, so that follow-up would land against
+// whichever song was open before (issue #265 review of #264, fixed for its
+// one real caller by folding the follow-up into a single guarded action —
+// see revealSharedTake below). A future such caller belongs the same way.
 export function selectSong(songId: string, knownSong?: SongItem): Promise<void> {
-	// Evaluated before the guard's await: it reads selectedSongId/openCollection
-	// as they stand right now, not after ensureLibraryWorkspaceRoute has (maybe)
-	// already let applySelectedSong change them.
+	// Evaluated before the guard's own possible park: a dirty draft defers
+	// `applySelectedSong` until the confirm resolves, so historyMode must read
+	// selectedSongId/openCollection as they stand right now, not whatever they
+	// become once that later run starts.
 	const historyMode = selectSongHistoryMode(songId, knownSong);
 	return guardDirtyNavigation(async () => {
-		await ensureLibraryWorkspaceRoute();
 		await applySelectedSong(songId, knownSong, historyMode, 'write');
 	});
 }
 
 export function selectNeighborSong(song: SongItem): Promise<void> {
 	return guardDirtyNavigation(async () => {
-		await ensureLibraryWorkspaceRoute();
 		await applySelectedSong(song.id, song, 'replace', 'keep');
+	});
+}
+
+// LibraryWall's share-inventory row for a shared take (a song_id plus a
+// generation id, not a full playable share of the song itself) needs the
+// song switch and the generation pin to land as one guarded action, exactly
+// like revealPlayingSong below: pinning the take is follow-up state that
+// must run once the song is actually current, not once selectSong's promise
+// resolves, since a dirty draft resolves that promise the moment it parks
+// the switch (see the note on selectSong above). Unlike revealPlayingSong,
+// the row carries only the song's id, not a hydrated SongItem, matching
+// selectSong's own knownSong-optional shape.
+export function revealSharedTake(songId: string, generationId: string): Promise<void> {
+	const historyMode = selectSongHistoryMode(songId, undefined);
+	return guardDirtyNavigation(async () => {
+		await applySelectedSong(songId, undefined, historyMode, 'write');
+		selectedGenerationId.set(generationId);
+		persistLibraryHistory();
 	});
 }
 
@@ -473,8 +483,12 @@ export function openTakesTab(): void {
 	detailTab.set('takes');
 }
 
+// The dirty-draft guard runs before anything else moves, matching every
+// other song-switch entry point (issue #265 S7; previously this navigated to
+// the library workspace via ensureLibraryWorkspaceRoute *before*
+// guardDirtyNavigation ran, so Cancel on the confirm still left the person
+// pushed off wherever they were, e.g. Settings).
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
-	await ensureLibraryWorkspaceRoute();
 	await guardDirtyNavigation(async () => {
 		await applySelectedSong(song.id, song, 'stack', 'write');
 		selectedGenerationId.set(generationId);

@@ -206,30 +206,53 @@ export function isPlaylistRoutePath(pathname: string): boolean {
 	);
 }
 
-// The five shapes a library address can take. Distinct from the
-// isAlbumRoutePath boolean below, which answers "is this under /album/" for
-// isLibraryWorkspacePath — that boolean is deliberately true for 'album',
-// 'album-song' and 'album-song-take' alike, since all three mount the
-// workspace. This finer distinction is what writeLibraryHistory needs: it
-// must treat album <-> album-song and album-song <-> album-song-take as route
-// crossings too, not just root <-> album, or a track (or a take within it)
-// opened from a shallower address would leave the router still believing it
-// is on the shallower route file while the bar reads one segment deeper --
-// see the note on writeLibraryHistory for what a stale router does on the
-// next Back/Forward. A take opened from another take in the same song stays
-// 'album-song-take' on both sides, so that move is the frequent-churn case,
-// not a crossing -- it is still the same route file, /take/[n], with only the
-// param changed. 'playlist' is its own shape for the same reason: switching
-// from one open playlist to another stays 'playlist' on both sides (frequent
-// churn, not a crossing), while every move between it and the four
-// /album/... shapes crosses route files and must go through goto.
-type LibraryRouteShape = 'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist';
+// The six shapes a pathname can take for the crossing check below. Five are
+// library addresses, distinct from the isAlbumRoutePath boolean below, which
+// answers "is this under /album/" for isLibraryWorkspacePath — that boolean
+// is deliberately true for 'album', 'album-song' and 'album-song-take'
+// alike, since all three mount the workspace. This finer distinction is what
+// writeLibraryHistory needs: it must treat album <-> album-song and
+// album-song <-> album-song-take as route crossings too, not just root <->
+// album, or a track (or a take within it) opened from a shallower address
+// would leave the router still believing it is on the shallower route file
+// while the bar reads one segment deeper -- see the note on
+// writeLibraryHistory for what a stale router does on the next Back/Forward.
+// A take opened from another take in the same song stays 'album-song-take'
+// on both sides, so that move is the frequent-churn case, not a crossing --
+// it is still the same route file, /take/[n], with only the param changed.
+// 'playlist' is its own shape for the same reason: switching from one open
+// playlist to another stays 'playlist' on both sides (frequent churn, not a
+// crossing), while every move between it and the four /album/... shapes
+// crosses route files and must go through goto.
+//
+// The sixth, 'external', is everything outside the five -- Settings, login,
+// a share page. Until issue #265's S7 nothing ever asked libraryRouteShape
+// about such a path: ensureLibraryWorkspaceRoute (#264) always navigated the
+// browser onto the workspace *before* any library history write ran, so by
+// the time writeLibraryHistory read window.location.pathname it was already
+// one of the five. With that guard gone, writeLibraryHistory is what detects
+// a caller opening a collection or a song from off the library route at
+// all, and it can only do that if leaving a non-library path counts as a
+// crossing every time -- collapsing 'external' into 'root' (both would
+// satisfy `!isAlbumRoutePath && !isPlaylistRoutePath`) would make a write
+// landing on '/' from Settings same-shape, take the raw `history.pushState`
+// branch, and leave the router mounted on Settings' route file while the bar
+// reads '/' -- exactly the desync writeLibraryHistory's own crossing check
+// exists to prevent, undetected because the one library path with no
+// address-owning leaf route of its own to force a `goto` is '/' itself. See
+// navigation.test.ts's "opening a collection from off the library route"
+// suite, which pins this for every entry point that used to route through
+// the removed guard.
+type LibraryRouteShape =
+	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist' | 'external';
 
 function libraryRouteShape(pathname: string): LibraryRouteShape {
 	if (isPlaylistRoutePath(pathname)) return 'playlist';
-	if (!isAlbumRoutePath(pathname)) return 'root';
-	if (!isSongRoutePath(pathname)) return 'album';
-	return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
+	if (isAlbumRoutePath(pathname)) {
+		if (!isSongRoutePath(pathname)) return 'album';
+		return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
+	}
+	return pathname === '/' ? 'root' : 'external';
 }
 
 // An open song's own address once its slug is known (issue #275). A selected
@@ -312,6 +335,25 @@ export type HistoryWriteMode = 'push' | 'replace';
 // second write overtake the first, and must see the entry the first one is
 // going to install rather than the stale one it would still read from
 // `history.state` — which is what `currentLibraryHistoryState` answers.
+//
+// The same-shape raw write is a permanent design choice, not scaffolding a
+// later cleanup should finish by routing everything through `goto`: issue
+// #276 measured what a `goto` costs per write (a real SvelteKit navigation,
+// its own route resolution and reactive re-run) against how often the
+// same-shape case actually fires — filter/sort/search-cursor/scroll on
+// nearly every interaction with the wall, a song-to-song or take-to-take
+// move on every list click and Previous/Next — and going through the router
+// for all of it would turn the library's most frequent writes into its most
+// expensive ones for a distinction (which route *file* is mounted) that
+// same-shape churn never changes. `libraryRouteShape` is what makes "does
+// this write cross" a real question instead of "is this a write" — treating
+// every write as a crossing would be simpler code, but wrong on the
+// frequency this store actually sees; see the `LibraryRouteShape` note above
+// for what a wrongly-collapsed shape does when a crossing goes undetected
+// instead. Issue #265's S7 (which removed `ensureLibraryWorkspaceRoute`,
+// #264's now-redundant separate guard, once this shape-based check alone was
+// proven to cover everything it did) confirmed the choice rather than
+// revisiting it.
 export function writeLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,

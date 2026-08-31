@@ -37,6 +37,19 @@ const fetchSongs = vi.fn();
 const searchLibrary = vi.fn();
 const fetchShares = vi.fn();
 
+// Only the route-shape crossing suite below drives a write that actually
+// crosses (every other test in this file sets window.location to the write's
+// own target first, so its write is same-shape and never reaches this) --
+// mocked the same way navigation.test.ts does, so a crossing write's `goto`
+// call moves the URL like the real one does.
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
+		if (options?.replaceState) history.replaceState(null, '', url);
+		else history.pushState(null, '', url);
+		return Promise.resolve();
+	})
+}));
+
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
 	fetchShares: (...args: unknown[]) => fetchShares(...args)
@@ -68,8 +81,11 @@ vi.mock('$lib/api/client', () => ({
 	reorderPlaylistEntry: vi.fn()
 }));
 
+import { goto } from '$app/navigation';
+
 import {
 	albumIsExpanded,
+	albumRoutePath,
 	applyLibraryHistory,
 	captureLibraryScroll,
 	detailTab,
@@ -92,7 +108,9 @@ import {
 	libraryFilter,
 	resetLibraryContextForTests,
 	setLibraryFilter,
-	snapshotLibraryHistory
+	snapshotLibraryHistory,
+	songRoutePath,
+	writeLibraryHistory
 } from './libraryContext';
 
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
@@ -227,6 +245,7 @@ beforeEach(() => {
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
 	history.replaceState(null, '', '/');
+	vi.mocked(goto).mockClear();
 });
 
 afterEach(() => {
@@ -675,6 +694,63 @@ describe('isPlaylistRoutePath', () => {
 		expect(isPlaylistRoutePath('/playlist/')).toBe(false);
 		expect(isPlaylistRoutePath('/')).toBe(false);
 		expect(isPlaylistRoutePath('/album/anfield')).toBe(false);
+	});
+});
+
+// libraryRouteShape itself is not exported -- writeLibraryHistory's own
+// crossing decision (goto vs. a raw synchronous write) is the observable
+// behaviour, so that is what these pin. Central to issue #265's S7: since
+// ensureLibraryWorkspaceRoute (#264) was removed, writeLibraryHistory is the
+// only thing left that can catch a write landing on a library address from a
+// non-library route (Settings, login, a share page) -- and it can only catch
+// it if leaving such a route always counts as a crossing, every time,
+// regardless of which of the five library shapes the write lands on.
+describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
+	it('crosses through goto for a write that changes which route file is mounted', async () => {
+		history.replaceState(null, '', albumRoutePath('a1'));
+
+		await writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
+
+		expect(goto).toHaveBeenCalledWith(songRoutePath('a1', 's1'), {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true
+		});
+	});
+
+	// A song-to-song move across album boundaries stays the 'album' shape on
+	// both sides -- only the route-file depth decides a crossing, never which
+	// album or song the address names.
+	it('stays a raw write for same-shape churn, never touching the router', async () => {
+		history.replaceState(null, '', albumRoutePath('a1'));
+
+		await writeLibraryHistory(libraryRootState(), albumRoutePath('a2'), 'replace');
+
+		expect(goto).not.toHaveBeenCalled();
+		expect(history.state).toEqual(libraryRootState());
+	});
+
+	// The one pairing that used to fail silently before 'external' became its
+	// own shape: a write landing on '/' (openLibraryWall's target, or
+	// openPlaylist's own '/' fallback before a playlist's slug is known) from
+	// a non-library route both satisfied `!isAlbumRoutePath &&
+	// !isPlaylistRoutePath`, so the two were indistinguishable and the write
+	// took the cheap same-shape branch -- a raw `history.pushState` that
+	// changes the address bar to '/' while the router stays mounted on
+	// whichever route file it last saw. The next Back/Forward or real
+	// navigation that disagrees with that stale belief tears the workspace
+	// down mid-session. This is the pairing #265's S7 had to get right for
+	// removing ensureLibraryWorkspaceRoute to be safe.
+	it('crosses through goto when the target is "/" and the write starts from a non-library route', async () => {
+		history.replaceState(null, '', '/settings/voices');
+
+		await writeLibraryHistory(libraryRootState(), '/', 'push');
+
+		expect(goto).toHaveBeenCalledWith('/', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true
+		});
 	});
 });
 

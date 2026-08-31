@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
-import { resolve } from '$app/paths';
 
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
@@ -92,6 +91,7 @@ import {
 	persistLibraryHistory,
 	resetNavigationForTests,
 	revealPlayingSong,
+	revealSharedTake,
 	selectLibraryFilter,
 	selectNeighborSong,
 	selectSong
@@ -241,8 +241,9 @@ describe('isLibraryWorkspacePath', () => {
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
-	// Issue #269 (and #275 one segment deeper): the guard must leave an album
-	// address alone, or opening a song from an album would take a detour
+	// Issue #269 (and #275 one segment deeper): writeLibraryHistory's crossing
+	// check must leave an album address alone rather than route every write
+	// through '/', or opening a song from an album would take a detour
 	// through the wall on the way there.
 	it('goes straight from an album address to the song, without a detour', async () => {
 		history.replaceState(null, '', '/album/a1');
@@ -572,7 +573,14 @@ describe('openAlbum / openPlaylist', () => {
 	});
 });
 
-describe('opening a collection from off the library route (issue #264)', () => {
+// #264 first gave this its own guard (ensureLibraryWorkspaceRoute), a
+// precondition every entry point below had to call before writing history.
+// Issue #265's S7 removed that guard once writeLibraryHistory's own crossing
+// check (libraryRouteShape's 'external' shape, libraryContext.ts) was proven
+// to reach the router for every one of these writes on its own -- these
+// tests pin the crossing behaviour directly instead of the removed guard's
+// call.
+describe('opening a collection from off the library route', () => {
 	it('openAlbum leaves settings for the album address with the album open', async () => {
 		history.replaceState(null, '', '/settings/voices');
 		await openAlbum('a1');
@@ -597,6 +605,25 @@ describe('opening a collection from off the library route (issue #264)', () => {
 		selectSong('s1');
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	// The one pairing removing the guard put at risk: openLibraryWall's own
+	// write always targets '/', and before libraryRouteShape gained its
+	// 'external' shape, '/settings/voices' and '/' both fell into the same
+	// 'root' bucket (neither is an album or playlist address), so this write
+	// would have taken the cheap same-shape branch -- a raw `history.
+	// pushState` that changes the address bar to '/' while SvelteKit's router
+	// stays mounted on Settings' route file underneath it.
+	it('openLibraryWall leaves settings for the wall through the router, not a raw history write', async () => {
+		history.replaceState(null, '', '/settings/voices');
+		await openLibraryWall();
+		expect(window.location.pathname).toBe('/');
+		expect(get(librarySurface)).toBe('browse');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true
+		});
 	});
 });
 
@@ -874,6 +901,47 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
+	// Issue #265's S7 (review of #264): revealPlayingSong used to navigate to
+	// the library workspace via ensureLibraryWorkspaceRoute *before*
+	// guardDirtyNavigation ran, so Cancel on the confirm still left the person
+	// pushed off whatever route they were on -- e.g. "Use as reference" from
+	// Now Playing while Settings is open (the draft and the playing take are
+	// independent of the current route). The guard must run first, so parking
+	// leaves the route untouched.
+	it('does not navigate off the current route before the dirty-draft confirm resolves', async () => {
+		history.replaceState(null, '', '/');
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		history.replaceState(null, '', '/settings/voices');
+		vi.mocked(goto).mockClear();
+
+		await revealPlayingSong(song({ id: 's2', album_id: 'a1' }), 'g2');
+
+		expect(window.location.pathname).toBe('/settings/voices');
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	// Issue #265 review of #264: onOpenShare's shared-take branch used to
+	// await selectSong and then set selectedGenerationId as a follow-up step
+	// -- guardDirtyNavigation resolves that promise the instant it parks a
+	// dirty draft, so the pin ran against the still-open old song a microtask
+	// later. revealSharedTake folds both into one guarded action instead.
+	it('defers revealSharedTake the same way, without pinning the take against the old song', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		await revealSharedTake('s2', 'g2');
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBeNull();
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
 	it('never prompts when the draft is clean', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
@@ -953,10 +1021,22 @@ describe('revealPlayingSong', () => {
 		]);
 	});
 
-	it('navigates home first from another route', async () => {
+	// Issue #265's S7 removed the separate ensureLibraryWorkspaceRoute guard
+	// (#264) that used to force a `goto('/')` detour before anything else ran;
+	// writeLibraryHistory's own crossing check (libraryRouteShape's 'external'
+	// shape) now reaches the router directly, so a reveal from off the
+	// library route lands straight on the song's own address instead of
+	// stopping at '/' first.
+	it('crosses directly from another route to the song address, with no detour through /', async () => {
 		history.replaceState(null, '', '/settings');
 		await revealPlayingSong(song({ id: 's1' }), 'g1');
-		expect(goto).toHaveBeenCalledWith(resolve('/'));
+		await vi.waitFor(() =>
+			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
+		);
+		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+			'/album/a1/s1',
+			'/album/a1/s1/take/1'
+		]);
 	});
 });
 

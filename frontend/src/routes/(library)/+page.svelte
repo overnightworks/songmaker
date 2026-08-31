@@ -15,7 +15,11 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-	import { resolveLegacySongQueryAddress } from '$lib/stores/libraryContext';
+	import {
+		currentLibraryHistoryState,
+		isLibraryHistoryState,
+		resolveLegacySongQueryAddress
+	} from '$lib/stores/libraryContext';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 	import { addToast } from '$lib/stores/toast';
 
@@ -36,17 +40,30 @@
 	const generationId = $derived(page.url.searchParams.get('gen'));
 
 	// A tab that already carries a LibraryHistoryState naming this exact
-	// legacy `?song=` entry (Back/Forward inside a session that opened one
-	// before this redirect existed) has `onPopstate` (navigation.ts) apply
-	// it instantly from `history.state` while this effect resolves the same
-	// address again over the network in parallel -- both converge on the same
-	// canonical address, so the only cost is one redundant fetch and a brief
-	// overlay flash, never a wrong landing. Known and self-healing; #265's S7
-	// (the router leading instead of hand-built history) removes the case
-	// entirely along with the hand-built history this page resolves against.
+	// legacy `?song=` entry has `onPopstate` (navigation.ts) apply it
+	// instantly from `history.state` on Back/Forward -- this happens whenever
+	// a song not yet in `songList` gets its own history entry written in this
+	// query form (`libraryHistoryUrl`'s own fallback, still a same-shape write
+	// against '/' per `libraryRouteShape`, so it never crosses a route on its
+	// own) and the person later returns to it. Re-resolving over the network
+	// would be redundant in that case -- `history.state` already carries the
+	// answer onPopstate just applied -- so this checks it first and skips
+	// straight to idle, with no overlay flash, whenever the entry already
+	// names this exact id/generation pair; issue #265's S7 closed this rather
+	// than leaving it to self-heal on a redundant fetch.
 	$effect(() => {
+		if (matchesResolvedHistoryState(songId, generationId)) {
+			addressState = 'idle';
+			return;
+		}
 		void redirectLegacyAddress(songId, generationId);
 	});
+
+	function matchesResolvedHistoryState(id: string | null, genId: string | null): boolean {
+		if (!id) return false;
+		const state = currentLibraryHistoryState();
+		return isLibraryHistoryState(state) && state.songId === id && state.generationId === genId;
+	}
 
 	// Same inert bridge as the sibling addresses (issue #276): the overlay
 	// only hides the stale workspace visually, `inert` on the wrapper one

@@ -15,11 +15,12 @@
 		updateGenerationInList,
 		updateSongInList
 	} from '$lib/stores/libraryData';
-	import { playAlbum, playPlaylistFrom, selectedGenerationId } from '$lib/stores/player';
+	import { playAlbum, playPlaylistFrom } from '$lib/stores/player';
 	import {
 		openAlbum,
 		openPlaylist,
 		persistLibraryHistory,
+		revealSharedTake,
 		selectLibraryFilter,
 		selectSong
 	} from '$lib/stores/navigation';
@@ -341,9 +342,12 @@
 		} else if (item.type === 'song') selectSong(item.id);
 		else if (item.type === 'playlist') openPlaylist(item.id);
 		else if (item.song_id) {
-			await selectSong(item.song_id);
-			selectedGenerationId.set(item.id);
-			persistLibraryHistory();
+			// A dirty draft must park the song switch and the take pin together
+			// (issue #265 review of #264) -- selectSong's own promise resolves the
+			// instant a dirty draft parks it, so setting selectedGenerationId
+			// right after this await used to run against whichever song was still
+			// open while the confirm was pending.
+			await revealSharedTake(item.song_id, item.id);
 		}
 	}
 
