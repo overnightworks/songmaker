@@ -241,6 +241,12 @@ sudo reboot
 docker compose ps -a                                # confirm: State = running, no manual `docker start` needed
 ```
 
+### Auto-deploy and generation jobs (issue #298)
+
+`scripts/auto-deploy.sh` (a systemd timer, see [Auto-Deploy](architecture.md#auto-deploy) in `docs/architecture.md` for the full mechanism) redeploys the stack on every merge to `main`. The honest guarantee is never against a job that was active at the moment the guard last checked, not "never mid-generation" outright: it checks `jobs.status IN ('queued', 'running')` before pulling, again right after the image build (which does not touch running containers) and immediately before `docker compose up -d --wait` (the step that recreates acestep-worker and music-worker, killing whatever ACE-Step subprocess call is in flight — incident 2026-08-30 18:31, a redeploy mid-generation dropped every active stream). Splitting the build from the recreate keeps that residual window to the few seconds between the second check and the recreate, not the build's 8-15 minutes. A tick that finds jobs active defers to the next one — same "the next tick retries" tolerance this doc already gives migration lock_timeout failures like `c9d4a2f18e37` — and the next tick finds the image already built, so its own recheck lands within seconds.
+
+If the database itself is unreachable when the guard runs, auto-deploy fails **closed**: it refuses to deploy rather than assume the queue is empty.
+
 ### pin_model semantics
 
 The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. Capacity is planned against `max(measured VRAM used, sum of declared sizes of what's currently loaded)`, not the declared-size table alone: ACE-Step loads lazily, so a model that hasn't served its first generation yet can measure almost nothing on NVML even though it is genuinely resident, and without that floor the cache would read it as free and overbook the GPU. The full eviction plan — which models, in what order — is computed and checked against the budget before anything is actually unloaded; a load the plan can't satisfy is rejected outright, with nothing destroyed. **Pinning** marks a loaded model as exempt from eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded).

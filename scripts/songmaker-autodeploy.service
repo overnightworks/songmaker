@@ -1,0 +1,40 @@
+[Unit]
+Description=Songmaker pull-based auto-deploy tick (issue #298)
+After=docker.service songmaker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# WorkingDirectory, ExecStart, and User below are placeholders (this repo's
+# canonical checkout/owner), kept concrete only so `systemd-analyze verify`
+# can check absolute paths. scripts/install-autodeploy.sh always overwrites
+# all three with the real project root and invoking user at install time —
+# copying this file by hand instead of running that script inherits these
+# values as-is, which is very likely wrong for a different checkout or
+# operator.
+WorkingDirectory=/home/felix-hummert/git/songmaker
+ExecStart=/home/felix-hummert/git/songmaker/scripts/auto-deploy.sh
+User=felix-hummert
+# No Group= override: the stack owner (User= above) is already a member of
+# the docker group, so the process inherits it as a supplementary group.
+# Forcing Group=docker as the *primary* group would make `git pull` write
+# new files with group docker instead of the owner's usual group.
+#
+# No StateDirectory: the consecutive-failure counter, the consecutive-
+# busy-deferral counter, and the deployed.sha marker all live inside the
+# checkout's own git ADMIN directory instead, resolved by auto-deploy.sh at
+# runtime via `git rev-parse --absolute-git-dir` (NOT a fixed path — see its
+# header for why a linked worktree needs this resolved rather than assumed).
+# A StateDirectory here would be a second location the unit run and a
+# manual shell run would silently diverge onto instead of sharing.
+#
+# No RuntimeDirectory either, for the same reason: the flock lock file lives
+# at that same resolved admin-directory path, not under a unit-managed
+# runtime dir. A unit-scoped RuntimeDirectory would give the systemd-run
+# tick and a manual shell run of this same script two different lock
+# inodes — no mutual exclusion between them at all.
+# No TimeoutStartSec override: a cold-cache `docker compose build` can
+# legitimately take 8-15 minutes (see CLAUDE.md — never wrap compose in a
+# timeout). The systemd default TimeoutStartSec (90s) would kill it mid-build
+# if not disabled here.
+TimeoutStartSec=infinity
