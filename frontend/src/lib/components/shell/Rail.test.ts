@@ -199,4 +199,80 @@ describe('Rail', () => {
 		expect(albumToggle.getAttribute('aria-expanded')).toBe('true');
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 	});
+
+	it('marks the open album and the open playlist with the same row-active highlight', async () => {
+		albumList.set([
+			{
+				id: 'a1',
+				title: 'Nachtstrom',
+				artist: '',
+				subtitle: '',
+				year: '',
+				colors: {},
+				song_count: 0,
+				picked_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00',
+				is_archived: false
+			},
+			{
+				id: 'a2',
+				title: 'Sonnwendfeuer',
+				artist: '',
+				subtitle: '',
+				year: '',
+				colors: {},
+				song_count: 0,
+				picked_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00',
+				is_archived: false
+			}
+		]);
+		playlistList.set([
+			{
+				id: 'p1',
+				title: 'Night Drive',
+				slug: 'night-drive',
+				entry_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00'
+			},
+			{
+				id: 'p2',
+				title: 'Morning Run',
+				slug: 'morning-run',
+				entry_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00'
+			}
+		]);
+		setOpenCollection({ kind: 'album', id: 'a1' });
+		selectedPlaylistDetail.set(null);
+		const target = await render();
+
+		const albumLabels = target.querySelectorAll<HTMLButtonElement>('.album-label');
+		const playlistLabels = target.querySelectorAll<HTMLButtonElement>('.playlist-label');
+		expect(albumLabels).toHaveLength(2);
+		expect(playlistLabels).toHaveLength(2);
+
+		// The open album is marked, its sibling is not -- no third state, same
+		// as the open playlist below.
+		expect(albumLabels[0]?.classList.contains('row-active')).toBe(true);
+		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
+		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
+		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(false);
+
+		setOpenCollection({ kind: 'playlist', id: 'p2' });
+		await tick();
+
+		expect(albumLabels[0]?.classList.contains('row-active')).toBe(false);
+		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
+		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
+		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(true);
+	});
 });

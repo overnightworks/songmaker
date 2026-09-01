@@ -191,7 +191,12 @@
 								<polyline points="9 6 15 12 9 18" />
 							</svg>
 						</button>
-						<button type="button" class="album-label" onclick={() => onAlbumLabelClick(album.id)}>
+						<button
+							type="button"
+							class="album-label"
+							class:row-active={album.id === openAlbumId}
+							onclick={() => onAlbumLabelClick(album.id)}
+						>
 							<span class="row-title">{album.title}</span>
 							<span class="row-meta">{album.song_count}</span>
 						</button>
