@@ -1,83 +1,27 @@
 <script lang="ts">
-	import { albumList } from '$lib/stores/libraryData';
 	import { openLibraryWall } from '$lib/stores/navigation';
-	import { libraryBrowse } from '$lib/stores/librarySearch';
-	import { ensurePlaylistsLoaded, playlistList, playlistLoad } from '$lib/stores/playlists';
-	import {
-		APP_NAME,
-		RAIL_LIBRARY_LABEL,
-		RAIL_NAV_LABEL,
-		RAIL_SUMMARY_LOADING
-	} from '$lib/constants';
-	import { librarySummaryLabel } from '$lib/utils/format';
-	import RailContext from './RailContext.svelte';
+	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
+	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
-
-	const albumCount = $derived($albumList.length);
-	const playlistCount = $derived($playlistList.length);
-
-	// Latches true the first time both lists have settled (ready or error) and
-	// never resets, so a later pagination/sort reload of either list doesn't
-	// blank the summary again — only the very first mount waits.
-	let summaryReady = $state(false);
-	$effect(() => {
-		const albumsSettled = $libraryBrowse.status === 'ready' || $libraryBrowse.status === 'error';
-		const playlistsSettled = $playlistLoad.status === 'ready' || $playlistLoad.status === 'error';
-		if (albumsSettled && playlistsSettled) summaryReady = true;
-	});
-
-	const summary = $derived(
-		summaryReady ? librarySummaryLabel(albumCount, playlistCount) : RAIL_SUMMARY_LOADING
-	);
-
-	$effect(() => {
-		void ensurePlaylistsLoaded();
-	});
 </script>
 
 <nav class="rail" aria-label={RAIL_NAV_LABEL}>
 	<div class="rail-top">
-		<button
-			type="button"
-			class="brand"
-			onclick={() => openLibraryWall()}
-			aria-label={RAIL_LIBRARY_LABEL}
-			data-text={APP_NAME}>{APP_NAME}</button
+		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
+			>{APP_NAME}</button
 		>
 	</div>
 
-	<button type="button" class="library-link" onclick={() => openLibraryWall()}>
-		<svg
-			class="library-icon"
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			aria-hidden="true"
-		>
-			<rect x="3" y="3" width="7" height="7" rx="1" />
-			<rect x="14" y="3" width="7" height="7" rx="1" />
-			<rect x="3" y="14" width="7" height="7" rx="1" />
-			<rect x="14" y="14" width="7" height="7" rx="1" />
-		</svg>
-		<span class="library-label">{RAIL_LIBRARY_LABEL}</span>
-		<span class="library-summary">{summary}</span>
-	</button>
-
-	<div class="rail-divider"></div>
-
-	<div class="rail-context-slot">
-		<RailContext />
+	<div class="rail-scroll">
+		<RailLibraryGroup />
 	</div>
 
-	<RailSettings />
+	<div class="rail-settings-pin">
+		<RailSettings />
+	</div>
 
 	<div class="rail-bottom">
 		<UserRow {username} {onlogout} />
@@ -119,51 +63,26 @@
 		text-decoration: none;
 	}
 
-	.library-link {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px 16px;
-		background: none;
-		border: none;
-		color: var(--text);
-		text-align: left;
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.library-link:hover {
-		background: var(--surface-hover);
-	}
-
-	.library-icon {
-		flex-shrink: 0;
-		color: var(--text-muted);
-	}
-
-	.library-label {
-		font-family: var(--font-display);
-		font-size: 0.85rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.library-summary {
-		margin-left: auto;
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-		white-space: nowrap;
-	}
-
-	.rail-divider {
-		height: 1px;
-		background: var(--border);
-		flex-shrink: 0;
-	}
-
-	.rail-context-slot {
+	.rail-scroll {
 		flex: 1;
 		min-height: 0;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.rail-settings-pin {
+		flex-shrink: 0;
+	}
+
+	/* Reaches into RailGroup's own panel (rendered by RailSettings) so the
+	   Settings group -- pinned outside the scroll container -- caps its own
+	   height instead of pushing the Library group above it fully off-screen
+	   on a short viewport; RailGroup's own .rail-group-content stays
+	   overflow:hidden for every other caller (Library's scrolling already
+	   happens one level up, in .rail-scroll). */
+	.rail-settings-pin :global(.rail-group-content) {
+		max-height: 40vh;
 		overflow-y: auto;
 	}
 

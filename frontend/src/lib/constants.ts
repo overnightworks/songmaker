@@ -248,7 +248,6 @@ export const RAIL_DRAWER_LABEL = 'Navigation';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
-export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
 // Remembers whether the rail's Settings disclosure was left open, so it
 // doesn't snap shut the moment the viewer navigates back into the library.
 export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';

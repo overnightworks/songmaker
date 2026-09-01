@@ -129,22 +129,22 @@ SvelteKit single-page app. All state in Svelte stores.
 
 The app shell is one navigation, not modes. A left `Rail` (264px, inline on
 wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
-coarse pointer) holds: the brand (a second Library link, same target as the
-"Library" link below it that carries the live album/playlist count), the
-context of the single open collection, and a bottom Settings link plus a user
-row (username, theme toggle, Logout — inline, no popup menu;
-`shell/UserRow.svelte`).
-The rail context (`RailContext.svelte`) shows the open collection's header —
-cover initials, title — as a button that opens that collection's interior
-(`openAlbum`/`openPlaylist`, replacing history instead of pushing when a song
-inside it is already open, i.e. "back to the collection"; marked
-`aria-current="page"` while the interior is the visible surface) so a song
-editor never needs the Library link to get back to its album. Below the
-header: the open album's tracks (with a takes/pick summary per row) or the
-open playlist's entries — an equalizer marks the one actually playing, a
-left-accent border marks the selected/current row — and a placeholder line
-when no collection is open. There is no Studio/Listen mode split and no third
-library tab for
+coarse pointer) holds: the brand (the rail's Library shortcut, `openLibraryWall`)
+pinned at the top; a scroll container in the middle holding the LIBRARY
+group, built on the shared `RailGroup.svelte` (chevron, icon, label, count —
+one row shape for every group); and, pinned below that scroll container, the
+SETTINGS group (also a `RailGroup.svelte`, via `RailSettings.svelte`) and a
+user row (username, theme toggle, Logout — inline, no popup menu;
+`shell/UserRow.svelte`). `RailLibraryGroup.svelte` is the LIBRARY group: it
+loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
+lists all of them, each expandable one level into its own tracks (a
+takes/pick summary per row, an equalizer marking the one actually playing, a
+crimson-accent left border marking the selected/current track — the same
+token every rail group's active row uses). The open album's row and its
+selected track pre-expand automatically on entry without overriding a later
+manual collapse; the LIBRARY group's own title does not yet navigate (planned
+for a later slice). There is no Studio/Listen mode split and no third library
+tab for
 Shared; `LibraryWall.svelte` (the main-area library browser) filters by chips
 `Albums · Playlists · Shared` instead, backed by `libraryFilter` in
 `stores/libraryContext.ts`. Share inventory is the same complete server list

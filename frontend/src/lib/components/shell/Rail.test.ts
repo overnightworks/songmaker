@@ -4,21 +4,7 @@ import { get } from 'svelte/store';
 
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { libraryBrowse } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
-import { RAIL_SUMMARY_LOADING } from '$lib/constants';
-
-function readyLibraryBrowseState() {
-	return {
-		status: 'ready' as const,
-		error: null,
-		albumHasMore: false,
-		songHasMore: false,
-		albumOffset: 0,
-		songOffset: 0
-	};
-}
+import { albumList } from '$lib/stores/libraryData';
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined),
@@ -40,13 +26,16 @@ vi.mock('$lib/api/songs', () => ({
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-const fetchPlaylists = vi.fn().mockResolvedValue([]);
 vi.mock('$lib/api/client', () => ({
+	fetchAlbums: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false }),
+	fetchAlbum: vi.fn(),
 	fetchSong: vi.fn(),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
-	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
+	fetchPlaylists: vi.fn().mockResolvedValue([]),
 	fetchPlaylist: vi.fn()
 }));
 
@@ -70,16 +59,9 @@ async function render(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-	fetchPlaylists.mockReset().mockResolvedValue([]);
+	localStorage.clear();
 	resetLibraryContextForTests();
-	resetPlaylists();
 	albumList.set([]);
-	songList.set([]);
-	playlistList.set([]);
-	// Most tests below aren't about the initial-load flash — seed both lists
-	// as already settled so the summary renders immediately, like a real
-	// session past its first mount.
-	libraryBrowse.set(readyLibraryBrowseState());
 	history.replaceState(null, '', '/');
 });
 
@@ -88,11 +70,10 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	resetLibraryContextForTests();
-	resetPlaylists();
 });
 
 describe('Rail', () => {
-	it('renders the brand, library summary, settings disclosure, and user row', async () => {
+	it('renders the brand, the LIBRARY group, the settings disclosure, and the user row', async () => {
 		albumList.set([
 			{
 				id: 'a1',
@@ -109,52 +90,29 @@ describe('Rail', () => {
 				is_archived: false
 			}
 		]);
-		playlistLoad.set({ status: 'ready', error: null });
 		const target = await render();
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
-		expect(target.textContent).toContain('1 album');
-		expect(requireElement<HTMLButtonElement>(target, 'button.disclose').textContent).toContain(
-			'Settings'
-		);
+		// Scoped to the top-level group toggles: a nested album row is also a
+		// `button.disclose` (RailLibraryGroup's per-album disclosure), so an
+		// unscoped query would pick it up between Library and Settings.
+		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
+		expect(groupRows[0]?.textContent).toContain('Library');
+		expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1');
+		expect(groupRows[1]?.textContent).toContain('Settings');
 		expect(target.textContent).toContain('felix');
 	});
 
-	it('opens the wall and keeps the open collection when Library is clicked', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
-		librarySurface.set('detail');
-		const before = history.state?.index ?? 0;
-		const target = await render();
-		requireElement<HTMLButtonElement>(target, '.library-link').click();
-		await tick();
-		await Promise.resolve();
-		expect(get(librarySurface)).toBe('browse');
-		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
-		expect(history.state.index).toBeGreaterThan(before);
-	});
-
-	it('loads the playlist count on mount instead of showing 0 until the Playlists chip is visited', async () => {
-		fetchPlaylists.mockResolvedValue([
-			{
-				id: 'p1',
-				title: 'Night Drive',
-				entry_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00'
-			}
-		]);
-		const target = await render();
-		await vi.waitFor(() => expect(get(playlistLoad).status).toBe('ready'));
-		await tick();
-		expect(target.textContent).toContain('1 playlist');
-	});
-
-	it('acts as the Library link when the brand wordmark is clicked', async () => {
+	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
 		librarySurface.set('detail');
 		const target = await render();
 		const brand = requireElement<HTMLButtonElement>(target, '.brand');
-		expect(brand.getAttribute('aria-label')).toBe('Library');
+		// Named after what it is (the wordmark), not what it does -- GitHub's own
+		// logo pattern -- so it never collides with the LIBRARY group's own
+		// "Library" name in an accessible-name lookup (both live in the same
+		// mobile drawer).
+		expect(brand.hasAttribute('aria-label')).toBe(false);
+		expect(brand.textContent).toBe('Hallucinai');
 		brand.click();
 		await tick();
 		await Promise.resolve();
@@ -162,19 +120,24 @@ describe('Rail', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('shows a loading placeholder instead of 0 albums · 0 playlists before either list has settled', async () => {
-		libraryBrowse.set({ ...readyLibraryBrowseState(), status: 'idle' });
-		albumList.set([]);
-		playlistList.set([]);
+	it('scrolls only the LIBRARY group, pinning Settings and the user row below it', async () => {
 		const target = await render();
-		expect(target.textContent).toContain(RAIL_SUMMARY_LOADING);
-		expect(target.textContent).not.toContain('0 album');
+		const scroll = requireElement(target, '.rail-scroll');
+		const scrolledToggles = scroll.querySelectorAll(
+			'.rail-group > .disclose-row > button.disclose'
+		);
+		expect(scrolledToggles).toHaveLength(1);
+		expect(scrolledToggles[0]?.textContent).toContain('Library');
+		expect(scroll.textContent).not.toContain('Settings');
 
-		fetchPlaylists.mockResolvedValue([]);
-		libraryBrowse.set(readyLibraryBrowseState());
-		await vi.waitFor(() => expect(get(playlistLoad).status).toBe('ready'));
-		await tick();
-		expect(target.textContent).toContain('0 albums');
-		expect(target.textContent).toContain('0 playlists');
+		const settingsPin = requireElement(target, '.rail-settings-pin');
+		const settingsToggle = settingsPin.querySelector(
+			'.rail-group > .disclose-row > button.disclose'
+		);
+		expect(settingsToggle?.textContent).toContain('Settings');
+
+		const bottom = requireElement(target, '.rail-bottom');
+		expect(bottom.textContent).toContain('felix');
+		expect(target.querySelector('.rail-scroll ~ .rail-settings-pin ~ .rail-bottom')).not.toBeNull();
 	});
 });

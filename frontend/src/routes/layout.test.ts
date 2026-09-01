@@ -379,7 +379,12 @@ describe('app shell', () => {
 		librarySurface.set('detail');
 		const target = await renderLayout('/');
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
-		expect(brand.getAttribute('aria-label')).toBe('Library');
+		// Named after what it is (the wordmark), not what it does -- GitHub's own
+		// logo pattern -- so it never collides with the LIBRARY rail group's own
+		// "Library" name once the drawer (which nests the whole Rail, including
+		// that group) is open alongside this strip.
+		expect(brand.hasAttribute('aria-label')).toBe(false);
+		expect(brand.textContent).toBe('Hallucinai');
 		brand.click();
 		await tick();
 		await Promise.resolve();

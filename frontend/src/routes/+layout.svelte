@@ -8,7 +8,7 @@
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
 	import NowPlaying from '$lib/components/NowPlaying.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
+	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL } from '$lib/constants';
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
@@ -242,12 +242,8 @@
 					<line x1="4" y1="17" x2="20" y2="17" />
 				</svg>
 			</button>
-			<button
-				type="button"
-				class="brand"
-				onclick={() => openLibraryWall()}
-				aria-label={RAIL_LIBRARY_LABEL}
-				data-text={APP_NAME}>{APP_NAME}</button
+			<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
+				>{APP_NAME}</button
 			>
 		</header>
 		<RailDrawer>
