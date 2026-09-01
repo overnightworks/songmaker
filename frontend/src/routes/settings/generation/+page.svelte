@@ -263,13 +263,6 @@
 </div>
 
 <style>
-	.page {
-		padding: 2rem;
-		max-width: 700px;
-		width: 100%;
-		min-width: 0;
-	}
-
 	h1 {
 		font-family: var(--font-display);
 		text-transform: uppercase;

@@ -208,13 +208,6 @@
 <ToastContainer />
 
 <style>
-	.page {
-		padding: 2rem;
-		max-width: 900px;
-		margin: 0 auto;
-		width: 100%;
-	}
-
 	.page-head {
 		display: flex;
 		justify-content: space-between;

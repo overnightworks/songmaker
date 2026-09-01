@@ -451,7 +451,7 @@
 {#if !admin}
 	<div class="denied">Admin access required.</div>
 {:else}
-	<div class="settings-page" class:compact>
+	<div class="settings-page">
 		<h1>Admin</h1>
 
 		{#if compact}
@@ -980,19 +980,6 @@
 {/if}
 
 <style>
-	.settings-page {
-		flex: 1;
-		padding: 2rem;
-		overflow-y: auto;
-		max-width: 900px;
-		width: 100%;
-		min-width: 0;
-	}
-
-	.settings-page.compact {
-		padding: 1rem;
-	}
-
 	.denied {
 		display: flex;
 		align-items: center;

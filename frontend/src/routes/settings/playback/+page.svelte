@@ -42,12 +42,6 @@
 </div>
 
 <style>
-	.settings-page {
-		flex: 1;
-		padding: 2rem;
-		max-width: 560px;
-	}
-
 	h1 {
 		font-family: var(--font-display);
 		text-transform: uppercase;

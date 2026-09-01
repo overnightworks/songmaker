@@ -135,14 +135,6 @@
 </div>
 
 <style>
-	.page {
-		width: 100%;
-		min-width: 0;
-		box-sizing: border-box;
-		padding: 1.5rem 2rem;
-		max-width: 800px;
-	}
-
 	h1 {
 		margin-top: 0;
 	}

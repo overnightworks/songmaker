@@ -47,6 +47,7 @@
 	--editor-generate-bar-height: 64px;
 	--header-height: 46px;
 	--rail-width: 264px;
+	--settings-content-max-width: 640px;
 
 	/* Button tokens */
 	--btn-radius-pill: 16px;
