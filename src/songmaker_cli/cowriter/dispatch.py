@@ -12,9 +12,12 @@ from songmaker_cli.constants import (
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
 )
-from songmaker_cli.cowriter.claude_adapter import stream_claude_turn
+from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
-from songmaker_cli.cowriter.openai_adapter import stream_openai_compatible_turn
+from songmaker_cli.cowriter.openai_adapter import (
+    call_openai_compatible_once,
+    stream_openai_compatible_turn,
+)
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
 
@@ -60,6 +63,39 @@ async def stream_cowriter_turn(
         user=user,
     ):
         yield event
+
+
+def call_provider_once(
+    *, provider: str, model: str, prompt: str, timeout: int, system: str | None = None,
+) -> str:
+    """One-shot completion from the selected provider — no tools, no session,
+    no chat history.
+
+    Used by the lyrical-coherence judge (#315), which needs a single verdict
+    rather than the co-writer's multi-turn tool-using chat that
+    ``stream_cowriter_turn`` gives, and runs under its own (much shorter)
+    time budget rather than the co-writer's session timeout.
+    """
+    if provider not in COWRITER_PROVIDERS:
+        raise ProviderUnavailableError(
+            provider, f"Unknown provider '{provider}'",
+        )
+    if not model:
+        raise ProviderUnavailableError(
+            provider, f"No model configured for {provider}",
+        )
+    if provider == "claude":
+        return call_claude_once(model=model, prompt=prompt, system=system)
+    if provider == "grok":
+        api_key = _require_secret("grok", get_settings().xai_api_key)
+        api_url = COWRITER_GROK_CHAT_URL
+    else:
+        api_key = _require_secret("codex", get_settings().openai_api_key)
+        api_url = COWRITER_OPENAI_CHAT_URL
+    return call_openai_compatible_once(
+        provider=provider, api_url=api_url, api_key=api_key, model=model,
+        prompt=prompt, timeout=timeout, system=system,
+    )
 
 
 def _require_secret(provider: str, secret) -> str:

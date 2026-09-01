@@ -628,7 +628,7 @@ def _judge(scores: SongScores, meta: SongMeta | None, **overrides: object) -> So
     )
 
     config = CoherenceJudgeConfig(
-        **{"model": "claude-test", "api_key": None, "timeout": 60, **overrides},
+        **{"provider": "claude", "model": "claude-test", "timeout": 60, **overrides},
     )
     return judge_lyrical_coherence(scores, meta, config)
 
@@ -637,7 +637,7 @@ def _claude_answers(text: str) -> object:
     from songmaker_cli.claude.provider import ClaudeResponse
 
     return patch(
-        "songmaker_cli.scoring.lyrical_coherence.call_claude",
+        "songmaker_cli.cowriter.claude_adapter.call_claude",
         return_value=ClaudeResponse(text=text),
     )
 
@@ -701,7 +701,7 @@ def test_judge_records_claudes_verdict_alongside_the_childs_scores() -> None:
 
 def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     with patch(
-        "songmaker_cli.scoring.lyrical_coherence.call_claude",
+        "songmaker_cli.cowriter.claude_adapter.call_claude",
         side_effect=RuntimeError("Claude unreachable"),
     ):
         judged = _judge(
@@ -723,7 +723,7 @@ def test_judge_gives_up_when_its_time_budget_runs_out() -> None:
         time.sleep(2)
 
     started = time.monotonic()
-    with patch("songmaker_cli.scoring.lyrical_coherence.call_claude", side_effect=_hang):
+    with patch("songmaker_cli.cowriter.claude_adapter.call_claude", side_effect=_hang):
         judged = _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
@@ -736,26 +736,87 @@ def test_judge_gives_up_when_its_time_budget_runs_out() -> None:
     assert elapsed < 2, f"waited {elapsed:.2f}s for a call it had given up on"
 
 
-def test_judge_uses_the_key_and_model_from_its_config_not_the_environment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The judge runs in the worker parent, but it still must not read
-    ambient credentials — the caller resolves Settings and the DB-configured
-    scoring model and hands both over."""
-    from pydantic import SecretStr
-
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-key")
-
+def test_judge_uses_the_model_from_its_config_not_a_hardcoded_default() -> None:
+    """Which model judges a song is a configured decision (#315) — the DB
+    setting the caller resolved, never a value the judge picks itself."""
     with _claude_answers('{"score": 7, "issues": [], "summary": "ok"}') as mock_call_claude:
         _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
             model="test-model",
-            api_key=SecretStr("config-supplied-key"),
         )
 
-    assert mock_call_claude.call_args.kwargs["api_key"] == "config-supplied-key"
     assert mock_call_claude.call_args.kwargs["model"] == "test-model"
+
+
+def test_judge_claude_call_gets_its_credential_from_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Claude path still resolves its credential through Settings
+    (#315), not something the adapter invents — ``call_claude`` must always
+    receive the configured key explicitly rather than pick one up itself."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "settings-key")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+
+    with _claude_answers('{"score": 7, "issues": [], "summary": "ok"}') as mock_call_claude:
+        _judge(_child_result("hello world"), SongMeta(prompt="test", lyrics=_LYRICS))
+
+    assert mock_call_claude.call_args.kwargs["api_key"] == "settings-key"
+    get_settings.cache_clear()
+
+
+def test_judge_routes_to_the_configured_provider_and_no_other(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The judge is provider-neutral (#315): a grok judge must call grok's
+    adapter with grok's own credential, never fall back to Claude."""
+    monkeypatch.setenv("XAI_API_KEY", "grok-key")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+
+    with (
+        patch(
+            "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
+            return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
+        ) as grok_call,
+        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+    ):
+        judged = _judge(
+            _child_result("hello world"),
+            SongMeta(prompt="test", lyrics=_LYRICS),
+            provider="grok",
+            model="grok-4.6",
+        )
+
+    assert judged.lyrical_coherence.score == 8
+    assert judged.lyrical_coherence.summary == "grok verdict"
+    assert grok_call.call_args.kwargs["provider"] == "grok"
+    assert grok_call.call_args.kwargs["model"] == "grok-4.6"
+    claude_call.assert_not_called()
+
+
+def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unset credential for the chosen provider is a named failure, never
+    a silent fallback to Claude (#315)."""
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+
+    with patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call:
+        judged = _judge(
+            _child_result("hello world"),
+            SongMeta(prompt="test", lyrics=_LYRICS),
+            provider="grok",
+            model="grok-4.6",
+        )
+
+    assert judged.lyrical_coherence is None
+    assert judged.runs[-1].outcome is ScorerOutcome.FAILED
+    assert "grok" in judged.runs[-1].detail
+    claude_call.assert_not_called()
 
 
 def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:

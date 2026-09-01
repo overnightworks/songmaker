@@ -744,10 +744,12 @@ POST /api/generations/{id}/score
           bpm_accuracy, silence_detection, spectral_quality) run concurrently
         Each scorer fault-isolated: one failure does not block others
       Parent kills subprocess on timeout (SIGKILL), freeing GPU memory
-    → parent judges lyrical_coherence (Claude) on the returned result,
-      reading the transcript from its text_accuracy value
+    → parent judges lyrical_coherence on the returned result, through the
+      configured judge provider (Claude/Grok/Codex, #315), reading the
+      transcript from its text_accuracy value
     → merge scores + whisper_text + whisper_cues into DB
-  → Job status: completed
+  → Job status: completed, or partial when the judge itself failed
+    (e.g. its provider has no credential) — never a silent completed
 ```
 
 **Every scorer reports its own outcome.** `SongScores.runs` carries one

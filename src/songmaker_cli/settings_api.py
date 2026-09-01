@@ -26,6 +26,8 @@ from songmaker_cli.api_models.settings import (
     CowriterSettingsResponse,
     DefaultConfigRequest,
     DefaultConfigResponse,
+    JudgeSettingsRequest,
+    JudgeSettingsResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
@@ -51,6 +53,8 @@ from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
+    get_judge_model,
+    get_judge_provider,
     get_preset,
     list_active_models,
     list_all_models,
@@ -61,6 +65,7 @@ from songmaker_cli.db.queries.settings import (
     set_cowriter_settings,
     set_cowriter_tail_token_budget,
     set_default_preset,
+    set_judge_settings,
     toggle_model,
     update_preset,
 )
@@ -417,6 +422,70 @@ def api_set_cowriter_settings(
     )
     session.commit()
     return _cowriter_response(session)
+
+
+# ── Judge (lyrical-coherence) provider settings ─────────────────────
+
+
+def _judge_response(session: Session) -> JudgeSettingsResponse:
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+
+    provider = get_judge_provider(session)
+    models_by_provider: dict[str, list[str]] = {}
+    errors: dict[str, str] = {}
+    for name in sorted(COWRITER_PROVIDERS):
+        models, error = _models_for_provider(name)
+        models_by_provider[name] = models
+        if error:
+            errors[name] = error
+    return JudgeSettingsResponse(
+        provider=provider,
+        model=get_judge_model(session, provider),
+        allowed_providers=sorted(COWRITER_PROVIDERS),
+        allowed_models=models_by_provider[provider],
+        models_by_provider=models_by_provider,
+        models_error=errors.get(provider),
+    )
+
+
+@router.get("/settings/judge")
+def api_get_judge_settings(
+    _user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> JudgeSettingsResponse:
+    try:
+        return _judge_response(session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.put("/settings/judge")
+def api_set_judge_settings(
+    req: JudgeSettingsRequest,
+    admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> JudgeSettingsResponse:
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+
+    if req.provider not in COWRITER_PROVIDERS:
+        raise HTTPException(
+            422, f"Unknown judge provider '{req.provider}'",
+        )
+    allowed, catalog_error = _models_for_provider(req.provider)
+    if catalog_error:
+        raise HTTPException(503, catalog_error)
+    if req.model not in allowed:
+        raise HTTPException(
+            422,
+            f"Unknown {req.provider} model '{req.model}'",
+        )
+    set_judge_settings(session, req.provider, req.model)
+    record_audit(
+        session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,
+        detail=f"provider={req.provider} model={req.model}",
+    )
+    session.commit()
+    return _judge_response(session)
 
 
 # ── Rate limits ────────────────────────────────────────────────────

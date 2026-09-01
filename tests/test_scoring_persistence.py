@@ -86,7 +86,7 @@ def claude_call():
     """The parent judges lyrical coherence in this process, so every run here
     goes through this mock: no test reaches the real provider, and a run that
     must not be judged at all can prove the call never happened."""
-    with patch("songmaker_cli.scoring.lyrical_coherence.call_claude") as call:
+    with patch("songmaker_cli.cowriter.claude_adapter.call_claude") as call:
         call.return_value = _verdict(COHERENT_VERDICT)
         yield call
 

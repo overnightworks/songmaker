@@ -392,6 +392,15 @@ export interface CowriterSettings {
 	tail_token_budget: number;
 }
 
+export interface JudgeSettings {
+	provider: string;
+	model: string;
+	allowed_providers: string[];
+	allowed_models: string[];
+	models_by_provider: Record<string, string[]>;
+	models_error?: string | null;
+}
+
 export interface MemoryScopeItem {
 	scope: 'user' | 'song' | 'album';
 	target_id: string;

@@ -854,11 +854,16 @@ def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
 @pytest.fixture(autouse=True)
 def stubbed_claude_judge():
     """The scoring job judges lyrical coherence in this process, right after
-    the scorer child returns — no test may reach the real Claude CLI or API."""
+    the scorer child returns — no test may reach the real Claude CLI or API.
+
+    The default judge provider is Claude (#315), routed through the
+    cowriter's claude_adapter — stub it there, one level below
+    ``call_provider_once``, so the provider-dispatch logic itself still runs.
+    """
     from songmaker_cli.claude.provider import ClaudeResponse
 
     with patch(
-        "songmaker_cli.scoring.lyrical_coherence.call_claude",
+        "songmaker_cli.cowriter.claude_adapter.call_claude",
         return_value=ClaudeResponse(text='{"score": 6, "issues": [], "summary": "fine"}'),
     ) as judge:
         yield judge
@@ -1074,15 +1079,17 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
-    seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_db, tmp_path: Path,
 ) -> None:
     """The scorer child is spawned with ANTHROPIC_API_KEY scrubbed and loads
-    third-party model weights, so the key must not cross the pipe at all:
-    this process judges coherence itself, on the result the child returned.
+    third-party model weights, so no secret must cross the pipe at all: this
+    process judges coherence itself, on the result the child returned, and
+    only resolves the judge provider's credential (#315) when it calls out.
     """
     from pydantic import SecretStr
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "parent-resolved-key")
+    from songmaker_cli.constants import CLAUDE_SCORING_MODEL_DEFAULT
+
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
 
@@ -1107,7 +1114,8 @@ def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
-    assert captured["judge_config"].api_key == SecretStr("parent-resolved-key")
+    assert captured["judge_config"].provider == "claude"
+    assert captured["judge_config"].model == CLAUDE_SCORING_MODEL_DEFAULT
     assert captured["judged"].text_accuracy is not None
     assert not any(
         isinstance(value, SecretStr) for value in vars(captured["child_config"]).values()

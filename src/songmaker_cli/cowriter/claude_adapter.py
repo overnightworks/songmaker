@@ -8,9 +8,11 @@ from songmaker_cli.claude.provider import (
     StreamEvent,
     UnavailableError,
     acall_claude_with_mcp_stream,
+    call_claude,
 )
 from songmaker_cli.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.settings import get_settings
 
 
 async def stream_claude_turn(
@@ -32,3 +34,22 @@ async def stream_claude_turn(
             yield event
     except UnavailableError as exc:
         raise ProviderUnavailableError("claude", str(exc)) from exc
+
+
+def call_claude_once(*, model: str, prompt: str, system: str | None = None) -> str:
+    """Synchronous, tool-free, single-turn completion.
+
+    Used by the lyrical-coherence judge (#315), which needs one verdict, not
+    the MCP-attached multi-turn co-writer chat that ``stream_claude_turn``
+    gives a real song-editing session.
+    """
+    settings = get_settings()
+    api_key = (
+        settings.anthropic_api_key.get_secret_value()
+        if settings.anthropic_api_key else None
+    )
+    try:
+        response = call_claude(prompt, api_key=api_key, system=system, model=model)
+    except UnavailableError as exc:
+        raise ProviderUnavailableError("claude", str(exc)) from exc
+    return response.text

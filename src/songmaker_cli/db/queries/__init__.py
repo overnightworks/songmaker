@@ -306,6 +306,12 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
+from songmaker_cli.db.queries.settings import (
+    get_judge_model as get_judge_model,
+)
+from songmaker_cli.db.queries.settings import (
+    get_judge_provider as get_judge_provider,
+)
 from songmaker_cli.db.queries.settings import get_preset as get_preset
 from songmaker_cli.db.queries.settings import list_active_models as list_active_models
 from songmaker_cli.db.queries.settings import list_all_models as list_all_models
@@ -321,6 +327,9 @@ from songmaker_cli.db.queries.settings import (
     set_cowriter_tail_token_budget as set_cowriter_tail_token_budget,
 )
 from songmaker_cli.db.queries.settings import set_default_preset as set_default_preset
+from songmaker_cli.db.queries.settings import (
+    set_judge_settings as set_judge_settings,
+)
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset
 from songmaker_cli.db.queries.sharing import (

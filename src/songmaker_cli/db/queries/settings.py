@@ -12,12 +12,15 @@ from songmaker_cli.constants import (
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
     COWRITER_PROVIDERS,
+    JUDGE_DEFAULT_PROVIDER,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COWRITER_MODEL,
     SETTING_COWRITER_PROVIDER,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
+    SETTING_JUDGE_MODEL,
+    SETTING_JUDGE_PROVIDER,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
@@ -248,6 +251,41 @@ def get_cowriter_model(session: Session, provider: str) -> str:
 def set_cowriter_settings(session: Session, provider: str, model: str) -> None:
     set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
     set_claude_model(session, SETTING_COWRITER_MODEL, model)
+
+
+def get_judge_provider(session: Session) -> str:
+    stored = _get_claude_model_row(session, SETTING_JUDGE_PROVIDER)
+    if stored is None:
+        return JUDGE_DEFAULT_PROVIDER
+    if stored not in COWRITER_PROVIDERS:
+        msg = f"Unknown judge provider '{stored}'"
+        raise ValueError(msg)
+    return stored
+
+
+def get_judge_model(session: Session, provider: str) -> str:
+    """Return the configured judge model: DB row override, or — on the
+    default provider — the pre-existing scoring-model setting, so a musician
+    who never touches the new judge settings keeps today's behavior (#315).
+
+    The stored model only counts when it was set for this same ``provider``
+    — ``set_judge_settings`` writes both together, but the two are still
+    separate rows, so a stored model left over from a different provider (or
+    with no provider ever stored) is treated as unset rather than handed to
+    a provider it was never configured for.
+    """
+    stored_provider = _get_claude_model_row(session, SETTING_JUDGE_PROVIDER)
+    stored_model = _get_claude_model_row(session, SETTING_JUDGE_MODEL)
+    if stored_model and stored_provider == provider:
+        return stored_model
+    if provider == "claude":
+        return get_claude_scoring_model(session)
+    return ""
+
+
+def set_judge_settings(session: Session, provider: str, model: str) -> None:
+    set_claude_model(session, SETTING_JUDGE_PROVIDER, provider)
+    set_claude_model(session, SETTING_JUDGE_MODEL, model)
 
 
 def get_cowriter_tail_token_budget(session: Session) -> int:

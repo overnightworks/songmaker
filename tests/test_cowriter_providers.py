@@ -329,7 +329,7 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
     monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
     execute = MagicMock(return_value=("[]", False))
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.openai_adapter.execute_cowriter_tool", execute,
+        "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,
     )
 
     async def _collect_events():

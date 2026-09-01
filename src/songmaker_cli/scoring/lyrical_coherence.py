@@ -1,8 +1,8 @@
-"""Lyrical coherence judge — uses Claude to judge sung lyrics.
+"""Lyrical coherence judge — asks an LLM to judge sung lyrics.
 
-Sends intended lyrics + Whisper transcription to Claude and asks:
-does the sung result make sense as a song? Creative deviations from
-intended lyrics are fine as long as the output is coherent.
+Sends intended lyrics + Whisper transcription to the configured judge
+provider and asks: does the sung result make sense as a song? Creative
+deviations from intended lyrics are fine as long as the output is coherent.
 
 Runs in the worker parent, on the scores the scorer child returned: it is
 the one scorer that calls an external service, and the child that loads
@@ -14,9 +14,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from pydantic import SecretStr
-
-from songmaker_cli.claude.provider import call_claude, parse_json_response
+from songmaker_cli.claude.provider import parse_json_response
+from songmaker_cli.cowriter.dispatch import call_provider_once
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     LyricalCoherenceScore,
@@ -31,13 +30,13 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CoherenceJudgeConfig:
-    """What the parent needs to reach Claude, resolved from Settings and the
-    DB by the caller — the judge itself reads neither, and defaults none of
-    it: which model judges a song is a configured decision, not a fallback.
-    ``api_key=None`` selects the Claude CLI backend."""
+    """Which provider and model judge a song, resolved from the DB by the
+    caller — the judge itself reads neither, and defaults none of it: this
+    is a configured decision, not a fallback. An unconfigured provider fails
+    with a named ``ProviderUnavailableError``, never silently on Claude."""
 
+    provider: str
     model: str
-    api_key: SecretStr | None
     timeout: int
 
 
@@ -104,7 +103,7 @@ def _judge(
     transcription: TextAccuracyScore | None,
     config: CoherenceJudgeConfig,
 ) -> LyricalCoherenceScore:
-    """Judge lyrical coherence using Claude (CLI or API).
+    """Judge lyrical coherence using the configured provider.
 
     Requires text_accuracy to have produced a transcription in this run.
     """
@@ -133,11 +132,16 @@ def _judge(
     prompt = JUDGE_PROMPT.format(intended=intended, transcribed=transcribed)
     n_intended = len(intended.splitlines())
     n_transcribed = len(transcribed.splitlines())
-    log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
-    api_key = config.api_key.get_secret_value() if config.api_key else None
-    response = call_claude(prompt, api_key=api_key, model=config.model)
-    log.debug("Claude response: %d chars", len(response.text))
-    data = parse_json_response(response.text)
+    log.debug(
+        "Sending %d intended + %d transcribed lines to judge provider %s",
+        n_intended, n_transcribed, config.provider,
+    )
+    response_text = call_provider_once(
+        provider=config.provider, model=config.model, prompt=prompt,
+        timeout=config.timeout,
+    )
+    log.debug("Judge response: %d chars", len(response_text))
+    data = parse_json_response(response_text)
 
     result = LyricalCoherenceScore(
         score=int(data.get("score", 0)),

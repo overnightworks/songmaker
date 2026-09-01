@@ -96,12 +96,21 @@ WHISPER_TEMPERATURE = 0.0
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
 # Default for Settings.claude_scoring_model, which the DB setting overrides
-# (get_claude_scoring_model). The scoring job resolves the model there and
-# hands it to the coherence judge on CoherenceJudgeConfig.
+# (get_claude_scoring_model). Since #315 the coherence judge itself reads
+# judge_provider/judge_model instead; get_judge_model() falls back to this
+# chain only while the judge provider stays on its default, Claude, so a
+# musician who already customized claude_scoring_model keeps that value.
 CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
+SETTING_JUDGE_PROVIDER = "judge_provider"
+SETTING_JUDGE_MODEL = "judge_model"
+# The judge is its own task with its own provider choice (not coupled to the
+# co-writer's), but its default must not move the goalposts on day one: the
+# default provider stays Claude, and get_judge_model() falls back to the
+# pre-existing claude_scoring_model default when unset (#315).
+JUDGE_DEFAULT_PROVIDER = "claude"
 
 MEMORY_SCOPE_USER = "user"
 MEMORY_SCOPE_SONG = "song"
@@ -153,6 +162,13 @@ COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER = "Available: "
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 
+# Owned solely by the legacy `/settings/claude-models` endpoint and the dead
+# chat_api.py co-writer (chat_model). scoring_model is not orphaned: it is
+# the Claude judge's fallback until a judge_provider/judge_model pair is
+# configured (#315, get_judge_model()) — once that pair exists it takes over
+# and scoring_model has no further effect. The co-writer reads its live
+# catalog instead (cowriter/catalog.py). Retire this list with chat_api.py's
+# cleanup.
 MODEL_ALLOWED_CLAUDE = frozenset({
     "claude-opus-4-6",
     "claude-sonnet-4-6",
@@ -425,6 +441,7 @@ class ResourceType(StrEnum):
     DEFAULT_CONFIG = "default_config"
     CLAUDE_MODELS = "claude_models"
     COWRITER = "cowriter"
+    JUDGE = "judge"
     RATE_LIMITS = "rate_limits"
     JOB = "job"
     SESSION = "session"
