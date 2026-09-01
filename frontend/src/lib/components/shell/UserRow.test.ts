@@ -35,6 +35,13 @@ describe('UserRow', () => {
 		expect(target.querySelector('[role="dialog"]')).toBeNull();
 	});
 
+	it('links the username to Account settings', async () => {
+		const target = await renderRow();
+		const link = requireElement<HTMLAnchorElement>(target, 'a.username');
+		expect(link.textContent).toBe('felix');
+		expect(link.getAttribute('href')).toBe('/settings/account');
+	});
+
 	it('calls onlogout when Logout is clicked', async () => {
 		const target = await renderRow();
 		const logout = Array.from(target.querySelectorAll('button')).find(
