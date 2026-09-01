@@ -34,7 +34,6 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE,
     RESOURCE_EVENT_STREAM_MAX_GLOBAL,
     RESOURCE_EVENT_STREAM_MAX_PER_USER,
-    RESOURCE_EVENT_STREAM_OPEN_LIMIT,
     RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
     RESOURCE_EVENT_STREAM_PAGE_SIZE,
     RESOURCE_EVENT_STREAM_PATH,
@@ -263,10 +262,11 @@ _STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 def _get_open_limiter(request: Request) -> RedisRateLimiter:
     def _build() -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
+        settings = get_settings()
         return RedisRateLimiter(
             ctx.redis,
             REDIS_RL_RESOURCE_STREAM_PREFIX,
-            RESOURCE_EVENT_STREAM_OPEN_LIMIT,
+            settings.resource_event_stream_open_limit,
             RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
         )
     return get_cached_limiter(request, "_resource_stream_open_limiter", _build)

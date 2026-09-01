@@ -29,7 +29,6 @@ from songmaker_cli.constants import (
     REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
     RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
-    RESOURCE_EVENT_STREAM_OPEN_LIMIT,
     RESOURCE_EVENT_STREAM_PATH,
     ResourceEventKind,
 )
@@ -42,6 +41,7 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.middleware import SESSION_COOKIE, ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
+from songmaker_cli.settings import get_settings
 
 
 def _seed_stream_users(session) -> None:
@@ -1099,12 +1099,31 @@ def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> 
 def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     clients, _, _ = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
+    open_limit = get_settings().resource_event_stream_open_limit
     responses = [
         clients["alice"].get("/api/resource-events/stream")
-        for _ in range(RESOURCE_EVENT_STREAM_OPEN_LIMIT + 1)
+        for _ in range(open_limit + 1)
     ]
     assert all(response.status_code == 200 for response in responses[:-1])
     assert responses[-1].status_code == 429
+
+
+def test_per_user_open_rate_reads_settings_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The limit is a settings field, not the constant it used to be
+    (issue #294): a `RESOURCE_EVENT_STREAM_OPEN_LIMIT` env override, the
+    same shape CI applies in `docker-compose.ci.yml`, must be what the
+    limiter actually enforces rather than the unconfigurable production
+    default."""
+    monkeypatch.setenv("RESOURCE_EVENT_STREAM_OPEN_LIMIT", "2")
+    get_settings.cache_clear()
+    clients, _, _ = _authenticated_clients(tmp_path)
+    _install_finite_route_stream(monkeypatch)
+
+    responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(3)]
+
+    assert [response.status_code for response in responses] == [200, 200, 429]
 
 
 def test_stream_rejects_when_db_pool_has_no_spare_capacity(
@@ -1116,7 +1135,11 @@ def test_stream_rejects_when_db_pool_has_no_spare_capacity(
     monkeypatch.setattr(
         resource_api,
         "get_settings",
-        lambda: SimpleNamespace(database_pool_size=1, database_max_overflow=0),
+        lambda: SimpleNamespace(
+            database_pool_size=1,
+            database_max_overflow=0,
+            resource_event_stream_open_limit=get_settings().resource_event_stream_open_limit,
+        ),
     )
     response = clients["alice"].get("/api/resource-events/stream")
     assert response.status_code == 503

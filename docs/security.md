@@ -117,12 +117,17 @@ Static `_app/` build assets and the static PWA root assets (`/manifest.webmanife
 
 When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
 
-Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`.
+Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
 
 ### Resource-event streams
 
-The global IP limit is supplemented by a fail-closed per-user opening limit of 12
-streams per minute; rejected attempts are not retained in the bounded Redis window.
+The global IP limit is supplemented by a fail-closed per-user opening limit,
+`RESOURCE_EVENT_STREAM_OPEN_LIMIT` (default 12 streams per minute, unchanged
+in production); rejected attempts are not retained in the bounded Redis
+window. CI overrides it to 30 in `docker-compose.ci.yml`, the same shape as
+`IP_RATE_LIMIT`'s own override — the e2e suite reuses one seeded user across
+every browser context, so its stream opens are additive against this one
+per-user budget in a way real production traffic across many users never is.
 Redis leases cap live streams at six per user and at most 12
 globally, reduced automatically when the configured DB pool has less spare capacity.
 If reserving one non-stream DB slot leaves no capacity, stream admission returns 503.
@@ -378,6 +383,7 @@ All mutating operations are logged to the `audit_log` table:
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. |
+| Resource-event stream open limit | `RESOURCE_EVENT_STREAM_OPEN_LIMIT` (per-user resource-events stream opens, default 12/min). CI overrides it — see "Resource-event streams" above. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
 
 ### Secrets

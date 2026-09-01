@@ -142,8 +142,18 @@ class Settings(BaseSettings):
     # dependency on `max_user_active_jobs` -- raising that setting should
     # prompt re-checking this comment's math, not a settings cross-reference.
     # The resource-events endpoint additionally enforces its own tighter
-    # per-user open limit (`RESOURCE_EVENT_STREAM_OPEN_LIMIT`).
+    # per-user open limit (`resource_event_stream_open_limit` below).
     stream_rate_limit: int = 45
+    # Resource-event SSE stream opens per user per
+    # `RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS` (constants.py) — tighter
+    # than `stream_rate_limit` above because this stream also holds a leased
+    # DB connection for its whole lifetime (see resource_event_api.py). CI
+    # overrides this the same way it overrides `ip_rate_limit`
+    # (docker-compose.ci.yml): the e2e suite reuses one seeded user across
+    # every browser context, so its opens are additive against this single
+    # per-user budget in a way production traffic across many real users
+    # never is.
+    resource_event_stream_open_limit: int = 12
 
     # ── arq workers ───────────────────────────────────────────────────
     arq_job_timeout: int = 1000
