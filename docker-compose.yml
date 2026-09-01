@@ -79,8 +79,14 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       HOST: "0.0.0.0"
+    # Published to the loopback interface only: Docker's NAT chain bypasses
+    # the INPUT chain (and with it UFW), so a "8080:8080" binding reaches the
+    # whole LAN regardless of the host firewall. Everything that needs this
+    # port is host-local (the cloudflared tunnel, the Vite dev proxy, the
+    # CLI); in-cluster callers use songmaker-web:8080 on the compose network,
+    # which is unaffected.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - audiofiles:/app/data/audio
       - queuestreams:/app/data/queue-streams
@@ -222,8 +228,10 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+    # Loopback only, same reason as songmaker-web above. Reach the dashboards
+    # from another machine over an SSH tunnel, not over the LAN.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafdata:/var/lib/grafana
       - ./monitoring/provisioning:/etc/grafana/provisioning:ro

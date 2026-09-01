@@ -33,10 +33,17 @@ from typing import Final
 # Face's stricter unauthenticated rate limits.
 SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "ANTHROPIC_API_KEY",
+    "XAI_API_KEY",
+    "OPENAI_API_KEY",
     "SESSION_SECRET",
     "SONGMAKER_INTERNAL_TOKEN",
     "DATABASE_URL",
     "REDIS_URL",
+    "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "HF_TOKEN",
+    "ADMIN_USERNAME",
+    "ADMIN_PASSWORD",
+    "GRAFANA_USER",
+    "GRAFANA_PASSWORD",
 )

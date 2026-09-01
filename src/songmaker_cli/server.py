@@ -344,7 +344,13 @@ def run_server(
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
+    # proxy_headers=False: uvicorn's own X-Forwarded-For/-Proto handling would
+    # rewrite the peer address and the scheme before any application code sees
+    # them, from *any* peer unless forwarded_allow_ips is kept in sync with
+    # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (see
+    # auth.resolve_client_ip), so uvicorn must hand over the connection as it is.
     uvicorn.run(
         app, host=settings.host, port=port, log_level="info",
         timeout_keep_alive=settings.request_timeout_seconds,
+        proxy_headers=False,
     )

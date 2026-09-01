@@ -147,10 +147,9 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path.startswith(STATIC_ASSET_PREFIX) or path in RATE_LIMIT_EXEMPT_PATHS:
             return await call_next(request)
-        from songmaker_cli.auth import get_client_ip
+        from songmaker_cli.auth import resolve_client_ip
         ctx: AppContext = request.app.state.ctx
-        direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
+        ip = resolve_client_ip(request)
         rate_limit_class = _classify_path(path)
         try:
             allowed = self._get_limiter(ctx, rate_limit_class).is_allowed(ip)

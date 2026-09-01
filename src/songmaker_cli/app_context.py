@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.auth import TrustedProxies
+
 if TYPE_CHECKING:
     from redis import Redis
 
@@ -21,7 +23,7 @@ class AppContext:
     data_dir: Path
     session_secret: bytes
     redis: Redis
-    trusted_proxies: frozenset[str] = field(default_factory=frozenset)
+    trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
 

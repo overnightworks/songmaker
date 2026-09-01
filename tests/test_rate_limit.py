@@ -10,10 +10,17 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.auth import hash_password
+from songmaker_cli.auth import TrustedProxies, hash_password
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware.rate_limit import RateLimitClass, _classify_path
+
+_PROXY_NETWORK = "172.16.0.0/12"
+_TRUSTED_PEER = "172.18.0.1"
+
+
+def _trust_proxy_network(client: TestClient) -> None:
+    client.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
 
 
 def _seed_rate_limit_data(session) -> None:
@@ -268,6 +275,52 @@ def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -
     resp = ip_limited_client.get("/api/auth/check")
 
     assert resp.status_code != 429
+
+
+# ── Per-IP budget keys behind a proxy ───────────────────────────────
+
+
+def _check_from(client: TestClient, forwarded_for: str) -> int:
+    peer_client = TestClient(client.app, client=(_TRUSTED_PEER, 55000))
+    resp = peer_client.get("/api/auth/check", headers={"x-forwarded-for": forwarded_for})
+    return resp.status_code
+
+
+def test_ip_budget_is_per_forwarded_client_not_per_proxy(
+    ip_limited_client: TestClient,
+) -> None:
+    """Behind a proxy every visitor arrives from one gateway address. The
+    budget must follow the visitor, or the first one locks out all the rest."""
+    _trust_proxy_network(ip_limited_client)
+
+    for _ in range(2):
+        _check_from(ip_limited_client, "203.0.113.1")
+
+    assert _check_from(ip_limited_client, "203.0.113.1") == 429
+    assert _check_from(ip_limited_client, "203.0.113.2") != 429
+
+
+def test_a_malformed_chain_shares_the_peer_budget(ip_limited_client: TestClient) -> None:
+    """Rotating nonsense through X-Forwarded-For must not mint fresh budgets:
+    every malformed chain keys on the peer the request really came from."""
+    _trust_proxy_network(ip_limited_client)
+
+    _check_from(ip_limited_client, "garbage")
+    _check_from(ip_limited_client, "   ")
+
+    assert _check_from(ip_limited_client, "203.0.113.1, ") == 429
+
+
+def test_ipv4_mapped_and_plain_forms_share_one_budget(
+    ip_limited_client: TestClient,
+) -> None:
+    """Same client, one budget — a notation switch must not double it."""
+    _trust_proxy_network(ip_limited_client)
+
+    _check_from(ip_limited_client, "203.0.113.1")
+    _check_from(ip_limited_client, "::ffff:203.0.113.1")
+
+    assert _check_from(ip_limited_client, "203.0.113.1") == 429
 
 
 # ── Path classification (_classify_path) ────────────────────────────

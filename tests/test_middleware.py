@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from songmaker_cli.auth import get_client_ip, hash_password, sign_session_id
+from songmaker_cli.auth import hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_session, create_user
 from songmaker_cli.middleware import (
@@ -252,30 +252,6 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
         assert entry is not None
 
 
-
-# -- get_client_ip ------------------------------------------------------------
-
-
-def test_get_client_ip_no_trusted_proxies() -> None:
-    assert get_client_ip("1.2.3.4", "5.6.7.8, 9.10.11.12", frozenset()) == "1.2.3.4"
-
-
-def test_get_client_ip_rightmost_untrusted() -> None:
-    proxies = frozenset({"10.0.0.1"})
-    result = get_client_ip("10.0.0.1", "1.2.3.4, 5.6.7.8, 10.0.0.1", proxies)
-    assert result == "5.6.7.8"
-
-
-def test_get_client_ip_all_trusted_falls_back() -> None:
-    proxies = frozenset({"10.0.0.1", "10.0.0.2"})
-    result = get_client_ip("10.0.0.1", "10.0.0.2, 10.0.0.1", proxies)
-    assert result == "10.0.0.1"
-
-
-def test_get_client_ip_no_xff() -> None:
-    proxies = frozenset({"10.0.0.1"})
-    result = get_client_ip("10.0.0.1", None, proxies)
-    assert result == "10.0.0.1"
 
 
 # -- Redis session cache integration -----------------------------------------

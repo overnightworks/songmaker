@@ -6,14 +6,18 @@ import dataclasses
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
-from conftest import make_fake_redis, make_test_app
+from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import hash_password
+from songmaker_cli.auth import CSRF_COOKIE, TrustedProxies, hash_password
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware import SESSION_COOKIE
+
+_PROXY_NETWORK = "172.16.0.0/12"
+_TRUSTED_PEER = "172.18.0.1"
+_UNTRUSTED_PEER = "203.0.113.50"
 
 
 @pytest.fixture()
@@ -145,23 +149,136 @@ def test_login_lockout_after_sustained_failures(client: TestClient) -> None:
     assert "Retry-After" in resp.headers
 
 
-def test_client_ip_trusted_proxy(client: TestClient) -> None:
-    _seed_admin(client)
-    client.app.state.ctx = dataclasses.replace(
-        client.app.state.ctx, trusted_proxies=frozenset({"testclient", "10.0.0.1"}),
-    )
-    resp = client.post(
-        "/api/auth/login",
-        json={"username": "admin", "password": "admin12345"},
-        headers={"x-forwarded-for": "203.0.113.1, 10.0.0.1"},
-    )
-    assert resp.status_code == 200
-
+def _recorded_login_ip(client: TestClient) -> str:
     factory = client.app.state.ctx.db
     with factory() as session:
         from songmaker_cli.db.models import LoginAttempt
         attempt = session.query(LoginAttempt).order_by(LoginAttempt.attempted_at.desc()).first()
-        assert attempt.ip_address == "203.0.113.1"
+        return attempt.ip_address
+
+
+def _cookie_attributes(resp: httpx.Response, name: str) -> set[str]:
+    headers = [h for h in resp.headers.get_list("set-cookie") if h.startswith(f"{name}=")]
+    assert len(headers) == 1, f"expected exactly one {name} cookie, got {headers}"
+    return {attribute.strip() for attribute in headers[0].split(";")[1:]}
+
+
+def _trust_docker_network(client: TestClient) -> None:
+    client.app.state.ctx = dataclasses.replace(
+        client.app.state.ctx, trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
+    )
+
+
+def _login_from_peer(
+    client: TestClient, peer_ip: str, headers: dict[str, str] | list[tuple[str, str]],
+) -> httpx.Response:
+    """Log in as if the request came from ``peer_ip`` rather than the test transport.
+
+    ``headers`` may be a list of pairs to send the same header field twice —
+    the shape a forged chain arrives in.
+    """
+    peer_client = TestClient(client.app, client=(peer_ip, 55000))
+    return peer_client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admin12345"},
+        headers=headers,
+    )
+
+
+def test_client_ip_from_forwarded_for_behind_trusted_proxy(client: TestClient) -> None:
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(
+        client, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
+    )
+
+    assert resp.status_code == 200
+    assert _recorded_login_ip(client) == "203.0.113.1"
+
+
+def test_client_ip_ignores_forwarded_for_from_untrusted_peer(client: TestClient) -> None:
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(client, _UNTRUSTED_PEER, {"x-forwarded-for": "10.9.9.9"})
+
+    assert resp.status_code == 200
+    assert _recorded_login_ip(client) == _UNTRUSTED_PEER
+
+
+def test_client_ip_merges_repeated_forwarded_for_fields(client: TestClient) -> None:
+    """Two X-Forwarded-For fields are one chain: the second field's hop is the
+    one closest to the server, so it — not the first field — names the client."""
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(
+        client,
+        _TRUSTED_PEER,
+        [("x-forwarded-for", "10.9.9.9"), ("x-forwarded-for", "203.0.113.1, 172.18.0.9")],
+    )
+
+    assert resp.status_code == 200
+    assert _recorded_login_ip(client) == "203.0.113.1"
+
+
+@pytest.mark.parametrize(
+    "forwarded_for", ["   ", "203.0.113.1, ", "garbage", "203.0.113.1, garbage"],
+)
+def test_login_of_a_malformed_chain_is_recorded_against_the_peer(
+    client: TestClient, forwarded_for: str,
+) -> None:
+    """A lockout counter must never key on an empty or nonsense identity —
+    that would pool every malformed visitor into one bucket."""
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(client, _TRUSTED_PEER, {"x-forwarded-for": forwarded_for})
+
+    assert resp.status_code == 200
+    assert _recorded_login_ip(client) == _TRUSTED_PEER
+
+
+def test_session_cookies_are_secure_behind_trusted_https_proxy(client: TestClient) -> None:
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(client, _TRUSTED_PEER, {"x-forwarded-proto": "https"})
+
+    assert resp.status_code == 200
+    assert "Secure" in _cookie_attributes(resp, SESSION_COOKIE)
+    assert "Secure" in _cookie_attributes(resp, CSRF_COOKIE)
+
+
+def test_session_cookies_are_plain_when_the_peer_is_not_a_trusted_proxy(
+    client: TestClient,
+) -> None:
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(client, _UNTRUSTED_PEER, {"x-forwarded-proto": "https"})
+
+    assert resp.status_code == 200
+    assert "Secure" not in _cookie_attributes(resp, SESSION_COOKIE)
+    assert "Secure" not in _cookie_attributes(resp, CSRF_COOKIE)
+
+
+def test_a_prepended_forwarded_proto_cannot_outvote_the_proxy(client: TestClient) -> None:
+    """The rightmost value is the one the closest proxy appended; a client that
+    sends its own X-Forwarded-Proto first must not decide the cookie flags."""
+    _seed_admin(client)
+    _trust_docker_network(client)
+
+    resp = _login_from_peer(
+        client,
+        _TRUSTED_PEER,
+        [("x-forwarded-proto", "https"), ("x-forwarded-proto", "http")],
+    )
+
+    assert resp.status_code == 200
+    assert "Secure" not in _cookie_attributes(resp, SESSION_COOKIE)
+    assert "Secure" not in _cookie_attributes(resp, CSRF_COOKIE)
 
 
 # -- Logout -------------------------------------------------------------------
@@ -312,20 +429,6 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
     assert resp.status_code == 403
     assert "already completed" in resp.json()["detail"]
-
-
-# -- _detect_secure ------------------------------------------------------------
-
-
-def test_detect_secure_none_request() -> None:
-    from songmaker_cli.auth_api import _detect_secure
-
-    redis = make_fake_redis()
-    ctx = AppContext(
-        db=MagicMock(), audio_dir=Path("/tmp/audio"),
-        data_dir=Path("/tmp/data"), session_secret=b"x" * 32, redis=redis,
-    )
-    assert _detect_secure(None, ctx) is False
 
 
 # -- Redis session cache integration ------------------------------------------

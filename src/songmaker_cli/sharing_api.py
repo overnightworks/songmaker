@@ -25,7 +25,7 @@ from songmaker_cli.api_models.songs import (
     share_pick_media,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.auth import get_client_ip
+from songmaker_cli.auth import resolve_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     COVER_NOT_FOUND,
@@ -115,15 +115,8 @@ def _check_rate_limit(
     *,
     retry_after: int,
 ) -> None:
-    ctx: AppContext = request.app.state.ctx
-    direct_ip = request.client.host if request.client else "unknown"
-    ip = get_client_ip(
-        direct_ip,
-        request.headers.get("x-forwarded-for"),
-        ctx.trusted_proxies,
-    )
     enforce_rate_limit(
-        limiter, ip,
+        limiter, resolve_client_ip(request),
         policy=_SHARED_LIMITER_FAILURE_POLICY,
         reject_detail="Too many requests",
         retry_after_seconds=retry_after,

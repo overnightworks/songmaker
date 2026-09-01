@@ -7,7 +7,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
 - **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal. Login writes the new session to Redis before the DB transaction commits (and deletes that key if commit fails) so a concurrent prune cannot be overwritten by a late cache `SET`.
 - **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
-- **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
+- **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer's address falls inside a `TRUSTED_PROXIES` network — see "Proxy trust")
 - **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
 - **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change and admin password reset still delete all sessions from both DB and Redis
 - **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
@@ -39,6 +39,87 @@ role does not bypass this filter and frames contain no user ID. Authentication a
 the initial cursor reads finish in a function-local DB session before streaming
 begins. Polls use independent short sessions, and every connection ends after at
 most 60 seconds so deactivation or session expiry is enforced on reconnect.
+
+## Proxy trust
+
+`TRUSTED_PROXIES` is a comma-separated list of IP addresses and CIDR networks
+(default: empty — no peer is trusted; the Docker deployment sets
+`172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
+in). `parse_trusted_proxies()` turns each entry into an `ip_network` at
+startup, and a peer is trusted when its address falls inside one of them — so
+`172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
+`10.0.0.1` covers only itself. An entry that is not a valid address or
+network (including one with host bits set, like `10.0.0.1/24`) raises at
+startup rather than being carried along as a rule that can never match. An
+entry carrying an interface zone (`fe80::1%eth0`) is rejected too: a zone is
+local to one host and is dropped when an address is matched against a network,
+so the entry would silently widen to every interface.
+
+Three behaviours hang off that decision, and all three are off when the peer
+is not trusted:
+
+- `X-Forwarded-For` is read for the real client IP (rightmost untrusted
+  entry). Every per-IP budget, the login/lockout counters, the access log,
+  and the session's bound IP key on that address; from an untrusted peer the
+  header is ignored and the direct peer address is used.
+- `X-Forwarded-Proto: https` marks the request as HTTPS, which is what sets
+  `Secure` on the session and CSRF cookies.
+- The same signal emits `Strict-Transport-Security`.
+
+`auth.resolve_client_ip()` and `auth.request_is_https()` own both decisions;
+no endpoint or middleware reads those headers itself. The chain is read from
+the right, where our own proxies appended, and only what it says there can
+become an identity:
+
+- Every `X-Forwarded-For` header field belongs to one ordered list, so the
+  fields are walked back to front too — reading only one of them would let a
+  client hide hops in another.
+- Starting at the newest hop, each entry a trusted proxy vouches for is
+  stepped over; the first entry that is not trusted is the client. Entries
+  further left are never read, so a client cannot change the answer by
+  prepending its own: `garbage, 203.0.113.7` from the address `203.0.113.7`
+  still keys on `203.0.113.7`. Reading left to right instead would let that
+  client void the chain and spend the gateway's shared budget rather than its
+  own.
+- An entry that is not a plain IP address, right of the client, names nobody:
+  `203.0.113.7, garbage` keys on the direct peer, because an empty string or a
+  word like `garbage` must never become an identity that binds a session and
+  buys a rate-limit budget.
+- At most `MAX_FORWARDED_FOR_HOPS` (16) entries are read; a real chain here is
+  three. Only the hops our own proxies appended are ever examined, so the
+  public client cannot reach that bound — everything it writes lands left of
+  the hop that decides. There is no bound on the chain's total length, because
+  rejecting a long chain would hand a client exactly the peer-key escape that
+  reading from the right removes.
+- A long chain is cheap rather than forbidden: entries are cut out of the
+  header field by index from the right, so a field carrying thousands of
+  separators costs only the entries actually read, and text longer than
+  `MAX_ADDRESS_CHARS` (45, the longest an address can be written) is refused
+  without being handed to the address parser. Neither rule can change an
+  identity — nothing they skip could have parsed as an address.
+- Both fallbacks to the peer are logged at `WARNING`. They pool unrelated
+  visitors into one budget, so they are a proxy misconfiguration to see rather
+  than a silent default. The public client cannot trigger either one: behind
+  Cloudflare → cloudflared → Docker the rightmost entry is always the one our
+  own tunnel appended. A caller on the host itself can, because it reaches the
+  server through the bridge gateway, which is a trusted pass-through hop and
+  forwards the caller's own chain unchanged — so a line there means either a
+  misconfigured proxy or a local caller, not a visitor from the internet.
+- Addresses are canonicalized: `::ffff:203.0.113.9` and `203.0.113.9` are one
+  identity, so nobody multiplies a budget by switching notation. An address
+  carrying an interface zone is treated as no address at all.
+- `X-Forwarded-Proto` is read by the same scan: only the rightmost value
+  counts, so a client that prepends its own cannot outvote the proxy behind it,
+  and a huge field costs no more than that one value.
+
+`run_server()` passes `proxy_headers=False` to uvicorn. Uvicorn's own
+forwarded-header handling would rewrite the peer address and the scheme before
+any application code runs, from any peer unless its separate
+`forwarded_allow_ips` is kept in sync with `TRUSTED_PROXIES` — two sources of
+truth for one decision. `TrustedProxies` is the only owner. Uvicorn's default
+`forwarded_allow_ips` is `127.0.0.1`, so this changes nothing for the Docker
+deployment (the peer is the bridge gateway, `172.18.0.1`); a proxy that ever
+reaches the server over loopback must be named in `TRUSTED_PROXIES` instead.
 
 ## CSRF Protection
 
@@ -115,7 +196,7 @@ traffic, unchanged by this split.
 
 Static `_app/` build assets and the static PWA root assets (`/manifest.webmanifest`, `/robots.txt`, `/favicon.svg`, `/icon-192.png`, `/icon-512.png`, `/service-worker.js`) are exempt from all three budgets — they're fetched by the browser and the service worker outside of user-driven navigation and would otherwise crowd out real calls from the same IP.
 
-When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
+When the request arrives from a peer inside a `TRUSTED_PROXIES` network, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior — see "Proxy trust". Without it every visitor behind the same proxy shares one budget. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
 
 Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
 
@@ -146,7 +227,7 @@ All responses include:
 - `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from a peer inside a `TRUSTED_PROXIES` network)
 - `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
 
 ## CORS
@@ -223,13 +304,15 @@ closes the owner before the logout request.
 
 ## Child Process Secret Scrubbing
 
-Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_PASSWORD`, and `HF_TOKEN`.
+Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
 
-`acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see CLAUDE.md), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `tests/test_secret_scrub_parity.py` imports both, asserts they name the same set, and pins the literal expected set of seven keys — so the two cannot silently drift apart the way they did before issue #157 (the Claude CLI child inherited `SONGMAKER_INTERNAL_TOKEN` because the two lists disagreed), and neither list can quietly shrink to empty and still pass.
+The bootstrap admin credentials are on that list because compose sets them on the long-running web container, not on a one-shot setup job: `lifecycle.auto_setup_admin` re-reads `ADMIN_USERNAME`/`ADMIN_PASSWORD` at every startup so a database restored from empty gets its admin back. They therefore sit in the parent environment for the container's whole life, and this scrub is what keeps them out of every child it spawns.
+
+`acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see CLAUDE.md), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `tests/test_secret_scrub_parity.py` imports both, asserts they name the same set, and pins the literal expected set of keys — so the two cannot silently drift apart the way they did before issue #157 (the Claude CLI child inherited `SONGMAKER_INTERNAL_TOKEN` because the two lists disagreed), and neither list can quietly shrink to empty and still pass.
 
 `HF_TOKEN` is scrubbed from the ACE-Step subprocess even though the subprocess genuinely does call Hugging Face: `vendor/acestep/acestep/api/model_download.py`'s `download_from_huggingface` runs both at subprocess startup (for the DiT and VAE models) and at request time (for LM models), and it passes no explicit `token=`, so `huggingface_hub` would pick up `HF_TOKEN` from the environment implicitly if it were present. However, every repo ID the subprocess can resolve on its own (via `MODEL_REPO_MAPPING` / `DEFAULT_REPO_ID` in that same module) is public and answers anonymously; the ACE-Step catalog's only two gated repos (`ACE-Step/acestep-v15-turbo`, `ACE-Step/acestep-5Hz-lm-1.7B`) are fetched exclusively by `acestep_worker.downloads.run_download`, which passes `token=` explicitly rather than relying on ambient env. So scrubbing `HF_TOKEN` here does not break any download this deployment performs — the consequence is that the subprocess's own Hugging Face requests go out anonymously and are subject to Hugging Face's stricter unauthenticated rate limits. See `acestep_worker/constants.py` for the same reasoning next to the list.
 
-A third case needs a different mechanism: `songmaker_cli.scoring.subprocess_runner` starts the long-lived scorer child via `multiprocessing`'s `spawn` start method, which has no `env=` parameter — the child process inherits the parent's complete `os.environ` at spawn time, the same way it would inherit any other process-wide state. `_child_main` (the child's entry point) calls `_scrub_secret_env_vars()` as its literal first statement — but by the time `_child_main` runs, the spawn bootstrap has already imported the whole `subprocess_runner` module and everything it pulls in at module level (`scoring.pipeline`, `settings`, `auth`, `api_models`, ...), because multiprocessing's spawn target must be importable before it can be called. The scrub cannot undo anything a module-level import already did; it only guarantees that no code invoked *after* it — `default_registry.ensure_loaded()`'s scorer-module imports and every scorer function call that follows — can read a secret out of `os.environ`. `tests/test_scorer_subprocess.py::test_scorer_child_drops_secret_env_keys_at_spawn` drives the real `_child_main` entry point (via the existing `_run_child_with_messages` test harness, not a stand-in) with all seven keys (plus a non-secret marker) set in the parent's environment beforehand, sends it an `EnvProbeRequest`, and asserts none of the seven come back present while the marker does — a spawned process's own `os.environ` cannot be observed from outside it any other way, so this round trip is what makes deleting the `_scrub_secret_env_vars()` call site fail the test.
+A third case needs a different mechanism: `songmaker_cli.scoring.subprocess_runner` starts the long-lived scorer child via `multiprocessing`'s `spawn` start method, which has no `env=` parameter — the child process inherits the parent's complete `os.environ` at spawn time, the same way it would inherit any other process-wide state. `_child_main` (the child's entry point) calls `_scrub_secret_env_vars()` as its literal first statement — but by the time `_child_main` runs, the spawn bootstrap has already imported the whole `subprocess_runner` module and everything it pulls in at module level (`scoring.pipeline`, `settings`, `auth`, `api_models`, ...), because multiprocessing's spawn target must be importable before it can be called. The scrub cannot undo anything a module-level import already did; it only guarantees that no code invoked *after* it — `default_registry.ensure_loaded()`'s scorer-module imports and every scorer function call that follows — can read a secret out of `os.environ`. `tests/test_scorer_subprocess.py::test_scorer_child_drops_secret_env_keys_at_spawn` drives the real `_child_main` entry point (via the existing `_run_child_with_messages` test harness, not a stand-in) with every `SECRET_ENV_KEYS` entry (plus a non-secret marker) set in the parent's environment beforehand, sends it an `EnvProbeRequest`, and asserts none of them come back present while the marker does — a spawned process's own `os.environ` cannot be observed from outside it any other way, so this round trip is what makes deleting the `_scrub_secret_env_vars()` call site fail the test.
 
 Everything a child scorer needs is resolved in the parent and carried into the child as data — never re-read from the child's own environment — and none of it is a secret. `scoring_worker.py` and `jobs/scoring.py` call `get_settings()` at worker startup and per-job respectively, in the parent process; `scoring_device`, `scorer_timeout_seconds`, and `text_accuracy_timeout_seconds` flow into `PipelineConfig` fields (`device`, `scorer_timeout`, `text_accuracy_timeout`), and `scoring_max_jobs` separately bounds ARQ worker concurrency (`ScoringWorkerSettings.max_jobs`) — it never crosses the pipe at all. `lyrical_coherence.py` — the one scorer that calls an external provider (Claude, Grok, or Codex, whichever the judge is configured for, #315) — used to run in the child and call `get_settings()` there to read `anthropic_api_key`; after the scrub that field is simply absent, so `get_settings()` would raise (`Settings.database_url` has no default and is also in `SECRET_ENV_KEYS`) rather than degrade gracefully. Issue #173 handed the key to the child on `PipelineConfig` instead; issue #176 took the secret out of the child altogether. `scoring/registry.py` marks that scorer `host=ScorerHost.PARENT`, the child's registry refuses to register a parent-hosted scorer at all, and `jobs/scoring.py` calls `judge_lyrical_coherence()` itself, in the worker parent, on the `SongScores` the child returned — the transcription it judges comes from that result's `text_accuracy` value. `PipelineConfig` carries no secret field, so there is no key in the child's memory to leak through the model weights it loads.
 
@@ -377,9 +460,10 @@ All mutating operations are logged to the `audit_log` table:
 | HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
-| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
+| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
-| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
+| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the compose network needs it. |
+| Published ports | `docker-compose.yml` publishes `songmaker-web` and Grafana as `127.0.0.1:8080:8080` / `127.0.0.1:3000:3000`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. |
@@ -424,7 +508,7 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Redis session staleness**: If Redis delete fails during user deactivation or after a failed login commit, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
-- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth. When deployed behind Cloudflare Tunnel or a reverse proxy, the proxy should block `/metrics` from public access. This is sufficient for single-user / friends-only deployments. If exposing to untrusted traffic, add `require_auth` or bind metrics to a separate internal port.
+- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth. Reachability, not auth, is what limits it today: the web container's port is published to `127.0.0.1` only, so `/metrics` is host-local unless the tunnel in front of it forwards that path — configure the tunnel to block `/metrics` from public access. This is sufficient for single-user / friends-only deployments. If exposing to untrusted traffic, add `require_auth` or bind metrics to a separate internal port.
 
 ## Hardening Roadmap (for public internet exposure)
 

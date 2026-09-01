@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.app_context import AppContext
-
 log = logging.getLogger(__name__)
 
 
@@ -19,10 +17,8 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
 
         structlog.contextvars.clear_contextvars()
 
-        from songmaker_cli.auth import get_client_ip
-        ctx: AppContext = request.app.state.ctx
-        direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
+        from songmaker_cli.auth import resolve_client_ip
+        ip = resolve_client_ip(request)
 
         structlog.contextvars.bind_contextvars(
             ip=ip, method=request.method, path=request.url.path,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,9 +13,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import hash_password, sign_session_id
+from songmaker_cli.auth import TrustedProxies, hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
+
+_PROXY_NETWORK = "172.16.0.0/12"
+_TRUSTED_PEER = "172.18.0.1"
 
 
 def _seed_sharing_data(session) -> None:
@@ -544,37 +548,72 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
     assert resp.status_code == 200
 
 
-def test_shared_rate_limit(tmp_path: Path) -> None:
+@contextmanager
+def _shared_app_with_small_budget(
+    client: TestClient, tmp_path: Path, trusted_proxies: TrustedProxies = TrustedProxies(),
+):
+    """An app of its own, budget 2, so one test's listeners cannot spill into
+    another's. The limiter is built at app creation from SHARING_RATE_LIMIT."""
     import songmaker_cli.constants as consts
-
-    client, _ = _make_sharing_app(tmp_path)
-    login_and_csrf(client, "admin", "admin12345")
-
-    resp = client.post("/api/albums/test_album/share")
-    slug = resp.json()["share_slug"]
+    from songmaker_cli.server import create_app
 
     old_limit = consts.SHARING_RATE_LIMIT
     consts.SHARING_RATE_LIMIT = 2
     try:
-        from songmaker_cli.server import create_app
         audio_dir = client.app.state.ctx.audio_dir
         data_dir = client.app.state.ctx.data_dir
-
         ctx = AppContext(
             db=client.app.state.ctx.db,
             audio_dir=audio_dir,
             data_dir=data_dir,
             session_secret=TEST_SECRET,
             redis=make_fake_redis(),
+            trusted_proxies=trusted_proxies,
         )
-        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        unauthed = TestClient(app, cookies={})
-
-        for _ in range(3):
-            resp = unauthed.get(f"/shared/{slug}")
-        assert resp.status_code == 429
+        yield create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     finally:
         consts.SHARING_RATE_LIMIT = old_limit
+
+
+def _shared_album_slug(client: TestClient) -> str:
+    login_and_csrf(client, "admin", "admin12345")
+    return client.post("/api/albums/test_album/share").json()["share_slug"]
+
+
+def test_shared_rate_limit(tmp_path: Path) -> None:
+    client, _ = _make_sharing_app(tmp_path)
+    slug = _shared_album_slug(client)
+
+    with _shared_app_with_small_budget(client, tmp_path) as app:
+        unauthed = TestClient(app, cookies={})
+        for _ in range(3):
+            resp = unauthed.get(f"/shared/{slug}")
+
+    assert resp.status_code == 429
+
+
+def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> None:
+    """A share page is the operator's public face: one listener exhausting the
+    budget must not close the page for everyone else behind the same proxy."""
+    client, _ = _make_sharing_app(tmp_path)
+    slug = _shared_album_slug(client)
+
+    with _shared_app_with_small_budget(
+        client, tmp_path, TrustedProxies.parse(_PROXY_NETWORK),
+    ) as app:
+        listener = TestClient(app, cookies={}, client=(_TRUSTED_PEER, 55000))
+
+        def _listen(forwarded_for: str) -> int:
+            return listener.get(
+                f"/shared/{slug}", headers={"x-forwarded-for": forwarded_for},
+            ).status_code
+
+        for _ in range(3):
+            exhausted = _listen("203.0.113.1")
+        other_listener = _listen("203.0.113.2")
+
+    assert exhausted == 429
+    assert other_listener == 200
 
 
 # ── Ownership checks ──────────────────────────────────────────────

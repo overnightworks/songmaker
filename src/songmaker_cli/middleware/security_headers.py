@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth import request_is_https
 from songmaker_cli.constants import RESOURCE_EVENT_STREAM_PATH
 
 
@@ -39,12 +39,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = self._csp
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        is_https = request.url.scheme == "https"
-        if not is_https:
-            ctx: AppContext = request.app.state.ctx
-            direct_ip = request.client.host if request.client else ""
-            if ctx.trusted_proxies and direct_ip in ctx.trusted_proxies:
-                is_https = request.headers.get("x-forwarded-proto", "") == "https"
-        if is_https:
+        if request_is_https(request):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response

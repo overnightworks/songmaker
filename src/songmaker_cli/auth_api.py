@@ -25,8 +25,9 @@ from songmaker_cli.auth import (
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
     generate_csrf_token,
-    get_client_ip,
     hash_password,
+    request_is_https,
+    resolve_client_ip,
     sign_session_id,
     verify_password_constant_time,
 )
@@ -83,29 +84,14 @@ def _clear_user_cache(request: Request, user_id: str) -> None:
         log.warning("Redis session cache clear failed")
 
 
-def _client_ip(request: Request, ctx: AppContext) -> str:
-    direct_ip = request.client.host if request.client else "unknown"
-    return get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
-
-
 def _client_user_agent(request: Request) -> str:
     return request.headers.get("user-agent", "")[:HTTP_MAX_USER_AGENT_LENGTH]
 
 
-def _detect_secure(request: Request | None, ctx: AppContext) -> bool:
-    if not request:
-        return False
-    direct_ip = request.client.host if request.client else ""
-    if ctx.trusted_proxies and direct_ip in ctx.trusted_proxies:
-        return request.headers.get("x-forwarded-proto", "") == "https"
-    return request.url.scheme == "https"
-
-
 def _set_session_cookie(
-    response: Response, session_id: str, ctx: AppContext,
-    request: Request | None = None,
+    response: Response, session_id: str, ctx: AppContext, request: Request,
 ) -> None:
-    secure = _detect_secure(request, ctx)
+    secure = request_is_https(request)
     signed = sign_session_id(session_id, ctx.session_secret)
     max_age = get_settings().session_max_age_seconds
     response.set_cookie(
@@ -146,7 +132,7 @@ def setup(
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
 
-    ip = _client_ip(request, ctx)
+    ip = resolve_client_ip(request)
     ua = _client_user_agent(request)
     try:
         user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
@@ -180,7 +166,7 @@ def login(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
-    ip = _client_ip(request, ctx)
+    ip = resolve_client_ip(request)
     settings = get_settings()
 
     lockout_failures = count_recent_failed_attempts(
@@ -306,7 +292,7 @@ def change_password(
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     user = get_user(db, current_user.id)
-    ip = _client_ip(request, ctx)
+    ip = resolve_client_ip(request)
     settings = get_settings()
 
     ip_failures = count_recent_failed_attempts(
@@ -326,7 +312,7 @@ def change_password(
     user.password_hash = hash_password(req.new)
     delete_user_sessions(db, current_user.id)
 
-    ip = _client_ip(request, ctx)
+    ip = resolve_client_ip(request)
     ua = _client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(
         seconds=settings.session_max_age_seconds,
