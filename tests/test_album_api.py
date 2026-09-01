@@ -8,6 +8,7 @@ computed server-side, once per request, from the DB.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -143,6 +144,67 @@ def test_list_albums_computes_picked_count_in_one_aggregate_query(picks_client) 
     assert len(queries) == 1, (
         f"expected one aggregate pick-count query for all albums, got {len(queries)}: {queries}"
     )
+
+
+def test_list_albums_computes_song_count_in_one_aggregate_query(picks_client) -> None:
+    """#340: song_count must come from one aggregate query, never from
+    joinedload(Album.songs) + len() -- that reintroduces the album-list
+    equivalent of the per-song generation-count N+1."""
+    client, factory = picks_client
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    all_queries, all_handle = _count_queries(engine)
+    queries, handle = _count_queries(engine, "from songs", "count(songs.id)")
+    try:
+        resp = client.get("/api/albums")
+    finally:
+        event.remove(engine, "before_cursor_execute", all_handle)
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert resp.status_code == 200
+    by_id = {a["id"]: a for a in resp.json()["items"]}
+    assert by_id["no-songs"]["song_count"] == 0
+    assert by_id["one-pick"]["song_count"] == 2
+    assert by_id["many-picks"]["song_count"] == 4
+    assert len(queries) == 1, (
+        f"expected one aggregate song-count query for all albums, got {len(queries)}: {queries}"
+    )
+    # Fixed budget for GET /api/albums against this fixture: one count(*)
+    # for the page total, one SELECT for the page of albums, one aggregate
+    # picked-count query, one aggregate song-count query -- never a query
+    # per album. Pinned alongside the aggregate-only assertion above so a
+    # regression on an unrelated relationship shows up here even when the
+    # two counted aggregates stay at one query each.
+    assert len(all_queries) == 4, (
+        f"expected exactly 4 queries for GET /api/albums against this fixture "
+        f"(count + page + picked-count aggregate + song-count aggregate), "
+        f"got {len(all_queries)}: {all_queries}"
+    )
+
+
+def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> None:
+    """#340 F1: count_songs_by_album() must honor the global soft-delete
+    filter (db/soft_delete.py) the same way the old joinedload(Album.songs)
+    + len() path did -- a soft-deleted song was never visible through that
+    relationship either, so the aggregate must not silently count it back in."""
+    def _seed(session) -> None:
+        session.add(User(
+            username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+        ))
+        session.add(Album(id="alb", title="Album", artist="A"))
+        session.add(Song(id="live", title="Live", album_id="alb", track_number=1, slug="live"))
+        session.add(Song(
+            id="gone", title="Gone", album_id="alb", track_number=2, slug="gone",
+            deleted_at=datetime.now(timezone.utc),
+        ))
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    resp = client.get("/api/albums")
+    assert resp.status_code == 200
+    by_id = {a["id"]: a for a in resp.json()["items"]}
+    assert by_id["alb"]["song_count"] == 1
 
 
 def _seed_metadata_scenarios(session) -> None:
@@ -293,6 +355,27 @@ def test_archived_filter_shows_only_archived_albums(archive_client) -> None:
     resp = client.get("/api/albums", params={"archived": "true"})
     ids = [a["id"] for a in resp.json()["items"]]
     assert ids == ["live-one"]
+
+
+def test_archived_filter_song_count_counts_songs_of_archived_album(tmp_path: Path) -> None:
+    """#340 F1: song_count for an archived album, reached via ?archived=true,
+    must still reflect its songs -- count_songs_by_album() is grouped by the
+    album ids the caller passes in, not filtered by is_archived itself, so
+    it must not accidentally go blind on the archived branch."""
+    def _seed(session) -> None:
+        session.add(User(
+            username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+        ))
+        session.add(Album(id="alb", title="Album", artist="A", is_archived=True))
+        session.add(Song(id="s1", title="One", album_id="alb", track_number=1, slug="one"))
+        session.add(Song(id="s2", title="Two", album_id="alb", track_number=2, slug="two"))
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    resp = client.get("/api/albums", params={"archived": "true"})
+    assert resp.status_code == 200
+    by_id = {a["id"]: a for a in resp.json()["items"]}
+    assert by_id["alb"]["song_count"] == 2
 
 
 def test_unarchive_album_restores_default_visibility(archive_client) -> None:

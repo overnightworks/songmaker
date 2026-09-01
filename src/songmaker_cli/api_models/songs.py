@@ -151,7 +151,7 @@ class AlbumResponse(BaseModel):
     archived_at: str | None = None
 
     @classmethod
-    def from_orm(cls, album: Album, *, picked_count: int = 0) -> AlbumResponse:
+    def from_orm(cls, album: Album, *, song_count: int, picked_count: int = 0) -> AlbumResponse:
         cover = album_cover_urls(album.id, album.cover_key) if album.cover_key else None
         return cls(
             id=album.id,
@@ -160,7 +160,7 @@ class AlbumResponse(BaseModel):
             subtitle=album.subtitle,
             year=album.year,
             colors=album.colors or {},
-            song_count=len(album.songs) if album.songs else 0,
+            song_count=song_count,
             picked_count=picked_count,
             is_shared=album.is_shared,
             share_slug=album.share_slug,
@@ -431,7 +431,7 @@ class SongSummaryResponse(BaseModel):
     created_at: str
 
     @classmethod
-    def from_orm(cls, song: Song) -> SongSummaryResponse:
+    def from_orm(cls, song: Song, *, generation_count: int) -> SongSummaryResponse:
         ver = song.latest_version
         generation_params = (
             _safe_json_dict(ver.generation_params, "version", ver.id)
@@ -454,7 +454,7 @@ class SongSummaryResponse(BaseModel):
             key_scale=ver.key_scale if ver else None,
             generation_params=generation_params,
             version_count=len(song.versions),
-            generation_count=len(song.generations),
+            generation_count=generation_count,
             is_shared=song.is_shared,
             share_slug=song.share_slug,
             cover=cover,
@@ -467,7 +467,10 @@ class SongResponse(SongSummaryResponse):
 
     @classmethod
     def from_orm(cls, song: Song) -> SongResponse:
-        base = SongSummaryResponse.from_orm(song)
+        # song.generations is always eager-loaded on this path (get_song(),
+        # list_songs(light=False)), unlike the light SongSummaryResponse
+        # list path — so counting it here costs no extra query.
+        base = SongSummaryResponse.from_orm(song, generation_count=len(song.generations))
 
         best_gen = _best_generation(song.generations)
         best_scores: dict[str, object] | None = None

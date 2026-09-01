@@ -27,6 +27,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_picked_songs_by_album,
+    count_songs_by_album,
     list_shared_inventory,
     search_library,
 )
@@ -85,11 +86,13 @@ def api_library_search(
         )
     album_ids = [item.id for item in page.items if isinstance(item, Album)]
     picked_counts = count_picked_songs_by_album(session, album_ids)
+    song_counts = count_songs_by_album(session, album_ids)
     return LibrarySearchResponse.from_orm(
         page.items,
         has_more=page.has_more,
         next_cursor=next_cursor,
         picked_counts=picked_counts,
+        song_counts=song_counts,
     )
 
 

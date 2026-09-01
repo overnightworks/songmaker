@@ -245,7 +245,10 @@ def resolve_library_pool_membership(
     start_generation_id: str | None,
     shuffle: bool,
 ) -> LibraryPoolMembership:
-    songs = list_songs(session, user_id=user.id, light=True, exclude_archived_albums=True)
+    songs = list_songs(
+        session, user_id=user.id, light=True, with_generations=True,
+        exclude_archived_albums=True,
+    )
     songs = sorted(
         songs,
         key=lambda song: (

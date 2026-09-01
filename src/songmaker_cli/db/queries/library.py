@@ -90,7 +90,6 @@ def _matching_albums(
 ) -> list[Album]:
     query = (
         session.query(Album)
-        .options(joinedload(Album.songs))
         .filter(Album.created_by == user_id)
         .filter(Album.is_archived.is_(False))
         .filter(title_matches(Album.title, q))

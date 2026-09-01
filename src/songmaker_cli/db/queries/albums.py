@@ -33,7 +33,6 @@ def list_albums(
     archived: bool = False,
 ) -> list[Album]:
     query = _album_query(session, user_id=user_id, q=q, archived=archived)
-    query = query.options(joinedload(Album.songs))
     if sort is None:
         query = query.order_by(Album.title, Album.id)
     else:
@@ -87,6 +86,27 @@ def count_picked_songs_by_album(
             Generation.is_picked == True,  # noqa: E712
             Generation.is_archived == False,  # noqa: E712
         )
+        .group_by(Song.album_id)
+        .all()
+    )
+    return dict(rows)
+
+
+def count_songs_by_album(
+    session: Session, album_ids: Sequence[str],
+) -> dict[str, int]:
+    """Count songs per album, grouped.
+
+    One aggregate query rather than a joinedload(Album.songs) whose only
+    purpose was AlbumResponse.from_orm's len(album.songs) — keeps album
+    list/detail responses free of the eager-loaded songs collection
+    entirely. Mirrors count_picked_songs_by_album().
+    """
+    if not album_ids:
+        return {}
+    rows = (
+        session.query(Song.album_id, func.count(Song.id))
+        .filter(Song.album_id.in_(album_ids))
         .group_by(Song.album_id)
         .all()
     )

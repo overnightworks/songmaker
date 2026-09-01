@@ -55,6 +55,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.queries import (
     RestoreWindowExpiredError,
     cleanup_song,
+    count_generations_by_song,
     count_songs,
     create_song,
     delete_version,
@@ -117,7 +118,11 @@ def api_list_songs(
         offset=page.offset, limit=page.limit, q=query, sort=sort,
         exclude_archived_albums=exclude_archived_albums,
     )
-    items = [SongSummaryResponse.from_orm(s) for s in songs]
+    generation_counts = count_generations_by_song(session, [s.id for s in songs])
+    items = [
+        SongSummaryResponse.from_orm(s, generation_count=generation_counts.get(s.id, 0))
+        for s in songs
+    ]
     return PaginatedResponse(
         items=items,
         total=total, offset=page.offset, limit=page.limit,

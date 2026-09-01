@@ -42,10 +42,12 @@ class LibraryAlbumHit(BaseModel):
     album: AlbumResponse
 
     @classmethod
-    def from_orm(cls, album: Album, *, picked_count: int = 0) -> LibraryAlbumHit:
+    def from_orm(cls, album: Album, *, song_count: int, picked_count: int = 0) -> LibraryAlbumHit:
         return cls(
             type=LIBRARY_ITEM_ALBUM,
-            album=AlbumResponse.from_orm(album, picked_count=picked_count),
+            album=AlbumResponse.from_orm(
+                album, song_count=song_count, picked_count=picked_count,
+            ),
         )
 
 
@@ -59,9 +61,11 @@ class LibrarySongHit(BaseModel):
     def from_orm(cls, song: Song) -> LibrarySongHit:
         if song.album is None:
             raise ValueError(f"Song {song.id} has no album")
+        # search_library() eager-loads Song.generations for every hit
+        # (_SONG_LIST_OPTIONS), so this costs no extra query.
         return cls(
             type=LIBRARY_ITEM_SONG,
-            song=SongSummaryResponse.from_orm(song),
+            song=SongSummaryResponse.from_orm(song, generation_count=len(song.generations)),
             album_id=song.album_id,
             album_title=song.album.title,
         )
@@ -85,16 +89,22 @@ class LibrarySearchResponse(BaseModel):
         *,
         has_more: bool,
         next_cursor: str | None,
+        song_counts: dict[str, int],
         picked_counts: dict[str, int] | None = None,
     ) -> LibrarySearchResponse:
         from songmaker_cli.db.models import Album as AlbumModel
 
-        counts = picked_counts or {}
+        picked = picked_counts or {}
+        songs = song_counts
         items: list[LibraryAlbumHit | LibrarySongHit] = []
         for hit in hits:
             if isinstance(hit, AlbumModel):
                 items.append(
-                    LibraryAlbumHit.from_orm(hit, picked_count=counts.get(hit.id, 0)),
+                    LibraryAlbumHit.from_orm(
+                        hit,
+                        song_count=songs.get(hit.id, 0),
+                        picked_count=picked.get(hit.id, 0),
+                    ),
                 )
             else:
                 items.append(LibrarySongHit.from_orm(hit))

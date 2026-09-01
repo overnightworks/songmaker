@@ -7,6 +7,7 @@ from songmaker_cli.db.queries.albums import count_albums as count_albums
 from songmaker_cli.db.queries.albums import (
     count_picked_songs_by_album as count_picked_songs_by_album,
 )
+from songmaker_cli.db.queries.albums import count_songs_by_album as count_songs_by_album
 from songmaker_cli.db.queries.albums import create_album as create_album
 from songmaker_cli.db.queries.albums import delete_album as delete_album
 from songmaker_cli.db.queries.albums import disable_album_sharing as disable_album_sharing
@@ -348,6 +349,9 @@ from songmaker_cli.db.queries.sharing import (
     list_shared_inventory as list_shared_inventory,
 )
 from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
+from songmaker_cli.db.queries.songs import (
+    count_generations_by_song as count_generations_by_song,
+)
 from songmaker_cli.db.queries.songs import count_songs as count_songs
 from songmaker_cli.db.queries.songs import create_song as create_song
 from songmaker_cli.db.queries.songs import delete_song as delete_song

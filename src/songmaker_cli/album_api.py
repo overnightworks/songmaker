@@ -46,6 +46,7 @@ from songmaker_cli.covers import (
     resolve_cover_file,
     write_album_cover,
 )
+from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     UNSET,
     RestoreWindowExpiredError,
@@ -53,6 +54,7 @@ from songmaker_cli.db.queries import (
     cleanup_album,
     count_albums,
     count_picked_songs_by_album,
+    count_songs_by_album,
     create_album,
     disable_album_sharing,
     enable_album_sharing,
@@ -73,6 +75,22 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _single_album_response(session: Session, album: Album) -> AlbumResponse:
+    """Build an AlbumResponse for one album, fetching its counts fresh.
+
+    Each aggregate call is scoped to a single-element id list -- the same
+    aggregate query api_list_albums batches across a whole page, just
+    invoked for one album instead of many.
+    """
+    picked_counts = count_picked_songs_by_album(session, [album.id])
+    song_counts = count_songs_by_album(session, [album.id])
+    return AlbumResponse.from_orm(
+        album,
+        song_count=song_counts.get(album.id, 0),
+        picked_count=picked_counts.get(album.id, 0),
+    )
+
+
 @router.get("/albums")
 def api_list_albums(
     page: Pagination,
@@ -90,8 +108,12 @@ def api_list_albums(
         q=query, sort=sort, archived=archived,
     )
     picked_counts = count_picked_songs_by_album(session, [a.id for a in albums])
+    song_counts = count_songs_by_album(session, [a.id for a in albums])
     items = [
-        AlbumResponse.from_orm(a, picked_count=picked_counts.get(a.id, 0)) for a in albums
+        AlbumResponse.from_orm(
+            a, song_count=song_counts.get(a.id, 0), picked_count=picked_counts.get(a.id, 0),
+        )
+        for a in albums
     ]
     return PaginatedResponse(
         items=items,
@@ -108,8 +130,7 @@ def api_get_album(
 ) -> AlbumResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 
 
 @router.post("/albums")
@@ -133,7 +154,7 @@ def api_create_album(
     except IntegrityError:
         session.rollback()
         raise HTTPException(409, f"Album ID conflict for '{title}'. Try a different title.")
-    return AlbumResponse.from_orm(album, picked_count=0)
+    return AlbumResponse.from_orm(album, song_count=0, picked_count=0)
 
 
 @router.put("/albums/{album_id}")
@@ -153,8 +174,7 @@ def api_update_album(
     check_album_access(album, user)
     fields_set = req.model_fields_set
     if not fields_set:
-        picked_counts = count_picked_songs_by_album(session, [album.id])
-        return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+        return _single_album_response(session, album)
 
     title: str | None = None
     if "title" in fields_set:
@@ -171,8 +191,7 @@ def api_update_album(
         raise HTTPException(404, "Album not found")
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album_id)
     session.commit()
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 
 
 @router.delete("/albums/{album_id}")
@@ -203,8 +222,7 @@ def api_restore_album(
         raise HTTPException(410, str(e))
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.ALBUM, album_id)
     session.commit()
-    picked_counts = count_picked_songs_by_album(session, [restored.id])
-    return AlbumResponse.from_orm(restored, picked_count=picked_counts.get(restored.id, 0))
+    return _single_album_response(session, restored)
 
 
 @router.post("/albums/{album_id}/archive")
@@ -224,8 +242,7 @@ def api_archive_album(
     album = archive_album(session, album_id)
     record_audit(session, user.id, AuditAction.ARCHIVE, ResourceType.ALBUM, album_id)
     session.commit()
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 
 
 @router.post("/albums/{album_id}/unarchive")
@@ -239,8 +256,7 @@ def api_unarchive_album(
     album = unarchive_album(session, album_id)
     record_audit(session, user.id, AuditAction.UNARCHIVE, ResourceType.ALBUM, album_id)
     session.commit()
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 
 
 @router.post("/albums/{album_id}/cleanup")
@@ -342,8 +358,7 @@ async def api_upload_album_cover(
     album = set_album_cover_key(session, album.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
     session.commit()
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 
 
 @router.delete("/albums/{album_id}/cover")
@@ -359,6 +374,5 @@ def api_delete_album_cover(
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
     session.commit()
     remove_album_cover_files(ctx.audio_dir, album.id)
-    picked_counts = count_picked_songs_by_album(session, [album.id])
-    return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
+    return _single_album_response(session, album)
 

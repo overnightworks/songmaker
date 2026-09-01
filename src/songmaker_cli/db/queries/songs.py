@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from songmaker_cli.db.models import (
     Album,
@@ -31,6 +33,7 @@ def list_songs(
     album_id: str | None = None,
     user_id: str | None = None,
     light: bool = False,
+    with_generations: bool = False,
     offset: int = 0,
     limit: int | None = None,
     q: str | None = None,
@@ -38,10 +41,31 @@ def list_songs(
     exclude_archived_albums: bool = False,
 ) -> list[Song]:
     if light:
-        query = session.query(Song).options(
+        light_options = [
             joinedload(Song.versions),
             joinedload(Song.album),
-        )
+        ]
+        if with_generations:
+            # A separate bulk query for all matched songs' generations, not
+            # a per-song joinedload — the caller needs the full relationship
+            # (e.g. the library queue pool), not just a count, so
+            # selectinload() rather than the count_generations_by_song()
+            # aggregate used by the summary response path.
+            #
+            # generation.version and generation.song (+ .song.album) must be
+            # joinedload()ed here rather than left to the back_populates
+            # backref: once the returned Song list itself goes out of scope
+            # downstream, its entries are only weakly referenced by the
+            # session, and a bare Generation.song/.version access after that
+            # falls back to one lazy query per generation -- silently
+            # reintroducing the N+1 this option exists to remove.
+            light_options.append(
+                selectinload(Song.generations).options(
+                    joinedload(Generation.version),
+                    joinedload(Generation.song).joinedload(Song.album),
+                ),
+            )
+        query = session.query(Song).options(*light_options)
     else:
         query = session.query(Song).options(
             joinedload(Song.versions),
@@ -78,6 +102,26 @@ def count_songs(
         exclude_archived_albums=exclude_archived_albums,
     )
     return query.count()
+
+
+def count_generations_by_song(
+    session: Session, song_ids: Sequence[str],
+) -> dict[str, int]:
+    """Count generations per song, grouped.
+
+    One aggregate query rather than touching each song's (unloaded)
+    ``generations`` relationship — keeps the song list response free of an
+    N+1 lazy-load per row. Mirrors count_picked_songs_by_album().
+    """
+    if not song_ids:
+        return {}
+    rows = (
+        session.query(Generation.song_id, func.count(Generation.id))
+        .filter(Generation.song_id.in_(song_ids))
+        .group_by(Generation.song_id)
+        .all()
+    )
+    return dict(rows)
 
 
 def _apply_song_filters(
