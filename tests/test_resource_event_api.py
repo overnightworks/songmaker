@@ -443,7 +443,7 @@ def test_heartbeat_is_comment_without_event_id_or_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clients, _, users = _authenticated_clients(tmp_path)
-    monkeypatch.setattr(resource_api, "RESOURCE_EVENT_STREAM_HEARTBEAT_SECONDS", 0)
+    monkeypatch.setattr(resource_api, "SSE_HEARTBEAT_SECONDS", 0)
     frames = _collect(
         resource_api._resource_event_generator(
             clients["alice"].app.state.ctx,
@@ -492,7 +492,7 @@ def test_poll_crossing_deadline_does_not_emit_a_late_heartbeat(
     clients, _, users = _authenticated_clients(tmp_path)
     ticks = iter([0.0, 0.0, 0.0, 60.0])
     monkeypatch.setattr(resource_api, "monotonic", lambda: next(ticks))
-    monkeypatch.setattr(resource_api, "RESOURCE_EVENT_STREAM_HEARTBEAT_SECONDS", 0)
+    monkeypatch.setattr(resource_api, "SSE_HEARTBEAT_SECONDS", 0)
 
     async def _poll_crossing_deadline(*_args, **_kwargs):
         return resource_api.ResourceEventPage(high_water_mark=0, events=())

@@ -28,7 +28,6 @@ from songmaker_cli.constants import (
     REDIS_RL_RESOURCE_STREAM_PREFIX,
     RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
-    RESOURCE_EVENT_STREAM_HEARTBEAT_SECONDS,
     RESOURCE_EVENT_STREAM_LEASE_SECONDS,
     RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
     RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE,
@@ -38,6 +37,8 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_PAGE_SIZE,
     RESOURCE_EVENT_STREAM_PATH,
     RESOURCE_EVENT_STREAM_POLL_SECONDS,
+    SSE_HEARTBEAT_COMMENT,
+    SSE_HEARTBEAT_SECONDS,
     LimiterFailurePolicy,
     ResourceEventKind,
 )
@@ -60,7 +61,6 @@ _SSE_HEADERS = {
     "Cache-Control": "no-cache, no-store",
     "X-Accel-Buffering": "no",
 }
-_HEARTBEAT_COMMENT = ": heartbeat\n\n"
 _AHEAD_BIGINT_SENTINEL = POSTGRES_BIGINT_MAX + 1
 
 
@@ -241,8 +241,8 @@ async def _resource_event_generator(
         now = monotonic()
         if now >= deadline:
             return
-        if now - last_emit >= RESOURCE_EVENT_STREAM_HEARTBEAT_SECONDS:
-            yield _HEARTBEAT_COMMENT
+        if now - last_emit >= SSE_HEARTBEAT_SECONDS:
+            yield SSE_HEARTBEAT_COMMENT
             last_emit = monotonic()
 
         remaining = deadline - monotonic()

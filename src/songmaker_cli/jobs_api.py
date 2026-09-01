@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,8 @@ from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
+    SSE_HEARTBEAT_COMMENT,
+    SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
     AuditAction,
     JobStatus,
@@ -56,6 +59,7 @@ async def api_stream_job(
 async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[str, None]:
     previous_status: str | None = None
     previous_progress: float | None = None
+    last_emit = monotonic()
     try:
         while True:
             with ctx.db() as db_session:
@@ -72,6 +76,10 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
                 previous_status = response.status
                 previous_progress = response.progress
                 yield f"data: {json.dumps(response.model_dump())}\n\n"
+                last_emit = monotonic()
+            elif monotonic() - last_emit >= SSE_HEARTBEAT_SECONDS:
+                yield SSE_HEARTBEAT_COMMENT
+                last_emit = monotonic()
 
             if response.status in JOB_TERMINAL_STATUSES:
                 return
