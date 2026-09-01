@@ -28,31 +28,42 @@ services:
     build:
       <<: *gha_cache
     # CI runs four Playwright specs sequentially from one runner IP inside a
-    # single 60s window (login/seeding plus the specs' own /api budgets add
-    # up to ~96 requests/min per e2e/README.md) — a real production default
-    # of 120/min 429s pure /api traffic here even though media and stream
-    # requests now sit in their own budgets since #278. 300 covers that
-    # single-IP burst without touching the production default. Grow this
-    # number if the e2e suite gains more specs.
+    # single 60s window. What this budget must cover is everything the
+    # server's own rate limiter classifies as API -- not the FlowGuard
+    # per-flow /api totals in e2e/README.md, which are the browser page's own
+    # `/api/*` fetches only and miss HTML document navigations (API class by
+    # `_classify_path`'s fail-closed default), `/health` polls, and anything
+    # seeded through Playwright's `request` API context (login, the library
+    # fixture, per-attempt playlists) -- the limiter counts every request
+    # that reaches it regardless of which Playwright context sent it. Issue
+    # #344 found that gap the hard way: a PR whose own e2e additions only
+    # grew the FlowGuard totals still tripped this limit, because 30 of its
+    # new requests (bulk test-data seeding) never touched a FlowGuard at all.
+    # Measured directly against `docker compose logs songmaker-web`'s access
+    # log, filtered to the runner's one IP and to the API class: 288
+    # requests across one full local run of the whole suite (smoke test plus
+    # both Playwright projects), the entire run finishing in ~35s -- so the
+    # 60s window's peak is that same 288. That bulk seeding now goes straight
+    # to the database (`scripts/seed_e2e_filler_albums.py`) instead of one
+    # `POST /api/albums` per row, which is what brought this run down from a
+    # measured ~321 before the fix. 600 is roughly 2x headroom over the
+    # current 288, including room for one CI retry landing inside the same
+    # window. Grow this number, honestly re-measured the same way, if the e2e
+    # suite gains more specs.
     #
     # The resource-events stream's own open-connection limit is keyed per
     # *user*, not per IP (issue #294) — and every browser context the e2e
     # suite opens reuses the one seeded admin account from global-setup, so
     # every stream open across the whole suite is additive against this one
     # user's budget the way it never is in production with many real users.
-    # Counted directly from the suite (each `page.goto` to an authenticated
-    # route opens the stream once): album-address.spec.ts is 5 (three single
-    # cold opens, plus the legacy-bookmark test's two full page loads),
-    # playlist-address.spec.ts is 2 (one cold open each), and library.spec.ts
-    # is 1 per shell (desktop + mobile) since its public-link step opens a
-    # separate logged-out context that never touches this stream — 5 + 2 + 2
-    # = 9 against the unconfigurable production default of 12, which is why
-    # one more standalone stream-opening test tipped the suite over it during
-    # #263. 30 gives roughly 3x headroom over that measured 9, the same
-    # multiple `media_rate_limit`'s own comment uses. Grow this number if the
-    # e2e suite gains more specs that open the stream.
+    # Measured the same way as the API budget above: 15 stream opens across
+    # one full local run of the whole suite, against the unconfigurable
+    # production default of 12, which is why one more standalone
+    # stream-opening test tipped the suite over it during #263. 30 gives
+    # roughly 2x headroom over that measured 15. Grow this number if the e2e
+    # suite gains more specs that open the stream.
     environment:
-      IP_RATE_LIMIT: "300"
+      IP_RATE_LIMIT: "600"
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "30"
     ports: !override
       - "${WEB_PORT:-8080}:8080"

@@ -252,6 +252,16 @@ export const RAIL_CONTEXT_NO_TAKES = '—';
 // Remembers whether the rail's Settings disclosure was left open, so it
 // doesn't snap shut the moment the viewer navigates back into the library.
 export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';
+// The LIBRARY and PLAYLISTS groups' own nested navigation landmarks --
+// distinct accessible names so a flow (or a screen reader) can tell them
+// apart from the rail's outer RAIL_NAV_LABEL and from each other.
+export const RAIL_LIBRARY_NAV_LABEL = 'Library albums';
+export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
+// Deliberately generic, never interpolating the album title: e2e drives the
+// album row by "a button whose name contains the album title", and only the
+// label button may match that -- every album's chevron sharing this exact
+// name is why a flow must scope to the album's own row before finding it.
+export const RAIL_ALBUM_DISCLOSE_LABEL = 'Toggle album tracks';
 
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];

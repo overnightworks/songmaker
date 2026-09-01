@@ -8,14 +8,13 @@
 	} from '$lib/stores/playlists';
 	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { RAIL_PLAYLISTS_LABEL } from '$lib/constants';
+	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import type { PlaylistEntryItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
 
 	// Local to this component, matching RailLibraryGroup's own
 	// LIBRARY_OPEN_STORAGE_KEY -- nothing else reads this key.
 	const PLAYLISTS_OPEN_STORAGE_KEY = 'songmaker.rail-playlists-open';
-	const PLAYLISTS_NAV_LABEL = 'Rail playlists';
 
 	const playlists = $derived($playlistList);
 	// Tracks exist only for the currently open playlist: loadPlaylistDetail
@@ -78,7 +77,7 @@
 	onTitleClick={onPlaylistsTitleClick}
 	{icon}
 >
-	<nav class="rail-playlists-nav" aria-label={PLAYLISTS_NAV_LABEL}>
+	<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
 		<ul class="playlist-list">
 			{#each playlists as playlist (playlist.id)}
 				{@const expanded = playlist.id === openPlaylistId}

@@ -132,14 +132,23 @@ transport offers Pause, not Retry), Now Playing opens on the judged take, a
 take reaches a playlist and can be reordered and pruned there, a playlist row
 plays and judges its take the same way an editor take row does — docked beside
 the playlist on desktop, as a sheet on mobile — shuffle toggles, and a share
-link serves the album to a logged-out visitor. Any 429 or 5xx
-response, failed request, browser console error or uncaught page exception
-fails the flow, and each flow holds a named `/api` request budget per shell.
+link serves the album to a logged-out visitor. A second `library.spec.ts` test
+proves the rail itself the same way (issue #326): a collapsed row's songs are
+provably invisible and an expanded row's provably not — `grid-template-rows:
+0fr` + `overflow: hidden` collapses to zero height only in a real layout
+engine, which jsdom never runs — the rail's one-open-album rule holds as that
+same real visibility, and Settings stays in view after the rail's own list is
+scrolled. Any 429 or 5xx response, failed request, browser console error or
+uncaught page exception fails the flow, and each flow holds a named `/api`
+request budget per shell.
 
 - **Projects run serially** (`fullyParallel: false`, one worker). Both shells
-  share one stack behind one IP rate-limit window, so their cost is additive and
-  measurable instead of a burst. Measured on a green run: 25 `/api` requests
-  per shell, budget 32 each.
+  share one stack behind one IP rate-limit window, so their cost is additive
+  and measurable instead of a burst. Each flow's measured count and budget are
+  a code comment on its constant (`LIBRARY_FLOW_API_REQUEST_BUDGET`,
+  `RAIL_FLOW_API_REQUEST_BUDGET` in `frontend/e2e/helpers.ts`) — that is the
+  one place the number is written down, so it cannot drift out of sync with
+  this doc the way it did before issue #326.
 - **One login per run.** Global setup authenticates once, seeds an album, songs,
   takes, a pick and a share link through the public API, and hands its session
   to every attempt as storage state. Mutable fixtures (the playlist) are seeded
@@ -221,7 +230,8 @@ frontend/e2e/
 ├── global-setup.ts                One login per run, seeds the library, saves the storage state
 ├── seed.ts                        Public-API seeding: per-run library, per-attempt playlist
 ├── helpers.ts                     Guards, shell facts, /api budgets, name matchers
-├── library.spec.ts                Library flow, driven in both the desktop and the mobile shell
+├── library.spec.ts                Library flow and the rail's own disclosure/pin promises (#326),
+│                                  both driven in the desktop and the mobile shell
 └── fixtures/take.mp3              3-second tone imported as a real take
 ```
 

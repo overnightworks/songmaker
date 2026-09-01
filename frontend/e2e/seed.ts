@@ -2,16 +2,26 @@
 // app uses. Runs once per Playwright run from global-setup, so the flow spec
 // only ever clicks — it never creates data of its own.
 
+import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import type { APIRequestContext } from '@playwright/test';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
+
+const execFileAsync = promisify(execFile);
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACT_DIR = path.join(E2E_DIR, '.artifacts');
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
 const SEEDED_LIBRARY_FILE = path.join(ARTIFACT_DIR, 'seeded-library.json');
+// The compose recipe this suite always runs under (README, e2e.yml) -- run
+// from the repo root so a caller's own COMPOSE_PROJECT_NAME (or its default,
+// inferred from the cwd docker compose up already ran in) resolves to the
+// same running stack.
+const REPO_ROOT = path.join(E2E_DIR, '..', '..');
+const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.ci.yml'];
 
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
@@ -27,6 +37,24 @@ const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
 const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
+// A second, sibling album: the rail's one-open-album rule (#323) and its
+// real CSS visibility (#326) only show up with two albums that can each be
+// opened in turn. No take is imported for it -- the rail only needs the
+// song rows to exist, not a playable generation.
+const RAIL_ALBUM_TITLE_PREFIX = 'E2E Rail Album';
+const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
+// Enough closed rows to make the rail's own LIBRARY+PLAYLISTS scroll region
+// taller than the viewport, so the Settings/user-row pin promise (ruled in
+// #302) can be measured by scrolling the rail and checking where Settings
+// actually renders -- not merely asserted from the CSS class structure.
+// Deliberately songless and seeded directly against the database (see
+// seedFillerAlbums below), not through 30 individual POSTs: issue #344's CI
+// root-cause analysis found those 30 requests -- proving no API semantics of
+// their own -- were most of what pushed a run over the server's IP rate
+// limit, which counts every request it receives regardless of which
+// Playwright context sent it.
+const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
+const RAIL_FILLER_ALBUM_COUNT = 30;
 
 function runMarker(): string {
 	return Date.now().toString(36);
@@ -49,6 +77,10 @@ export interface SeededLibrary {
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
 	takeLabel: string;
+	/** A sibling album, open in the rail beside `albumTitle` -- the rail's one-open-album rule. */
+	secondAlbumTitle: string;
+	/** One of the second album's own songs, for the visibility assertion. */
+	secondAlbumSongTitle: string;
 }
 
 /** Seeded per attempt, because the flow reorders and prunes it. */
@@ -77,6 +109,42 @@ function requiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} must be set to the CI stack's admin credentials`);
 	return value;
+}
+
+/**
+ * Seeds `RAIL_FILLER_ALBUM_COUNT` songless albums titled
+ * `${titlePrefix}-0`, `${titlePrefix}-1`, ... directly against the database,
+ * inside the web container, in one process -- not through
+ * `RAIL_FILLER_ALBUM_COUNT` individual `POST /api/albums` calls. Those never
+ * exercised API semantics of their own (see `scripts/seed_e2e_filler_albums.py`
+ * for the full reasoning, issue #344) and their only cost to the server's IP
+ * rate limiter was existing. Uses the same `docker compose` recipe the CI
+ * workflow and this suite's own README already run under.
+ */
+async function seedFillerAlbums(titlePrefix: string): Promise<void> {
+	try {
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_filler_albums.py',
+				'--count',
+				String(RAIL_FILLER_ALBUM_COUNT),
+				'--title-prefix',
+				titlePrefix,
+				'--owner-username',
+				requiredEnv('ADMIN_USERNAME')
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Seeding filler albums failed: ${detail}`, { cause: err });
+	}
 }
 
 class SeedApi {
@@ -158,11 +226,29 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
+	const secondAlbumTitle = `${RAIL_ALBUM_TITLE_PREFIX} ${runMarker()}`;
+	const secondAlbum = await seed.postJson<CreatedResource>('/api/albums', {
+		title: secondAlbumTitle,
+		artist: ALBUM_ARTIST
+	});
+	for (const title of RAIL_ALBUM_SONG_TITLES) {
+		await seed.postJson<CreatedResource>('/api/songs', {
+			title,
+			album_id: secondAlbum.id,
+			lyrics: `${title} — seeded lyrics`,
+			prompt: 'calm test tone'
+		});
+	}
+
+	await seedFillerAlbums(`${RAIL_FILLER_ALBUM_TITLE_PREFIX} ${runMarker()}`);
+
 	return {
 		albumTitle,
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
+		secondAlbumTitle,
+		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		playlistTakes: playlistSongTitles.map((songTitle) => ({
 			songTitle,
 			takeId: takeId(takeBySongTitle, songTitle)

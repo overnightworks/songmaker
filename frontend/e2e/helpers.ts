@@ -15,19 +15,33 @@ export const MOBILE_VIEWPORT = { width: 390, height: 844 };
 export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
- * What the library flow costs the API per shell: 25 `/api` requests measured on
- * a green run, 32 budgeted. Both projects share one IP rate-limit window, so a
- * flow that suddenly needs more round trips is a regression — find the extra
- * requests instead of raising these numbers.
+ * What the library flow costs the API per shell, measured on a green run
+ * against `library.spec.ts`'s own first test: 34 requests per shell against
+ * a clean stack, budgeted at 40. Both projects share one IP rate-limit
+ * window, so a flow that suddenly needs more round trips is a regression —
+ * find the extra requests instead of raising this number. Every other
+ * mention of this budget (the `e2e/README.md` table, `docs/testing.md`)
+ * points back here rather than restating it, which is exactly how those
+ * three numbers drifted apart before: #312 and #325 each added a request per
+ * page load (`ensureAllAlbumsLoaded`, `ensurePlaylistsLoaded`) without this
+ * constant, or its callers, ever being re-measured.
  */
-// Includes the settings-rail round trip (#263): disclose Settings in the
-// rail, land on a section, then use the rail's own album context row to
-// return — no second page load, so no second stream open beyond that one
-// extra round trip. Measured 33 on a green run with the round trip folded
-// in (was 26 without it), budget raised from 32 with the same headroom.
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 39,
-	mobile: 39
+	desktop: 40,
+	mobile: 40
+};
+
+/**
+ * What the rail's own disclosure/pin flow (`library.spec.ts`'s second test)
+ * costs the API per shell, measured on a green run against a clean stack: 28
+ * on desktop, 25 on mobile. One shared ceiling for both, matching
+ * LIBRARY_FLOW_API_REQUEST_BUDGET's own convention -- a separate budget from
+ * it, for a different flow, sharing only the one IP rate-limit window both
+ * tests already share.
+ */
+export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
+	desktop: 34,
+	mobile: 34
 };
 
 const API_PATH_PREFIX = '/api';

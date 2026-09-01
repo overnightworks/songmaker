@@ -14,7 +14,12 @@
 		selectSong
 	} from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { RAIL_CONTEXT_NO_TAKES, RAIL_LIBRARY_LABEL } from '$lib/constants';
+	import {
+		RAIL_ALBUM_DISCLOSE_LABEL,
+		RAIL_CONTEXT_NO_TAKES,
+		RAIL_LIBRARY_LABEL,
+		RAIL_LIBRARY_NAV_LABEL
+	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
 
@@ -22,12 +27,6 @@
 	// else reads this key, matching how RailGroup's own groupId is already
 	// inlined per caller (see RailSettings.svelte) rather than centralized.
 	const LIBRARY_OPEN_STORAGE_KEY = 'songmaker.rail-library-open';
-	const LIBRARY_NAV_LABEL = 'Library albums';
-	// Deliberately generic, never interpolating the album title: e2e drives
-	// the album row by 'a button whose name contains the album title', and
-	// only .album-label may match that -- the chevron carrying the title too
-	// would make every album row ambiguous under that locator.
-	const ALBUM_DISCLOSE_LABEL = 'Toggle album tracks';
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
@@ -161,7 +160,7 @@
 	onTitleClick={onLibraryTitleClick}
 	{icon}
 >
-	<nav class="rail-library-nav" aria-label={LIBRARY_NAV_LABEL}>
+	<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
 		<ul class="album-list">
 			{#each albums as album (album.id)}
 				{@const expanded = isAlbumExpanded(album.id)}
@@ -172,7 +171,7 @@
 							class="album-disclose"
 							aria-expanded={expanded}
 							aria-controls={`rail-library-album-${album.id}`}
-							aria-label={ALBUM_DISCLOSE_LABEL}
+							aria-label={RAIL_ALBUM_DISCLOSE_LABEL}
 							onclick={() => toggleAlbum(album.id)}
 						>
 							<svg

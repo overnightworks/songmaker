@@ -19,10 +19,13 @@ import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
+	RAIL_ALBUM_DISCLOSE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
+	RAIL_PLAYLISTS_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
@@ -43,6 +46,7 @@ import {
 	NARROW_VIEWPORT,
 	nameStartingWith,
 	playlistEntryRows,
+	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
 	workspace,
 	type Shell
@@ -373,4 +377,177 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	console.log(`Library flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertWithinBudget(LIBRARY_FLOW_API_REQUEST_BUDGET[shell]);
+});
+
+/**
+ * One album's own row inside the rail's LIBRARY group. Every album's chevron
+ * shares the exact same accessible name (RAIL_ALBUM_DISCLOSE_LABEL — #326),
+ * so a flow must narrow to the row that carries this album's title before it
+ * can find that album's own chevron or its own songs.
+ */
+function railAlbumRow(rail: Locator, albumTitle: string): Locator {
+	return rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle });
+}
+
+/**
+ * A collapsed row's songs are not merely painted-and-clipped: `toBeVisible()`
+ * only asks whether an element has its own non-empty box and no
+ * `visibility: hidden`, so a song row clipped by an ancestor's zero-height
+ * `overflow: hidden` (the grid-collapse trick `.album-songs` and
+ * `.rail-group-panel` both use) still reports visible under it -- verified
+ * against this exact markup while building #326: `getBoundingClientRect()`
+ * on the row still returns its natural size even though the ancestor's own
+ * rect is zero-height. `toBeInViewport()` uses the browser's own
+ * IntersectionObserver, which -- unlike `toBeVisible()` -- does resolve
+ * clipping through ancestors, so it is the one assertion that actually
+ * distinguishes "collapsed" from "expanded" for this pattern. Scrolled into
+ * view first so a row far down the seeded list (see RAIL_FILLER_ALBUM_COUNT
+ * in seed.ts) is judged on its own collapse state, not on where the rail
+ * happens to be scrolled.
+ */
+async function expectRailRowExpanded(row: Locator, song: Locator): Promise<void> {
+	await row.scrollIntoViewIfNeeded();
+	await expect(song).toBeInViewport();
+}
+
+async function expectRailRowCollapsed(row: Locator, song: Locator): Promise<void> {
+	await row.scrollIntoViewIfNeeded();
+	await expect(song).not.toBeInViewport();
+}
+
+test('the rail disclosure and pin promises hold in a real browser', async ({ page }, testInfo) => {
+	const shell = shellOf(testInfo);
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+
+	// A cold playlist open, not a rail click: PLAYLISTS' own bare chevron has
+	// no accessible name once a title click is wired (same RailGroup gap as
+	// LIBRARY's), so like the album below, it only opens once a playlist is
+	// already open (its own expandTrigger). Doing this before any album is
+	// open also keeps LIBRARY collapsed for it -- avoiding the deep-scroll
+	// edge this test found while building #326: with LIBRARY's own 30-plus
+	// seeded rows already open, the browser's native scrollIntoView() can
+	// leave the very last row straddling the scroll container's clip edge,
+	// where the pinned Settings row intercepts the click.
+	await page.goto(`/playlist/${playlist.slug}`);
+	await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+
+	// Rebuilt after every click that navigates (#263): on mobile the drawer's
+	// own afterNavigate hook closes it, so the rail's nav landmark stops
+	// existing until openRailNav opens it again -- a locator built from an
+	// earlier `rail` would silently match nothing rather than prove anything.
+	let rail = await openRailNav(page, shell);
+
+	// The PLAYLISTS group, touched by a real browser for the first time
+	// (#326 finding 1): entering it force-expands its own row, and a track
+	// row inside it plays and judges the same way a library track does.
+	const [firstPlaylistSongTitle] = playlist.songTitles;
+	await rail
+		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+		.getByRole('button', { name: nameStartingWith(firstPlaylistSongTitle) })
+		.click();
+	await expectTakeShownInNowPlaying(page, shell, firstPlaylistSongTitle);
+	await expect(
+		shellTransport(page, shell, firstPlaylistSongTitle).getByRole('button', {
+			name: TRANSPORT_PAUSE_LABEL,
+			exact: true
+		})
+	).toBeVisible();
+	await closeNowPlaying(page, shell);
+
+	// A cold album open, not a wall click: the wall's default 'newest' sort
+	// would otherwise chase the seeded filler albums below (see
+	// RAIL_FILLER_ALBUM_COUNT in seed.ts), and this test is about the rail,
+	// not the wall's own grid. Opening the address still sets openCollection
+	// the same way a wall click does, which is what the rail reads. Neither
+	// playing the playlist entry nor closing Now Playing navigated, so this
+	// is the flow's second real navigation.
+	await page.goto(`/album/${library.albumId}`);
+	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+
+	rail = await openRailNav(page, shell);
+	function firstAlbumRow(): Locator {
+		return railAlbumRow(rail, library.albumTitle);
+	}
+	function firstAlbumSong(): Locator {
+		return firstAlbumRow().getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
+	}
+	// Entering an album force-expands its own row without a chevron click,
+	// and that force-expand is what pulled the whole LIBRARY group open too.
+	await expectRailRowExpanded(firstAlbumRow(), firstAlbumSong());
+
+	function secondAlbumRow(): Locator {
+		return railAlbumRow(rail, library.secondAlbumTitle);
+	}
+	const secondAlbumChevron = secondAlbumRow().getByRole('button', {
+		name: RAIL_ALBUM_DISCLOSE_LABEL,
+		exact: true
+	});
+	function secondAlbumSong(): Locator {
+		return secondAlbumRow().getByRole('button', {
+			name: nameStartingWith(library.secondAlbumSongTitle)
+		});
+	}
+
+	// The chevron alone toggles a closed album's tracks -- loaded on demand,
+	// the first time it opens -- and never navigates (#326 finding 1).
+	await expect(secondAlbumChevron).toHaveAttribute('aria-expanded', 'false');
+	await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
+	await secondAlbumChevron.click();
+	await expect(secondAlbumChevron).toHaveAttribute('aria-expanded', 'true');
+	// The promise jsdom cannot measure (#326 finding 3): the row really
+	// renders, not merely carries data-open="true" -- .rail-group-panel's
+	// grid-template-rows collapses a closed panel to zero height. Opening it
+	// by its chevron alone -- not just by its label -- still enforces the
+	// one-slot rule (#323): the album that was open closes too.
+	await expectRailRowExpanded(secondAlbumRow(), secondAlbumSong());
+	await expectRailRowCollapsed(firstAlbumRow(), firstAlbumSong());
+	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}`));
+
+	// The row's label is the navigation target (ruled sentence 5 of #302): a
+	// list entry click goes directly into that album.
+	await railAlbumRow(rail, library.secondAlbumTitle)
+		.getByRole('button', { name: containing(library.secondAlbumTitle) })
+		.click();
+	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
+
+	// The group's own title is a second destination beside its disclosure
+	// (ruled sentence 5 of #302): it opens the wall on the Albums tab.
+	rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true }).click();
+	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
+	await expect(page).toHaveURL('/');
+
+	// "Settings stays pinned below LIBRARY and PLAYLISTS" (#326 finding 6) as
+	// a promise, not a CSS class assertion: seed.ts adds enough filler albums
+	// that the rail's own list genuinely overflows, so this really scrolls
+	// past content rather than measuring a page that never needed to scroll.
+	rail = await openRailNav(page, shell);
+	const libraryGroupTitle = rail.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true });
+	const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
+	await expect(libraryGroupTitle).toBeInViewport();
+	await expect(settingsToggle).toBeInViewport();
+	const [beforeSettingsBox] = await boundingBoxes(settingsToggle);
+
+	const railBox = await rail.boundingBox();
+	if (!railBox) throw new Error('Expected the rail to render');
+	await page.mouse.move(railBox.x + railBox.width / 2, railBox.y + railBox.height / 3);
+	await page.mouse.wheel(0, 8000);
+
+	// Proof this really scrolled, not a no-op: the top of the scrollable
+	// region -- the LIBRARY group's own title -- has scrolled out of view.
+	await expect(libraryGroupTitle).not.toBeInViewport();
+
+	// The pin promise itself: Settings never moved with the content that just
+	// scrolled past it.
+	const [afterSettingsBox] = await boundingBoxes(settingsToggle);
+	expect(afterSettingsBox.y).toBeCloseTo(beforeSettingsBox.y, 0);
+	await expect(settingsToggle).toBeInViewport();
+
+	console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
+	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
 });
