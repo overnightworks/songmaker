@@ -1,7 +1,9 @@
 import type {
 	Capabilities,
 	CowriterSettings,
+	JudgeSettings,
 	PresetItem,
+	ProviderStatus,
 	RateLimitsResponse,
 	UserRateLimitsResponse,
 	VersionGenerationParams
@@ -52,27 +54,6 @@ export async function toggleModel(modelId: string, active: boolean): Promise<Ava
 	});
 }
 
-export interface ClaudeModelsResponse {
-	chat_model: string;
-	scoring_model: string;
-	allowed_models: string[];
-}
-
-export async function fetchClaudeModels(): Promise<ClaudeModelsResponse> {
-	return apiFetch<ClaudeModelsResponse>('/api/settings/claude-models');
-}
-
-export async function updateClaudeModels(
-	chat_model: string,
-	scoring_model: string
-): Promise<ClaudeModelsResponse> {
-	return apiFetch<ClaudeModelsResponse>('/api/settings/claude-models', {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ chat_model, scoring_model })
-	});
-}
-
 export async function fetchCowriterSettings(): Promise<CowriterSettings> {
 	return apiFetch<CowriterSettings>('/api/settings/cowriter');
 }
@@ -91,6 +72,22 @@ export async function updateCowriterSettings(
 			tail_token_budget: tailTokenBudget
 		})
 	});
+}
+
+export async function fetchJudgeSettings(): Promise<JudgeSettings> {
+	return apiFetch<JudgeSettings>('/api/settings/judge');
+}
+
+export async function updateJudgeSettings(provider: string, model: string): Promise<JudgeSettings> {
+	return apiFetch<JudgeSettings>('/api/settings/judge', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ provider, model })
+	});
+}
+
+export async function fetchProviderStatus(): Promise<ProviderStatus[]> {
+	return apiFetch<ProviderStatus[]>('/api/settings/providers');
 }
 
 export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGenerationParams>> {

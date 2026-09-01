@@ -19,6 +19,7 @@ from songmaker_cli.claude.provider import (
     _find_claude_binary,
     acall_claude,
     call_claude,
+    clear_cli_login_status_cache,
     clear_client_cache,
     cli_login_status,
     is_available,
@@ -31,8 +32,10 @@ from songmaker_cli.constants import SECRET_ENV_KEYS
 @pytest.fixture(autouse=True)
 def _clear_claude_clients():
     clear_client_cache()
+    clear_cli_login_status_cache()
     yield
     clear_client_cache()
+    clear_cli_login_status_cache()
 
 
 def _leaked_secret_env_values() -> dict[str, str]:
@@ -187,6 +190,44 @@ def test_cli_login_status_timeout_is_logged_out() -> None:
         status = cli_login_status()
 
     assert status.logged_in is False
+
+
+def test_cli_login_status_reuses_a_recent_probe_instead_of_spawning_again() -> None:
+    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_auth_status_result(payload),
+        ) as run,
+    ):
+        first = cli_login_status()
+        second = cli_login_status()
+
+    assert first == second
+    run.assert_called_once()
+
+
+def test_cli_login_status_probes_again_once_the_cache_is_cleared() -> None:
+    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_auth_status_result(payload),
+        ) as run,
+    ):
+        cli_login_status()
+        clear_cli_login_status_cache()
+        cli_login_status()
+
+    assert run.call_count == 2
 
 
 # ── list_cli_model_aliases ───────────────────────────────────────────

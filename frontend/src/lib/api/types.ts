@@ -388,7 +388,7 @@ export interface CowriterSettings {
 	allowed_providers: string[];
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
-	models_error?: string | null;
+	models_errors: Record<string, string>;
 	tail_token_budget: number;
 }
 
@@ -398,7 +398,14 @@ export interface JudgeSettings {
 	allowed_providers: string[];
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
-	models_error?: string | null;
+	models_errors: Record<string, string>;
+}
+
+export interface ProviderStatus {
+	provider: string;
+	configured: boolean;
+	setup_method?: 'api_key' | 'claude_cli' | null;
+	environment_key?: string | null;
 }
 
 export interface MemoryScopeItem {

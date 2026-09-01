@@ -53,6 +53,7 @@ class ProviderSetupMethod(StrEnum):
 class ConfiguredProvider:
     provider: str
     method: ProviderSetupMethod
+    environment_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,7 +122,9 @@ def _provider_configuration(
             return DependencyUnavailableProvider(
                 provider, _ANTHROPIC_SDK_DISTRIBUTION,
             )
-        return ConfiguredProvider(provider, ProviderSetupMethod.API_KEY)
+        return ConfiguredProvider(
+            provider, ProviderSetupMethod.API_KEY, credential.environment_key,
+        )
     if provider == _CLAUDE_PROVIDER and cli_login_status().logged_in:
         return ConfiguredProvider(provider, ProviderSetupMethod.CLAUDE_CLI)
     return UnconfiguredProvider(provider, credential.environment_key)

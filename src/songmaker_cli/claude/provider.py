@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from songmaker_cli.constants import (
+    CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     SECRET_ENV_KEYS,
@@ -39,6 +41,10 @@ log = logging.getLogger(__name__)
 _sync_clients: dict[str, object] = {}
 _async_clients: dict[str, object] = {}
 _client_lock = threading.Lock()
+
+_cli_login_status_cache: CliLoginStatus | None = None
+_cli_login_status_cache_at: float = 0.0
+_cli_login_status_lock = threading.Lock()
 
 _DISALLOWED_TOOLS = (
     "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,"
@@ -56,6 +62,13 @@ def clear_client_cache() -> None:
     with _client_lock:
         _sync_clients.clear()
         _async_clients.clear()
+
+
+def clear_cli_login_status_cache() -> None:
+    global _cli_login_status_cache, _cli_login_status_cache_at
+    with _cli_login_status_lock:
+        _cli_login_status_cache = None
+        _cli_login_status_cache_at = 0.0
 
 
 class UnavailableError(Exception):
@@ -439,7 +452,29 @@ def cli_login_status() -> CliLoginStatus:
     as logged out — a discovery probe degrades to "unavailable" rather than
     raising, since the caller iterates every co-writer provider and one
     provider's probe must not abort the others.
+
+    The result is cached for ``CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS``: a
+    single Models-tab page load calls this once per settings section
+    (providers, co-writer, judge), and each would otherwise spawn its own
+    ``claude auth status`` subprocess.
     """
+    global _cli_login_status_cache, _cli_login_status_cache_at
+    now = time.monotonic()
+    with _cli_login_status_lock:
+        cached = _cli_login_status_cache
+        if (
+            cached is not None
+            and now - _cli_login_status_cache_at < CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS
+        ):
+            return cached
+    status = _probe_cli_login_status()
+    with _cli_login_status_lock:
+        _cli_login_status_cache = status
+        _cli_login_status_cache_at = now
+    return status
+
+
+def _probe_cli_login_status() -> CliLoginStatus:
     binary = _find_claude_binary()
     if binary is None:
         return CliLoginStatus(logged_in=False, auth_method=None)

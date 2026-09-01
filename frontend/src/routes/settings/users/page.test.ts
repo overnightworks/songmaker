@@ -23,10 +23,11 @@ const api = vi.hoisted(() => ({
 	updateGenerationDefaults: vi.fn(),
 	fetchAllModels: vi.fn(),
 	toggleModel: vi.fn(),
-	fetchClaudeModels: vi.fn(),
-	updateClaudeModels: vi.fn(),
 	fetchCowriterSettings: vi.fn(),
 	updateCowriterSettings: vi.fn(),
+	fetchJudgeSettings: vi.fn(),
+	updateJudgeSettings: vi.fn(),
+	fetchProviderStatus: vi.fn(),
 	fetchBuiltinDefaults: vi.fn(),
 	listWorkers: vi.fn(),
 	getRegistry: vi.fn()
@@ -76,7 +77,7 @@ const TAB_LABELS = [
 	'Login Attempts',
 	'Rate Limits',
 	'Generation',
-	'Claude',
+	'Models',
 	'ACE-Step'
 ];
 
@@ -142,6 +143,30 @@ async function selectTab(target: HTMLElement, tab: string): Promise<void> {
 	await flush();
 }
 
+function sectionByHeading(target: HTMLElement, heading: string): HTMLElement {
+	const section = Array.from(target.querySelectorAll('section')).find(
+		(el) => el.querySelector('h2')?.textContent?.trim() === heading
+	);
+	if (!section) throw new Error(`Expected section "${heading}" to be rendered`);
+	return section;
+}
+
+function pillNamed(section: HTMLElement, name: string): HTMLButtonElement {
+	const pill = Array.from(section.querySelectorAll<HTMLButtonElement>('.provider-pill')).find(
+		(el) => el.textContent?.includes(name)
+	);
+	if (!pill) throw new Error(`Expected a "${name}" provider pill`);
+	return pill;
+}
+
+function buttonNamed(section: HTMLElement, label: string): HTMLButtonElement {
+	const button = Array.from(section.querySelectorAll<HTMLButtonElement>('button')).find((el) =>
+		el.textContent?.trim().startsWith(label)
+	);
+	if (!button) throw new Error(`Expected a button starting with "${label}"`);
+	return button;
+}
+
 beforeEach(() => {
 	currentUser.set({ id: 'u1', username: 'felix', role: 'admin' });
 	api.fetchUsers.mockResolvedValue([ADMIN_USER, OTHER_USER]);
@@ -151,20 +176,44 @@ beforeEach(() => {
 	api.fetchGenerationDefaults.mockResolvedValue({});
 	api.fetchAllModels.mockResolvedValue([]);
 	api.fetchBuiltinDefaults.mockResolvedValue({});
-	api.fetchClaudeModels.mockResolvedValue({
-		chat_model: 'claude-sonnet',
-		scoring_model: 'claude-sonnet',
-		allowed_models: ['claude-sonnet']
-	});
+	api.fetchProviderStatus.mockResolvedValue([
+		{ provider: 'claude', configured: true, setup_method: 'claude_cli', environment_key: null },
+		{
+			provider: 'codex',
+			configured: true,
+			setup_method: 'api_key',
+			environment_key: 'OPENAI_API_KEY'
+		},
+		{ provider: 'grok', configured: false, setup_method: null, environment_key: 'XAI_API_KEY' }
+	]);
 	api.fetchCowriterSettings.mockResolvedValue({
 		provider: 'claude',
 		model: 'claude-sonnet',
 		tail_token_budget: 8000,
-		allowed_providers: ['claude'],
+		allowed_providers: ['claude', 'codex', 'grok'],
 		allowed_models: ['claude-sonnet'],
-		models_by_provider: { claude: ['claude-sonnet'] },
-		models_error: null
+		models_by_provider: { claude: ['claude-sonnet'], codex: [], grok: [] },
+		models_errors: {
+			codex: 'could not list codex models',
+			grok: 'grok is not configured: missing XAI_API_KEY'
+		}
 	});
+	api.fetchJudgeSettings.mockResolvedValue({
+		provider: 'claude',
+		model: 'claude-opus',
+		allowed_providers: ['claude', 'codex', 'grok'],
+		allowed_models: ['claude-opus'],
+		models_by_provider: { claude: ['claude-opus'], codex: ['gpt-5.4'], grok: [] },
+		models_errors: { grok: 'grok is not configured: missing XAI_API_KEY' }
+	});
+	api.updateJudgeSettings.mockImplementation(async (provider: string, model: string) => ({
+		provider,
+		model,
+		allowed_providers: ['claude', 'codex', 'grok'],
+		allowed_models: [model],
+		models_by_provider: { claude: ['claude-opus'], codex: ['gpt-5.4'], grok: [] },
+		models_errors: { grok: 'grok is not configured: missing XAI_API_KEY' }
+	}));
 	api.listWorkers.mockResolvedValue({ workers: [] });
 	api.getRegistry.mockResolvedValue({ models: [] });
 	Object.defineProperty(window, 'innerWidth', { configurable: true, value: VIEWPORT_PX });
@@ -284,5 +333,137 @@ describe('admin settings compact layout', () => {
 		expect(target.querySelector(`select[aria-label="${ADMIN_TABS_LABEL}"]`)).toBeNull();
 		expect(buttons).toEqual(TAB_LABELS);
 		expect(getComputedStyle(requireElement(target, '.stack-table')).display).not.toBe('block');
+	});
+});
+
+describe('admin models tab', () => {
+	it('shows each provider real reachability with its setup method or missing key', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const providers = sectionByHeading(target, 'Providers');
+
+		expect(providers.textContent).toContain('Claude Code CLI login');
+		expect(providers.textContent).toContain('OPENAI_API_KEY set');
+		expect(providers.textContent).toContain('missing XAI_API_KEY');
+	});
+
+	it('disables picking an unconfigured provider in the co-writer picker', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		expect(pillNamed(cowriter, 'Grok').disabled).toBe(true);
+	});
+
+	it('shows the catalog failure reason for a provider that is viewed but not saved', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		pillNamed(cowriter, 'Codex').click();
+		await tick();
+
+		expect(cowriter.textContent).toContain('could not list codex models');
+	});
+
+	it('disables Save Co-Writer once switched to a provider with no valid model', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		pillNamed(cowriter, 'Codex').click();
+		await tick();
+
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
+	});
+
+	it('disables picking an unconfigured provider in the scoring picker', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const scoring = sectionByHeading(target, 'Scoring');
+
+		expect(pillNamed(scoring, 'Grok').disabled).toBe(true);
+	});
+
+	it('disables Save and shows "Nothing changed" right after a clean load', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const scoring = sectionByHeading(target, 'Scoring');
+
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
+		expect(cowriter.textContent).toContain('Nothing changed.');
+		expect(buttonNamed(scoring, 'Save Scoring').disabled).toBe(true);
+		expect(scoring.textContent).toContain('Nothing changed.');
+	});
+
+	it('has no Chat Model field anymore', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(target.textContent).not.toContain('Chat Model');
+	});
+
+	it('opens without claiming unsaved changes when the saved provider has no live catalog', async () => {
+		api.fetchCowriterSettings.mockResolvedValue({
+			provider: 'claude',
+			model: 'claude-sonnet',
+			tail_token_budget: 8000,
+			allowed_providers: ['claude', 'codex', 'grok'],
+			allowed_models: [],
+			models_by_provider: { claude: [], codex: [], grok: [] },
+			models_errors: { claude: 'could not list claude models' }
+		});
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const modelSelect = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model');
+
+		expect(cowriter.textContent).toContain('Nothing changed.');
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
+		expect(modelSelect.value).toBe('claude-sonnet');
+		expect(modelSelect.disabled).toBe(true);
+	});
+
+	it('lets a history-tail-only change stay saveable when the saved provider has no live catalog', async () => {
+		api.fetchCowriterSettings.mockResolvedValue({
+			provider: 'claude',
+			model: 'claude-sonnet',
+			tail_token_budget: 8000,
+			allowed_providers: ['claude', 'codex', 'grok'],
+			allowed_models: [],
+			models_by_provider: { claude: [], codex: [], grok: [] },
+			models_errors: { claude: 'could not list claude models' }
+		});
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
+		budgetInput.value = '30000';
+		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
+	});
+
+	it('loads and saves the scoring block against /api/settings/judge', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const scoring = sectionByHeading(target, 'Scoring');
+		expect(scoring.textContent).toContain('claude-opus');
+
+		pillNamed(scoring, 'Codex').click();
+		await tick();
+		const modelSelect = requireElement<HTMLSelectElement>(scoring, '#judge-model');
+		modelSelect.value = 'gpt-5.4';
+		modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
+		await tick();
+
+		const saveButton = buttonNamed(scoring, 'Save Scoring');
+		expect(saveButton.disabled).toBe(false);
+		saveButton.click();
+		await flush();
+
+		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'gpt-5.4');
 	});
 });

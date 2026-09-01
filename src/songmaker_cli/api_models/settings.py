@@ -115,7 +115,7 @@ class CowriterSettingsResponse(BaseModel):
     allowed_providers: list[str]
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
-    models_error: str | None = None
+    models_errors: dict[str, str] = Field(default_factory=dict)
     tail_token_budget: int
 
 
@@ -130,7 +130,14 @@ class JudgeSettingsResponse(BaseModel):
     allowed_providers: list[str]
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
-    models_error: str | None = None
+    models_errors: dict[str, str] = Field(default_factory=dict)
+
+
+class ProviderStatusResponse(BaseModel):
+    provider: str
+    configured: bool
+    setup_method: Literal["api_key", "claude_cli"] | None = None
+    environment_key: str | None = None
 
 
 class ChatRequest(BaseModel):

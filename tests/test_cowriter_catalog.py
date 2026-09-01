@@ -105,7 +105,7 @@ def test_api_key_marks_provider_as_configured(monkeypatch):
     )
 
     assert get_provider_configuration("claude") == ConfiguredProvider(
-        "claude", ProviderSetupMethod.API_KEY,
+        "claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY",
     )
 
 

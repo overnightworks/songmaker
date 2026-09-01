@@ -28,13 +28,14 @@
 		updateGenerationDefaults,
 		fetchAllModels,
 		toggleModel as toggleModelApi,
-		fetchClaudeModels,
-		updateClaudeModels,
 		fetchCowriterSettings,
-		updateCowriterSettings
+		updateCowriterSettings,
+		fetchJudgeSettings,
+		updateJudgeSettings,
+		fetchProviderStatus
 	} from '$lib/api/client';
-	import type { AvailableModel, ClaudeModelsResponse } from '$lib/api/client';
-	import type { CowriterSettings } from '$lib/api/types';
+	import type { AvailableModel } from '$lib/api/client';
+	import type { CowriterSettings, JudgeSettings, ProviderStatus } from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
@@ -59,7 +60,7 @@
 		{ id: 'attempts', label: 'Login Attempts' },
 		{ id: 'ratelimits', label: 'Rate Limits' },
 		{ id: 'generation', label: 'Generation' },
-		{ id: 'claude', label: 'Claude' },
+		{ id: 'models', label: 'Models' },
 		{ id: 'acestep', label: 'ACE-Step' }
 	] as const;
 
@@ -85,8 +86,8 @@
 			void loadGlobalLimits();
 		} else if (next === 'generation' || next === 'acestep') {
 			void loadGenDefaults();
-		} else if (next === 'claude') {
-			void loadClaudeModels();
+		} else if (next === 'models') {
+			void loadModelsTab();
 		}
 	}
 
@@ -118,16 +119,18 @@
 	let newRole = $state('user');
 	let creating = $state(false);
 
-	let claudeModels = $state<ClaudeModelsResponse | null>(null);
-	let claudeChatModel = $state('');
-	let claudeScoringModel = $state('');
-	let savingClaude = $state(false);
+	let providerStatuses = $state<ProviderStatus[]>([]);
 
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterProvider = $state('claude');
 	let cowriterModel = $state('');
 	let cowriterBudget = $state(0);
 	let savingCowriter = $state(false);
+
+	let judgeSettings = $state<JudgeSettings | null>(null);
+	let judgeProvider = $state('claude');
+	let judgeModel = $state('');
+	let savingJudge = $state(false);
 
 	let resetPasswordUserId = $state<string | null>(null);
 	let resetPasswordValue = $state('');
@@ -255,13 +258,33 @@
 		}
 	}
 
-	async function loadClaudeModels() {
+	function providerLabel(provider: string): string {
+		return provider.charAt(0).toUpperCase() + provider.slice(1);
+	}
+
+	function providerStatusFor(provider: string): ProviderStatus | undefined {
+		return providerStatuses.find((status) => status.provider === provider);
+	}
+
+	function providerDetail(status: ProviderStatus): string {
+		if (!status.configured) {
+			return `not configured — missing ${status.environment_key}`;
+		}
+		if (status.setup_method === 'claude_cli') {
+			return 'configured — Claude Code CLI login';
+		}
+		return `configured — ${status.environment_key} set`;
+	}
+
+	const configuredProviders = $derived(
+		new Set(providerStatuses.filter((status) => status.configured).map((s) => s.provider))
+	);
+
+	async function loadModelsTab() {
 		try {
-			claudeModels = await fetchClaudeModels();
-			claudeChatModel = claudeModels.chat_model;
-			claudeScoringModel = claudeModels.scoring_model;
+			providerStatuses = await fetchProviderStatus();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load Claude models';
+			error = e instanceof Error ? e.message : 'Failed to load provider status';
 		}
 		try {
 			cowriterSettings = await fetchCowriterSettings();
@@ -271,20 +294,52 @@
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load co-writer settings';
 		}
+		try {
+			judgeSettings = await fetchJudgeSettings();
+			judgeProvider = judgeSettings.provider;
+			judgeModel = judgeSettings.model;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load scoring settings';
+		}
 	}
 
-	const cowriterModels = $derived(
-		cowriterSettings?.models_by_provider?.[cowriterProvider] ??
-			cowriterSettings?.allowed_models ??
-			[]
+	const cowriterModels = $derived(cowriterSettings?.models_by_provider?.[cowriterProvider] ?? []);
+	const cowriterModelsError = $derived(cowriterSettings?.models_errors?.[cowriterProvider]);
+	const cowriterDirty = $derived(
+		cowriterSettings !== null &&
+			(cowriterProvider !== cowriterSettings.provider ||
+				cowriterModel !== cowriterSettings.model ||
+				cowriterBudget !== cowriterSettings.tail_token_budget)
 	);
+	const cowriterCanSave = $derived(cowriterDirty && cowriterModel !== '' && !savingCowriter);
 
-	$effect(() => {
-		void cowriterProvider;
-		if (cowriterModels.length > 0 && !cowriterModels.includes(cowriterModel)) {
-			cowriterModel = '';
+	const judgeModels = $derived(judgeSettings?.models_by_provider?.[judgeProvider] ?? []);
+	const judgeModelsError = $derived(judgeSettings?.models_errors?.[judgeProvider]);
+	const judgeDirty = $derived(
+		judgeSettings !== null &&
+			(judgeProvider !== judgeSettings.provider || judgeModel !== judgeSettings.model)
+	);
+	const judgeCanSave = $derived(judgeDirty && judgeModel !== '' && !savingJudge);
+
+	function selectCowriterProvider(provider: string): void {
+		cowriterProvider = provider;
+		if (cowriterSettings && provider === cowriterSettings.provider) {
+			cowriterModel = cowriterSettings.model;
+			return;
 		}
-	});
+		const models = cowriterSettings?.models_by_provider?.[provider] ?? [];
+		cowriterModel = models[0] ?? '';
+	}
+
+	function selectJudgeProvider(provider: string): void {
+		judgeProvider = provider;
+		if (judgeSettings && provider === judgeSettings.provider) {
+			judgeModel = judgeSettings.model;
+			return;
+		}
+		const models = judgeSettings?.models_by_provider?.[provider] ?? [];
+		judgeModel = models[0] ?? '';
+	}
 
 	async function handleSaveCowriter() {
 		savingCowriter = true;
@@ -305,17 +360,17 @@
 		}
 	}
 
-	async function handleSaveClaudeModels() {
-		savingClaude = true;
+	async function handleSaveJudge() {
+		savingJudge = true;
 		error = '';
 		try {
-			claudeModels = await updateClaudeModels(claudeChatModel, claudeScoringModel);
-			claudeChatModel = claudeModels.chat_model;
-			claudeScoringModel = claudeModels.scoring_model;
+			judgeSettings = await updateJudgeSettings(judgeProvider, judgeModel);
+			judgeProvider = judgeSettings.provider;
+			judgeModel = judgeSettings.model;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save Claude models';
+			error = e instanceof Error ? e.message : 'Failed to save scoring settings';
 		} finally {
-			savingClaude = false;
+			savingJudge = false;
 		}
 	}
 
@@ -868,22 +923,89 @@
 			</section>
 		{/if}
 
-		{#if tab === 'claude'}
+		{#if tab === 'models'}
+			<section>
+				<h2>Providers</h2>
+				<p class="hint">
+					Each provider's real reachability — configured and by what means, or not configured and
+					what's missing.
+				</p>
+				{#if providerStatuses.length > 0}
+					<div class="provider-status-list">
+						{#each providerStatuses as status (status.provider)}
+							<div
+								class="provider-status-row"
+								class:ok={status.configured}
+								class:bad={!status.configured}
+							>
+								<span class="dot"></span>
+								<span>
+									<span class="name">{providerLabel(status.provider)}</span>
+									<span class="detail">{providerDetail(status)}</span>
+								</span>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p>Loading...</p>
+				{/if}
+			</section>
+
 			<section>
 				<h2>Co-Writer</h2>
 				<p class="hint">
-					Provider and model for the studio co-writer. The model list is loaded live from that
-					provider API.
+					Provider and model that answer your next message. The model list is loaded live from that
+					provider.
 				</p>
 				{#if cowriterSettings}
 					<div class="claude-form">
+						<div class="active-banner">
+							<span class="dot"></span>
+							<span>
+								<b>{cowriterDirty ? 'Still active' : 'Active'}</b>
+								<span class="model"
+									>{providerLabel(cowriterSettings.provider)} · {cowriterSettings.model}</span
+								>
+							</span>
+						</div>
+						{#if cowriterDirty}
+							<div class="change-banner">
+								<span
+									>Saving switches the co-writer to <strong
+										>{providerLabel(cowriterProvider)} · {cowriterModel || '…'}</strong
+									>. Earlier messages stay as they are; only the next reply changes.</span
+								>
+							</div>
+						{/if}
 						<div class="claude-field">
-							<label for="cowriter-provider">Provider</label>
-							<select id="cowriter-provider" bind:value={cowriterProvider}>
+							<span class="field-label" id="cowriter-provider-label">Provider</span>
+							<div class="provider-picker" role="group" aria-labelledby="cowriter-provider-label">
 								{#each cowriterSettings.allowed_providers as provider (provider)}
-									<option value={provider}>{provider}</option>
+									{@const configured = configuredProviders.has(provider)}
+									<button
+										type="button"
+										class="provider-pill"
+										class:selected={cowriterProvider === provider}
+										aria-pressed={cowriterProvider === provider}
+										disabled={!configured}
+										onclick={() => selectCowriterProvider(provider)}
+									>
+										<span class="name">{providerLabel(provider)}</span>
+										<span
+											class="pill-status"
+											class:status-ok={configured}
+											class:status-bad={!configured}
+										>
+											{configured ? 'configured' : 'not configured'}
+										</span>
+										{#if !configured}
+											<span class="pill-reason"
+												>Missing {providerStatusFor(provider)?.environment_key}</span
+											>
+										{/if}
+									</button>
 								{/each}
-							</select>
+							</div>
 						</div>
 						<div class="claude-field">
 							<label for="cowriter-model">Model</label>
@@ -892,10 +1014,18 @@
 								bind:value={cowriterModel}
 								disabled={cowriterModels.length === 0}
 							>
+								{#if cowriterModels.length === 0 && cowriterModel}
+									<option value={cowriterModel}
+										>{cowriterModel} (current — live list unavailable)</option
+									>
+								{/if}
 								{#each cowriterModels as model (model)}
 									<option value={model}>{model}</option>
 								{/each}
 							</select>
+							{#if cowriterModelsError}
+								<p class="hint">{cowriterModelsError}</p>
+							{/if}
 						</div>
 						<div class="claude-field">
 							<label for="cowriter-budget">History tail (tokens)</label>
@@ -907,47 +1037,99 @@
 								max="100000"
 							/>
 						</div>
-						{#if cowriterSettings.models_error && cowriterProvider === cowriterSettings.provider}
-							<p class="hint">{cowriterSettings.models_error}</p>
-						{:else if cowriterModels.length === 0}
-							<p class="hint">No models listed for {cowriterProvider}.</p>
-						{/if}
-						<button
-							class="save-btn"
-							onclick={handleSaveCowriter}
-							disabled={savingCowriter || !cowriterModel}
-						>
-							{savingCowriter ? 'Saving...' : 'Save Co-Writer'}
-						</button>
+						<div class="btn-row">
+							<button class="save-btn" onclick={handleSaveCowriter} disabled={!cowriterCanSave}>
+								{savingCowriter ? 'Saving...' : 'Save Co-Writer'}
+							</button>
+							<span class="save-reason"
+								>{cowriterDirty ? 'Changed, not saved yet.' : 'Nothing changed.'}</span
+							>
+						</div>
 					</div>
 				{:else}
 					<p>Loading...</p>
 				{/if}
 			</section>
+
 			<section>
-				<h2>Scoring Models</h2>
-				<p class="hint">Select which Claude model to use for scoring. Scoring stays on Claude.</p>
-				{#if claudeModels}
+				<h2>Scoring</h2>
+				<p class="hint">
+					Provider and model that judge how closely the sung lyrics match what you wrote. Its own
+					choice, independent of the co-writer.
+				</p>
+				{#if judgeSettings}
 					<div class="claude-form">
+						<div class="active-banner">
+							<span class="dot"></span>
+							<span>
+								<b>{judgeDirty ? 'Still active' : 'Active'}</b>
+								<span class="model"
+									>{providerLabel(judgeSettings.provider)} · {judgeSettings.model}</span
+								>
+							</span>
+						</div>
+						{#if judgeDirty}
+							<div class="change-banner">
+								<span
+									>Saving switches the judge to <strong
+										>{providerLabel(judgeProvider)} · {judgeModel || '…'}</strong
+									>. Already-scored generations keep their scores; only the next scoring run
+									changes.</span
+								>
+							</div>
+						{/if}
 						<div class="claude-field">
-							<label for="chat-model">Chat Model</label>
-							<select id="chat-model" bind:value={claudeChatModel}>
-								{#each claudeModels.allowed_models as model (model)}
+							<span class="field-label" id="judge-provider-label">Provider</span>
+							<div class="provider-picker" role="group" aria-labelledby="judge-provider-label">
+								{#each judgeSettings.allowed_providers as provider (provider)}
+									{@const configured = configuredProviders.has(provider)}
+									<button
+										type="button"
+										class="provider-pill"
+										class:selected={judgeProvider === provider}
+										aria-pressed={judgeProvider === provider}
+										disabled={!configured}
+										onclick={() => selectJudgeProvider(provider)}
+									>
+										<span class="name">{providerLabel(provider)}</span>
+										<span
+											class="pill-status"
+											class:status-ok={configured}
+											class:status-bad={!configured}
+										>
+											{configured ? 'configured' : 'not configured'}
+										</span>
+										{#if !configured}
+											<span class="pill-reason"
+												>Missing {providerStatusFor(provider)?.environment_key}</span
+											>
+										{/if}
+									</button>
+								{/each}
+							</div>
+						</div>
+						<div class="claude-field">
+							<label for="judge-model">Model</label>
+							<select id="judge-model" bind:value={judgeModel} disabled={judgeModels.length === 0}>
+								{#if judgeModels.length === 0 && judgeModel}
+									<option value={judgeModel}>{judgeModel} (current — live list unavailable)</option>
+								{/if}
+								{#each judgeModels as model (model)}
 									<option value={model}>{model}</option>
 								{/each}
 							</select>
+							{#if judgeModelsError}
+								<p class="hint">{judgeModelsError}</p>
+							{/if}
 						</div>
-						<div class="claude-field">
-							<label for="scoring-model">Scoring Model</label>
-							<select id="scoring-model" bind:value={claudeScoringModel}>
-								{#each claudeModels.allowed_models as model (model)}
-									<option value={model}>{model}</option>
-								{/each}
-							</select>
+						<div class="btn-row">
+							<button class="save-btn" onclick={handleSaveJudge} disabled={!judgeCanSave}>
+								{savingJudge ? 'Saving...' : 'Save Scoring'}
+							</button>
+							<span class="save-reason"
+								>{judgeDirty ? 'Changed, not saved yet.' : 'Nothing changed.'}</span
+							>
 						</div>
-						<button class="save-btn" onclick={handleSaveClaudeModels} disabled={savingClaude}>
-							{savingClaude ? 'Saving...' : 'Save'}
-						</button>
 					</div>
 				{:else}
 					<p>Loading...</p>
@@ -1220,7 +1402,8 @@
 		gap: 0.25rem;
 	}
 
-	.claude-field label {
+	.claude-field label,
+	.claude-field .field-label {
 		font-size: 0.8rem;
 		color: var(--text-muted);
 		text-transform: uppercase;
@@ -1242,6 +1425,180 @@
 		border-color: var(--accent);
 		outline: none;
 		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+	}
+
+	.provider-status-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		max-width: 460px;
+	}
+
+	.provider-status-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.4rem 0.55rem;
+		border-radius: var(--input-radius);
+		background: var(--surface);
+	}
+
+	.provider-status-row .dot {
+		flex-shrink: 0;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		margin-top: 0.35rem;
+		background: var(--score-bad);
+	}
+
+	.provider-status-row.ok .dot {
+		background: var(--score-good);
+	}
+
+	.provider-status-row .name {
+		font-family: var(--font-display);
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		font-size: 0.86rem;
+		color: var(--text);
+		display: inline-block;
+		min-width: 64px;
+	}
+
+	.provider-status-row .detail {
+		font-size: 0.76rem;
+		color: var(--text-muted);
+		display: block;
+	}
+
+	.provider-status-row.bad .detail {
+		color: var(--score-bad);
+	}
+
+	.active-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.55rem;
+		padding: 0.6rem 0.75rem;
+		border-radius: var(--input-radius);
+		font-size: 0.86rem;
+		line-height: 1.4;
+		background: var(--surface);
+		border: 1px solid var(--border);
+	}
+
+	.active-banner .dot {
+		flex-shrink: 0;
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		margin-top: 0.3rem;
+		background: var(--score-good);
+	}
+
+	.active-banner b {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		font-size: 0.78rem;
+		display: block;
+		margin-bottom: 0.15rem;
+		color: var(--text-muted);
+	}
+
+	.active-banner .model {
+		font-family: ui-monospace, monospace;
+		font-size: 0.82rem;
+		color: var(--text);
+	}
+
+	.provider-picker {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.provider-pill {
+		flex: 1 1 90px;
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		padding: 0.5rem 0.6rem;
+		font-size: 0.82rem;
+		background: var(--bg);
+		color: var(--text-muted);
+		cursor: pointer;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+		text-align: left;
+		font-family: var(--font-body);
+	}
+
+	.provider-pill .name {
+		font-family: var(--font-display);
+		font-weight: 600;
+		letter-spacing: 0.03em;
+		color: var(--text);
+	}
+
+	.provider-pill.selected {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 1px var(--primary) inset;
+	}
+
+	.provider-pill.selected .name {
+		color: var(--primary);
+	}
+
+	.provider-pill:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+		background: var(--surface);
+	}
+
+	.pill-status {
+		font-size: 0.66rem;
+		font-weight: 500;
+	}
+
+	.status-ok {
+		color: var(--score-good);
+	}
+
+	.status-bad {
+		color: var(--score-bad);
+	}
+
+	.pill-reason {
+		font-size: 0.66rem;
+		color: var(--text-subtle);
+		line-height: 1.3;
+	}
+
+	.change-banner {
+		display: flex;
+		gap: 0.5rem;
+		align-items: flex-start;
+		padding: 0.6rem 0.7rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		font-size: 0.78rem;
+		color: var(--text-muted);
+	}
+
+	.btn-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.save-reason {
+		font-size: 0.74rem;
+		color: var(--text-subtle);
 	}
 
 	.hint {
@@ -1306,13 +1663,14 @@
 		margin-top: 0.5rem;
 	}
 
-	.save-btn:hover:not(.disabled) {
+	.save-btn:hover:not(.disabled):not(:disabled) {
 		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
 	}
 
-	.save-btn.disabled {
+	.save-btn.disabled,
+	.save-btn:disabled {
 		opacity: 0.5;
-		cursor: wait;
+		cursor: not-allowed;
 	}
 
 	.clear-btn {

@@ -28,6 +28,7 @@ from songmaker_cli.api_models.settings import (
     DefaultConfigResponse,
     JudgeSettingsRequest,
     JudgeSettingsResponse,
+    ProviderStatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
@@ -341,6 +342,42 @@ def api_set_claude_models(
     )
 
 
+# ── Provider reachability (shared by Co-Writer and Scoring) ────────
+
+
+@router.get("/settings/providers")
+def api_get_provider_status(
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[ProviderStatusResponse]:
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from songmaker_cli.cowriter.catalog import (
+        ConfiguredProvider,
+        get_provider_configuration,
+    )
+
+    statuses: list[ProviderStatusResponse] = []
+    for name in sorted(COWRITER_PROVIDERS):
+        configuration = get_provider_configuration(name)
+        if isinstance(configuration, ConfiguredProvider):
+            statuses.append(
+                ProviderStatusResponse(
+                    provider=name,
+                    configured=True,
+                    setup_method=configuration.method.value,
+                    environment_key=configuration.environment_key,
+                ),
+            )
+        else:
+            statuses.append(
+                ProviderStatusResponse(
+                    provider=name,
+                    configured=False,
+                    environment_key=configuration.missing_environment_key,
+                ),
+            )
+    return statuses
+
+
 def _models_for_provider(provider: str) -> tuple[list[str], str | None]:
     from songmaker_cli.cowriter.catalog import list_provider_models
     from songmaker_cli.cowriter.errors import (
@@ -374,7 +411,7 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
-        models_error=errors.get(provider),
+        models_errors=errors,
         tail_token_budget=get_cowriter_tail_token_budget(session),
     )
 
@@ -402,14 +439,20 @@ def api_set_cowriter_settings(
         raise HTTPException(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
-    allowed, catalog_error = _models_for_provider(req.provider)
-    if catalog_error:
-        raise HTTPException(503, catalog_error)
-    if req.model not in allowed:
-        raise HTTPException(
-            422,
-            f"Unknown {req.provider} model '{req.model}'",
-        )
+    saved_provider = get_cowriter_provider(session)
+    provider_or_model_changed = (
+        req.provider != saved_provider
+        or req.model != get_cowriter_model(session, saved_provider)
+    )
+    if provider_or_model_changed:
+        allowed, catalog_error = _models_for_provider(req.provider)
+        if catalog_error:
+            raise HTTPException(503, catalog_error)
+        if req.model not in allowed:
+            raise HTTPException(
+                422,
+                f"Unknown {req.provider} model '{req.model}'",
+            )
     set_cowriter_settings(session, req.provider, req.model)
     if req.tail_token_budget is not None:
         try:
@@ -444,7 +487,7 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
-        models_error=errors.get(provider),
+        models_errors=errors,
     )
 
 
