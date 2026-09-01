@@ -120,7 +120,7 @@ def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
     )
 
     assert get_provider_configuration("claude") == DependencyUnavailableProvider(
-        "claude", "anthropic",
+        "claude", "anthropic", "ANTHROPIC_API_KEY",
     )
     with pytest.raises(ProviderUnavailableError, match="required dependency 'anthropic'"):
         list_provider_models("claude")
@@ -135,7 +135,7 @@ def test_claude_key_without_sdk_handles_a_blocked_import(monkeypatch):
     monkeypatch.setattr("songmaker_cli.cowriter.catalog.find_spec", _blocked)
 
     assert get_provider_configuration("claude") == DependencyUnavailableProvider(
-        "claude", "anthropic",
+        "claude", "anthropic", "ANTHROPIC_API_KEY",
     )
 
 

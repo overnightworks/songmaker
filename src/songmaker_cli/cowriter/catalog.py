@@ -66,6 +66,7 @@ class UnconfiguredProvider:
 class DependencyUnavailableProvider:
     provider: str
     dependency: str
+    environment_key: str | None = None
 
 
 type ProviderConfiguration = (
@@ -120,7 +121,7 @@ def _provider_configuration(
     if _secret(credential.secret):
         if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
             return DependencyUnavailableProvider(
-                provider, _ANTHROPIC_SDK_DISTRIBUTION,
+                provider, _ANTHROPIC_SDK_DISTRIBUTION, credential.environment_key,
             )
         return ConfiguredProvider(
             provider, ProviderSetupMethod.API_KEY, credential.environment_key,

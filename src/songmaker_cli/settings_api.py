@@ -352,29 +352,45 @@ def api_get_provider_status(
     from songmaker_cli.constants import COWRITER_PROVIDERS
     from songmaker_cli.cowriter.catalog import (
         ConfiguredProvider,
+        DependencyUnavailableProvider,
+        UnconfiguredProvider,
         get_provider_configuration,
     )
 
     statuses: list[ProviderStatusResponse] = []
     for name in sorted(COWRITER_PROVIDERS):
         configuration = get_provider_configuration(name)
-        if isinstance(configuration, ConfiguredProvider):
-            statuses.append(
-                ProviderStatusResponse(
-                    provider=name,
-                    configured=True,
-                    setup_method=configuration.method.value,
-                    environment_key=configuration.environment_key,
-                ),
-            )
-        else:
-            statuses.append(
-                ProviderStatusResponse(
-                    provider=name,
-                    configured=False,
-                    environment_key=configuration.missing_environment_key,
-                ),
-            )
+        match configuration:
+            case ConfiguredProvider():
+                statuses.append(
+                    ProviderStatusResponse(
+                        provider=name,
+                        configured=True,
+                        setup_method=configuration.method.value,
+                        environment_key=configuration.environment_key,
+                    ),
+                )
+            case DependencyUnavailableProvider():
+                statuses.append(
+                    ProviderStatusResponse(
+                        provider=name,
+                        configured=False,
+                        environment_key=configuration.environment_key,
+                        missing_dependency=configuration.dependency,
+                    ),
+                )
+            case UnconfiguredProvider():
+                statuses.append(
+                    ProviderStatusResponse(
+                        provider=name,
+                        configured=False,
+                        environment_key=configuration.missing_environment_key,
+                    ),
+                )
+            case _:
+                raise AssertionError(
+                    f"unhandled provider configuration state: {configuration!r}",
+                )
     return statuses
 
 

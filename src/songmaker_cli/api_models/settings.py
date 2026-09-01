@@ -138,6 +138,7 @@ class ProviderStatusResponse(BaseModel):
     configured: bool
     setup_method: Literal["api_key", "claude_cli"] | None = None
     environment_key: str | None = None
+    missing_dependency: str | None = None
 
 
 class ChatRequest(BaseModel):

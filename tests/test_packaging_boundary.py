@@ -294,7 +294,9 @@ from songmaker_cli.cowriter.catalog import (
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 
 configuration = get_provider_configuration("claude")
-assert configuration == DependencyUnavailableProvider("claude", "anthropic")
+assert configuration == DependencyUnavailableProvider(
+    "claude", "anthropic", "ANTHROPIC_API_KEY",
+)
 try:
     list_provider_models("claude")
 except ProviderUnavailableError as error:

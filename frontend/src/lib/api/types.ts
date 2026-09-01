@@ -406,6 +406,7 @@ export interface ProviderStatus {
 	configured: boolean;
 	setup_method?: 'api_key' | 'claude_cli' | null;
 	environment_key?: string | null;
+	missing_dependency?: string | null;
 }
 
 export interface MemoryScopeItem {

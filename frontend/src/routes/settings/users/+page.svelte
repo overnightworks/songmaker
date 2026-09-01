@@ -267,6 +267,9 @@
 	}
 
 	function providerDetail(status: ProviderStatus): string {
+		if (status.missing_dependency) {
+			return `key set, but the '${status.missing_dependency}' package is not installed`;
+		}
 		if (!status.configured) {
 			return `not configured — missing ${status.environment_key}`;
 		}

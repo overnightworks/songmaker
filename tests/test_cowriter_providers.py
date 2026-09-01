@@ -385,18 +385,46 @@ def test_provider_status_reports_setup_method_and_missing_key(admin_client, monk
         "configured": True,
         "setup_method": "claude_cli",
         "environment_key": None,
+        "missing_dependency": None,
     }
     assert by_provider["codex"] == {
         "provider": "codex",
         "configured": True,
         "setup_method": "api_key",
         "environment_key": "OPENAI_API_KEY",
+        "missing_dependency": None,
     }
     assert by_provider["grok"] == {
         "provider": "grok",
         "configured": False,
         "setup_method": None,
         "environment_key": "XAI_API_KEY",
+        "missing_dependency": None,
+    }
+
+
+def test_provider_status_reports_a_missing_dependency_instead_of_crashing(
+    admin_client, monkeypatch,
+):
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: None,
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    get_settings.cache_clear()
+
+    client, _ = admin_client
+    resp = client.get("/api/settings/providers")
+
+    assert resp.status_code == 200
+    by_provider = {item["provider"]: item for item in resp.json()}
+    assert by_provider["claude"] == {
+        "provider": "claude",
+        "configured": False,
+        "setup_method": None,
+        "environment_key": "ANTHROPIC_API_KEY",
+        "missing_dependency": "anthropic",
     }
 
 
