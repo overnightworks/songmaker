@@ -7,6 +7,7 @@
 		RAIL_SETTINGS_OPEN_STORAGE_KEY,
 		SETTINGS_NAV_LABEL
 	} from '$lib/constants';
+	import RailGroup from './RailGroup.svelte';
 
 	interface SettingsSection {
 		href: string;
@@ -28,101 +29,46 @@
 	const visibleSections = $derived(SETTINGS_SECTIONS.filter((item) => !item.adminOnly || admin));
 	const pathname = $derived(page.url.pathname);
 	const onSettingsRoute = $derived(pathname.startsWith('/settings'));
-
-	function readPersistedOpen(): boolean {
-		try {
-			return localStorage.getItem(RAIL_SETTINGS_OPEN_STORAGE_KEY) === 'true';
-		} catch {
-			return false;
-		}
-	}
-
-	function persistOpen(value: boolean): void {
-		try {
-			localStorage.setItem(RAIL_SETTINGS_OPEN_STORAGE_KEY, String(value));
-		} catch {
-			// Best-effort convenience only — the disclosure still works without it.
-		}
-	}
-
-	let open = $state(readPersistedOpen());
-
-	// A plain variable, not $state: it must not itself become a dependency
-	// this effect reruns for, only a value the effect reads once per actual
-	// run of *its own* trigger (onSettingsRoute) — the same "track the
-	// previous value in an untracked local" idiom syncSongAddressToRename
-	// uses in stores/navigation.ts. Landing directly on a /settings/* route
-	// (a fresh visit, a reload, a shared link, or arriving from outside
-	// Settings) always finds the section it points at already expanded,
-	// regardless of what a previous session left in storage — but only on
-	// that entry transition. Reading `open` here as well as writing it
-	// would make every click that closes the panel while already on a
-	// /settings/* route re-run this same effect, find `onSettingsRoute &&
-	// !open` true again, and snap it back open, so a viewer could never
-	// collapse it while browsing Settings. Moving between sections
-	// (Generation → Voices) keeps whatever the viewer left it at, since
-	// that is not an entry transition.
-	let previousOnSettingsRoute = false;
-	$effect(() => {
-		const enteredSettings = onSettingsRoute && !previousOnSettingsRoute;
-		previousOnSettingsRoute = onSettingsRoute;
-		if (enteredSettings) {
-			open = true;
-			persistOpen(true);
-		}
-	});
-
-	function toggleOpen(): void {
-		open = !open;
-		persistOpen(open);
-	}
 </script>
 
-<div class="rail-settings">
-	<button
-		type="button"
-		class="row disclose"
-		aria-expanded={open}
-		aria-controls="rail-settings-group"
-		onclick={toggleOpen}
-	>
+<RailGroup
+	label={RAIL_SETTINGS_LABEL}
+	groupId="rail-settings-group"
+	storageKey={RAIL_SETTINGS_OPEN_STORAGE_KEY}
+	expandTrigger={onSettingsRoute}
+>
+	{#snippet icon()}
 		<svg
-			class="caret"
-			class:open
-			width="10"
-			height="10"
+			width="14"
+			height="14"
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
-			stroke-width="3"
+			stroke-width="2"
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			aria-hidden="true"
 		>
-			<polyline points="9 6 15 12 9 18" />
+			<path
+				d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+			/>
+			<circle cx="12" cy="12" r="3" />
 		</svg>
-		<span>{RAIL_SETTINGS_LABEL}</span>
-	</button>
-	<div class="rail-settings-panel" data-open={open} id="rail-settings-group" inert={!open}>
-		<nav class="rail-settings-nav" aria-label={SETTINGS_NAV_LABEL}>
-			<ul>
-				{#each visibleSections as section (section.href)}
-					<li>
-						<a href={section.href} class="row row-sub" class:row-active={pathname === section.href}>
-							{section.label}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</nav>
-	</div>
-</div>
+	{/snippet}
+	<nav class="rail-settings-nav" aria-label={SETTINGS_NAV_LABEL}>
+		<ul>
+			{#each visibleSections as section (section.href)}
+				<li>
+					<a href={section.href} class="row row-sub" class:row-active={pathname === section.href}>
+						{section.label}
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</nav>
+</RailGroup>
 
 <style>
-	.rail-settings {
-		flex-shrink: 0;
-	}
-
 	.row {
 		display: flex;
 		align-items: center;
@@ -141,42 +87,6 @@
 	.row:hover {
 		background: var(--surface-hover);
 		color: var(--text);
-	}
-
-	.disclose {
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.caret {
-		flex-shrink: 0;
-		transition: transform 0.16s ease;
-	}
-
-	.caret.open {
-		transform: rotate(90deg);
-	}
-
-	.rail-settings-panel {
-		display: grid;
-		grid-template-rows: 0fr;
-		transition: grid-template-rows 0.2s ease;
-	}
-
-	.rail-settings-panel[data-open='true'] {
-		grid-template-rows: 1fr;
-	}
-
-	.rail-settings-panel > .rail-settings-nav {
-		overflow: hidden;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.caret,
-		.rail-settings-panel {
-			transition: none;
-		}
 	}
 
 	.rail-settings-nav ul {
