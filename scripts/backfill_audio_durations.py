@@ -30,10 +30,13 @@ write it; harmless, since both read the same file on disk and write the
 same value, so the final row is correct either way.
 
 Run inside the web container, where ``DATABASE_URL`` and the audio volume
-are mounted:
+are mounted. Use the venv's Python directly — bare ``python`` on the
+container's ``PATH`` is the package-less system interpreter, not the app's:
 
-    docker compose exec songmaker-web python scripts/backfill_audio_durations.py
-    docker compose exec songmaker-web python scripts/backfill_audio_durations.py --apply
+    docker compose exec songmaker-web /app/.venv/bin/python \
+        scripts/backfill_audio_durations.py
+    docker compose exec songmaker-web /app/.venv/bin/python \
+        scripts/backfill_audio_durations.py --apply
 
 Run the dry-run first and read the counts before passing ``--apply``.
 """

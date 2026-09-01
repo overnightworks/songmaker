@@ -893,6 +893,16 @@ Health endpoint at `/health` reports:
 - `db`, `redis`, `acestep`: component health
 - `status`: "ok" or "degraded" (degraded if both workers down, DB down, or Redis down)
 
+## Operational Scripts
+
+One-off data scripts (`scripts/backfill_audio_durations.py`, `scripts/migrate_generation_params.py`, and future ones) live in `scripts/`, which the web image copies whole (`Dockerfile`). They run inside the `songmaker-web` container, where `DATABASE_URL` and the audio volume are mounted:
+
+```
+docker compose exec songmaker-web /app/.venv/bin/python scripts/<name>.py --help
+```
+
+Use `/app/.venv/bin/python`, not bare `python`. The web container's `PATH` resolves `python` to the package-less system interpreter that `python:3.12-slim` ships with — the app's dependencies live only in the `uv`-managed venv at `/app/.venv`, the same path every worker Dockerfile's `ENTRYPOINT` addresses directly rather than relying on `PATH`. Each script's module docstring documents its own dry-run/apply flags.
+
 ## Backup & Restore
 
 `scripts/backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore.sh` restores both. `scripts/backup-list.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.

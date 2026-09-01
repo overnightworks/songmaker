@@ -30,6 +30,13 @@ RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
 # Copy source code (only this layer rebuilds on code changes)
 COPY src/ src/
 COPY alembic.ini ./
+# Operational one-off scripts (backfills, migrations) run inside this
+# container via `docker compose exec songmaker-web /app/.venv/bin/python
+# scripts/<name>.py`. Copied whole rather than as an allowlist: scripts/
+# is a few hundred KB of trusted first-party code already in the build
+# context, and a hand-picked list would silently miss the next operational
+# script someone adds.
+COPY scripts/ scripts/
 RUN uv sync --frozen --no-dev --extra server --extra mcp
 
 COPY --from=frontend-builder /app/frontend/build frontend/build

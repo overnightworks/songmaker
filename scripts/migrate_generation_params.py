@@ -13,6 +13,15 @@ Modes:
   human can decide what to do.
 
 Run ``--dry-run`` first, review the report, then ``--fix``.
+
+Run inside the web container, where ``DATABASE_URL`` is set. Use the
+venv's Python directly — bare ``python`` on the container's ``PATH`` is
+the package-less system interpreter, not the app's:
+
+    docker compose exec songmaker-web /app/.venv/bin/python \
+        scripts/migrate_generation_params.py
+    docker compose exec songmaker-web /app/.venv/bin/python \
+        scripts/migrate_generation_params.py --fix
 """
 
 from __future__ import annotations
