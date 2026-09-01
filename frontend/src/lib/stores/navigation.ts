@@ -282,6 +282,16 @@ export async function openLibraryWall(): Promise<void> {
 	});
 }
 
+// A rail group title's own destination (issue #323, ruled sentence 5 of
+// #302): LIBRARY opens the grid on the Albums tab, PLAYLISTS on the
+// Playlists tab. Composes openLibraryWall with the existing tab machinery
+// rather than a new address -- the tab lives in `history.state`
+// (selectLibraryFilter above), so no route needs to exist for it.
+export async function openLibraryFilter(filter: LibraryFilter): Promise<void> {
+	await openLibraryWall();
+	selectLibraryFilter(filter);
+}
+
 export interface AlbumTrackNeighbors {
 	previous: SongItem | null;
 	next: SongItem | null;

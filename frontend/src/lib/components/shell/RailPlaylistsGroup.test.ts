@@ -4,7 +4,11 @@ import { get } from 'svelte/store';
 
 import type { PlaylistDetailItem, PlaylistEntryItem, PlaylistItem } from '$lib/api/types';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	libraryFilter,
+	librarySurface,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -137,9 +141,19 @@ describe('RailPlaylistsGroup', () => {
 	it('shows the PLAYLISTS group with its icon and the current playlist count, collapsed with no playlist open', async () => {
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		expect(toggle.textContent).toContain('Playlists');
+		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Playlists');
 		expect(target.querySelector('.meta')?.textContent).toBe('1');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('opens the library grid on the Playlists tab when the PLAYLISTS title is clicked', async () => {
+		librarySurface.set('detail');
+		libraryFilter.set('albums');
+		const target = await render();
+		const titleButton = requireElement<HTMLButtonElement>(target, 'button.group-title');
+		titleButton.click();
+		await vi.waitFor(() => expect(get(libraryFilter)).toBe('playlists'));
+		expect(get(librarySurface)).toBe('browse');
 	});
 
 	it('loads every playlist on mount regardless of the current route', async () => {

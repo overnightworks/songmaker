@@ -2,9 +2,10 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { openCollection } from '$lib/stores/collection';
+import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
+import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +71,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	resetLibraryContextForTests();
+	resetPlaylists();
 });
 
 describe('Rail', () => {
@@ -129,8 +131,11 @@ describe('Rail', () => {
 			'.rail-group > .disclose-row > button.disclose'
 		);
 		expect(scrolledToggles).toHaveLength(2);
-		expect(scrolledToggles[0]?.textContent).toContain('Library');
-		expect(scrolledToggles[1]?.textContent).toContain('Playlists');
+		const scrolledTitles = scroll.querySelectorAll(
+			'.rail-group > .disclose-row > button.group-title'
+		);
+		expect(scrolledTitles[0]?.textContent?.trim()).toBe('Library');
+		expect(scrolledTitles[1]?.textContent?.trim()).toBe('Playlists');
 		expect(scroll.textContent).not.toContain('Settings');
 
 		const settingsPin = requireElement(target, '.rail-settings-pin');
@@ -142,5 +147,56 @@ describe('Rail', () => {
 		const bottom = requireElement(target, '.rail-bottom');
 		expect(bottom.textContent).toContain('felix');
 		expect(target.querySelector('.rail-scroll ~ .rail-settings-pin ~ .rail-bottom')).not.toBeNull();
+	});
+
+	it('does not collapse an open playlist when an album row is expanded by its own chevron -- Library and Playlists do not share a slot', async () => {
+		albumList.set([
+			{
+				id: 'a1',
+				title: 'Nachtstrom',
+				artist: '',
+				subtitle: '',
+				year: '',
+				colors: {},
+				song_count: 0,
+				picked_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00',
+				is_archived: false
+			}
+		]);
+		playlistList.set([
+			{
+				id: 'p1',
+				title: 'Night Drive',
+				slug: 'night-drive',
+				entry_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00'
+			}
+		]);
+		setOpenCollection({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set({
+			id: 'p1',
+			title: 'Night Drive',
+			slug: 'night-drive',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00',
+			entries: []
+		});
+		const target = await render();
+		const playlistPanel = requireElement<HTMLDivElement>(target, '.playlist-songs');
+		expect(playlistPanel.getAttribute('data-open')).toBe('true');
+
+		const albumToggle = requireElement<HTMLButtonElement>(target, '.album-disclose');
+		albumToggle.click();
+		await tick();
+
+		expect(albumToggle.getAttribute('aria-expanded')).toBe('true');
+		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 	});
 });

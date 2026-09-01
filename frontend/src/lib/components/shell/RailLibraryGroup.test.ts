@@ -4,7 +4,11 @@ import { get } from 'svelte/store';
 
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import { openCollection } from '$lib/stores/collection';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	libraryFilter,
+	librarySurface,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -182,9 +186,19 @@ describe('RailLibraryGroup', () => {
 	it('shows the LIBRARY group with its icon and the current album count, collapsed with no album open', async () => {
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		expect(toggle.textContent).toContain('Library');
+		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
 		expect(target.querySelector('.meta')?.textContent).toBe('1');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('opens the library grid on the Albums tab when the LIBRARY title is clicked', async () => {
+		librarySurface.set('detail');
+		libraryFilter.set('playlists');
+		const target = await render();
+		const titleButton = requireElement<HTMLButtonElement>(target, 'button.group-title');
+		titleButton.click();
+		await vi.waitFor(() => expect(get(libraryFilter)).toBe('albums'));
+		expect(get(librarySurface)).toBe('browse');
 	});
 
 	it('loads every album on mount regardless of the current route', async () => {
@@ -304,6 +318,46 @@ describe('RailLibraryGroup', () => {
 
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(get(openCollection)).toBeNull();
+	});
+
+	it('closes the previously open album when a different album is opened by its label', async () => {
+		albumList.set([
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Anfield' })
+		]);
+		const target = await render();
+		const labels = target.querySelectorAll<HTMLButtonElement>('.album-label');
+		labels[0]?.click();
+		await tick();
+		await Promise.resolve();
+		let toggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
+		expect(toggles[0]?.getAttribute('aria-expanded')).toBe('true');
+
+		labels[1]?.click();
+		await tick();
+		await Promise.resolve();
+		toggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
+		expect(toggles[0]?.getAttribute('aria-expanded')).toBe('false');
+		expect(toggles[1]?.getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('closes the previously open album when a different album is opened by its chevron', async () => {
+		albumList.set([
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Anfield' })
+		]);
+		const target = await render();
+		let toggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
+		toggles[0]?.click();
+		await tick();
+		toggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
+		expect(toggles[0]?.getAttribute('aria-expanded')).toBe('true');
+
+		toggles[1]?.click();
+		await tick();
+		toggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
+		expect(toggles[0]?.getAttribute('aria-expanded')).toBe('false');
+		expect(toggles[1]?.getAttribute('aria-expanded')).toBe('true');
 	});
 
 	it('does not refetch an album on a second expand once its songs are loaded', async () => {

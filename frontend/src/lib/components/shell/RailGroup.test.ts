@@ -28,7 +28,7 @@ interface RenderOverrides {
 	icon?: Snippet;
 	count?: number;
 	expandTrigger?: boolean;
-	titleHref?: string;
+	onTitleClick?: () => void;
 }
 
 async function render(overrides: RenderOverrides = {}) {
@@ -147,14 +147,20 @@ describe('RailGroup', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('renders a titleHref as a link sibling of the toggle, which still expands and collapses', async () => {
-		const { target } = await render({ titleHref: '/settings/account' });
+	it('renders onTitleClick as a button sibling of the toggle, which still expands and collapses on its own', async () => {
+		const onTitleClick = vi.fn();
+		const { target } = await render({ onTitleClick });
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		const titleLink = requireElement<HTMLAnchorElement>(target, '.disclose-row > a.group-title');
-		expect(titleLink.getAttribute('href')).toBe('/settings/account');
-		expect(toggle.querySelector('a')).toBeNull();
+		const titleButton = requireElement<HTMLButtonElement>(
+			target,
+			'.disclose-row > button.group-title'
+		);
+		expect(toggle.querySelector('.group-title')).toBeNull();
 
+		titleButton.click();
+		expect(onTitleClick).toHaveBeenCalledOnce();
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
 		toggle.click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
@@ -163,9 +169,9 @@ describe('RailGroup', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('renders the title as plain text, not a link, when no titleHref is given', async () => {
+	it('renders the title as plain text inside the toggle when no onTitleClick is given', async () => {
 		const { target } = await render();
-		expect(target.querySelector('a.group-title')).toBeNull();
+		expect(target.querySelector('.disclose-row > button.group-title')).toBeNull();
 		expect(requireElement(target, 'button.disclose span.group-title').tagName).toBe('SPAN');
 	});
 });

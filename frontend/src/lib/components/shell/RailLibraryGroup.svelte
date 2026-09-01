@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SvelteSet } from 'svelte/reactivity';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		albumList,
@@ -8,7 +7,12 @@
 		songList
 	} from '$lib/stores/libraryData';
 	import { selectedSongId } from '$lib/stores/player';
-	import { compareAlbumTracks, openAlbum, selectSong } from '$lib/stores/navigation';
+	import {
+		compareAlbumTracks,
+		openAlbum,
+		openLibraryFilter,
+		selectSong
+	} from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { RAIL_CONTEXT_NO_TAKES, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
@@ -40,7 +44,13 @@
 		void ensureAllAlbumsLoaded();
 	});
 
-	const expandedAlbumIds = new SvelteSet<string>();
+	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
+	// letting every once-opened row accumulate would stop showing where the
+	// viewer IS. Opening an album -- by its label or its own chevron -- closes
+	// whichever other album was open; this is local to the LIBRARY group, so
+	// an open playlist in the sibling PLAYLISTS group is never affected (the
+	// two groups do not share a slot).
+	let expandedAlbumId: string | null = $state(null);
 
 	// Edge-triggered like RailGroup's own expandTrigger idiom (see its comment):
 	// previousOpenAlbumId is a plain variable, not $state, so this effect only
@@ -59,7 +69,7 @@
 	}
 
 	function isAlbumExpanded(albumId: string): boolean {
-		return expandedAlbumIds.has(albumId);
+		return expandedAlbumId === albumId;
 	}
 
 	// True once this album's songs are already in songList -- re-expanding an
@@ -76,16 +86,20 @@
 	}
 
 	function expandAlbum(albumId: string): void {
-		expandedAlbumIds.add(albumId);
+		expandedAlbumId = albumId;
 		if (!albumSongsKnown(albumId)) void loadSongsForAlbum(albumId);
 	}
 
 	function toggleAlbum(albumId: string): void {
 		if (isAlbumExpanded(albumId)) {
-			expandedAlbumIds.delete(albumId);
+			expandedAlbumId = null;
 			return;
 		}
 		expandAlbum(albumId);
+	}
+
+	function onLibraryTitleClick(): void {
+		void openLibraryFilter('albums');
 	}
 
 	// The row's label is the navigation target (ruled sentence 5 of #302: a
@@ -144,6 +158,7 @@
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albums.length}
 	expandTrigger={openAlbumId !== null}
+	onTitleClick={onLibraryTitleClick}
 	{icon}
 >
 	<nav class="rail-library-nav" aria-label={LIBRARY_NAV_LABEL}>
@@ -252,9 +267,9 @@
 		border-left: 3px solid transparent;
 	}
 
-	/* Mirrors RailGroup's own .disclose-row/.disclose/.group-title-link split
-	   (titleHref seam): the chevron toggles only, the label navigates only --
-	   see onAlbumLabelClick's own comment for why they must be two elements. */
+	/* Mirrors RailGroup's own .disclose-row/.disclose/.group-title-action split:
+	   the chevron toggles only, the label navigates only -- see
+	   onAlbumLabelClick's own comment for why they must be two elements. */
 	.album-row {
 		display: flex;
 		align-items: center;
