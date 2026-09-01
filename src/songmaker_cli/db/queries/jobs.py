@@ -354,6 +354,24 @@ def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]
     return result
 
 
+def last_job_failure_time(session: Session) -> datetime | None:
+    """When the most recent failed job finished, or None if none ever did.
+
+    Every path that marks a job FAILED also stamps completed_at, so the
+    newest of those is the newest failure.
+    """
+    newest = (
+        session.query(func.max(Job.completed_at))
+        .filter(Job.status == JobStatus.FAILED)
+        .scalar()
+    )
+    if newest is None:
+        return None
+    if newest.tzinfo is None:
+        return newest.replace(tzinfo=timezone.utc)
+    return newest
+
+
 def _duration_seconds_expr(session: Session):
     """Duration expression in seconds.
 

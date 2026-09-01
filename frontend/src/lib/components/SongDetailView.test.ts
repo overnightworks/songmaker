@@ -225,7 +225,6 @@ function healthSummary(overrides: Partial<HealthSummary> = {}): HealthSummary {
 	return {
 		status: 'ok',
 		queue_depth_cap_reached: false,
-		queue_depth: 0,
 		music_queue_depth: 0,
 		scoring_queue_depth: 0,
 		acestep_workers_online: 1,

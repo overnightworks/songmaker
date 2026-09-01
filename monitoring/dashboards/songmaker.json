@@ -98,7 +98,7 @@
       },
       "targets": [
         {
-          "expr": "songmaker_queue_depth",
+          "expr": "sum(songmaker_queue_depth)",
           "legendFormat": "Queue"
         }
       ],
@@ -112,29 +112,27 @@
           "color": { "mode": "thresholds" },
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 18000 },
-              { "color": "red", "value": 22000 }
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
             ]
-          },
-          "unit": "decmbytes"
+          }
         },
         "overrides": []
       },
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
       "id": 4,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
+        "colorMode": "background",
+        "graphMode": "none",
         "reduceOptions": { "calcs": ["lastNotNull"] }
       },
       "targets": [
         {
-          "expr": "songmaker_gpu_vram_megabytes",
-          "legendFormat": "VRAM"
+          "expr": "songmaker_acestep_workers_total{status=\"online\"}",
+          "legendFormat": "Online workers"
         }
       ],
-      "title": "GPU VRAM (MB)",
+      "title": "Online ACE-Step Workers",
       "type": "stat"
     },
     {
@@ -338,9 +336,8 @@
             "stacking": { "mode": "none" }
           },
           "color": { "mode": "continuous-GrYlRd" },
-          "unit": "decmbytes",
-          "min": 0,
-          "max": 24000
+          "unit": "decgbytes",
+          "min": 0
         },
         "overrides": []
       },
@@ -352,11 +349,15 @@
       },
       "targets": [
         {
-          "expr": "songmaker_gpu_vram_megabytes",
-          "legendFormat": "VRAM Used"
+          "expr": "songmaker_acestep_worker_vram_used_gigabytes",
+          "legendFormat": "{{worker_id}} used"
+        },
+        {
+          "expr": "songmaker_acestep_worker_vram_total_gigabytes",
+          "legendFormat": "{{worker_id}} budget"
         }
       ],
-      "title": "GPU VRAM Over Time",
+      "title": "ACE-Step Worker VRAM Over Time",
       "type": "timeseries"
     },
     {
@@ -369,7 +370,7 @@
             "lineWidth": 2,
             "stacking": { "mode": "none" }
           },
-          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "color": { "mode": "palette-classic" },
           "min": 0
         },
         "overrides": []
@@ -383,7 +384,7 @@
       "targets": [
         {
           "expr": "songmaker_queue_depth",
-          "legendFormat": "Queue Depth"
+          "legendFormat": "{{queue}}"
         }
       ],
       "title": "Queue Depth Over Time",

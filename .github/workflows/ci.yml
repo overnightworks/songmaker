@@ -114,6 +114,26 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  alert-rules:
+    name: Alert rules (promtool)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The rules are Prometheus' own schema, so Prometheus' own tool is
+      # the only honest checker — and it comes in the same image the
+      # compose stack runs, rather than as a second thing to install.
+      # `test rules` drives monitoring/alert.rules.test.yml against the
+      # real rule file (issue #333).
+      - name: Check and unit-test the alert rules
+        run: |
+          run_promtool() {
+            docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
+              --entrypoint promtool prom/prometheus:latest "$@"
+          }
+          run_promtool check rules alert.rules.yml
+          run_promtool test rules alert.rules.test.yml
+
   postgresql-contract:
     name: PostgreSQL contract (serial)
     runs-on: ubuntu-latest

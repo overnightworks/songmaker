@@ -4,6 +4,10 @@ After=docker.service
 Requires=docker.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
+# Fires once the unit gives up restarting (after StartLimitBurst is spent
+# within StartLimitIntervalSec above), not on each individual restart
+# attempt — RestartMode=direct below is what makes that true (issue #333).
+OnFailure=songmaker-alert@%n.service
 
 [Service]
 Type=oneshot
@@ -17,6 +21,13 @@ RemainAfterExit=yes
 WorkingDirectory=/home/felix-hummert/git/songmaker
 ExecStart=/usr/bin/docker compose up -d
 Restart=on-failure
+# Without this, systemd passes through the failed state before EVERY
+# scheduled restart, and OnFailure= above fires each time — up to
+# StartLimitBurst emails for a single boot problem. `direct` restarts
+# straight from the failed attempt, so the unit only ever enters failed
+# once its restart budget is spent, which is the one moment worth an
+# email (issue #333; requires systemd >= 254, this host runs 255).
+RestartMode=direct
 RestartSec=10
 User=felix-hummert
 Group=docker

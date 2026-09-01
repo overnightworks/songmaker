@@ -2,6 +2,13 @@
 Description=Songmaker pull-based auto-deploy tick (issue #298)
 After=docker.service songmaker.service
 Requires=docker.service
+# Only a hard unit failure (non-zero exit from auto-deploy.sh itself, e.g.
+# the shell failing to start) triggers this — not the script's own
+# consecutive-failure counter, which already alerts independently once N
+# ticks in a row are stuck (see auto-deploy.sh's record_failure). This
+# closes the other gap: the failure this counter can never see because the
+# tick died before ever reaching it (issue #333).
+OnFailure=songmaker-alert@%n.service
 
 [Service]
 Type=oneshot

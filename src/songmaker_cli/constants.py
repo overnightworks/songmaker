@@ -233,8 +233,6 @@ SCORER_TIMEOUT_SECONDS = 120
 TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 
 # arq worker
-ARQ_QUEUE_KEY = "arq:queue"
-ARQ_HEALTH_KEY = f"{ARQ_QUEUE_KEY}:health-check"
 RECOVERY_LOCK_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock"
 RECOVERY_LOCK_TTL_SECONDS = 30
 ARQ_MUSIC_QUEUE_NAME = "arq:queue:music"
@@ -279,12 +277,37 @@ PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS = "songmaker_http_request_duration_milliseconds_total"
 PROM_ACTIVE_SESSIONS = "songmaker_active_sessions"
 PROM_JOBS_TOTAL = "songmaker_jobs_total"
+# When the newest job failure finished, as Unix time (issue #333). A
+# timestamp rather than a failure counter, because every counter-shaped
+# answer needs history the alarm may not have: a per-type
+# songmaker_jobs_total{status="failed"} series only comes into existence
+# WITH the first failure of that type, and even an always-exported total
+# reads 1 on Prometheus' FIRST sample if the failure happened between the
+# web container becoming healthy and that first scrape. increase() finds
+# no rise across a series' first sample either way, so exactly the first
+# failure of a fresh stack went unalerted. "How long ago was the last
+# one" needs no history: one sample carries the whole answer.
+PROM_LAST_JOB_FAILURE_TIMESTAMP = "songmaker_last_job_failure_timestamp_seconds"
+# What that metric reads while nothing has ever failed: the Unix epoch,
+# which puts `time() - <metric>` decades outside every alert window
+# without the series ever having to be absent.
+PROM_NEVER_FAILED_TIMESTAMP = 0.0
 PROM_JOB_DURATION_SECONDS = "songmaker_job_duration_seconds"
+# Labeled by queue ("music"/"scoring") — the arq queue names the workers
+# actually run on. Renders as songmaker_queue_depth{queue="music"} etc.
+# (issue #333, #330 Finding 3): the previous single unlabeled value read
+# the arq client library's own default queue key, which nothing in this
+# codebase ever enqueues to, so it was always 0.
 PROM_QUEUE_DEPTH = "songmaker_queue_depth"
-PROM_GPU_VRAM_MB = "songmaker_gpu_vram_megabytes"
 PROM_ACESTEP_WORKERS_TOTAL = "songmaker_acestep_workers_total"
 PROM_ACESTEP_WORKER_LOADED_MODELS = "songmaker_acestep_worker_loaded_models"
 PROM_ACESTEP_WORKER_QUEUE_DEPTH = "songmaker_acestep_worker_queue_depth"
+# Per-worker VRAM from the acestep-worker's own heartbeat (issue #333,
+# #330 Finding 4) — replaces songmaker_gpu_vram_megabytes, which could
+# never be produced from the songmaker-web container itself (no GPU
+# runtime, no NVML there) and always read empty.
+PROM_ACESTEP_WORKER_VRAM_USED_GB = "songmaker_acestep_worker_vram_used_gigabytes"
+PROM_ACESTEP_WORKER_VRAM_TOTAL_GB = "songmaker_acestep_worker_vram_total_gigabytes"
 PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 # Rate limit setting keys (stored in rate_limit_settings table)

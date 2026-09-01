@@ -69,6 +69,19 @@ SERVICE_TARGET="/etc/systemd/system/songmaker-autodeploy.service"
 TIMER_SOURCE="$SCRIPT_DIR/songmaker-autodeploy.timer"
 TIMER_TARGET="/etc/systemd/system/songmaker-autodeploy.timer"
 DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy.sh"
+# The shared alert template unit (issue #333) — songmaker-autodeploy.service
+# above declares OnFailure=songmaker-alert@%n.service, so it must exist
+# before that unit is installed. install-autostart.sh installs the same
+# file for songmaker.service; both installers are idempotent and derive
+# the same WorkingDirectory/User from their own checkout, so running
+# either (or both) converges on one identical installed unit.
+ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
+ALERT_SERVICE_TARGET="/etc/systemd/system/songmaker-alert@.service"
+ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
+# Sourced by alert.sh (and by auto-deploy.sh) for the .env keys that
+# configure the channel — a checkout missing it has no alert channel at
+# all, which is exactly what must not be discovered during an outage.
+ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
 
 if [ ! -f "$SERVICE_SOURCE" ]; then
     echo "ERROR: $SERVICE_SOURCE not found." >&2
@@ -82,6 +95,21 @@ fi
 
 if [ ! -x "$DEPLOY_SCRIPT" ]; then
     echo "ERROR: $DEPLOY_SCRIPT not found or not executable." >&2
+    exit 1
+fi
+
+if [ ! -f "$ALERT_SERVICE_SOURCE" ]; then
+    echo "ERROR: $ALERT_SERVICE_SOURCE not found." >&2
+    exit 1
+fi
+
+if [ ! -x "$ALERT_SCRIPT" ]; then
+    echo "ERROR: $ALERT_SCRIPT not found or not executable." >&2
+    exit 1
+fi
+
+if [ ! -f "$ALERT_CONFIG_LIB" ]; then
+    echo "ERROR: $ALERT_CONFIG_LIB not found." >&2
     exit 1
 fi
 
@@ -107,14 +135,27 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/auto-deploy.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
 
 TMP_SERVICE="$(mktemp)"
-trap 'rm -f "$TMP_SERVICE"' EXIT
+TMP_ALERT_SERVICE="$(mktemp)"
+trap 'rm -f "$TMP_SERVICE" "$TMP_ALERT_SERVICE"' EXIT
 
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
     -e "s#^ExecStart=.*#ExecStart=$ESCAPED_DEPLOY_SCRIPT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$SERVICE_SOURCE" >"$TMP_SERVICE"
+
+# ExecStart carries fixed arguments after the script path (the alert
+# subject/body) — only the path prefix up to alert.sh itself is
+# substituted, unlike the single-argument ExecStart above.
+sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
+    -e "s#^ExecStart=.*/scripts/alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
+    -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
+    "$ALERT_SERVICE_SOURCE" >"$TMP_ALERT_SERVICE"
+
+echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/alert.sh ..., User=$INSTALL_USER)..."
+sudo install -m 0644 "$TMP_ALERT_SERVICE" "$ALERT_SERVICE_TARGET"
 
 echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/auto-deploy.sh, User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_SERVICE" "$SERVICE_TARGET"
@@ -133,6 +174,16 @@ echo "Done. songmaker-autodeploy.timer is armed and will tick every ~2 minutes."
 echo "The first tick runs within 2 minutes and is safe to run against the live"
 echo "stack: auto-deploy.sh only pulls + redeploys when origin/main has moved,"
 echo "the local tree is clean and fast-forwardable, and no jobs are active."
+echo
+echo "songmaker-alert@.service is installed alongside it (issue #333):"
+echo "songmaker-autodeploy.service emails ALERT_EMAIL_TO once three deploy"
+echo "attempts in a row have failed (~6 minutes while the ticks are quick,"
+echo "longer when one of them waits out a slow deploy), then again once an"
+echo "hour for as long as it stays stuck."
+echo "Set ALERT_EMAIL_TO/SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD in"
+echo ".env for this to actually send — without them the stack's alertmanager"
+echo "refuses to start and auto-deploy.sh refuses to deploy, both naming the"
+echo "missing keys, instead of silently doing nothing."
 echo
 echo "To verify what's installed:"
 echo "  systemctl status songmaker-autodeploy.timer"

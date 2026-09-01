@@ -185,7 +185,6 @@ describe('API client', () => {
 		mockOk({
 			status: 'ok',
 			queue_depth_cap_reached: true,
-			queue_depth: 5,
 			music_queue_depth: 3,
 			scoring_queue_depth: 2,
 			acestep_workers_online: 1,
@@ -194,7 +193,6 @@ describe('API client', () => {
 		const result = await fetchHealth();
 		expect(mockFetch.mock.calls[0][0]).toBe('/health');
 		expect(result.queue_depth_cap_reached).toBe(true);
-		expect(result.queue_depth).toBe(5);
 	});
 
 	it('pickGeneration sends POST', async () => {

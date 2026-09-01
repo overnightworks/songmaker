@@ -11,10 +11,8 @@ from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
 from songmaker_cli.constants import (
-    ARQ_HEALTH_KEY,
     ARQ_MUSIC_HEALTH_KEY,
     ARQ_MUSIC_QUEUE_NAME,
-    ARQ_QUEUE_KEY,
     ARQ_SCORING_HEALTH_KEY,
     ARQ_SCORING_QUEUE_NAME,
 )
@@ -52,20 +50,6 @@ async def close_arq_pool() -> None:
         _pool = None
     if pool is not None:
         await pool.aclose()
-
-
-async def get_queue_depth() -> int:
-    try:
-        return await get_arq_pool().zcard(ARQ_QUEUE_KEY)
-    except Exception:
-        return 0
-
-
-async def is_worker_healthy() -> bool:
-    try:
-        return await get_arq_pool().exists(ARQ_HEALTH_KEY) > 0
-    except Exception:
-        return False
 
 
 async def is_music_worker_healthy() -> bool:

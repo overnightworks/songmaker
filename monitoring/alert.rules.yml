@@ -1,0 +1,52 @@
+# Prometheus alert rules for Songmaker (issue #333).
+#
+# These are the source of truth for the three conditions — checkable with
+# `promtool check rules monitoring/alert.rules.yml` independent of any UI —
+# evaluated by Prometheus itself (see rule_files: in prometheus.yml) and
+# delivered by Alertmanager's own SMTP client (monitoring/
+# alertmanager.yml.template), not duplicated as a second set of native
+# Grafana alert rules: that would mean maintaining the same three
+# thresholds in two schemas, which is exactly the kind of side-by-side
+# duplication this design avoids. All three notify the same address
+# configured in .env (ALERT_EMAIL_TO) — see alertmanager.yml.template.
+groups:
+  - name: songmaker
+    rules:
+      - alert: NoOnlineAceStepWorker
+        expr: songmaker_acestep_workers_total{status="online"} == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: No online ACE-Step worker for 10 minutes
+          description: >-
+            songmaker_acestep_workers_total{status="online"} has read 0 for
+            10 minutes straight — generation is stalled. This is the exact
+            metric that sat correct and unwatched for six days during
+            issue #252.
+
+      - alert: SongmakerTargetDown
+        expr: up{job="songmaker"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus cannot scrape songmaker-web
+          description: >-
+            up{job="songmaker"} has been 0 for 5 minutes — songmaker-web is
+            unreachable or the container is down.
+
+      # Age of the newest failure, not a rise in a failure count: a
+      # counter answers "how many more since the last sample", which
+      # nothing can answer about the very FIRST sample of a series — and
+      # the first sample is exactly where a fresh stack's first failed job
+      # lands when it fails between songmaker-web becoming healthy and
+      # Prometheus' first scrape of it. A timestamp is complete in every
+      # single sample. See alert.rules.test.yml for both cases pinned.
+      - alert: SongmakerJobFailure
+        expr: time() - songmaker_last_job_failure_timestamp_seconds < 900
+        labels:
+          severity: warning
+        annotations:
+          summary: Songmaker jobs are failing
+          description: At least one job failed within the last 15 minutes.

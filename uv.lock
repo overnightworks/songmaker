@@ -1601,6 +1601,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 mcp = [
@@ -1670,6 +1671,7 @@ requires-dist = [
     { name = "python-dotenv", marker = "extra == 'server'", specifier = ">=1.0,<2" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.7,<1" },
     { name = "python-slugify", specifier = ">=8.0,<9" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0,<7" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'acestep-worker'", specifier = ">=5.0,<9" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'server'", specifier = ">=5.0,<9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },

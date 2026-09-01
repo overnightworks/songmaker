@@ -214,10 +214,61 @@ services:
     restart: unless-stopped
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
       - promdata:/prometheus
     depends_on:
       songmaker-web:
         condition: service_healthy
+      alertmanager:
+        condition: service_started
+    cap_drop:
+      - ALL
+
+  # Delivers the three alert.rules.yml conditions by email via Alertmanager's
+  # own SMTP client (issue #333) — see monitoring/alertmanager.yml.template
+  # for why this owns delivery instead of scripts/alert.sh or Grafana's
+  # native alerting. Internal-only, same as prometheus above (no published
+  # port): reached by Prometheus over the compose network, not by a human
+  # browser directly.
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    # Only the four non-secret values travel as environment (they are
+    # readable in `docker inspect`, which for a hostname, a port and two
+    # addresses is what they already are in .env.docker.example). The
+    # password does NOT: it is mounted as the smtp_password secret below
+    # and read by Alertmanager itself from /run/secrets/smtp_password
+    # (smtp_auth_password_file in the template), so it never reaches this
+    # container's environment, argv, or writable layer.
+    environment:
+      ALERT_EMAIL_TO: "${ALERT_EMAIL_TO:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+    secrets:
+      - smtp_password
+    volumes:
+      - ./monitoring/alertmanager.yml.template:/etc/alertmanager/alertmanager.yml.template:ro
+      - ./monitoring/alertmanager-entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+      - alertmanagerdata:/alertmanager
+    # The image's own ENTRYPOINT is /bin/alertmanager; entrypoint: replaces
+    # it entirely so the SMTP config can be assembled first (see
+    # monitoring/alertmanager-entrypoint.sh, which then execs the real
+    # binary). Confirmed against prom/alertmanager:latest that /bin/sh,
+    # /bin/sed and /bin/amtool all exist in this image — no envsubst, sed
+    # substitution instead, and amtool validates the result before the
+    # daemon ever sees it.
+    entrypoint: ["/bin/sh", "/etc/alertmanager/entrypoint.sh"]
+    # Without this, a container stuck in a config-error restart loop still
+    # counts as "started" — `docker compose up --wait` would then wait on
+    # it forever and wedge the auto-deploy tick holding the lock (issue
+    # #333). Unhealthy is a state both `compose ps` and `--wait` can see.
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     cap_drop:
       - ALL
 
@@ -244,6 +295,13 @@ services:
 secrets:
   hf_token:
     environment: HF_TOKEN
+  # Mounted into the alertmanager container at /run/secrets/smtp_password
+  # instead of being passed as an environment variable: a secret in
+  # `environment:` is visible in `docker inspect` and `docker compose
+  # config` for anyone on the host, and would additionally have to survive
+  # a text substitution on its way into the config (issue #333).
+  smtp_password:
+    environment: SMTP_PASSWORD
 
 volumes:
   pgdata:
@@ -253,3 +311,4 @@ volumes:
   hfcache:
   promdata:
   grafdata:
+  alertmanagerdata:

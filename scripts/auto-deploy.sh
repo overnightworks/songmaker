@@ -38,15 +38,24 @@
 #     c9d4a2f18e37 unique-slug-index migration). That is not fatal — the
 #     next tick retries the same pull+deploy. A tick that could not deploy
 #     despite main having moved (a hard refusal, or a pull/build/up
-#     failure) increments a consecutive-FAILURE counter; only N in a row
-#     escalates to a prio=err journal line worth paging on. A tick that
-#     merely defers because jobs are active increments a separate
-#     consecutive-BUSY counter with a much higher threshold and a quieter
-#     prio=warning line — a normal generation queue or an hours-long
-#     lora_training job legitimately keeps jobs active for a long time, and
-#     that is not the same emergency as a deploy that keeps failing outright
-#     (see record_failure / record_busy_deferral below). Both counters reset
-#     only on an actual deploy or a genuine "nothing to deploy" tick.
+#     failure) increments a consecutive-FAILURE counter; only the tick
+#     that crosses N in a row escalates to a prio=err journal line worth
+#     paging on — and, since issue #333, is also the only tick that exits
+#     non-zero (fail_tick below), so `OnFailure=songmaker-alert@%n.service`
+#     on the systemd unit emails the operator at that exact same moment
+#     instead of on every transient blip. A streak that simply continues
+#     escalates again once every ALERT_REPEAT_SECONDS of wall-clock time,
+#     so an outage nobody reacts to stays visible without mailing every
+#     two minutes (see escalation_due). A tick that merely defers because
+#     jobs are active
+#     increments a separate consecutive-BUSY counter with a much higher
+#     threshold and a quieter prio=warning line, never fails the unit — a
+#     normal generation queue or an hours-long lora_training job
+#     legitimately keeps jobs active for a long time, and that is not the
+#     same emergency as a deploy that keeps failing outright (see
+#     record_failure / fail_tick / record_busy_deferral below). Both
+#     counters reset only on an actual deploy or a genuine "nothing to
+#     deploy" tick.
 #   - This host's `.env` and checkout are also the operator's manual
 #     workspace. A dirty tree, a diverged local main, or HEAD sitting on a
 #     branch other than the deploy branch are left completely untouched —
@@ -91,9 +100,9 @@
 # WorkingDirectory/User/ExecStart into the systemd unit, exactly like
 # install-autostart.sh does for songmaker.service.
 #
-# LOCK_FILE and all three state files (FAILURE_COUNT_FILE, BUSY_COUNT_FILE,
-# DEPLOYED_SHA_FILE) live at a fixed path inside the git ADMIN directory,
-# resolved via `git rev-parse --absolute-git-dir` (GIT_ADMIN_DIR below) —
+# LOCK_FILE and all state files (the two counters, the two escalation
+# timestamps, DEPLOYED_SHA_FILE) live at a fixed path inside the git ADMIN
+# directory, resolved via `git rev-parse --absolute-git-dir` (GIT_ADMIN_DIR) —
 # not assumed to be $REPO_ROOT/.git. In a normal checkout that IS
 # $REPO_ROOT/.git; in a linked worktree (`git worktree add`), $REPO_ROOT/.git
 # is a FILE ("gitdir: /path/to/main/.git/worktrees/<name>"), and the real
@@ -145,10 +154,34 @@ LOCK_FILE="${SONGMAKER_AUTODEPLOY_LOCK_FILE:-$STATE_DIR_FALLBACK/songmaker-autod
 FAILURE_COUNT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failcount}"
 BUSY_COUNT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busycount}"
 DEPLOYED_SHA_FILE="${SONGMAKER_AUTODEPLOY_DEPLOYED_SHA_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.deployed-sha}"
+FAILURE_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failure-escalated-at}"
+BUSY_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busy-escalated-at}"
 GUARD_REASON_FILE="${SONGMAKER_AUTODEPLOY_GUARD_REASON_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.guard-reason}"
 FAILURE_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD:-3}"
 BUSY_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_BUSY_ALERT_THRESHOLD:-30}"
+# Wall-clock time between one escalation of an unbroken streak and the
+# next — 1h, deliberately the same cadence Alertmanager's repeat_interval
+# gives the other half of this one alert channel
+# (monitoring/alertmanager.yml.template). See escalation_due.
+ALERT_REPEAT_SECONDS="${SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS:-3600}"
+# A zero or garbage value here would make every escalation arithmetic
+# silently fail, i.e. turn the alarm off — the one failure mode this whole
+# issue exists to prevent.
+if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS must be a positive integer, got '$ALERT_REPEAT_SECONDS'"
+    exit 1
+fi
 DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
+# Bounds the container-readiness wait of step 9 only; the image build in
+# step 8 stays deliberately unbounded, because a cold-cache build takes
+# 8-15 minutes by design. Without a bound, one service that can never
+# become healthy (issue #333's own alertmanager, if .env lacks the SMTP
+# values) makes `compose up --wait` wait forever — and since the tick holds
+# the flock the whole time, every later tick skips and nothing is ever
+# alerted. The default is generous enough for a cold ACE-Step model load
+# (ACESTEP_STARTUP_TIMEOUT_SECONDS, 900s) to still converge: this guards
+# against "never", not against "slow".
+COMPOSE_UP_WAIT_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_COMPOSE_UP_WAIT_TIMEOUT_SECONDS:-1200}"
 POSTGRES_USER="${POSTGRES_USER:-songmaker}"
 POSTGRES_DB="${POSTGRES_DB:-songmaker}"
 
@@ -177,35 +210,44 @@ active_job_count() {
     printf '%s' "$count"
 }
 
-# Shared reader for both consecutive-tick counters. Guards `cat` itself
-# against set -e (an unreadable file, e.g. a permissions problem, must be
-# treated like a corrupt one — 0 plus a loud line — rather than killing the
-# tick before it can even record anything).
-read_counter() {
+# Shared reader for every whole-number state file this script keeps: the
+# two consecutive-tick counters and the two escalation timestamps. A
+# missing file reads 0, which is what both kinds want — no streak yet, and
+# no escalation yet. Guards `cat` itself against set -e (an unreadable
+# file, e.g. a permissions problem, must be treated like a corrupt one — 0
+# plus a loud line — rather than killing the tick before it can even
+# record anything).
+read_number() {
     local file="$1"
     if [[ ! -f "$file" ]]; then
         printf '0'
         return
     fi
-    local count
-    if ! count="$(cat "$file" 2>&1)"; then
-        log_err "cannot read counter file $file ($count) — treating as corrupt, using 0"
+    local value
+    if ! value="$(cat "$file" 2>&1)"; then
+        log_err "cannot read state file $file ($value) — treating as corrupt, using 0"
         printf '0' >"$file"
         printf '0'
         return
     fi
-    if ! [[ "$count" =~ ^[0-9]+$ ]]; then
-        log_err "counter file $file has corrupt content ('$count') — resetting to 0"
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        log_err "state file $file has corrupt content ('$value') — resetting to 0"
         printf '0' >"$file"
         printf '0'
         return
     fi
-    printf '%s' "$count"
+    printf '%s' "$value"
 }
 
 reset_counters() {
     printf '0' >"$FAILURE_COUNT_FILE"
     printf '0' >"$BUSY_COUNT_FILE"
+    # The escalation timestamps belong to the streak that is now over. A
+    # new streak has to be able to escalate on the tick that crosses its
+    # threshold, even if that is minutes after the previous streak's last
+    # escalation — otherwise a recovery followed by a fresh outage would
+    # stay silent for the rest of the repeat window.
+    rm -f "$FAILURE_ESCALATED_AT_FILE" "$BUSY_ESCALATED_AT_FILE"
     # The counters hitting 0 means the guard streak is over too — an
     # up-to-date shortcut or a first-run adoption both reset the counters
     # without ever reaching the branch check that would otherwise clear
@@ -228,42 +270,112 @@ record_success() {
     local written_sha
     if ! written_sha="$(cat "$DEPLOYED_SHA_FILE" 2>&1)" || [[ "$written_sha" != "$deployed_sha" ]]; then
         log_err "deployed-sha file $DEPLOYED_SHA_FILE reads back as '$written_sha' after writing '$deployed_sha' — treating this deploy as failed, not successful"
-        record_failure "deployed-sha readback mismatch"
+        # This path pages immediately either way (the caller exits 1), so
+        # only record_failure's counting matters here, not its answer to
+        # "did this tick escalate".
+        record_failure "deployed-sha readback mismatch" || true
         return 1
     fi
     reset_counters
     log_info "deploy succeeded, now running $deployed_sha"
 }
 
+# What the clock reads. Its own function because the tests replace it —
+# a repetition promised in hours cannot be proven by a test that waits
+# hours.
+now_seconds() {
+    date +%s
+}
+
+# The escalation rule both counters below share: escalate on the tick that
+# CROSSES the threshold, then at most once per ALERT_REPEAT_SECONDS for as
+# long as the streak lasts, recording in $timestamp_file when it did.
+# Escalating on every tick past the threshold would mail the operator
+# every two minutes through `OnFailure=` (issue #333) and bury the
+# journal; escalating only on the crossing tick would let a permanent
+# outage go quiet after a single missed message, which is the worse of the
+# two failures. Every tick is still counted and still logged at debug, so
+# the record of what happened is complete either way.
+#
+# The repetition is measured in TIME, not in ticks. A systemd timer starts
+# no second run while the previous one is still going, so a tick is not a
+# fixed two minutes: one that waits out COMPOSE_UP_WAIT_TIMEOUT_SECONDS
+# occupies twenty. Counting ticks turned "again in an hour" into "again in
+# ten hours" on exactly the slow, broken ticks this alarm exists for.
+# The THRESHOLD stays a tick count on
+# purpose: "three attempts in a row failed" is what separates a transient
+# blip (a migration lock_timeout the next tick retries) from an outage,
+# and elapsed time cannot tell those two apart.
+#
+# Called at most once per tick per counter — it writes the timestamp it
+# reads.
+escalation_due() {
+    local count="$1"
+    local threshold="$2"
+    local timestamp_file="$3"
+    ((count >= threshold)) || return 1
+    local now last_escalation
+    now="$(now_seconds)"
+    last_escalation="$(read_number "$timestamp_file")"
+    ((now - last_escalation >= ALERT_REPEAT_SECONDS)) || return 1
+    printf '%s' "$now" >"$timestamp_file"
+}
+
 # A tick that could not deploy at all despite $DEPLOY_BRANCH having moved —
 # a hard refusal (wrong branch, dirty tree, diverged), a fail-closed DB
 # check, or a pull/build/up failure. This is the "something is actually
-# broken" signal: N of these in a row (default 3, ~6 minutes) pages.
+# broken" signal: N of these in a row (default 3) pages.
+#
+# Returns success on exactly the ticks that escalated, so fail_tick below
+# fails the systemd unit — and therefore sends the email — on those and
+# only those, without asking escalation_due a second question it would
+# answer differently (it records the time it escalated).
 record_failure() {
     local reason="$1"
     local count
-    count="$(read_counter "$FAILURE_COUNT_FILE")"
+    count="$(read_number "$FAILURE_COUNT_FILE")"
     count=$((count + 1))
     printf '%s' "$count" >"$FAILURE_COUNT_FILE"
     log_debug "failure count now $count (this tick: $reason)"
-    if [[ "$count" -ge "$FAILURE_ALERT_THRESHOLD" ]]; then
-        log_err "ALERT: $count ticks in a row deferred/failed, reason: $reason — auto-deploy is stuck, needs human attention"
+    escalation_due "$count" "$FAILURE_ALERT_THRESHOLD" "$FAILURE_ESCALATED_AT_FILE" || return 1
+    log_err "ALERT: $count ticks in a row deferred/failed, reason: $reason — auto-deploy is stuck, needs human attention"
+}
+
+# Every guard/infra refusal below calls this instead of a bare `exit 1` —
+# it records the tick via record_failure() exactly as before, and fails the
+# systemd unit (exit 1) on exactly the ticks that also log the "ALERT: N
+# ticks in a row" line above: the tick that crosses
+# FAILURE_ALERT_THRESHOLD, and then the first tick at least
+# ALERT_REPEAT_SECONDS later while the streak holds. Every other tick in a
+# streak exits 0 despite having deferred.
+#
+# This is what makes `OnFailure=songmaker-alert@%n.service` (issue #333)
+# safe to attach to this unit: without it, the branch guard alone would
+# fire that unit-failure — and the alert email — on essentially every
+# 2-minute tick for as long as the operator works on a branch other than
+# $DEPLOY_BRANCH in this checkout (see step 4's own comment), which is a
+# routine, not an emergency, state.
+fail_tick() {
+    local reason="$1"
+    if record_failure "$reason"; then
+        exit 1
     fi
+    exit 0
 }
 
 # A tick deferred only because jobs are active (before or after the build).
 # This is expected behavior under a busy queue or a long-running
 # lora_training job, not a fault — it gets its own, much higher threshold
-# (default 30 ticks, ~1h) and a quieter prio=warning line instead of err.
+# (default 30 ticks) and a quieter prio=warning line instead of err.
 record_busy_deferral() {
     local active_job_count="$1"
     local count
-    count="$(read_counter "$BUSY_COUNT_FILE")"
+    count="$(read_number "$BUSY_COUNT_FILE")"
     count=$((count + 1))
     printf '%s' "$count" >"$BUSY_COUNT_FILE"
     log_debug "busy-deferral count now $count ($active_job_count jobs active)"
-    if [[ "$count" -ge "$BUSY_ALERT_THRESHOLD" ]]; then
-        log_warning "deploy pending for ~1h, $active_job_count jobs still active"
+    if escalation_due "$count" "$BUSY_ALERT_THRESHOLD" "$BUSY_ESCALATED_AT_FILE"; then
+        log_warning "deploy deferred on $count ticks in a row, $active_job_count jobs still active"
     fi
 }
 
@@ -310,20 +422,17 @@ fi
 # failure ALERT.
 if ! LOCAL_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>&1)"; then
     log_err "cannot determine local HEAD in $REPO_ROOT: $LOCAL_HEAD"
-    record_failure "cannot determine local HEAD"
-    exit 1
+    fail_tick "cannot determine local HEAD"
 fi
 
 if ! FETCH_OUTPUT="$(git -C "$REPO_ROOT" fetch origin "$DEPLOY_BRANCH" --quiet 2>&1)"; then
     log_err "git fetch origin $DEPLOY_BRANCH failed in $REPO_ROOT: $FETCH_OUTPUT"
-    record_failure "git fetch failed"
-    exit 1
+    fail_tick "git fetch failed"
 fi
 
 if ! REMOTE_HEAD="$(git -C "$REPO_ROOT" rev-parse "origin/$DEPLOY_BRANCH" 2>&1)"; then
     log_err "cannot resolve origin/$DEPLOY_BRANCH in $REPO_ROOT: $REMOTE_HEAD"
-    record_failure "cannot resolve origin/$DEPLOY_BRANCH"
-    exit 1
+    fail_tick "cannot resolve origin/$DEPLOY_BRANCH"
 fi
 
 # --- 3. Up-to-date shortcut — the common case, and must stay silent. Judged
@@ -364,14 +473,12 @@ fi
 # the ALERT threshold is unaffected by the log-level damping.
 if ! CURRENT_BRANCH="$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD 2>&1)"; then
     log_guard_reason "HEAD at $REPO_ROOT is not on a branch (detached?) — refusing to deploy, not touching the tree: $CURRENT_BRANCH"
-    record_failure "HEAD not on a branch"
-    exit 1
+    fail_tick "HEAD not on a branch"
 fi
 
 if [[ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]]; then
     log_guard_reason "HEAD at $REPO_ROOT is on branch '$CURRENT_BRANCH', not the deploy branch '$DEPLOY_BRANCH' — refusing to deploy, not touching the tree"
-    record_failure "HEAD on branch $CURRENT_BRANCH instead of $DEPLOY_BRANCH"
-    exit 1
+    fail_tick "HEAD on branch $CURRENT_BRANCH instead of $DEPLOY_BRANCH"
 fi
 
 # Branch guard passed — clear any stale reason so a future recurrence (after
@@ -384,20 +491,17 @@ rm -f "$GUARD_REASON_FILE"
 # operator's manual workspace.
 if ! STATUS_OUTPUT="$(git -C "$REPO_ROOT" status --porcelain 2>&1)"; then
     log_err "cannot determine working tree status in $REPO_ROOT: $STATUS_OUTPUT"
-    record_failure "git status failed"
-    exit 1
+    fail_tick "git status failed"
 fi
 
 if [[ -n "$STATUS_OUTPUT" ]]; then
     log_err "working tree at $REPO_ROOT is dirty — refusing to deploy, not touching it (the operator may be working here)"
-    record_failure "working tree dirty"
-    exit 1
+    fail_tick "working tree dirty"
 fi
 
 if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
     log_err "local HEAD ($LOCAL_HEAD) has diverged from origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — not fast-forwardable, refusing to deploy, not touching the tree"
-    record_failure "local HEAD diverged from origin/$DEPLOY_BRANCH"
-    exit 1
+    fail_tick "local HEAD diverged from origin/$DEPLOY_BRANCH"
 fi
 
 # --- 6. Job guard, ahead of the first step that touches the checkout. An
@@ -405,8 +509,7 @@ fi
 # deploy", not as "assume idle".
 if ! ACTIVE_JOB_COUNT="$(active_job_count)"; then
     log_err "cannot reach the database to check for active jobs — refusing to deploy (fail closed): $ACTIVE_JOB_COUNT"
-    record_failure "database unreachable before pull"
-    exit 1
+    fail_tick "database unreachable before pull"
 fi
 
 if [[ "$ACTIVE_JOB_COUNT" -gt 0 ]]; then
@@ -415,18 +518,34 @@ if [[ "$ACTIVE_JOB_COUNT" -gt 0 ]]; then
     exit 0
 fi
 
-# --- 7. Pull, then build. No timeout around the build (CLAUDE.md) — a
+# --- 7. Alert-channel guard, the last check before anything is changed.
+# The stack's alertmanager refuses to start without the five .env values
+# (issue #333), so a checkout that reaches this commit without them cannot
+# be deployed at all — `compose up --wait` would only discover that after
+# the whole build, minutes later, from an "unhealthy container" message
+# that names no cause. Refusing here instead names the missing keys on the
+# very first tick. The same helper scripts/alert.sh uses owns the list, so
+# there is one answer to "what configures the alert channel".
+if ! ALERT_CONFIG_ERROR="$( (
+    # shellcheck source=scripts/alert-config.sh
+    source "$SCRIPT_DIR/alert-config.sh"
+    load_alert_config "$REPO_ROOT/.env"
+) 2>&1 )"; then
+    log_err "alert channel not configured — refusing to deploy a stack whose alertmanager cannot start: $ALERT_CONFIG_ERROR"
+    fail_tick "alert channel not configured"
+fi
+
+# --- 8. Pull, then build. No timeout around the build (CLAUDE.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
-# itself — the recheck in step 8 is what guards the actual recreate. Both
+# itself — the recheck in step 9 is what guards the actual recreate. Both
 # `git pull` and `compose build` stream straight to this process's own
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
 # only a short log_err line with the exit code goes through `logger`.
 if ! PULL_OUTPUT="$(git -C "$REPO_ROOT" pull --ff-only origin "$DEPLOY_BRANCH" 2>&1)"; then
     log_err "git pull --ff-only failed in $REPO_ROOT despite passing the fast-forward check: $PULL_OUTPUT"
-    record_failure "git pull failed"
-    exit 1
+    fail_tick "git pull failed"
 fi
 
 if compose build; then
@@ -434,19 +553,17 @@ if compose build; then
 else
     BUILD_EXIT_CODE=$?
     log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
-    record_failure "compose build failed"
-    exit 1
+    fail_tick "compose build failed"
 fi
 
-# --- 8. Recheck immediately before the recreate — the only step that can
+# --- 9. Recheck immediately before the recreate — the only step that can
 # kill an in-flight job. This shrinks the unsafe window from the build's
 # 8-15 minutes down to the seconds between this check and `compose up`. A
 # deferral here finds the image already built on the next tick, so the
 # recheck lands within seconds rather than after another full build.
 if ! ACTIVE_JOB_COUNT="$(active_job_count)"; then
     log_err "cannot reach the database to recheck for active jobs after build — refusing to recreate containers (fail closed): $ACTIVE_JOB_COUNT"
-    record_failure "database unreachable after build"
-    exit 1
+    fail_tick "database unreachable after build"
 fi
 
 if [[ "$ACTIVE_JOB_COUNT" -gt 0 ]]; then
@@ -460,20 +577,22 @@ fi
 # leaving a just-recreated stack with no way to record what it is running.
 if ! DEPLOYED_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>&1)"; then
     log_err "cannot determine HEAD in $REPO_ROOT right before recreate: $DEPLOYED_HEAD"
-    record_failure "cannot determine HEAD before recreate"
-    exit 1
+    fail_tick "cannot determine HEAD before recreate"
 fi
 
-if compose up -d --wait; then
+if compose up -d --wait --wait-timeout "$COMPOSE_UP_WAIT_TIMEOUT_SECONDS"; then
     if record_success "$DEPLOYED_HEAD"; then
-        TICK_EXIT_CODE=0
-    else
-        TICK_EXIT_CODE=1
+        exit 0
     fi
+    # record_success's own failure path (deployed-sha readback mismatch)
+    # already called record_failure — but a deploy that succeeded and then
+    # immediately corrupted its own bookkeeping is a different, rarer, and
+    # more urgent kind of broken than a routine guard refusal, so this one
+    # pages immediately (exit 1) rather than waiting for fail_tick's
+    # threshold.
+    exit 1
 else
-    TICK_EXIT_CODE=$?
-    log_err "docker compose up -d --wait failed in $REPO_ROOT (exit $TICK_EXIT_CODE)"
-    record_failure "compose up failed"
+    UP_EXIT_CODE=$?
+    log_err "docker compose up -d --wait failed or timed out after ${COMPOSE_UP_WAIT_TIMEOUT_SECONDS}s in $REPO_ROOT (exit $UP_EXIT_CODE)"
+    fail_tick "compose up failed"
 fi
-
-exit "$TICK_EXIT_CODE"

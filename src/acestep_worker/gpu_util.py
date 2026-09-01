@@ -1,7 +1,8 @@
 """Live GPU memory queries via NVML for acestep_worker.
 
-Kept separate from songmaker_cli.gpu_util because engine isolation forbids
-acestep_worker from importing songmaker_cli.
+The only NVML reader in the project: this worker's container is the sole
+one holding a GPU, so it measures its own VRAM and publishes it in its
+heartbeat, from which songmaker-web republishes it on /metrics.
 """
 
 from __future__ import annotations

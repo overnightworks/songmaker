@@ -138,13 +138,15 @@ The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The Pyt
 
 ### Prometheus metric keys
 
-The web container's `/metrics` endpoint exposes the following worker pool gauges (in addition to the existing HTTP, jobs, queue depth, and GPU VRAM metrics):
+The web container's `/metrics` endpoint exposes the following worker pool gauges (in addition to the existing HTTP, jobs, and queue depth metrics):
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
 | `songmaker_acestep_workers_total` | gauge | `status="online\|loading\|offline"` | Count of registered workers in each status. `online` = heartbeat fresh and not currently loading a model. `loading` = heartbeat fresh and `target_loading` is non-null. `offline` = no heartbeat in the last 15 s (Redis TTL). |
 | `songmaker_acestep_worker_loaded_models` | gauge | `worker_id="..."` | Number of models currently in the cache for that worker. Always emitted for every registered worker, including offline ones (offline workers report 0). |
 | `songmaker_acestep_worker_queue_depth` | gauge | `worker_id="..."` | Per-worker generation queue depth, read from Redis. |
+| `songmaker_acestep_worker_vram_used_gigabytes` | gauge | `worker_id="..."` | VRAM in use on that worker's GPU, taken from its own heartbeat. Emitted only for workers that reported a number — `songmaker-web` has no GPU and cannot measure one (the old `songmaker_gpu_vram_megabytes`, which tried to, always read empty and is gone). |
+| `songmaker_acestep_worker_vram_total_gigabytes` | gauge | `worker_id="..."` | That GPU's total VRAM, same heartbeat source. |
 
 **Useful Prometheus queries:**
 

@@ -1,6 +1,18 @@
 global:
   scrape_interval: 15s
 
+# Alert delivery: Alertmanager sends via its own SMTP client, configured
+# from the same .env account scripts/alert.sh uses (see
+# monitoring/alertmanager.yml.template for why it — not this file's own
+# rule evaluation, and not a webhook back into a script — owns delivery).
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: songmaker
     metrics_path: /metrics

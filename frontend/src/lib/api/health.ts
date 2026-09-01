@@ -3,7 +3,6 @@ import { apiFetch } from './fetch';
 export interface HealthSummary {
 	status: string;
 	queue_depth_cap_reached: boolean;
-	queue_depth: number;
 	music_queue_depth: number;
 	scoring_queue_depth: number;
 	acestep_workers_online: number;

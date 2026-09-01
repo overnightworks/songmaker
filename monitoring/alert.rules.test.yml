@@ -1,0 +1,71 @@
+# Unit tests for the job-failure rule in alert.rules.yml, run by
+# Prometheus' own promtool against the real rule file (issue #333):
+#
+#   docker run --rm -v "$PWD/monitoring:/monitoring" -w /monitoring \
+#     prom/prometheus:latest promtool test rules alert.rules.test.yml
+#
+# The two cases below are the same failure seen from the two histories
+# Prometheus can have: one where it watched the metric before anything
+# failed, and one where its very first sample of the series already
+# carries the failure — a job that fails between songmaker-web becoming
+# healthy and the first scrape of it. The second case is what a counter
+# and increase() cannot see, and it is why this metric is a timestamp.
+#
+# promtool's clock starts at Unix time 0, so the timestamps below are
+# minutes from epoch and every eval_time is past the 15-minute window to
+# keep "never failed" (a metric reading 0) from looking recent.
+rule_files:
+  - alert.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    name: a failure Prometheus watched the metric across
+    input_series:
+      - series: songmaker_last_job_failure_timestamp_seconds
+        # Reads 0 ("nothing has ever failed") for half an hour, then
+        # carries a failure that finished at minute 30.
+        values: "0x29 1800x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: SongmakerJobFailure
+        exp_alerts: []
+      - eval_time: 31m
+        alertname: SongmakerJobFailure
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Songmaker jobs are failing
+              description: At least one job failed within the last 15 minutes.
+      - eval_time: 50m
+        alertname: SongmakerJobFailure
+        exp_alerts: []
+
+  - interval: 1m
+    name: a failure that is already there on the first sample
+    input_series:
+      - series: songmaker_last_job_failure_timestamp_seconds
+        # No sample at all until minute 30 — Prometheus starts scraping a
+        # stack whose first job has already failed.
+        values: "_x29 1800x30"
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: SongmakerJobFailure
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Songmaker jobs are failing
+              description: At least one job failed within the last 15 minutes.
+
+  - interval: 1m
+    name: a failure older than the window stays quiet
+    input_series:
+      - series: songmaker_last_job_failure_timestamp_seconds
+        values: "60x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: SongmakerJobFailure
+        exp_alerts: []

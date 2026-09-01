@@ -1,0 +1,40 @@
+# Alertmanager config template (issue #333) — NOT the final config.
+#
+# Alertmanager's own config format has no ${VAR} substitution, so the SMTP
+# account and recipient — the exact same five .env keys scripts/alert.sh
+# reads (ALERT_EMAIL_TO, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD):
+# one configured channel, two delivery paths — are resolved at container
+# start by monitoring/alertmanager-entrypoint.sh. The __PLACEHOLDER__
+# tokens below never reach disk with real values in this file; they are
+# substituted into a throwaway file inside the container.
+#
+# The password is the one value that is never substituted: Docker mounts
+# it as a secret file, and smtp_auth_password_file below points
+# Alertmanager straight at that file — so it stays out of process
+# arguments, out of `docker inspect`, and out of the generated config.
+#
+# Delivery for Prometheus-sourced alerts (monitoring/alert.rules.yml) goes
+# through Alertmanager's built-in email_configs, not through
+# scripts/alert.sh and not through Grafana's own alerting engine — see
+# that file's header comment for the full "one decision, one reason".
+# Alertmanager gives this for free that a raw script call would not:
+# group_by/group_wait/repeat_interval below mean a flapping alert re-fires
+# at most once an hour, not once per Prometheus evaluation.
+global:
+  smtp_smarthost: '__SMTP_HOST__:__SMTP_PORT__'
+  smtp_from: '__SMTP_USER__'
+  smtp_auth_username: '__SMTP_USER__'
+  smtp_auth_password_file: '/run/secrets/smtp_password'
+  smtp_require_tls: true
+
+route:
+  receiver: songmaker-email
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+
+receivers:
+  - name: songmaker-email
+    email_configs:
+      - to: '__ALERT_EMAIL_TO__'

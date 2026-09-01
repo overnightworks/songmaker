@@ -68,6 +68,10 @@ dev = [
     "pytest-xdist>=3.8,<4",
     "ruff>=0.4,<1",
     "fakeredis[lua]>=2.0,<3",
+    # Reads back what monitoring/alertmanager-entrypoint.sh generates, so
+    # its escaping is asserted against a real YAML parser instead of
+    # against matching text (issue #333).
+    "pyyaml>=6.0,<7",
 ]
 
 [project.scripts]

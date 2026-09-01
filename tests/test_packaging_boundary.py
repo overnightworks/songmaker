@@ -75,6 +75,7 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "pytest-xdist": frozenset({"xdist"}),
     "python-dotenv": frozenset({"dotenv"}),
     "python-multipart": frozenset({"multipart", "python_multipart"}),
+    "pyyaml": frozenset({"_yaml", "yaml"}),
     "redis": frozenset({"redis"}),
     "ruff": frozenset({"ruff"}),
     "soundfile": frozenset({"_soundfile", "_soundfile_data", "soundfile"}),

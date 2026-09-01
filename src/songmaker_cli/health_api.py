@@ -12,23 +12,21 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     PROM_ACESTEP_WORKER_LOADED_MODELS,
     PROM_ACESTEP_WORKER_QUEUE_DEPTH,
+    PROM_ACESTEP_WORKER_VRAM_TOTAL_GB,
+    PROM_ACESTEP_WORKER_VRAM_USED_GB,
     PROM_ACESTEP_WORKERS_TOTAL,
     PROM_ACTIVE_SESSIONS,
     PROM_CONTENT_TYPE,
-    PROM_GPU_VRAM_MB,
     PROM_HTTP_REQUEST_DURATION_MS,
     PROM_HTTP_REQUESTS_TOTAL,
     PROM_JOB_DURATION_SECONDS,
     PROM_JOBS_TOTAL,
+    PROM_LAST_JOB_FAILURE_TIMESTAMP,
+    PROM_NEVER_FAILED_TIMESTAMP,
     PROM_QUEUE_DEPTH,
 )
 
 router = APIRouter()
-
-
-def _get_gpu_vram_mb() -> float | None:
-    from songmaker_cli.gpu_util import get_gpu_memory_used_mb
-    return get_gpu_memory_used_mb()
 
 
 def _compute_script_hashes(index_html: Path) -> list[str]:
@@ -58,17 +56,20 @@ def _check_db(ctx: AppContext) -> bool:
 def _format_prometheus(
     http_snapshot: dict,
     jobs_by_type: dict[str, dict[str, int]],
+    last_job_failure_epoch_seconds: float,
     duration_avg: float | None,
     duration_min: float | None,
     duration_max: float | None,
-    queue_depth: int,
-    gpu_vram_mb: float | None,
+    music_queue_depth: int,
+    scoring_queue_depth: int,
     active_sessions: int,
     acestep_workers_online: int,
     acestep_workers_loading: int,
     acestep_workers_offline: int,
     acestep_worker_loaded_counts: dict[str, int],
     acestep_worker_queue_depths: dict[str, int],
+    acestep_worker_vram_used_gb: dict[str, float],
+    acestep_worker_vram_total_gb: dict[str, float],
 ) -> str:
     lines: list[str] = []
 
@@ -98,6 +99,13 @@ def _format_prometheus(
                 f'{PROM_JOBS_TOTAL}{{type="{job_type}",status="{status}"}} {count}'
             )
 
+    lines.append(
+        f"# HELP {PROM_LAST_JOB_FAILURE_TIMESTAMP} "
+        "Unix time of the newest job failure, 0 while nothing has ever failed.",
+    )
+    lines.append(f"# TYPE {PROM_LAST_JOB_FAILURE_TIMESTAMP} gauge")
+    lines.append(f"{PROM_LAST_JOB_FAILURE_TIMESTAMP} {last_job_failure_epoch_seconds}")
+
     lines.append(f"# HELP {PROM_JOB_DURATION_SECONDS} Job duration statistics for completed jobs.")
     lines.append(f"# TYPE {PROM_JOB_DURATION_SECONDS} gauge")
     duration_values = [
@@ -109,14 +117,10 @@ def _format_prometheus(
                 f'{PROM_JOB_DURATION_SECONDS}{{quantile="{quantile_label}"}} {value}'
             )
 
-    lines.append(f"# HELP {PROM_QUEUE_DEPTH} Number of jobs in the queue.")
+    lines.append(f"# HELP {PROM_QUEUE_DEPTH} Number of jobs waiting per arq queue.")
     lines.append(f"# TYPE {PROM_QUEUE_DEPTH} gauge")
-    lines.append(f"{PROM_QUEUE_DEPTH} {queue_depth}")
-
-    if gpu_vram_mb is not None:
-        lines.append(f"# HELP {PROM_GPU_VRAM_MB} GPU VRAM usage in megabytes.")
-        lines.append(f"# TYPE {PROM_GPU_VRAM_MB} gauge")
-        lines.append(f"{PROM_GPU_VRAM_MB} {gpu_vram_mb}")
+    lines.append(f'{PROM_QUEUE_DEPTH}{{queue="music"}} {music_queue_depth}')
+    lines.append(f'{PROM_QUEUE_DEPTH}{{queue="scoring"}} {scoring_queue_depth}')
 
     lines.append(
         f"# HELP {PROM_ACESTEP_WORKERS_TOTAL} Total registered acestep workers by status.",
@@ -150,6 +154,24 @@ def _format_prometheus(
             f'{PROM_ACESTEP_WORKER_QUEUE_DEPTH}{{worker_id="{worker_id}"}} {depth}',
         )
 
+    lines.append(
+        f"# HELP {PROM_ACESTEP_WORKER_VRAM_USED_GB} Per-worker VRAM used, from its own heartbeat.",
+    )
+    lines.append(f"# TYPE {PROM_ACESTEP_WORKER_VRAM_USED_GB} gauge")
+    for worker_id, used_gb in sorted(acestep_worker_vram_used_gb.items()):
+        lines.append(
+            f'{PROM_ACESTEP_WORKER_VRAM_USED_GB}{{worker_id="{worker_id}"}} {used_gb}',
+        )
+
+    lines.append(
+        f"# HELP {PROM_ACESTEP_WORKER_VRAM_TOTAL_GB} Per-worker VRAM budget, from its heartbeat.",
+    )
+    lines.append(f"# TYPE {PROM_ACESTEP_WORKER_VRAM_TOTAL_GB} gauge")
+    for worker_id, total_gb in sorted(acestep_worker_vram_total_gb.items()):
+        lines.append(
+            f'{PROM_ACESTEP_WORKER_VRAM_TOTAL_GB}{{worker_id="{worker_id}"}} {total_gb}',
+        )
+
     lines.append("")
     return "\n".join(lines)
 
@@ -159,22 +181,28 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 
     from songmaker_cli.acestep_state import read_queue_depth, read_worker_state
-    from songmaker_cli.arq_pool import get_arq_pool, get_queue_depth
+    from songmaker_cli.arq_pool import (
+        get_arq_pool,
+        get_music_queue_depth,
+        get_scoring_queue_depth,
+    )
     from songmaker_cli.db.queries import (
         count_active_sessions,
         job_counts_by_type_and_status,
         job_duration_stats,
+        last_job_failure_time,
         list_worker_identities,
     )
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
         jobs_by_type = job_counts_by_type_and_status(session)
         duration = job_duration_stats(session)
+        last_job_failure = last_job_failure_time(session)
         active_sessions = count_active_sessions(session)
         acestep_workers = list_worker_identities(session)
 
-    gpu_vram_mb = _get_gpu_vram_mb()
-    queue_depth = await get_queue_depth()
+    music_queue_depth = await get_music_queue_depth()
+    scoring_queue_depth = await get_scoring_queue_depth()
 
     pool = get_arq_pool()
     workers_online = 0
@@ -182,6 +210,8 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     workers_offline = 0
     loaded_counts: dict[str, int] = {}
     queue_depths: dict[str, int] = {}
+    vram_used_gb: dict[str, float] = {}
+    vram_total_gb: dict[str, float] = {}
     for w in acestep_workers:
         state = await read_worker_state(pool, w.id)
         if state is None:
@@ -195,21 +225,31 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
             workers_online += 1
         loaded_counts[w.id] = len(state.get("loaded", []))
         queue_depths[w.id] = await read_queue_depth(pool, w.id)
+        if state.get("vram_used_gb") is not None:
+            vram_used_gb[w.id] = state["vram_used_gb"]
+        if state.get("vram_total_gb") is not None:
+            vram_total_gb[w.id] = state["vram_total_gb"]
 
     body = _format_prometheus(
         http_snapshot=http_metrics.snapshot(),
         jobs_by_type=jobs_by_type,
+        last_job_failure_epoch_seconds=(
+            last_job_failure.timestamp() if last_job_failure
+            else PROM_NEVER_FAILED_TIMESTAMP
+        ),
         duration_avg=duration.avg,
         duration_min=duration.min,
         duration_max=duration.max,
-        queue_depth=queue_depth,
-        gpu_vram_mb=gpu_vram_mb,
+        music_queue_depth=music_queue_depth,
+        scoring_queue_depth=scoring_queue_depth,
         active_sessions=active_sessions,
         acestep_workers_online=workers_online,
         acestep_workers_loading=workers_loading,
         acestep_workers_offline=workers_offline,
         acestep_worker_loaded_counts=loaded_counts,
         acestep_worker_queue_depths=queue_depths,
+        acestep_worker_vram_used_gb=vram_used_gb,
+        acestep_worker_vram_total_gb=vram_total_gb,
     )
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
@@ -228,19 +268,15 @@ async def health_check(request: Request) -> JSONResponse:
     from songmaker_cli.arq_pool import (
         get_arq_pool,
         get_music_queue_depth,
-        get_queue_depth,
         get_scoring_queue_depth,
         is_music_worker_healthy,
         is_scoring_worker_healthy,
-        is_worker_healthy,
     )
     from songmaker_cli.db.queries import count_total_queued_jobs, list_worker_identities
     from songmaker_cli.settings import get_settings
 
-    worker_running = await is_worker_healthy()
     music_running = await is_music_worker_healthy()
     scoring_running = await is_scoring_worker_healthy()
-    queue_depth = await get_queue_depth()
     music_queue_depth = await get_music_queue_depth()
     scoring_queue_depth = await get_scoring_queue_depth()
 
@@ -278,10 +314,8 @@ async def health_check(request: Request) -> JSONResponse:
     )
     return JSONResponse({
         "status": "degraded" if degraded else "ok",
-        "worker": "running" if worker_running else "stopped",
         "music_worker": "running" if music_running else "stopped",
         "scoring_worker": "running" if scoring_running else "stopped",
-        "queue_depth": queue_depth,
         "music_queue_depth": music_queue_depth,
         "scoring_queue_depth": scoring_queue_depth,
         "db": "ok" if db_ok else "error",

@@ -80,6 +80,21 @@ instead:
 `src/` tree, over a table of read and write statements that pins that
 boundary, and over seeded files at every path that used to be exempt.
 
+### Alert rules (promtool)
+
+`monitoring/alert.rules.yml` is Prometheus' own schema, so Prometheus' own
+tool checks and unit-tests it rather than pytest.
+`monitoring/alert.rules.test.yml` feeds the real rule file synthetic series
+and asserts which alerts fire — in particular that a job failure is caught
+both when Prometheus watched the metric across it and when its very first
+sample of the series already carries it (issue #333). CI runs this as the
+`alert-rules` job; locally:
+
+```bash
+docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
+  --entrypoint promtool prom/prometheus:latest test rules alert.rules.test.yml
+```
+
 ### Acceptance evidence pilot
 
 #42-A1 is one Pytest integration proof for `ACC-CURATION-02` →

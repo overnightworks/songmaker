@@ -249,15 +249,13 @@ def test_exempt_static_paths_bypass_ip_rate_limit(ip_limited_client: TestClient,
 def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
     ip_limited_client: TestClient, mock_arq_pool,
 ) -> None:
-    """/health is the priciest anonymous endpoint (DB + ~6 Redis round trips)
+    """/health is the priciest anonymous endpoint (DB + ~5 Redis round trips)
     and must share the same budget as every other request -- an anonymous
     caller must not be able to hammer it for free (see rate_limit.py)."""
     with (
         ip_limited_client,
-        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):

@@ -1078,10 +1078,8 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
 
     with (
         client,
-        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
@@ -1089,10 +1087,10 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["db"] == "ok"
-    assert data["worker"] == "stopped"
     assert data["music_worker"] == "stopped"
     assert data["scoring_worker"] == "stopped"
-    assert data["queue_depth"] == 0
+    assert data["music_queue_depth"] == 0
+    assert data["scoring_queue_depth"] == 0
     assert data["acestep"] == "unknown"
     assert data["acestep_workers_total"] == 0
     assert data["acestep_workers_online"] == 0
@@ -1127,10 +1125,8 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
 
     with (
         client,
-        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=3)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=2)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=1)),
     ):
@@ -1138,10 +1134,10 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["worker"] == "running"
     assert data["music_worker"] == "running"
     assert data["scoring_worker"] == "running"
-    assert data["queue_depth"] == 3
+    assert data["music_queue_depth"] == 2
+    assert data["scoring_queue_depth"] == 1
     assert data["acestep"] == "unknown"
     assert data["acestep_workers_total"] == 0
 
@@ -1173,10 +1169,8 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
 
     with (
         client,
-        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
@@ -1219,10 +1213,8 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
 
     with (
         client,
-        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=3)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=3)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.settings.get_settings") as mock_settings,
@@ -1323,6 +1315,45 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
     assert "songmaker_job_duration_seconds" in body
 
 
+def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
+    tmp_path: Path, mock_arq_pool,
+) -> None:
+    """The single sample an alert needs: when a job last failed.
+
+    A counter would have to be compared against an earlier sample, which
+    is exactly what Prometheus does not have for the first failure of a
+    freshly started stack (issue #333).
+    """
+    from songmaker_cli.db.models import Job
+
+    client = _make_metrics_client(tmp_path)
+    older = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
+    newest = datetime(2026, 8, 31, 8, 30, tzinfo=timezone.utc)
+    with client.app.state.ctx.db() as session:
+        session.add(Job(type="generate", status="failed", started_at=older, completed_at=older))
+        session.add(Job(type="score", status="failed", started_at=newest, completed_at=newest))
+        session.add(
+            Job(type="generate", status="completed", started_at=newest, completed_at=newest),
+        )
+        session.commit()
+
+    with client:
+        body = client.get("/metrics").text
+
+    assert f"songmaker_last_job_failure_timestamp_seconds {newest.timestamp()}" in body
+
+
+def test_metrics_last_job_failure_timestamp_is_epoch_when_nothing_ever_failed(
+    tmp_path: Path, mock_arq_pool,
+) -> None:
+    client = _make_metrics_client(tmp_path)
+
+    with client:
+        body = client.get("/metrics").text
+
+    assert "songmaker_last_job_failure_timestamp_seconds 0.0" in body
+
+
 def test_metrics_format_prometheus_all_sections() -> None:
     from songmaker_cli.health_api import _format_prometheus
 
@@ -1338,17 +1369,20 @@ def test_metrics_format_prometheus_all_sections() -> None:
     body = _format_prometheus(
         http_snapshot=http_snapshot,
         jobs_by_type=jobs_by_type,
+        last_job_failure_epoch_seconds=1756000000.0,
         duration_avg=12.3,
         duration_min=1.0,
         duration_max=45.6,
-        queue_depth=7,
-        gpu_vram_mb=1024.5,
+        music_queue_depth=7,
+        scoring_queue_depth=2,
         active_sessions=3,
         acestep_workers_online=0,
         acestep_workers_loading=0,
         acestep_workers_offline=0,
         acestep_worker_loaded_counts={},
         acestep_worker_queue_depths={},
+        acestep_worker_vram_used_gb={"acestep-worker-0": 12.5},
+        acestep_worker_vram_total_gb={"acestep-worker-0": 24.0},
     )
     assert '# TYPE songmaker_http_requests_total counter' in body
     assert 'songmaker_http_requests_total{method="GET",status="200"} 10' in body
@@ -1358,14 +1392,20 @@ def test_metrics_format_prometheus_all_sections() -> None:
     assert 'songmaker_jobs_total{type="generate",status="completed"} 5' in body
     assert 'songmaker_jobs_total{type="generate",status="failed"} 1' in body
     assert 'songmaker_jobs_total{type="score",status="queued"} 2' in body
+    assert "# TYPE songmaker_last_job_failure_timestamp_seconds gauge" in body
+    assert "songmaker_last_job_failure_timestamp_seconds 1756000000.0" in body
     assert 'songmaker_job_duration_seconds{quantile="avg"} 12.3' in body
     assert 'songmaker_job_duration_seconds{quantile="min"} 1.0' in body
     assert 'songmaker_job_duration_seconds{quantile="max"} 45.6' in body
-    assert "songmaker_queue_depth 7" in body
-    assert "songmaker_gpu_vram_megabytes 1024.5" in body
+    assert 'songmaker_queue_depth{queue="music"} 7' in body
+    assert 'songmaker_queue_depth{queue="scoring"} 2' in body
+    assert 'songmaker_acestep_worker_vram_used_gigabytes{worker_id="acestep-worker-0"} 12.5' \
+        in body
+    assert 'songmaker_acestep_worker_vram_total_gigabytes{worker_id="acestep-worker-0"} 24.0' \
+        in body
 
 
-def test_metrics_format_prometheus_no_gpu_no_duration() -> None:
+def test_metrics_format_prometheus_no_duration() -> None:
     from songmaker_cli.health_api import _format_prometheus
 
     body = _format_prometheus(
@@ -1375,22 +1415,29 @@ def test_metrics_format_prometheus_no_gpu_no_duration() -> None:
             "http_request_duration_total_ms": 0.0,
         },
         jobs_by_type={},
+        last_job_failure_epoch_seconds=0.0,
         duration_avg=None,
         duration_min=None,
         duration_max=None,
-        queue_depth=0,
-        gpu_vram_mb=None,
+        music_queue_depth=0,
+        scoring_queue_depth=0,
         active_sessions=0,
         acestep_workers_online=0,
         acestep_workers_loading=0,
         acestep_workers_offline=0,
         acestep_worker_loaded_counts={},
         acestep_worker_queue_depths={},
+        acestep_worker_vram_used_gb={},
+        acestep_worker_vram_total_gb={},
     )
-    assert "songmaker_gpu_vram_megabytes" not in body
     assert "songmaker_job_duration_seconds{" not in body
+    # Exported even with nothing to report: an alert that reads "how long
+    # ago" needs the series to exist before the first failure does, and
+    # the Unix epoch puts it decades outside the window (issue #333).
+    assert "songmaker_last_job_failure_timestamp_seconds 0.0" in body
     assert "songmaker_active_sessions 0" in body
-    assert "songmaker_queue_depth 0" in body
+    assert 'songmaker_queue_depth{queue="music"} 0' in body
+    assert 'songmaker_queue_depth{queue="scoring"} 0' in body
 
 
 def test_metrics_format_prometheus_acestep_worker_gauges() -> None:
@@ -1403,11 +1450,12 @@ def test_metrics_format_prometheus_acestep_worker_gauges() -> None:
             "http_request_duration_total_ms": 0.0,
         },
         jobs_by_type={},
+        last_job_failure_epoch_seconds=0.0,
         duration_avg=None,
         duration_min=None,
         duration_max=None,
-        queue_depth=0,
-        gpu_vram_mb=None,
+        music_queue_depth=0,
+        scoring_queue_depth=0,
         active_sessions=0,
         acestep_workers_online=2,
         acestep_workers_loading=1,
@@ -1422,6 +1470,8 @@ def test_metrics_format_prometheus_acestep_worker_gauges() -> None:
             "acestep-worker-1": 0,
             "acestep-worker-2": 0,
         },
+        acestep_worker_vram_used_gb={},
+        acestep_worker_vram_total_gb={},
     )
     assert '# TYPE songmaker_acestep_workers_total gauge' in body
     assert 'songmaker_acestep_workers_total{status="online"} 2' in body
@@ -1445,17 +1495,20 @@ def test_metrics_format_prometheus_acestep_no_workers() -> None:
             "http_request_duration_total_ms": 0.0,
         },
         jobs_by_type={},
+        last_job_failure_epoch_seconds=0.0,
         duration_avg=None,
         duration_min=None,
         duration_max=None,
-        queue_depth=0,
-        gpu_vram_mb=None,
+        music_queue_depth=0,
+        scoring_queue_depth=0,
         active_sessions=0,
         acestep_workers_online=0,
         acestep_workers_loading=0,
         acestep_workers_offline=0,
         acestep_worker_loaded_counts={},
         acestep_worker_queue_depths={},
+        acestep_worker_vram_used_gb={},
+        acestep_worker_vram_total_gb={},
     )
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body
     assert 'songmaker_acestep_workers_total{status="loading"} 0' in body
