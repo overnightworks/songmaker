@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from importlib.util import find_spec
 from typing import Final
 
 import httpx
@@ -37,6 +38,7 @@ from songmaker_cli.settings import Settings, get_settings
 _CLAUDE_PROVIDER: Final = "claude"
 _GROK_PROVIDER: Final = "grok"
 _CODEX_PROVIDER: Final = "codex"
+_ANTHROPIC_SDK_DISTRIBUTION: Final = "anthropic"
 _ANTHROPIC_API_KEY_ENVIRONMENT: Final = "ANTHROPIC_API_KEY"
 _XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 _OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
@@ -59,7 +61,15 @@ class UnconfiguredProvider:
     missing_environment_key: str
 
 
-type ProviderConfiguration = ConfiguredProvider | UnconfiguredProvider
+@dataclass(frozen=True)
+class DependencyUnavailableProvider:
+    provider: str
+    dependency: str
+
+
+type ProviderConfiguration = (
+    ConfiguredProvider | DependencyUnavailableProvider | UnconfiguredProvider
+)
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,12 @@ def get_provider_configuration(provider: str) -> ProviderConfiguration:
 def list_provider_models(provider: str) -> list[str]:
     settings = get_settings()
     configuration = _provider_configuration(provider, settings)
+    if isinstance(configuration, DependencyUnavailableProvider):
+        raise ProviderUnavailableError(
+            provider,
+            f"{provider} is unavailable: required dependency "
+            f"'{configuration.dependency}' is not installed",
+        )
     if isinstance(configuration, UnconfiguredProvider):
         raise ProviderUnavailableError(
             provider,
@@ -101,10 +117,21 @@ def _provider_configuration(
 ) -> ProviderConfiguration:
     credential = _provider_api_credential(provider, settings)
     if _secret(credential.secret):
+        if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
+            return DependencyUnavailableProvider(
+                provider, _ANTHROPIC_SDK_DISTRIBUTION,
+            )
         return ConfiguredProvider(provider, ProviderSetupMethod.API_KEY)
     if provider == _CLAUDE_PROVIDER and cli_login_status().logged_in:
         return ConfiguredProvider(provider, ProviderSetupMethod.CLAUDE_CLI)
     return UnconfiguredProvider(provider, credential.environment_key)
+
+
+def _anthropic_sdk_available() -> bool:
+    try:
+        return find_spec(_ANTHROPIC_SDK_DISTRIBUTION) is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def _provider_api_credential(

@@ -11,6 +11,7 @@ from songmaker_cli.claude.provider import CliLoginStatus
 from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
     ConfiguredProvider,
+    DependencyUnavailableProvider,
     ProviderSetupMethod,
     UnconfiguredProvider,
     get_provider_configuration,
@@ -41,6 +42,9 @@ def test_grok_catalog_uses_live_xai_ids(monkeypatch):
 
 def test_claude_catalog_uses_live_anthropic_ids(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: object(),
+    )
 
     response = MagicMock()
     response.status_code = 200
@@ -96,9 +100,42 @@ def test_invalid_catalog_json_is_named_error(monkeypatch):
 
 def test_api_key_marks_provider_as_configured(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: object(),
+    )
 
     assert get_provider_configuration("claude") == ConfiguredProvider(
         "claude", ProviderSetupMethod.API_KEY,
+    )
+
+
+def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: None,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLoginStatus(logged_in=True, auth_method="claude.ai"),
+    )
+
+    assert get_provider_configuration("claude") == DependencyUnavailableProvider(
+        "claude", "anthropic",
+    )
+    with pytest.raises(ProviderUnavailableError, match="required dependency 'anthropic'"):
+        list_provider_models("claude")
+
+
+def test_claude_key_without_sdk_handles_a_blocked_import(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+
+    def _blocked(_name):
+        raise ModuleNotFoundError("blocked")
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog.find_spec", _blocked)
+
+    assert get_provider_configuration("claude") == DependencyUnavailableProvider(
+        "claude", "anthropic",
     )
 
 
