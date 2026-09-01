@@ -18,3 +18,8 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   30.08.2026, zweite Fassung freigegeben am 31.08.2026 — gegen die inzwischen
   gelandete Adressstruktur (#265) gehalten: jede Zeile der Leiste ist jetzt
   eine echte Adresse, das Aufklappen ist reine Darstellung.
+- `admin-models.html` — der Admin-Tab „Models" (#317). Erste Fassung
+  freigegeben am 01.09.2026: Provider-Status oben, Co-Writer und Scoring als
+  baugleiche Blöcke darunter, totes Chat-Model-Feld entfernt. Backend-
+  Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
+  providerneutral).

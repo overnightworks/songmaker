@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Providers, Co-Writer &amp; Scoring — Fassung 1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+	:root {
+		--paper: #f6f5f8;
+		--panel: #ffffff;
+		--panel-sunk: #f1eff4;
+		--ink: #1b1a20;
+		--ink-soft: #56525f;
+		--muted: #8b8794;
+		--rule: #e2dfe8;
+		--rule-strong: #cbc6d4;
+		--violet: #4b2fd1;
+		--crimson: #a81e2e;
+		--good: #1f7a4d;
+		--good-bg: color-mix(in srgb, #1f7a4d 12%, transparent);
+		--warn-bg: #fdf3e3;
+		--warn-ink: #7a5312;
+		--bad-bg: #fbe9ea;
+		--bad-ink: #a81e2e;
+		--shadow: 0 1px 2px rgba(27, 26, 32, .06), 0 8px 24px rgba(27, 26, 32, .05);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--paper: #131218;
+			--panel: #1c1a22;
+			--panel-sunk: #232029;
+			--ink: #eeecf2;
+			--ink-soft: #b3aebe;
+			--muted: #857f92;
+			--rule: #302c3a;
+			--rule-strong: #443e52;
+			--violet: #a794ff;
+			--crimson: #ef8090;
+			--good: #5fc994;
+			--good-bg: color-mix(in srgb, #5fc994 14%, transparent);
+			--warn-bg: #2e2416;
+			--warn-ink: #e2bb70;
+			--bad-bg: #341a1d;
+			--bad-ink: #ef8090;
+			--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--paper: #131218;
+		--panel: #1c1a22;
+		--panel-sunk: #232029;
+		--ink: #eeecf2;
+		--ink-soft: #b3aebe;
+		--muted: #857f92;
+		--rule: #302c3a;
+		--rule-strong: #443e52;
+		--violet: #a794ff;
+		--crimson: #ef8090;
+		--good: #5fc994;
+		--good-bg: color-mix(in srgb, #5fc994 14%, transparent);
+		--warn-bg: #2e2416;
+		--warn-ink: #e2bb70;
+		--bad-bg: #341a1d;
+		--bad-ink: #ef8090;
+		--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+	}
+
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		line-height: 1.55;
+	}
+
+	.wrap {
+		max-width: 1320px;
+		margin: 0 auto;
+		padding: 3rem 1.5rem 5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 3rem;
+	}
+
+	.eyebrow {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .14em;
+		font-size: .82rem;
+		font-weight: 600;
+		color: var(--violet);
+	}
+
+	h1 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: clamp(2rem, 4.6vw, 2.8rem);
+		font-weight: 600;
+		letter-spacing: .01em;
+		margin: .35rem 0 0;
+		text-wrap: balance;
+	}
+
+	.lede {
+		max-width: 66ch;
+		color: var(--ink-soft);
+		margin: .85rem 0 0;
+	}
+
+	h2 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: 1.05rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+
+	.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+	/* ── Warum-Box (Operator-Sprache: Deutsch) ────────────────── */
+	.decisions { display: flex; flex-direction: column; gap: 1rem; }
+
+	.decision {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-left: 3px solid var(--violet);
+		border-radius: 3px;
+		padding: 1rem 1.15rem;
+	}
+
+	.decision h3 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .92rem;
+		font-weight: 600;
+		margin: 0 0 .5rem;
+	}
+
+	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
+	.decision p + p { margin-top: .6rem; }
+	.quote {
+		font-style: italic;
+		border-left: 2px solid var(--rule-strong);
+		padding-left: .8rem;
+		color: var(--ink);
+	}
+
+	.ruling {
+		font-size: .82rem;
+		color: var(--violet);
+		font-weight: 600;
+		margin: .2rem 0 0;
+	}
+
+	.findings {
+		list-style: none;
+		margin: .7rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: .8rem;
+	}
+
+	.findings li {
+		padding: .7rem .85rem;
+		background: var(--panel-sunk);
+		border-radius: 3px;
+		border: 1px solid var(--rule);
+	}
+
+	.findings .num {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-weight: 600;
+		color: var(--violet);
+		margin-right: .4rem;
+	}
+
+	.findings .claim { color: var(--ink); font-size: .92rem; }
+
+	code.loc {
+		font-family: ui-monospace, monospace;
+		font-size: .74rem;
+		color: var(--violet);
+		background: color-mix(in srgb, var(--violet) 10%, transparent);
+		padding: .05rem .35rem;
+		border-radius: 2px;
+		display: inline-block;
+		margin-top: .35rem;
+	}
+
+	/* ── settings card mock (App-UI: Englisch) ───────────────── */
+	.states {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.state { display: flex; flex-direction: column; gap: .9rem; }
+
+	.state-head {
+		display: flex;
+		align-items: baseline;
+		gap: .6rem;
+		flex-wrap: wrap;
+	}
+
+	.state-head h3 {
+		margin: 0;
+		font-family: "Barlow Condensed", sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .95rem;
+	}
+
+	.tag {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: .74rem;
+		font-weight: 600;
+		padding: .1rem .5rem;
+		border-radius: 2px;
+	}
+
+	.tag-now { background: var(--warn-bg); color: var(--warn-ink); }
+	.tag-next { background: var(--good-bg); color: var(--good); }
+	.tag-state { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
+
+	.state-note {
+		color: var(--ink-soft);
+		font-size: .88rem;
+		min-height: 3.6em;
+		margin: 0;
+	}
+
+	.mini-page {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		box-shadow: var(--shadow);
+		padding: 1rem 1.1rem 1.2rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.block-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .78rem;
+		font-weight: 600;
+		margin: 0 0 .5rem;
+		color: var(--muted);
+	}
+
+	.card-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: 1.0rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+
+	.card-sub {
+		font-size: .8rem;
+		color: var(--muted);
+		margin: -.4rem 0 0;
+	}
+
+	/* provider status list */
+	.provider-status-list {
+		display: flex;
+		flex-direction: column;
+		gap: .45rem;
+	}
+
+	.provider-status-row {
+		display: flex;
+		align-items: flex-start;
+		gap: .5rem;
+		padding: .4rem .55rem;
+		border-radius: 3px;
+		background: var(--panel-sunk);
+	}
+
+	.provider-status-row .dot {
+		flex-shrink: 0;
+		width: .5rem;
+		height: .5rem;
+		border-radius: 50%;
+		margin-top: .35rem;
+	}
+	.provider-status-row.ok .dot { background: var(--good); }
+	.provider-status-row.bad .dot { background: var(--bad-ink); }
+
+	.provider-status-row .name {
+		font-family: "Barlow Condensed", sans-serif;
+		font-weight: 600;
+		letter-spacing: .02em;
+		font-size: .86rem;
+		color: var(--ink);
+		display: inline-block;
+		min-width: 64px;
+	}
+
+	.provider-status-row .detail {
+		font-size: .76rem;
+		color: var(--ink-soft);
+		display: block;
+	}
+	.provider-status-row.bad .detail { color: var(--bad-ink); }
+	.provider-status-row .subnote {
+		font-size: .72rem;
+		color: var(--warn-ink);
+		display: block;
+		margin-top: .1rem;
+	}
+
+	.active-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: .55rem;
+		padding: .6rem .75rem;
+		border-radius: 3px;
+		font-size: .86rem;
+		line-height: 1.4;
+	}
+
+	.active-banner.ok { background: var(--good-bg); color: var(--ink); border: 1px solid color-mix(in srgb, var(--good) 35%, transparent); }
+
+	.active-banner .dot {
+		flex-shrink: 0;
+		width: .55rem;
+		height: .55rem;
+		border-radius: 50%;
+		margin-top: .3rem;
+		background: var(--good);
+	}
+
+	.active-banner b {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		font-size: .78rem;
+		display: block;
+		margin-bottom: .15rem;
+	}
+	.active-banner .model {
+		font-family: ui-monospace, monospace;
+		font-size: .82rem;
+	}
+	.active-banner .caption {
+		display: block;
+		margin-top: .25rem;
+		font-size: .76rem;
+		opacity: .85;
+		font-style: italic;
+	}
+
+	.field-label {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .06em;
+		font-size: .74rem;
+		color: var(--muted);
+		margin-bottom: .35rem;
+		display: block;
+	}
+
+	.provider-picker {
+		display: flex;
+		gap: .5rem;
+		flex-wrap: wrap;
+	}
+
+	.provider-pill {
+		flex: 1 1 90px;
+		border: 1px solid var(--rule-strong);
+		border-radius: 4px;
+		padding: .5rem .6rem;
+		font-size: .82rem;
+		background: var(--panel);
+		color: var(--ink-soft);
+		cursor: default;
+		display: flex;
+		flex-direction: column;
+		gap: .15rem;
+		min-width: 0;
+	}
+
+	.provider-pill .name {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-weight: 600;
+		letter-spacing: .03em;
+		color: var(--ink);
+	}
+
+	.provider-pill.selected {
+		border-color: var(--violet);
+		box-shadow: 0 0 0 1px var(--violet) inset;
+		background: color-mix(in srgb, var(--violet) 6%, var(--panel));
+	}
+
+	.provider-pill.selected .name { color: var(--violet); }
+
+	.provider-pill.disabled {
+		opacity: .55;
+		background: var(--panel-sunk);
+	}
+
+	.pill-status {
+		font-size: .66rem;
+		text-transform: none;
+		letter-spacing: 0;
+		font-weight: 500;
+	}
+	.status-ok { color: var(--good); }
+	.status-bad { color: var(--bad-ink); }
+
+	.pill-reason {
+		font-size: .66rem;
+		color: var(--muted);
+		line-height: 1.3;
+	}
+
+	select.mock, input.mock {
+		width: 100%;
+		padding: .45rem .55rem;
+		background: var(--panel);
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		color: var(--ink);
+		font-size: .84rem;
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+	}
+
+	select.mock:disabled, input.mock:disabled {
+		opacity: .55;
+		background: var(--panel-sunk);
+	}
+
+	.dirty-mark { color: var(--violet); font-weight: 600; }
+
+	.inline-note {
+		font-size: .76rem;
+		color: var(--muted);
+		margin: 0;
+	}
+	.inline-note.warn { color: var(--warn-ink); }
+
+	.change-banner {
+		display: flex;
+		gap: .5rem;
+		align-items: flex-start;
+		padding: .6rem .7rem;
+		background: var(--warn-bg);
+		border: 1px solid color-mix(in srgb, var(--warn-ink) 35%, transparent);
+		border-radius: 3px;
+		font-size: .78rem;
+		color: var(--warn-ink);
+	}
+
+	.btn-row { display: flex; align-items: center; gap: .6rem; margin-top: .1rem; flex-wrap: wrap; }
+
+	button.mock-save {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .78rem;
+		font-weight: 600;
+		padding: .5rem 1.1rem;
+		border-radius: 999px;
+		border: none;
+		background: linear-gradient(135deg, var(--violet), var(--crimson));
+		color: #fff;
+		cursor: default;
+	}
+
+	button.mock-save.disabled {
+		background: var(--rule-strong);
+		color: var(--muted);
+		cursor: not-allowed;
+	}
+
+	.save-reason { font-size: .74rem; color: var(--muted); }
+
+	.field-row { display: flex; flex-direction: column; gap: .3rem; }
+
+	.gone-block {
+		border: 1px dashed var(--rule-strong);
+		border-radius: 3px;
+		padding: .6rem .75rem;
+		font-size: .78rem;
+		color: var(--muted);
+		background: var(--panel-sunk);
+	}
+
+	.proposed-tag {
+		display: inline-block;
+		font-family: "Barlow Condensed", sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .68rem;
+		font-weight: 600;
+		color: var(--warn-ink);
+		background: var(--warn-bg);
+		border-radius: 2px;
+		padding: .1rem .45rem;
+		margin-left: .5rem;
+		vertical-align: middle;
+	}
+
+	.foot-note {
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 68ch;
+	}
+
+	.freeze-note {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 68ch;
+		margin: 0 auto;
+		padding: .75rem 1.5rem 0;
+	}
+</style>
+</head>
+<body>
+<p class="freeze-note">
+	Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung. Gebaut wird
+	gegen Issue #317; #315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 übernommen von
+	<code>docs/design/navigation.html</code> (Fassung 4, eingefroren 01.09.2026). Warum-Notiz auf
+	Deutsch (richtet sich an den Operator); alle Beschriftungen innerhalb der Karten-Mockups auf
+	Englisch, weil die App englisch ist.
+</p>
+<div class="wrap">
+	<header>
+		<div class="eyebrow">Songmaker · Admin · Models · Eingefroren</div>
+		<h1>Providers first, then Co-Writer and Scoring — as two matching blocks</h1>
+		<p class="lede">
+			Der heutige Tab „Claude" vermischt drei Dinge unter einem Anbieter-Namen. Dieser Entwurf trennt
+			sie: oben ein ehrlicher Anbieter-Status, darunter zwei baugleiche Blöcke (Provider → Modell) für
+			die zwei echten Aufgaben — mitschreiben und bewerten.
+		</p>
+	</header>
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Warum — Operator-Befund vom 01.09.2026, mit Screenshot</h3>
+			<p class="quote">
+				„oben steht CLAUDE => falsch. 2 Co-writer? Ich kann Provider wählen und dann kein Model =>
+				Wechsel nicht möglich? Grok default funktioniert gerade nicht. Und wenn ich Save drücke:
+				'grok is not configured'. Und unten dann nochmal Chat-Modell und Scoring-Modell?"
+			</p>
+			<p class="quote">
+				Nachtrag: Der Co-Writer lief tatsächlich mit Claude und funktionierte — die Seite zeigte
+				trotzdem „grok" im Provider-Feld.
+			</p>
+			<p class="ruling">Zwei Operator-Rulings für diesen Entwurf: Sprache der Karten = Englisch (App ist
+				englisch, nur diese Notiz bleibt deutsch). Scoring wird providerneutral entworfen — je Aufgabe
+				ein eigener Provider, keine erzwungene Kopplung an den Co-Writer.</p>
+			<p>Sieben Befunde, im Code belegt:</p>
+			<ol class="findings">
+				<li>
+					<span class="num">1</span>
+					<span class="claim">
+						Der Tab heißt „Claude" — stehengeblieben aus der Zeit, als der Co-Writer Claude-only
+						war, vor Issue #34 (Multi-Provider). Er ist falsch, sobald ein anderer Provider aktiv
+						ist. Umbenannt zu „Models".
+					</span>
+					<code class="loc">frontend/src/routes/settings/users/+page.svelte:56-64 (ADMIN_TABS)</code>
+				</li>
+				<li>
+					<span class="num">2</span>
+					<span class="claim">
+						„Chat Model" im Abschnitt Scoring Models ist ein totes Feld: Es steuert
+						<code>SETTING_CLAUDE_CHAT_MODEL</code>, gelesen ausschließlich von
+						<code>POST /songs/{'{'}song_id{'}'}/chat</code> — diesen Endpunkt ruft weder Frontend
+						noch CLI je auf. Es ist nicht der Co-Writer und verschwindet in diesem Entwurf
+						ersatzlos.
+					</span>
+					<code class="loc">src/songmaker_cli/chat_api.py:185-220 (unbenutzter Endpunkt) · src/songmaker_cli/settings_api.py:295-336 (totes Feld)</code>
+				</li>
+				<li>
+					<span class="num">3</span>
+					<span class="claim">
+						„Scoring Model" ist echt: Es steuert das Claude-Richter-Modell des
+						<code>lyrical_coherence</code>-Scorers.
+					</span>
+					<code class="loc">src/songmaker_cli/jobs/scoring.py:95 (get_claude_scoring_model)</code>
+				</li>
+				<li>
+					<span class="num">4</span>
+					<span class="claim">
+						Grok und Codex sind in dieser Umgebung wirklich nicht eingerichtet — beide API-Keys
+						sind leer.
+					</span>
+					<code class="loc">src/songmaker_cli/settings.py:185-187 (xai_api_key, openai_api_key)</code>
+				</li>
+				<li>
+					<span class="num">5</span>
+					<span class="claim">
+						Kerndefekt: Der Modell-Katalog verlangt für jeden Provider einen API-Key, auch für
+						Claude — aber der echte Co-Writer-Chat läuft über die gemountete Claude-Code-CLI-Anmeldung
+						ganz ohne Key (kein <code>api_key</code>-Argument im Aufruf). Deshalb zeigte die Seite
+						das tatsächlich laufende, funktionierende Claude als „nicht konfiguriert" mit leerer
+						Modell-Liste — der wahre Auslöser des Nachtrags.
+					</span>
+					<code class="loc">src/songmaker_cli/cowriter/catalog.py:115-118 (Key-Pflicht für Claude) · src/songmaker_cli/cowriter/claude_adapter.py:23-31 (CLI-Aufruf ohne api_key)</code>
+				</li>
+				<li>
+					<span class="num">6</span>
+					<span class="claim">
+						Frontend-Bug: Wechselt man auf einen Provider mit leerem Katalog, wird das alte
+						Modell nicht geleert — der <code>$effect</code> greift nur, wenn die neue Liste nicht
+						leer ist. Der Save-Knopf bleibt dadurch fälschlich aktiv (<code>disabled={'{'}!cowriterModel{'}'}</code>
+						schützt nicht mehr, weil der alte Wert überlebt); nur eine serverseitige Prüfung
+						verhindert den kaputten Schreibvorgang.
+					</span>
+					<code class="loc">frontend/src/routes/settings/users/+page.svelte:282-287 ($effect) · :918 (disabled-Bedingung)</code>
+				</li>
+				<li>
+					<span class="num">7</span>
+					<span class="claim">
+						Zwei Quellen der Wahrheit für „welche Claude-Modelle gibt es": Der Co-Writer holt live
+						von der Anthropic-API, Scoring nutzt eine hartkodierte, veraltete Liste mit
+						Modell-Namen, die es so nicht gibt.
+					</span>
+					<code class="loc">src/songmaker_cli/constants.py:155-159 (MODEL_ALLOWED_CLAUDE)</code>
+				</li>
+			</ol>
+			<p>
+				Die Providerneutralität des Scoring-Judges gibt es im Code heute nicht — der
+				<code>lyrical_coherence</code>-Judge ruft Claude direkt auf
+				(<code>src/songmaker_cli/jobs/scoring.py:95</code>). Der Scoring-Block unten zeigt einen
+				Zielzustand, der voraussetzt, dass der Judge über dieselbe Provider-Abstraktion läuft wie der
+				Co-Writer; das ist Backend-Arbeit, die dieser Entwurf nicht vorwegnimmt.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Co-Writer, three states side by side</h2>
+		<p class="state-note" style="min-height:auto">
+			Every state shows the full mini-page: providers first with their real status, then the
+			task block. The active model is always visible before any choice is offered.
+		</p>
+
+		<div class="states">
+			<div class="state">
+				<div class="state-head">
+					<h3>Normal case</h3>
+					<span class="tag tag-next">Claude active, model pickable</span>
+				</div>
+				<p class="state-note">
+					All three providers are configured, including the Anthropic API key that the model
+					catalog needs (in addition to the CLI login). Everything works as designed.
+				</p>
+
+				<div class="mini-page">
+					<div>
+						<p class="block-title">Providers</p>
+						<div class="provider-status-list">
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Claude</span>
+									<span class="detail">configured — Claude Code CLI login, plus ANTHROPIC_API_KEY for the live model catalog</span>
+								</span>
+							</div>
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Grok</span>
+									<span class="detail">configured — XAI_API_KEY set</span>
+								</span>
+							</div>
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Codex</span>
+									<span class="detail">configured — OPENAI_API_KEY set</span>
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div>
+						<p class="card-title">Co-Writer</p>
+						<p class="card-sub">Provider and model that answer your next message.</p>
+
+						<div class="active-banner ok">
+							<span class="dot"></span>
+							<span>
+								<b>Active</b>
+								<span class="model">Claude · claude-sonnet-4-6</span>
+								<span class="caption">Runs via the Claude Code CLI login.</span>
+							</span>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Provider</span>
+							<div class="provider-picker">
+								<div class="provider-pill selected">
+									<span class="name">Claude</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+								<div class="provider-pill">
+									<span class="name">Grok</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+								<div class="provider-pill">
+									<span class="name">Codex</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Model</span>
+							<select class="mock"><option>claude-sonnet-4-6</option></select>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">History tail (tokens)</span>
+							<input class="mock" value="24000">
+						</div>
+
+						<div class="btn-row">
+							<button class="mock-save disabled">Save</button>
+							<span class="save-reason">Nothing changed.</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="state">
+				<div class="state-head">
+					<h3>What the operator actually hit</h3>
+					<span class="tag tag-now">Root cause, now shown correctly</span>
+				</div>
+				<p class="state-note">
+					Grok and Codex are genuinely unconfigured. Claude is configured (it runs via the CLI
+					login) — the model catalog just can't be fetched without a separate API key. The page no
+					longer confuses "chat works" with "catalog reachable".
+				</p>
+
+				<div class="mini-page">
+					<div>
+						<p class="block-title">Providers</p>
+						<div class="provider-status-list">
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Claude</span>
+									<span class="detail">configured — Claude Code CLI login</span>
+									<span class="subnote">Model catalog unavailable: missing ANTHROPIC_API_KEY (not needed for chat itself)</span>
+								</span>
+							</div>
+							<div class="provider-status-row bad">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Grok</span>
+									<span class="detail">not configured — missing XAI_API_KEY in .env</span>
+								</span>
+							</div>
+							<div class="provider-status-row bad">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Codex</span>
+									<span class="detail">not configured — missing OPENAI_API_KEY in .env</span>
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div>
+						<p class="card-title">Co-Writer</p>
+						<p class="card-sub">Provider and model that answer your next message.</p>
+
+						<div class="active-banner ok">
+							<span class="dot"></span>
+							<span>
+								<b>Active</b>
+								<span class="model">Claude · claude-sonnet-4-6</span>
+								<span class="caption">Runs via the Claude Code CLI login — independent of the catalog note above.</span>
+							</span>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Provider</span>
+							<div class="provider-picker">
+								<div class="provider-pill selected">
+									<span class="name">Claude</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+								<div class="provider-pill disabled">
+									<span class="name">Grok</span>
+									<span class="pill-status status-bad">not configured</span>
+									<span class="pill-reason">Missing XAI_API_KEY</span>
+								</div>
+								<div class="provider-pill disabled">
+									<span class="name">Codex</span>
+									<span class="pill-status status-bad">not configured</span>
+									<span class="pill-reason">Missing OPENAI_API_KEY</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Model</span>
+							<select class="mock" disabled><option>claude-sonnet-4-6 (current — live list unavailable)</option></select>
+							<p class="inline-note warn">Live catalog needs ANTHROPIC_API_KEY. The model that's actually running stays selected and usable.</p>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">History tail (tokens)</span>
+							<input class="mock" value="24000">
+						</div>
+
+						<div class="btn-row">
+							<button class="mock-save disabled">Save</button>
+							<span class="save-reason">Nothing changed.</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="state">
+				<div class="state-head">
+					<h3>Just changed</h3>
+					<span class="tag tag-state">Unsaved</span>
+				</div>
+				<p class="state-note">
+					Same fully-configured baseline as "Normal case". Switching provider resets the model
+					field to a real option for the new provider — no stale value survives the switch — and
+					names the effect before Save is pressed.
+				</p>
+
+				<div class="mini-page">
+					<div>
+						<p class="block-title">Providers</p>
+						<div class="provider-status-list">
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Claude</span>
+									<span class="detail">configured — Claude Code CLI login, plus ANTHROPIC_API_KEY</span>
+								</span>
+							</div>
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Grok</span>
+									<span class="detail">configured — XAI_API_KEY set</span>
+								</span>
+							</div>
+							<div class="provider-status-row ok">
+								<span class="dot"></span>
+								<span>
+									<span class="name">Codex</span>
+									<span class="detail">configured — OPENAI_API_KEY set</span>
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div>
+						<p class="card-title">Co-Writer</p>
+						<p class="card-sub">Provider and model that answer your next message.</p>
+
+						<div class="active-banner ok">
+							<span class="dot"></span>
+							<span>
+								<b>Still active</b>
+								<span class="model">Claude · claude-sonnet-4-6</span>
+								<span class="caption">Until you save, Claude keeps answering.</span>
+							</span>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Provider</span>
+							<div class="provider-picker">
+								<div class="provider-pill">
+									<span class="name">Claude</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+								<div class="provider-pill selected">
+									<span class="name">Grok <span class="dirty-mark">●</span></span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+								<div class="provider-pill">
+									<span class="name">Codex</span>
+									<span class="pill-status status-ok">configured</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">Model</span>
+							<select class="mock"><option>grok-4-latest</option></select>
+							<p class="inline-note">Reset to a real Grok model on switch — the old Claude value is never kept.</p>
+						</div>
+
+						<div class="field-row">
+							<span class="field-label">History tail (tokens)</span>
+							<input class="mock" value="24000">
+						</div>
+
+						<div class="change-banner">
+							<span>↷</span>
+							<span>
+								Saving switches the co-writer from <strong>Claude</strong> to
+								<strong>Grok · grok-4-latest</strong> right away. Earlier messages stay as
+								they are; only the next reply comes from Grok.
+							</span>
+						</div>
+
+						<div class="btn-row">
+							<button class="mock-save">Save</button>
+							<span class="save-reason dirty-mark">Changed, not saved yet.</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Scoring — same shape, its own provider<span class="proposed-tag">Proposed — not implemented yet, see #315</span></h2>
+		<p class="state-note" style="min-height:auto">
+			Structurally identical to Co-Writer (Provider → Model), because the judge is a separate task
+			from the co-writer and deserves its own choice — but today the <code>lyrical_coherence</code>
+			judge only ever calls Claude. This block is the target this design points to, not what runs now;
+			landing it is Issue #315.
+		</p>
+
+		<div class="mini-page" style="max-width:460px;">
+			<div>
+				<p class="card-title">Scoring — Text Accuracy Judge</p>
+				<p class="card-sub">Provider and model that judge how closely the sung lyrics match what you wrote.</p>
+
+				<div class="active-banner ok">
+					<span class="dot"></span>
+					<span>
+						<b>Active</b>
+						<span class="model">Claude · claude-opus-4-6</span>
+						<span class="caption">Judges every new generation with this model.</span>
+					</span>
+				</div>
+
+				<div class="field-row">
+					<span class="field-label">Provider</span>
+					<div class="provider-picker">
+						<div class="provider-pill selected">
+							<span class="name">Claude</span>
+							<span class="pill-status status-ok">configured</span>
+						</div>
+						<div class="provider-pill disabled">
+							<span class="name">Grok</span>
+							<span class="pill-status status-bad">not configured</span>
+							<span class="pill-reason">Missing XAI_API_KEY</span>
+						</div>
+						<div class="provider-pill disabled">
+							<span class="name">Codex</span>
+							<span class="pill-status status-bad">not configured</span>
+							<span class="pill-reason">Missing OPENAI_API_KEY</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="field-row">
+					<span class="field-label">Model</span>
+					<select class="mock"><option>claude-opus-4-6</option></select>
+				</div>
+
+				<div class="btn-row">
+					<button class="mock-save disabled">Save</button>
+					<span class="save-reason">Nothing changed.</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="gone-block" style="max-width:460px;">
+			The old "Chat Model" field is gone, not hidden. It controlled an endpoint nothing calls
+			(finding 2) — there is no honest name for it inside either task block, so it does not
+			reappear here.
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Was ich nicht klären konnte</h3>
+			<p>
+				Wie „aktiv" in Zukunft wirklich verifiziert werden soll (Live-Probe gegen den Provider bei
+				jedem Laden, oder ein persistierter „zuletzt erfolgreich benutzt"-Zustand): Backend liest
+				heute für Anzeige und tatsächliche Nutzung dieselbe gespeicherte Einstellung
+				(<code>src/songmaker_cli/db/queries/settings.py:229-245</code>) und hat keinen separaten
+				Erfolgs-Zustand. Der Banner oben braucht eine neue, echte Quelle — welche, ist eine
+				Backend-Entscheidung.
+			</p>
+			<p>
+				Ob <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code>
+				exakt so in <code>.env</code> heißen, ist aus den Feldnamen in <code>settings.py</code> und
+				dem pydantic-settings-Standard abgeleitet, nicht aus einer dokumentierten Liste bestätigt —
+				<code>.env.docker.example</code> nennt namentlich nur <code>ANTHROPIC_API_KEY</code>.
+			</p>
+			<p>
+				Der Umbau des <code>lyrical_coherence</code>-Judges auf eine echte Provider-Abstraktion
+				(damit der Scoring-Block unten nicht nur ein Mockup bleibt) ist nicht untersucht — nur
+				belegt, dass er heute Claude-fest ist.
+			</p>
+		</div>
+	</section>
+
+	<p class="foot-note">
+		Reines HTML-Mockup, kein Produktcode. Tokens, Schrift und Kartenbau von
+		<code>docs/design/navigation.html</code> (Fassung 4) übernommen. Codeverweise mit Datei:Zeile
+		wurden am 01.09.2026 gegen den damaligen Stand von <code>main</code> geprüft.
+	</p>
+</div>
+</body>
+</html>
