@@ -346,6 +346,7 @@ def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralSta
         queue_depth=queue_depth,
         vram_used_gb=state.get("vram_used_gb"),
         vram_total_gb=state.get("vram_total_gb"),
+        vram_measured=state.get("vram_measured"),
         available_modes=list(state.get("available_modes", [])),
         pinned=list(state.get("pinned", [])),
         last_heartbeat_at=state.get("last_heartbeat_at"),

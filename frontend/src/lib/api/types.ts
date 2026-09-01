@@ -653,6 +653,7 @@ export interface WorkerEphemeralStateItem {
 	queue_depth: number;
 	vram_used_gb?: number | null;
 	vram_total_gb?: number | null;
+	vram_measured?: boolean | null;
 	available_modes: string[];
 	pinned: string[];
 	last_heartbeat_at?: string | null;

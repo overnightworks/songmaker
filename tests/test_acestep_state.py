@@ -105,9 +105,29 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     assert state.vram_used_gb == 6.0
     assert state.target_loading is None
     assert state.vram_total_gb == 24.0
+    assert state.vram_measured is False
     assert state.available_modes == []
     assert state.pinned == ["sft"]
     assert state.loading_started_at is None
+
+
+@pytest.mark.parametrize(
+    ("payload_vram_measured", "expected"),
+    [
+        pytest.param({"vram_measured": True}, True, id="measured"),
+        pytest.param({"vram_measured": False}, False, id="estimated"),
+        pytest.param({}, None, id="legacy-payload-missing-field"),
+    ],
+)
+def test_state_from_dict_reads_vram_measured(
+    payload_vram_measured: dict, expected: bool | None
+) -> None:
+    from songmaker_cli.admin_api import _state_from_dict
+
+    state = _state_from_dict(payload_vram_measured, queue_depth=0)
+
+    assert state is not None
+    assert state.vram_measured is expected
 
 
 def test_worker_state_key_format() -> None:

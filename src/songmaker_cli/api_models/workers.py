@@ -58,6 +58,7 @@ class WorkerEphemeralState(BaseModel):
     queue_depth: int = 0
     vram_used_gb: float | None = None
     vram_total_gb: float | None = None
+    vram_measured: bool | None = None
     available_modes: list[str] = []
     pinned: list[str] = []
     last_heartbeat_at: str | None = None

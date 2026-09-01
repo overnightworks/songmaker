@@ -135,7 +135,10 @@
 
 	function formatVramUsage(state: WorkerInfoItem['state']): string | null {
 		if (!state || state.vram_used_gb == null || state.vram_total_gb == null) return null;
-		return `${state.vram_used_gb.toFixed(1)} / ${state.vram_total_gb.toFixed(1)} GB`;
+		const isEstimate = state.vram_measured === false;
+		const estimatePrefix = isEstimate ? '~' : '';
+		const estimateSuffix = isEstimate ? ' est.' : '';
+		return `${estimatePrefix}${state.vram_used_gb.toFixed(1)} / ${state.vram_total_gb.toFixed(1)} GB${estimateSuffix}`;
 	}
 
 	function isCardBusy(worker: WorkerInfoItem): boolean {
@@ -289,7 +292,12 @@
 						{#if vramUsage}
 							<div class="card-row">
 								<span class="row-label">VRAM:</span>
-								<span class="row-value">{vramUsage}</span>
+								<span
+									class="row-value"
+									title={worker.state.vram_measured === false ? 'Estimated VRAM usage' : undefined}
+								>
+									{vramUsage}
+								</span>
 							</div>
 						{/if}
 						<div class="card-row">
