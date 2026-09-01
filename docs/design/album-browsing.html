@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Album-Browsing — Fassung 1 (komprimierte Reihe)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+	:root {
+		--paper: #f6f5f8;
+		--panel: #ffffff;
+		--panel-sunk: #f1eff4;
+		--ink: #1b1a20;
+		--ink-soft: #56525f;
+		--muted: #8b8794;
+		--rule: #e2dfe8;
+		--rule-strong: #cbc6d4;
+		--violet: #4b2fd1;
+		--crimson: #a81e2e;
+		--good: #1f7a4d;
+		--warn-bg: #fdf3e3;
+		--warn-ink: #7a5312;
+		--shadow: 0 1px 2px rgba(27, 26, 32, .06), 0 8px 24px rgba(27, 26, 32, .05);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--paper: #131218;
+			--panel: #1c1a22;
+			--panel-sunk: #232029;
+			--ink: #eeecf2;
+			--ink-soft: #b3aebe;
+			--muted: #857f92;
+			--rule: #302c3a;
+			--rule-strong: #443e52;
+			--violet: #a794ff;
+			--crimson: #ef8090;
+			--good: #5fc994;
+			--warn-bg: #2e2416;
+			--warn-ink: #e2bb70;
+			--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--paper: #131218;
+		--panel: #1c1a22;
+		--panel-sunk: #232029;
+		--ink: #eeecf2;
+		--ink-soft: #b3aebe;
+		--muted: #857f92;
+		--rule: #302c3a;
+		--rule-strong: #443e52;
+		--violet: #a794ff;
+		--crimson: #ef8090;
+		--good: #5fc994;
+		--warn-bg: #2e2416;
+		--warn-ink: #e2bb70;
+		--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		line-height: 1.55;
+		margin: 0;
+	}
+
+	.wrap {
+		max-width: 1320px;
+		margin: 0 auto;
+		padding: 3rem 1.5rem 5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 3rem;
+	}
+
+	.eyebrow {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .14em;
+		font-size: .82rem;
+		font-weight: 600;
+		color: var(--violet);
+	}
+
+	h1 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: clamp(2.1rem, 5vw, 3rem);
+		font-weight: 600;
+		letter-spacing: .01em;
+		margin: .35rem 0 0;
+		text-wrap: balance;
+	}
+
+	.lede {
+		max-width: 68ch;
+		color: var(--ink-soft);
+		margin: .85rem 0 0;
+	}
+
+	h2 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: 1.05rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+
+	h3 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .92rem;
+		font-weight: 600;
+		margin: 0 0 .35rem;
+	}
+
+	code {
+		font-family: ui-monospace, monospace;
+		font-size: .88em;
+		background: var(--panel-sunk);
+		padding: .05em .3em;
+		border-radius: 2px;
+	}
+
+	.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+	/* ── warum-notiz / decisions ─────────────────────────────── */
+	.decisions { display: flex; flex-direction: column; gap: 1rem; }
+
+	.decision {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-left: 3px solid var(--violet);
+		border-radius: 3px;
+		padding: 1rem 1.15rem;
+	}
+
+	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
+	.decision p + p { margin-top: .5rem; }
+	.decision .quote {
+		font-style: italic;
+		color: var(--ink);
+		border-left: 2px solid var(--rule-strong);
+		padding-left: .7rem;
+		margin: .5rem 0;
+	}
+	.rec { color: var(--ink); }
+	.rec strong { color: var(--violet); }
+
+	.findings {
+		margin: .5rem 0 0;
+		padding-left: 1.15rem;
+		display: flex;
+		flex-direction: column;
+		gap: .45rem;
+		color: var(--ink-soft);
+		font-size: .9rem;
+	}
+	.findings li::marker { color: var(--violet); }
+	.findings code { font-size: .82em; }
+
+	/* ── states grid ──────────────────────────────────────────── */
+	.states {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.states-wide {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.state {
+		display: flex;
+		flex-direction: column;
+		gap: .9rem;
+	}
+
+	.state-head {
+		display: flex;
+		align-items: baseline;
+		gap: .6rem;
+		flex-wrap: wrap;
+	}
+
+	.tag {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: .74rem;
+		font-weight: 600;
+		padding: .1rem .5rem;
+		border-radius: 2px;
+	}
+
+	.tag-now { background: var(--warn-bg); color: var(--warn-ink); }
+	.tag-next { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+	.tag-state { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
+
+	.state-note {
+		color: var(--ink-soft);
+		font-size: .92rem;
+		margin: 0;
+	}
+
+	/* ── the schematic app window ───────────────────────────── */
+	.app {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		box-shadow: var(--shadow);
+		overflow: hidden;
+		display: grid;
+	}
+
+	.app-wall { grid-template-columns: 172px 1fr; height: 460px; }
+	.app-browse { grid-template-columns: 172px 1fr; height: 560px; }
+
+	.col {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		border-right: 1px solid var(--rule);
+	}
+
+	.col:last-child { border-right: 0; }
+	.col-nav { background: var(--panel); }
+	.col-body { background: var(--panel); padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+
+	.addr {
+		font-family: ui-monospace, monospace;
+		font-size: .62rem;
+		color: var(--muted);
+		padding: 0 .75rem .45rem;
+		border-bottom: 1px solid var(--rule);
+		margin-bottom: .3rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.addr span { color: var(--violet); }
+
+	.brand {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .22em;
+		font-size: .78rem;
+		font-weight: 600;
+		color: var(--violet);
+		padding: .8rem .75rem .6rem;
+	}
+
+	.nav-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.row {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .09em;
+		font-size: .78rem;
+		font-weight: 500;
+		color: var(--ink-soft);
+		padding: .42rem .75rem;
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+		border: 0;
+		background: none;
+		width: 100%;
+		text-align: left;
+	}
+
+	.row-sub {
+		padding-left: 1.55rem;
+		font-size: .74rem;
+		text-transform: none;
+		letter-spacing: .02em;
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		color: var(--muted);
+	}
+
+	.row-sub2 { padding-left: 2.35rem; }
+
+	.row-active {
+		color: var(--crimson);
+		box-shadow: inset 2px 0 0 var(--crimson);
+		background: color-mix(in srgb, var(--crimson) 6%, transparent);
+	}
+
+	.meta {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .68rem;
+		color: var(--muted);
+		text-transform: none;
+		letter-spacing: 0;
+		margin-left: auto;
+	}
+
+	.icon { width: 14px; height: 14px; flex-shrink: 0; stroke: currentColor; }
+
+	.caret {
+		display: inline-block;
+		font-size: .6rem;
+		color: var(--muted);
+		flex-shrink: 0;
+		transform: rotate(90deg);
+	}
+
+	.nav-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+
+	.foot {
+		border-top: 1px solid var(--rule);
+		padding: .5rem .75rem;
+		font-size: .7rem;
+		color: var(--muted);
+		display: flex;
+		justify-content: space-between;
+		gap: .5rem;
+	}
+
+	/* ── rail row swatch (mini-cover) ─────────────────────────── */
+	.row-swatch {
+		width: 18px;
+		height: 18px;
+		border-radius: 2px;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		font-size: .5rem;
+		font-family: "Barlow Condensed", sans-serif;
+		letter-spacing: 0;
+		text-transform: uppercase;
+		color: var(--ink);
+		background: var(--panel-sunk);
+	}
+
+	/* ── album/playlist wall grid ─────────────────────────────── */
+	.wall-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: .5rem;
+		padding: .7rem .9rem .5rem;
+		border-bottom: 1px solid var(--rule);
+		flex-shrink: 0;
+	}
+
+	.wall-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .06em;
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	.chip-row { display: flex; gap: .3rem; }
+	.chip {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		font-size: .66rem;
+		font-weight: 600;
+		padding: .18rem .55rem;
+		border-radius: 999px;
+		border: 1px solid var(--rule-strong);
+		color: var(--muted);
+	}
+	.chip.active { color: var(--violet); border-color: var(--violet); background: color-mix(in srgb, var(--violet) 12%, transparent); }
+
+	.wall-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: .6rem;
+		padding: .8rem .9rem;
+		overflow-y: auto;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.tile {
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		overflow: hidden;
+		background: var(--panel);
+		position: relative;
+	}
+
+	.tile.selected { box-shadow: inset 0 0 0 2px var(--crimson); }
+
+	.tile-cover {
+		aspect-ratio: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: "Barlow Condensed", sans-serif;
+		font-size: 1.05rem;
+		letter-spacing: .04em;
+		color: var(--ink);
+		background: var(--panel-sunk);
+	}
+
+	.tile-meta { padding: .35rem .45rem; }
+	.tile-title {
+		font-size: .72rem;
+		font-family: "Barlow Condensed", sans-serif;
+		letter-spacing: .02em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.tile-sub { font-size: .6rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+	/* ── the compressed strip (the proposal's core piece) ───────── */
+	.strip-wrap { border-bottom: 1px solid var(--rule); flex-shrink: 0; background: var(--panel-sunk); }
+
+	.strip-header {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		padding: .45rem .9rem .3rem;
+	}
+
+	.strip-back {
+		display: flex;
+		align-items: center;
+		gap: .3rem;
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .68rem;
+		font-weight: 600;
+		color: var(--violet);
+		border: 1px solid transparent;
+	}
+
+	.strip-skip {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 3px;
+		border: 1px solid var(--rule-strong);
+		color: var(--ink-soft);
+		font-size: .7rem;
+	}
+
+	.strip {
+		display: flex;
+		gap: .5rem;
+		padding: 0 .9rem .6rem;
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+	}
+
+	.strip-tile {
+		flex-shrink: 0;
+		width: 84px;
+		border-radius: 4px;
+		overflow: hidden;
+		border: 1px solid var(--rule);
+		background: var(--panel);
+		scroll-snap-align: center;
+		opacity: .55;
+		transform: scale(.94);
+	}
+
+	.strip-tile.active {
+		opacity: 1;
+		transform: scale(1);
+		box-shadow: 0 0 0 2px var(--crimson);
+	}
+
+	.strip-tile.edge { width: 34px; overflow: hidden; }
+	.strip-tile.edge .tile-meta { display: none; }
+
+	.strip-tile .tile-cover { aspect-ratio: 1; font-size: .82rem; }
+	.strip-tile .tile-meta { padding: .25rem .3rem; }
+	.strip-tile .tile-title { font-size: .6rem; }
+
+	.strip-scrim {
+		position: relative;
+	}
+	.strip-scrim::after {
+		content: '';
+		position: absolute;
+		top: 0; right: 0; bottom: 0;
+		width: 40px;
+		background: linear-gradient(to right, transparent, var(--panel-sunk));
+		pointer-events: none;
+	}
+
+	/* ── album/playlist detail body (below the strip) ───────────── */
+	.detail-header {
+		display: flex;
+		align-items: center;
+		gap: .6rem;
+		padding: .7rem .9rem .4rem;
+		flex-shrink: 0;
+	}
+
+	.detail-art {
+		width: 40px;
+		height: 40px;
+		border-radius: 3px;
+		background: var(--panel-sunk);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: "Barlow Condensed", sans-serif;
+		font-size: .8rem;
+		flex-shrink: 0;
+	}
+
+	.detail-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	.detail-crumb { font-size: .68rem; color: var(--muted); }
+	.detail-crumb b { color: var(--ink-soft); font-weight: 500; }
+
+	.detail-body { padding: .3rem .9rem 1rem; overflow-y: auto; flex: 1; min-height: 0; }
+
+	.ghost { height: 8px; border-radius: 2px; background: var(--panel-sunk); margin-bottom: .5rem; }
+	.ghost-60 { width: 60%; } .ghost-80 { width: 80%; } .ghost-40 { width: 40%; }
+
+	.track-row {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		padding: .35rem 0;
+		border-bottom: 1px solid var(--rule);
+		font-size: .82rem;
+	}
+	.track-row.current { color: var(--crimson); font-weight: 600; }
+	.track-row .n { width: 1.3rem; color: var(--muted); font-size: .7rem; }
+
+	/* ── zoom-in strip detail (state d) ──────────────────────────── */
+	.zoom-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+	.zoom-panel {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+	.zoom-label {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .74rem;
+		font-weight: 600;
+		padding: .5rem .8rem;
+		border-bottom: 1px solid var(--rule);
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+	}
+	.zoom-label .badge-future {
+		font-size: .6rem;
+		font-weight: 600;
+		color: var(--good);
+		background: color-mix(in srgb, var(--good) 16%, transparent);
+		padding: .05rem .4rem;
+		border-radius: 999px;
+	}
+	.zoom-strip { padding: .9rem .8rem 1.1rem; }
+
+	.zoom-strip .strip { padding: 0; }
+	.zoom-strip .strip-tile { width: 108px; }
+	.zoom-strip .strip-tile.edge { width: 42px; }
+	.zoom-strip .strip-tile .tile-cover { font-size: 1rem; }
+	.zoom-strip .strip-tile .tile-title { font-size: .68rem; }
+	.zoom-strip .strip-tile .tile-sub { font-size: .58rem; }
+
+	/* placeholder art for the #229 cover variant — abstract, clearly not a real photo */
+	.art-future {
+		background:
+			radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 55%),
+			linear-gradient(135deg, var(--seed-a, #6b4bd6), var(--seed-b, #a81e2e));
+		position: relative;
+	}
+	.art-future::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: repeating-linear-gradient(120deg, rgba(255,255,255,.08) 0 6px, transparent 6px 14px);
+	}
+
+	/* ── rail mini-cover comparison (state e) ────────────────────── */
+	.rail-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+	.rail-panel {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		box-shadow: var(--shadow);
+		overflow: hidden;
+		width: 100%;
+		max-width: 260px;
+	}
+
+	/* ── mobile risk sketch (kostet-section) ─────────────────────── */
+	.phone {
+		width: 220px;
+		border: 1px solid var(--rule-strong);
+		border-radius: 14px;
+		padding: 8px;
+		background: var(--panel);
+		box-shadow: var(--shadow);
+	}
+	.phone-screen {
+		border: 1px solid var(--rule);
+		border-radius: 8px;
+		overflow: hidden;
+		background: var(--panel);
+	}
+	.phone .strip-wrap { background: var(--panel-sunk); }
+	.phone .strip-tile { width: 58px; }
+	.phone .strip-tile.edge { width: 22px; }
+	.phone .strip-tile .tile-title { font-size: .52rem; }
+	.phone .song-skip-row {
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+		padding: .4rem .6rem;
+		border-bottom: 1px solid var(--rule);
+		font-size: .6rem;
+		color: var(--muted);
+	}
+	.phone .song-skip-row .strip-skip { width: 16px; height: 16px; font-size: .6rem; }
+
+	.cost-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		gap: 1rem;
+	}
+
+	.foot-note {
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 68ch;
+	}
+
+	.freeze-note {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 62ch;
+		margin: 0 auto;
+		padding: .75rem 1.5rem 0;
+	}
+
+	/* ── kinetic scroll prototype (bedienbar) ─────────────────────── */
+	.app-live { grid-template-columns: 1fr; height: auto; max-width: 480px; }
+
+	.strip-filter-wrap {
+		display: flex;
+		align-items: center;
+		gap: .2rem;
+		margin-left: auto;
+	}
+
+	.strip-filter {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .7rem;
+		padding: .22rem .55rem;
+		border: 1px solid var(--rule-strong);
+		border-radius: 999px;
+		background: var(--panel);
+		color: var(--ink);
+		width: 128px;
+	}
+	.strip-filter::placeholder { color: var(--muted); }
+	.strip-filter:focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+
+	.strip-filter-clear {
+		border: 0;
+		background: none;
+		color: var(--muted);
+		font-size: .95rem;
+		line-height: 1;
+		cursor: pointer;
+		padding: .1rem .35rem;
+		border-radius: 3px;
+	}
+	.strip-filter-clear:hover { color: var(--ink); background: var(--panel-sunk); }
+	.strip-filter-clear:focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+
+	.strip.live, .rail-live-list {
+		cursor: grab;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	.strip.live { touch-action: pan-x; }
+	.strip.live.is-dragging, .rail-live-list.is-dragging { cursor: grabbing; }
+
+	.strip-tile[role="button"] { cursor: pointer; }
+	.strip-tile:focus-visible {
+		outline: 2px solid var(--violet);
+		outline-offset: 2px;
+	}
+	.strip-tile.filtered-out-but-open {
+		opacity: .4;
+		outline: 1px dashed var(--rule-strong);
+		outline-offset: -1px;
+	}
+
+	.live-status {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .74rem;
+		color: var(--ink-soft);
+		padding: .5rem .9rem 0;
+		margin: 0;
+	}
+
+	.rail-live-list {
+		max-height: 210px;
+		overflow-y: auto;
+		touch-action: pan-y;
+	}
+	.rail-live-row { cursor: pointer; }
+	.rail-live-row:focus-visible {
+		outline: 2px solid var(--violet);
+		outline-offset: -2px;
+	}
+
+	/*
+	 * .strip.live and .rail-live-list deliberately do NOT use CSS scroll-snap-type,
+	 * unlike the static .strip mockups above. Measured in a headless Chromium probe:
+	 * with scroll-snap-type active, the browser fights every programmatic scrollLeft
+	 * assignment made during our own drag/momentum loop and the row visibly sticks a
+	 * few pixels into the drag instead of following the cursor. The prototype's JS
+	 * snaps by itself instead, once movement has actually settled (see snapToNearest
+	 * in the script below) — a plain scrollIntoView({behavior:'smooth'}), which is not
+	 * fought because nothing is driving scrollLeft by hand at that point anymore.
+	 */
+	.strip.live, .rail-live-list { scroll-snap-type: none; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.strip { scroll-behavior: auto; }
+	}
+</style>
+</head>
+<body>
+<p class="freeze-note">
+	Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung, nach dem
+	Ausprobieren des bedienbaren Prototyps gesegnet, Issue #348. Änderungen an dieser Datei brauchen
+	eine neue Freigabe.
+</p>
+<div class="wrap">
+
+	<header>
+		<div class="eyebrow">Songmaker · Target UI · Eingefroren</div>
+		<h1>Die Wand bleibt da — sie schrumpft nur</h1>
+		<p class="lede">
+			Reines HTML-Mockup für die Entscheidung, wie Album- und Playlist-Browsing nach dem
+			Navigations-Umbau (#302, eingefroren in <code>docs/design/navigation.html</code>) weitergeht.
+			Tokens, Schrift und Bildsprache sind von dort übernommen; App-Beschriftungen sind Englisch
+			(die App ist Englisch), diese Notiz ist Deutsch.
+		</p>
+	</header>
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Der Anlass — Operator, 01.09.2026, am laufenden System</h3>
+			<p class="quote">
+				„was mir fehlt wenn ich auf ein Album klick =&gt; also das könnte gehighlighted werden auch
+				in der Liste links irgendwie =&gt; und mir fehlt ein einfaches Back? oder was ich
+				präferieren würde =&gt; das Album ist zwar zu sehen =&gt; aber ich sehe immer noch die
+				Kachelliste? […] und man, das wäre so ein — wie soll man das nennen — irgendwie so wie beim
+				iPod damals, so ein schnelles Durchscrollen oben? weil irgendwie ist mir der Klick auf
+				Library immer zu viel, um wieder dann zum nächsten Album zu kommen."
+			</p>
+			<p class="quote">
+				„aber die Kachelwand ist besser zum Blättern? […] wenn ich das Album klicke =&gt; ich sehe
+				immer noch die Kachelwand oder eben komprimiert mit so einem iPod-Schnelldurchlauf?"
+			</p>
+			<p class="quote">
+				„das problem an der liste links =&gt; wenn du album mit cover hast =&gt; findest du dort
+				schneller was du willst." (Präzisierung — visuelles Finden statt Lesen, Grundlage für Zustand
+				(e) unten)
+			</p>
+		</div>
+
+		<div class="decision">
+			<h3>Belegte Befunde aus dem Code (Datei:Zeile)</h3>
+			<ul class="findings">
+				<li><code>LibraryWorkspace.svelte:77-89</code> — <code>LibraryWall</code>, <code>AlbumDetailView</code> und <code>PlaylistDetailView</code> stehen in einem exklusiven <code>{'{#if}'}</code>-Zweig. Die Wand wird beim Öffnen eines Albums vollständig aus dem DOM entfernt, nicht nur überdeckt — die Wunsch-Lesart des Operators trifft die Realität.</li>
+				<li><code>LibraryWall.svelte:653-699</code> — heute existieren keine echten Cover: entweder eine <b>Volltonfläche</b> aus <code>album.colors.primary</code> (<code>usableAlbumPrimary()</code>, <code>contrast.ts:44-55</code>) oder, wenn auch das fehlt, eine graue Kachel mit <code>titleInitials()</code> (<code>format.ts:21-31</code>). Kein Verlauf — die Kachel ist einfarbig oder Initialen, nie beides gleichzeitig.</li>
+				<li><code>LibraryWall.svelte:924-926</code> — die volle Wand markiert das offene Album/die offene Playlist bereits (<code>.wall-tile.selected</code>, Akzent-Ring). Nur sichtbar ist dieser Zustand nie, weil die Wand beim Öffnen komplett verschwindet (siehe oben).</li>
+				<li><code>RailLibraryGroup.svelte:194</code> — der Album-Label-Button trägt <b>kein</b> <code>class:row-active</code>. Der strukturell identische Playlist-Fall (<code>RailPlaylistsGroup.svelte:91</code>, <code>class:row-active={'{expanded}'}</code>) hat es. Das offene Album ist links also unmarkiert — eine Inkonsistenz zwischen zwei baugleichen Gruppen, kein Sonderfall.</li>
+				<li>Kein <code>scrollIntoView</code> irgendwo im Rail-Bereich. Der Edge-Trigger, der „gerade betreten" erkennt (<code>RailLibraryGroup.svelte:60-65</code>), ist der bestehende Andockpunkt dafür.</li>
+				<li><code>CollectionHeader.svelte:75-78</code> — der einzige Rückweg ist die Brotkrume „Library" (<code>openLibraryWall()</code>). Ein kleines Wort, kein Bedienelement mit Gewicht, und sie führt immer zur vollen Wand, nie zum Nachbarn.</li>
+				<li>Vor/Zurück existiert bereits — aber nur für <b>Songs</b>: <code>EditorHeader.svelte:159-186</code> (<code>SONG_PREVIOUS_LABEL</code>/<code>SONG_NEXT_LABEL</code>) hinter der Prop <code>songRail</code>, die an <code>matchMedia</code> hängt — sichtbar nur auf schmalen Fenstern, auf dem Desktop unsichtbar. Für Alben gibt es kein Äquivalent.</li>
+				<li><code>TakeStrip.svelte:49-54</code> — das einzige vorhandene horizontale Scroll-Muster im Repo (<code>display:flex; overflow-x:auto</code>, Chips mit <code>flex-shrink:0</code>). Vorbild für die komprimierte Reihe unten, statt etwas Neues zu erfinden.</li>
+				<li><code>AlbumNode.svelte:56-66</code> — das Zeile-mit-Mini-Cover-Muster (Cover/Volltonfläche/Initialen als <code>.album-art</code>, 1:1 dieselbe Fallback-Kette wie die Wand) existiert bereits — nur für Suchtreffer, nicht für die dauerhafte Leiste. Zustand (e) unten überträgt es dorthin.</li>
+			</ul>
+		</div>
+
+		<div class="decision">
+			<h3>Der Vorschlag in drei Sätzen</h3>
+			<p class="rec">
+				<strong>1.</strong> Die Wand verschwindet nicht mehr — sie komprimiert zu einer horizontalen,
+				seitwärts scrollbaren Reihe über dem Albuminhalt, das offene Element mittig und markiert,
+				Nachbarn angeschnitten sichtbar (Apple-Music-/iPod-Muster).
+				<strong>2.</strong> Ein Klick auf den Reihenkopf (oder auf den Leiste-Titel „Library"/„Playlists")
+				bringt die volle Wand zurück.
+				<strong>3.</strong> Die Leiste links markiert das offene Album/die offene Playlist sichtbar und
+				scrollt es ins Bild — dieselbe Farbe (<code>--crimson</code>), die die eingefrorene Fassung 4
+				für <code>row-active</code> schon festgelegt hat.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="states">
+		<div class="state">
+			<div class="state-head">
+				<h2>(a) Volle Kachelwand</h2>
+				<span class="tag tag-now">Heutiger Zustand</span>
+			</div>
+			<p class="state-note">
+				Wurzel-Adresse <code>/</code>, kein Album offen. Unverändert gegenüber heute — der Referenzpunkt
+				für (b) und (c).
+			</p>
+			<div class="app app-wall">
+				<div class="col col-nav">
+					<div class="brand">Hallucinai</div>
+					<div class="addr" aria-hidden="true">app.songmaker<span>/</span></div>
+					<div class="nav-scroll">
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+							Library <span class="meta">9</span></div>
+						<ul class="nav-list">
+							<li class="row row-sub">Anfield <span class="meta">2</span></li>
+							<li class="row row-sub">Open Windows <span class="meta">8</span></li>
+							<li class="row row-sub">Sommerluft <span class="meta">1</span></li>
+							<li class="row row-sub">Balcony Disco <span class="meta">1</span></li>
+							<li class="row row-sub">Nachtstrom <span class="meta">26</span></li>
+						</ul>
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+							Playlists <span class="meta">4</span></div>
+					</div>
+					<div class="foot"><span>felix</span><span>Logout</span></div>
+				</div>
+				<div class="col col-body">
+					<div class="wall-toolbar">
+						<span class="wall-title">Albums</span>
+						<div class="chip-row"><span class="chip active">Albums</span><span class="chip">Playlists</span><span class="chip">Shared</span></div>
+					</div>
+					<div class="wall-grid">
+						<div class="tile"><div class="tile-cover" style="background:#3a2f66;color:#efe9ff">AN</div><div class="tile-meta"><div class="tile-title">Anfield</div><div class="tile-sub">2 songs</div></div></div>
+						<div class="tile"><div class="tile-cover">OW</div><div class="tile-meta"><div class="tile-title">Open Windows</div><div class="tile-sub">8 songs</div></div></div>
+						<div class="tile"><div class="tile-cover" style="background:#7a2340;color:#ffe9ef">SL</div><div class="tile-meta"><div class="tile-title">Sommerluft</div><div class="tile-sub">1 song</div></div></div>
+						<div class="tile"><div class="tile-cover">BD</div><div class="tile-meta"><div class="tile-title">Balcony Disco</div><div class="tile-sub">1 song</div></div></div>
+						<div class="tile"><div class="tile-cover">NS</div><div class="tile-meta"><div class="tile-title">Nachtstrom</div><div class="tile-sub">26 songs</div></div></div>
+						<div class="tile"><div class="tile-cover" style="background:#245a4a;color:#e6fff5">ZH</div><div class="tile-meta"><div class="tile-title">Zuhause</div><div class="tile-sub">5 songs</div></div></div>
+						<div class="tile"><div class="tile-cover">SL</div><div class="tile-meta"><div class="tile-title">Sommerlicht</div><div class="tile-sub">6 songs</div></div></div>
+						<div class="tile"><div class="tile-cover">VN</div><div class="tile-meta"><div class="tile-title">Vernissage</div><div class="tile-sub">6 songs</div></div></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="states-wide">
+		<div class="state">
+			<div class="state-head">
+				<h2>(b) Album offen — komprimierte Reihe</h2>
+				<span class="tag tag-next">Vorschlag</span>
+			</div>
+			<p class="state-note">
+				<code>/album/open-windows</code>: die Wand ist zur Reihe geschrumpft, „Open Windows" liegt
+				mittig und markiert, „Anfield" links / „Sommerluft" rechts sind angeschnitten sichtbar. Die
+				Leiste links markiert „Open Windows" (<code>row-active</code>) und ist dahin gescrollt. Kein
+				eigener Vor/Zurück-Knopf im Reihenkopf — die Reihe selbst ist die Bedienung: wischen, oder die
+				Nachbarkachel antippen. Bedienbar durchgespielt unten in „Ein Verhalten, nicht ein Bauteil".
+			</p>
+			<div class="app app-browse">
+				<div class="col col-nav">
+					<div class="brand">Hallucinai</div>
+					<div class="addr" aria-hidden="true">app.songmaker<span>/album/open-windows</span></div>
+					<div class="nav-scroll">
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+							Library <span class="meta">9</span></div>
+						<ul class="nav-list">
+							<li class="row row-sub">Anfield <span class="meta">2</span></li>
+							<li class="row row-sub row-active">Open Windows <span class="meta">8</span></li>
+							<ul class="nav-list">
+								<li class="row row-sub row-sub2">Morgenluft</li>
+								<li class="row row-sub row-sub2">Fenster auf</li>
+								<li class="row row-sub row-sub2 row-active">Offene Türen</li>
+								<li class="row row-sub row-sub2">Balkonlicht</li>
+							</ul>
+							<li class="row row-sub">Sommerluft <span class="meta">1</span></li>
+							<li class="row row-sub">Balcony Disco <span class="meta">1</span></li>
+							<li class="row row-sub">Nachtstrom <span class="meta">26</span></li>
+						</ul>
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+							Playlists <span class="meta">4</span></div>
+					</div>
+					<div class="foot"><span>felix</span><span>Logout</span></div>
+				</div>
+				<div class="col col-body">
+					<div class="strip-wrap">
+						<div class="strip-header">
+							<span class="strip-back">⌃ All albums</span>
+							<div class="strip-filter-wrap">
+								<input class="strip-filter" type="text" placeholder="Filter albums…" aria-label="Filter albums by name" disabled>
+							</div>
+						</div>
+						<div class="strip-scrim">
+							<div class="strip">
+								<div class="strip-tile edge"><div class="tile-cover" style="background:#3a2f66;color:#efe9ff">AN</div></div>
+								<div class="strip-tile active"><div class="tile-cover">OW</div><div class="tile-meta"><div class="tile-title">Open Windows</div><div class="tile-sub">8 songs</div></div></div>
+								<div class="strip-tile"><div class="tile-cover" style="background:#7a2340;color:#ffe9ef">SL</div><div class="tile-meta"><div class="tile-title">Sommerluft</div><div class="tile-sub">1 song</div></div></div>
+								<div class="strip-tile edge"><div class="tile-cover">BD</div></div>
+							</div>
+						</div>
+					</div>
+					<div class="detail-header">
+						<div class="detail-art">OW</div>
+						<div>
+							<div class="detail-title">Open Windows</div>
+							<div class="detail-crumb"><b>Library</b> › Open Windows</div>
+						</div>
+					</div>
+					<div class="detail-body">
+						<div class="track-row"><span class="n">01</span>Morgenluft</div>
+						<div class="track-row"><span class="n">02</span>Fenster auf</div>
+						<div class="track-row"><span class="n">03</span>Regen am Fenster</div>
+						<div class="track-row"><span class="n">04</span>Kalter Tee</div>
+						<div class="track-row current"><span class="n">05</span>Offene Türen</div>
+						<div class="track-row"><span class="n">06</span>Balkonlicht</div>
+						<div class="track-row"><span class="n">07</span>Nachbarn</div>
+						<div class="track-row"><span class="n">08</span>Letzter Sommer</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>(c) Playlist offen — dasselbe Muster</h2>
+				<span class="tag tag-next">Vorschlag</span>
+			</div>
+			<p class="state-note">
+				<code>/playlist/sommer-2026</code>: identischer Aufbau, jetzt über der Playlists-Gruppe.
+				Die Reihe zeigt Playlist-Kacheln (heute: Initialen, keine Cover — Playlists haben in
+				<code>LibraryWall.svelte:745-749</code> nie ein Coverfeld, nur <code>titleInitials()</code>).
+			</p>
+			<div class="app app-browse">
+				<div class="col col-nav">
+					<div class="brand">Hallucinai</div>
+					<div class="addr" aria-hidden="true">app.songmaker<span>/playlist/sommer-2026</span></div>
+					<div class="nav-scroll">
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+							Library <span class="meta">9</span></div>
+						<div class="row"><span class="caret">▶</span>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+							Playlists <span class="meta">4</span></div>
+						<ul class="nav-list">
+							<li class="row row-sub">Favoriten <span class="meta">12</span></li>
+							<li class="row row-sub row-active">Sommer 2026 <span class="meta">8</span></li>
+							<ul class="nav-list">
+								<li class="row row-sub row-sub2 row-active">Balkonlicht</li>
+								<li class="row row-sub row-sub2">Nachbarn</li>
+								<li class="row row-sub row-sub2">Zuhause</li>
+							</ul>
+							<li class="row row-sub">Für Thomas <span class="meta">5</span></li>
+							<li class="row row-sub">Demos <span class="meta">21</span></li>
+						</ul>
+					</div>
+					<div class="foot"><span>felix</span><span>Logout</span></div>
+				</div>
+				<div class="col col-body">
+					<div class="strip-wrap">
+						<div class="strip-header">
+							<span class="strip-back">⌃ All playlists</span>
+						</div>
+						<div class="strip-scrim">
+							<div class="strip">
+								<div class="strip-tile edge"><div class="tile-cover">FA</div></div>
+								<div class="strip-tile active"><div class="tile-cover">S26</div><div class="tile-meta"><div class="tile-title">Sommer 2026</div><div class="tile-sub">8 songs</div></div></div>
+								<div class="strip-tile"><div class="tile-cover">FT</div><div class="tile-meta"><div class="tile-title">Für Thomas</div><div class="tile-sub">5 songs</div></div></div>
+								<div class="strip-tile edge"><div class="tile-cover">DE</div></div>
+							</div>
+						</div>
+					</div>
+					<div class="detail-header">
+						<div class="detail-art">S26</div>
+						<div>
+							<div class="detail-title">Sommer 2026</div>
+							<div class="detail-crumb"><b>Playlists</b> › Sommer 2026</div>
+						</div>
+					</div>
+					<div class="detail-body">
+						<div class="track-row current"><span class="n">01</span>Balkonlicht</div>
+						<div class="track-row"><span class="n">02</span>Nachbarn</div>
+						<div class="track-row"><span class="n">03</span>Zuhause</div>
+						<div class="track-row"><span class="n">04</span>Sommerlicht</div>
+						<div class="track-row"><span class="n">05</span>Vernissage</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>(d) Die komprimierte Reihe im Detail — mit und ohne Cover</h2>
+		<p class="state-note">
+			Angeschnittene Nachbarn (schmale <code>.edge</code>-Kacheln), aktive Kachel mittig mit
+			Akzent-Ring, rechter Rand mit Verlaufs-Scrim als Scroll-Andeutung — das „iPod-Schnelldurchlauf"-Gefühl.
+			Links: heutiger Zustand (Volltonfläche/Initialen, siehe Befund oben). Rechts: hypothetisch mit
+			generierten Covern (#229) — deutlich als Spekulation markiert, keine echten Bilder.
+		</p>
+	</section>
+
+	<section class="zoom-pair">
+		<div class="zoom-panel">
+			<div class="zoom-label">Heute — Initialen / Volltonfläche</div>
+			<div class="zoom-strip">
+				<div class="strip-scrim">
+					<div class="strip">
+						<div class="strip-tile edge"><div class="tile-cover" style="background:#3a2f66;color:#efe9ff">AN</div></div>
+						<div class="strip-tile active"><div class="tile-cover">OW</div><div class="tile-meta"><div class="tile-title">Open Windows</div><div class="tile-sub">8 songs</div></div></div>
+						<div class="strip-tile"><div class="tile-cover" style="background:#7a2340;color:#ffe9ef">SL</div><div class="tile-meta"><div class="tile-title">Sommerluft</div><div class="tile-sub">1 song</div></div></div>
+						<div class="strip-tile edge"><div class="tile-cover">BD</div></div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="zoom-panel">
+			<div class="zoom-label">Mit generierten Covern <span class="badge-future">#229 — hypothetisch</span></div>
+			<div class="zoom-strip">
+				<div class="strip-scrim">
+					<div class="strip">
+						<div class="strip-tile edge"><div class="tile-cover art-future" style="--seed-a:#3a2f66;--seed-b:#1b1a20"></div></div>
+						<div class="strip-tile active"><div class="tile-cover art-future" style="--seed-a:#4b2fd1;--seed-b:#a81e2e"></div><div class="tile-meta"><div class="tile-title">Open Windows</div><div class="tile-sub">8 songs</div></div></div>
+						<div class="strip-tile"><div class="tile-cover art-future" style="--seed-a:#7a2340;--seed-b:#245a4a"></div><div class="tile-meta"><div class="tile-title">Sommerluft</div><div class="tile-sub">1 song</div></div></div>
+						<div class="strip-tile edge"><div class="tile-cover art-future" style="--seed-a:#245a4a;--seed-b:#3a2f66"></div></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>(e) Leiste links: heute vs. Mini-Cover (Operator-Präzisierung)</h2>
+		<p class="state-note">
+			„Wenn du Album mit Cover hast, findest du dort schneller was du willst" — visuelles Finden statt
+			Lesen. Das Muster existiert bereits für Suchtreffer (<code>AlbumNode.svelte:56-66</code>, dieselbe
+			Cover/Volltonfläche/Initialen-Kette); dieser Vorschlag würde es auf die dauerhafte Rail-Zeile
+			übertragen. Ehrliche Folgefrage unten in „Was das kostet".
+		</p>
+	</section>
+
+	<section class="rail-pair">
+		<div class="rail-panel">
+			<div class="zoom-label">Heute — keine Mini-Cover</div>
+			<div style="padding:.4rem 0">
+				<ul class="nav-list">
+					<li class="row row-sub">Anfield <span class="meta">2</span></li>
+					<li class="row row-sub row-active">Open Windows <span class="meta">8</span></li>
+					<li class="row row-sub">Sommerluft <span class="meta">1</span></li>
+					<li class="row row-sub">Balcony Disco <span class="meta">1</span></li>
+				</ul>
+			</div>
+		</div>
+		<div class="rail-panel">
+			<div class="zoom-label">Mit Mini-Cover <span class="badge-future">#229 — hypothetisch</span></div>
+			<div style="padding:.4rem 0">
+				<ul class="nav-list">
+					<li class="row row-sub" style="gap:.45rem"><span class="row-swatch" style="background:#3a2f66;color:#efe9ff">AN</span>Anfield <span class="meta">2</span></li>
+					<li class="row row-sub row-active" style="gap:.45rem"><span class="row-swatch art-future" style="--seed-a:#4b2fd1;--seed-b:#a81e2e"></span>Open Windows <span class="meta">8</span></li>
+					<li class="row row-sub" style="gap:.45rem"><span class="row-swatch art-future" style="--seed-a:#7a2340;--seed-b:#245a4a"></span>Sommerluft <span class="meta">1</span></li>
+					<li class="row row-sub" style="gap:.45rem"><span class="row-swatch" style="background:var(--panel-sunk)">BD</span>Balcony Disco <span class="meta">1</span></li>
+				</ul>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Ein Verhalten, nicht ein Bauteil — kinetisches Blättern</h2>
+		<p class="state-note">
+			Das iPod-Muster aus Satz 1 oben, jetzt bedienbar statt gezeichnet. Kein Sonderfall der komprimierten
+			Reihe, sondern eine Bedienidee, die überall gilt, wo man durch viele Dinge blättert: die komprimierte
+			Reihe (horizontal, unten links), die Alben-Unterliste in der Leiste links (vertikal, unten rechts) —
+			und, außerhalb dieses Vorschlags, schon heute <code>TakeStrip.svelte:49-54</code> (die Takes eines
+			Songs, <code>overflow-x: auto</code>, aber bislang ohne jedes Schwung-Verhalten). Eine Implementierung,
+			drei Abnehmer — Details unten in „Was das kostet".
+		</p>
+		<p class="state-note">
+			<b>Probier's aus:</b> Maustaste gedrückt halten und nach links/rechts (bzw. oben/unten) ziehen — die
+			Reihe folgt 1:1 dem Cursor. Loslassen — sie läuft mit Schwung weiter und rastet auf einer Kachel ein.
+			Mit dem Rad scrollen (mehrfach kurz drehen beschleunigt). Während des Ausrollens klicken — das fängt
+			nur ein, es öffnet nichts. Tippen ins Feld filtert sofort. Auf Trackpad oder Touchscreen: normales
+			Wischen, das Betriebssystem übernimmt.
+		</p>
+	</section>
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Wie es sich anfühlen soll</h3>
+			<ul class="findings">
+				<li><b>Ziehen ist Papier auf dem Tisch.</b> Solange die Maustaste unten ist, klebt die Reihe am
+					Cursor — bewegt er sich 100 Pixel, wandert die Reihe 100 Pixel. Kein Regler, keine Dämpfung,
+					kein Nachlaufen. Der Zeiger zeigt das vorher an: <code>grab</code> über der Reihe,
+					<code>grabbing</code> während des Ziehens — sonst probiert man es nie aus. Textmarkierung ist
+					währenddessen abgeschaltet, sonst markiert der Zug die Beschriftungen statt zu scrollen.</li>
+				<li><b>Der Schwung kommt erst beim Loslassen.</b> Aus der Geschwindigkeit der letzten rund 100 ms
+					(nicht der Gesamtstrecke) wird ein Schub berechnet, der mit Reibung ausläuft — genau wie beim
+					iPod-Klickrad.</li>
+				<li><b>Ein Klick fängt nur ein, er wählt nicht.</b> Läuft die Reihe noch, stoppt der erste Klick
+					sie und tut sonst nichts. Erst der Klick auf die stehende Reihe öffnet ein Album.</li>
+				<li><b>Ziehen ist kein Klicken.</b> Ab ein paar Pixeln Bewegung zählt es als Ziehen, nicht als
+					Klick — sonst öffnet jeder Wisch versehentlich das falsche Album.</li>
+				<li><b>Sie rastet ein.</b> Sobald die Reihe steht — ausgerollt oder eingefangen — bleibt immer eine
+					Kachel mittig, nie ein Stopp zwischen zwei Kacheln. Das übernimmt bewusst kein CSS
+					<code>scroll-snap-type</code>: im Test hat es jede programmatische Bewegung während des
+					Ziehens/Schwungs sichtbar zurückgezogen. Die Reihe rastet stattdessen selbst nach, erst wenn
+					sie wirklich steht.</li>
+				<li><b>Filtern bricht den Schwung nicht.</b> Wird die Reihe durch Tippen kürzer, laufen Trägheit
+					und Einrasten korrekt weiter — kein Auslaufen ins Leere. Das offene Album verschwindet dabei
+					nie kommentarlos: passt es nicht zum Filter, bleibt es sichtbar, nur erkennbar
+					herausgefiltert (gedämpft, gestrichelter Rand).</li>
+			</ul>
+			<p class="state-note">
+				Wer <code>prefers-reduced-motion: reduce</code> eingestellt hat, bekommt nichts davon: kein
+				Schwung, kein Einrasten, nur direktes Scrollen mit Rad, Ziehen oder Wisch. (Pfeiltasten und Tab
+				funktionieren immer, für den genauen einen Schritt — unsichtbar, ohne eigenes Bedienelement auf
+				dem Bildschirm.)
+			</p>
+		</div>
+		<div class="decision">
+			<h3>Filter: eigenes schmales Feld, nicht die Wand-Suche</h3>
+			<p>
+				<code>LibraryWall.svelte:132-139,310-313,430-437</code> — die vorhandene Suche („Search albums
+				and songs") ist ein serverseitiges, bibliotheksweites Feld: sie durchsucht Alben <i>und</i> Songs
+				über die ganze Sammlung (<code>librarySearch</code>-Store, Pagination, Ladezustand), gebunden an
+				den globalen <code>searchQuery</code>-Store. Die Reihe braucht etwas anderes: nur die Geschwister
+				der gerade offenen Gruppe schnell eingrenzen, rein clientseitig, ohne Netzwerk, ohne Songtreffer.
+				Denselben Store wiederzuverwenden würde zwei verschiedene Werkzeuge hinter einem Feld verstecken —
+				genau die Doppelung, die im Settings-Tab bereits entfernt wurde, nur umgekehrt: nicht zwei Felder
+				für dasselbe, sondern ein Feld für zwei verschiedene Aufgaben. Deshalb: eigenes, bewusst
+				schmaleres Feld, klar „Filter albums" beschriftet, lokaler Zustand der Reihe. Folge:
+				kein Persistieren zwischen Reihe und voller Wand — sie sind jetzt zwei verschiedene Werkzeuge, und
+				die Wand hat ihre eigene, weiterhin sichtbare Suche. Ein Wechsel zur Wand fängt dort bewusst leer
+				an, statt einen unerklärten Filterzustand von der Reihe mitzuschleppen.
+			</p>
+		</div>
+	</section>
+
+	<section class="states-wide">
+		<div class="state">
+			<div class="state-head">
+				<h2>Horizontal — die komprimierte Reihe</h2>
+				<span class="tag tag-next">Bedienbar</span>
+			</div>
+			<p class="state-note">Dieselben acht Alben wie in Zustand (a)/(b) oben.</p>
+			<div class="app app-live">
+				<div class="col col-body">
+					<div class="strip-wrap">
+						<div class="strip-header">
+							<span class="strip-back">⌃ All albums</span>
+							<div class="strip-filter-wrap">
+								<input class="strip-filter" type="text" id="live-strip-filter" placeholder="Filter albums…" aria-label="Filter albums by name" autocomplete="off">
+								<button class="strip-filter-clear" id="live-strip-filter-clear" type="button" aria-label="Clear filter" hidden>×</button>
+							</div>
+						</div>
+						<div class="strip-scrim">
+							<div class="strip live" id="live-strip" aria-label="Albums — drag, scroll with the wheel, or click a neighbour to open it">
+								<div class="strip-tile" role="button" tabindex="0" data-title="Anfield" aria-current="false"><div class="tile-cover" style="background:#3a2f66;color:#efe9ff">AN</div><div class="tile-meta"><div class="tile-title">Anfield</div><div class="tile-sub">2 songs</div></div></div>
+								<div class="strip-tile active" role="button" tabindex="0" data-title="Open Windows" aria-current="true"><div class="tile-cover">OW</div><div class="tile-meta"><div class="tile-title">Open Windows</div><div class="tile-sub">8 songs</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Sommerluft" aria-current="false"><div class="tile-cover" style="background:#7a2340;color:#ffe9ef">SL</div><div class="tile-meta"><div class="tile-title">Sommerluft</div><div class="tile-sub">1 song</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Balcony Disco" aria-current="false"><div class="tile-cover">BD</div><div class="tile-meta"><div class="tile-title">Balcony Disco</div><div class="tile-sub">1 song</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Nachtstrom" aria-current="false"><div class="tile-cover">NS</div><div class="tile-meta"><div class="tile-title">Nachtstrom</div><div class="tile-sub">26 songs</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Zuhause" aria-current="false"><div class="tile-cover" style="background:#245a4a;color:#e6fff5">ZH</div><div class="tile-meta"><div class="tile-title">Zuhause</div><div class="tile-sub">5 songs</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Sommerlicht" aria-current="false"><div class="tile-cover">SL</div><div class="tile-meta"><div class="tile-title">Sommerlicht</div><div class="tile-sub">6 songs</div></div></div>
+								<div class="strip-tile" role="button" tabindex="0" data-title="Vernissage" aria-current="false"><div class="tile-cover">VN</div><div class="tile-meta"><div class="tile-title">Vernissage</div><div class="tile-sub">6 songs</div></div></div>
+							</div>
+						</div>
+					</div>
+					<p class="live-status" id="live-strip-status" role="status" aria-live="polite">Offen: Open Windows</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>Vertikal — dieselbe Leiste links, andere Achse</h2>
+				<span class="tag tag-next">Bedienbar</span>
+			</div>
+			<p class="state-note">
+				Dieselbe Mechanik, senkrecht: Ziehen zieht die Liste 1:1 mit, Loslassen gibt ihr Schwung, ein
+				Klick während des Ausrollens fängt nur ein. Das Mausrad braucht hier keine Umleitung — senkrecht
+				ist bereits die native Scrollrichtung, das Betriebssystem liefert sie ohnehin.
+			</p>
+			<div class="rail-panel">
+				<div class="zoom-label">Library — Alben</div>
+				<div style="padding:.4rem 0">
+					<ul class="nav-list rail-live-list" id="live-rail-list" aria-label="Albums — drag, or click a neighbour to open it">
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Anfield" aria-current="false">Anfield <span class="meta">2</span></li>
+						<li class="row row-sub row-active rail-live-row" role="button" tabindex="0" data-title="Open Windows" aria-current="true">Open Windows <span class="meta">8</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Sommerluft" aria-current="false">Sommerluft <span class="meta">1</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Balcony Disco" aria-current="false">Balcony Disco <span class="meta">1</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Nachtstrom" aria-current="false">Nachtstrom <span class="meta">26</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Zuhause" aria-current="false">Zuhause <span class="meta">5</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Sommerlicht" aria-current="false">Sommerlicht <span class="meta">6</span></li>
+						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Vernissage" aria-current="false">Vernissage <span class="meta">6</span></li>
+					</ul>
+				</div>
+			</div>
+			<p class="live-status" id="live-rail-status" role="status" aria-live="polite">Offen: Open Windows</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Was das kostet</h2>
+
+		<div class="cost-grid">
+			<div class="decision">
+				<h3>Bleibt die Wand montiert?</h3>
+				<p>
+					Nein, nicht mit dem heutigen Code. <code>LibraryWorkspace.svelte:77-89</code> ist ein
+					exklusiver <code>{'{#if}'}</code> — genau eine der fünf Ansichten ist je gemountet. Der
+					Vorschlag verlangt einen echten Umbau von <code>LibraryWall.svelte</code>: sie muss zwei
+					Darstellungsmodi liefern (voll / komprimierte Reihe), gespeist aus demselben
+					<code>albumGroups</code>/<code>orderedPlaylists</code>-Zustand, den sie schon berechnet —
+					damit <code>AlbumDetailView</code>/<code>PlaylistDetailView</code> die Reihe einbetten
+					können, ohne eine zweite Datenquelle zu pflegen. Das ist eine Komponenten-Restrukturierung,
+					keine reine CSS-Änderung.
+				</p>
+			</div>
+			<div class="decision">
+				<h3>Rail-Highlight + Scroll</h3>
+				<p>
+					Günstig: <code>RailLibraryGroup.svelte:194</code> braucht nur das <code>class:row-active</code>,
+					das <code>RailPlaylistsGroup.svelte:91</code> bereits vorführt. Neu ist ein
+					<code>scrollIntoView</code> im vorhandenen Edge-Trigger-Effekt (<code>RailLibraryGroup.svelte:60-65</code>) —
+					klein, lokal, kein neuer Store.
+				</p>
+			</div>
+			<div class="decision">
+				<h3>Vor/Zurück zwischen Alben — kein Knopf, die Reihe selbst ist die Bedienung</h3>
+				<p>
+					Ursprünglich als Chevron-Buttons im Reihenkopf entworfen (wie <code>EditorHeader.svelte</code>s
+					<code>SONG_PREVIOUS_LABEL</code>/<code>SONG_NEXT_LABEL</code>); der Operator hat sie explizit
+					gestrichen, sobald Wischen und Nachbarkachel-Klick belegt waren — „wenn das andere intuitiv
+					geht, weg damit". Bleibt Chrome, das nichts mehr trägt. Vor/Zurück heute: schnell = wischen,
+					genau ein Album weiter = Nachbarkachel antippen oder Pfeiltaste. Kein zusätzliches
+					Bedienelement auf dem Bildschirm — nur die Tastatur bleibt (Pfeiltasten, Tab), unsichtbar,
+					weil ohne sie die Reihe für niemanden bedienbar wäre, der nicht zeigen kann.
+				</p>
+			</div>
+			<div class="decision">
+				<h3>Cover-Realität (#229)</h3>
+				<p>
+					Ohne #229 lebt die Reihe von Volltonflächen und zwei Buchstaben — funktional, aber optisch
+					dünn (siehe Zustand d, links). Mit Mini-Cover in der Leiste (Zustand e) übernimmt die Leiste
+					einen Teil der „ich erkenne es visuell"-Aufgabe, die die Operator-Präzisierung beschreibt.
+					<b>Ehrliche Folge:</b> Wenn die Leiste schon Mini-Cover zeigt, deckt sie einen Teil dessen
+					ab, was die komprimierte Reihe leisten soll — die Reihe bleibt aber die einzige Stelle, an
+					der man <i>ohne</i> Wand-Rückkehr zum <i>Nachbarn</i> wechselt (die Leiste zeigt nur das
+					eine offene Element, nicht "wer kommt als Nächstes"). Kein Ersatz, aber eine Überschneidung,
+					die eine spätere Priorisierung kennen sollte.
+				</p>
+			</div>
+			<div class="decision">
+				<h3>Kinetisches Blättern — ein Baustein, drei Abnehmer</h3>
+				<p>
+					Trackpad und Touch: nichts zu bauen — <code>overflow-x/y: auto</code> plus natives OS-Momentum,
+					genau wie <code>TakeStrip.svelte:49-54</code> es heute schon (ohne Schwung) nutzt. Für die Maus
+					bleibt echter Code: Pointer-Events für 1:1-Ziehen, ein <code>requestAnimationFrame</code>-Reibungslauf
+					für den Schwung nach dem Loslassen, die Klick-fängt-nur-ein-Logik, Wheel-zu-horizontal für die
+					Reihe. Das ist die Arbeit einer einzigen kleinen, zustandslosen Funktion (siehe Prototyp-Skript
+					unten) — nicht dreimal Einzelarbeit: dieselbe Funktion bedient die komprimierte Reihe
+					(horizontal), <code>TakeStrip.svelte</code> (horizontal) und die Alben-Unterliste in der Leiste
+					links (vertikal) gegen dieselben vier Regeln. Eine kleine Inertia-Bibliothek wäre für dieses
+					Stück zu schwer: der App-spezifische Teil (Klick-fängt-ein, aktive Kachel markieren, Filter-
+					Kompatibilität) muss ohnehin selbst geschrieben werden, und der generische Rest ist mit rund
+					120 Zeilen so klein, dass eine zusätzliche Abhängigkeit (Pflege, Bundle-Größe, eine weitere API
+					zu lernen) den Eigenbau nicht aufwiegt — „nicht das Rad neu erfinden" gilt für große Räder,
+					nicht für eine Handvoll Event-Listener. Ehrlicher Rest-Aufwand: Reibungs-/Geschwindigkeitswerte
+					an echten Geräten (Maus mit hoher DPI, verschiedene Wheel-Granularitäten) nachjustieren — das
+					kann kein statisches Mockup abschließend beweisen. Der Filter oben in der Reihe ist eine kleine
+					zusätzliche Fläche desselben Bausteins: ein <code>hidden</code>-Toggle pro Kachel, keine neue
+					Scroll-Logik, weil die Momentum-Funktion ihre Grenzen (<code>scrollWidth</code>/<code>clientWidth</code>)
+					ohnehin bei jedem Frame neu liest.
+				</p>
+			</div>
+			<div class="decision">
+				<h3>Mobilbreite — offene Frage, nicht gelöst</h3>
+				<p>
+					<code>LibraryWall.svelte:1142-1144</code> kollabiert das Grid unter 768px auf zwei Spalten —
+					unverändert nutzbar. Riskant ist der Album-Kopfbereich: dort existiert für Songs bereits eine
+					horizontale Skip-Zeile, aber nur unter 768px (<code>songRail</code> an <code>matchMedia</code>
+					in <code>EditorHeader.svelte</code>). Eine zweite horizontale Reihe (Alben-Strip) direkt
+					darüber stapelt zwei Scroll-Leisten auf engstem Raum — mehr Chrome, als ein Telefon-Screen
+					verträgt. Diese Datei zeigt das Risiko (rechts), löst es aber nicht.
+				</p>
+				<div class="phone" style="margin-top:.6rem">
+					<div class="phone-screen">
+						<div class="strip-wrap">
+							<div class="strip-header" style="padding:.3rem .5rem .2rem">
+								<span class="strip-back" style="font-size:.58rem">⌃ All albums</span>
+							</div>
+							<div class="strip" style="padding:0 .5rem .4rem">
+								<div class="strip-tile edge"><div class="tile-cover" style="font-size:.6rem">AN</div></div>
+								<div class="strip-tile active"><div class="tile-cover" style="font-size:.68rem">OW</div><div class="tile-meta"><div class="tile-title">Open Wind…</div></div></div>
+								<div class="strip-tile edge"><div class="tile-cover" style="font-size:.6rem">SL</div></div>
+							</div>
+						</div>
+						<div class="song-skip-row">
+							<span class="strip-skip" aria-label="Previous song">‹</span>
+							<span>Offene Türen</span>
+							<span class="strip-skip" aria-label="Next song" style="margin-left:auto">›</span>
+						</div>
+						<div style="padding:.4rem .5rem">
+							<div class="ghost ghost-80"></div>
+							<div class="ghost ghost-60"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<p class="foot-note">
+		Erste Fassung, gesegnet 01.09.2026 vom Operator nach dem Ausprobieren des bedienbaren Prototyps:
+		die Kachelwand bleibt beim Öffnen eines Albums bestehen und schrumpft zu einer Reihe, durch die
+		man kinetisch blättert. Diese Fassung ist jetzt als <code>docs/design/album-browsing.html</code>
+		eingefroren; der Bau wird gegen Issue #348 gehalten. Basisstil aus
+		<code>docs/design/navigation.html</code> (Fassung 4, 01.09.2026).
+	</p>
+
+</div>
+
+<script>
+(function () {
+	'use strict';
+
+	var FRICTION_PER_FRAME = 0.94;
+	var FRAME_MS = 1000 / 60;
+	// Below this, the row would still be technically "animating" (any click would
+	// only catch it, never open a tile) for up to a second after a moderate flick,
+	// long after the remaining motion is visually imperceptible — measured in the
+	// headless probe. Tuned up from 0.02 so the row stops as soon as it looks stopped.
+	var MIN_VELOCITY = 0.05;
+	var MAX_VELOCITY = 2.6;
+	var WHEEL_VELOCITY_GAIN = 0.06;
+	var DRAG_THRESHOLD_PX = 6;
+	var VELOCITY_SAMPLE_WINDOW_MS = 120;
+
+	var reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+	function createKineticScroller(container, options) {
+		var axis = options.axis;
+		var itemSelector = options.itemSelector;
+		var onOpen = options.onOpen;
+
+		function clientSize() { return axis === 'x' ? container.clientWidth : container.clientHeight; }
+		function scrollSize() { return axis === 'x' ? container.scrollWidth : container.scrollHeight; }
+		function getScroll() { return axis === 'x' ? container.scrollLeft : container.scrollTop; }
+		function setScroll(value) {
+			var max = Math.max(0, scrollSize() - clientSize());
+			var clamped = Math.max(0, Math.min(max, value));
+			if (axis === 'x') container.scrollLeft = clamped; else container.scrollTop = clamped;
+			return clamped;
+		}
+		function pointerPos(event) { return axis === 'x' ? event.clientX : event.clientY; }
+
+		var velocity = 0;
+		var rafId = null;
+		var lastFrameTime = null;
+		var isAnimating = false;
+		var dragState = null;
+		var suppressNextClick = false;
+		var caughtMomentumOnDown = false;
+
+		function snapToNearest() {
+			if (reducedMotionQuery.matches) return;
+			var items = Array.prototype.filter.call(
+				container.querySelectorAll(itemSelector),
+				function (el) { return !el.hidden; }
+			);
+			if (items.length === 0) return;
+			var containerRect = container.getBoundingClientRect();
+			var containerCenter = axis === 'x'
+				? containerRect.left + containerRect.width / 2
+				: containerRect.top + containerRect.height / 2;
+			var nearest = null;
+			var nearestDist = Infinity;
+			items.forEach(function (item) {
+				var r = item.getBoundingClientRect();
+				var itemCenter = axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2;
+				var dist = Math.abs(itemCenter - containerCenter);
+				if (dist < nearestDist) { nearestDist = dist; nearest = item; }
+			});
+			if (nearest) {
+				nearest.scrollIntoView({
+					inline: axis === 'x' ? 'center' : 'nearest',
+					block: axis === 'y' ? 'center' : 'nearest',
+					behavior: 'smooth'
+				});
+			}
+		}
+
+		function stopMomentum(snap) {
+			isAnimating = false;
+			velocity = 0;
+			lastFrameTime = null;
+			if (rafId !== null) {
+				cancelAnimationFrame(rafId);
+				rafId = null;
+			}
+			if (snap) snapToNearest();
+		}
+
+		function step(now) {
+			// lastFrameTime is always primed by the caller that starts the loop (see
+			// startMomentum / the wheel handler below) — a fresh dt=0 first frame would
+			// look identical to "clamped at the scroll boundary" and stop the animation
+			// before it ever moves.
+			var dt = Math.min(48, now - lastFrameTime);
+			lastFrameTime = now;
+
+			var before = getScroll();
+			var after = setScroll(before + velocity * dt);
+			velocity *= Math.pow(FRICTION_PER_FRAME, dt / FRAME_MS);
+
+			var stuckAtBoundary = after === before && dt > 0;
+			if (stuckAtBoundary || Math.abs(velocity) < MIN_VELOCITY) {
+				stopMomentum(true); // settled — snap to the nearest tile centre
+				return;
+			}
+			rafId = requestAnimationFrame(step);
+		}
+
+		function startMomentum(initialVelocity) {
+			if (reducedMotionQuery.matches) return false;
+			velocity = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, initialVelocity));
+			if (Math.abs(velocity) < MIN_VELOCITY) return false;
+			lastFrameTime = performance.now();
+			isAnimating = true;
+			if (rafId === null) rafId = requestAnimationFrame(step);
+			return true;
+		}
+
+		container.addEventListener('wheel', function (event) {
+			if (axis !== 'x') return;
+			if (event.deltaX !== 0) return; // trackpad already sends its own horizontal delta — leave it to the OS
+			event.preventDefault();
+			if (reducedMotionQuery.matches) {
+				setScroll(getScroll() + event.deltaY);
+				return;
+			}
+			var injected = (event.deltaY * WHEEL_VELOCITY_GAIN) / FRAME_MS;
+			velocity = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocity + injected));
+			isAnimating = true;
+			// Only (re)prime the clock and (re)schedule when nothing is running yet —
+			// repeated rapid ticks must add to the existing swing, not restart it, or
+			// every tick would reset dt to ~0 and the row would never accelerate.
+			if (rafId === null) {
+				lastFrameTime = performance.now();
+				rafId = requestAnimationFrame(step);
+			}
+		}, { passive: false });
+
+		container.addEventListener('pointerdown', function (event) {
+			if (event.pointerType !== 'mouse' || event.button !== 0) return; // touch/trackpad keep native handling
+			// A click is mousedown+mouseup: by the time the paired 'click' event fires below,
+			// isAnimating has already been cleared by this very handler — so whether this
+			// mousedown interrupted a still-rolling row has to be captured here, not there.
+			caughtMomentumOnDown = isAnimating;
+			stopMomentum(caughtMomentumOnDown); // catch it where it is, then settle on the nearest tile
+			dragState = {
+				pointerId: event.pointerId,
+				start: pointerPos(event),
+				startScroll: getScroll(),
+				dragged: false,
+				samples: [{ pos: pointerPos(event), t: event.timeStamp }]
+			};
+			// Pointer capture is only taken once movement crosses the drag threshold
+			// (see pointermove below) — capturing on every mousedown would retarget the
+			// matching click event to the container, breaking a plain click on a tile.
+		});
+
+		container.addEventListener('pointermove', function (event) {
+			if (!dragState || event.pointerId !== dragState.pointerId) return;
+			var pos = pointerPos(event);
+			var delta = pos - dragState.start;
+			if (!dragState.dragged && Math.abs(delta) > DRAG_THRESHOLD_PX) {
+				dragState.dragged = true;
+				container.classList.add('is-dragging');
+				container.setPointerCapture(dragState.pointerId);
+			}
+			if (dragState.dragged) {
+				setScroll(dragState.startScroll - delta);
+			}
+			dragState.samples.push({ pos: pos, t: event.timeStamp });
+			var cutoff = event.timeStamp - VELOCITY_SAMPLE_WINDOW_MS;
+			while (dragState.samples.length > 2 && dragState.samples[1].t < cutoff) {
+				dragState.samples.shift();
+			}
+		});
+
+		function endDrag(event) {
+			if (!dragState || event.pointerId !== dragState.pointerId) return;
+			container.classList.remove('is-dragging');
+			if (dragState.dragged) {
+				var samples = dragState.samples;
+				var first = samples[0];
+				var last = samples[samples.length - 1];
+				var dt = last.t - first.t;
+				var dx = last.pos - first.pos;
+				var releaseVelocity = dt > 0 ? -dx / dt : 0;
+				suppressNextClick = true;
+				if (!startMomentum(releaseVelocity)) snapToNearest(); // too gentle to coast — settle right away
+			}
+			dragState = null;
+		}
+		container.addEventListener('pointerup', endDrag);
+		container.addEventListener('pointercancel', endDrag);
+
+		container.addEventListener('click', function (event) {
+			if (suppressNextClick) {
+				suppressNextClick = false;
+				event.preventDefault();
+				event.stopPropagation();
+				return;
+			}
+			if (caughtMomentumOnDown) {
+				caughtMomentumOnDown = false;
+				event.preventDefault();
+				event.stopPropagation();
+				return;
+			}
+			var item = event.target.closest(itemSelector);
+			if (!item || item.hidden) return;
+			onOpen(item);
+		});
+
+		container.addEventListener('keydown', function (event) {
+			var forwardKey = axis === 'x' ? 'ArrowRight' : 'ArrowDown';
+			var backwardKey = axis === 'x' ? 'ArrowLeft' : 'ArrowUp';
+			if (event.key !== forwardKey && event.key !== backwardKey) {
+				if ((event.key === 'Enter' || event.key === ' ') && event.target.matches(itemSelector)) {
+					event.preventDefault();
+					onOpen(event.target);
+				}
+				return;
+			}
+			event.preventDefault();
+			stopMomentum();
+			var items = Array.prototype.filter.call(
+				container.querySelectorAll(itemSelector),
+				function (el) { return !el.hidden; }
+			);
+			var currentIndex = items.indexOf(document.activeElement);
+			var step = event.key === forwardKey ? 1 : -1;
+			var nextIndex = Math.max(0, Math.min(items.length - 1, (currentIndex === -1 ? 0 : currentIndex) + step));
+			var next = items[nextIndex];
+			if (!next) return;
+			next.focus();
+			next.scrollIntoView({
+				inline: axis === 'x' ? 'center' : 'nearest',
+				block: axis === 'y' ? 'center' : 'nearest',
+				behavior: reducedMotionQuery.matches ? 'auto' : 'smooth'
+			});
+		});
+
+		reducedMotionQuery.addEventListener('change', function () { stopMomentum(false); });
+
+		return { stopMomentum: stopMomentum };
+	}
+
+	function wireOpenBehavior(config) {
+		return function openItem(item) {
+			var items = config.container.querySelectorAll(config.itemSelector);
+			for (var i = 0; i < items.length; i++) {
+				var el = items[i];
+				var isTarget = el === item;
+				el.classList.toggle(config.activeClass, isTarget);
+				el.setAttribute('aria-current', String(isTarget));
+			}
+			if (config.statusEl) config.statusEl.textContent = config.statusPrefix + (item.dataset.title || '');
+			item.scrollIntoView({
+				inline: config.scrollAxis === 'x' ? 'center' : 'nearest',
+				block: config.scrollAxis === 'y' ? 'center' : 'nearest',
+				behavior: reducedMotionQuery.matches ? 'auto' : 'smooth'
+			});
+		};
+	}
+
+	// ── horizontal: the compressed album strip ──────────────────────
+	var strip = document.getElementById('live-strip');
+	if (strip) {
+		var stripStatus = document.getElementById('live-strip-status');
+		var openStripTile = wireOpenBehavior({
+			container: strip,
+			itemSelector: '.strip-tile',
+			activeClass: 'active',
+			statusEl: stripStatus,
+			statusPrefix: 'Offen: ',
+			scrollAxis: 'x'
+		});
+		createKineticScroller(strip, { axis: 'x', itemSelector: '.strip-tile', onOpen: openStripTile });
+
+		var filterInput = document.getElementById('live-strip-filter');
+		var filterClear = document.getElementById('live-strip-filter-clear');
+		var tiles = Array.prototype.slice.call(strip.querySelectorAll('.strip-tile'));
+
+		function applyFilter() {
+			var query = filterInput.value.trim().toLowerCase();
+			filterClear.hidden = query.length === 0;
+			tiles.forEach(function (tile) {
+				var title = (tile.dataset.title || '').toLowerCase();
+				var matches = query.length === 0 || title.indexOf(query) !== -1;
+				var isActive = tile.classList.contains('active');
+				tile.hidden = !matches && !isActive;
+				tile.classList.toggle('filtered-out-but-open', !matches && isActive);
+			});
+		}
+
+		filterInput.addEventListener('input', applyFilter);
+		filterInput.addEventListener('keydown', function (event) {
+			if (event.key === 'Escape' && filterInput.value !== '') {
+				event.preventDefault();
+				filterInput.value = '';
+				applyFilter();
+			}
+		});
+		filterClear.addEventListener('click', function () {
+			filterInput.value = '';
+			applyFilter();
+			filterInput.focus();
+		});
+	}
+
+	// ── vertical: the same behaviour, the rail's sibling-album list ─
+	var railList = document.getElementById('live-rail-list');
+	if (railList) {
+		var railStatus = document.getElementById('live-rail-status');
+		var openRailRow = wireOpenBehavior({
+			container: railList,
+			itemSelector: '.rail-live-row',
+			activeClass: 'row-active',
+			statusEl: railStatus,
+			statusPrefix: 'Offen: ',
+			scrollAxis: 'y'
+		});
+		createKineticScroller(railList, { axis: 'y', itemSelector: '.rail-live-row', onOpen: openRailRow });
+	}
+})();
+</script>
+</body>
+</html>

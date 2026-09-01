@@ -23,3 +23,9 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   baugleiche Blöcke darunter, totes Chat-Model-Feld entfernt. Backend-
   Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
   providerneutral).
+- `album-browsing.html` — Album-/Playlist-Browsing nach dem Öffnen (#348).
+  Erste Fassung freigegeben am 01.09.2026, nach dem Ausprobieren eines
+  bedienbaren Prototyps: die Kachelwand bleibt bestehen und schrumpft beim
+  Öffnen eines Albums zu einer kinetisch durchblätterbaren Reihe. Mini-Cover
+  in der Leiste links hängen an #229; die Mobilbreite ist als offene Frage
+  markiert, nicht gelöst.
