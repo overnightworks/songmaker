@@ -241,8 +241,8 @@ export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 // every private route, settings included (issue #263).
 export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_LIBRARY_LABEL = 'Library';
+export const RAIL_PLAYLISTS_LABEL = 'Playlists';
 export const RAIL_SETTINGS_LABEL = 'Settings';
-export const RAIL_SUMMARY_LOADING = '…';
 // The drawer the compact shell puts the rail in — its accessible name, which
 // is how a flow scopes to it while another overlay may be open.
 export const RAIL_DRAWER_LABEL = 'Navigation';

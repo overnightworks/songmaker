@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	albumSummaryLabel,
-	formatTime,
-	librarySummaryLabel,
-	playlistSummaryLabel,
-	titleInitials
-} from './format.ts';
+import { albumSummaryLabel, formatTime, playlistSummaryLabel, titleInitials } from './format.ts';
 
 describe('formatTime', () => {
 	it('formats zero seconds', () => {
@@ -47,17 +41,6 @@ describe('playlistSummaryLabel', () => {
 		[5, '5 tracks']
 	])('entryCount=%i -> %j', (entryCount, expected) => {
 		expect(playlistSummaryLabel(entryCount)).toBe(expected);
-	});
-});
-
-describe('librarySummaryLabel', () => {
-	it.each([
-		[0, 0, '0 albums · 0 playlists'],
-		[1, 0, '1 album · 0 playlists'],
-		[3, 1, '3 albums · 1 playlist'],
-		[3, 2, '3 albums · 2 playlists']
-	])('albumCount=%i playlistCount=%i -> %j', (albumCount, playlistCount, expected) => {
-		expect(librarySummaryLabel(albumCount, playlistCount)).toBe(expected);
 	});
 });
 

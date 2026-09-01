@@ -73,7 +73,7 @@ afterEach(async () => {
 });
 
 describe('Rail', () => {
-	it('renders the brand, the LIBRARY group, the settings disclosure, and the user row', async () => {
+	it('renders the brand, the LIBRARY and PLAYLISTS groups, the settings disclosure, and the user row', async () => {
 		albumList.set([
 			{
 				id: 'a1',
@@ -94,11 +94,13 @@ describe('Rail', () => {
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
 		// Scoped to the top-level group toggles: a nested album row is also a
 		// `button.disclose` (RailLibraryGroup's per-album disclosure), so an
-		// unscoped query would pick it up between Library and Settings.
+		// unscoped query would pick it up between Library, Playlists, and
+		// Settings.
 		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
 		expect(groupRows[0]?.textContent).toContain('Library');
 		expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1');
-		expect(groupRows[1]?.textContent).toContain('Settings');
+		expect(groupRows[1]?.textContent).toContain('Playlists');
+		expect(groupRows[2]?.textContent).toContain('Settings');
 		expect(target.textContent).toContain('felix');
 	});
 
@@ -120,14 +122,15 @@ describe('Rail', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('scrolls only the LIBRARY group, pinning Settings and the user row below it', async () => {
+	it('scrolls the LIBRARY and PLAYLISTS groups, pinning Settings and the user row below them', async () => {
 		const target = await render();
 		const scroll = requireElement(target, '.rail-scroll');
 		const scrolledToggles = scroll.querySelectorAll(
 			'.rail-group > .disclose-row > button.disclose'
 		);
-		expect(scrolledToggles).toHaveLength(1);
+		expect(scrolledToggles).toHaveLength(2);
 		expect(scrolledToggles[0]?.textContent).toContain('Library');
+		expect(scrolledToggles[1]?.textContent).toContain('Playlists');
 		expect(scroll.textContent).not.toContain('Settings');
 
 		const settingsPin = requireElement(target, '.rail-settings-pin');

@@ -2,6 +2,7 @@
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
+	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 
@@ -17,6 +18,7 @@
 
 	<div class="rail-scroll">
 		<RailLibraryGroup />
+		<RailPlaylistsGroup />
 	</div>
 
 	<div class="rail-settings-pin">
