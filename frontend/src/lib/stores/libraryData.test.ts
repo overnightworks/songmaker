@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem, PaginatedResponse, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, PaginatedResponse, SongItem } from '$lib/api/types';
 
 vi.mock('$lib/api/client', () => ({
 	fetchSongs: vi.fn().mockResolvedValue({
@@ -9,13 +9,23 @@ vi.mock('$lib/api/client', () => ({
 		offset: 0,
 		limit: 200,
 		has_more: false
+	}),
+	fetchAlbums: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
 	})
 }));
 
-import { fetchSongs } from '$lib/api/client';
+import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import {
+	albumList,
 	albumSongsLoad,
+	allAlbumsLoad,
 	cancelAlbumSongLoads,
+	ensureAllAlbumsLoaded,
 	loadSongsForAlbum,
 	overlaySongList,
 	replaceSongInList,
@@ -24,6 +34,24 @@ import {
 	updateGenerationScores,
 	upsertSongInList
 } from './libraryData';
+
+function makeAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
+	return {
+		id: 'a1',
+		title: 'Album',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 0,
+		picked_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: '',
+		is_archived: false,
+		...overrides
+	};
+}
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -89,12 +117,21 @@ beforeEach(() => {
 		limit: 200,
 		has_more: false
 	});
+	vi.mocked(fetchAlbums).mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	});
 });
 
 afterEach(() => {
 	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	songList.set([]);
+	albumList.set([]);
+	allAlbumsLoad.set({ status: 'idle', error: null });
 });
 
 describe('song list mutations', () => {
@@ -222,5 +259,78 @@ describe('updateGenerationScores', () => {
 		updateGenerationScores('g1', { dynamics: 80 });
 		const songs = get(songList);
 		expect(songs[0].generations[1].scores).toBeNull();
+	});
+});
+
+describe('ensureAllAlbumsLoaded', () => {
+	it('follows has_more across pages until the full list is loaded', async () => {
+		vi.mocked(fetchAlbums)
+			.mockResolvedValueOnce({
+				items: [makeAlbum({ id: 'a1' }), makeAlbum({ id: 'a2' })],
+				total: 3,
+				offset: 0,
+				limit: 2,
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [makeAlbum({ id: 'a3' })],
+				total: 3,
+				offset: 2,
+				limit: 2,
+				has_more: false
+			});
+		const ok = await ensureAllAlbumsLoaded();
+		expect(ok).toBe(true);
+		expect(
+			get(albumList)
+				.map((a) => a.id)
+				.sort()
+		).toEqual(['a1', 'a2', 'a3']);
+		expect(get(allAlbumsLoad)).toEqual({ status: 'ready', error: null });
+	});
+
+	it('does not refetch once the list is loaded', async () => {
+		vi.mocked(fetchAlbums).mockResolvedValueOnce({
+			items: [makeAlbum({ id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		await ensureAllAlbumsLoaded();
+		await ensureAllAlbumsLoaded();
+		expect(vi.mocked(fetchAlbums)).toHaveBeenCalledTimes(1);
+	});
+
+	it('preserves an album a concurrent load added while merging its own fetch', async () => {
+		let resolvePage: ((value: PaginatedResponse<AlbumItem>) => void) | undefined;
+		vi.mocked(fetchAlbums).mockImplementationOnce(
+			() =>
+				new Promise<PaginatedResponse<AlbumItem>>((resolve) => {
+					resolvePage = resolve;
+				})
+		);
+		const pending = ensureAllAlbumsLoaded();
+		albumList.set([makeAlbum({ id: 'a-from-grid' })]);
+		resolvePage?.({
+			items: [makeAlbum({ id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		await pending;
+		expect(
+			get(albumList)
+				.map((a) => a.id)
+				.sort()
+		).toEqual(['a-from-grid', 'a1']);
+	});
+
+	it('records a retryable error when albums fail to load', async () => {
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('offline'));
+		const ok = await ensureAllAlbumsLoaded();
+		expect(ok).toBe(false);
+		expect(get(allAlbumsLoad)).toEqual({ status: 'error', error: 'offline' });
 	});
 });

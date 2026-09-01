@@ -1,8 +1,8 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { ApiError } from '$lib/api/fetch';
-import { fetchSongs } from '$lib/api/client';
+import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
-import { LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
+import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
 
 // The library's in-memory cache of every browsed album and song. Every
 // surface that lists, filters, or mutates library data reads and writes
@@ -154,6 +154,70 @@ export function addAlbumToList(album: AlbumItem): void {
 		if (list.some((a) => a.id === album.id)) return list;
 		return [...list, album].sort((a, b) => a.title.localeCompare(b.title));
 	});
+}
+
+export type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface AllAlbumsLoadState {
+	status: AllAlbumsLoadStatus;
+	error: string | null;
+}
+
+// Tracks a route-independent full load of every album, for surfaces (the
+// rail) that need the complete list regardless of which library page is
+// open. loadLibraryBrowse() keeps paginating and resetting albumList for
+// the active browse view -- this loader must only ever merge into it, never
+// .set() its own page alone, or the two would repeatedly kick each other's
+// results out of the store.
+export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
+
+let allAlbumsInflight: Promise<boolean> | null = null;
+
+export async function ensureAllAlbumsLoaded(): Promise<boolean> {
+	if (get(allAlbumsLoad).status === 'ready') return true;
+	return loadAllAlbums();
+}
+
+function loadAllAlbums(): Promise<boolean> {
+	if (allAlbumsInflight) return allAlbumsInflight;
+	allAlbumsLoad.set({ status: 'loading', error: null });
+	allAlbumsInflight = (async () => {
+		try {
+			let offset = 0;
+			const collected: AlbumItem[] = [];
+			for (;;) {
+				const page = await fetchAlbums(offset, LIBRARY_ALBUM_PAGE_SIZE);
+				collected.push(...page.items);
+				offset += page.items.length;
+				if (!page.has_more || page.items.length === 0) break;
+			}
+			albumList.update((current) => mergeFetchedAlbums(current, collected));
+			allAlbumsLoad.set({ status: 'ready', error: null });
+			return true;
+		} catch (err) {
+			allAlbumsLoad.set({ status: 'error', error: allAlbumsErrorMessage(err) });
+			return false;
+		} finally {
+			allAlbumsInflight = null;
+		}
+	})();
+	return allAlbumsInflight;
+}
+
+// Existing entries win on a conflicting id, matching loadLibraryBrowse's
+// load-more merge -- an album added or refreshed elsewhere while this fetch
+// was in flight (e.g. by the grid) must survive, not get overwritten by a
+// page fetched before that update happened.
+function mergeFetchedAlbums(current: AlbumItem[], fetched: AlbumItem[]): AlbumItem[] {
+	const currentIds = new Set(current.map((album) => album.id));
+	const newOnes = fetched.filter((album) => !currentIds.has(album.id));
+	return [...current, ...newOnes];
+}
+
+function allAlbumsErrorMessage(err: unknown): string {
+	if (err instanceof ApiError) return err.detail || err.message;
+	if (err instanceof Error) return err.message;
+	return 'Failed to load albums';
 }
 
 export function addSongsToList(songs: SongItem[]): void {
