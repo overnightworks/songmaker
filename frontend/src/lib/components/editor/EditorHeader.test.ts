@@ -66,7 +66,6 @@ function defaultProps() {
 		coverBusy: false,
 		coverActionLabel: 'Upload song cover',
 		onrenamesong: vi.fn(async () => undefined),
-		onsaveversion: vi.fn(),
 		oncoverfile: vi.fn(),
 		oncoverremove: vi.fn(),
 		oncovererror: vi.fn(),
@@ -191,18 +190,6 @@ describe('EditorHeader', () => {
 			setPointer('coarse');
 			expect(minHeightPx(generate, 'Generate')).toBe(HITBOX_FREQUENT_PX);
 		}
-	});
-
-	it('saves a version from the song menu', async () => {
-		const onsaveversion = vi.fn();
-		const { target } = await render({ onsaveversion });
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
-		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Save version'
-		);
-		item?.click();
-		expect(onsaveversion).toHaveBeenCalledTimes(1);
 	});
 
 	it('announces the song title as the heading name, with a separately named edit button', async () => {

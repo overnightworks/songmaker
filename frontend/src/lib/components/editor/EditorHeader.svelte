@@ -30,7 +30,6 @@
 		coverBusy: boolean;
 		coverActionLabel: string;
 		onrenamesong: (title: string) => Promise<void>;
-		onsaveversion: () => void;
 		oncoverfile: (event: Event) => void;
 		oncoverremove: () => void;
 		oncovererror: () => void;
@@ -69,7 +68,6 @@
 		coverBusy,
 		coverActionLabel,
 		onrenamesong,
-		onsaveversion,
 		oncoverfile,
 		oncoverremove,
 		oncovererror,
@@ -154,7 +152,6 @@
 					{onshare}
 					{onunshare}
 					onrename={() => titleEditor?.startEdit()}
-					{onsaveversion}
 					{onaddtoplaylist}
 					ondelete={ondeletesong}
 				/>

@@ -89,7 +89,7 @@
 		takesPerGenerate
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
-	import type { GenerationItem } from '$lib/api/types';
+	import type { GenerationItem, SongItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
@@ -108,6 +108,8 @@
 		EDITOR_NO_MODELS_WARNING,
 		EDITOR_QUEUED_LABEL,
 		EDITOR_QUEUE_BUSY_TITLE,
+		EDITOR_SAVE_ACCESSIBLE_LABEL,
+		EDITOR_SAVE_LABEL,
 		EDITOR_SELECT_MODEL_TITLE,
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TAB_WRITE_LABEL,
@@ -652,6 +654,43 @@
 </script>
 
 {#if song}
+	{#snippet saveAction()}
+		<div class="write-save">
+			<p class="write-save-hint" role="status">
+				{#if dirty}{EDITOR_UNSAVED_TITLE}{/if}
+			</p>
+			<button
+				type="button"
+				class="save-btn"
+				class:dirty
+				data-hitbox="text"
+				disabled={!dirty}
+				aria-label={EDITOR_SAVE_ACCESSIBLE_LABEL}
+				onclick={() => void onSaveVersion()}
+			>
+				{EDITOR_SAVE_LABEL}
+			</button>
+		</div>
+	{/snippet}
+
+	{#snippet writeSurface(
+		current: SongItem,
+		withCowriter: boolean,
+		isCompact: boolean,
+		onTurnCompleted: () => void
+	)}
+		<div class="write-surface">
+			{@render saveAction()}
+			<WriteColumn
+				song={current}
+				allSongs={songs}
+				coWriterOpen={withCowriter}
+				compact={isCompact}
+				onturncompleted={onTurnCompleted}
+			/>
+		</div>
+	{/snippet}
+
 	<div class="detail-panel" class:compact>
 		<EditorHeader
 			{song}
@@ -664,7 +703,6 @@
 			{coverBusy}
 			{coverActionLabel}
 			onrenamesong={onRenameSong}
-			onsaveversion={() => void onSaveVersion()}
 			oncoverfile={onCoverFile}
 			oncoverremove={onCoverRemove}
 			oncovererror={() => (coverFailed = true)}
@@ -741,13 +779,7 @@
 					</button>
 				</div>
 				{#if tab === 'write'}
-					<WriteColumn
-						{song}
-						allSongs={songs}
-						coWriterOpen={false}
-						{compact}
-						onturncompleted={() => {}}
-					/>
+					{@render writeSurface(song, false, compact, () => {})}
 				{:else}
 					{@render expiryDigest()}
 					<TakesList
@@ -766,22 +798,10 @@
 					/>
 				{/if}
 			{:else if $coWriterOpen}
-				<WriteColumn
-					{song}
-					allSongs={songs}
-					coWriterOpen={true}
-					{compact}
-					onturncompleted={onTurnCompleted}
-				/>
+				{@render writeSurface(song, true, compact, onTurnCompleted)}
 			{:else}
 				<div class="editor-columns">
-					<WriteColumn
-						{song}
-						allSongs={songs}
-						coWriterOpen={false}
-						{compact}
-						onturncompleted={() => {}}
-					/>
+					{@render writeSurface(song, false, compact, () => {})}
 					<div class="takes-column">
 						{@render expiryDigest()}
 						<TakesList
@@ -840,13 +860,7 @@
 			label={EDITOR_VIEW_COWRITER_LABEL}
 			onclose={() => coWriterOpen.set(false)}
 		>
-			<WriteColumn
-				{song}
-				allSongs={songs}
-				coWriterOpen={true}
-				compact
-				onturncompleted={onTurnCompleted}
-			/>
+			{@render writeSurface(song, true, true, onTurnCompleted)}
 		</EditorSheet>
 		<EditorSheet
 			open={$recipeOpen}
@@ -933,6 +947,61 @@
 		flex: 1;
 		min-height: 0;
 		overflow: hidden auto;
+	}
+
+	.write-surface {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		gap: 0.6rem;
+		min-width: 0;
+		min-height: 0;
+	}
+
+	.write-save {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.write-save-hint {
+		margin: 0;
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	.save-btn {
+		padding: var(--btn-padding-pill);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		background: none;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: var(--btn-font-size);
+		letter-spacing: var(--btn-letter-spacing);
+		text-transform: uppercase;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.save-btn.dirty {
+		border-color: var(--primary);
+		color: var(--primary);
+		background: rgba(160, 32, 240, 0.08);
+	}
+
+	.save-btn:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.save-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.editor-tabs {

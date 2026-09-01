@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EDITOR_SAVE_LABEL } from '$lib/constants';
 import SongMenu from './SongMenu.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -22,7 +23,6 @@ function defaultProps() {
 		})),
 		onunshare: vi.fn(async () => undefined),
 		onrename: vi.fn(),
-		onsaveversion: vi.fn(),
 		onaddtoplaylist: vi.fn(),
 		ondelete: vi.fn()
 	};
@@ -48,7 +48,7 @@ describe('SongMenu', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toContain('Rename');
-		expect(items).toContain('Save version');
+		expect(items).not.toContain(EDITOR_SAVE_LABEL);
 		expect(items).toContain('Add to playlist');
 		expect(items).toContain('Delete song');
 	});
@@ -64,18 +64,6 @@ describe('SongMenu', () => {
 		await tick();
 		expect(props.onrename).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('.menu-panel')).toBeNull();
-	});
-
-	it('saves a version from the menu', async () => {
-		const { target, props } = await renderMenu();
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
-		const saveVersion = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Save version'
-		);
-		saveVersion?.click();
-		await tick();
-		expect(props.onsaveversion).toHaveBeenCalledTimes(1);
 	});
 
 	it('closes on Escape without triggering an action', async () => {

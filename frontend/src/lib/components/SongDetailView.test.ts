@@ -19,8 +19,11 @@ import {
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
+	EDITOR_SAVE_ACCESSIBLE_LABEL,
+	EDITOR_SAVE_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_TAB_WRITE_LABEL,
+	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
@@ -35,6 +38,7 @@ import {
 	TAKE_AGAIN_LABEL,
 	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
+import { accessibleName } from '$lib/test-utils/accessible-name';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -292,6 +296,12 @@ function header(target: HTMLElement): HTMLElement {
 	const el = target.querySelector<HTMLElement>('.detail-header');
 	if (!el) throw new Error('Expected the Editor header row');
 	return el;
+}
+
+function writeSaveButton(target: HTMLElement): HTMLButtonElement {
+	const button = target.querySelector<HTMLButtonElement>('.write-save .save-btn');
+	if (!button) throw new Error('Expected the write-surface Save button');
+	return button;
 }
 
 function visibleText(el: HTMLElement): string {
@@ -798,27 +808,68 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
 		await tick();
-		clickNamed(target, 'Save');
+		const dialog = target.querySelector<HTMLElement>('.dialog');
+		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
+		clickNamed(dialog, EDITOR_UNSAVED_SAVE_LABEL);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-last'));
 		expect(updateSong).toHaveBeenCalled();
 	});
 
-	it('saves a version from the song menu without switching songs', async () => {
+	it('keeps write-surface Save and the unsaved-changes confirm as distinct accessible names while the dialog is open', async () => {
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		await tick();
+
+		const dialog = target.querySelector<HTMLElement>('.dialog');
+		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
+
+		const buttons = Array.from(target.querySelectorAll('button'));
+		expect(buttons.filter((el) => accessibleName(el) === EDITOR_UNSAVED_SAVE_LABEL)).toHaveLength(
+			1
+		);
+		expect(
+			buttons.filter((el) => accessibleName(el) === EDITOR_SAVE_ACCESSIBLE_LABEL)
+		).toHaveLength(1);
+		expect(EDITOR_SAVE_ACCESSIBLE_LABEL).not.toBe(EDITOR_UNSAVED_SAVE_LABEL);
+	});
+
+	it('makes unsaved changes visible on the write surface before you hunt for them', async () => {
+		const target = await renderView();
+		const save = writeSaveButton(target);
+		expect(save.disabled).toBe(true);
+		expect(save.textContent?.trim()).toBe(EDITOR_SAVE_LABEL);
+		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe('');
+		expect(header(target).querySelector('.save-btn')).toBeNull();
+
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		expect(save.disabled).toBe(false);
+		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe(
+			EDITOR_UNSAVED_TITLE
+		);
+	});
+
+	it('saves from the write surface without the overflow menu or generate', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(song({ version_count: 2 }));
 		const target = await renderView();
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
-		clickNamed(target, 'Save version');
+		expect(target.querySelector('.menu-panel')).toBeNull();
+		writeSaveButton(target).click();
 		await tick();
 		await Promise.resolve();
 		await tick();
 
 		expect(updateSong).toHaveBeenCalled();
+		expect(generateSong).not.toHaveBeenCalled();
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
@@ -832,9 +883,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		// Only override the *post-save* reload — the initial render already
 		// consumed one fetchVersions() call while loading the song.
 		vi.mocked(fetchVersions).mockResolvedValueOnce([version({ id: 'v5', version_number: 5 })]);
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
-		clickNamed(target, 'Save version');
+		writeSaveButton(target).click();
 		await tick();
 		await Promise.resolve();
 		await tick();

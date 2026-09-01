@@ -117,6 +117,8 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 	'This proposal applies to a different song than the one you have open';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
+export const EDITOR_SAVE_LABEL = 'Save';
+export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
 export const EDITOR_QUEUED_LABEL = 'Queued...';
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
@@ -136,7 +138,6 @@ export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_NETWORK_ERROR = 'Network error. Check connection and retry.';
 
-export const SONG_MENU_SAVE_VERSION_LABEL = 'Save version';
 export const SONG_MENU_SHARE_LABEL = 'Share song';
 export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
