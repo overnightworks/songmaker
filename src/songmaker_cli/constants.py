@@ -149,6 +149,7 @@ COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
     "audio", "image", "search", "moderation",
 )
 COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
+COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER = "Available: "
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 

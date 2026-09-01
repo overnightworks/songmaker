@@ -27,7 +27,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.constants import SECRET_ENV_KEYS
+from songmaker_cli.constants import (
+    COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
+    COWRITER_MODELS_TIMEOUT_SECONDS,
+    SECRET_ENV_KEYS,
+)
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -417,6 +421,96 @@ def is_available(api_key: str | None = None) -> bool:
     if api_key:
         return True
     return _find_claude_binary() is not None
+
+
+@dataclass(frozen=True)
+class CliLoginStatus:
+    """What `claude auth status` reports, not just whether the binary exists."""
+
+    logged_in: bool
+    auth_method: str | None
+
+
+def cli_login_status() -> CliLoginStatus:
+    """Ask the CLI itself whether it is logged in, and with what auth method.
+
+    Any failure to get a clean answer (binary missing, non-zero exit, a
+    timeout, or output that doesn't parse as the expected JSON) is reported
+    as logged out — a discovery probe degrades to "unavailable" rather than
+    raising, since the caller iterates every co-writer provider and one
+    provider's probe must not abort the others.
+    """
+    binary = _find_claude_binary()
+    if binary is None:
+        return CliLoginStatus(logged_in=False, auth_method=None)
+    try:
+        result = subprocess.run(
+            [binary, "auth", "status"],
+            capture_output=True,
+            text=True,
+            timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
+            env=_scrub_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return CliLoginStatus(logged_in=False, auth_method=None)
+    try:
+        payload = json.loads(result.stdout)
+    except ValueError:
+        return CliLoginStatus(logged_in=False, auth_method=None)
+    if not isinstance(payload, dict) or not isinstance(payload.get("loggedIn"), bool):
+        return CliLoginStatus(logged_in=False, auth_method=None)
+    auth_method = payload.get("authMethod")
+    return CliLoginStatus(
+        logged_in=payload["loggedIn"],
+        auth_method=auth_method if isinstance(auth_method, str) else None,
+    )
+
+
+def list_cli_model_aliases() -> list[str]:
+    """Model names the CLI's `--model` flag accepts, read from `/model`.
+
+    The CLI's own text is the only source for this list — there is no
+    machine-readable catalog endpoint for a CLI-only login. Raises
+    UnavailableError, never returns an empty list, if that text doesn't
+    contain the expected `Available: a, b, c.` fragment.
+    """
+    binary = _require_claude_binary()
+    try:
+        result = subprocess.run(
+            [binary, "-p", "/model"],
+            capture_output=True,
+            text=True,
+            timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
+            env=_scrub_env(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise UnavailableError(
+            f"Claude CLI /model timed out after {COWRITER_MODELS_TIMEOUT_SECONDS}s",
+        ) from exc
+    except OSError as exc:
+        raise UnavailableError(f"Claude CLI /model failed to run: {exc}") from exc
+    if result.returncode != 0:
+        raise UnavailableError(
+            f"Claude CLI /model exited {result.returncode}: {result.stderr.strip()}",
+        )
+    return _parse_cli_model_aliases(result.stdout)
+
+
+def _parse_cli_model_aliases(stdout: str) -> list[str]:
+    for line in stdout.splitlines():
+        if COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER not in line:
+            continue
+        after_marker = line.split(COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER, 1)[1]
+        aliases = [
+            token.strip()
+            for token in after_marker.rstrip(".").split(", ")
+            if token.strip() and " " not in token.strip()
+        ]
+        if aliases:
+            return aliases
+    raise UnavailableError(
+        "Claude CLI /model output did not contain a parseable model list",
+    )
 
 
 # ── Shared helpers ─────────────────────────────────────────────────

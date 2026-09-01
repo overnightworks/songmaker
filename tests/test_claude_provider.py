@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,7 +20,9 @@ from songmaker_cli.claude.provider import (
     acall_claude,
     call_claude,
     clear_client_cache,
+    cli_login_status,
     is_available,
+    list_cli_model_aliases,
     parse_json_response,
 )
 from songmaker_cli.constants import SECRET_ENV_KEYS
@@ -101,6 +104,171 @@ def test_is_available_with_cli_binary() -> None:
 def test_is_available_neither() -> None:
     with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
         assert is_available(api_key=None) is False
+
+
+# ── cli_login_status ───────────────────────────────────────────────
+
+
+def _auth_status_result(stdout: str, returncode: int = 0) -> MagicMock:
+    return MagicMock(stdout=stdout, stderr="", returncode=returncode)
+
+
+def test_cli_login_status_reads_logged_in_json() -> None:
+    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_auth_status_result(payload),
+        ),
+    ):
+        status = cli_login_status()
+
+    assert status.logged_in is True
+    assert status.auth_method == "claude.ai"
+
+
+def test_cli_login_status_no_binary_is_logged_out() -> None:
+    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
+        status = cli_login_status()
+
+    assert status.logged_in is False
+    assert status.auth_method is None
+
+
+def test_cli_login_status_not_logged_in() -> None:
+    payload = json.dumps({"loggedIn": False})
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_auth_status_result(payload),
+        ),
+    ):
+        status = cli_login_status()
+
+    assert status.logged_in is False
+    assert status.auth_method is None
+
+
+def test_cli_login_status_malformed_json_is_logged_out() -> None:
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_auth_status_result("not json"),
+        ),
+    ):
+        status = cli_login_status()
+
+    assert status.logged_in is False
+
+
+def test_cli_login_status_timeout_is_logged_out() -> None:
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=15),
+        ),
+    ):
+        status = cli_login_status()
+
+    assert status.logged_in is False
+
+
+# ── list_cli_model_aliases ───────────────────────────────────────────
+
+
+def _model_command_result(stdout: str, returncode: int = 0) -> MagicMock:
+    return MagicMock(stdout=stdout, stderr="", returncode=returncode)
+
+
+def test_list_cli_model_aliases_parses_available_line() -> None:
+    stdout = (
+        "Current model: `Opus 5 (1M context)` (effort: high)\n"
+        "Usage: /model <name>. Available: sonnet, opus, haiku, fable, best, "
+        "sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.\n"
+    )
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_model_command_result(stdout),
+        ),
+    ):
+        aliases = list_cli_model_aliases()
+
+    assert aliases == [
+        "sonnet", "opus", "haiku", "fable", "best",
+        "sonnet[1m]", "opus[1m]", "fable[1m]", "opusplan", "default",
+    ]
+
+
+def test_list_cli_model_aliases_unexpected_output_raises_named_error() -> None:
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_model_command_result("no usable output here\n"),
+        ),
+    ):
+        with pytest.raises(UnavailableError, match="did not contain a parseable"):
+            list_cli_model_aliases()
+
+
+def test_list_cli_model_aliases_no_binary_raises_named_error() -> None:
+    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
+        with pytest.raises(UnavailableError, match="Claude CLI not found"):
+            list_cli_model_aliases()
+
+
+def test_list_cli_model_aliases_timeout_raises_named_error() -> None:
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=15),
+        ),
+    ):
+        with pytest.raises(UnavailableError, match="timed out"):
+            list_cli_model_aliases()
+
+
+def test_list_cli_model_aliases_nonzero_exit_raises_named_error() -> None:
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            return_value=_model_command_result("", returncode=1),
+        ),
+    ):
+        with pytest.raises(UnavailableError, match="exited 1"):
+            list_cli_model_aliases()
 
 
 # ── _call_api ───────────────────────────────────────────────────────

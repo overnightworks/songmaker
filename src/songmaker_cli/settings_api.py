@@ -338,11 +338,17 @@ def api_set_claude_models(
 
 def _models_for_provider(provider: str) -> tuple[list[str], str | None]:
     from songmaker_cli.cowriter.catalog import list_provider_models
-    from songmaker_cli.cowriter.errors import ProviderUnavailableError
+    from songmaker_cli.cowriter.errors import (
+        ProviderModelCatalogUnavailableError,
+        ProviderUnavailableError,
+    )
 
     try:
         return list_provider_models(provider), None
-    except ProviderUnavailableError as exc:
+    except (
+        ProviderUnavailableError,
+        ProviderModelCatalogUnavailableError,
+    ) as exc:
         return [], str(exc)
 
 
