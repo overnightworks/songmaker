@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -250,6 +251,7 @@ def _add_second_shared_audio_take(
         pytest.param("no_pick_uses_latest_fallback", "admin_user/g2.mp3", 200),
         pytest.param("nothing_playable", None, 200),
         pytest.param("album_not_shared", None, 404),
+        pytest.param("in_root_dot_segments", None, 200),
     ],
 )
 def test_shared_audio_authorization_matches_presented_share_selection(
@@ -285,6 +287,8 @@ def test_shared_audio_authorization_matches_presented_share_selection(
             album = session.get(Album, "test_album")
             assert album is not None
             album.share_slug = "private-share"
+        elif configuration == "in_root_dot_segments":
+            first_take.mp3_path = "admin_user/../admin_user/g1.mp3"
         else:
             raise AssertionError(f"Unknown configuration: {configuration}")
         session.commit()
@@ -309,34 +313,284 @@ def test_shared_audio_authorization_matches_presented_share_selection(
     assert audio_url == f"/shared/{slug}/audio/{expected_filename}"
     assert unauthed.get(audio_url).status_code == 200
     other_filename = "admin_user/g1.mp3"
-    assert unauthed.get(f"/shared/{slug}/audio/{other_filename}").status_code == 404
+    if other_filename != expected_filename:
+        assert unauthed.get(f"/shared/{slug}/audio/{other_filename}").status_code == 404
 
 
-def test_shared_audio_issues_one_scalar_filename_query(sharing_app: TestClient) -> None:
-    slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
-    factory = sharing_app.app.state.ctx.db
-    with factory() as probe_session:
-        engine = probe_session.get_bind()
+def _add_shared_audio_playlist(session) -> None:
+    session.add(Playlist(id="pl1", title="Shared audio playlist"))
+    session.add(PlaylistEntry(
+        id="pe1", playlist_id="pl1", generation_id="g1", position=1,
+    ))
 
-    queries, handle = _count_queries(engine, "select")
-    try:
-        unauthed = TestClient(sharing_app.app, cookies={})
-        response = unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
-    finally:
-        event.remove(engine, "before_cursor_execute", handle)
 
-    assert response.status_code == 200
-    assert len(queries) == 1, (
-        f"expected one scalar filename lookup for shared audio, "
-        f"got {len(queries)}: {queries}"
+def _add_second_shared_audio_playlist_entry(session) -> None:
+    session.add(PlaylistEntry(
+        id="pe2", playlist_id="pl1", generation_id="g2", position=2,
+    ))
+
+
+def _percent_encoded_dot_segments(path: str) -> str:
+    """Keep dot segments intact because HTTP clients normalize them before sending."""
+    return path.replace("..", "%2E%2E")
+
+
+def _presented_audio_urls(payload: dict, entries_key: str) -> list[str]:
+    entries = payload[entries_key]
+    if isinstance(entries, list):
+        audio_urls = (entry["audio_url"] for entry in entries)
+    else:
+        audio_urls = (entries,)
+    return [audio_url for audio_url in audio_urls if audio_url is not None]
+
+
+def _presented_audio_filenames(payload: dict, entries_key: str) -> set[str]:
+    return {
+        audio_url.rsplit("/audio/", maxsplit=1)[1]
+        for audio_url in _presented_audio_urls(payload, entries_key)
+    }
+
+
+@pytest.mark.parametrize(
+    ("configuration", "expected_filenames"),
+    [
+        pytest.param("newest_of_two_picks", {"admin_user/g2.mp3"}),
+        pytest.param("archived_pick", {"admin_user/g2.mp3"}),
+        pytest.param("pick_without_mp3_path", {"admin_user/g2.mp3"}),
+        pytest.param("no_pick_uses_latest_fallback", {"admin_user/g2.mp3"}),
+        pytest.param("nothing_playable", set()),
+        pytest.param("not_shared", set()),
+        pytest.param("traversal", set()),
+        pytest.param("in_root_dot_segments", set()),
+    ],
+)
+def test_shared_song_audio_authorization_matches_presented_share_selection(
+    sharing_app: TestClient,
+    configuration: str,
+    expected_filenames: set[str],
+) -> None:
+    ctx = sharing_app.app.state.ctx
+    selected_at = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    with ctx.db() as session:
+        first_take = session.get(Generation, "g1")
+        assert first_take is not None
+        if configuration == "newest_of_two_picks":
+            first_take.created_at = selected_at - timedelta(days=1)
+            _add_second_shared_audio_take(
+                session, is_picked=True, created_at=selected_at,
+            )
+        elif configuration == "archived_pick":
+            first_take.is_archived = True
+            _add_second_shared_audio_take(session, is_picked=False)
+        elif configuration == "pick_without_mp3_path":
+            first_take.mp3_path = ""
+            _add_second_shared_audio_take(session, is_picked=False)
+        elif configuration == "no_pick_uses_latest_fallback":
+            first_take.is_picked = False
+            _add_second_shared_audio_take(session, is_picked=False)
+        elif configuration == "nothing_playable":
+            first_take.is_archived = True
+        elif configuration == "not_shared":
+            song = session.get(Song, "s1")
+            assert song is not None
+            song.share_slug = "private-share"
+        elif configuration == "traversal":
+            first_take.mp3_path = "admin_user/../../outside.mp3"
+        elif configuration == "in_root_dot_segments":
+            first_take.mp3_path = "admin_user/../admin_user/g1.mp3"
+        else:
+            raise AssertionError(f"Unknown configuration: {configuration}")
+        session.commit()
+
+    (ctx.audio_dir / "admin_user" / "g2.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    (ctx.audio_dir.parent / "outside.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    slug = (
+        "private-share"
+        if configuration == "not_shared"
+        else sharing_app.post("/api/songs/s1/share").json()["share_slug"]
     )
-    assert "from generations" in queries[0].lower()
-    assert "versions" not in queries[0].lower()
+    unauthed = TestClient(sharing_app.app, cookies={})
+    shared_response = unauthed.get(f"/shared/song/{slug}")
+    candidates = {
+        "admin_user/g1.mp3",
+        "admin_user/g2.mp3",
+        "admin_user/../../outside.mp3",
+        "admin_user/../admin_user/g1.mp3",
+    }
+    candidate_statuses = {
+        filename: unauthed.get(
+            f"/shared/song/{slug}/audio/{_percent_encoded_dot_segments(filename)}",
+        ).status_code
+        for filename in candidates
+    }
+    delivered_filenames = {
+        filename for filename, status_code in candidate_statuses.items()
+        if status_code == 200
+    }
+
+    assert delivered_filenames == expected_filenames
+    if configuration == "not_shared":
+        assert shared_response.status_code == 404
+        assert all(status_code == 404 for status_code in candidate_statuses.values())
+        return
+    if configuration == "traversal":
+        assert candidate_statuses["admin_user/../../outside.mp3"] == 404
+    assert shared_response.status_code == 200
+    assert all(
+        unauthed.get(audio_url).status_code == 200
+        for audio_url in _presented_audio_urls(shared_response.json(), "audio_url")
+    )
+    assert _presented_audio_filenames(shared_response.json(), "audio_url") == delivered_filenames
 
 
-def test_shared_audio_filename_lookup_runs_off_the_event_loop(
+@pytest.mark.parametrize(
+    ("configuration", "expected_filenames"),
+    [
+        pytest.param("newest_of_two_picks", {"admin_user/g1.mp3", "admin_user/g2.mp3"}),
+        pytest.param("archived_pick", {"admin_user/g2.mp3"}),
+        pytest.param("pick_without_mp3_path", {"admin_user/g2.mp3"}),
+        pytest.param(
+            "no_pick_uses_latest_fallback", {"admin_user/g1.mp3", "admin_user/g2.mp3"},
+        ),
+        pytest.param("nothing_playable", set()),
+        pytest.param("not_shared", set()),
+        pytest.param("traversal", set()),
+        pytest.param("in_root_dot_segments", set()),
+    ],
+)
+def test_shared_playlist_audio_authorization_matches_presented_share_selection(
+    sharing_app: TestClient,
+    configuration: str,
+    expected_filenames: set[str],
+) -> None:
+    ctx = sharing_app.app.state.ctx
+    with ctx.db() as session:
+        _add_shared_audio_playlist(session)
+        first_take = session.get(Generation, "g1")
+        assert first_take is not None
+        if configuration == "newest_of_two_picks":
+            _add_second_shared_audio_take(session, is_picked=True)
+            _add_second_shared_audio_playlist_entry(session)
+        elif configuration == "archived_pick":
+            first_take.is_archived = True
+            _add_second_shared_audio_take(session, is_picked=False)
+            _add_second_shared_audio_playlist_entry(session)
+        elif configuration == "pick_without_mp3_path":
+            first_take.mp3_path = ""
+            _add_second_shared_audio_take(session, is_picked=False)
+            _add_second_shared_audio_playlist_entry(session)
+        elif configuration == "no_pick_uses_latest_fallback":
+            first_take.is_picked = False
+            _add_second_shared_audio_take(session, is_picked=False)
+            _add_second_shared_audio_playlist_entry(session)
+        elif configuration == "nothing_playable":
+            first_take.is_archived = True
+        elif configuration == "not_shared":
+            playlist = session.get(Playlist, "pl1")
+            assert playlist is not None
+            playlist.share_slug = "private-share"
+        elif configuration == "traversal":
+            first_take.mp3_path = "admin_user/../../outside.mp3"
+        elif configuration == "in_root_dot_segments":
+            first_take.mp3_path = "admin_user/../admin_user/g1.mp3"
+        else:
+            raise AssertionError(f"Unknown configuration: {configuration}")
+        session.commit()
+
+    (ctx.audio_dir / "admin_user" / "g2.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    (ctx.audio_dir.parent / "outside.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    slug = (
+        "private-share"
+        if configuration == "not_shared"
+        else sharing_app.post("/api/playlists/pl1/share").json()["share_slug"]
+    )
+    unauthed = TestClient(sharing_app.app, cookies={})
+    shared_response = unauthed.get(f"/shared/playlist/{slug}")
+    candidates = {
+        "admin_user/g1.mp3",
+        "admin_user/g2.mp3",
+        "admin_user/../../outside.mp3",
+        "admin_user/../admin_user/g1.mp3",
+    }
+    candidate_statuses = {
+        filename: unauthed.get(
+            f"/shared/playlist/{slug}/audio/{_percent_encoded_dot_segments(filename)}",
+        ).status_code
+        for filename in candidates
+    }
+    delivered_filenames = {
+        filename for filename, status_code in candidate_statuses.items()
+        if status_code == 200
+    }
+
+    assert delivered_filenames == expected_filenames
+    if configuration == "not_shared":
+        assert shared_response.status_code == 404
+        assert all(status_code == 404 for status_code in candidate_statuses.values())
+        return
+    if configuration == "traversal":
+        assert candidate_statuses["admin_user/../../outside.mp3"] == 404
+    assert shared_response.status_code == 200
+    assert all(
+        unauthed.get(audio_url).status_code == 200
+        for audio_url in _presented_audio_urls(shared_response.json(), "entries")
+    )
+    assert _presented_audio_filenames(shared_response.json(), "entries") == delivered_filenames
+
+
+def _seed_shared_playlist_audio(session) -> None:
+    _add_shared_audio_playlist(session)
+
+
+@dataclass(frozen=True)
+class SharedAudioSurface:
+    share_path: str
+    audio_path: str
+    lookup_name: str
+    query_table: str
+    seed: Callable | None = None
+
+
+_SHARED_AUDIO_LOOKUP_CONFIGURATIONS = [
+    pytest.param(
+        SharedAudioSurface(
+            "/api/albums/test_album/share",
+            "/shared/{slug}/audio/admin_user/g1.mp3",
+            "shared_album_audio_filename_is_presented",
+            "generations",
+        ),
+        id="album",
+    ),
+    pytest.param(
+        SharedAudioSurface(
+            "/api/songs/s1/share",
+            "/shared/song/{slug}/audio/admin_user/g1.mp3",
+            "shared_song_audio_filename_is_presented",
+            "generations",
+        ),
+        id="song",
+    ),
+    pytest.param(
+        SharedAudioSurface(
+            "/api/playlists/pl1/share",
+            "/shared/playlist/{slug}/audio/admin_user/g1.mp3",
+            "shared_playlist_audio_filename_is_presented",
+            "playlist_entries",
+            _seed_shared_playlist_audio,
+        ),
+        id="playlist",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "surface",
+    _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
+)
+def test_shared_audio_lookups_run_off_the_event_loop(
     sharing_app: TestClient,
     monkeypatch: pytest.MonkeyPatch,
+    surface: SharedAudioSurface,
 ) -> None:
     import asyncio
     import threading
@@ -345,19 +599,19 @@ def test_shared_audio_filename_lookup_runs_off_the_event_loop(
 
     from songmaker_cli import sharing_api
 
-    slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
-    real_lookup = sharing_api.shared_album_audio_filename_is_presented
+    if surface.seed is not None:
+        with sharing_app.app.state.ctx.db() as session:
+            surface.seed(session)
+            session.commit()
+    slug = sharing_app.post(surface.share_path).json()["share_slug"]
+    real_lookup = getattr(sharing_api, surface.lookup_name)
     observed_threads: list[int] = []
 
     def _observing_lookup(db, slug: str, filename: str) -> bool:
         observed_threads.append(threading.get_ident())
         return real_lookup(db, slug, filename)
 
-    monkeypatch.setattr(
-        sharing_api,
-        "shared_album_audio_filename_is_presented",
-        _observing_lookup,
-    )
+    monkeypatch.setattr(sharing_api, surface.lookup_name, _observing_lookup)
 
     async def _request_audio() -> tuple[int, int]:
         event_loop_thread = threading.get_ident()
@@ -365,7 +619,7 @@ def test_shared_audio_filename_lookup_runs_off_the_event_loop(
         async with httpx.AsyncClient(
             transport=transport, base_url="http://testserver",
         ) as client:
-            response = await client.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
+            response = await client.get(surface.audio_path.format(slug=slug))
         return response.status_code, event_loop_thread
 
     status_code, event_loop_thread = asyncio.run(_request_audio())
@@ -373,6 +627,83 @@ def test_shared_audio_filename_lookup_runs_off_the_event_loop(
     assert status_code == 200
     assert observed_threads
     assert observed_threads[0] != event_loop_thread
+
+
+@pytest.mark.parametrize(
+    "surface",
+    _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
+)
+def test_shared_audio_lookups_issue_one_scalar_filename_query(
+    sharing_app: TestClient,
+    surface: SharedAudioSurface,
+) -> None:
+    if surface.seed is not None:
+        with sharing_app.app.state.ctx.db() as session:
+            surface.seed(session)
+            session.commit()
+    slug = sharing_app.post(surface.share_path).json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(surface.audio_path.format(slug=slug))
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 200
+    assert len(queries) == 1, f"expected one scalar filename lookup, got {queries}"
+    statement, parameters = queries[0]
+    normalized_statement = " ".join(statement.lower().split())
+    filename_predicate = "generations.mp3_path = ?"
+    assert f"from {surface.query_table}" in normalized_statement
+    assert filename_predicate in normalized_statement
+    filename_predicate_index = normalized_statement.index(filename_predicate)
+    filename_parameter_index = normalized_statement[:filename_predicate_index].count("?")
+    assert parameters[filename_parameter_index] == "admin_user/g1.mp3"
+    assert "versions" not in normalized_statement
+
+
+@pytest.mark.parametrize(
+    "surface",
+    _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
+)
+def test_shared_audio_lookups_authorize_canonical_missing_names_before_file_checks(
+    sharing_app: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: SharedAudioSurface,
+) -> None:
+    if surface.seed is not None:
+        with sharing_app.app.state.ctx.db() as session:
+            surface.seed(session)
+            session.commit()
+    slug = sharing_app.post(surface.share_path).json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    checked_paths: list[Path] = []
+    original_exists = Path.exists
+
+    def record_exists(path: Path) -> bool:
+        checked_paths.append(path)
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", record_exists)
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(
+            surface.audio_path.replace("g1.mp3", "missing.mp3").format(slug=slug),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 404
+    assert len(queries) == 1
+    assert checked_paths == []
 
 
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
@@ -421,6 +752,7 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
         if record.name == "songmaker_cli.audio_paths"
     ).getMessage()
     assert "admin_user/../../outside.mp3" in traversal_log
+    assert "Audio path traversal denied" in traversal_log
     assert str(sharing_app.app.state.ctx.audio_dir) not in traversal_log
 
 
@@ -433,13 +765,16 @@ def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
 # ── Share payload media fields (#128) ───────────────────────────────
 
 
-def _count_queries(engine, statement_contains: str) -> tuple[list[str], Callable]:
+def _count_queries(
+    engine,
+    statement_contains: str,
+) -> tuple[list[tuple[str, tuple]], Callable]:
     """Register a query-count probe; caller removes it via the returned handle."""
-    queries: list[str] = []
+    queries: list[tuple[str, tuple]] = []
 
     def _record(conn, cursor, statement, parameters, context, executemany) -> None:
         if statement_contains.lower() in statement.lower():
-            queries.append(statement)
+            queries.append((statement, parameters))
 
     event.listen(engine, "before_cursor_execute", _record)
     return queries, _record
@@ -584,6 +919,62 @@ def test_shared_generation_view_includes_pick_media(sharing_app: TestClient) -> 
     # requested parameter -- unmeasured is None here, not 0.
     assert data["audio_duration"] is None
     assert data["lyrics"] == "Hello"
+
+
+def test_shared_generation_hides_a_noncanonical_stored_audio_path(
+    sharing_app: TestClient,
+) -> None:
+    with sharing_app.app.state.ctx.db() as session:
+        generation = session.get(Generation, "g1")
+        assert generation is not None
+        generation.mp3_path = "admin_user/../admin_user/g1.mp3"
+        session.commit()
+
+    slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
+    unauthed = TestClient(sharing_app.app, cookies={})
+
+    response = unauthed.get(f"/shared/gen/{slug}")
+
+    assert response.status_code == 200
+    assert response.json()["audio_url"] is None
+    assert unauthed.get(f"/shared/gen/{slug}/audio/admin_user/g1.mp3").status_code == 404
+
+
+def test_shared_generation_audio_authorizes_canonical_missing_names_before_file_checks(
+    sharing_app: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    filesystem_calls: list[str] = []
+
+    for method_name in ("resolve", "lstat", "stat", "exists"):
+        original_method = getattr(Path, method_name)
+
+        def record_filesystem_call(
+            path: Path,
+            *args,
+            _name=method_name,
+            _method=original_method,
+            **kwargs,
+        ):
+            filesystem_calls.append(_name)
+            return _method(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, method_name, record_filesystem_call)
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(f"/shared/gen/{slug}/audio/admin_user/missing.mp3")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 404
+    assert len(queries) == 1
+    assert filesystem_calls == []
 
 
 def test_shared_generation_reports_the_takes_measured_duration(
