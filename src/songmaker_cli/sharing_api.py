@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -49,6 +51,8 @@ from songmaker_cli.db.queries import (
     get_playlist_by_slug,
     get_song_by_slug,
     shared_album_audio_filename_is_presented,
+    shared_playlist_audio_filename_is_presented,
+    shared_song_audio_filename_is_presented,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -137,9 +141,22 @@ def _picked_generation(song):
     return None
 
 
-def _picked_filename(song) -> str | None:
-    gen = _picked_generation(song)
-    return gen.mp3_path if gen else None
+def _shared_audio_url(
+    route: str,
+    generation,
+) -> str | None:
+    if (
+        generation is None
+        or not is_playable_take(generation)
+        or not _is_safe_shared_audio_filename(generation.mp3_path)
+    ):
+        return None
+    return f"{route}/{generation.mp3_path}"
+
+
+def _is_safe_shared_audio_filename(filename: str) -> bool:
+    path = PurePosixPath(filename)
+    return not path.is_absolute() and ".." not in path.parts
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -217,10 +234,7 @@ def get_shared_album(
             id=s.id,
             title=s.title,
             track_number=s.track_number,
-            audio_url=(
-                f"/shared/{slug}/audio/{gen.mp3_path}"
-                if gen and gen.mp3_path else None
-            ),
+            audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
@@ -339,10 +353,7 @@ def get_shared_song(
         title=song.title,
         artist=song.album.artist if song.album else "",
         album_title=song.album.title if song.album else "",
-        audio_url=(
-            f"/shared/song/{slug}/audio/{gen.mp3_path}"
-            if gen and gen.mp3_path else None
-        ),
+        audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen),
         cover=cover,
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
@@ -381,7 +392,7 @@ async def get_shared_song_cover(
 
 
 @router.get("/shared/song/{slug}/audio/{filename:path}")
-async def get_shared_song_audio(
+def get_shared_song_audio(
     slug: str,
     filename: str,
     request: Request,
@@ -389,12 +400,7 @@ async def get_shared_song_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    song = get_song_by_slug(db, slug)
-    if not song:
-        raise HTTPException(404, "Not found")
-
-    picked_path = _picked_filename(song)
-    if not picked_path or filename != picked_path:
+    if not shared_song_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)
@@ -474,10 +480,7 @@ def get_shared_playlist(
             song_title=gen.song.title if gen.song else "",
             artist=gen.song.album.artist if gen.song and gen.song.album else "",
             generation_number=gen.generation_number,
-            audio_url=(
-                f"/shared/playlist/{slug}/audio/{gen.mp3_path}"
-                if gen.mp3_path else None
-            ),
+            audio_url=_shared_audio_url(f"/shared/playlist/{slug}/audio", gen),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
@@ -529,7 +532,7 @@ def get_shared_playlist_stream(
 
 
 @router.get("/shared/playlist/{slug}/audio/{filename:path}")
-async def get_shared_playlist_audio(
+def get_shared_playlist_audio(
     slug: str,
     filename: str,
     request: Request,
@@ -537,16 +540,7 @@ async def get_shared_playlist_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    playlist = get_playlist_by_slug(db, slug)
-    if not playlist:
-        raise HTTPException(404, "Not found")
-
-    valid_filenames = {
-        e.generation.mp3_path
-        for e in playlist.entries
-        if e.generation is not None
-    }
-    if filename not in valid_filenames:
+    if not shared_playlist_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)

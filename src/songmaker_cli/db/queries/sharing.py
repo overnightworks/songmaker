@@ -19,7 +19,14 @@ from songmaker_cli.constants import (
     LIBRARY_ITEM_SONG,
     SHARE_INVENTORY_TYPES,
 )
-from songmaker_cli.db.models import Album, Generation, Playlist, ShareMixin, Song
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Playlist,
+    PlaylistEntry,
+    ShareMixin,
+    Song,
+)
 
 log = logging.getLogger(__name__)
 
@@ -87,11 +94,28 @@ def shared_album_audio_filename_is_presented(
     slug: str,
     filename: str,
 ) -> bool:
-    """Whether a shared album currently presents ``filename`` as audio.
+    return _shared_song_audio_filename_is_presented(
+        session, slug, filename, shared_entity=Album,
+    )
 
-    Mirrors the picked-or-latest-playable selection in the public share page
-    without loading an album graph merely to authorize its audio URL.
-    """
+
+def shared_song_audio_filename_is_presented(
+    session: Session,
+    slug: str,
+    filename: str,
+) -> bool:
+    return _shared_song_audio_filename_is_presented(
+        session, slug, filename, shared_entity=Song,
+    )
+
+
+def _shared_song_audio_filename_is_presented(
+    session: Session,
+    slug: str,
+    filename: str,
+    *,
+    shared_entity: type[Album] | type[Song],
+) -> bool:
     candidate_generation = aliased(Generation)
     selected_picked_generation = aliased(Generation)
     song_has_playable_pick = (
@@ -122,13 +146,10 @@ def shared_album_audio_filename_is_presented(
         )
         .scalar_subquery()
     )
-    matching_generation = (
+    matching_generation_query = (
         session.query(Generation.id)
         .join(Song, Generation.song_id == Song.id)
-        .join(Album, Song.album_id == Album.id)
         .filter(
-            Album.share_slug == slug,
-            Album.is_shared.is_(True),
             Generation.mp3_path == filename,
             playable_take_filter(),
             or_(
@@ -142,9 +163,36 @@ def shared_album_audio_filename_is_presented(
                 ),
             ),
         )
+    )
+    if shared_entity is Album:
+        matching_generation_query = matching_generation_query.join(
+            Album, Song.album_id == Album.id,
+        )
+    matching_generation = matching_generation_query.filter(
+        shared_entity.share_slug == slug,
+        shared_entity.is_shared.is_(True),
+    ).first()
+    return matching_generation is not None
+
+
+def shared_playlist_audio_filename_is_presented(
+    session: Session,
+    slug: str,
+    filename: str,
+) -> bool:
+    matching_entry = (
+        session.query(PlaylistEntry.id)
+        .join(Playlist, PlaylistEntry.playlist_id == Playlist.id)
+        .join(Generation, PlaylistEntry.generation_id == Generation.id)
+        .filter(
+            Playlist.share_slug == slug,
+            Playlist.is_shared.is_(True),
+            Generation.mp3_path == filename,
+            playable_take_filter(),
+        )
         .first()
     )
-    return matching_generation is not None
+    return matching_entry is not None
 
 
 def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:
