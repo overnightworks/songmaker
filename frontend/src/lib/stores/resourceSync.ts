@@ -131,8 +131,15 @@ export class ResourceSyncController {
 	}
 
 	async retry(): Promise<boolean> {
-		if (!this.started) this.start();
 		this.store.update((state) => ({ ...state, error: null }));
+		// A retry after teardown (an 'unauthorized' or 'disabled' probe result)
+		// finds the owner stopped: start() alone opens the one EventSource it
+		// needs. Routing that case into restartConnection() below as well used
+		// to open a second connection and immediately close the first.
+		if (!this.started) {
+			this.start();
+			return this.waitForReady();
+		}
 		if (!this.syncedOnce) {
 			this.restartConnection();
 			return this.waitForReady();

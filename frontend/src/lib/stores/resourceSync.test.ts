@@ -545,6 +545,33 @@ describe('resource sync owner', () => {
 		expect(onUnauthorized).not.toHaveBeenCalled();
 	});
 
+	it('does not schedule a timer reconnect after a disabled-account probe', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
+		controller.start();
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		await flush();
+		expect(sources).toHaveLength(1);
+	});
+
+	it('a manual retry after a disabled-account probe opens exactly one new EventSource', async () => {
+		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
+		controller.start();
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		expect(sources[0].closed).toBe(true);
+
+		void controller.retry();
+		await flush();
+
+		expect(sources).toHaveLength(2);
+		expect(sources[1].closed).toBe(false);
+	});
+
 	it('opens a native EventSource with credentials and cleans it up', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();

@@ -397,21 +397,30 @@ describe('session lost (401)', () => {
 });
 
 describe('safeInternalPath', () => {
-	it('keeps an already-safe local path, including its query and hash', () => {
-		expect(safeInternalPath('/album/a1/song-1?tab=lyrics#top')).toBe(
+	it.each([
+		[
+			'an already-safe local path, kept with its query and hash',
+			'/album/a1/song-1?tab=lyrics#top',
 			'/album/a1/song-1?tab=lyrics#top'
-		);
-	});
-
-	it('discards a scheme-relative escape (//host/path resolves to a foreign origin)', () => {
-		expect(safeInternalPath('//attacker.example/x')).toBe('/');
-	});
-
-	it('discards a full cross-origin URL', () => {
-		expect(safeInternalPath('https://attacker.example')).toBe('/');
-	});
-
-	it('discards a leading-backslash escape (parsed as a host separator, same as a browser)', () => {
-		expect(safeInternalPath('/\\attacker.example')).toBe('/');
+		],
+		['a scheme-relative escape (resolves to a foreign origin)', '//attacker.example/x', '/'],
+		['a full cross-origin URL', 'https://attacker.example', '/'],
+		[
+			'a leading backslash (a host separator for http(s), same as a browser)',
+			'/\\attacker.example',
+			'/'
+		],
+		['a javascript: URL', 'javascript:alert(1)', '/'],
+		['a data: URL', 'data:text/html,hi', '/'],
+		['a leading newline hiding a scheme-relative escape', '\n//attacker.example', '/'],
+		['an embedded newline hiding a host separator', '/\n/attacker', '/'],
+		[
+			'percent-encoded slashes, which stay literal path characters, not a host escape',
+			'%2F%2Fattacker.example/x',
+			'/%2F%2Fattacker.example/x'
+		],
+		['an empty string', '', '/']
+	])('resolves %s to the safe redirect target', (_label, input, expected) => {
+		expect(safeInternalPath(input)).toBe(expected);
 	});
 });
