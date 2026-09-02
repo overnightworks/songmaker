@@ -231,13 +231,22 @@ def test_a_new_mirror_directory_is_private_from_the_start(mirror_dir: Path) -> N
 
 
 def test_a_source_larger_than_a_login_document_is_refused(
-    home: Path, mirror_dir: Path,
+    monkeypatch, home: Path, mirror_dir: Path,
 ) -> None:
-    (home / ".claude/.credentials.json").write_text(
-        "x" * (mirror.SOURCE_READ_LIMIT_BYTES + 1),
-    )
+    """Valid JSON in the first bytes, more after them: judged in full or not at all.
+
+    Reading only the first N bytes and mirroring what parses would publish a
+    document whose remainder nobody ever looked at.
+    """
+    mirror.mirror(home, mirror_dir)
+    good = (mirror_dir / "claude.json").read_text()
+    # Above the other two fixtures, below this one once padded, so exactly one
+    # source is over the limit.
+    monkeypatch.setattr(mirror, "SOURCE_READ_LIMIT_BYTES", 1500)
+    (home / ".claude/.credentials.json").write_text(json.dumps(CLAUDE) + " " * 1500)
 
     assert mirror.mirror(home, mirror_dir) == 1
+    assert (mirror_dir / "claude.json").read_text() == good
 
 
 # ── a field we have never measured is not published ────────────────
@@ -373,6 +382,18 @@ def test_an_exported_directory_wins_over_the_env_file(
         ("SONGMAKER_CLI_CREDENTIALS_DIR=/srv/creds # note", "/srv/creds"),
         ("SONGMAKER_CLI_CREDENTIALS_DIR=~/creds", "/home/someone/creds"),
         ("  SONGMAKER_CLI_CREDENTIALS_DIR = /srv/creds  ", "/srv/creds"),
+        # Compose accepts a colon as the separator, and an export prefix.
+        ("SONGMAKER_CLI_CREDENTIALS_DIR: /srv/creds", "/srv/creds"),
+        ("export SONGMAKER_CLI_CREDENTIALS_DIR=/srv/creds", "/srv/creds"),
+        # A '#' only starts a comment when whitespace precedes it, so this is
+        # a path with a '#' in it — Compose keeps it, and so do we.
+        ("SONGMAKER_CLI_CREDENTIALS_DIR=/srv/creds#blue", "/srv/creds#blue"),
+        # The last assignment wins, as in Compose.
+        (
+            "SONGMAKER_CLI_CREDENTIALS_DIR=/srv/first\n"
+            "SONGMAKER_CLI_CREDENTIALS_DIR=/srv/last",
+            "/srv/last",
+        ),
     ],
 )
 def test_the_env_file_is_read_the_way_compose_reads_it(
@@ -393,6 +414,11 @@ def test_the_env_file_is_read_the_way_compose_reads_it(
         "SONGMAKER_CLI_CREDENTIALS_DIR=/srv/%h/creds",
         "SONGMAKER_CLI_CREDENTIALS_DIR=relative/creds",
         'SONGMAKER_CLI_CREDENTIALS_DIR="/srv/unclosed',
+        # Outside the subset this reader implements. Guessing differently from
+        # Compose would point the mirror somewhere else, so it refuses.
+        r'SONGMAKER_CLI_CREDENTIALS_DIR="/srv/a\tb"',
+        "SONGMAKER_CLI_CREDENTIALS_DIR=/srv/$HOME/creds",
+        'SONGMAKER_CLI_CREDENTIALS_DIR="/srv/creds" trailing',
     ],
 )
 def test_a_directory_no_unit_could_carry_is_refused(
@@ -404,6 +430,18 @@ def test_a_directory_no_unit_could_carry_is_refused(
 
     with pytest.raises(mirror.MirrorError):
         mirror.resolve_mirror_directory(tmp_path, Path("/home/someone"))
+
+
+def test_an_exported_but_empty_variable_means_the_default(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    """Compose's `${VAR:-default}` treats empty as unset, so this does too."""
+    (tmp_path / ".env").write_text("SONGMAKER_CLI_CREDENTIALS_DIR=/from/file\n")
+    monkeypatch.setenv("SONGMAKER_CLI_CREDENTIALS_DIR", "")
+
+    resolved = mirror.resolve_mirror_directory(tmp_path, Path("/home/someone"))
+
+    assert resolved == Path("/home/someone/.songmaker/agent-cli-credentials")
 
 
 def test_without_configuration_the_mirror_lives_under_the_owners_home(
@@ -449,16 +487,29 @@ def test_a_lock_error_that_is_not_contention_is_a_failure(
 # ── a field its CLI needs is not optional ──────────────────────────
 
 
+def _required_field_cases() -> list[tuple[str, str, str]]:
+    """Every field each provider declares as required, not a sample of them.
+
+    Sampling left `key`, `auth_mode`, `id_token` and `access_token` removable
+    from the required sets without a single red test.
+    """
+    cases = [(".claude/.credentials.json", f, "claude") for f in sorted(
+        mirror.CLAUDE_REQUIRED_FIELDS,
+    )]
+    cases += [(".grok/auth.json", f, "grok") for f in sorted(
+        mirror.GROK_REQUIRED_FIELDS,
+    )]
+    cases += [(".codex/auth.json", f, "codex") for f in sorted(
+        mirror.CODEX_REQUIRED_FIELDS - {"tokens"},
+    )]
+    cases += [(".codex/auth.json", f, "codex") for f in sorted(
+        mirror.CODEX_TOKEN_REQUIRED_FIELDS,
+    )]
+    return cases
+
+
 @pytest.mark.parametrize(
-    ("relative", "removed", "published"),
-    [
-        (".claude/.credentials.json", "scopes", "claude"),
-        (".claude/.credentials.json", "accessToken", "claude"),
-        (".grok/auth.json", "create_time", "grok"),
-        (".grok/auth.json", "refresh_token", "grok"),
-        (".codex/auth.json", "account_id", "codex"),
-        (".codex/auth.json", "refresh_token", "codex"),
-    ],
+    ("relative", "removed", "published"), _required_field_cases(),
 )
 def test_a_document_its_cli_could_not_use_is_not_published(
     home: Path, mirror_dir: Path, relative, removed, published,
@@ -554,6 +605,35 @@ def test_the_verifier_refuses_a_second_hard_link(mirror_dir: Path, tmp_path) -> 
     os.link(target, tmp_path / "alias")
 
     with pytest.raises(mirror.MirrorError, match="hard link"):
+        mirror.verify_mirror_file(target, "claude")
+
+
+def test_the_verifier_refuses_a_file_another_account_owns(
+    monkeypatch, mirror_dir: Path,
+) -> None:
+    """Ownership is checked on the open descriptor, and it has to be checked."""
+    mirror.prepare_mirror_directory(mirror_dir)
+    target = mirror_dir / "claude.json"
+    mirror.write_in_place(target, b"{}")
+    somebody_else = os.getuid() + 1
+    monkeypatch.setattr(mirror.os, "getuid", lambda: somebody_else)
+
+    with pytest.raises(mirror.MirrorError, match="owned by uid"):
+        mirror.verify_mirror_file(target, "claude")
+
+
+def test_the_verifier_refuses_a_file_too_large_to_judge_in_full(
+    monkeypatch, mirror_dir: Path,
+) -> None:
+    """Valid JSON first, anything at all after the read limit — never looked at."""
+    mirror.prepare_mirror_directory(mirror_dir)
+    target = mirror_dir / "claude.json"
+    mirror.write_in_place(target, b'{"a": 1}' + b" " * 200)
+    # Patched only now, so write_in_place could still create the file: what is
+    # under test is the judging, not the writing.
+    monkeypatch.setattr(mirror, "SOURCE_READ_LIMIT_BYTES", 64)
+
+    with pytest.raises(mirror.MirrorError, match="cannot be judged in full"):
         mirror.verify_mirror_file(target, "claude")
 
 

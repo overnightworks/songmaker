@@ -534,6 +534,16 @@ def verify_mirror_file(path: Path, cli: str) -> None:
                 f"{path} is mode {stat.S_IMODE(info.st_mode):04o}, "
                 f"not {MIRROR_FILE_MODE:04o}",
             )
+        # The size is checked, not just the read capped. Reading the first
+        # 256 KiB and judging that would clear a file whose first bytes are
+        # valid JSON and whose remainder — a renewal token, anything — was
+        # never looked at.
+        if info.st_size > SOURCE_READ_LIMIT_BYTES:
+            raise MirrorError(
+                f"{path} is {info.st_size} bytes, more than the "
+                f"{SOURCE_READ_LIMIT_BYTES} a login document may be, so it "
+                f"cannot be judged in full",
+            )
         payload = os.read(descriptor, SOURCE_READ_LIMIT_BYTES)
     finally:
         os.close(descriptor)

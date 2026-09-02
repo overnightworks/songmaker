@@ -60,6 +60,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INSTALL_USER="${SUDO_USER:-$(id -un)}"
 
+# The units run as this user and mirror this user's logins. Resolving to root
+# means the script was started from a root login rather than with sudo: it
+# would then install units that mirror /root's logins — which are not the ones
+# the co-writer uses — and the operator would find an empty mirror with no
+# error to explain it.
+if [ "$INSTALL_USER" = "root" ]; then
+    echo "ERROR: refusing to install units that would run as root." >&2
+    echo "SUDO_USER is unset, so this looks like a root login rather than" >&2
+    echo "sudo. The units would mirror /root's agent-CLI logins, not the" >&2
+    echo "operator's. Log in as the account the stack belongs to and run:" >&2
+    echo "  sudo ./scripts/install-cli-credentials-mirror.sh" >&2
+    exit 1
+fi
+
 # shellcheck source=scripts/agent-cli-paths.sh
 source "$SCRIPT_DIR/agent-cli-paths.sh"
 require_main_checkout "$PROJECT_ROOT" install-cli-credentials-mirror.sh || exit 1

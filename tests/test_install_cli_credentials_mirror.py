@@ -528,6 +528,14 @@ def test_a_stopped_trigger_fails_the_preflight(run_installer, unit) -> None:
     assert "is not running" in result.stderr
 
 
+def test_it_refuses_to_install_units_that_would_run_as_root(run_installer) -> None:
+    """A root login mirrors /root's logins, which are not the operator's."""
+    result = run_installer(SUDO_USER="root")
+
+    assert result.returncode == 1
+    assert "would run as root" in result.stderr
+
+
 def test_running_it_twice_changes_nothing_the_second_time(run_installer) -> None:
     run_installer()
     before = {
