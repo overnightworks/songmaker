@@ -10,6 +10,7 @@ import { albumList, updateAlbumInList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { LIBRARY_ROW_FILTER_EMPTY } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
+import libraryRowSource from './LibraryRow.svelte?raw';
 
 const fetchSongs = vi.fn();
 const fetchPlaylists = vi.fn();
@@ -580,5 +581,22 @@ describe('LibraryRow', () => {
 		} finally {
 			restoreScrollIntoView();
 		}
+	});
+
+	it("keeps a hidden tile out of the flex flow in a real cascade, not just marked via the 'hidden' IDL property", () => {
+		// element.hidden staying true (asserted throughout this file) only
+		// proves the attribute is set -- it says nothing about what a real
+		// browser paints, because jsdom computes neither layout nor the
+		// CSS-origin precedence rule that decides this: author-origin CSS
+		// (`.row-tile { display: flex }`) always wins over the user agent's
+		// own `[hidden] { display: none }`, regardless of selector
+		// specificity, unless the author stylesheet says so itself. A live
+		// Playwright pass against a real stack caught exactly this: 48 of 50
+		// filtered tiles stayed visible with computed `display: flex` (#402
+		// review) before `.row-tile[hidden]` existed below. getComputedStyle
+		// in jsdom cannot re-prove that (no real layout engine), so this
+		// pins the stylesheet rule's own source instead; the live behaviour
+		// is proven by the Playwright pass, not by this unit test.
+		expect(libraryRowSource).toMatch(/\.row-tile\[hidden\]\s*\{[^}]*display:\s*none/);
 	});
 });

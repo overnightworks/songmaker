@@ -304,6 +304,18 @@
 		cursor: pointer;
 	}
 
+	/* A hidden tile must actually leave the flex flow, not just go
+	   invisible-but-still-laid-out -- author-origin CSS always wins over the
+	   user-agent's own `[hidden] { display: none }`, regardless of selector
+	   specificity, so `.row-tile`'s own `display: flex` above silently
+	   overrode the browser's default the moment a real stylesheet cascade
+	   (not jsdom, which never computes layout) was in play. Confirmed live
+	   in Playwright against a real e2e stack (#402 review): 48 of 50 hidden
+	   tiles stayed visible with `display: flex` until this rule was added. */
+	.row-tile[hidden] {
+		display: none;
+	}
+
 	.row-tile.active {
 		opacity: 1;
 		transform: scale(1);
