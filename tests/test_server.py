@@ -175,7 +175,8 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     from conftest import login_and_csrf
     login_and_csrf(client, "admin6", "admin12345")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
-    assert resp.status_code == 403
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Not Found"
 
 
 @pytest.fixture()

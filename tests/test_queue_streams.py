@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -518,6 +519,57 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
     assert second.json()["snapshot_id"] == data["snapshot_id"]
     audio = public.get(data["stream_url"], headers={"Range": "bytes=0-3"})
     assert audio.status_code == 206
+
+
+@pytest.mark.parametrize(
+    ("share_endpoint", "stream_url"),
+    [
+        ("/api/albums/a1/share", "/shared/{slug}/stream"),
+        ("/api/playlists/pl1/share", "/shared/playlist/{slug}/stream"),
+    ],
+)
+def test_shared_queue_stream_hides_path_traversal_as_a_missing_file(
+    tmp_path: Path,
+    monkeypatch,
+    caplog: pytest.LogCaptureFixture,
+    share_endpoint: str,
+    stream_url: str,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+    slug = client.post(share_endpoint).json()["share_slug"]
+    public = TestClient(client.app, cookies={})
+
+    with factory() as session:
+        session.query(Generation).filter_by(id="g1").update({
+            "mp3_path": "owner-id/../../outside.mp3",
+        })
+        session.commit()
+
+    caplog.set_level(logging.WARNING, logger="songmaker_cli.audio_paths")
+    traversal_response = public.post(stream_url.format(slug=slug))
+
+    with factory() as session:
+        session.query(Generation).filter_by(id="g1").update({
+            "mp3_path": "owner-id/missing.mp3",
+        })
+        session.commit()
+
+    missing_response = public.post(stream_url.format(slug=slug))
+
+    assert traversal_response.status_code == 404
+    assert traversal_response.json()["detail"] == "Not Found"
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Not Found"
+    assert traversal_response.headers == missing_response.headers
+    traversal_log = next(
+        record for record in caplog.records
+        if record.name == "songmaker_cli.audio_paths"
+    ).getMessage()
+    assert "owner-id/../../outside.mp3" in traversal_log
+    assert str(client.app.state.ctx.audio_dir) not in traversal_log
 
 
 def test_shared_playlist_queue_stream_revalidates_entries(

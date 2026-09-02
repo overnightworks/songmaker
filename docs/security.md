@@ -170,6 +170,13 @@ Album, song, generation, and playlist shares expose public read-only endpoints w
 
 Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; audio URLs include the exact stored relative audio path needed by the filename allowlist. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists — never the parent album's art. Public cover bytes are served from `/shared/{slug}/cover` or `/shared/song/{slug}/cover` using that same slug gate — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
 
+`audio_paths.resolve_audio_path()` is the single resolver for stored audio paths
+used by shared-audio handlers and queue-stream assembly. A missing file and a
+path that would escape the audio root, including through a symlink, both return
+the indistinguishable visitor response `404 Not Found`. Traversal rejection is
+logged at `WARNING` with the stored relative path rendered via `%r`; the
+resolved server path is never logged.
+
 ### Per-IP (global middleware)
 
 Every request is subject to a global per-IP rate limit, split into three budget
