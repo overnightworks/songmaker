@@ -487,6 +487,28 @@ describe('admin models tab', () => {
 		expect(providers.textContent).not.toContain('Claude Code CLI login');
 	});
 
+	it('keeps known reachability enabled while refreshing it', async () => {
+		let resolveRefresh: ((statuses: ProviderStatus[]) => void) | undefined;
+		const refresh = new Promise<ProviderStatus[]>((resolve) => {
+			resolveRefresh = resolve;
+		});
+		api.fetchProviderStatus
+			.mockResolvedValueOnce([providerStatus('claude', CLAUDE_VIA_CLI)])
+			.mockReturnValueOnce(refresh);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		await selectTab(target, 'models');
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('Refreshing provider status...');
+		expect(providers.textContent).toContain('Claude Code CLI login');
+		expect(pillNamed(sectionByHeading(target, 'Co-Writer'), 'Claude').disabled).toBe(false);
+
+		resolveRefresh?.([providerStatus('claude', CLAUDE_VIA_CLI)]);
+		await flush();
+		expect(providers.textContent).not.toContain('Refreshing provider status...');
+	});
+
 	it('names an empty provider-status response as empty', async () => {
 		api.fetchProviderStatus.mockResolvedValue([]);
 		const target = await renderPage(true);

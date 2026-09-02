@@ -345,12 +345,12 @@
 	}
 
 	async function loadModelsTab() {
-		providerStatuses = [];
 		loadingProviderStatuses = true;
 		providerStatusError = '';
 		try {
 			providerStatuses = await fetchProviderStatus();
 		} catch (e) {
+			providerStatuses = [];
 			providerStatusError = e instanceof Error ? e.message : 'Failed to load provider status';
 		} finally {
 			loadingProviderStatuses = false;
@@ -1020,6 +1020,9 @@
 							</div>
 						{/each}
 					</div>
+					{#if loadingProviderStatuses}
+						<p>Refreshing provider status...</p>
+					{/if}
 				{:else if loadingProviderStatuses}
 					<p>Loading...</p>
 				{:else if providerStatusError}
