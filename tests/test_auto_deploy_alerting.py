@@ -61,6 +61,7 @@ class Checkout:
         self.root = tmp_path / "checkout"
         self.origin = tmp_path / "origin.git"
         self.log_file = tmp_path / "journal.txt"
+        self.docker_calls_file = tmp_path / "docker-calls.txt"
         self._bin = tmp_path / "bin"
         self._bin.mkdir()
         self._clock_file = tmp_path / "clock.txt"
@@ -104,10 +105,22 @@ class Checkout:
 
     def set_active_jobs(self, count: int) -> None:
         """Stand in for `docker compose exec postgres psql …`."""
-        _write_executable(self._bin / "docker", f'#!/bin/bash\necho {count}\n')
+        _write_executable(
+            self._bin / "docker",
+            f'#!/bin/bash\nprintf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\necho {count}\n',
+        )
 
     def write_alert_config(self, content: str = VALID_ALERT_ENV) -> None:
         (self.root / ".env").write_text(content)
+
+    def write_mount_preflight(self, body: str) -> None:
+        _write_executable(self.root / "scripts" / "check_agent_cli_mounts.sh", body)
+
+    def commit_mount_preflight(self, body: str) -> None:
+        self.write_mount_preflight(body)
+        _git(self.root, "add", "scripts/check_agent_cli_mounts.sh")
+        _git(self.root, "commit", "-m", "add mount preflight")
+        _git(self.root, "push", "origin", "main")
 
     def move_main_forward(self) -> None:
         clone = self.root.parent / "pusher"
@@ -145,6 +158,7 @@ class Checkout:
                 "PATH": f"{self._bin}:/usr/bin:/bin",
                 "HOME": str(self.root.parent),
                 "LOG_CAPTURE_FILE": str(self.log_file),
+                "DOCKER_CALLS_FILE": str(self.docker_calls_file),
                 "FAKE_CLOCK_FILE": str(self._clock_file),
                 "SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD": str(FAILURE_ALERT_THRESHOLD),
                 "SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS": str(ALERT_REPEAT_SECONDS),
@@ -154,6 +168,10 @@ class Checkout:
     @property
     def journal(self) -> str:
         return self.log_file.read_text() if self.log_file.exists() else ""
+
+    @property
+    def docker_calls(self) -> str:
+        return self.docker_calls_file.read_text() if self.docker_calls_file.exists() else ""
 
     def alert_lines(self) -> list[str]:
         return [line for line in self.journal.splitlines() if "ALERT:" in line]
@@ -236,3 +254,41 @@ def test_a_missing_alert_configuration_refuses_to_deploy_and_names_the_key(
     assert result.returncode == 0
     assert "SMTP_PASSWORD" in checkout.journal
     assert "alert channel not configured" in checkout.journal
+
+
+def test_a_failing_mount_preflight_alerts_without_pulling_or_building(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.commit_mount_preflight(
+        "#!/bin/bash\nprintf '%s\\n' 'Claude CLI mount source is not a regular file'\nexit 1\n",
+    )
+    local_head_before = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    checkout.move_main_forward()
+
+    exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
+
+    assert exit_codes == [0, 0, 1]
+    assert len(checkout.alert_lines()) == 1
+    assert "reason: agent CLI mount preflight failed" in checkout.journal
+    assert "agent CLI mount preflight failed" in checkout.journal
+    assert "Claude CLI mount source is not a regular file" in checkout.journal
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == local_head_before
+    assert "compose build" not in checkout.docker_calls
+
+
+def test_a_missing_mount_preflight_is_logged_and_the_deploy_continues(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "mount preflight not installed, skipping" in checkout.journal
+    assert "compose build" in checkout.docker_calls
