@@ -315,17 +315,20 @@ def test_engine_isolation_does_not_fire_on_songmaker_cli_itself(
 def test_real_codebase_passes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Line-regex rules stay clean on the real src/ tree. AST rules may
-    still report; their checked-site counts must be non-zero."""
+    """The real src/ tree must be clean under every rule — exit 0, not just
+    a quiet stdout. A future real violation must fail this test, not only
+    print louder; checked-site counts must be non-zero per rule too, so a
+    rule that silently stopped running would fail it as well."""
     project_root = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(project_root)
-    checker.main(["src/"])
+    rc = checker.main(["src/"])
     out = capsys.readouterr().out
+    assert rc == 0
     for name in LINE_REGEX_RULES:
         assert f"[{name}]" not in out
     assert f"{checker.CHECKED_LABEL}:" in out
-    assert _checked_site_count(out, checker.DICT_ANY_IN_SIGNATURE) > 0
-    assert _checked_site_count(out, checker.GETATTR_LITERAL_DEFAULT) > 0
+    for rule in checker.RULES:
+        assert _checked_site_count(out, rule.name) > 0
 
 
 def test_missing_root_returns_2(
