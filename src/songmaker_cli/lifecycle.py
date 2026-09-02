@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Final
+from typing import Final, Literal
 
 from arq.connections import ArqRedis
 from fastapi import FastAPI
@@ -310,12 +310,28 @@ def auto_setup_admin(ctx: AppContext) -> None:
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
-async def report_claude_cli_tool_surface() -> None:
-    """Say in the boot log whether the mounted Claude CLI stays inside its allowlist.
+async def report_claude_cli_tool_surface() -> Literal["ok", "drift"]:
+    """Verify the mounted Claude CLI's tool surface at boot; say so in the
+    log, and return the state for ``/health``'s ``claude_cli_tool_surface``
+    field (operator ruling, #351 round 6).
 
-    The co-writer's CLI transport verifies this itself and refuses a drifted
-    binary, so this does not decide anything; it makes the drift visible at
-    boot instead of the first time a musician opens a chat.
+    #351 originally asked for an unexpected tool to fail the server
+    start outright; the operator overruled that once the allowlist gate
+    itself was confirmed to cover every call path — a server that refuses
+    to serve albums and playback over a co-writer problem is a worse
+    outage than the co-writer being unavailable. So this never aborts
+    startup. The co-writer's own CLI transport verifies this again itself
+    and refuses a drifted binary regardless of what this function
+    returns; this only makes that state visible to the operator and to
+    monitoring, not just to whichever musician opens a chat first and
+    finds it broken.
+
+    ``"drift"`` means a confirmed, unexpected tool surface
+    (``CliToolSurfaceError``) — a real security finding. Any other
+    outcome, including simply not being able to verify at all (no CLI
+    mounted, a transient probe failure), is reported ``"ok"`` here: that
+    is a different kind of unavailability, not evidence of drift, and
+    conflating the two would hide the one signal this field exists for.
     """
     from songmaker_cli.claude.provider import (
         CliToolSurfaceError,
@@ -327,11 +343,12 @@ async def report_claude_cli_tool_surface() -> None:
         await verify_cli_tool_surface()
     except CliToolSurfaceError as exc:
         log.error("Claude CLI co-writer disabled: %s", exc)
-        return
+        return "drift"
     except UnavailableError as exc:
         log.info("Claude CLI tool surface not verified: %s", exc)
-        return
+        return "ok"
     log.info("Claude CLI tool surface verified: songmaker MCP tools only")
+    return "ok"
 
 
 def _sync_sessions(ctx: AppContext, session_cache) -> int:

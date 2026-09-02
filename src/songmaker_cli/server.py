@@ -92,7 +92,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     auto_setup_admin(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-    await report_claude_cli_tool_surface()
+    app.state.claude_cli_tool_surface = await report_claude_cli_tool_surface()
 
     await init_arq_pool()
     log.info("arq pool connected")
