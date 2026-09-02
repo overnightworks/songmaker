@@ -47,7 +47,7 @@ COPIED_SCRIPTS = (
 # of either fake starts a program. Everything below is a bash builtin. The one
 # effect they still have — `install` putting a file where the installer put it
 # — is a builtin read and a redirect, and only into a path that is textually
-# under the sandbox and contains no `..`.
+# under the sandbox, contains no `..`, and is not itself a symlink.
 #
 # `grep -nE 'exec|[$][(]|`' over both bodies must come back empty.
 
@@ -68,7 +68,19 @@ inside() {
     return 1
 }
 
-inside "$RECORDING" || refuse "recording file outside the sandbox"
+# A redirect follows a symlink, so a textual prefix alone would let a link
+# inside the sandbox carry a write out of it. Only the target itself is judged,
+# never its parent chain — that would be resolution again, and the sandbox is a
+# freshly made tmp_path in which only our own test or installer code could put
+# a link at all.
+writable_target() {
+    inside "${1:-}" || return 1
+    [ ! -L "${1:-}" ] || return 1
+    return 0
+}
+
+writable_target "$RECORDING" \
+    || refuse "recording file outside the sandbox or through a symlink"
 
 record() { printf '%s\n' "$*" >> "$RECORDING"; }
 """
@@ -79,6 +91,8 @@ record() { printf '%s\n' "$*" >> "$RECORDING"; }
 # to run one.
 SYSTEMCTL_STATE = """
 STATE_FILE="$SANDBOX_ROOT/systemctl-state"
+
+writable_target "$STATE_FILE" || refuse "state file is a symlink"
 
 state_add() { printf '%s\n' "$1" >> "$STATE_FILE"; }
 
@@ -186,7 +200,8 @@ case "${1:-}" in
                       "it uses: install -m MODE SOURCE TARGET"
         [ "$2" = "-m" ] || refuse "install without -m as its first option"
         inside "$4" || refuse "install reading '$4' outside the sandbox"
-        inside "$5" || refuse "install writing '$5' outside the sandbox"
+        writable_target "$5" \
+            || refuse "install writing '$5' outside the sandbox or through a symlink"
         mapfile -t -d '' whole < "$4"
         printf '%s' "${whole[0]-}" > "$5"
         exit 0 ;;
@@ -209,6 +224,11 @@ fi
 exit 2
 """
 
+
+# The account the installer is told it was sudo'd from. Fixed, because
+# `${SUDO_USER:-$(id -un)}` would otherwise resolve to whoever runs pytest and
+# put that name into the assertions.
+DEFAULT_SUDO_USER = "operator"
 
 # What a subprocess started by this test is allowed to inherit. Everything
 # else is dropped, not merged: BASH_ENV runs a file before any fake's first
@@ -305,6 +325,7 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
             "SONGMAKER_GROK_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CLI": "/bin/sh",
         })
+        built.setdefault("SUDO_USER", DEFAULT_SUDO_USER)
         built.setdefault("SONGMAKER_UNIT_DIR", str(units))
         if "SONGMAKER_UNIT_DIR" in overrides:
             built["SONGMAKER_UNIT_DIR"] = overrides["SONGMAKER_UNIT_DIR"]
@@ -401,10 +422,29 @@ def test_the_unit_it_writes_names_this_checkout_and_this_home(
     assert f"--mirror-dir {home}/.songmaker/agent-cli-credentials" in exec_start
 
 
-def test_it_writes_the_mirror_even_though_songmaker_did_not_exist(
+def test_it_checks_the_mounts_as_the_operator_it_installed_for(
+    run_installer, checkout: Path, home: Path,
+) -> None:
+    """Not as root under sudo: root sees a different home and a different mirror."""
+    run_installer()
+
+    preflight = checkout / "scripts" / "check_agent_cli_mounts.sh"
+    assert (
+        f"sudo -u {DEFAULT_SUDO_USER} {preflight} --home {home} "
+        f"--mirror-dir {home}/.songmaker/agent-cli-credentials"
+    ) in _recorded(run_installer)
+
+
+def test_the_seeded_mirror_holds_one_file_per_cli(
     run_installer, home: Path,
 ) -> None:
-    """The default path is two levels deep; only creating the last one fails."""
+    """The seam the closing preflight then judges, stated as what it is.
+
+    `_seed_mirror()` runs the real mirror script before the installer starts,
+    standing in for the `systemctl start` the fakes do not run. So what this
+    pins is that seam — a file per CLI, in the two-level path the script had to
+    create — and not the installer, which writes none of them.
+    """
     run_installer()
 
     mirrored = home / ".songmaker/agent-cli-credentials"
@@ -515,6 +555,28 @@ def test_a_fake_refuses_and_does_nothing(run_installer, tmp_path, program, argv)
     assert f"fake {program}: refusing" in result.stderr
     assert not Path("/etc/systemd/system/x").exists()
     assert not (run_installer.sandbox.parent / "escape").exists()
+
+
+def test_a_fake_refuses_a_write_that_would_travel_through_a_symlink(
+    run_installer, tmp_path: Path,
+) -> None:
+    """A textual prefix says yes to a link; the redirect behind it lands outside."""
+    outside = tmp_path.parent / "outside-the-sandbox"
+    outside.write_text("untouched")
+    target = run_installer.sandbox / "looks-like-it-is-inside"
+    target.symlink_to(outside)
+    source = run_installer.sandbox / "unit-to-install"
+    source.write_text("[Service]\n")
+
+    result = subprocess.run(
+        ["sudo", "install", "-m", "0644", str(source), str(target)],
+        env=run_installer.environment(),
+        text=True, capture_output=True, check=False, cwd=run_installer.sandbox,
+    )
+
+    assert result.returncode == 97, f"{result.stdout}{result.stderr}"
+    assert "through a symlink" in result.stderr
+    assert outside.read_text() == "untouched"
 
 
 def test_a_fake_records_even_what_it_refuses(run_installer) -> None:

@@ -254,14 +254,15 @@ def test_a_new_mirror_directory_is_private_from_the_start(mirror_dir: Path) -> N
 # creates the whole path and creates it private.
 
 
-def _run_the_script(home: Path, mirror_dir: Path, environment=None):
+def _run_the_script(home: Path, mirror_dir: Path):
+    """HOME is named: the script reads Path.home() when it resolves the mirror."""
     return subprocess.run(
         [
             str(MIRROR_SCRIPT),
             "--home", str(home),
             "--mirror-dir", str(mirror_dir),
         ],
-        env=environment or {"PATH": "/usr/bin:/bin"},
+        env={"PATH": "/usr/bin:/bin", "HOME": str(home)},
         text=True, capture_output=True, check=False,
     )
 
