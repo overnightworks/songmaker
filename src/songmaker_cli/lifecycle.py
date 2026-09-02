@@ -310,7 +310,7 @@ def auto_setup_admin(ctx: AppContext) -> None:
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
-async def report_claude_cli_tool_surface() -> Literal["ok", "drift"]:
+async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified"]:
     """Verify the mounted Claude CLI's tool surface at boot; say so in the
     log, and return the state for ``/health``'s ``claude_cli_tool_surface``
     field (operator ruling, #351 round 6).
@@ -326,12 +326,16 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift"]:
     monitoring, not just to whichever musician opens a chat first and
     finds it broken.
 
-    ``"drift"`` means a confirmed, unexpected tool surface
-    (``CliToolSurfaceError``) — a real security finding. Any other
-    outcome, including simply not being able to verify at all (no CLI
-    mounted, a transient probe failure), is reported ``"ok"`` here: that
-    is a different kind of unavailability, not evidence of drift, and
-    conflating the two would hide the one signal this field exists for.
+    Three states, not two — "could not check" is its own message to the
+    operator, not silently folded into either verified state:
+
+    - ``"ok"``: verified, and the surface matches the allowlist.
+    - ``"drift"``: verified, and it does not (``CliToolSurfaceError``) — a
+      real security finding.
+    - ``"unverified"``: the probe itself failed to reach a verdict at all
+      (no CLI mounted, a timeout, a zombie process, the MCP connection
+      never coming up) — a different kind of unavailability, not evidence
+      of drift, but also not the same claim as "checked and clean".
     """
     from songmaker_cli.claude.provider import (
         CliToolSurfaceError,
@@ -346,7 +350,7 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift"]:
         return "drift"
     except UnavailableError as exc:
         log.info("Claude CLI tool surface not verified: %s", exc)
-        return "ok"
+        return "unverified"
     log.info("Claude CLI tool surface verified: songmaker MCP tools only")
     return "ok"
 

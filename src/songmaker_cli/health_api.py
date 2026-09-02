@@ -326,12 +326,16 @@ async def health_check(request: Request) -> JSONResponse:
         "acestep_workers_online": workers_online,
         "queue_depth_cap_reached": queue_depth_cap_reached,
         "uptime_seconds": uptime,
-        # "ok" or "drift" (#351): whether the mounted Claude CLI's tool
-        # surface still matches the co-writer's allowlist. A drifted
-        # binary never takes the whole server down — the co-writer path
-        # refuses it on its own — but the operator and monitoring should
-        # see the state without reading the boot log.
+        # "ok" / "drift" / "unverified" (#351): whether the mounted Claude
+        # CLI's tool surface still matches the co-writer's allowlist. A
+        # drifted binary never takes the whole server down — the co-writer
+        # path refuses it on its own — but the operator and monitoring
+        # should see the state without reading the boot log. No silent
+        # "ok" default: if the boot-time check has not run yet (or ever),
+        # that is "unverified", a materially different claim than
+        # "checked and clean" — never assumed just because nothing else
+        # is known.
         "claude_cli_tool_surface": getattr(
-            request.app.state, "claude_cli_tool_surface", "ok",
+            request.app.state, "claude_cli_tool_surface", "unverified",
         ),
     })

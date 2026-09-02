@@ -42,10 +42,11 @@ def test_boot_log_stays_calm_when_no_cli_is_mounted(caplog) -> None:
 
     status, text = _boot(caplog, verify)
 
-    # Not verified is not the same claim as drift — no CLI mounted at all
-    # is a different, unrelated kind of unavailability, not a confirmed
-    # unexpected tool surface, so it must not light up the drift signal.
-    assert status == "ok"
+    # "Could not check" is its own state, not folded into either verified
+    # outcome: not "drift" (no confirmed unexpected tool surface), and not
+    # "ok" either (that claims the CLI was actually checked and found
+    # clean, which did not happen here).
+    assert status == "unverified"
     assert "not verified" in text
     assert all(record.levelname != "ERROR" for record in caplog.records)
 
