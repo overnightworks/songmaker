@@ -9,7 +9,6 @@
 	import { RAIL_ITEM_SELECTOR } from './rail-item-selector';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
-
 </script>
 
 <nav class="rail" aria-label={RAIL_NAV_LABEL}>
@@ -19,10 +18,7 @@
 		>
 	</div>
 
-	<div
-		class="rail-scroll"
-		use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}
-	>
+	<div class="rail-scroll" use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}>
 		<RailLibraryGroup />
 		<RailPlaylistsGroup />
 	</div>
