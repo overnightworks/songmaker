@@ -306,7 +306,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deps: WorkerDeps = app.state.deps
     control_plane = (
-        getattr(deps.registry_client, "_control_plane_url", "(unknown)")
+        deps.registry_client.control_plane_url
         if deps.registry_client is not None
         else "(disabled)"
     )

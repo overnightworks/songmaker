@@ -614,6 +614,8 @@ def test_lifespan_calls_registry(tmp_path: Path) -> None:
     register_calls = []
 
     class FakeRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             register_calls.append(registration)
 
@@ -645,6 +647,8 @@ def test_health_returns_503_until_registered_then_200(tmp_path: Path) -> None:
         register_release = _asyncio.Event()
 
         class SlowRegistry:
+            control_plane_url = "http://control-plane.test"
+
             async def register(self, registration):
                 register_started.set()
                 await register_release.wait()
@@ -692,6 +696,8 @@ def test_lifespan_cancels_pending_registration_on_shutdown(tmp_path: Path) -> No
     cancelled = _asyncio.Event()
 
     class HangingRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             try:
                 await _asyncio.sleep(60)
@@ -731,6 +737,8 @@ def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) ->
     deps, _ = _make_deps(tmp_path)
 
     class FailingRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             await _asyncio.sleep(60)
             raise RuntimeError("should not reach this")
