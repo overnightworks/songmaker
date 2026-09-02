@@ -6,6 +6,7 @@ import asyncio
 import json
 import subprocess
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1525,6 +1526,26 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
 def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
     claude_binary, monkeypatch,
 ) -> None:
+    """#351 round 7, Finding 5: a broken pipe during the write must be
+    normalized *at the write itself* — caught inline, reaped, and
+    reported with its own message — not merely "some UnavailableError,
+    eventually" surfacing however long the outer deadline takes to
+    exhaust. The previous version of this test only checked the latter,
+    which stayed green even without the inline ``except OSError`` around
+    the write (confirmed live: removing it, the write's BrokenPipeError
+    escapes ``_run``'s try instead of being caught inline, the thread's
+    own ``finally`` still puts a result — but with the *generic* "Popen()
+    did not return" payload, not the real cause, and pytest only warns
+    on the escaped exception rather than failing). A generous timeout
+    budget makes "prompt, not deadline-bound" and "the real cause, not
+    the generic fallback" both load-bearing assertions here.
+    """
+    reaped: list[int] = []
+
+    def fake_reap(proc) -> bool:
+        reaped.append(proc.pid)
+        return False
+
     def fake_popen(*_cmd, **_kw):
         proc = MagicMock()
         proc.pid = 9090
@@ -1536,10 +1557,17 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
         return proc
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
 
-    with pytest.raises(UnavailableError) as exc:
+    started = time.monotonic()
+    with pytest.raises(UnavailableError, match="broken") as exc:
         asyncio.run(verify_cli_tool_surface())
+    elapsed = time.monotonic() - started
+
     assert not isinstance(exc.value, provider._ZombieProbeError)
+    assert elapsed < 1.0, "normalized via the deadline instead of the write itself"
+    assert reaped == [9090]
 
 
 def test_probe_runner_task_cancellation_gives_waiters_a_normal_error(
