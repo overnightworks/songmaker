@@ -48,6 +48,7 @@ from songmaker_cli.db.queries import (
     get_generation_by_slug,
     get_playlist_by_slug,
     get_song_by_slug,
+    shared_album_audio_filename_is_presented,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -299,7 +300,7 @@ def get_shared_album_stream(
 
 
 @router.get("/shared/{slug}/audio/{filename:path}")
-async def get_shared_audio(
+def get_shared_audio(
     slug: str,
     filename: str,
     request: Request,
@@ -307,15 +308,7 @@ async def get_shared_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    album = get_album_by_slug(db, slug)
-    if not album:
-        raise HTTPException(404, "Not found")
-
-    valid_filenames = {
-        fn for s in album.songs
-        if (fn := _picked_filename(s))
-    }
-    if filename not in valid_filenames:
+    if not shared_album_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)

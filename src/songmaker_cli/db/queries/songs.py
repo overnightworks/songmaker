@@ -32,7 +32,7 @@ def list_songs(
     session: Session,
     album_id: str | None = None,
     user_id: str | None = None,
-    light: bool = False,
+    light: bool = True,
     with_generations: bool = False,
     offset: int = 0,
     limit: int | None = None,
@@ -68,11 +68,11 @@ def list_songs(
         query = session.query(Song).options(*light_options)
     else:
         query = session.query(Song).options(
-            joinedload(Song.versions),
-            joinedload(Song.generations).joinedload(Generation.scores),
-            joinedload(Song.generations).joinedload(Generation.rating),
-            joinedload(Song.generations).joinedload(Generation.src_generation),
-            joinedload(Song.generations).joinedload(Generation.version),
+            selectinload(Song.versions),
+            selectinload(Song.generations).selectinload(Generation.scores),
+            selectinload(Song.generations).joinedload(Generation.rating),
+            selectinload(Song.generations).joinedload(Generation.src_generation),
+            selectinload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
     query = _apply_song_filters(
