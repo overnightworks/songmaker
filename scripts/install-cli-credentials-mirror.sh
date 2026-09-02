@@ -143,23 +143,33 @@ ESCAPED_CHECK_SCRIPT="$(sed_escape_replacement "$CHECK_SCRIPT")"
 MIRROR_EXEC="$MIRROR_SCRIPT --home $INSTALL_HOME --mirror-dir $MIRROR_DIR"
 ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/alert.sh"
 
-# The path unit repeats PathChanged= and PathModified= per watched file, so
-# "does any line equal this" is the question — while a line that matches no
-# expected file at all is the foreign one refuse_silent_takeover reports.
-_watch_is_ours() {
-    local target="$1" watched="$2"
+# The path unit's watches are compared as a SET, not one by one. Proving that
+# the three expected lines are present says nothing about a fourth: a foreign
+# PathChanged=, or any PathModified= this run would not write, sat there
+# unnoticed. Everything the installed unit watches must be exactly what this
+# run watches — no more, no less.
+_watches_are_ours() {
+    local target="$1"
+    shift
+    local installed expected
     [ -f "$target" ] || return 0
-    if ! grep -qxF "PathChanged=$watched" "$target"; then
-        if [ "$FORCE" = "1" ]; then
-            echo "Replacing $target (--force): it does not watch $watched"
-            return 0
-        fi
-        echo "ERROR: $target belongs to something else." >&2
-        echo "  it does not watch $watched" >&2
-        echo "Another checkout installed it, or it was edited by hand. Look" >&2
-        echo "first; re-run with --force to take it over." >&2
-        return 1
+    installed="$(sed -n 's/^Path\(Changed\|Modified\|Exists\)=//p' "$target" \
+        | LC_ALL=C sort -u)"
+    expected="$(printf '%s\n' "$@" | LC_ALL=C sort -u)"
+    [ "$installed" != "$expected" ] || return 0
+
+    if [ "$FORCE" = "1" ]; then
+        echo "Replacing $target (--force): it watches something else"
+        return 0
     fi
+    echo "ERROR: $target belongs to something else." >&2
+    echo "  it watches:" >&2
+    printf '    %s\n' $installed >&2
+    echo "  this run watches:" >&2
+    printf '    %s\n' $expected >&2
+    echo "Another checkout installed it, or it was edited by hand. Look" >&2
+    echo "first; re-run with --force to take it over." >&2
+    return 1
 }
 
 # EVERY check before the FIRST write. Half an installation is worse than none:
@@ -168,17 +178,17 @@ _watch_is_ours() {
 # state --force exists to make someone look at.
 # ExecStart is a command with arguments, so ours-with-other-arguments is still
 # ours. PathChanged and Unit hold one value, so they are compared exactly —
-# and the path unit's three watches are each compared, since a foreign watch
-# on the second or third line would otherwise be invisible. Each watched file
-# is checked against the home this run installs for, which is what makes a
-# second checkout watching the same operator visible.
+# and the path unit's watches are compared as a whole set against the home
+# this run installs for, so neither a missing watch nor an extra one gets
+# through.
 refuse_silent_takeover "$SERVICE_TARGET" ExecStart "$MIRROR_SCRIPT" "$FORCE" command || exit 1
 refuse_silent_takeover "$ALERT_SERVICE_TARGET" ExecStart "$ALERT_EXEC_PREFIX" "$FORCE" command || exit 1
 refuse_silent_takeover "$TIMER_TARGET" Unit \
     "songmaker-cli-credentials-mirror.service" "$FORCE" || exit 1
-for watched in .claude/.credentials.json .grok/auth.json .codex/auth.json; do
-    _watch_is_ours "$PATH_TARGET" "$INSTALL_HOME/$watched" || exit 1
-done
+_watches_are_ours "$PATH_TARGET" \
+    "$INSTALL_HOME/.claude/.credentials.json" \
+    "$INSTALL_HOME/.grok/auth.json" \
+    "$INSTALL_HOME/.codex/auth.json" || exit 1
 
 TMP_SERVICE="$(mktemp)"
 TMP_PATH="$(mktemp)"
