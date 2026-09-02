@@ -1,7 +1,7 @@
 [Unit]
 Description=Songmaker stack (docker compose up -d) after boot
-After=docker.service
-Requires=docker.service
+After=docker.service songmaker-cli-credentials-mirror.service
+Requires=docker.service songmaker-cli-credentials-mirror.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
 # Fires once the unit gives up restarting (after StartLimitBurst is spent
@@ -19,6 +19,7 @@ RemainAfterExit=yes
 # this file by hand instead of running that script inherits these values
 # as-is, which is very likely wrong for a different checkout or operator.
 WorkingDirectory=/home/felix-hummert/git/songmaker
+ExecStartPre=/home/felix-hummert/git/songmaker/scripts/check_agent_cli_mounts.sh
 ExecStart=/usr/bin/docker compose up -d
 Restart=on-failure
 # Without this, systemd passes through the failed state before EVERY

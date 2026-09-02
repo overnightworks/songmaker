@@ -519,7 +519,7 @@ def test_a_regressed_guard_reaches_a_fake_that_does_nothing(run_installer) -> No
     """
     before = sorted(Path("/etc/systemd/system").glob("songmaker-cli-credentials-*"))
 
-    result = run_installer(SONGMAKER_UNIT_DIR="/etc/systemd/system")
+    result = run_installer("--force", SONGMAKER_UNIT_DIR="/etc/systemd/system")
 
     assert result.returncode == 97, f"{result.stdout}{result.stderr}"
     assert "outside the sandbox" in result.stderr
@@ -776,6 +776,18 @@ def _run_preflight(
     )
 
 
+def _run_argumentless_preflight(
+    run_installer, sabotage=None,
+) -> subprocess.CompletedProcess[str]:
+    run_installer()
+    if sabotage is not None:
+        sabotage()
+    return subprocess.run(
+        [str(run_installer.checkout / "scripts" / "check_agent_cli_mounts.sh")],
+        env=run_installer.environment(), text=True, capture_output=True, check=False,
+    )
+
+
 def _forget(run_installer, fact: str) -> None:
     """Take one line out of the state table the fakes answer from."""
     kept = [
@@ -881,6 +893,44 @@ def test_the_preflight_passes_once_everything_is_installed(run_installer) -> Non
     result = _run_preflight(run_installer)
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+
+
+def test_argumentless_preflight_rejects_a_different_frozen_mirror_dir(
+    run_installer,
+) -> None:
+    service = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    expected = run_installer.home / ".songmaker/agent-cli-credentials"
+    different = run_installer.home / ".songmaker/different-credentials"
+
+    result = _run_argumentless_preflight(
+        run_installer,
+        lambda: service.write_text(
+            service.read_text().replace(str(expected), str(different)),
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "Spiegel-Installer erneut ausführen" in result.stderr
+
+
+def test_argumentless_preflight_accepts_the_installed_mirror_dir(
+    run_installer,
+) -> None:
+    result = _run_argumentless_preflight(run_installer)
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+
+
+def test_argumentless_preflight_keeps_the_missing_unit_message(
+    run_installer,
+) -> None:
+    service = run_installer.units / "songmaker-cli-credentials-mirror.service"
+
+    result = _run_argumentless_preflight(run_installer, service.unlink)
+
+    assert result.returncode == 1
+    assert "is not installed" in result.stderr
+    assert "Spiegel-Installer erneut ausführen" not in result.stderr
 
 
 @pytest.mark.parametrize("unit", PREFLIGHT_UNITS)

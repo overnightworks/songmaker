@@ -20,9 +20,9 @@
 # in-flight generation. Do that deliberately, in a maintenance window —
 # this script does not do it for you.
 #
-# WorkingDirectory is derived from where this script lives, not hardcoded,
-# so running it from a worktree installs a unit pointing at that worktree
-# rather than silently at the main checkout. User is derived from who is
+# WorkingDirectory is derived from where this script lives, not hardcoded.
+# Linked worktrees are refused before the unit can point at a disposable
+# checkout. User is derived from who is
 # running the installer (SUDO_USER when invoked via `sudo`, otherwise the
 # current user) — NOT from where the script lives — because that's whose
 # stack (.env, docker group membership, Claude CLI credentials) the unit
@@ -38,15 +38,24 @@
 # docs/acestep.md.
 #
 # Usage:
-#   ./scripts/install-autostart.sh
+#   ./scripts/install-autostart.sh [--force]
 
 set -euo pipefail
+
+FORCE=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --force) FORCE=1; shift ;;
+        *) echo "ERROR: unknown argument '$1'. Usage: $0 [--force]" >&2; exit 2 ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INSTALL_USER="${SUDO_USER:-$(id -un)}"
 UNIT_SOURCE="$SCRIPT_DIR/songmaker.service"
-UNIT_TARGET="/etc/systemd/system/songmaker.service"
+UNIT_DIR="${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"
+UNIT_TARGET="$UNIT_DIR/songmaker.service"
 # The shared alert template unit (issue #333) — songmaker.service above
 # declares OnFailure=songmaker-alert@%n.service, so it must exist before
 # that unit is installed. install-autodeploy.sh installs the same file
@@ -54,12 +63,13 @@ UNIT_TARGET="/etc/systemd/system/songmaker.service"
 # derive the same WorkingDirectory/User from their own checkout, so
 # running either (or both) converges on one identical installed unit.
 ALERT_UNIT_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
-ALERT_UNIT_TARGET="/etc/systemd/system/songmaker-alert@.service"
+ALERT_UNIT_TARGET="$UNIT_DIR/songmaker-alert@.service"
 ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
 # Sourced by alert.sh (and by auto-deploy.sh) for the .env keys that
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
+PREFLIGHT_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 
 if [ ! -f "$UNIT_SOURCE" ]; then
     echo "ERROR: $UNIT_SOURCE not found." >&2
@@ -78,6 +88,11 @@ fi
 
 if [ ! -f "$ALERT_CONFIG_LIB" ]; then
     echo "ERROR: $ALERT_CONFIG_LIB not found." >&2
+    exit 1
+fi
+
+if [ ! -x "$PREFLIGHT_SCRIPT" ]; then
+    echo "ERROR: $PREFLIGHT_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
@@ -103,12 +118,35 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
+ESCAPED_PREFLIGHT="$(sed_escape_replacement \
+    "$PREFLIGHT_SCRIPT")"
+
+# shellcheck source=scripts/agent-cli-paths.sh
+source "$SCRIPT_DIR/agent-cli-paths.sh"
+require_main_checkout "$PROJECT_ROOT" install-autostart.sh || exit 1
+
+refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \
+    "$PROJECT_ROOT" "$FORCE" || exit 1
+refuse_silent_takeover "$ALERT_UNIT_TARGET" ExecStart \
+    "$PROJECT_ROOT/scripts/alert.sh" "$FORCE" command || exit 1
+
+if ! sudo -u "$INSTALL_USER" "$PREFLIGHT_SCRIPT" \
+        >/dev/null 2>&1; then
+    echo "ERROR: the agent-CLI mount preflight does not pass yet." >&2
+    echo "songmaker.service would then refuse to start the stack at boot." >&2
+    echo "Set the login mirror up first:" >&2
+    echo "  sudo ./scripts/install-cli-credentials-mirror.sh" >&2
+    echo "Then re-run this installer. To see what is missing:" >&2
+    echo "  ./scripts/check_agent_cli_mounts.sh" >&2
+    exit 1
+fi
 
 TMP_UNIT="$(mktemp)"
 TMP_ALERT_UNIT="$(mktemp)"
 trap 'rm -f "$TMP_UNIT" "$TMP_ALERT_UNIT"' EXIT
 
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
+    -e "s#^ExecStartPre=.*#ExecStartPre=$ESCAPED_PREFLIGHT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$UNIT_SOURCE" > "$TMP_UNIT"
 

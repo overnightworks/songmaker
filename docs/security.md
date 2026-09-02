@@ -457,6 +457,21 @@ look right prove nothing about currency if what rewrites them has been
 erroring out since yesterday. The service is not required to be *active* — a
 finished oneshot is legitimately inactive.
 
+**Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
+`songmaker-cli-credentials-mirror.service`, then runs the argumentless
+preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
+therefore prevents the stack from starting at boot, rather than leaving it up
+with stale login copies. The two-minute deploy tick runs that same argumentless
+preflight, so boot and deploy resolve the same mirror location.
+
+The mirror installer freezes its resolved directory in the mirror service's
+`--mirror-dir` argument. An argumentless preflight reads that installed service
+and requires exactly one matching value; an unreadable, missing, ambiguous, or
+different value refuses with `Spiegel-Installer erneut ausführen`. After
+changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
+`sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
+checkout before the next boot or deploy.
+
 That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's
 own tests kept passing while the surface the deploy tick runs stopped checking
@@ -503,11 +518,11 @@ refusals above, each of which turns it red when removed.
 
 **What this does not yet do.** Nothing mounts these copies. Until the
 container-side change lands, the mirror is a host service that keeps three
-files current and a preflight that can say whether they are sound; the stack
-starts exactly as it does today. The preflight does insist that the mirror
-unit is installed and enabled — old-but-valid copies would otherwise pass
-every content check while nothing kept them current — so the auto-deploy tick
-refuses to deploy until the installer has been run once.
+files current and a preflight that can say whether they are sound. The
+preflight does insist that the mirror unit is installed and enabled —
+old-but-valid copies would otherwise pass every content check while nothing
+kept them current — so the auto-deploy tick and boot refuse until the installer
+has been run once.
 
 ## Child Process Secret Scrubbing
 
