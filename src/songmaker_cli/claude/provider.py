@@ -31,13 +31,12 @@ from typing import Final, Literal
 from pydantic import BaseModel, Field
 
 from songmaker_cli.agent_cli import (
-    CliLogin as CliLoginStatus,
-)
-from songmaker_cli.agent_cli import (
+    CliLogin,
     claude_cli_login,
     clear_claude_cli_login_cache,
 )
 from songmaker_cli.constants import (
+    CLAUDE_CLI_BINARY,
     CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
@@ -508,7 +507,7 @@ def is_available(api_key: str | None = None) -> bool:
     return _find_claude_binary() is not None
 
 
-def cli_login_status() -> CliLoginStatus:
+def cli_login_status() -> CliLogin:
     """Return the mounted Claude CLI's cached login probe."""
     return claude_cli_login(_find_claude_binary())
 
@@ -1895,7 +1894,7 @@ async def _acall_cli(
 
 
 def _find_claude_binary() -> str | None:
-    found = shutil.which("claude")
+    found = shutil.which(CLAUDE_CLI_BINARY)
     if found:
         log.debug("Found claude binary on PATH: %s", found)
         return found
@@ -1903,7 +1902,7 @@ def _find_claude_binary() -> str | None:
     ext_dir = Path.home() / ".vscode" / "extensions"
     if ext_dir.is_dir():
         for ext in sorted(ext_dir.glob("anthropic.claude-code-*"), reverse=True):
-            candidate = ext / "resources" / "native-binary" / "claude"
+            candidate = ext / "resources" / "native-binary" / CLAUDE_CLI_BINARY
             if candidate.is_file():
                 return str(candidate)
 

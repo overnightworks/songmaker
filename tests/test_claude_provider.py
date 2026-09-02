@@ -128,7 +128,7 @@ def test_is_available_neither() -> None:
 
 
 def test_cli_login_status_delegates_to_the_shared_runner() -> None:
-    runner_status = provider.CliLoginStatus(logged_in=True, auth_method="claude.ai")
+    runner_status = provider.CliLogin(logged_in=True, auth_method="claude.ai")
     with (
         patch(
             "songmaker_cli.claude.provider._find_claude_binary",
@@ -146,7 +146,7 @@ def test_cli_login_status_delegates_to_the_shared_runner() -> None:
 
 
 def test_cli_login_status_without_a_binary_delegates_the_unavailable_probe() -> None:
-    logged_out = provider.CliLoginStatus(logged_in=False, auth_method=None)
+    logged_out = provider.CliLogin(logged_in=False, auth_method=None)
     with (
         patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None),
         patch(

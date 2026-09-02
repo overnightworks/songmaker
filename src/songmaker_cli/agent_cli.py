@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import selectors
@@ -19,7 +20,6 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_LOGGED_IN_FIELD,
     CLAUDE_CLI_STATUS_ARGS,
     CLI_LOGIN_STATUS_CACHE_SECONDS,
-    CLI_MAX_CONCURRENT_SPAWNS,
     CLI_OUTPUT_READ_LIMIT_BYTES,
     CLI_TERMINATION_GRACE_SECONDS,
     CODEX_CLI_BINARY,
@@ -72,12 +72,10 @@ class _SpawnState:
     completed: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
     process: subprocess.Popen[bytes] | None = None
-    unavailable: bool = False
     abandoned: bool = False
 
 
 LOGGED_OUT = CliLogin(logged_in=False, auth_method=None)
-_spawn_admission = threading.BoundedSemaphore(CLI_MAX_CONCURRENT_SPAWNS)
 
 
 def scrubbed_env() -> dict[str, str]:
@@ -89,7 +87,12 @@ def scrubbed_env() -> dict[str, str]:
 
 
 class CachedProbe[T]:
-    """A single-flight probe whose answer or failure has a bounded lifetime."""
+    """A cached probe with a published future for each cold flight.
+
+    The state lock only protects the cache and the future's publication.  The
+    probe runs without it, so every caller waits at most its own answer budget
+    instead of inheriting a predecessor's whole probe.
+    """
 
     def __init__(self, probe: Callable[[], T]) -> None:
         self._probe = probe
@@ -97,25 +100,55 @@ class CachedProbe[T]:
         self._value: T | None = None
         self._failure: Exception | None = None
         self._answered_at = 0.0
+        self._inflight: concurrent.futures.Future[T] | None = None
 
     def get(self) -> T:
         with self._lock:
             if self._is_fresh():
                 return self._answer()
-            try:
-                self._value = self._probe()
-                self._failure = None
-            except Exception as exc:  # noqa: BLE001 - preserve a probe's failure for its TTL
-                self._value = None
-                self._failure = exc
-            self._answered_at = time.monotonic()
-            return self._answer()
+            future = self._inflight
+            if future is None:
+                future = concurrent.futures.Future()
+                self._inflight = future
+                threading.Thread(
+                    target=self._run_and_resolve,
+                    args=(future,),
+                    daemon=True,
+                ).start()
+
+        deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
+        try:
+            return future.result(timeout=max(deadline - time.monotonic(), 0))
+        except concurrent.futures.TimeoutError as exc:
+            raise AgentCliUnavailableError(
+                "agent CLI probe did not answer within its caller budget",
+            ) from exc
 
     def clear(self) -> None:
         with self._lock:
             self._value = None
             self._failure = None
             self._answered_at = 0.0
+
+    def _run_and_resolve(self, future: concurrent.futures.Future[T]) -> None:
+        try:
+            result = self._probe()
+        except Exception as exc:  # noqa: BLE001 - preserve a probe's failure for its TTL
+            with self._lock:
+                self._value = None
+                self._failure = exc
+                self._answered_at = time.monotonic()
+                if self._inflight is future:
+                    self._inflight = None
+            future.set_exception(exc)
+        else:
+            with self._lock:
+                self._value = result
+                self._failure = None
+                self._answered_at = time.monotonic()
+                if self._inflight is future:
+                    self._inflight = None
+            future.set_result(result)
 
     def _is_fresh(self) -> bool:
         if self._value is None and self._failure is None:
@@ -131,13 +164,14 @@ class CachedProbe[T]:
 
 
 def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
-    """Run one CLI with bounded output and bounded process-group cleanup."""
-    process = _spawn_cli(binary, args)
+    """Run one CLI with one answer budget and separate bounded cleanup."""
+    deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
+    process = _spawn_cli(binary, args, deadline)
     if process is None:
         return None
     output: _CliOutput | None = None
     try:
-        output = _read_bounded(process)
+        output = _read_bounded(process, deadline)
     finally:
         _reap_process_group(process)
     if output is None:
@@ -150,9 +184,9 @@ def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
     )
 
 
-def _spawn_cli(binary: str, args: tuple[str, ...]) -> subprocess.Popen[bytes] | None:
-    if not _spawn_admission.acquire(blocking=False):
-        return None
+def _spawn_cli(
+    binary: str, args: tuple[str, ...], deadline: float,
+) -> subprocess.Popen[bytes] | None:
     state = _SpawnState()
 
     def spawn() -> None:
@@ -165,8 +199,6 @@ def _spawn_cli(binary: str, args: tuple[str, ...]) -> subprocess.Popen[bytes] | 
                 start_new_session=True,
             )
         except OSError:
-            with state.lock:
-                state.unavailable = True
             state.completed.set()
         else:
             reap_late_process = False
@@ -178,11 +210,10 @@ def _spawn_cli(binary: str, args: tuple[str, ...]) -> subprocess.Popen[bytes] | 
             if reap_late_process:
                 _reap_process_group(process)
             state.completed.set()
-        finally:
-            _spawn_admission.release()
 
     threading.Thread(target=spawn, daemon=True).start()
-    if state.completed.wait(timeout=COWRITER_MODELS_TIMEOUT_SECONDS):
+    remaining = max(deadline - time.monotonic(), 0)
+    if state.completed.wait(timeout=remaining):
         with state.lock:
             return state.process
     with state.lock:
@@ -207,6 +238,8 @@ def _cli_output(binary_name: str, args: tuple[str, ...]) -> str | None:
 
 def _combined_cli_output(binary: str | None, args: tuple[str, ...]) -> str | None:
     run = _successful_cli_run(binary, args)
+    # Grok and Codex place status diagnostics on either stream across releases;
+    # their line contracts must not become dependent on that presentation choice.
     return None if run is None else run.stdout + run.stderr
 
 
@@ -224,8 +257,7 @@ def _successful_cli_run(binary: str | None, args: tuple[str, ...]) -> CliRun | N
     return run
 
 
-def _read_bounded(process: subprocess.Popen[bytes]) -> _CliOutput | None:
-    deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
+def _read_bounded(process: subprocess.Popen[bytes], deadline: float) -> _CliOutput | None:
     stdout = bytearray()
     stderr = bytearray()
     with selectors.DefaultSelector() as selector:
@@ -239,8 +271,6 @@ def _read_bounded(process: subprocess.Popen[bytes]) -> _CliOutput | None:
             for key, _ in selector.select(timeout=remaining):
                 collected = key.data
                 room = CLI_OUTPUT_READ_LIMIT_BYTES - len(stdout) - len(stderr)
-                if room <= 0:
-                    return _CliOutput(stdout, stderr, complete=False)
                 chunk = key.fileobj.read1(room)
                 if not chunk:
                     selector.unregister(key.fileobj)
@@ -263,7 +293,27 @@ def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
     _bounded_wait(process, CLI_TERMINATION_GRACE_SECONDS)
     if _process_group_exists(process.pid):
         _signal_process_group(process.pid, signal.SIGKILL)
-    _bounded_wait(process, CLI_TERMINATION_GRACE_SECONDS)
+        _wait_for_process_group_exit(process, CLI_TERMINATION_GRACE_SECONDS)
+
+
+def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
+    """Wait until SIGKILL has made the whole group unaddressable.
+
+    Waiting only for the direct child can return while one of its children
+    still runs, which would make a completed probe lie about its cleanup.
+    """
+    deadline = time.monotonic() + timeout
+    while _process_group_exists(process.pid):
+        # `poll()` performs the non-blocking waitpid that reaps the direct
+        # child. Without it, its zombie can keep the process group addressable
+        # after SIGKILL even though no runnable process remains.
+        process.poll()
+        if not _process_group_exists(process.pid):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(min(0.01, max(deadline - time.monotonic(), 0)))
+    return True
 
 
 def _signal_process_group(process_id: int, signal_number: signal.Signals) -> None:
@@ -293,6 +343,8 @@ def _probe_claude_login(binary: str) -> CliLogin:
     output = _claude_output(binary)
     if output is None:
         return LOGGED_OUT
+    # Claude offers structured status, so accepting a near-match would turn a
+    # changed authentication contract into a false logged-in report.
     try:
         payload: Any = json.loads(output)
     except ValueError:
@@ -322,6 +374,8 @@ def _probe_grok_status() -> GrokCliStatus:
 def _parse_grok_login(output: str) -> CliLogin:
     for line in output.splitlines():
         stripped = line.strip()
+        # These exact markers reject prose changes rather than guessing a
+        # subscription state from incidental account text.
         if stripped.startswith(GROK_CLI_LOGGED_IN_MARKER):
             account = stripped.removeprefix(GROK_CLI_LOGGED_IN_MARKER).rstrip(".")
             return CliLogin(logged_in=True, auth_method=account or None)
@@ -363,6 +417,8 @@ def _probe_codex_login() -> CliLogin:
 def _parse_codex_login(output: str) -> CliLogin:
     for line in output.splitlines():
         stripped = line.strip()
+        # Codex has no structured status output; its documented markers are
+        # deliberately narrower than a heuristic that could forge a login.
         if stripped.startswith(CODEX_CLI_LOGGED_IN_MARKER):
             account = stripped.removeprefix(CODEX_CLI_LOGGED_IN_MARKER)
             return CliLogin(logged_in=True, auth_method=account or None)

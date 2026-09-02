@@ -6,7 +6,8 @@ import json
 import os
 import subprocess
 import threading
-from unittest.mock import patch
+import time
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -255,6 +256,58 @@ def test_parallel_cold_asks_share_one_failure() -> None:
     assert failures[0] is failures[1]
 
 
+def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    first_failure: list[Exception] = []
+
+    def probe() -> str:
+        started.set()
+        release.wait()
+        return "answer"
+
+    cached = CachedProbe(probe)
+    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.05)
+
+    def first_ask() -> None:
+        with pytest.raises(AgentCliUnavailableError) as raised:
+            cached.get()
+        first_failure.append(raised.value)
+
+    first = threading.Thread(target=first_ask)
+    first.start()
+    assert started.wait(timeout=1)
+
+    started_waiting = time.monotonic()
+    with pytest.raises(AgentCliUnavailableError, match="caller budget"):
+        cached.get()
+    assert time.monotonic() - started_waiting < 0.2
+
+    release.set()
+    first.join(timeout=1)
+    assert len(first_failure) == 1
+    assert cached.get() == "answer"
+
+
+def test_run_cli_shares_one_deadline_between_spawn_and_read() -> None:
+    process = MagicMock(spec=subprocess.Popen)
+    process.returncode = 0
+    output = MagicMock()
+    output.stdout = bytearray(b"ok")
+    output.stderr = bytearray()
+    output.complete = True
+
+    with (
+        patch("songmaker_cli.agent_cli._spawn_cli", return_value=process) as spawn,
+        patch("songmaker_cli.agent_cli._read_bounded", return_value=output) as read,
+        patch("songmaker_cli.agent_cli._reap_process_group"),
+    ):
+        run = run_cli("grok", ("models",))
+
+    assert run == CliRun(returncode=0, stdout="ok", stderr="", complete=True)
+    assert spawn.call_args.args[2] == read.call_args.args[1]
+
+
 def test_a_cli_that_floods_us_is_read_only_up_to_the_limit() -> None:
     flood = "while :; do printf x; done"
     with _a_shell_pretending_to_be_a_cli():
@@ -291,6 +344,29 @@ def test_a_cli_that_leaves_a_child_behind_is_terminated_with_its_group() -> None
         assert _cli_output("grok", ("-c", command)) is None
 
     assert started
+    with pytest.raises(ProcessLookupError):
+        os.killpg(started[0].pid, 0)
+
+
+def test_a_sigterm_ignoring_cli_and_child_are_reaped_after_sigkill() -> None:
+    command = "trap '' TERM; { trap '' TERM; while :; do :; done; } & while :; do :; done"
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        return process
+
+    with (
+        _a_shell_pretending_to_be_a_cli(),
+        patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.05),
+        patch("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.1),
+        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process),
+    ):
+        assert _cli_output("grok", ("-c", command)) is None
+
+    assert started[0].poll() is not None
     with pytest.raises(ProcessLookupError):
         os.killpg(started[0].pid, 0)
 

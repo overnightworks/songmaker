@@ -141,7 +141,6 @@ COWRITER_CLI_TIMEOUT_SECONDS = 600
 COWRITER_MAX_TOOL_ROUNDS = 8
 COWRITER_MODELS_TIMEOUT_SECONDS = 15
 CLI_LOGIN_STATUS_CACHE_SECONDS = 30
-CLI_MAX_CONCURRENT_SPAWNS = 8
 # Agent CLI login probes return only a few hundred bytes. These bounds keep a
 # broken mounted binary from holding a request or its memory indefinitely.
 CLI_OUTPUT_READ_LIMIT_BYTES = 64 * 1024
