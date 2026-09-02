@@ -243,10 +243,27 @@ def test_getattr_literal_default_is_reported(
     assert "songmaker_cli/m.py:1" in out
 
 
+def test_getattr_signed_numeric_literal_default_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """getattr(obj, "retries", -1) is a UnaryOp(USub, Constant) in the AST,
+    not a bare Constant — must still be recognized as a literal default."""
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": 'value = getattr(obj, "retries", -1)\n',
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert checker.GETATTR_LITERAL_DEFAULT in out
+    assert "songmaker_cli/m.py:1" in out
+
+
 @pytest.mark.parametrize("source", [
     'value = getattr(obj, "status")\n',
     'value = getattr(obj, "status", None)\n',
     'DEFAULT = "ok"\nvalue = getattr(obj, "status", DEFAULT)\n',
+    'DEFAULT = 1\nvalue = getattr(obj, "retries", -DEFAULT)\n',
 ])
 def test_getattr_without_a_literal_default_is_not_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,

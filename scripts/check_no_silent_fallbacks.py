@@ -190,8 +190,19 @@ def _getattr_default(node: ast.Call) -> ast.expr | None:
     return None
 
 
+def _is_signed_numeric_constant(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, (ast.UAdd, ast.USub))
+        and isinstance(node.operand, ast.Constant)
+        and isinstance(node.operand.value, (int, float))
+    )
+
+
 def _is_non_none_constant(node: ast.expr) -> bool:
-    return isinstance(node, ast.Constant) and node.value is not None
+    if isinstance(node, ast.Constant):
+        return node.value is not None
+    return _is_signed_numeric_constant(node)
 
 
 def _inspect_getattr_literal_default(
