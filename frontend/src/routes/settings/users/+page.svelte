@@ -47,12 +47,23 @@
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import {
 		ADMIN_TABS_LABEL,
+		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
 		PROVIDER_CONFIGURED_LABEL,
+		PROVIDER_COWRITER_SURFACE_PREFIX,
+		PROVIDER_JUDGE_SURFACE_PREFIX,
 		PROVIDER_KEY_ONLY_LABEL,
 		PROVIDER_LOGIN_ONLY_LABEL,
 		PROVIDER_MISSING_DEPENDENCY_LABEL,
-		PROVIDER_NOT_CONFIGURED_LABEL
+		PROVIDER_NOT_CONFIGURED_LABEL,
+		PROVIDER_STATUS_DESCRIPTION,
+		PROVIDER_STATUS_EMPTY_MESSAGE,
+		PROVIDER_STATUS_REFRESHING_MESSAGE,
+		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
+		providerCliLoginNeedsApiKeyDetail,
+		providerConfiguredDetail,
+		providerMissingDependencyDetail,
+		providerMissingRequirementDetail
 	} from '$lib/constants';
 	import {
 		COMPACT_SELECT_CLASS,
@@ -288,24 +299,29 @@
 	function surfaceDetail(surface: ProviderSurfaceStatus): string {
 		switch (surface.state) {
 			case 'missing_dependency':
-				return `Missing ${surface.missing_dependency ?? 'required dependency'}`;
+				return providerMissingDependencyDetail(surface.missing_dependency);
 			case 'unconfigured':
 				return surface.needs === 'cli_login'
-					? 'Missing Claude Code CLI login'
-					: `Missing ${surface.environment_key ?? 'required API key'}`;
+					? providerMissingRequirementDetail(PROVIDER_CLI_LOGIN_LABELS.claude_cli)
+					: providerMissingRequirementDetail(surface.environment_key);
 			case 'cli_login_needs_api_key':
-				return `${cliLoginLabel(surface)} found — but answering needs its API key`;
+				return providerCliLoginNeedsApiKeyDetail(cliLoginLabel(surface));
 			case 'api_key_needs_cli_login':
-				return 'Key is set, but answering needs the Claude Code CLI login';
+				return PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL;
 			case 'configured':
-				return `${PROVIDER_CONFIGURED_LABEL} — ${cliLoginLabel(surface) ?? `${surface.environment_key} set`}`;
+				return providerConfiguredDetail(cliLoginLabel(surface), surface.environment_key);
 		}
 	}
 
 	function providerDetail(status: ProviderStatus): string[] {
 		const cowriter = surfaceDetail(status.cowriter);
 		const judge = surfaceDetail(status.judge);
-		return cowriter === judge ? [cowriter] : [`co-writer: ${cowriter}`, `judge: ${judge}`];
+		return cowriter === judge
+			? [cowriter]
+			: [
+					`${PROVIDER_COWRITER_SURFACE_PREFIX} ${cowriter}`,
+					`${PROVIDER_JUDGE_SURFACE_PREFIX} ${judge}`
+				];
 	}
 
 	function worstState(status: ProviderStatus): ProviderSurfaceStatus['state'] {
@@ -341,7 +357,7 @@
 
 	function pickerReason(provider: string, surface: 'cowriter' | 'judge'): string {
 		const status = surfaceFor(provider, surface);
-		return status ? surfaceDetail(status) : 'Provider status is unavailable';
+		return status ? surfaceDetail(status) : PROVIDER_STATUS_UNAVAILABLE_DETAIL;
 	}
 
 	async function loadModelsTab() {
@@ -995,10 +1011,7 @@
 		{#if tab === 'models'}
 			<section>
 				<h2>Providers</h2>
-				<p class="hint">
-					Each provider's real reachability — whether it can answer you, by what means, and what is
-					still missing when it cannot.
-				</p>
+				<p class="hint">{PROVIDER_STATUS_DESCRIPTION}</p>
 				{#if providerStatuses.length > 0}
 					<div class="provider-status-list">
 						{#each providerStatuses as status (status.provider)}
@@ -1021,14 +1034,14 @@
 						{/each}
 					</div>
 					{#if loadingProviderStatuses}
-						<p>Refreshing provider status...</p>
+						<p>{PROVIDER_STATUS_REFRESHING_MESSAGE}</p>
 					{/if}
 				{:else if loadingProviderStatuses}
 					<p>Loading...</p>
 				{:else if providerStatusError}
 					<p class="error">{providerStatusError}</p>
 				{:else}
-					<p>No provider status is available.</p>
+					<p>{PROVIDER_STATUS_EMPTY_MESSAGE}</p>
 				{/if}
 			</section>
 
