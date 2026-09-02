@@ -40,16 +40,33 @@ COPIED_SCRIPTS = (
 # guards regressed, hand a test run the real /etc/systemd/system — and on a
 # root test run it would write there. A fake stands in for a dangerous thing;
 # it must be the *safe* half of it, not the compliant half.
-FAKE_SUDO = """#!/bin/bash
+# Refuses anything whose *resolved* location is outside the sandbox, then
+# execs. Textual "does it start with /" was not enough: a relative path, a
+# `$SANDBOX_ROOT/../../etc/...`, or a path through a symlinked directory all
+# reached the real `install`. A fake stands in for a dangerous thing; it has to
+# be the safe half of it, not the compliant half.
+CONTAINMENT = """
+contained() {
+    local candidate="$1" resolved
+    case "$candidate" in
+        -*|[0-9][0-9][0-9][0-9]) return 0 ;;
+    esac
+    resolved="$(readlink -m -- "$candidate" 2>/dev/null)" || return 1
+    case "$resolved/" in
+        "$SANDBOX_REAL"/*) return 0 ;;
+    esac
+    return 1
+}
+"""
+
+FAKE_SUDO = '#!/bin/bash\n' + CONTAINMENT + """
 for argument in "$@"; do
     case "$argument" in
-        /*)
-            case "$argument" in
-                "$SANDBOX_ROOT"/*) ;;
-                *)
-                    echo "fake sudo: refusing '$argument' outside $SANDBOX_ROOT" >&2
-                    exit 97 ;;
-            esac ;;
+        */*|/*)
+            if ! contained "$argument"; then
+                echo "fake sudo: refusing '$argument' outside $SANDBOX_REAL" >&2
+                exit 97
+            fi ;;
     esac
 done
 if [ "$1" = "-u" ]; then shift 2; fi
@@ -60,14 +77,12 @@ exec "$@"
 # once `enable` has been seen, and — crucially — really runs the unit's
 # ExecStart on `start`. Faking that away would have hidden the missing parent
 # directory the mirror could not create.
-FAKE_SYSTEMCTL = """#!/bin/bash
-case "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}" in
-    "$SANDBOX_ROOT"/*) ;;
-    *)
-        echo "fake systemctl: unit dir ${SONGMAKER_UNIT_DIR:-unset} is outside" \
-            "$SANDBOX_ROOT" >&2
-        exit 97 ;;
-esac
+FAKE_SYSTEMCTL = '#!/bin/bash\n' + CONTAINMENT + """
+if ! contained "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"; then
+    echo "fake systemctl: unit dir ${SONGMAKER_UNIT_DIR:-unset} is outside" \
+        "$SANDBOX_REAL" >&2
+    exit 97
+fi
 echo "$*" >> "$SYSTEMCTL_LOG"
 
 state_dir="$SANDBOX_ROOT/systemctl-state"
@@ -96,6 +111,7 @@ case "$1" in
     is-enabled) unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.enabled" ]; exit $? ;;
     is-active)  unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.active" ]; exit $? ;;
     is-failed)  unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.failed" ]; exit $? ;;
+    daemon-reload) exit 0 ;;
     list-unit-files)
         unit="$(unit_of "$@")"
         if [ -f "$SONGMAKER_UNIT_DIR/$unit" ]; then
@@ -103,7 +119,10 @@ case "$1" in
         fi
         exit 0 ;;
 esac
-exit 0
+# Anything this fake was never taught is a command whose real effect nobody
+# has thought about. Succeeding at it would be the fake lying.
+echo "fake systemctl: refusing unmodelled command '$1'" >&2
+exit 97
 """
 
 # The installer reads the operator's home from passwd, never from $HOME (a run
@@ -116,6 +135,15 @@ if [ "$1" = "passwd" ]; then
 fi
 exit 2
 """
+
+
+# What a test may not replace: everything that keeps the run inside the
+# sandbox. SONGMAKER_UNIT_DIR is deliberately not on the list — pointing it at
+# /etc/systemd/system is how the safety net itself is tested — because the
+# fakes refuse that target rather than trusting the variable.
+RESERVED_ENVIRONMENT = frozenset({
+    "PATH", "SANDBOX_ROOT", "SANDBOX_REAL", "TMPDIR", "HOME",
+})
 
 
 def _executable(path: Path, body: str) -> None:
@@ -199,20 +227,32 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
         real /etc/systemd/system the moment an early guard regressed.
         """
         started_from = from_checkout or checkout
+        reserved = set(overrides) & RESERVED_ENVIRONMENT
+        if reserved:
+            raise AssertionError(
+                f"a test may not override {sorted(reserved)}: those are what "
+                f"keep the run inside the sandbox",
+            )
         environment = {
             **os.environ,
+            **overrides,
+            # After the overrides, never before: these are the containment,
+            # and a test that could replace PATH or SANDBOX_ROOT would be one
+            # keyword argument away from the real sudo.
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "HOME": str(home),
             "TMPDIR": str(scratch),
             "SANDBOX_ROOT": str(tmp_path),
+            "SANDBOX_REAL": str(tmp_path.resolve()),
+            "HOME": str(home),
             "SYSTEMCTL_LOG": str(systemctl_log),
-            "SONGMAKER_UNIT_DIR": str(units),
             "FAKE_OPERATOR_HOME": str(home),
             "SONGMAKER_CLAUDE_CLI": "/bin/sh",
             "SONGMAKER_GROK_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CLI": "/bin/sh",
-            **overrides,
         }
+        environment.setdefault("SONGMAKER_UNIT_DIR", str(units))
+        if "SONGMAKER_UNIT_DIR" in overrides:
+            environment["SONGMAKER_UNIT_DIR"] = overrides["SONGMAKER_UNIT_DIR"]
         environment.pop("SONGMAKER_CLI_CREDENTIALS_DIR", None)
         return subprocess.run(
             [str(started_from / "scripts" / INSTALLER.name), *arguments],
@@ -307,24 +347,85 @@ def test_it_refuses_a_linked_worktree(run_installer, tmp_path) -> None:
     assert "linked worktree" in result.stderr
 
 
-def test_a_regressed_worktree_guard_still_cannot_reach_the_real_system(
-    run_installer, tmp_path,
+def test_the_fakes_and_not_the_machine_are_what_stop_a_real_target(
+    run_installer,
 ) -> None:
-    """The fakes are the safety net, not the guard they protect.
+    """From the MAIN checkout, so nothing earlier refuses first.
 
-    If the worktree refusal ever regresses, this run must still fail against
-    the fakes rather than reach the real sudo and /etc/systemd/system. Proved
-    by taking the guard away — SONGMAKER_UNIT_DIR removed is the same shape of
-    accident — and insisting the fake, not the machine, is what stops it.
+    The previous version of this test ran from a linked worktree and was
+    stopped by require_main_checkout before a fake was ever consulted — it
+    proved the guard, not the net under it. Pointed at /etc/systemd/system,
+    the run must die on the fake, with the fake's own exit code, and leave the
+    real directory untouched.
     """
-    linked = _linked_worktree_of(run_installer.checkout, tmp_path)
+    before = sorted(Path("/etc/systemd/system").glob("songmaker-cli-credentials-*"))
 
-    result = run_installer(
-        from_checkout=linked, SONGMAKER_UNIT_DIR="/etc/systemd/system",
+    result = run_installer(SONGMAKER_UNIT_DIR="/etc/systemd/system")
+
+    assert result.returncode == 97, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "fake systemctl" in result.stderr or "fake sudo" in result.stderr
+    assert sorted(Path("/etc/systemd/system").glob("songmaker-cli-credentials-*")) == before
+
+
+@pytest.mark.parametrize(
+    "escape",
+    [
+        "{sandbox}/../../../etc/systemd/system/evil.service",
+        "relative/../../../../etc/systemd/system/evil.service",
+        "{sandbox}/through-a-symlink/evil.service",
+    ],
+)
+def test_the_fake_sudo_refuses_a_path_that_only_looks_contained(
+    run_installer, tmp_path, escape,
+) -> None:
+    """Textual containment let `..` and symlinked parents through to real install."""
+    (tmp_path / "through-a-symlink").symlink_to("/etc/systemd/system")
+    # The source lives inside the sandbox on purpose: the destination is what
+    # is under test, and an out-of-sandbox source would be refused first and
+    # make the test pass without ever judging the escape.
+    source = tmp_path / "unit-to-install"
+    source.write_text("[Service]\n")
+
+    result = subprocess.run(
+        ["sudo", "install", "-m", "0644", str(source),
+         escape.format(sandbox=tmp_path)],
+        env={
+            **os.environ,
+            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
+            "SANDBOX_ROOT": str(run_installer.sandbox),
+            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
+        },
+        text=True, capture_output=True, check=False, cwd=tmp_path,
     )
 
-    assert result.returncode != 0
-    assert not Path("/etc/systemd/system/songmaker-cli-credentials-mirror.path").exists()
+    assert result.returncode == 97, result.stderr
+    assert "fake sudo: refusing" in result.stderr
+
+
+def test_the_fake_systemctl_refuses_a_command_it_does_not_model(
+    run_installer,
+) -> None:
+    """Succeeding at an unmodelled command would be the fake lying."""
+    result = subprocess.run(
+        ["systemctl", "mask", "songmaker-cli-credentials-mirror.service"],
+        env={
+            **os.environ,
+            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
+            "SANDBOX_ROOT": str(run_installer.sandbox),
+            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
+            "SONGMAKER_UNIT_DIR": str(run_installer.units),
+            "SYSTEMCTL_LOG": str(run_installer.log),
+        },
+        text=True, capture_output=True, check=False,
+    )
+
+    assert result.returncode == 97
+    assert "unmodelled command" in result.stderr
+
+
+def test_a_test_cannot_override_what_keeps_the_run_contained(run_installer) -> None:
+    with pytest.raises(AssertionError, match="keep the run inside the sandbox"):
+        run_installer(PATH="/usr/bin:/bin")
 
 
 def _linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
