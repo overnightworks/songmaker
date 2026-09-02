@@ -466,18 +466,24 @@ def test_shared_song_audio_authorization_matches_presented_share_selection(
         "admin_user/g2.mp3",
         "admin_user/../../outside.mp3",
     }
-    delivered_filenames = {
-        filename
-        for filename in candidates
-        if unauthed.get(
+    candidate_statuses = {
+        filename: unauthed.get(
             f"/shared/song/{slug}/audio/{_shared_audio_request_path(filename)}",
-        ).status_code == 200
+        ).status_code
+        for filename in candidates
+    }
+    delivered_filenames = {
+        filename for filename, status_code in candidate_statuses.items()
+        if status_code == 200
     }
 
     assert delivered_filenames == expected_filenames
     if configuration == "not_shared":
         assert shared_response.status_code == 404
+        assert all(status_code == 404 for status_code in candidate_statuses.values())
         return
+    if configuration == "traversal":
+        assert candidate_statuses["admin_user/../../outside.mp3"] == 404
     assert shared_response.status_code == 200
     assert _presented_audio_filenames(shared_response.json(), "audio_url") == delivered_filenames
 
@@ -544,18 +550,24 @@ def test_shared_playlist_audio_authorization_matches_presented_share_selection(
         "admin_user/g2.mp3",
         "admin_user/../../outside.mp3",
     }
-    delivered_filenames = {
-        filename
-        for filename in candidates
-        if unauthed.get(
+    candidate_statuses = {
+        filename: unauthed.get(
             f"/shared/playlist/{slug}/audio/{_shared_audio_request_path(filename)}",
-        ).status_code == 200
+        ).status_code
+        for filename in candidates
+    }
+    delivered_filenames = {
+        filename for filename, status_code in candidate_statuses.items()
+        if status_code == 200
     }
 
     assert delivered_filenames == expected_filenames
     if configuration == "not_shared":
         assert shared_response.status_code == 404
+        assert all(status_code == 404 for status_code in candidate_statuses.values())
         return
+    if configuration == "traversal":
+        assert candidate_statuses["admin_user/../../outside.mp3"] == 404
     assert shared_response.status_code == 200
     assert _presented_audio_filenames(shared_response.json(), "entries") == delivered_filenames
 
