@@ -1,7 +1,14 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LoginAttemptItem, PaginatedResponse, SessionItem, UserItem } from '$lib/api/types';
+import type {
+	LoginAttemptItem,
+	PaginatedResponse,
+	ProviderStatus,
+	ProviderSurfaceStatus,
+	SessionItem,
+	UserItem
+} from '$lib/api/types';
 import { ADMIN_TABS_LABEL, COMPACT_LAYOUT_MEDIA } from '$lib/constants';
 import { COMPACT_SELECT_CLASS, COMPACT_STACK_CLASS } from '$lib/styles/compact-ui';
 import { currentUser } from '$lib/stores/auth';
@@ -71,6 +78,47 @@ const ATTEMPT: LoginAttemptItem = {
 	success: false,
 	attempted_at: '2026-01-03T01:00:00Z'
 };
+function providerStatus(
+	provider: string,
+	cowriter: ProviderSurfaceStatus,
+	judge: ProviderSurfaceStatus = cowriter
+): ProviderStatus {
+	return { provider, cowriter, judge };
+}
+
+const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
+	state: 'configured',
+	setup_method: 'claude_cli',
+	environment_key: null
+};
+const SIGNED_IN_GROK_CLI: ProviderSurfaceStatus = {
+	state: 'cli_login_needs_api_key',
+	setup_method: 'grok_cli',
+	environment_key: 'XAI_API_KEY'
+};
+const NO_CODEX_KEY: ProviderSurfaceStatus = {
+	state: 'unconfigured',
+	setup_method: null,
+	environment_key: 'OPENAI_API_KEY'
+};
+const GROK_SIGNED_IN_WITHOUT_TURNS: ProviderStatus[] = [
+	providerStatus('claude', CLAUDE_VIA_CLI),
+	providerStatus('codex', NO_CODEX_KEY),
+	providerStatus('grok', SIGNED_IN_GROK_CLI)
+];
+const CLAUDE_KEY_WITHOUT_CLI: ProviderStatus[] = [
+	providerStatus(
+		'claude',
+		{
+			state: 'api_key_needs_cli_login',
+			setup_method: 'api_key',
+			environment_key: 'ANTHROPIC_API_KEY'
+		},
+		{ state: 'configured', setup_method: 'api_key', environment_key: 'ANTHROPIC_API_KEY' }
+	),
+	providerStatus('codex', NO_CODEX_KEY),
+	providerStatus('grok', SIGNED_IN_GROK_CLI)
+];
 const TAB_LABELS = [
 	'Users',
 	'Sessions',
@@ -177,14 +225,17 @@ beforeEach(() => {
 	api.fetchAllModels.mockResolvedValue([]);
 	api.fetchBuiltinDefaults.mockResolvedValue({});
 	api.fetchProviderStatus.mockResolvedValue([
-		{ provider: 'claude', configured: true, setup_method: 'claude_cli', environment_key: null },
-		{
-			provider: 'codex',
-			configured: true,
+		providerStatus('claude', CLAUDE_VIA_CLI),
+		providerStatus('codex', {
+			state: 'configured',
 			setup_method: 'api_key',
 			environment_key: 'OPENAI_API_KEY'
-		},
-		{ provider: 'grok', configured: false, setup_method: null, environment_key: 'XAI_API_KEY' }
+		}),
+		providerStatus('grok', {
+			state: 'unconfigured',
+			setup_method: null,
+			environment_key: 'XAI_API_KEY'
+		})
 	]);
 	api.fetchCowriterSettings.mockResolvedValue({
 		provider: 'claude',
@@ -345,6 +396,61 @@ describe('admin models tab', () => {
 		expect(providers.textContent).toContain('Claude Code CLI login');
 		expect(providers.textContent).toContain('OPENAI_API_KEY set');
 		expect(providers.textContent).toContain('missing XAI_API_KEY');
+	});
+
+	it('names the CLI each provider is signed in with', async () => {
+		api.fetchProviderStatus.mockResolvedValue([
+			providerStatus('claude', CLAUDE_VIA_CLI),
+			providerStatus('codex', {
+				state: 'configured',
+				setup_method: 'codex_cli',
+				environment_key: null
+			}),
+			providerStatus('grok', {
+				state: 'configured',
+				setup_method: 'grok_cli',
+				environment_key: null
+			})
+		]);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const providers = sectionByHeading(target, 'Providers');
+
+		expect(providers.textContent).toContain('Grok CLI login');
+		expect(providers.textContent).toContain('Codex CLI login');
+	});
+
+	it('does not offer a CLI-only provider for either surface', async () => {
+		api.fetchProviderStatus.mockResolvedValue(GROK_SIGNED_IN_WITHOUT_TURNS);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		for (const heading of ['Co-Writer', 'Scoring']) {
+			const picker = sectionByHeading(target, heading);
+			expect(pillNamed(picker, 'Grok').disabled).toBe(true);
+			expect(picker.textContent).toContain('Signed in, but answering needs its API key');
+		}
+	});
+
+	it('offers a Claude API key to the judge but not the co-writer', async () => {
+		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(pillNamed(sectionByHeading(target, 'Scoring'), 'Claude').disabled).toBe(false);
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		expect(pillNamed(cowriter, 'Claude').disabled).toBe(true);
+		expect(cowriter.textContent).toContain('answering needs the Claude Code CLI login');
+	});
+
+	it('spells out both surfaces when their reachability differs', async () => {
+		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const providers = sectionByHeading(target, 'Providers');
+
+		expect(providers.textContent).toContain('co-writer:');
+		expect(providers.textContent).toContain('judge:');
 	});
 
 	it('disables picking an unconfigured provider in the co-writer picker', async () => {

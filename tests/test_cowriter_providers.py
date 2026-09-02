@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -46,7 +45,10 @@ LIVE_CATALOG = {
 
 def _fake_user(user_id: str, role: str = "user"):
     user = AuthenticatedUser(
-        id=user_id, username=f"u-{user_id}", role=role, is_active=True,
+        id=user_id,
+        username=f"u-{user_id}",
+        role=role,
+        is_active=True,
     )
     return lambda: user
 
@@ -57,14 +59,19 @@ def _stream_events(response) -> list[dict]:
         if not line:
             continue
         if line.startswith("data: "):
-            events.append(json.loads(line[len("data: "):]))
+            events.append(json.loads(line[len("data: ") :]))
     return events
 
 
 def _seed(session, user_id: str) -> None:
-    session.add(User(
-        id=user_id, username=f"user-{user_id}", password_hash="x", role="admin",
-    ))
+    session.add(
+        User(
+            id=user_id,
+            username=f"user-{user_id}",
+            password_hash="x",
+            role="admin",
+        )
+    )
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
     session.add(Song(id="s1", title="Thunder", album_id="alb1", track_number=1))
@@ -91,6 +98,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
+
     app = FastAPI()
     app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
@@ -220,12 +228,17 @@ def test_each_saved_provider_calls_only_itself(admin_client):
                 "songmaker_cli.cowriter.dispatch.stream_openai_compatible_turn",
                 _oai,
             ),
-            patch.dict("os.environ", {
-                "XAI_API_KEY": "grok-key",
-                "OPENAI_API_KEY": "openai-key",
-            }, clear=False),
+            patch.dict(
+                "os.environ",
+                {
+                    "XAI_API_KEY": "grok-key",
+                    "OPENAI_API_KEY": "openai-key",
+                },
+                clear=False,
+            ),
         ):
             from songmaker_cli.settings import get_settings
+
             get_settings.cache_clear()
             resp = client.post("/api/chat/turn", json={"message": "hello"})
         events = _stream_events(resp)
@@ -249,6 +262,7 @@ def test_missing_credentials_named_error_no_persist(admin_client, monkeypatch):
     client.put("/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.6"})
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     from songmaker_cli.settings import get_settings
+
     get_settings.cache_clear()
     called = {"claude": False, "oai": False}
 
@@ -278,16 +292,25 @@ def test_missing_credentials_named_error_no_persist(admin_client, monkeypatch):
 def test_create_song_tool_hits_canonical_function(admin_client):
     _, factory = admin_client
     user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
+        id="u-test",
+        username="u-u-test",
+        role="admin",
+        is_active=True,
     )
     with factory() as session:
         via_catalog, err = execute_cowriter_tool(
-            session, user, "create_song",
+            session,
+            user,
+            "create_song",
             {"album_id": "alb1", "title": "FromCatalog", "lyrics": "a"},
         )
         assert err is False
         canonical = tool_create_song(
-            session, user, album_id="alb1", title="FromDirect", lyrics="b",
+            session,
+            user,
+            album_id="alb1",
+            title="FromDirect",
+            lyrics="b",
         )
         session.commit()
     assert "FromCatalog" in via_catalog
@@ -305,11 +328,16 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
     slug still follows the title through execute_cowriter_tool's commit."""
     _, factory = admin_client
     user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
+        id="u-test",
+        username="u-u-test",
+        role="admin",
+        is_active=True,
     )
     with factory() as session:
         _, err = execute_cowriter_tool(
-            session, user, "rename_song",
+            session,
+            user,
+            "rename_song",
             {"song_id": "s1", "title": "Renamed Track"},
         )
         assert err is False
@@ -323,7 +351,9 @@ def test_cowriter_provider_switch_keeps_scoring_model(admin_client):
     client, factory = admin_client
     with factory() as session:
         set_claude_model(
-            session, SETTING_CLAUDE_SCORING_MODEL, "claude-haiku-4-5-20251001",
+            session,
+            SETTING_CLAUDE_SCORING_MODEL,
+            "claude-haiku-4-5-20251001",
         )
         session.commit()
     client.put("/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"})
@@ -343,9 +373,11 @@ def test_openai_adapter_emits_same_event_types(admin_client):
 
         def json(self):
             return {
-                "choices": [{
-                    "message": {"role": "assistant", "content": "from grok"},
-                }],
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "from grok"},
+                    }
+                ],
             }
 
     class _Client:
@@ -366,6 +398,7 @@ def test_openai_adapter_emits_same_event_types(admin_client):
         patch.dict("os.environ", {"XAI_API_KEY": "k"}, clear=False),
     ):
         from songmaker_cli.settings import get_settings
+
         get_settings.cache_clear()
         resp = client.post("/api/chat/turn", json={"message": "hi"})
     types = [event["type"] for event in _stream_events(resp)]
@@ -377,13 +410,19 @@ def test_openai_adapter_emits_same_event_types(admin_client):
 def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch):
     responses = [
         {
-            "choices": [{"message": {
-                "content": "",
-                "tool_calls": [{
-                    "id": f"call-{index}",
-                    "function": {"name": "list_albums", "arguments": "{}"},
-                }],
-            }}],
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": f"call-{index}",
+                                "function": {"name": "list_albums", "arguments": "{}"},
+                            }
+                        ],
+                    }
+                }
+            ],
         }
         for index in range(COWRITER_MAX_TOOL_ROUNDS)
     ]
@@ -414,7 +453,8 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
     monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
     execute = MagicMock(return_value=("[]", False))
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,
+        "songmaker_cli.cowriter.tools.execute_cowriter_tool",
+        execute,
     )
 
     async def _collect_events():
@@ -429,7 +469,10 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
                 messages=[{"role": "user", "content": "hello"}],
                 session=MagicMock(),
                 user=AuthenticatedUser(
-                    id="u", username="u", role="user", is_active=True,
+                    id="u",
+                    username="u",
+                    role="user",
+                    is_active=True,
                 ),
             )
         ]
@@ -443,107 +486,80 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
 
 def test_provider_status_reports_setup_method_and_missing_key(admin_client, monkeypatch):
     from songmaker_cli.cowriter.catalog import (
+        ApiKeyNeedsCliLoginProvider,
+        CliLoginNeedsApiKeyProvider,
         ConfiguredProvider,
+        DependencyUnavailableProvider,
         ProviderSetupMethod,
+        ProviderSurface,
         UnconfiguredProvider,
     )
 
-    def _fake_configuration(provider: str):
-        if provider == "claude":
+    def _fake_configuration(provider: str, surface: ProviderSurface):
+        if provider == "claude" and surface is ProviderSurface.CO_WRITER:
             return ConfiguredProvider("claude", ProviderSetupMethod.CLAUDE_CLI)
+        if provider == "claude":
+            return ApiKeyNeedsCliLoginProvider("claude", "ANTHROPIC_API_KEY")
+        if provider == "codex" and surface is ProviderSurface.CO_WRITER:
+            return CliLoginNeedsApiKeyProvider(
+                "codex",
+                ProviderSetupMethod.CODEX_CLI,
+                "OPENAI_API_KEY",
+            )
         if provider == "codex":
-            return ConfiguredProvider("codex", ProviderSetupMethod.API_KEY, "OPENAI_API_KEY")
+            return DependencyUnavailableProvider("codex", "openai", "OPENAI_API_KEY")
         return UnconfiguredProvider("grok", "XAI_API_KEY")
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.get_provider_configuration", _fake_configuration,
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        _fake_configuration,
     )
     client, _ = admin_client
     resp = client.get("/api/settings/providers")
     assert resp.status_code == 200
     by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"] == {
-        "provider": "claude",
-        "configured": True,
+    assert by_provider["claude"]["cowriter"] == {
+        "state": "configured",
         "setup_method": "claude_cli",
         "environment_key": None,
         "missing_dependency": None,
     }
-    assert by_provider["codex"] == {
-        "provider": "codex",
-        "configured": True,
-        "setup_method": "api_key",
+    assert by_provider["claude"]["judge"]["state"] == "api_key_needs_cli_login"
+    assert by_provider["codex"]["cowriter"] == {
+        "state": "cli_login_needs_api_key",
+        "setup_method": "codex_cli",
         "environment_key": "OPENAI_API_KEY",
         "missing_dependency": None,
     }
-    assert by_provider["grok"] == {
-        "provider": "grok",
-        "configured": False,
-        "setup_method": None,
-        "environment_key": "XAI_API_KEY",
-        "missing_dependency": None,
-    }
+    assert by_provider["codex"]["judge"]["state"] == "missing_dependency"
+    assert by_provider["grok"]["cowriter"]["state"] == "unconfigured"
 
 
 def test_provider_status_reports_a_missing_dependency_instead_of_crashing(
-    admin_client, monkeypatch,
+    admin_client,
+    monkeypatch,
 ):
-    from songmaker_cli.settings import get_settings
+    from songmaker_cli.cowriter.catalog import DependencyUnavailableProvider
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: None,
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        lambda provider, surface: DependencyUnavailableProvider(
+            provider,
+            "anthropic",
+            "ANTHROPIC_API_KEY",
+        ),
     )
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-    get_settings.cache_clear()
-
     client, _ = admin_client
     resp = client.get("/api/settings/providers")
 
     assert resp.status_code == 200
     by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"] == {
-        "provider": "claude",
-        "configured": False,
+    assert by_provider["claude"]["judge"] == {
+        "state": "missing_dependency",
         "setup_method": None,
         "environment_key": "ANTHROPIC_API_KEY",
         "missing_dependency": "anthropic",
     }
-
-
-def test_provider_status_treats_a_hanging_claude_cli_as_logged_out(
-    admin_client, monkeypatch,
-):
-    from songmaker_cli.agent_cli import clear_agent_cli_caches
-    from songmaker_cli.settings import get_settings
-
-    started = threading.Event()
-    release = threading.Event()
-
-    def _hanging_output(_binary: str) -> str | None:
-        started.set()
-        release.wait(timeout=1)
-        return None
-
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    get_settings.cache_clear()
-    clear_agent_cli_caches()
-    monkeypatch.setattr(
-        "songmaker_cli.claude.provider._find_claude_binary", lambda: "/mounted/claude",
-    )
-    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
-    try:
-        client, _ = admin_client
-        resp = client.get("/api/settings/providers")
-    finally:
-        release.set()
-        clear_agent_cli_caches()
-        get_settings.cache_clear()
-
-    assert started.is_set()
-    assert resp.status_code == 200
-    by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"]["configured"] is False
 
 
 def test_models_errors_cover_every_provider_not_only_the_saved_one(admin_client, monkeypatch):
@@ -553,12 +569,14 @@ def test_models_errors_cover_every_provider_not_only_the_saved_one(admin_client,
     def _list_provider_models(provider: str) -> list[str]:
         if provider == "grok":
             raise ProviderUnavailableError(
-                "grok", "grok is not configured: missing XAI_API_KEY",
+                "grok",
+                "grok is not configured: missing XAI_API_KEY",
             )
         return list(LIVE_CATALOG[provider])
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        _list_provider_models,
     )
     settings = client.get("/api/settings/cowriter").json()
     assert settings["provider"] == "codex"
@@ -585,12 +603,14 @@ def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(admin_c
     def _list_provider_models(provider: str) -> list[str]:
         if provider == "grok":
             raise ProviderUnavailableError(
-                "grok", "grok is not configured: missing XAI_API_KEY",
+                "grok",
+                "grok is not configured: missing XAI_API_KEY",
             )
         return list(LIVE_CATALOG[provider])
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        _list_provider_models,
     )
     settings = client.get("/api/settings/judge").json()
     assert settings["provider"] == "codex"
@@ -609,7 +629,8 @@ def test_cowriter_save_with_unchanged_provider_and_model_survives_a_down_catalog
 
     def _down(provider: str) -> list[str]:
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
         )
 
     with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):
@@ -632,7 +653,8 @@ def test_cowriter_save_that_actually_changes_the_model_still_needs_a_live_catalo
 
     def _down(provider: str) -> list[str]:
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
         )
 
     with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):

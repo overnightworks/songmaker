@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -74,6 +75,7 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "ChatTurnV2Response": "ChatTurnV2Result",
     "CowriterSettingsResponse": "CowriterSettings",
     "JudgeSettingsResponse": "JudgeSettings",
+    "ProviderSurfaceStatus": "ProviderSurfaceStatus",
     "ProviderStatusResponse": "ProviderStatus",
     "MemoryScopeResponse": "MemoryScopeItem",
     "MemoryBundleResponse": "MemoryBundle",
@@ -160,6 +162,7 @@ _EMIT_ORDER: list[str] = [
     "ChatTurnV2Result",
     "CowriterSettings",
     "JudgeSettings",
+    "ProviderSurfaceStatus",
     "ProviderStatus",
     "MemoryScopeItem",
     "MemoryBundle",
@@ -225,6 +228,7 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
 
     try:
         import typing
+
         if origin is typing.Union:
             args = get_args(annotation)
             non_none = [a for a in args if a is not type(None)]
@@ -236,6 +240,7 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
 
     try:
         import typing
+
         if origin is typing.Literal:
             args = get_args(annotation)
             return " | ".join(f"'{a}'" if isinstance(a, str) else str(a) for a in args)
@@ -259,6 +264,9 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return _RESPONSE_MODEL_NAMES.get(annotation.__name__, annotation.__name__)
 
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return " | ".join(f"'{member.value}'" for member in annotation)
+
     if hasattr(annotation, "__name__"):
         return type_map.get(annotation.__name__, "unknown")
 
@@ -276,10 +284,7 @@ def _model_to_interface(model: type[BaseModel], ts_name: str) -> str:
         else:
             ts_type = _py_type_to_ts(field_info.annotation, field_info)
 
-        has_none_default = (
-            not field_info.is_required()
-            and field_info.default is None
-        )
+        has_none_default = not field_info.is_required() and field_info.default is None
         optional_marker = "?" if has_none_default else ""
 
         lines.append(f"\t{field_name}{optional_marker}: {ts_type};")
@@ -353,6 +358,7 @@ def generate() -> str:
         PlaylistResponse,
         PresetResponse,
         ProviderStatusResponse,
+        ProviderSurfaceStatus,
         QueueStreamLibraryRequest,
         QueueStreamManifestResponse,
         QueueStreamSkipResponse,
@@ -430,6 +436,7 @@ def generate() -> str:
         "CowriterSettings": CowriterSettingsResponse,
         "JudgeSettings": JudgeSettingsResponse,
         "ProviderStatus": ProviderStatusResponse,
+        "ProviderSurfaceStatus": ProviderSurfaceStatus,
         "MemoryScopeItem": MemoryScopeResponse,
         "MemoryBundle": MemoryBundleResponse,
         "RateResult": RateResponse,

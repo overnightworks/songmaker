@@ -115,6 +115,19 @@ export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
 
+export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
+	claude_cli: 'Claude Code CLI login',
+	grok_cli: 'Grok CLI login',
+	codex_cli: 'Codex CLI login'
+};
+export const PROVIDER_CONFIGURED_LABEL = 'configured';
+export const PROVIDER_NOT_CONFIGURED_LABEL = 'not configured';
+export const PROVIDER_LOGIN_ONLY_LABEL = 'login only';
+export const PROVIDER_KEY_ONLY_LABEL = 'key only';
+export const PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON = 'Signed in, but answering needs its API key';
+export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON =
+	'Key is set, but answering needs the Claude Code CLI login';
+
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal
 // streamed while song X is open can target song Y. Every tool-call badge
 // that attributes a proposal to its target song shares this copy.

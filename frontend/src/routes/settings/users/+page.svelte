@@ -35,12 +35,26 @@
 		fetchProviderStatus
 	} from '$lib/api/client';
 	import type { AvailableModel } from '$lib/api/client';
-	import type { CowriterSettings, JudgeSettings, ProviderStatus } from '$lib/api/types';
+	import type {
+		CowriterSettings,
+		JudgeSettings,
+		ProviderStatus,
+		ProviderSurfaceStatus
+	} from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
-	import { ADMIN_TABS_LABEL } from '$lib/constants';
+	import {
+		ADMIN_TABS_LABEL,
+		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON,
+		PROVIDER_CLI_LOGIN_LABELS,
+		PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON,
+		PROVIDER_CONFIGURED_LABEL,
+		PROVIDER_KEY_ONLY_LABEL,
+		PROVIDER_LOGIN_ONLY_LABEL,
+		PROVIDER_NOT_CONFIGURED_LABEL
+	} from '$lib/constants';
 	import {
 		COMPACT_SELECT_CLASS,
 		COMPACT_STACK_CLASS,
@@ -266,22 +280,61 @@
 		return providerStatuses.find((status) => status.provider === provider);
 	}
 
-	function providerDetail(status: ProviderStatus): string {
-		if (status.missing_dependency) {
-			return `key set, but the '${status.missing_dependency}' package is not installed`;
-		}
-		if (!status.configured) {
-			return `not configured — missing ${status.environment_key}`;
-		}
-		if (status.setup_method === 'claude_cli') {
-			return 'configured — Claude Code CLI login';
-		}
-		return `configured — ${status.environment_key} set`;
+	function cliLoginLabel(surface: ProviderSurfaceStatus): string | undefined {
+		return surface.setup_method ? PROVIDER_CLI_LOGIN_LABELS[surface.setup_method] : undefined;
 	}
 
-	const configuredProviders = $derived(
-		new Set(providerStatuses.filter((status) => status.configured).map((s) => s.provider))
-	);
+	function surfaceDetail(surface: ProviderSurfaceStatus): string {
+		switch (surface.state) {
+			case 'missing_dependency':
+				return `key set, but the '${surface.missing_dependency}' package is not installed`;
+			case 'unconfigured':
+				return `${PROVIDER_NOT_CONFIGURED_LABEL} — missing ${surface.environment_key}`;
+			case 'cli_login_needs_api_key':
+				return `${cliLoginLabel(surface)} found — but answering needs its API key`;
+			case 'api_key_needs_cli_login':
+				return `${surface.environment_key} set — but answering needs the Claude Code CLI login`;
+			case 'configured':
+				return `${PROVIDER_CONFIGURED_LABEL} — ${cliLoginLabel(surface) ?? `${surface.environment_key} set`}`;
+		}
+	}
+
+	function providerDetail(status: ProviderStatus): string[] {
+		const cowriter = surfaceDetail(status.cowriter);
+		const judge = surfaceDetail(status.judge);
+		return cowriter === judge ? [cowriter] : [`co-writer: ${cowriter}`, `judge: ${judge}`];
+	}
+
+	function worstState(status: ProviderStatus): ProviderSurfaceStatus['state'] {
+		return status.cowriter.state === 'configured' ? status.judge.state : status.cowriter.state;
+	}
+
+	function surfaceFor(provider: string, surface: 'cowriter' | 'judge') {
+		return providerStatusFor(provider)?.[surface];
+	}
+
+	function answering(provider: string, surface: 'cowriter' | 'judge'): boolean {
+		return surfaceFor(provider, surface)?.state === 'configured';
+	}
+
+	function pickerStatus(provider: string, surface: 'cowriter' | 'judge'): string {
+		const state = surfaceFor(provider, surface)?.state;
+		if (state === 'cli_login_needs_api_key') return PROVIDER_LOGIN_ONLY_LABEL;
+		return state === 'api_key_needs_cli_login'
+			? PROVIDER_KEY_ONLY_LABEL
+			: PROVIDER_NOT_CONFIGURED_LABEL;
+	}
+
+	function pickerReason(provider: string, surface: 'cowriter' | 'judge'): string {
+		const status = surfaceFor(provider, surface);
+		if (status?.state === 'cli_login_needs_api_key') {
+			return PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON;
+		}
+		if (status?.state === 'api_key_needs_cli_login') {
+			return PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON;
+		}
+		return `Missing ${status?.environment_key}`;
+	}
 
 	async function loadModelsTab() {
 		try {
@@ -930,21 +983,26 @@
 			<section>
 				<h2>Providers</h2>
 				<p class="hint">
-					Each provider's real reachability — configured and by what means, or not configured and
-					what's missing.
+					Each provider's real reachability — whether it can answer you, by what means, and what is
+					still missing when it cannot.
 				</p>
 				{#if providerStatuses.length > 0}
 					<div class="provider-status-list">
 						{#each providerStatuses as status (status.provider)}
+							{@const state = worstState(status)}
 							<div
 								class="provider-status-row"
-								class:ok={status.configured}
-								class:bad={!status.configured}
+								class:ok={state === 'configured'}
+								class:partial={state === 'cli_login_needs_api_key' ||
+									state === 'api_key_needs_cli_login'}
+								class:bad={state === 'missing_dependency' || state === 'unconfigured'}
 							>
 								<span class="dot"></span>
 								<span>
 									<span class="name">{providerLabel(status.provider)}</span>
-									<span class="detail">{providerDetail(status)}</span>
+									{#each providerDetail(status) as line (line)}
+										<span class="detail">{line}</span>
+									{/each}
 								</span>
 							</div>
 						{/each}
@@ -984,27 +1042,25 @@
 							<span class="field-label" id="cowriter-provider-label">Provider</span>
 							<div class="provider-picker" role="group" aria-labelledby="cowriter-provider-label">
 								{#each cowriterSettings.allowed_providers as provider (provider)}
-									{@const configured = configuredProviders.has(provider)}
+									{@const canAnswer = answering(provider, 'cowriter')}
 									<button
 										type="button"
 										class="provider-pill"
 										class:selected={cowriterProvider === provider}
 										aria-pressed={cowriterProvider === provider}
-										disabled={!configured}
+										disabled={!canAnswer}
 										onclick={() => selectCowriterProvider(provider)}
 									>
 										<span class="name">{providerLabel(provider)}</span>
 										<span
 											class="pill-status"
-											class:status-ok={configured}
-											class:status-bad={!configured}
+											class:status-ok={canAnswer}
+											class:status-bad={!canAnswer}
 										>
-											{configured ? 'configured' : 'not configured'}
+											{canAnswer ? PROVIDER_CONFIGURED_LABEL : pickerStatus(provider, 'cowriter')}
 										</span>
-										{#if !configured}
-											<span class="pill-reason"
-												>Missing {providerStatusFor(provider)?.environment_key}</span
-											>
+										{#if !canAnswer}
+											<span class="pill-reason">{pickerReason(provider, 'cowriter')}</span>
 										{/if}
 									</button>
 								{/each}
@@ -1085,27 +1141,25 @@
 							<span class="field-label" id="judge-provider-label">Provider</span>
 							<div class="provider-picker" role="group" aria-labelledby="judge-provider-label">
 								{#each judgeSettings.allowed_providers as provider (provider)}
-									{@const configured = configuredProviders.has(provider)}
+									{@const canAnswer = answering(provider, 'judge')}
 									<button
 										type="button"
 										class="provider-pill"
 										class:selected={judgeProvider === provider}
 										aria-pressed={judgeProvider === provider}
-										disabled={!configured}
+										disabled={!canAnswer}
 										onclick={() => selectJudgeProvider(provider)}
 									>
 										<span class="name">{providerLabel(provider)}</span>
 										<span
 											class="pill-status"
-											class:status-ok={configured}
-											class:status-bad={!configured}
+											class:status-ok={canAnswer}
+											class:status-bad={!canAnswer}
 										>
-											{configured ? 'configured' : 'not configured'}
+											{canAnswer ? PROVIDER_CONFIGURED_LABEL : pickerStatus(provider, 'judge')}
 										</span>
-										{#if !configured}
-											<span class="pill-reason"
-												>Missing {providerStatusFor(provider)?.environment_key}</span
-											>
+										{#if !canAnswer}
+											<span class="pill-reason">{pickerReason(provider, 'judge')}</span>
 										{/if}
 									</button>
 								{/each}
@@ -1459,6 +1513,10 @@
 		background: var(--score-good);
 	}
 
+	.provider-status-row.partial .dot {
+		background: var(--score-ok);
+	}
+
 	.provider-status-row .name {
 		font-family: var(--font-display);
 		font-weight: 600;
@@ -1477,6 +1535,10 @@
 
 	.provider-status-row.bad .detail {
 		color: var(--score-bad);
+	}
+
+	.provider-status-row.partial .detail {
+		color: var(--score-ok);
 	}
 
 	.active-banner {

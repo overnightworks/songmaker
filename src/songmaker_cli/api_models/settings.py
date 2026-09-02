@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
@@ -15,7 +16,6 @@ if TYPE_CHECKING:
 
 
 class GenerationDefaultsRequest(RootModel[dict[str, GenerationParams]]):
-
     @model_validator(mode="before")
     @classmethod
     def _validate_keys(cls, values: object) -> object:
@@ -133,12 +133,25 @@ class JudgeSettingsResponse(BaseModel):
     models_errors: dict[str, str] = Field(default_factory=dict)
 
 
-class ProviderStatusResponse(BaseModel):
-    provider: str
-    configured: bool
-    setup_method: Literal["api_key", "claude_cli"] | None = None
+class ProviderSurfaceState(StrEnum):
+    CONFIGURED = "configured"
+    CLI_LOGIN_NEEDS_API_KEY = "cli_login_needs_api_key"
+    API_KEY_NEEDS_CLI_LOGIN = "api_key_needs_cli_login"
+    MISSING_DEPENDENCY = "missing_dependency"
+    UNCONFIGURED = "unconfigured"
+
+
+class ProviderSurfaceStatus(BaseModel):
+    state: ProviderSurfaceState
+    setup_method: Literal["api_key", "claude_cli", "grok_cli", "codex_cli"] | None = None
     environment_key: str | None = None
     missing_dependency: str | None = None
+
+
+class ProviderStatusResponse(BaseModel):
+    provider: str
+    cowriter: ProviderSurfaceStatus
+    judge: ProviderSurfaceStatus
 
 
 class ChatRequest(BaseModel):
@@ -204,13 +217,10 @@ class ConversationResponse(BaseModel):
             title=row["title"],
             created_at=row["created_at"].isoformat(),
             updated_at=row["updated_at"].isoformat(),
-            archived_at=(
-                row["archived_at"].isoformat() if row["archived_at"] else None
-            ),
+            archived_at=(row["archived_at"].isoformat() if row["archived_at"] else None),
             message_count=row["message_count"],
             last_message_at=(
-                row["last_message_at"].isoformat()
-                if row["last_message_at"] else None
+                row["last_message_at"].isoformat() if row["last_message_at"] else None
             ),
         )
 
@@ -316,4 +326,3 @@ class UserRateLimitsResponse(BaseModel):
     user_id: str
     overrides: list[RateLimitItem]
     effective: list[RateLimitItem]
-

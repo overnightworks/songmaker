@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,6 +31,8 @@ from songmaker_cli.api_models.settings import (
     JudgeSettingsRequest,
     JudgeSettingsResponse,
     ProviderStatusResponse,
+    ProviderSurfaceState,
+    ProviderSurfaceStatus,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
@@ -76,6 +80,9 @@ from songmaker_cli.db.queries.settings import (
     update_preset,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
+
+if TYPE_CHECKING:
+    from songmaker_cli.cowriter.catalog import ProviderSurface
 
 router = APIRouter()
 
@@ -216,7 +223,9 @@ def _build_model_response(model) -> AvailableModelResponse:
         hidden_params=caps["hidden_params"],
     )
     return AvailableModelResponse(
-        id=model.id, is_active=model.is_active, capabilities=capabilities,
+        id=model.id,
+        is_active=model.is_active,
+        capabilities=capabilities,
     )
 
 
@@ -249,8 +258,12 @@ def api_toggle_model(
     if not model:
         raise HTTPException(404, "Model not found")
     record_audit(
-        session, admin.id, AuditAction.UPDATE, ResourceType.MODEL,
-        model_id, f"active={active}",
+        session,
+        admin.id,
+        AuditAction.UPDATE,
+        ResourceType.MODEL,
+        model_id,
+        f"active={active}",
     )
     session.commit()
     return AvailableModelResponse(id=model.id, is_active=model.is_active)
@@ -268,6 +281,7 @@ def api_get_default_config(
     session: Session = Depends(get_db_session),
 ) -> DefaultConfigResponse:
     from songmaker_cli.db.models import User
+
     db_user = session.query(User).filter_by(id=user.id).first()
     return DefaultConfigResponse(config=db_user.default_generation_config if db_user else None)
 
@@ -279,21 +293,27 @@ def api_set_default_config(
     session: Session = Depends(get_db_session),
 ) -> DefaultConfigResponse:
     from songmaker_cli.db.models import User
+
     if req.config is not None and req.config not in VALID_BUILTIN_CONFIGS:
         preset = get_preset(session, req.config, user.id)
         if not preset:
             from songmaker_cli.db.queries.settings import list_shared_presets as _shared
+
             shared_ids = {p.id for p in _shared(session)}
             if req.config not in shared_ids:
                 raise HTTPException(
-                    400, "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
+                    400,
+                    "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
                 )
     db_user = session.query(User).filter_by(id=user.id).first()
     if not db_user:
         raise HTTPException(404, "User not found")
     db_user.default_generation_config = req.config
     record_audit(
-        session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
+        session,
+        user.id,
+        AuditAction.UPDATE,
+        ResourceType.DEFAULT_CONFIG,
         detail=req.config or "inherit",
     )
     session.commit()
@@ -336,8 +356,13 @@ def api_set_claude_models(
 
     set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
     set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
-    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.CLAUDE_MODELS,
-                 detail=f"chat={req.chat_model} scoring={req.scoring_model}")
+    record_audit(
+        session,
+        admin.id,
+        AuditAction.UPDATE,
+        ResourceType.CLAUDE_MODELS,
+        detail=f"chat={req.chat_model} scoring={req.scoring_model}",
+    )
     session.commit()
 
     return ClaudeModelsResponse(
@@ -354,48 +379,60 @@ def api_set_claude_models(
 def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[ProviderStatusResponse]:
+    from songmaker_cli.cowriter.catalog import ProviderSurface
+
+    return [
+        ProviderStatusResponse(
+            provider=name,
+            cowriter=_surface_status(name, ProviderSurface.CO_WRITER),
+            judge=_surface_status(name, ProviderSurface.JUDGE),
+        )
+        for name in sorted(COWRITER_PROVIDERS)
+    ]
+
+
+def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfaceStatus:
     from songmaker_cli.cowriter.catalog import (
+        ApiKeyNeedsCliLoginProvider,
+        CliLoginNeedsApiKeyProvider,
         ConfiguredProvider,
         DependencyUnavailableProvider,
         UnconfiguredProvider,
         get_provider_configuration,
     )
 
-    statuses: list[ProviderStatusResponse] = []
-    for name in sorted(COWRITER_PROVIDERS):
-        configuration = get_provider_configuration(name)
-        match configuration:
-            case ConfiguredProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=True,
-                        setup_method=configuration.method.value,
-                        environment_key=configuration.environment_key,
-                    ),
-                )
-            case DependencyUnavailableProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=False,
-                        environment_key=configuration.environment_key,
-                        missing_dependency=configuration.dependency,
-                    ),
-                )
-            case UnconfiguredProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=False,
-                        environment_key=configuration.missing_environment_key,
-                    ),
-                )
-            case _:
-                raise AssertionError(
-                    f"unhandled provider configuration state: {configuration!r}",
-                )
-    return statuses
+    configuration = get_provider_configuration(provider, surface)
+    match configuration:
+        case ConfiguredProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.CONFIGURED,
+                setup_method=configuration.method.value,
+                environment_key=configuration.environment_key,
+            )
+        case CliLoginNeedsApiKeyProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.CLI_LOGIN_NEEDS_API_KEY,
+                setup_method=configuration.method.value,
+                environment_key=configuration.missing_environment_key,
+            )
+        case ApiKeyNeedsCliLoginProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.API_KEY_NEEDS_CLI_LOGIN,
+                setup_method="api_key",
+                environment_key=configuration.environment_key,
+            )
+        case DependencyUnavailableProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.MISSING_DEPENDENCY,
+                environment_key=configuration.environment_key,
+                missing_dependency=configuration.dependency,
+            )
+        case UnconfiguredProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.UNCONFIGURED,
+                environment_key=configuration.missing_environment_key,
+            )
+    raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
 def _models_for_provider(provider: str) -> tuple[list[str], str | None]:
@@ -453,7 +490,8 @@ def api_set_cowriter_settings(
 ) -> CowriterSettingsResponse:
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
-            422, f"Unknown co-writer provider '{req.provider}'",
+            422,
+            f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
     provider_or_model_changed = (
@@ -475,7 +513,10 @@ def api_set_cowriter_settings(
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
     record_audit(
-        session, admin.id, AuditAction.UPDATE, ResourceType.COWRITER,
+        session,
+        admin.id,
+        AuditAction.UPDATE,
+        ResourceType.COWRITER,
         detail=f"provider={req.provider} model={req.model}",
     )
     session.commit()
@@ -523,7 +564,8 @@ def api_set_judge_settings(
 ) -> JudgeSettingsResponse:
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
-            422, f"Unknown judge provider '{req.provider}'",
+            422,
+            f"Unknown judge provider '{req.provider}'",
         )
     allowed, catalog_error = _models_for_provider(req.provider)
     if catalog_error:
@@ -535,7 +577,10 @@ def api_set_judge_settings(
         )
     set_judge_settings(session, req.provider, req.model)
     record_audit(
-        session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,
+        session,
+        admin.id,
+        AuditAction.UPDATE,
+        ResourceType.JUDGE,
         detail=f"provider={req.provider} model={req.model}",
     )
     session.commit()
@@ -543,6 +588,7 @@ def api_set_judge_settings(
 
 
 # ── Rate limits ────────────────────────────────────────────────────
+
 
 def _get_env_defaults() -> dict[str, int]:
     """Snapshot of the per-user rate-limit defaults from Settings."""
@@ -616,11 +662,17 @@ def api_get_user_rate_limits(
     effective = []
     for key, env_val in env_defaults.items():
         val = resolve_rate_limit(session, user_id, key, env_val)
-        effective.append(RateLimitItem(
-            setting_key=key, value=val, is_override=key in override_keys,
-        ))
+        effective.append(
+            RateLimitItem(
+                setting_key=key,
+                value=val,
+                is_override=key in override_keys,
+            )
+        )
     return UserRateLimitsResponse(
-        user_id=user_id, overrides=override_items, effective=effective,
+        user_id=user_id,
+        overrides=override_items,
+        effective=effective,
     )
 
 

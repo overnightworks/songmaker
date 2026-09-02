@@ -569,6 +569,15 @@ Both provider-facing images install the `claude` extra, so
 replace the web container's Claude CLI mirror: the co-writer needs the CLI
 with Songmaker's MCP tools, and the SDK has no equivalent tool path.
 
+### The API-key path, honestly
+
+A Claude API key answers the judge and lists models, but the co-writer still
+needs the Claude Code CLI login because its tool-enabled turns run through that
+CLI. `/api/settings/providers` reports reachability separately for `cowriter`
+and `judge`; only `configured` means a turn can run and is offered by the
+settings page. A Grok or Codex CLI login is visible there, but both turn
+surfaces still need their respective API keys.
+
 ## Child Process Secret Scrubbing
 
 Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
