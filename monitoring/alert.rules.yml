@@ -50,3 +50,12 @@ groups:
         annotations:
           summary: Songmaker jobs are failing
           description: At least one job failed within the last 15 minutes.
+
+      - alert: SongmakerBackgroundLoopUnhealthy
+        expr: songmaker_background_loop_alive == 0 or songmaker_background_loop_consecutive_failures >= 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: A Songmaker background loop is unhealthy
+          description: A background loop has stopped or failed three consecutive ticks.

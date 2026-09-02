@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from typing import Final, Literal
 
 from arq.connections import ArqRedis
@@ -13,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
+    BACKGROUND_LOOP_FAILURE_THRESHOLD,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -43,6 +46,73 @@ JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
 CHAT_STALE_JOB_THRESHOLD_SECONDS: Final = 900
 
 
+class BackgroundLoopName(StrEnum):
+    SESSION_SYNC = "session_sync"
+    RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
+    SCORE_BACKFILL = "score_backfill"
+    STALE_JOB_REAPER = "stale_job_reaper"
+
+
+class BackgroundLoopStatus(StrEnum):
+    OK = "ok"
+    FAILING = "failing"
+    DEAD = "dead"
+
+
+@dataclass
+class BackgroundLoopHealth:
+    name: BackgroundLoopName
+    consecutive_failures: int = 0
+    last_error: str | None = None
+    is_alive: bool = True
+
+    @property
+    def status(self) -> BackgroundLoopStatus:
+        if not self.is_alive:
+            return BackgroundLoopStatus.DEAD
+        if self.consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
+            return BackgroundLoopStatus.FAILING
+        return BackgroundLoopStatus.OK
+
+
+class BackgroundLoopRegistry:
+    def __init__(self) -> None:
+        self._loops = {
+            name: BackgroundLoopHealth(name=name) for name in BackgroundLoopName
+        }
+        self._shutting_down = False
+
+    @property
+    def shutting_down(self) -> bool:
+        return self._shutting_down
+
+    def begin_shutdown(self) -> None:
+        self._shutting_down = True
+
+    def record_success(self, name: BackgroundLoopName) -> None:
+        health = self._loops[name]
+        health.consecutive_failures = 0
+        health.last_error = None
+
+    def record_failure(self, name: BackgroundLoopName, error: Exception) -> int:
+        health = self._loops[name]
+        health.consecutive_failures += 1
+        health.last_error = str(error)
+        return health.consecutive_failures
+
+    def mark_dead(self, name: BackgroundLoopName, error: BaseException | None) -> None:
+        health = self._loops[name]
+        health.is_alive = False
+        health.last_error = "task ended" if error is None else f"{type(error).__name__}: {error}"
+
+    def metrics_snapshot(self) -> dict[str, BackgroundLoopHealth]:
+        return {name.value: health for name, health in self._loops.items()}
+
+
+def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
+    return app.state.background_loop_registry
+
+
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
     from songmaker_cli.db.queries import delete_resource_events_before
@@ -68,20 +138,27 @@ async def resource_event_cleanup_loop(app: FastAPI) -> None:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
+    registry = background_loop_registry(app)
     tick = 0
     while True:
         await asyncio.sleep(RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS)
         tick += 1
+        error: Exception | None = None
         try:
             await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-        except Exception:
+        except Exception as exc:
+            error = exc
             log.exception("Resource event cleanup failed")
-
         if tick % _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS == 0:
             try:
                 await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
-            except Exception:
+            except Exception as exc:
+                error = exc if error is None else error
                 log.exception("Queue stream cleanup failed")
+        if error is None:
+            registry.record_success(BackgroundLoopName.RESOURCE_EVENT_CLEANUP)
+        else:
+            registry.record_failure(BackgroundLoopName.RESOURCE_EVENT_CLEANUP, error)
 
 
 def _pick_unscored_generations(session: Session, limit: int) -> list[tuple[str, str]]:
@@ -239,6 +316,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
     )
 
     ctx: AppContext = app.state.ctx
+    registry = background_loop_registry(app)
     while True:
         await asyncio.sleep(SCORE_BACKFILL_INTERVAL_SECONDS)
         try:
@@ -248,12 +326,16 @@ async def score_backfill_loop(app: FastAPI) -> None:
                 ex=SCORE_BACKFILL_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
+                registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
                 continue
             scored = await backfill_unscored_generations(ctx, get_arq_pool())
             if scored:
                 log.info("Score backfill: dispatched %d generation(s)", scored)
-        except Exception:
+        except Exception as exc:
+            registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, exc)
             log.exception("Score backfill tick failed")
+        else:
+            registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
 
 
 def reap_stale_lora_training_jobs(ctx: AppContext) -> int:
@@ -373,6 +455,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
     ``score_backfill_loop`` so only one web replica reaps a given tick.
     """
     ctx: AppContext = app.state.ctx
+    registry = background_loop_registry(app)
     while True:
         await asyncio.sleep(JOB_REAPER_INTERVAL_SECONDS)
         try:
@@ -382,10 +465,14 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
                 ex=JOB_REAPER_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
+                registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
                 continue
             await asyncio.to_thread(_run_stale_job_reaper_tick, ctx)
-        except Exception:
+        except Exception as exc:
+            registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, exc)
             log.exception("Stale job reaper tick failed")
+        else:
+            registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
 
 
 def auto_setup_admin(ctx: AppContext) -> None:
@@ -539,8 +626,8 @@ async def session_sync_loop(app: FastAPI) -> None:
 
     ctx: AppContext = app.state.ctx
     session_cache = app.state.session_cache
+    registry = background_loop_registry(app)
 
-    consecutive_failures = 0
     while True:
         await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
         try:
@@ -550,20 +637,22 @@ async def session_sync_loop(app: FastAPI) -> None:
                 ex=SESSION_SYNC_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
+                registry.record_success(BackgroundLoopName.SESSION_SYNC)
                 continue
             try:
                 synced = await asyncio.to_thread(_sync_sessions, ctx, session_cache)
-                consecutive_failures = 0
                 if synced:
                     log.info("Session sync: updated %d sessions", synced)
             finally:
                 await asyncio.to_thread(ctx.redis.delete, SESSION_SYNC_LOCK_KEY)
-        except Exception:
-            consecutive_failures += 1
-            if consecutive_failures >= 3:
+        except Exception as exc:
+            consecutive_failures = registry.record_failure(BackgroundLoopName.SESSION_SYNC, exc)
+            if consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
                 log.error(
                     "Session sync failed %d consecutive times",
                     consecutive_failures, exc_info=True,
                 )
             else:
                 log.warning("Session sync failed", exc_info=True)
+        else:
+            registry.record_success(BackgroundLoopName.SESSION_SYNC)

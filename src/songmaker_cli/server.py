@@ -32,6 +32,8 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
+    BackgroundLoopName,
+    BackgroundLoopRegistry,
     auto_setup_admin,
     cleanup_expired_resource_events,
     reconcile_crashed_loras,
@@ -54,6 +56,19 @@ from songmaker_cli.middleware import (
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
+
+
+def _record_background_loop_completion(
+    task: asyncio.Task[None],
+    name: BackgroundLoopName,
+    registry: BackgroundLoopRegistry,
+) -> None:
+    if registry.shutting_down:
+        return
+    if task.cancelled():
+        registry.mark_dead(name, asyncio.CancelledError())
+        return
+    registry.mark_dead(name, task.exception())
 
 
 def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
@@ -80,6 +95,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
+    registry = BackgroundLoopRegistry()
+    app.state.background_loop_registry = registry
     cleanup_expired_queue_streams(ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
@@ -102,21 +119,29 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
-    sync_task = asyncio.create_task(session_sync_loop(app))
-    event_cleanup_task = asyncio.create_task(resource_event_cleanup_loop(app))
-    score_backfill_task = asyncio.create_task(score_backfill_loop(app))
-    job_reaper_task = asyncio.create_task(stale_job_reaper_loop(app))
+    loop_tasks = (
+        (BackgroundLoopName.SESSION_SYNC, asyncio.create_task(session_sync_loop(app))),
+        (
+            BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
+            asyncio.create_task(resource_event_cleanup_loop(app)),
+        ),
+        (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
+        (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
+    )
+    app.state.background_loop_tasks = loop_tasks
+    for name, task in loop_tasks:
+        task.add_done_callback(
+            lambda completed, loop_name=name: _record_background_loop_completion(
+                completed, loop_name, registry,
+            ),
+        )
     try:
         yield
     finally:
-        sync_task.cancel()
-        event_cleanup_task.cancel()
-        score_backfill_task.cancel()
-        job_reaper_task.cancel()
-        await asyncio.gather(
-            sync_task, event_cleanup_task, score_backfill_task, job_reaper_task,
-            return_exceptions=True,
-        )
+        registry.begin_shutdown()
+        for _name, task in loop_tasks:
+            task.cancel()
+        await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
         await close_arq_pool()
         await shutdown_tool_surface_background_tasks()
 
