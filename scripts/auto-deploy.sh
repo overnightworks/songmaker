@@ -205,6 +205,10 @@ if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
     exit 1
 fi
+command -v jq >/dev/null || {
+    log_err "jq is required for the pre-recreate rollback tagging but is not installed"
+    exit 1
+}
 # GitHub normally creates the first check run shortly after a push. Do not
 # treat that ordinary propagation delay as a failed deploy, but do surface a
 # workflow that never starts instead of waiting forever on the same SHA.
@@ -252,7 +256,7 @@ preserve_running_images() {
         return 1
     fi
 
-    if compose_config="$(compose config --format json 2>"$compose_stderr_file")"; then
+    if compose_config="$(compose config --format json --no-interpolate 2>"$compose_stderr_file")"; then
         rm -f "$compose_stderr_file"
     else
         compose_exit_code=$?
@@ -346,7 +350,6 @@ prune_docker_resources() {
 
     if [[ "$prune_failed" == false ]]; then
         log_info "pruned unreferenced Docker images and build cache older than ${PRUNE_RETENTION_HOURS}h"
-        reset_counters
     fi
 
     return 0
@@ -439,6 +442,7 @@ record_success() {
         record_failure "deployed-sha readback mismatch" || true
         return 1
     fi
+    reset_counters
     log_info "deploy succeeded, now running $deployed_sha"
 }
 

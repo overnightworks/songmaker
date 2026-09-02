@@ -44,6 +44,9 @@
 #
 # Usage:
 #   ./scripts/install-autodeploy.sh
+#
+# Prerequisites: Docker Compose v2 and jq. auto-deploy.sh uses jq to read the
+# non-interpolated Compose project and build-service list before a recreate.
 
 set -euo pipefail
 

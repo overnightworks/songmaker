@@ -507,6 +507,7 @@ def test_recreate_preserves_each_running_service_image_with_a_previous_tag(
     recreate = "compose up -d --wait --wait-timeout 1200"
     assert previous_tag in docker_calls
     assert "tag sha256:previous-songmaker-web songmaker-postgres:previous" not in docker_calls
+    assert "compose config --format json --no-interpolate" in docker_calls
     assert recreate in docker_calls
     assert docker_calls.index(previous_tag) < docker_calls.index(recreate)
 
@@ -602,7 +603,7 @@ def test_a_failed_container_recreate_does_not_prune(tmp_path: Path) -> None:
     assert "builder prune" not in checkout.docker_calls
 
 
-def test_a_prune_failure_logs_the_command_without_changing_deploy_state_or_counters(
+def test_a_prune_failure_resets_the_counters_like_any_successful_deploy(
     tmp_path: Path,
 ) -> None:
     checkout = Checkout(tmp_path)
@@ -618,11 +619,11 @@ def test_a_prune_failure_logs_the_command_without_changing_deploy_state_or_count
     assert "docker image prune --force --filter until=48h failed after deploy (exit 1)" in checkout.journal
     assert "docker builder prune --all --force --filter until=48h failed after deploy (exit 1)" in checkout.journal
     assert "deploy remains successful" in checkout.journal
-    assert checkout.failure_count_file.read_text() == "2"
+    assert checkout.failure_count_file.read_text() == "0"
     assert checkout.deployed_sha_file.read_text() == checkout.remote_main_sha()
 
 
-def test_a_prune_timeout_leaves_the_successful_deploy_and_counters_unchanged(
+def test_a_prune_timeout_resets_the_counters_like_any_successful_deploy(
     tmp_path: Path,
 ) -> None:
     checkout = Checkout(tmp_path)
@@ -638,7 +639,7 @@ def test_a_prune_timeout_leaves_the_successful_deploy_and_counters_unchanged(
     assert "docker image prune --force --filter until=48h failed after deploy (exit 124)" in checkout.journal
     assert "docker builder prune --all --force --filter until=48h failed after deploy (exit 124)" in checkout.journal
     assert "failure count now" not in checkout.journal
-    assert checkout.failure_count_file.read_text() == "2"
+    assert checkout.failure_count_file.read_text() == "0"
     assert "deploy succeeded, now running" in checkout.journal
 
 
