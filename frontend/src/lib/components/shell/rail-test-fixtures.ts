@@ -22,6 +22,14 @@ export function requireElement<T extends Element>(root: ParentNode, selector: st
 	return element;
 }
 
+export function requireButtonContainingText(root: ParentNode, text: string): HTMLButtonElement {
+	const button = Array.from(root.querySelectorAll('button')).find((candidate) =>
+		candidate.textContent?.includes(text)
+	);
+	if (!button) throw new Error(`Expected a button containing ${text} to be rendered`);
+	return button;
+}
+
 export function buildAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a1',

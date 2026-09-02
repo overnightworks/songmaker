@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError } from '$lib/api/fetch';
+import { LIBRARY_RETRY_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -18,6 +19,7 @@ import {
 	buildGeneration as generation,
 	buildSong as song,
 	createComponentMount,
+	requireButtonContainingText,
 	requireElement,
 	songsPage
 } from './rail-test-fixtures';
@@ -306,22 +308,29 @@ describe('RailLibraryGroup', () => {
 		expect(albumToggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('marks the currently playing track with the equalizer', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
-		songList.set([
-			song({ id: 's1', title: 'Tide', track_number: 1 }),
-			song({ id: 's2', title: 'Ebb', track_number: 2 })
-		]);
-		selectedSongId.set('s2');
-		audioPlayer.current = { songId: 's2' } as unknown as typeof audioPlayer.current;
-		audioPlayer.status = 'playing';
+	it.each([
+		{ currentSongId: 's1', status: 'playing' as const, markedTrack: 'Tide' },
+		{ currentSongId: 's2', status: 'playing' as const, markedTrack: 'Ebb' },
+		{ currentSongId: 's2', status: 'paused' as const, markedTrack: null }
+	])(
+		'shows a playing marker only for the current track while playback is active',
+		async ({ currentSongId, status, markedTrack }) => {
+			openCollection.set({ kind: 'album', id: 'a1' });
+			songList.set([
+				song({ id: 's1', title: 'Tide', track_number: 1 }),
+				song({ id: 's2', title: 'Ebb', track_number: 2 })
+			]);
+			audioPlayer.current = { songId: currentSongId } as unknown as typeof audioPlayer.current;
+			audioPlayer.status = status;
 
-		const target = await render();
+			const target = await render();
 
-		const active = target.querySelector('.row-sub2.row-active .row-title');
-		expect(active?.textContent).toBe('Ebb');
-		expect(target.querySelector('.row-sub2.row-active .equalizer')).not.toBeNull();
-	});
+			for (const trackTitle of ['Tide', 'Ebb']) {
+				const track = requireButtonContainingText(target, trackTitle);
+				expect(track.querySelector('.equalizer') !== null).toBe(trackTitle === markedTrack);
+			}
+		}
+	);
 
 	it('summarizes a single take in the singular, with no pick suffix', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
@@ -341,14 +350,14 @@ describe('RailLibraryGroup', () => {
 		await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('true'));
 		const panel = requireElement<HTMLDivElement>(target, '#rail-library-group');
 		expect(panel.inert).toBe(false);
-		expect(requireElement(target, '.rail-status').textContent).toBe('Backend unreachable');
+		expect(requireElement(target, '[role="alert"]').textContent).toBe('Backend unreachable');
 
 		fetchAlbums.mockResolvedValueOnce(
 			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
 		);
-		requireElement<HTMLButtonElement>(target, '.rail-retry').click();
+		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
 
-		await vi.waitFor(() => expect(target.querySelector('.rail-status')).toBeNull());
-		expect(target.querySelector('.album-label .row-title')?.textContent).toBe('Recovered');
+		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
+		expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement);
 	});
 });
