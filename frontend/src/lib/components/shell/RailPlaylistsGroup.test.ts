@@ -2,6 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -16,6 +17,8 @@ import {
 	buildPlaylistDetail as detail,
 	buildPlaylistEntry as entry,
 	createComponentMount,
+	findElementByRoleAndName,
+	requireButtonContainingText,
 	requireElement
 } from './rail-test-fixtures';
 
@@ -102,34 +105,46 @@ describe('RailPlaylistsGroup', () => {
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '12']);
 	});
 
-	it('pre-expands the open playlist and shows its tracks, marking the currently playing one', async () => {
-		playlistList.set([
-			playlist({ id: 'p1', title: 'Night Drive' }),
-			playlist({ id: 'p2', title: 'Favorites' })
-		]);
-		setOpenCollection({ kind: 'playlist', id: 'p1' });
-		selectedPlaylistDetail.set(
-			detail({
-				id: 'p1',
-				entries: [
-					entry({ id: 'pe1', song_title: 'Tide', generation_id: 'g1', mp3_path: 'tide.mp3' }),
-					entry({ id: 'pe2', song_title: 'Ebb', generation_id: 'g2', mp3_path: 'ebb.mp3' })
-				]
-			})
-		);
-		audioPlayer.current = {
-			generation: { id: 'g2', mp3_path: 'ebb.mp3' }
-		} as unknown as typeof audioPlayer.current;
-		audioPlayer.status = 'playing';
+	it.each([
+		{ currentEntryId: 'pe1', status: 'playing' as const, markedEntry: 'Tide' },
+		{ currentEntryId: 'pe2', status: 'playing' as const, markedEntry: 'Ebb' },
+		{ currentEntryId: 'pe2', status: 'paused' as const, markedEntry: null }
+	])(
+		'shows a playing marker only for the current playlist entry while playback is active',
+		async ({ currentEntryId, status, markedEntry }) => {
+			setOpenCollection({ kind: 'playlist', id: 'p1' });
+			selectedPlaylistDetail.set(
+				detail({
+					id: 'p1',
+					entries: [
+						entry({ id: 'pe1', song_title: 'Tide', generation_id: 'g1', mp3_path: 'tide.mp3' }),
+						entry({ id: 'pe2', song_title: 'Ebb', generation_id: 'g2', mp3_path: 'ebb.mp3' })
+					]
+				})
+			);
+			audioPlayer.current = {
+				generation: {
+					id: currentEntryId === 'pe1' ? 'g1' : 'g2',
+					mp3_path: currentEntryId === 'pe1' ? 'tide.mp3' : 'ebb.mp3'
+				}
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = status;
 
-		const target = await render();
+			const target = await render();
 
-		const rows = target.querySelectorAll('.row-sub2 .row-title');
-		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Tide', 'Ebb']);
-		const active = target.querySelector('.row-sub2.row-active .row-title');
-		expect(active?.textContent).toBe('Ebb');
-		expect(target.querySelector('.row-sub2.row-active .equalizer')).not.toBeNull();
-	});
+			const rows = target.querySelectorAll('.row-sub2 .row-title');
+			expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Tide', 'Ebb']);
+			const active = target.querySelector('.row-sub2.row-active .row-title');
+			expect(active?.textContent).toBe(currentEntryId === 'pe1' ? 'Tide' : 'Ebb');
+
+			for (const entryTitle of ['Tide', 'Ebb']) {
+				const entryRow = requireButtonContainingText(target, entryTitle);
+				expect(findElementByRoleAndName(entryRow, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(
+					entryTitle === markedEntry
+				);
+			}
+		}
+	);
 
 	it('navigates into the playlist and expands it when its label is clicked', async () => {
 		playlistList.set([
