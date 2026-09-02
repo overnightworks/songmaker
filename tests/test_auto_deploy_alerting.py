@@ -889,7 +889,10 @@ def test_a_failed_prometheus_hup_keeps_a_successful_deploy_successful(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "Prometheus rule reload failed after deploy; deploy remains successful" in checkout.journal
+    assert (
+        "Prometheus rule reload failed after deploy; deploy remains successful"
+        in checkout.journal
+    )
     assert checkout.failure_count_file.read_text() == "0"
     assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
@@ -989,7 +992,10 @@ def test_a_prometheus_readiness_failure_keeps_a_successful_deploy_successful(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "Prometheus did not become ready after rule reload; deploy remains successful" in checkout.journal
+    assert (
+        "Prometheus did not become ready after rule reload; deploy remains successful"
+        in checkout.journal
+    )
     assert checkout.failure_count_file.read_text() == "0"
     assert "Prometheus alert rule count mismatch" not in checkout.journal
 
@@ -1006,7 +1012,10 @@ def test_an_unavailable_prometheus_rule_api_keeps_a_successful_deploy_successful
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "cannot read Prometheus rules after reload; deploy remains successful" in checkout.journal
+    assert (
+        "cannot read Prometheus rules after reload; deploy remains successful"
+        in checkout.journal
+    )
     assert checkout.failure_count_file.read_text() == "0"
     assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
@@ -1041,7 +1050,10 @@ def test_an_invalid_prometheus_rule_api_response_keeps_a_successful_deploy_succe
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "cannot read Prometheus rules after reload; deploy remains successful" in checkout.journal
+    assert (
+        "cannot read Prometheus rules after reload; deploy remains successful"
+        in checkout.journal
+    )
     assert checkout.failure_count_file.read_text() == "0"
     assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
