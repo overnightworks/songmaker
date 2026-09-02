@@ -250,7 +250,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 10s
+      # A cold Prometheus may replay its WAL before its ready endpoint responds.
+      start_period: 60s
     depends_on:
       songmaker-web:
         condition: service_healthy

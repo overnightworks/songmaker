@@ -22,6 +22,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "auto-deploy.sh"
 ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert-config.sh"
+PROMETHEUS_RULE_PATH = Path("monitoring/rules/alert.rules.yml")
 
 FAILURE_ALERT_THRESHOLD = 3
 # Shorter than the 1h default only to keep the number of ticks a test has
@@ -35,6 +36,11 @@ CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
 PRUNE_TIMEOUT_SECONDS = 1
 PROMETHEUS_RULES_RESPONSE = """\
 {"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
+"""
+PROMETHEUS_METRICS_RESPONSE = """\
+# HELP prometheus_config_last_reload_successful Whether the last configuration reload attempt was successful.
+# TYPE prometheus_config_last_reload_successful gauge
+prometheus_config_last_reload_successful 1
 """
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
@@ -90,7 +96,10 @@ class Checkout:
         self._prometheus_ready_exit_code = 0
         self._prometheus_reload_exit_code = 0
         self._prometheus_rules_exit_code = 0
+        self._prometheus_metrics_exit_code = 0
         self._prometheus_rules_response = PROMETHEUS_RULES_RESPONSE
+        self._prometheus_metrics_response = PROMETHEUS_METRICS_RESPONSE
+        self._prometheus_container = "0123456789ab"
         self.compose_stderr = ""
         self.check_runs_stderr = ""
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
@@ -108,8 +117,8 @@ class Checkout:
             copy.chmod(source.stat().st_mode)
         self.deploy_script = self.root / "scripts" / DEPLOY_SCRIPT.name
         (self.root / "monitoring" / "rules").mkdir(parents=True)
-        (self.root / "monitoring" / "rules" / "alert.rules.yml").write_text(
-            (REPO_ROOT / "monitoring" / "rules" / "alert.rules.yml").read_text(),
+        (self.root / PROMETHEUS_RULE_PATH).write_text(
+            (REPO_ROOT / PROMETHEUS_RULE_PATH).read_text(),
         )
         (self.root / "monitoring" / "prometheus.yml").write_text(
             (REPO_ROOT / "monitoring" / "prometheus.yml").read_text(),
@@ -177,6 +186,14 @@ class Checkout:
         self._prometheus_rules_response = response
         self._write_curl_stub()
 
+    def set_prometheus_metrics_response(self, response: str) -> None:
+        self._prometheus_metrics_response = response
+        self._write_curl_stub()
+
+    def set_prometheus_container(self, container: str) -> None:
+        self._prometheus_container = container
+        self._write_docker_stub()
+
     def _write_curl_stub(self) -> None:
         _write_executable(
             self._bin / "curl",
@@ -185,6 +202,11 @@ class Checkout:
             'if [[ "$*" == "--fail --silent --show-error --max-time 30 --retry 5 '
             '--retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready" ]]; then\n'
             f"    exit {self._prometheus_ready_exit_code}\n"
+            "fi\n"
+            'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
+            'http://127.0.0.1:9090/metrics" ]]; then\n'
+            f"    printf '%s' {shlex.quote(self._prometheus_metrics_response)}\n"
+            f"    exit {self._prometheus_metrics_exit_code}\n"
             "fi\n"
             'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
             'http://127.0.0.1:9090/api/v1/rules" ]]; then\n'
@@ -215,7 +237,7 @@ class Checkout:
             '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
             "    fi\n"
             '    if [[ "$3" == "-q" && "$4" == "prometheus" ]]; then\n'
-            '        echo container-prometheus\n'
+            f"        printf '%s\\n' {shlex.quote(self._prometheus_container)}\n"
             "        exit 0\n"
             "    fi\n"
             '    echo container-songmaker-web\n'
@@ -226,7 +248,7 @@ class Checkout:
             "    exit 0\n"
             "fi\n"
             'if [[ "$1" == "kill" && "$2" == "-s" && "$3" == "HUP" '
-            '&& "$4" == "container-prometheus" ]]; then\n'
+            f'&& "$4" == {shlex.quote(self._prometheus_container)} ]]; then\n'
             f"    exit {self._prometheus_reload_exit_code}\n"
             "fi\n"
             'if [[ "$1" == "image" || "$1" == "builder" ]]; then\n'
@@ -316,9 +338,9 @@ class Checkout:
             _git(clone, "config", "user.email", "test@example.com")
             _git(clone, "config", "user.name", "Test")
         _git(clone, "pull", "--ff-only", "origin", "main")
-        rules = clone / "monitoring" / "rules" / "alert.rules.yml"
+        rules = clone / PROMETHEUS_RULE_PATH
         rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
-        _git(clone, "add", "monitoring/rules/alert.rules.yml")
+        _git(clone, "add", str(PROMETHEUS_RULE_PATH))
         _git(clone, "commit", "-m", "change alert rules")
         _git(clone, "push", "origin", "main")
 
@@ -806,10 +828,11 @@ def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
     assert result.returncode == 0
     assert checkout.curl_calls.splitlines() == [
         "--fail --silent --show-error --max-time 30 --retry 5 --retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready",
+        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/metrics",
         "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
     ]
     assert "compose ps -q prometheus" in checkout.docker_calls
-    assert "kill -s HUP container-prometheus" in checkout.docker_calls
+    assert "kill -s HUP 0123456789ab" in checkout.docker_calls
     assert "deploy remains successful" not in checkout.journal
 
 
@@ -826,9 +849,10 @@ def test_a_changed_prometheus_config_reloads_and_verifies_prometheus_rules(
     assert result.returncode == 0
     assert checkout.curl_calls.splitlines() == [
         "--fail --silent --show-error --max-time 30 --retry 5 --retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready",
+        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/metrics",
         "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
     ]
-    assert "kill -s HUP container-prometheus" in checkout.docker_calls
+    assert "kill -s HUP 0123456789ab" in checkout.docker_calls
 
 
 def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
@@ -871,6 +895,83 @@ def test_a_failed_prometheus_hup_keeps_a_successful_deploy_successful(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
     assert "Prometheus alert rule count mismatch" not in checkout.journal
+
+
+def test_a_missing_prometheus_container_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_container("")
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
+        in checkout.journal
+    )
+    assert "kill -s HUP" not in checkout.docker_calls
+    assert checkout.failure_count_file.read_text() == "0"
+
+
+def test_an_invalid_prometheus_container_id_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_container("prometheus-container")
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "Prometheus container ID 'prometheus-container' contains unsupported characters "
+        "after deploy; deploy remains successful"
+    ) in checkout.journal
+    assert "kill -s HUP" not in checkout.docker_calls
+    assert checkout.failure_count_file.read_text() == "0"
+
+
+def test_prometheus_compose_warnings_do_not_contaminate_its_container_id(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.compose_stderr = "WARN: compose emitted a warning"
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "kill -s HUP 0123456789ab" in checkout.docker_calls
+    assert "WARN: compose emitted a warning" not in checkout.journal
+    assert "Prometheus container ID" not in checkout.journal
+
+
+def test_a_failed_prometheus_config_reload_is_logged_without_failing_the_tick(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_metrics_response(
+        "prometheus_config_last_reload_successful 0\n",
+    )
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "Prometheus reload did not apply; deploy remains successful" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+    assert "failure count now" not in checkout.journal
+    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
 
 
 def test_a_prometheus_readiness_failure_keeps_a_successful_deploy_successful(
@@ -922,7 +1023,7 @@ def test_an_empty_previous_deployed_sha_reloads_changed_prometheus_rules(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "kill -s HUP container-prometheus" in checkout.docker_calls
+    assert "kill -s HUP 0123456789ab" in checkout.docker_calls
 
 
 def test_an_invalid_prometheus_rule_api_response_keeps_a_successful_deploy_successful(
