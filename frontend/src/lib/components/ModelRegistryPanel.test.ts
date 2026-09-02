@@ -77,8 +77,8 @@ describe('ModelRegistryPanel compact layout', () => {
 	it('restyles registry rows so Download stays in the card', async () => {
 		api.getRegistry.mockResolvedValue({
 			models: [
-				{ mode: 'turbo', downloaded: false, loaded_on: [], loading_on: [] },
-				{ mode: 'sft', downloaded: true, loaded_on: ['acestep-worker-0'], loading_on: [] }
+				{ mode: 'turbo', availability: 'not_downloaded', loaded_on: [], loading_on: [] },
+				{ mode: 'sft', availability: 'downloaded', loaded_on: ['acestep-worker-0'], loading_on: [] }
 			]
 		});
 		const target = await renderPanel(true);
@@ -116,10 +116,29 @@ describe('ModelRegistryPanel compact layout', () => {
 
 	it('keeps a desktop table when not compact', async () => {
 		api.getRegistry.mockResolvedValue({
-			models: [{ mode: 'turbo', downloaded: false, loaded_on: [], loading_on: [] }]
+			models: [{ mode: 'turbo', availability: 'not_downloaded', loaded_on: [], loading_on: [] }]
 		});
 		const target = await renderPanel(false);
 		expect(getComputedStyle(requireElement(target, '.registry-table')).display).not.toBe('block');
 		expect(target.textContent).toContain('Download');
+	});
+});
+
+describe('ModelRegistryPanel with no worker online', () => {
+	it('names the unknown state instead of claiming the model is missing', async () => {
+		// The GPU worker sat on "Created" for five days without ever
+		// starting (issue #252's live incident). With no worker online, the
+		// registry cannot know whether a model's files are on disk, so the
+		// panel must say that -- not claim "not downloaded" as if the files
+		// were confirmed missing, and not offer a Download button that the
+		// backend would reject with 503 anyway.
+		api.getRegistry.mockResolvedValue({
+			models: [{ mode: 'turbo', availability: 'unknown_no_worker', loaded_on: [], loading_on: [] }]
+		});
+		const target = await renderPanel(false);
+
+		expect(target.textContent).toContain('no worker running');
+		expect(target.textContent).not.toContain('not downloaded');
+		expect(target.querySelector('button.action-btn')).toBeNull();
 	});
 });

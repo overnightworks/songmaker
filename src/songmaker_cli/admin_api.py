@@ -33,6 +33,7 @@ from songmaker_cli.api_models import (
     LoadedModelDetail,
     LoadModelOnWorkerRequest,
     LoginAttemptResponse,
+    ModelAvailability,
     PaginatedResponse,
     PinModelOnWorkerRequest,
     RegistryModelResponse,
@@ -396,6 +397,8 @@ async def get_registry_endpoint(
     for w in workers:
         states[w.id] = await read_worker_state(pool, w.id)
 
+    any_worker_online = any(st is not None for st in states.values())
+
     downloaded_union: set[str] = set()
     for st in states.values():
         if st is not None:
@@ -412,10 +415,16 @@ async def get_registry_endpoint(
                 loaded_on.append(worker_id)
             if st.get("target_loading") == mode:
                 loading_on.append(worker_id)
+        if not any_worker_online:
+            availability: ModelAvailability = "unknown_no_worker"
+        elif mode in downloaded_union:
+            availability = "downloaded"
+        else:
+            availability = "not_downloaded"
         models.append(
             RegistryModelResponse(
                 mode=mode,
-                downloaded=mode in downloaded_union,
+                availability=availability,
                 loaded_on=sorted(loaded_on),
                 loading_on=sorted(loading_on),
             ),
@@ -554,7 +563,13 @@ async def restart_worker_endpoint(
     try:
         response = await _post_to_worker(worker.host, worker.port, "/restart")
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Worker unreachable: {exc}")
+        # Restart asks the running worker process to end itself; nothing is listening to ask.
+        raise HTTPException(
+            502,
+            f"Worker '{worker_id}' isn't responding, so it can't be asked to "
+            "restart itself. Its container is likely stopped or crashed — "
+            "restart the container directly.",
+        ) from exc
     if response.status_code >= 400:
         raise HTTPException(502, f"Worker returned {response.status_code}")
     return StatusResponse(status="restarting")

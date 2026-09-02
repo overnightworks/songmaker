@@ -94,9 +94,18 @@
 		return `${hours}h ${remMinutes}m`;
 	}
 
+	function describeOffline(identity: WorkerInfoItem['identity']): string {
+		return `Offline — last registered ${formatLastSeen(identity.last_register_at)}`;
+	}
+
+	// Nothing is listening for /restart once the worker process is gone, so name that instead of erroring.
+	function restartNeedsRunningWorkerHint(workerId: string): string {
+		return `Can't restart — no worker process is running to ask. Restart the container running worker "${workerId}" directly.`;
+	}
+
 	function describeStatus(worker: WorkerInfoItem): string {
 		const state = worker.state;
-		if (!state) return 'Offline (no heartbeat)';
+		if (!state) return describeOffline(worker.identity);
 		if (state.target_loading) {
 			const elapsed = formatElapsed(state.loading_started_at);
 			return elapsed
@@ -306,7 +315,10 @@
 						</div>
 					{:else}
 						<div class="card-row">
-							<span class="row-value dim">Offline (no heartbeat)</span>
+							<span class="row-value dim">{describeOffline(worker.identity)}</span>
+						</div>
+						<div class="card-row">
+							<span class="row-value dim">{restartNeedsRunningWorkerHint(worker.identity.id)}</span>
 						</div>
 					{/if}
 
@@ -354,7 +366,8 @@
 						<button
 							class="action-btn danger"
 							onclick={() => handleRestart(worker.identity.id)}
-							disabled={busyAction[`${worker.identity.id}:restart`]}
+							disabled={offline || busyAction[`${worker.identity.id}:restart`]}
+							title={offline ? restartNeedsRunningWorkerHint(worker.identity.id) : undefined}
 						>
 							{busyAction[`${worker.identity.id}:restart`] ? 'Restarting…' : 'Restart'}
 						</button>

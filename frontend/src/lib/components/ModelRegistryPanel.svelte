@@ -122,8 +122,10 @@
 					<tr>
 						<td class="mode-cell" data-label="Mode">{model.mode}</td>
 						<td data-label="Status">
-							{#if model.downloaded}
+							{#if model.availability === 'downloaded'}
 								<span class="badge ok">downloaded</span>
+							{:else if model.availability === 'unknown_no_worker'}
+								<span class="badge unknown">no worker running — download state unknown</span>
 							{:else}
 								<span class="badge missing">not downloaded</span>
 							{/if}
@@ -141,8 +143,10 @@
 								<span class="dl-progress">
 									Downloading… {Math.round((dlJob.job.progress ?? 0) * 100)}%
 								</span>
-							{:else if model.downloaded}
+							{:else if model.availability === 'downloaded'}
 								<span class="dim">—</span>
+							{:else if model.availability === 'unknown_no_worker'}
+								<span class="dim">No worker online to download it</span>
 							{:else}
 								<button
 									class="action-btn"
@@ -246,6 +250,11 @@
 	.badge.missing {
 		background: rgba(220, 80, 80, 0.15);
 		color: rgb(220, 80, 80);
+	}
+
+	.badge.unknown {
+		background: rgba(220, 180, 50, 0.15);
+		color: rgb(220, 180, 50);
 	}
 
 	.action-btn {

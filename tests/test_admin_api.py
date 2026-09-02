@@ -770,13 +770,30 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     resp = client.get("/api/admin/registry")
     assert resp.status_code == 200
     by_mode = {m["mode"]: m for m in resp.json()["models"]}
-    assert by_mode["sft"]["downloaded"] is True
+    assert by_mode["sft"]["availability"] == "downloaded"
     assert by_mode["sft"]["loaded_on"] == ["w1"]
     assert by_mode["sft"]["loading_on"] == []
-    assert by_mode["turbo"]["downloaded"] is True
+    assert by_mode["turbo"]["availability"] == "downloaded"
     assert by_mode["turbo"]["loaded_on"] == []
     assert by_mode["turbo"]["loading_on"] == ["w2"]
-    assert by_mode["xl-sft"]["downloaded"] is False
+    assert by_mode["xl-sft"]["availability"] == "not_downloaded"
+
+
+def test_registry_unknown_availability_when_no_worker_online(client: TestClient) -> None:
+    # The GPU worker sat on "Created" for five days without ever starting
+    # (issue #252's live incident): the registry saw zero online workers and
+    # called every model "not downloaded", as if the files were missing
+    # rather than nobody being around to report on them. A model's download
+    # state must read as unknown, not as a false negative, when no worker is
+    # online to answer the question.
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_pool_with_state({"w1": None}))
+
+    resp = client.get("/api/admin/registry")
+    assert resp.status_code == 200
+    availabilities = {m["availability"] for m in resp.json()["models"]}
+    assert availabilities == {"unknown_no_worker"}
 
 
 def test_load_model_on_worker_enqueues_job(client: TestClient) -> None:
@@ -1093,6 +1110,12 @@ def test_restart_worker_unreachable(client: TestClient) -> None:
     with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
         resp = client.post("/api/admin/workers/w1/restart")
     assert resp.status_code == 502
+    # The restart button is the one thing someone reaches for on a dead
+    # worker; it must say why it can't help instead of relaying a bare
+    # connection error (issue #252).
+    detail = resp.json()["detail"]
+    assert "can't be asked to restart itself" in detail
+    assert "restart the container directly" in detail.lower()
 
 
 def test_restart_worker_requires_admin(client: TestClient) -> None:

@@ -66,6 +66,9 @@ class WorkerEphemeralState(BaseModel):
 
 WorkerStatus = Literal["online", "loading", "offline"]
 
+# No worker online means unknown, not "not downloaded" — a third outcome.
+ModelAvailability = Literal["downloaded", "not_downloaded", "unknown_no_worker"]
+
 
 class WorkerInfo(BaseModel):
     identity: WorkerIdentity
@@ -79,7 +82,7 @@ class WorkerPoolResponse(BaseModel):
 
 class RegistryModelResponse(BaseModel):
     mode: str
-    downloaded: bool
+    availability: ModelAvailability
     loaded_on: list[str]
     loading_on: list[str]
 

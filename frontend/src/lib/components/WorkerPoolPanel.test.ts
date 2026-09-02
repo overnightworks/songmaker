@@ -74,6 +74,68 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
+function offlineWorkerPool(lastRegisterAt: string): WorkerPoolResponse {
+	return {
+		workers: [
+			{
+				identity: {
+					id: 'acestep-worker-0',
+					host: 'worker',
+					port: 8100,
+					gpu_id: 0,
+					vram_total_gb: 24,
+					registered_at: '2026-08-24T11:10:00Z',
+					last_register_at: lastRegisterAt
+				},
+				state: null,
+				status: 'offline'
+			}
+		]
+	};
+}
+
+async function renderOffline(lastRegisterAt: string): Promise<HTMLElement> {
+	api.listWorkers.mockResolvedValue(offlineWorkerPool(lastRegisterAt));
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: [] } });
+	await tick();
+	await Promise.resolve();
+	await tick();
+	return target;
+}
+
+describe('WorkerPoolPanel with no heartbeat', () => {
+	it('names how long the worker has been gone instead of just "no heartbeat"', async () => {
+		// The GPU worker's container sat on "Created" for five days without
+		// ever registering again (issue #252's live incident). "Offline (no
+		// heartbeat)" told the operator nothing about how long that had been
+		// true; last_register_at was already on the wire and unused.
+		const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+		const target = await renderOffline(sixDaysAgo);
+
+		expect(target.textContent).toContain('last registered');
+		expect(target.textContent).toContain('6d ago');
+		expect(target.textContent).not.toContain('no heartbeat');
+	});
+
+	it('explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
+		const target = await renderOffline(new Date().toISOString());
+
+		const restartButton = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+			(button) => button.textContent?.includes('Restart')
+		);
+		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
+
+		expect(restartButton.disabled).toBe(true);
+		// The hint must name which worker's container is meant -- there can be
+		// several -- not just say "its container" in the abstract.
+		expect(restartButton.title).toContain('acestep-worker-0');
+		expect(target.textContent).toContain('no worker process is running');
+		expect(target.textContent).toContain('worker "acestep-worker-0"');
+	});
+});
+
 describe('WorkerPoolPanel VRAM measurement', () => {
 	it('marks estimated VRAM usage', async () => {
 		const value = await renderVram(false);

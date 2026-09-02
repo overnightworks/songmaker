@@ -688,7 +688,7 @@ export interface WorkerPoolResponse {
 
 export interface RegistryModelItem {
 	mode: string;
-	downloaded: boolean;
+	availability: 'downloaded' | 'not_downloaded' | 'unknown_no_worker';
 	loaded_on: string[];
 	loading_on: string[];
 }

@@ -79,6 +79,12 @@ def test_build_env_strips_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
         assert key not in env
 
 
+def test_build_env_strips_mismatched_virtual_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VIRTUAL_ENV", "/app/.venv")
+    env = build_env("sft", port=8101, vram_budget_gb=24.0)
+    assert "VIRTUAL_ENV" not in env
+
+
 def test_build_env_binds_configured_gpu() -> None:
     env = build_env("sft", port=8101, vram_budget_gb=24.0, gpu_id=1)
     assert env["CUDA_VISIBLE_DEVICES"] == "1"
