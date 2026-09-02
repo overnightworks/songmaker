@@ -841,31 +841,34 @@ parent's coherence budget, which is spent after the child returns.
 - Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Chat and LoRA-training job recovery** (`lifecycle.py`, web process — #371):
-`chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
-never inside an arq worker, so they have no worker-scoped cron at all.
-`lora_training` jobs run inside the music worker but, as noted above, fall
-outside its `job_type`-scoped recovery. Both therefore need a web-process-side
-equivalent of `WorkerBase.cleanup_stale_cron`, reusing the same generic
-`recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that backs
-generate/score:
+**Job recovery** (`lifecycle.py`, web process — #371, #420):
+`recover_stale_jobs_by_liveness()` is the single liveness owner for every job
+type. It separates work that never started from a running job that stopped
+reporting progress:
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
   minutes, matching the arq-worker cron cadence), behind the same
   single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
   so only one web replica reaps a given tick.
-- `reap_stale_chat_jobs()` distinguishes two causes: a `QUEUED` turn has not
-  reached any request handler, so `CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS`
-  (900s) reports no worker availability. A `RUNNING` turn writes a heartbeat
-  while its response stream advances; after
-  `CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS` (180s) without one, it reports
-  a disconnected heartbeat. The heartbeat interval is 15s, while the reaper
-  runs every 120s, so 180s tolerates ordinary stream and scheduler jitter but
-  leaves a dead request visible for at most one reaper cadence beyond that.
-- `reap_stale_lora_training_jobs()` uses the same default
-  `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
-  MusicWorker's `arq_job_timeout` envelope.
+- Every `QUEUED` job gets `QUEUED_JOB_STALE_THRESHOLD_SECONDS` (900s): it has
+  no running owner, so expiry reports `No worker available`. The 900-second
+  allowance covers a temporarily unavailable worker without making an
+  unstarted job look like a broken heartbeat.
+- A `RUNNING` chat job writes a heartbeat every
+  `JOB_HEARTBEAT_INTERVAL_SECONDS` (15s): both chat endpoints use the same
+  background timer, while the co-writer endpoint also refreshes it from stream
+  events at that cadence. After
+  `JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS` (180s) without one, it reports
+  `Heartbeat abgerissen`. Six intervals tolerate normal scheduling and stream
+  jitter while making a dead request visible within one further reaper tick.
+- Generate writes a heartbeat for each worker SSE event, score writes only
+  when scorer progress is reported, and LoRA training writes for each worker
+  SSE event or progress report. None promises an event within 180 seconds, so
+  those running types retain the configured `stale_job_threshold_seconds` age
+  threshold. That avoids falsely reaping an active long generation, scorer,
+  or LoRA step; a future periodic signal can opt a type into the 180-second
+  rule by adding it to `JOB_TYPES_WITH_PERIODIC_HEARTBEATS`.
 - `reconcile_crashed_loras()` (also run once at web startup) now reaps stale
-  `lora_training` jobs itself before checking for a terminal/missing
+  jobs itself before checking for a terminal/missing
   `training_job_id` — previously it only *waited* for something else to
   terminal-ize that job, which nothing did, so a LoRA row could stay stuck in
   `TRAINING`/`PREPROCESSING`/`EXPORTING` forever.

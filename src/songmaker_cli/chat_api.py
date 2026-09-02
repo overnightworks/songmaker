@@ -30,7 +30,7 @@ from songmaker_cli.claude.provider import (
     is_available,
 )
 from songmaker_cli.constants import (
-    CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS,
+    JOB_HEARTBEAT_INTERVAL_SECONDS,
     JobStatus,
     JobType,
 )
@@ -116,7 +116,7 @@ SYSTEM_PROMPT = f"{CHAT_ROLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL_PROMPT}"
 
 async def _keep_chat_job_heartbeat(db_factory, job_id: str) -> None:
     while True:
-        await asyncio.sleep(CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS)
+        await asyncio.sleep(JOB_HEARTBEAT_INTERVAL_SECONDS)
         with db_factory() as heartbeat_session:
             update_job_heartbeat(heartbeat_session, job_id)
             heartbeat_session.commit()

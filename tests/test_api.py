@@ -1842,6 +1842,33 @@ def test_song_chat_send(client: TestClient) -> None:
     assert data["assistant_message"]["content"] == "Hello from Claude"
 
 
+def test_song_chat_marks_the_legacy_job_running_then_completed(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    from songmaker_cli.constants import JobStatus
+
+    factory = client.app.state.ctx.db
+    observed_statuses: list[str] = []
+
+    async def _respond(*_args, **_kwargs):
+        with factory() as session:
+            job = session.query(Job).filter_by(type="chat").one()
+            observed_statuses.append(job.status)
+        response = MagicMock()
+        response.text = "Hello from Claude"
+        return response
+
+    with patch("songmaker_cli.chat_api.acall_claude", _respond):
+        response = client.post("/api/songs/s1/chat", json={"message": "hi"})
+
+    assert response.status_code == 200
+    assert observed_statuses == [JobStatus.RUNNING]
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == JobStatus.COMPLETED
+        assert job.completed_at is not None
+
+
 def test_song_chat_multi_turn(client: TestClient) -> None:
     patcher, mock_fn = _mock_acall()
     with patcher:
@@ -1933,12 +1960,18 @@ def test_song_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     from songmaker_cli.claude.provider import UnavailableError
+    from songmaker_cli.constants import JobStatus
 
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
         resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
+    with client.app.state.ctx.db() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == JobStatus.FAILED
+        assert job.error == "Claude unavailable"
+        assert job.error_type == "unavailable"
 
 
 def test_song_chat_builds_context(client: TestClient) -> None:

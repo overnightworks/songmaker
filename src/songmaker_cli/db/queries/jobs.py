@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -349,6 +350,62 @@ def recover_stale_jobs_by_age_and_type(
             job_type,
             queued_threshold_seconds,
             heartbeat_threshold_seconds,
+        )
+    return recovered
+
+
+def recover_stale_jobs_by_liveness(
+    session: Session,
+    *,
+    periodic_heartbeat_job_types: Collection[str],
+    queued_threshold_seconds: int,
+    heartbeat_threshold_seconds: int,
+    now: datetime | None = None,
+) -> int:
+    """Fail active jobs according to the liveness signal their type provides."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    from songmaker_cli.settings import get_settings
+
+    age_threshold_seconds = get_settings().stale_job_threshold_seconds
+    queued_cutoff = now - timedelta(seconds=queued_threshold_seconds)
+    heartbeat_cutoff = now - timedelta(seconds=heartbeat_threshold_seconds)
+    age_cutoff = now - timedelta(seconds=age_threshold_seconds)
+    candidates = session.query(Job).filter(Job.status.in_(JOB_ACTIVE_STATUSES)).all()
+    recovered = 0
+
+    for job in candidates:
+        if job.status == JobStatus.QUEUED:
+            is_stale = _is_started_stale(job, queued_cutoff)
+            error = "No worker available — please retry."
+            error_type = "no_worker_available"
+        elif job.type in periodic_heartbeat_job_types:
+            is_stale = _is_heartbeat_stale(job, heartbeat_cutoff)
+            error = "Heartbeat abgerissen — bitte erneut versuchen."
+            error_type = "heartbeat_lost"
+        else:
+            is_stale = _is_heartbeat_stale(job, age_cutoff)
+            error = "Job timed out (exceeded maximum run time)"
+            error_type = "stale_timeout"
+        if not is_stale:
+            continue
+        job.status = JobStatus.FAILED
+        job.error = error
+        job.error_type = error_type
+        job.completed_at = now
+        recovered += 1
+
+    session.flush()
+    if recovered:
+        log.info(
+            "Recovered %d stale jobs (queued=%ds, heartbeat=%ds, age=%ds)",
+            recovered,
+            queued_threshold_seconds,
+            heartbeat_threshold_seconds,
+            age_threshold_seconds,
         )
     return recovered
 

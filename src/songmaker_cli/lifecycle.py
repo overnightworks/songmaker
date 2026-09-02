@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+    JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    JOB_TYPES_WITH_PERIODIC_HEARTBEATS,
+    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -347,77 +348,38 @@ async def score_backfill_loop(app: FastAPI) -> None:
             log.exception("Score backfill tick failed")
 
 
-def reap_stale_lora_training_jobs(
+def reap_stale_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
+    """Terminal-ize active jobs through the shared liveness owner."""
+    from songmaker_cli.db.queries import recover_stale_jobs_by_liveness
+
+    with ctx.db() as session:
+        recovered = recover_stale_jobs_by_liveness(
+            session,
+            periodic_heartbeat_job_types=JOB_TYPES_WITH_PERIODIC_HEARTBEATS,
+            queued_threshold_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+            heartbeat_threshold_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+            now=now,
+        )
+        session.commit()
+    if recovered:
+        log.warning("Recovered %d stale job(s)", recovered)
+    return recovered
+
+
+def reconcile_crashed_loras(
     ctx: AppContext,
     *,
     now: datetime | None = None,
+    reap_jobs: bool = True,
 ) -> int:
-    """Terminal-ize LORA_TRAINING jobs whose worker process died.
-
-    ``train_lora`` runs inside the same MusicWorker arq process as
-    ``generate``, but ``WorkerBase``'s on_startup/on_shutdown/cleanup_stale_cron
-    recovery (worker_base.py) is scoped to ``self.job_type``, which
-    MusicWorker fixes to ``JobType.GENERATE`` -- so a dead worker never
-    terminal-izes the LORA_TRAINING job it was mid-training. This reuses
-    the exact same age+heartbeat rule (``recover_stale_jobs_by_age_and_type``,
-    default ``stale_job_threshold_seconds``) that generate/score already get
-    from their arq-worker cron, just invoked from the web process instead.
-
-    Returns the number of jobs recovered.
-    """
-    from songmaker_cli.constants import JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-    with ctx.db() as session:
-        recovered = recover_stale_jobs_by_age_and_type(
-            session,
-            JobType.LORA_TRAINING,
-            now=now,
-        )
-        session.commit()
-    if recovered:
-        log.warning("Recovered %d stale lora_training job(s)", recovered)
-    return recovered
-
-
-def reap_stale_chat_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
-    """Terminal-ize CHAT jobs whose web-process request handler died.
-
-    Chat jobs run inline in a FastAPI request (chat_api.py,
-    conversation_api.py) rather than in an arq worker, so they have no
-    cron of their own; a web-process crash mid-request leaves the job
-    QUEUED/RUNNING forever. Queued jobs receive the worker-availability
-    deadline; running jobs are judged by their stream heartbeat.
-
-    Returns the number of jobs recovered.
-    """
-    from songmaker_cli.constants import JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-    with ctx.db() as session:
-        recovered = recover_stale_jobs_by_age_and_type(
-            session,
-            JobType.CHAT,
-            queued_threshold_seconds=CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-            heartbeat_threshold_seconds=CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-            now=now,
-        )
-        session.commit()
-    if recovered:
-        log.warning("Recovered %d stale chat job(s)", recovered)
-    return recovered
-
-
-def reconcile_crashed_loras(ctx: AppContext, *, now: datetime | None = None) -> int:
     """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
     tick. If the ARQ worker crashed mid-training, the LoRA row stays in
     PREPROCESSING / TRAINING / EXPORTING even though no job is running --
     and, left alone, its ``training_job_id`` would too, since nothing else
-    terminal-izes a LORA_TRAINING job (see :func:`reap_stale_lora_training_jobs`).
-    This first reaps that job, then detects that the associated
-    ``training_job_id`` is either missing or in a terminal state, and
+    terminal-izes a LORA_TRAINING job. This first reaps active jobs, then
+    detects that the associated ``training_job_id`` is either missing or in a terminal state, and
     reuses the job runner's ``cleanup_failed_lora`` helper to release disk
     space and mark the row FAILED.
 
@@ -427,7 +389,8 @@ def reconcile_crashed_loras(ctx: AppContext, *, now: datetime | None = None) -> 
     from songmaker_cli.db.queries import get_job, list_active_user_loras
     from songmaker_cli.jobs.lora_training import cleanup_failed_lora
 
-    reap_stale_lora_training_jobs(ctx, now=now)
+    if reap_jobs:
+        reap_stale_jobs(ctx, now=now)
 
     reconciled = 0
     with ctx.db() as session:
@@ -460,26 +423,17 @@ def _run_stale_job_reaper_tick(
     *,
     now: datetime | None = None,
 ) -> tuple[int, int]:
-    """Reap stale chat jobs and reconcile crashed LoRAs for one tick.
+    """Reap stale jobs and reconcile crashed LoRAs for one tick.
 
-    Returns ``(chat_jobs_recovered, loras_reconciled)``.
+    Returns ``(jobs_recovered, loras_reconciled)``.
     """
-    recovered_chat = reap_stale_chat_jobs(ctx, now=now)
-    reconciled_loras = reconcile_crashed_loras(ctx, now=now)
-    return recovered_chat, reconciled_loras
+    recovered_jobs = reap_stale_jobs(ctx, now=now)
+    reconciled_loras = reconcile_crashed_loras(ctx, now=now, reap_jobs=False)
+    return recovered_jobs, reconciled_loras
 
 
 async def stale_job_reaper_loop(app: FastAPI) -> None:
-    """Run the chat/lora_training stale-job reap for the server lifetime.
-
-    generate and score get this from ``WorkerBase.cleanup_stale_cron``
-    inside their arq workers (every 2 minutes -- see music_worker.py /
-    scoring_worker.py ``cron_jobs``); chat isn't an arq job at all, and
-    lora_training's job type isn't covered by MusicWorker's GENERATE-only
-    recovery, so the web process runs their equivalent here instead. Uses
-    the same single-flight Redis lock idiom as ``session_sync_loop`` /
-    ``score_backfill_loop`` so only one web replica reaps a given tick.
-    """
+    """Run shared stale-job recovery for the server lifetime."""
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
     while True:

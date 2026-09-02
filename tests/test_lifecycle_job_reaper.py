@@ -1,13 +1,4 @@
-"""Tests for lifecycle.reap_stale_chat_jobs / reap_stale_lora_training_jobs /
-_run_stale_job_reaper_tick — the chat and lora_training equivalent of
-WorkerBase's arq-worker cron for generate/score (issue #371).
-
-chat runs inline in a web request and lora_training shares MusicWorker's
-process with generate but is excluded from its job_type-scoped recovery, so
-neither ever leaves QUEUED/RUNNING on its own when its process dies. These
-tests simulate that death directly: a job stuck active with a stale
-started_at/heartbeat_at, exactly as a killed process would leave it.
-"""
+"""Tests for lifecycle's shared stale-job reaper (issue #371)."""
 
 from __future__ import annotations
 
@@ -19,8 +10,8 @@ from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
-    CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+    JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     JobStatus,
     JobType,
     LoraStatus,
@@ -30,8 +21,7 @@ from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries import get_user_lora
 from songmaker_cli.lifecycle import (
     _run_stale_job_reaper_tick,
-    reap_stale_chat_jobs,
-    reap_stale_lora_training_jobs,
+    reap_stale_jobs,
 )
 from songmaker_cli.settings import get_settings
 
@@ -82,9 +72,9 @@ def _job_status(ctx: AppContext, job_id: str) -> str:
         return session.query(Job).filter_by(id=job_id).first().status
 
 
-class TestReapStaleChatJobs:
-    def test_terminal_izes_a_chat_job_whose_web_process_died(self, ctx) -> None:
-        dead = _dead_process_time(CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS)
+class TestReapStaleJobs:
+    def test_terminal_izes_a_queued_job_without_a_worker(self, ctx) -> None:
+        dead = _dead_process_time(QUEUED_JOB_STALE_THRESHOLD_SECONDS)
         _add_job(
             ctx,
             job_id="chat-1",
@@ -94,13 +84,16 @@ class TestReapStaleChatJobs:
             heartbeat_at=dead,
         )
 
-        recovered = reap_stale_chat_jobs(ctx, now=_NOW)
+        recovered = reap_stale_jobs(ctx, now=_NOW)
 
         assert recovered == 1
-        assert _job_status(ctx, "chat-1") == JobStatus.FAILED
+        with ctx.db() as session:
+            job = session.query(Job).filter_by(id="chat-1").one()
+            assert job.status == JobStatus.FAILED
+            assert job.error_type == "no_worker_available"
 
     def test_marks_a_running_chat_with_a_stale_heartbeat_as_failed(self, ctx) -> None:
-        dead = _dead_process_time(CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS)
+        dead = _dead_process_time(JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS)
         _add_job(
             ctx,
             job_id="chat-running",
@@ -110,7 +103,7 @@ class TestReapStaleChatJobs:
             heartbeat_at=dead,
         )
 
-        recovered = reap_stale_chat_jobs(ctx, now=_NOW)
+        recovered = reap_stale_jobs(ctx, now=_NOW)
 
         assert recovered == 1
         with ctx.db() as session:
@@ -129,70 +122,51 @@ class TestReapStaleChatJobs:
             heartbeat_at=_NOW,
         )
 
-        recovered = reap_stale_chat_jobs(ctx, now=_NOW)
+        recovered = reap_stale_jobs(ctx, now=_NOW)
 
         assert recovered == 0
         assert _job_status(ctx, "chat-2") == JobStatus.RUNNING
 
-    def test_ignores_other_job_types(self, ctx) -> None:
-        dead = _dead_process_time(CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS)
-        _add_job(
-            ctx,
-            job_id="gen-1",
-            job_type=JobType.GENERATE,
-            status=JobStatus.RUNNING,
-            started_at=dead,
-            heartbeat_at=dead,
-        )
-
-        recovered = reap_stale_chat_jobs(ctx, now=_NOW)
-
-        assert recovered == 0
-        assert _job_status(ctx, "gen-1") == JobStatus.RUNNING
-
-
-class TestReapStaleLoraTrainingJobs:
-    def test_terminal_izes_a_lora_training_job_whose_worker_died(self, ctx) -> None:
+    def test_uses_the_age_threshold_for_non_periodic_job_heartbeats(self, ctx) -> None:
         dead = _dead_process_time(get_settings().stale_job_threshold_seconds)
-        _add_job(
-            ctx,
-            job_id="lora-1",
-            job_type=JobType.LORA_TRAINING,
-            status=JobStatus.RUNNING,
-            started_at=dead,
-            heartbeat_at=dead,
-        )
+        for job_type in (JobType.GENERATE, JobType.SCORE, JobType.LORA_TRAINING):
+            _add_job(
+                ctx,
+                job_id=f"{job_type}-old",
+                job_type=job_type,
+                status=JobStatus.RUNNING,
+                started_at=dead,
+                heartbeat_at=dead,
+            )
 
-        recovered = reap_stale_lora_training_jobs(ctx, now=_NOW)
+        recovered = reap_stale_jobs(ctx, now=_NOW)
 
-        assert recovered == 1
-        assert _job_status(ctx, "lora-1") == JobStatus.FAILED
+        assert recovered == 3
+        for job_type in (JobType.GENERATE, JobType.SCORE, JobType.LORA_TRAINING):
+            assert _job_status(ctx, f"{job_type}-old") == JobStatus.FAILED
 
-    def test_leaves_a_recently_heartbeating_job_running(self, ctx) -> None:
-        """A long-running but alive job (recent heartbeat) must survive —
-        lora_training jobs can legitimately run far longer than the age
-        cutoff alone would tolerate."""
-        old_start = _dead_process_time(get_settings().stale_job_threshold_seconds)
-        _add_job(
-            ctx,
-            job_id="lora-2",
-            job_type=JobType.LORA_TRAINING,
-            status=JobStatus.RUNNING,
-            started_at=old_start,
-            heartbeat_at=_NOW,
-        )
+    def test_keeps_non_periodic_jobs_running_before_their_age_threshold(self, ctx) -> None:
+        stale_for_chat = _dead_process_time(JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS)
+        for job_type in (JobType.GENERATE, JobType.SCORE, JobType.LORA_TRAINING):
+            _add_job(
+                ctx,
+                job_id=f"{job_type}-alive",
+                job_type=job_type,
+                status=JobStatus.RUNNING,
+                started_at=stale_for_chat,
+                heartbeat_at=stale_for_chat,
+            )
 
-        recovered = reap_stale_lora_training_jobs(ctx, now=_NOW)
+        recovered = reap_stale_jobs(ctx, now=_NOW)
 
         assert recovered == 0
-        assert _job_status(ctx, "lora-2") == JobStatus.RUNNING
+        for job_type in (JobType.GENERATE, JobType.SCORE, JobType.LORA_TRAINING):
+            assert _job_status(ctx, f"{job_type}-alive") == JobStatus.RUNNING
 
 
 def test_reaper_tick_reaps_chat_and_resolves_the_lora_reconciliation_loop(ctx) -> None:
-    """One tick closes both loops: a dead chat job goes terminal, and a dead
-    lora_training job goes terminal *and* unblocks reconcile_crashed_loras,
-    which previously waited forever on a job nothing ever terminal-izes."""
-    chat_dead = _dead_process_time(CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS)
+    """One tick terminalizes jobs before it reconciles their LoRA row."""
+    chat_dead = _dead_process_time(QUEUED_JOB_STALE_THRESHOLD_SECONDS)
     lora_dead = _dead_process_time(get_settings().stale_job_threshold_seconds)
     _add_job(
         ctx,
@@ -224,9 +198,9 @@ def test_reaper_tick_reaps_chat_and_resolves_the_lora_reconciliation_loop(ctx) -
         )
         session.commit()
 
-    recovered_chat, reconciled_loras = _run_stale_job_reaper_tick(ctx, now=_NOW)
+    recovered_jobs, reconciled_loras = _run_stale_job_reaper_tick(ctx, now=_NOW)
 
-    assert recovered_chat == 1
+    assert recovered_jobs == 2
     assert reconciled_loras == 1
     assert _job_status(ctx, "chat-3") == JobStatus.FAILED
     assert _job_status(ctx, "lora-3") == JobStatus.FAILED

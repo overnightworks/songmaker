@@ -165,6 +165,9 @@ from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_age_and_type as recover_stale_jobs_by_age_and_type,
 )
 from songmaker_cli.db.queries.jobs import (
+    recover_stale_jobs_by_liveness as recover_stale_jobs_by_liveness,
+)
+from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_type as recover_stale_jobs_by_type,
 )
 from songmaker_cli.db.queries.jobs import update_job_heartbeat as update_job_heartbeat

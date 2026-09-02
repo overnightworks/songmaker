@@ -21,11 +21,13 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from songmaker_cli.api_helpers import (
     check_album_access,
@@ -47,12 +49,13 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import get_db_session
+from songmaker_cli.chat_api import _keep_chat_job_heartbeat
 from songmaker_cli.claude.provider import (
     FinalEvent,
     StreamEvent,
 )
 from songmaker_cli.constants import (
-    CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS,
+    JOB_HEARTBEAT_INTERVAL_SECONDS,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
     MEMORY_SCOPE_USER,
@@ -529,7 +532,7 @@ async def api_chat_turn(
                 user=user,
             ):
                 now = time.monotonic()
-                if now - last_heartbeat >= CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS:
+                if now - last_heartbeat >= JOB_HEARTBEAT_INTERVAL_SECONDS:
                     update_job_heartbeat(session, job_id)
                     session.commit()
                     last_heartbeat = now
@@ -619,10 +622,20 @@ async def api_chat_turn(
             }
         )
 
+    heartbeat_task = asyncio.create_task(
+        _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
+    )
+
+    async def _stop_heartbeat() -> None:
+        heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await heartbeat_task
+
     return StreamingResponse(
         event_generator(),
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        background=BackgroundTask(_stop_heartbeat),
     )
 
 

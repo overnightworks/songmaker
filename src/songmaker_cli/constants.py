@@ -150,9 +150,9 @@ COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000
 COWRITER_CLI_TIMEOUT_SECONDS = 600
 COWRITER_MAX_TOOL_ROUNDS = 8
 COWRITER_MODELS_TIMEOUT_SECONDS = 15
-CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
-CHAT_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
-CHAT_QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
+JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
+JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
+QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 CLI_LOGIN_STATUS_CACHE_SECONDS = 30
 # Agent CLI login probes return only a few hundred bytes. These bounds keep a
 # broken mounted binary from holding a request or its memory indefinitely.
@@ -548,6 +548,11 @@ class JobType(StrEnum):
     SCORE = "score"
     CHAT = "chat"
     LORA_TRAINING = "lora_training"
+
+
+JOB_TYPES_WITH_PERIODIC_HEARTBEATS: Final[frozenset[JobType]] = frozenset({
+    JobType.CHAT,
+})
 
 
 class JobFunction(StrEnum):
