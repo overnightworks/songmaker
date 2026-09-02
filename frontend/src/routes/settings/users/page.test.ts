@@ -473,6 +473,30 @@ describe('admin models tab', () => {
 		expect(providers.textContent).not.toContain('Loading...');
 	});
 
+	it('does not show stale reachability after a provider-status refresh fails', async () => {
+		api.fetchProviderStatus
+			.mockResolvedValueOnce([providerStatus('claude', CLAUDE_VIA_CLI)])
+			.mockRejectedValueOnce(new Error('Provider refresh failed'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		expect(sectionByHeading(target, 'Providers').textContent).toContain('Claude Code CLI login');
+
+		await selectTab(target, 'models');
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('Provider refresh failed');
+		expect(providers.textContent).not.toContain('Claude Code CLI login');
+	});
+
+	it('names an empty provider-status response as empty', async () => {
+		api.fetchProviderStatus.mockResolvedValue([]);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('No provider status is available.');
+		expect(providers.textContent).not.toContain('Loading...');
+	});
+
 	it('offers a Claude API key to the judge but not the co-writer', async () => {
 		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
 		const target = await renderPage(true);

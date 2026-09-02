@@ -345,6 +345,7 @@
 	}
 
 	async function loadModelsTab() {
+		providerStatuses = [];
 		loadingProviderStatuses = true;
 		providerStatusError = '';
 		try {
