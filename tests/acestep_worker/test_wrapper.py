@@ -10,6 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_engine.models import AceStepConfig
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
@@ -55,7 +56,7 @@ def _make_deps(
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:
@@ -398,18 +399,13 @@ def test_stream_task_yields_done(tmp_path: Path) -> None:
 
 
 def _patch_engine_modules(monkeypatch: pytest.MonkeyPatch, generate) -> None:
-    """Point the runner's lazy engine imports at a stub client."""
+    """Point the runner's lazy engine-client import at a stub client."""
     import sys
 
     fake_client_cls = MagicMock()
     fake_client_cls.return_value.generate = generate
     monkeypatch.setitem(
         sys.modules, "acestep_engine.client", MagicMock(AceStepClient=fake_client_cls),
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "acestep_engine.models",
-        MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw)),
     )
 
 
@@ -428,7 +424,7 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=out_dir,
         )
@@ -464,7 +460,7 @@ def test_default_generate_runner_carries_delivered_batch_size(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -509,7 +505,7 @@ def test_default_generate_runner_emits_progress(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -532,7 +528,7 @@ def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.Mon
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -559,7 +555,7 @@ def test_default_generate_runner_reports_acestep_cause_verbatim(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -865,7 +861,7 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:
@@ -921,7 +917,7 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:

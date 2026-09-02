@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from acestep_engine.models import AceStepConfig
+
 TaskKind = Literal["generate", "download", "train_lora"]
 TaskState = Literal["pending", "running", "done", "error"]
 EventType = Literal["progress", "done", "error"]
@@ -54,7 +56,7 @@ class EvictModelResponse(BaseModel):
 
 class GenerateRequest(BaseModel):
     mode: str
-    config: dict[str, Any]
+    config: AceStepConfig
 
 
 class DownloadModelRequest(BaseModel):

@@ -16,6 +16,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
+from acestep_engine.models import AceStepConfig
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -459,19 +460,17 @@ async def default_generate_runner(
     task_id: str,
     *,
     mode: str,
-    config: dict[str, Any],
+    config: AceStepConfig,
     port: int,
     audio_output_dir: Path,
 ) -> None:
     from acestep_engine.client import AceStepClient
     from acestep_engine.errors import AceStepError
-    from acestep_engine.models import AceStepConfig
     from acestep_worker.models import GenerationTaskResult
     from acestep_worker.progress import parse_step_fraction
 
     await task_store.mark_running(task_id)
     try:
-        ace_config = AceStepConfig(**config)
         client = AceStepClient(host="http://127.0.0.1", port=port)
 
         loop = asyncio.get_running_loop()
@@ -485,7 +484,7 @@ async def default_generate_runner(
             )
 
         result = await asyncio.to_thread(
-            client.generate, ace_config, on_progress=_on_progress,
+            client.generate, config, on_progress=_on_progress,
         )
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
