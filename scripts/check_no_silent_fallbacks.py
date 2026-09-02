@@ -5,13 +5,16 @@ Run from the project root:
     python scripts/check_no_silent_fallbacks.py src/
 
 Each rule is a regex over a physical line or an AST walk, scoped to the
-files whose role it governs. There is no exemption list: a hit is a
-defect to fix, and a legitimate exception is expressed in the code
+files whose role it governs. There is no per-violation allowlist: a hit
+is a defect to fix. A legitimate exception is expressed in the code
 itself — as the file's role (a settings module owns env reads,
-``env_override.py`` owns the one save-and-restore idiom) or as a named
-type (``ComputedTimestamp`` owns a timestamp whose None is real;
+``env_override.py`` owns the one save-and-restore idiom, ``cowriter/
+tools.py`` owns the one untyped MCP tool-dispatch boundary) — or as a
+named type (``ComputedTimestamp`` owns a timestamp whose None is real;
 ``getattr(..., None)`` is the honest absent answer, while a literal
-string or number default invents a value the code cannot know).
+string or number default invents a value the code cannot know). A role
+exemption is narrow (one file, one documented reason on the ``Rule``
+and here), never a growing list of one-off hits.
 
 Every run prints how many sites each rule inspected, so a clean report
 is distinguishable from a rule that never ran.
