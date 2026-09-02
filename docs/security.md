@@ -383,6 +383,90 @@ being in place.
 - **CLI backend**: All known tools disabled via `--disallowedTools` denylist. Note: `--tools ""` and `--allowedTools ""` do not reliably block tools in current Claude CLI versions, so a comprehensive denylist is used instead. This list must be updated when new tools are added to Claude Code.
 - **API backend**: Uses the Anthropic Python SDK with `max_tokens=1024` to limit response cost.
 
+## Agent-CLI Login Mirror (host side)
+
+The co-writer and the lyrical-coherence judge sign in to Claude, Grok and
+Codex with the operator's *subscriptions* rather than API keys. Making those
+logins reachable from a container is a separate, later change; what lives here
+is the host-side half, and it is useful and safe on its own.
+
+`scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
+login into `~/.songmaker/agent-cli-credentials/`, kept current by
+`songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
+`scripts/install-cli-credentials-mirror.sh`. Nothing reads those copies yet.
+
+**The renewal secret never leaves the host.** The mirror publishes the
+short-lived access token and blanks the long-lived one, so whatever eventually
+reads a copy can spend what it holds until it expires but cannot mint a new
+one. What each CLI tolerates was measured on 2026-09-02, each variant run in a
+throwaway container against the real binaries:
+
+| CLI | what the mirror publishes | measured |
+|---|---|---|
+| claude | an **allowlist**: `accessToken`, `expiresAt`, `scopes` — nothing else | `accessToken` + `scopes` is the whole requirement; dropping `scopes` alone flips `claude auth status` to `loggedIn:false`. Without `refreshToken` a full turn runs unchanged. |
+| grok | the document, with `refresh_token` blanked and the four personal fields dropped | its CLI needs every other field (dropping `create_time` alone yields "You are not authenticated"), but tolerates a blank refresh token and the loss of `email`, `first_name`, `last_name`, `profile_image_asset_id`. |
+| codex | the document, with `tokens.refresh_token` blanked and `OPENAI_API_KEY` nulled | the refresh field may not be absent ("missing field `refresh_token`") but may be empty; `id_token` must stay a well-formed JWT. |
+
+The two shapes are not an inconsistency. Claude's allowlist cannot leak: a
+field added tomorrow is simply not carried. Grok and Codex must carry their
+whole document or their CLI refuses it, so for those two **an unknown field
+stops the mirror with a named error** instead of being copied — a CLI update
+introducing `device_refresh_token` would otherwise ride along unnoticed.
+
+**How it writes.** In place: one write into the existing inode, never a
+rename, because a file bind-mount is pinned to the inode it was made from and
+would not follow a rename. It never truncates — shorter content is padded with
+trailing spaces, which every JSON reader ignores — and it reads the bytes back
+through the same descriptor before reporting success. That is not a universal
+atomicity guarantee and is not claimed as one: on ext4 and xfs a *completed*
+buffered write is serialised against a concurrent read, a retried short write
+is the one window, and a reader using `mmap` can still straddle the change.
+Two runs cannot overlap: the second waits for an `flock` and, if it never gets
+it, fails rather than reporting success.
+
+**How it refuses.** Every path is opened with `O_NOFOLLOW` and checked on the
+open descriptor — regular file, our own uid, exactly one hard link, expected
+mode — before anything is written, and the mirror directory is created `0700`
+rather than chmodded afterwards.
+
+`scripts/check_agent_cli_mounts.sh` is the preflight: it calls
+`mirror_agent_cli_credentials.py --verify`, which applies those same checks to
+each published file, parses the JSON, and refuses any renewal token found
+anywhere in it — so a login copied in by hand is caught rather than mounted.
+One check, two callers today — the installer and the auto-deploy tick
+(#364) — and a third once the containers mount these files.
+
+Where the mirror lives has one answer, owned by that same module: an exported
+`SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
+default under the stack owner's home — compose's own order. The value must be
+an absolute path or `~/…` with no whitespace and no `%`, because systemd
+splits directive values on whitespace and expands `%` as a specifier; anything
+else is refused loudly rather than mangled into a unit.
+
+**Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
+from a linked worktree — these units outlive the shell that installed them,
+and the day a throwaway worktree is removed the unit stops — and refuses to
+silently replace any unit that belongs to something else, judged by the one
+directive that names its owner: the script an `ExecStart` runs, the home a
+`PathChanged` watches, the service a timer drives. `--force` overrides. Every
+one of those checks runs before the first write, so a refusal leaves the
+machine exactly as it was rather than half-installed.
+
+The installer is driven end to end by
+`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout,
+with `sudo`, `systemctl` and `getent` replaced by fakes. That test exists
+because two crashes shipped in this script while `bash -n` was the only thing
+looking at it: neither an unset variable at runtime nor a directory whose
+parent does not exist is visible to a syntax check.
+
+**What this does not yet do.** Nothing mounts these copies. Until the
+container-side change lands, the mirror is a host service that keeps three
+files current and a preflight that can say whether they are sound; the stack
+starts exactly as it does today. The preflight does insist that the mirror
+unit is installed and enabled — old-but-valid copies would otherwise pass
+every content check while nothing kept them current — so the auto-deploy tick
+refuses to deploy until the installer has been run once.
+
 ## Child Process Secret Scrubbing
 
 Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.

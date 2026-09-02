@@ -1,0 +1,313 @@
+"""The mirror installer, driven as a real subprocess.
+
+Two crashes shipped in this script because nothing ever ran it: `bash -n`
+sees neither an unset variable at runtime nor a missing parent directory.
+So this drives the real file, from a throwaway checkout, with `sudo`,
+`systemctl` and `getent` replaced by fakes on PATH — no real units, no root,
+nothing outside the temporary directories.
+"""
+
+from __future__ import annotations
+
+import os
+import stat
+import subprocess
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+INSTALLER = REPO_ROOT / "scripts" / "install-cli-credentials-mirror.sh"
+
+COPIED_SCRIPTS = (
+    "install-cli-credentials-mirror.sh",
+    "mirror_agent_cli_credentials.py",
+    "check_agent_cli_mounts.sh",
+    "agent-cli-paths.sh",
+    "alert.sh",
+    "songmaker-cli-credentials-mirror.service",
+    "songmaker-cli-credentials-mirror.path",
+    "songmaker-cli-credentials-mirror.timer",
+    "songmaker-alert@.service",
+)
+
+# `sudo install ...` and `sudo -u USER CMD ...` are the only two shapes the
+# installer uses; both run without privilege here.
+FAKE_SUDO = """#!/bin/bash
+if [ "$1" = "-u" ]; then shift 2; fi
+exec "$@"
+"""
+
+# Records what would have been asked of systemd, answers `is-enabled` only
+# once `enable` has been seen, and — crucially — really runs the unit's
+# ExecStart on `start`. Faking that away would have hidden the missing parent
+# directory the mirror could not create.
+FAKE_SYSTEMCTL = """#!/bin/bash
+echo "$*" >> "$SYSTEMCTL_LOG"
+case "$1" in
+    is-enabled)
+        grep -q "^enable .*songmaker-cli-credentials-mirror.service" "$SYSTEMCTL_LOG" \\
+            && exit 0 || exit 1 ;;
+    list-unit-files)
+        grep -q "^enable .*songmaker-cli-credentials-mirror.service" "$SYSTEMCTL_LOG" \\
+            && echo "songmaker-cli-credentials-mirror.service enabled enabled" \\
+            || true
+        exit 0 ;;
+    start)
+        unit="$SONGMAKER_UNIT_DIR/$2"
+        [ -f "$unit" ] || exit 1
+        exec $(sed -n 's/^ExecStart=//p' "$unit" | head -1) ;;
+esac
+exit 0
+"""
+
+# The installer reads the operator's home from passwd, never from $HOME (a run
+# under `sudo -H` would otherwise mirror /root). The test therefore has to
+# answer as passwd would.
+FAKE_GETENT = """#!/bin/bash
+if [ "$1" = "passwd" ]; then
+    echo "$2:x:1000:1000::$FAKE_OPERATOR_HOME:/bin/bash"
+    exit 0
+fi
+exit 2
+"""
+
+
+def _executable(path: Path, body: str) -> None:
+    path.write_text(body)
+    path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+@pytest.fixture
+def checkout(tmp_path: Path) -> Path:
+    """A git checkout that is its own main worktree, with the scripts in it."""
+    root = tmp_path / "songmaker"
+    (root / "scripts").mkdir(parents=True)
+    for name in COPIED_SCRIPTS:
+        source = REPO_ROOT / "scripts" / name
+        target = root / "scripts" / name
+        target.write_bytes(source.read_bytes())
+        target.chmod(source.stat().st_mode)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    return root
+
+
+@pytest.fixture
+def home(tmp_path: Path) -> Path:
+    """A signed-in operator whose ~/.songmaker does not exist yet.
+
+    That absence is the point: the mirror has to create the whole path, not
+    just its last segment.
+    """
+    signed_in = tmp_path / "home"
+    for relative, document in (
+        (
+            ".claude/.credentials.json",
+            '{"claudeAiOauth": {"accessToken": "a", "expiresAt": 1, '
+            '"scopes": ["user:inference"], "refreshToken": "secret"}}',
+        ),
+        (
+            ".grok/auth.json",
+            '{"realm": {"key": "k", "auth_mode": "oidc", "create_time": "t", '
+            '"expires_at": "t", "user_id": "u", "team_id": "t", '
+            '"principal_type": "User", "principal_id": "p", '
+            '"oidc_issuer": "i", "oidc_client_id": "c", '
+            '"coding_data_retention_opt_out": true, "refresh_token": "secret"}}',
+        ),
+        (
+            ".codex/auth.json",
+            '{"auth_mode": "chatgpt", "OPENAI_API_KEY": null, '
+            '"last_refresh": "t", "tokens": {"id_token": "i", '
+            '"access_token": "a", "account_id": "n", "refresh_token": "secret"}}',
+        ),
+    ):
+        path = signed_in / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(document)
+    return signed_in
+
+
+@pytest.fixture
+def run_installer(tmp_path: Path, checkout: Path, home: Path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _executable(fake_bin / "sudo", FAKE_SUDO)
+    _executable(fake_bin / "systemctl", FAKE_SYSTEMCTL)
+    _executable(fake_bin / "getent", FAKE_GETENT)
+    units = tmp_path / "systemd"
+    units.mkdir()
+    systemctl_log = tmp_path / "systemctl.log"
+    systemctl_log.write_text("")
+
+    def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "HOME": str(home),
+            "SYSTEMCTL_LOG": str(systemctl_log),
+            "SONGMAKER_UNIT_DIR": str(units),
+            "FAKE_OPERATOR_HOME": str(home),
+            "SONGMAKER_CLAUDE_CLI": "/bin/sh",
+            "SONGMAKER_GROK_CLI": "/bin/sh",
+            "SONGMAKER_CODEX_CLI": "/bin/sh",
+        }
+        environment.pop("SONGMAKER_CLI_CREDENTIALS_DIR", None)
+        return subprocess.run(
+            [str(checkout / "scripts" / INSTALLER.name), *arguments],
+            cwd=checkout,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    _run.units = units
+    _run.log = systemctl_log
+    _run.home = home
+    return _run
+
+
+def test_the_installer_runs_through(run_installer) -> None:
+    """The whole thing, end to end. Both shipped crashes died here."""
+    result = run_installer()
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+
+
+def test_it_writes_the_four_units_it_promises(run_installer) -> None:
+    run_installer()
+
+    installed = {path.name for path in run_installer.units.iterdir()}
+    assert installed == {
+        "songmaker-cli-credentials-mirror.service",
+        "songmaker-cli-credentials-mirror.path",
+        "songmaker-cli-credentials-mirror.timer",
+        "songmaker-alert@.service",
+    }
+
+
+def test_the_unit_it_writes_names_this_checkout_and_this_home(
+    run_installer, checkout: Path, home: Path,
+) -> None:
+    run_installer()
+
+    unit = (run_installer.units / "songmaker-cli-credentials-mirror.service").read_text()
+    exec_start = next(
+        line for line in unit.splitlines() if line.startswith("ExecStart=")
+    )
+    assert str(checkout / "scripts" / "mirror_agent_cli_credentials.py") in exec_start
+    assert f"--home {home}" in exec_start
+    assert f"--mirror-dir {home}/.songmaker/agent-cli-credentials" in exec_start
+
+
+def test_it_writes_the_mirror_even_though_songmaker_did_not_exist(
+    run_installer, home: Path,
+) -> None:
+    """The default path is two levels deep; only creating the last one fails."""
+    run_installer()
+
+    mirrored = home / ".songmaker/agent-cli-credentials"
+    assert {path.name for path in mirrored.iterdir()} >= {
+        "claude.json", "grok.json", "codex.json",
+    }
+
+
+def test_no_renewal_secret_is_in_anything_it_published(
+    run_installer, home: Path,
+) -> None:
+    run_installer()
+
+    published = "\n".join(
+        path.read_text()
+        for path in (home / ".songmaker/agent-cli-credentials").glob("*.json")
+    )
+    assert "secret" not in published
+
+
+def test_it_enables_the_units_rather_than_only_writing_them(run_installer) -> None:
+    run_installer()
+
+    asked = run_installer.log.read_text()
+    assert "enable songmaker-cli-credentials-mirror.service" in asked
+    assert "enable --now songmaker-cli-credentials-mirror.path" in asked
+    assert "enable --now songmaker-cli-credentials-mirror.timer" in asked
+
+
+def test_it_refuses_a_linked_worktree(run_installer, checkout: Path, tmp_path) -> None:
+    """These units outlive the shell; a throwaway checkout must not own them."""
+    identity = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+    }
+    subprocess.run(["git", "add", "-A"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "base"],
+        cwd=checkout, check=True, env=identity,
+    )
+    linked = tmp_path / "linked"
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "--detach", str(linked)],
+        cwd=checkout, check=True,
+    )
+
+    result = subprocess.run(
+        [str(linked / "scripts" / INSTALLER.name)],
+        cwd=linked, text=True, capture_output=True, check=False,
+    )
+
+    assert result.returncode == 1
+    assert "linked worktree" in result.stderr
+
+
+def test_it_refuses_a_unit_that_belongs_to_another_checkout(run_installer) -> None:
+    run_installer()
+    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    unit.write_text(
+        unit.read_text().replace("ExecStart=", "ExecStart=/somewhere/else/", 1),
+    )
+
+    result = run_installer()
+
+    assert result.returncode == 1
+    assert "belongs to something else" in result.stderr
+
+
+def test_a_refused_takeover_replaces_nothing_at_all(run_installer) -> None:
+    """Every check before the first write: no half-installed machine."""
+    run_installer()
+    alert = run_installer.units / "songmaker-alert@.service"
+    alert.write_text("[Service]\nExecStart=/untouched\n")
+    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    unit.write_text(
+        unit.read_text().replace("ExecStart=", "ExecStart=/somewhere/else/", 1),
+    )
+
+    run_installer()
+
+    assert alert.read_text() == "[Service]\nExecStart=/untouched\n"
+
+
+def test_force_takes_a_foreign_unit_over(run_installer) -> None:
+    run_installer()
+    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    unit.write_text(
+        unit.read_text().replace("ExecStart=", "ExecStart=/somewhere/else/", 1),
+    )
+
+    result = run_installer("--force")
+
+    assert result.returncode == 0
+    assert "/somewhere/else/" not in unit.read_text()
+
+
+def test_running_it_twice_changes_nothing_the_second_time(run_installer) -> None:
+    run_installer()
+    before = {
+        path.name: path.read_text() for path in run_installer.units.iterdir()
+    }
+
+    result = run_installer()
+
+    assert result.returncode == 0
+    assert {p.name: p.read_text() for p in run_installer.units.iterdir()} == before
