@@ -139,6 +139,26 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
     assert "Background loop session_sync ended" in caplog.text
 
 
+def test_failed_lifecycle_loop_logs_its_exception(
+    tmp_path, monkeypatch, mock_arq_pool, caplog,
+) -> None:
+    async def failed_loop(_app) -> None:
+        raise RuntimeError("redis unavailable")
+
+    monkeypatch.setattr(server, "session_sync_loop", failed_loop)
+    client, _ = make_test_app(tmp_path)
+    with client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    matching_records = [
+        record for record in caplog.records
+        if record.getMessage() == "Background loop session_sync ended"
+    ]
+    assert len(matching_records) == 1
+    assert isinstance(matching_records[0].exc_info[1], RuntimeError)
+
+
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:

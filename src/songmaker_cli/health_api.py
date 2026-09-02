@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -39,8 +39,9 @@ class BackgroundLoopResponse(BaseModel):
     last_error: str | None
 
 
-class BackgroundLoopsResponse(BaseModel):
-    background_loops: dict[BackgroundLoopName, BackgroundLoopResponse]
+_background_loop_response_adapter = TypeAdapter(
+    dict[BackgroundLoopName, BackgroundLoopResponse],
+)
 
 
 def _compute_script_hashes(index_html: Path) -> list[str]:
@@ -347,7 +348,7 @@ async def health_check(request: Request) -> JSONResponse:
     from songmaker_cli.redis_client import redis_health
     redis_ok = redis_health(ctx.redis)
     background_loop_health = request.app.state.background_loop_registry.loop_health()
-    background_loops = BackgroundLoopsResponse(background_loops={
+    background_loops = _background_loop_response_adapter.validate_python({
         name: {
             "state": health.status,
             "consecutive_failures": health.consecutive_failures,
@@ -394,5 +395,7 @@ async def health_check(request: Request) -> JSONResponse:
         # "ok". Defaults to "unverified" (never a silent "ok") for the
         # narrow window before the boot-time check has run at all.
         "claude_cli_tool_surface": claude_cli_tool_surface_health(),
-        "background_loops": background_loops.model_dump(mode="json")["background_loops"],
+        "background_loops": _background_loop_response_adapter.dump_python(
+            background_loops, mode="json",
+        ),
     })

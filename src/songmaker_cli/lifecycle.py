@@ -310,6 +310,7 @@ async def backfill_unscored_generations(
             await _auto_score_generation(redis, ctx.db, gen_id, song_id)
             dispatched += 1
         except Exception as exc:
+            log.exception("Score backfill failed for generation %s — continuing", gen_id)
             if first_error is None:
                 first_error = exc
     return BackfillResult(dispatched=dispatched, first_error=first_error)
@@ -344,14 +345,6 @@ async def score_backfill_loop(app: FastAPI) -> None:
             result = await backfill_unscored_generations(ctx, get_arq_pool())
             if result.first_error is not None:
                 registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, result.first_error)
-                log.error(
-                    "Score backfill tick failed",
-                    exc_info=(
-                        type(result.first_error),
-                        result.first_error,
-                        result.first_error.__traceback__,
-                    ),
-                )
             else:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
             if result.dispatched:

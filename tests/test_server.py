@@ -697,6 +697,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
         ):
             async with _lifespan(mock_app):
                 await asyncio.wait_for(reaper_started.wait(), timeout=1)
+                mock_app.state.background_loop_tasks = {}
         reaper_loop.assert_awaited_once_with(mock_app)
         assert reaper_cancelled.is_set()
 

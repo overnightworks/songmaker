@@ -68,7 +68,11 @@ def _record_background_loop_completion(
     if task.cancelled():
         registry.mark_dead(name, asyncio.CancelledError())
     else:
-        registry.mark_dead(name, task.exception())
+        exception = task.exception()
+        registry.mark_dead(name, exception)
+        if exception is not None:
+            log.error("Background loop %s ended", name, exc_info=exception)
+            return
     log.error("Background loop %s ended", name)
 
 
@@ -129,8 +133,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
         (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
     )
-    # The lifecycle test deliberately uses this seam to cancel one real task
-    # from outside and prove that its done callback marks only that loop dead.
     app.state.background_loop_tasks = dict(loop_tasks)
     for name, task in loop_tasks:
         task.add_done_callback(
@@ -142,9 +144,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
     finally:
         registry.begin_shutdown()
-        for task in app.state.background_loop_tasks.values():
+        for _name, task in loop_tasks:
             task.cancel()
-        await asyncio.gather(*app.state.background_loop_tasks.values(), return_exceptions=True)
+        await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
         await close_arq_pool()
         await shutdown_tool_surface_background_tasks()
 
