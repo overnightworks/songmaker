@@ -28,9 +28,9 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
 * W2 — generic ``dict[str, Any]`` in function parameters masks domain
   shapes. Use a Pydantic model. Return annotations and nested forms are
   not this rule. Exempt: ``cowriter/tools.py`` — ``execute_cowriter_tool``
-  dispatches raw MCP tool-call JSON across ten heterogeneous handlers
+  dispatches raw MCP tool-call JSON across the heterogeneous handlers
   whose only shared shape is the per-tool JSON Schema already carried in
-  ``CowriterTool.parameters``; turning that into ten named argument
+  ``CowriterTool.parameters``; turning that into named per-tool argument
   models is a multi-file rework, tracked as a follow-up rather than
   fixed by this checker slice.
 * W3 — silent dict-fallback patterns like ``cfg.get("key", "default")``

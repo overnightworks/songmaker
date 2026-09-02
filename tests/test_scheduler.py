@@ -615,8 +615,7 @@ def test_submit_generation_returns_task_id() -> None:
     assert task_id == "gen-1"
     args, kwargs = client.post.call_args
     assert args[0].endswith("/generate")
-    assert kwargs["json"]["mode"] == "sft"
-    assert kwargs["json"]["config"] == asdict(_make_ace_config())
+    assert kwargs["json"] == {"mode": "sft", "config": asdict(_make_ace_config())}
 
 
 # ── _iterate_task_events ─────────────────────────────────────────────

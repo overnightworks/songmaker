@@ -6,9 +6,9 @@ checks stay in ``mcp_server.tools``.
 
 ``execute_cowriter_tool``'s ``arguments: dict[str, Any]`` is exempt from
 ``scripts/check_no_silent_fallbacks.py``'s dict-any-in-signature rule:
-the ten tools below share no single argument shape, only their own JSON
-Schema in ``CowriterTool.parameters``. Collapsing that into ten named
-argument models is tracked as a follow-up — see #332, finding F15.
+the tools below share no single argument shape, only their own JSON
+Schema in ``CowriterTool.parameters``. Collapsing that into named
+per-tool argument models is tracked as a follow-up — see #332, finding F15.
 """
 
 from __future__ import annotations

@@ -77,11 +77,11 @@ file's job:
   timestamp field still fails, because that is how a NOT NULL column gets
   misdescribed.
 - **`cowriter/tools.py`** is exempt from the `dict[str, Any]`-in-signature
-  rule: `execute_cowriter_tool` dispatches raw MCP tool-call JSON across ten
-  handlers whose only shared shape is each tool's own JSON Schema
-  (`CowriterTool.parameters`). Collapsing that into ten named argument
-  models is a multi-file rework, tracked as a follow-up (#332, finding F15),
-  not something this checker fixes by itself.
+  rule: `execute_cowriter_tool` dispatches raw MCP tool-call JSON across the
+  heterogeneous handlers whose only shared shape is each tool's own JSON
+  Schema (`CowriterTool.parameters`). Collapsing that into named per-tool
+  argument models is a multi-file rework, tracked as a follow-up (#332,
+  finding F15), not something this checker fixes by itself.
 
 `tests/test_check_no_silent_fallbacks.py` runs the checker over the real
 `src/` tree, over a table of read and write statements that pins that
