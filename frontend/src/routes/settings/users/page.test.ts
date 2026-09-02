@@ -463,6 +463,16 @@ describe('admin models tab', () => {
 		expect(target.textContent).not.toContain('Missing undefined');
 	});
 
+	it('shows a provider-status fetch failure instead of loading forever', async () => {
+		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('Provider probe failed');
+		expect(providers.textContent).not.toContain('Loading...');
+	});
+
 	it('offers a Claude API key to the judge but not the co-writer', async () => {
 		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
 		const target = await renderPage(true);

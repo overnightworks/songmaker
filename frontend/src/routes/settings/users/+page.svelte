@@ -133,6 +133,8 @@
 	let creating = $state(false);
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
+	let loadingProviderStatuses = $state(false);
+	let providerStatusError = $state('');
 
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterProvider = $state('claude');
@@ -343,10 +345,14 @@
 	}
 
 	async function loadModelsTab() {
+		loadingProviderStatuses = true;
+		providerStatusError = '';
 		try {
 			providerStatuses = await fetchProviderStatus();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load provider status';
+			providerStatusError = e instanceof Error ? e.message : 'Failed to load provider status';
+		} finally {
+			loadingProviderStatuses = false;
 		}
 		try {
 			cowriterSettings = await fetchCowriterSettings();
@@ -1013,8 +1019,12 @@
 							</div>
 						{/each}
 					</div>
-				{:else}
+				{:else if loadingProviderStatuses}
 					<p>Loading...</p>
+				{:else if providerStatusError}
+					<p class="error">{providerStatusError}</p>
+				{:else}
+					<p>No provider status is available.</p>
 				{/if}
 			</section>
 
