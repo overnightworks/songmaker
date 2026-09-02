@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -25,7 +26,11 @@ from songmaker_cli.api_models.songs import (
     share_pick_media,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.audio_paths import canonical_audio_filename, resolve_audio_path
+from songmaker_cli.audio_paths import (
+    canonical_audio_filename,
+    resolve_audio_path,
+    resolve_canonical_audio_path,
+)
 from songmaker_cli.auth import resolve_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
@@ -68,6 +73,7 @@ from songmaker_cli.queue_streams import (
 from songmaker_cli.redis_client import RedisRateLimiter
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 # Public, unauthenticated share endpoints fail open: blocking real listeners
@@ -151,8 +157,17 @@ def _shared_audio_url(
         or not is_playable_take(generation)
     ):
         return None
-    filename = canonical_audio_filename(audio_dir, generation.mp3_path)
-    if filename is None:
+    return _shared_audio_url_for_filename(route, generation.mp3_path, audio_dir)
+
+
+def _shared_audio_url_for_filename(
+    route: str,
+    stored_filename: str,
+    audio_dir: Path,
+) -> str | None:
+    filename = canonical_audio_filename(audio_dir, stored_filename)
+    if filename != stored_filename:
+        log.warning("Stored audio path is not canonical: %r", stored_filename)
         return None
     return f"{route}/{filename}"
 
@@ -320,10 +335,10 @@ def get_shared_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_album_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
+    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    if not shared_album_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
-    audio_path = resolve_audio_path(ctx.audio_dir, filename)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -398,10 +413,10 @@ def get_shared_song_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_song_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
+    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    if not shared_song_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
-    audio_path = resolve_audio_path(ctx.audio_dir, filename)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -411,6 +426,7 @@ def get_shared_generation(
     slug: str,
     request: Request,
     db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JSONResponse:
     _check_shared_rate_limit(request)
     gen = get_generation_by_slug(db, slug)
@@ -424,7 +440,9 @@ def get_shared_generation(
         generation_number=gen.generation_number,
         seed=gen.seed,
         audio_url=(
-            f"/shared/gen/{slug}/audio/{gen.mp3_path}"
+            _shared_audio_url_for_filename(
+                f"/shared/gen/{slug}/audio", gen.mp3_path, ctx.audio_dir,
+            )
             if gen.mp3_path else None
         ),
         generation_id=media.generation_id,
@@ -444,6 +462,7 @@ async def get_shared_gen_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
+    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
     gen = get_generation_by_slug(db, slug)
     if not gen:
         raise HTTPException(404, "Not found")
@@ -451,7 +470,6 @@ async def get_shared_gen_audio(
     if filename != gen.mp3_path:
         raise HTTPException(404, "Not found")
 
-    audio_path = resolve_audio_path(ctx.audio_dir, filename)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -541,10 +559,10 @@ def get_shared_playlist_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_playlist_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
+    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    if not shared_playlist_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
-    audio_path = resolve_audio_path(ctx.audio_dir, filename)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 

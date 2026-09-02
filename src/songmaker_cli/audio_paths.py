@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import cache
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -10,26 +11,52 @@ from fastapi import HTTPException
 log = logging.getLogger(__name__)
 
 
+@cache
+def _resolved_audio_root(audio_dir: Path) -> Path:
+    return audio_dir.resolve()
+
+
+def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:
+    """Resolve ``filename`` and return it only when it stays below the root."""
+    audio_root = _resolved_audio_root(audio_dir)
+    audio_path = (audio_root / filename).resolve()
+    if not audio_path.is_relative_to(audio_root):
+        return None
+    return audio_path
+
+
 def audio_filename_is_contained(audio_dir: Path, filename: str) -> bool:
     """Whether resolving ``filename`` keeps it inside ``audio_dir``."""
-    audio_root = audio_dir.resolve()
-    return (audio_root / filename).resolve().is_relative_to(audio_root)
+    return _resolved_within_root(audio_dir, filename) is not None
 
 
 def canonical_audio_filename(audio_dir: Path, filename: str) -> str | None:
     """Return the root-relative canonical filename, or ``None`` if it escapes."""
-    if not audio_filename_is_contained(audio_dir, filename):
+    audio_path = _resolved_within_root(audio_dir, filename)
+    if audio_path is None:
         return None
-    audio_root = audio_dir.resolve()
-    return (audio_root / filename).resolve().relative_to(audio_root).as_posix()
+    return audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix()
 
 
 def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
     """Return an existing audio file constrained to ``audio_dir``."""
-    audio_root = audio_dir.resolve()
-    audio_path = (audio_root / relative_path).resolve()
-    if not audio_filename_is_contained(audio_dir, relative_path):
+    audio_path = _resolved_within_root(audio_dir, relative_path)
+    if audio_path is None:
         log.warning("Audio path traversal denied: %r", relative_path)
+        raise HTTPException(404, "Not Found")
+    if not audio_path.exists():
+        raise HTTPException(404, "Not Found")
+    return audio_path
+
+
+def resolve_canonical_audio_path(audio_dir: Path, filename: str) -> Path:
+    """Return an existing canonical audio filename constrained to ``audio_dir``."""
+    audio_path = _resolved_within_root(audio_dir, filename)
+    if (
+        audio_path is None
+        or audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix() != filename
+    ):
+        log.warning("Audio path traversal denied: %r", filename)
         raise HTTPException(404, "Not Found")
     if not audio_path.exists():
         raise HTTPException(404, "Not Found")
