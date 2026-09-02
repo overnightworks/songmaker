@@ -425,16 +425,23 @@ Two runs cannot overlap: the second waits for an `flock` and, if it never gets
 it, fails rather than reporting success.
 
 **How it refuses.** Every path is opened with `O_NOFOLLOW` and checked on the
-open descriptor — regular file, our own uid, exactly one hard link, expected
-mode — before anything is written, and the mirror directory is created `0700`
-rather than chmodded afterwards.
+open descriptor before it is read or written: a regular file, owned by us,
+with exactly one hard link, and no larger than a login document can be — a
+file too big to read in full is refused rather than judged on its first bytes.
+The mirror directory is created `0700` rather than chmodded afterwards. A
+mirrored file's mode is *set* to `0600` when it is written and *required* to
+be `0600` when it is verified; the difference is deliberate, since the writer
+owns that file and the verifier only inspects it.
 
 `scripts/check_agent_cli_mounts.sh` is the preflight: it calls
 `mirror_agent_cli_credentials.py --verify`, which applies those same checks to
-each published file, parses the JSON, and refuses any renewal token found
-anywhere in it — so a login copied in by hand is caught rather than mounted.
-One check, two callers today — the installer and the auto-deploy tick
-(#364) — and a third once the containers mount these files.
+each published file, parses the JSON, and refuses any non-empty value under a
+renewal-token key found anywhere in it — so a login copied in by hand is
+caught rather than mounted. It also asks systemd whether the mirror service,
+its login watch and its timer are installed, enabled and — for the two
+triggers — running: files that look right prove nothing about currency if
+nothing rewrites them. One check, two callers today — the installer and the
+auto-deploy tick (#364) — and a third once the containers mount these files.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
@@ -445,19 +452,28 @@ else is refused loudly rather than mangled into a unit.
 
 **Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
 from a linked worktree — these units outlive the shell that installed them,
-and the day a throwaway worktree is removed the unit stops — and refuses to
-silently replace any unit that belongs to something else, judged by the one
-directive that names its owner: the script an `ExecStart` runs, the home a
-`PathChanged` watches, the service a timer drives. `--force` overrides. Every
-one of those checks runs before the first write, so a refusal leaves the
-machine exactly as it was rather than half-installed.
+and the day a throwaway worktree is removed the unit stops — refuses to run as
+root, whose logins are not the operator's, and refuses to silently replace any
+of the four units it writes when that unit belongs to something else. Ownership
+is judged per unit by the one directive that names its owner: the script an
+`ExecStart` runs, the file a `PathChanged` watches, the service a timer drives.
+A unit carrying no such directive counts as foreign — a file that cannot be
+identified is the one to stop at — and the comparison must reach a token
+boundary, so our own unit with different arguments is still ours while a
+lookalike path is not. `--force` overrides. Every one of those checks runs
+before the first write, so a refusal leaves the machine exactly as it was
+rather than half-installed.
 
 The installer is driven end to end by
-`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout,
-with `sudo`, `systemctl` and `getent` replaced by fakes. That test exists
+`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout.
+Every invocation goes through one harness that replaces `sudo`, `systemctl`
+and `getent`, and those fakes refuse anything outside the test's own
+directory rather than complying: a run that reached the real `sudo` because a
+guard regressed must fail on the fake, not on the machine. That test exists
 because two crashes shipped in this script while `bash -n` was the only thing
-looking at it: neither an unset variable at runtime nor a directory whose
-parent does not exist is visible to a syntax check.
+looking at it — neither an unset variable at runtime nor a directory whose
+parent does not exist is visible to a syntax check — and it now also pins the
+refusals above, each of which turns it red when removed.
 
 **What this does not yet do.** Nothing mounts these copies. Until the
 container-side change lands, the mirror is a host service that keeps three
