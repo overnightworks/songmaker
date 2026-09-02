@@ -483,6 +483,14 @@ describe('LibraryRow', () => {
 			album({ id: 'a-3', title: 'Vernissage' })
 		]);
 		const root = await render({ kind: 'album', id: 'a-1' });
+		// fetchSongs/fetchPlaylists/fetchPlaylist are file-wide vi.mock wrappers
+		// that never touch globalThis.fetch at all -- the fetch spy below can
+		// only see a real fetch call, so these three are cleared and asserted
+		// on separately, the same way the row's own mount-time calls to them
+		// are cleared before every other test in this describe block.
+		fetchSongs.mockClear();
+		fetchPlaylists.mockClear();
+		fetchPlaylist.mockClear();
 		const searchLibraryModule = await import('$lib/api/library');
 		const fetchSpy = vi
 			.spyOn(globalThis, 'fetch')
@@ -499,6 +507,9 @@ describe('LibraryRow', () => {
 		expect(findTileByName(root, 'Sommerluft').hidden).toBe(true);
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(searchLibrarySpy).not.toHaveBeenCalled();
+		expect(fetchSongs).not.toHaveBeenCalled();
+		expect(fetchPlaylists).not.toHaveBeenCalled();
+		expect(fetchPlaylist).not.toHaveBeenCalled();
 		expect(get(searchQuery)).toBe(searchQueryBefore);
 		expect(window.location.href).toBe(addressBefore);
 	});

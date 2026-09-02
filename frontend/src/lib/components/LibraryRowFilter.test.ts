@@ -104,4 +104,10 @@ describe('LibraryRowFilter', () => {
 		expect(event.defaultPrevented).toBe(false);
 		expect(probeValue(root)).toBe('');
 	});
+
+	it("announces Escape as the field's own clear shortcut, since the clear button is now Tab-invisible", () => {
+		const root = render();
+		const input = root.querySelector<HTMLInputElement>('input');
+		expect(input?.getAttribute('aria-keyshortcuts')).toBe('Escape');
+	});
 });

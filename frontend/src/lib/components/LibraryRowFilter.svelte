@@ -40,6 +40,7 @@
 		bind:this={inputEl}
 		placeholder={libraryRowFilterPlaceholder(collectionLabel)}
 		aria-label={libraryRowFilterAriaLabel(collectionLabel)}
+		aria-keyshortcuts="Escape"
 		autocomplete="off"
 		onkeydown={onKeydown}
 	/>

@@ -109,10 +109,7 @@
 	// without changing which tiles are currently shown) and not when a
 	// sibling's title or subtitle changes without moving in or out of view.
 	const visibleTileKey = $derived(
-		tiles
-			.filter((tile) => !tileHidden(tile))
-			.map((tile) => tile.id)
-			.join('\u0000')
+		JSON.stringify(tiles.filter((tile) => !tileHidden(tile)).map((tile) => tile.id))
 	);
 
 	// Position, not the list contents, is what centring cares about: a
