@@ -8,7 +8,11 @@
 	} from '$lib/stores/playlists';
 	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
+	import {
+		RAIL_PLAYING_MARKER_LABEL,
+		RAIL_PLAYLISTS_LABEL,
+		RAIL_PLAYLISTS_NAV_LABEL
+	} from '$lib/constants';
 	import type { PlaylistEntryItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
@@ -106,7 +110,7 @@
 											onclick={() => onEntryClick(index)}
 										>
 											{#if isEntryPlaying(entry)}
-												<span class="equalizer" aria-hidden="true">
+												<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
 													<span></span><span></span><span></span>
 												</span>
 											{/if}
