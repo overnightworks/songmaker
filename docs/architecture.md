@@ -458,8 +458,7 @@ The API client and `types.ts` are the frontend's contract with the backend.
 `scripts/generate_types.py --check` derives the browser-facing models from the
 registered FastAPI routes' response and body annotations, follows nested
 Pydantic models, supplements them with the exported `api_models`, and verifies
-their TypeScript interfaces. If those routes cannot load, it states the failure
-and checks the exported models alone. The backend-only `/api/internal/` worker
+their TypeScript interfaces. The backend-only `/api/internal/` worker
 protocol is the sole excluded route role. When a routed model changes,
 regenerate `types.ts` and run the check.
 

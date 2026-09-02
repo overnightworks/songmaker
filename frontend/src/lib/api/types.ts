@@ -430,7 +430,7 @@ export interface LibraryQueueStreamRequest {
 }
 
 export interface LibrarySearchResponse {
-	items: LibraryAlbumHit | LibrarySongHit[];
+	items: (LibraryAlbumHit | LibrarySongHit)[];
 	next_cursor: string | null;
 	has_more: boolean;
 }

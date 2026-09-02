@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = PROJECT_ROOT / "frontend" / "src" / "lib" / "api" / "types.ts"
 CHECKED_MODE = "--check"
 ROUTE_SOURCE = "FastAPI routes"
-FALLBACK_SOURCE = "api_models exports"
+EXPORTED_SOURCE = "api_models exports"
 INTERNAL_ROUTE_PREFIX = "/api/internal/"
 INTERFACE_PATTERN = re.compile(r"^export interface (\w+)", re.MULTILINE)
 
@@ -62,7 +62,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "CleanupResponse": "CleanupResult",
     "ConversationResponse": "ConversationItem",
     "CowriterSettingsResponse": "CowriterSettings",
-    "GenerationParams": "VersionGenerationParams",
     "GenerationResponse": "GenerationItem",
     "JobResponse": "JobItem",
     "JudgeSettingsResponse": "JudgeSettings",
@@ -157,6 +156,18 @@ class GenerationResult:
     exempted_models: int
 
 
+@dataclass(frozen=True)
+class DiscoveredModels:
+    route_models: frozenset[type[BaseModel]]
+    exported_models: frozenset[type[BaseModel]]
+    exempted_routes: int
+    exempted_models: int
+
+    @property
+    def models(self) -> frozenset[type[BaseModel]]:
+        return self.route_models | self.exported_models
+
+
 class TypeScriptTypeError(ValueError):
     pass
 
@@ -206,7 +217,7 @@ def _route_routers() -> tuple[APIRouter, ...]:
     return api_router, health_router, sharing_router
 
 
-def _fallback_models() -> tuple[set[type[BaseModel]], int]:
+def _exported_models() -> tuple[set[type[BaseModel]], int]:
     import songmaker_cli.api_models as api_models
 
     exported_models = {
@@ -235,31 +246,22 @@ def _closed_models(roots: Iterable[type[BaseModel]]) -> set[type[BaseModel]]:
     return models
 
 
-def _api_models(
-    routers: Iterable[APIRouter] | None = None,
-) -> tuple[set[type[BaseModel]], int, int, int, int]:
+def _api_models(routers: Iterable[APIRouter] | None = None) -> DiscoveredModels:
     if routers is not None:
         annotations, exempted_routes = _route_annotations(routers)
         roots = set().union(*(_models_in_annotation(annotation) for annotation in annotations))
         route_models = _closed_models(roots)
-        return route_models, len(route_models), 0, exempted_routes, 0
-    try:
-        annotations, exempted_routes = _route_annotations(_route_routers())
-    except Exception as error:
-        print(f"WARNING: route introspection unavailable ({error}); using {FALLBACK_SOURCE}")
-        fallback_models, exempted_models = _fallback_models()
-        models = _closed_models(fallback_models)
-        return models, 0, len(models), 0, exempted_models
+        return DiscoveredModels(frozenset(route_models), frozenset(), exempted_routes, 0)
+    annotations, exempted_routes = _route_annotations(_route_routers())
     roots = set().union(*(_models_in_annotation(annotation) for annotation in annotations))
     route_models = _closed_models(roots)
-    fallback_roots, exempted_models = _fallback_models()
-    fallback_models = _closed_models(fallback_roots) - route_models
-    return (
-        route_models | fallback_models,
-        len(route_models),
-        len(fallback_models),
-        exempted_routes,
-        exempted_models,
+    exported_roots, exempted_models = _exported_models()
+    exported_models = _closed_models(exported_roots) - route_models
+    return DiscoveredModels(
+        route_models=frozenset(route_models),
+        exported_models=frozenset(exported_models),
+        exempted_routes=exempted_routes,
+        exempted_models=exempted_models,
     )
 
 
@@ -274,6 +276,8 @@ def _py_type_to_ts(annotation: Any) -> str:
     if origin is list:
         (inner,) = get_args(annotation)
         inner_type = _py_type_to_ts(inner)
+        while get_origin(inner) is Annotated:
+            inner = get_args(inner)[0]
         if get_origin(inner) in (UnionType, Union):
             inner_type = f"({inner_type})"
         return f"{inner_type}[]"
@@ -340,18 +344,15 @@ def _build_track_scores_interface() -> str:
 
 
 def generate(routers: Iterable[APIRouter] | None = None) -> GenerationResult:
-    (
-        models,
-        route_models,
-        exported_models,
-        exempted_routes,
-        exempted_models,
-    ) = _api_models(routers)
-    from songmaker_cli.api_models import StoredGenerationParams
-
-    models.add(StoredGenerationParams)
+    discovered_models = _api_models(routers)
+    route_models = tuple(
+        model for model in discovered_models.route_models if not _is_generic_model(model)
+    )
+    exported_models = tuple(
+        model for model in discovered_models.exported_models if not _is_generic_model(model)
+    )
     emitted_models = sorted(
-        (model for model in models if not _is_generic_model(model)),
+        (*route_models, *exported_models),
         key=lambda model: (_ts_name(model), model.__module__, model.__name__),
     )
     blocks = [HEADER, _build_track_scores_interface()]
@@ -359,10 +360,10 @@ def generate(routers: Iterable[APIRouter] | None = None) -> GenerationResult:
     return GenerationResult(
         content="\n\n".join(blocks) + "\n",
         models=tuple(emitted_models),
-        route_models=route_models,
-        exported_models=exported_models,
-        exempted_routes=exempted_routes,
-        exempted_models=exempted_models,
+        route_models=len(route_models),
+        exported_models=len(exported_models),
+        exempted_routes=discovered_models.exempted_routes,
+        exempted_models=discovered_models.exempted_models,
     )
 
 
@@ -370,7 +371,7 @@ def _checked_message(result: GenerationResult) -> str:
     return (
         f"Checked {len(result.models)} API models "
         f"({result.route_models} from {ROUTE_SOURCE}, "
-        f"{result.exported_models} from {FALLBACK_SOURCE}; "
+        f"{result.exported_models} from {EXPORTED_SOURCE}; "
         f"{result.exempted_routes} exempt routes, {result.exempted_models} exempt models)"
     )
 
@@ -396,7 +397,11 @@ def check_generated_types(result: GenerationResult, output_path: Path = OUTPUT_P
 
 
 def main() -> None:
-    result = generate()
+    try:
+        result = generate()
+    except ImportError as error:
+        print(f"FAIL: route introspection unavailable: {error}")
+        sys.exit(1)
     if CHECKED_MODE in sys.argv:
         sys.exit(0 if check_generated_types(result) else 1)
     OUTPUT_PATH.write_text(result.content)

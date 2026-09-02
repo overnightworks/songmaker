@@ -95,8 +95,7 @@ application lifecycle. It follows every route's `response_model` and body
 parameter through nested Pydantic annotations, then supplements that set with
 exported `api_models` and checks that each discovered model has a TypeScript
 interface in `frontend/src/lib/api/types.ts`. The output always states `Checked
-N API models`; it also states when route loading failed and the guard had to
-inspect the exported models alone. The only route role excluded is
+N API models`. The only route role excluded is
 `/api/internal/`: worker registration is a
 backend-to-backend protocol rather than a browser surface.
 
