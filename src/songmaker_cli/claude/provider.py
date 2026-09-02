@@ -1165,10 +1165,14 @@ def _resolve_inflight_async(
         return
     if exception is not None:
         future.set_exception(exception)
-        # The leader already re-raises this same exception itself and
-        # never awaits its own future — without this, asyncio logs
-        # "exception was never retrieved" the moment nothing else was
-        # waiting on it (no followers this round).
+        # This runs inside the independent probe task (round 7), which
+        # never reads the future back itself — every caller, the one that
+        # triggered the probe included, awaits it the same way through
+        # _await_follower_result_async. But any of them may already have
+        # given up on their own wait_for by the time we get here, leaving
+        # nobody left to retrieve it the normal way; without this call,
+        # asyncio logs "exception was never retrieved" once the future is
+        # garbage-collected.
         future.exception()
     else:
         future.set_result(result)
