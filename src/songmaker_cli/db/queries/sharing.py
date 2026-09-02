@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypeVar
 
-from sqlalchemy import ColumnElement, and_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import ColumnElement, and_, func, or_
+from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.orm.util import AliasedClass
 
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
@@ -69,14 +70,81 @@ def is_playable_take(gen: Generation) -> bool:
     return bool(gen.mp3_path) and not gen.is_archived
 
 
-def playable_take_filter() -> ColumnElement[bool]:
+def playable_take_filter(
+    entity: type[Generation] | AliasedClass = Generation,
+) -> ColumnElement[bool]:
     """SQLAlchemy criteria mirroring `is_playable_take()`, for queries that
     can't load full Generation rows into Python."""
     return and_(
-        Generation.mp3_path.isnot(None),
-        Generation.mp3_path != "",
-        Generation.is_archived.is_(False),
+        entity.mp3_path.isnot(None),
+        entity.mp3_path != "",
+        entity.is_archived.is_(False),
     )
+
+
+def shared_album_audio_filename_is_presented(
+    session: Session,
+    slug: str,
+    filename: str,
+) -> bool:
+    """Whether a shared album currently presents ``filename`` as audio.
+
+    Mirrors the picked-or-latest-playable selection in the public share page
+    without loading an album graph merely to authorize its audio URL.
+    """
+    candidate_generation = aliased(Generation)
+    selected_picked_generation = aliased(Generation)
+    song_has_playable_pick = (
+        session.query(candidate_generation.id)
+        .filter(
+            candidate_generation.song_id == Generation.song_id,
+            candidate_generation.is_picked.is_(True),
+            playable_take_filter(candidate_generation),
+        )
+        .exists()
+    )
+    selected_playable_pick_id = (
+        session.query(selected_picked_generation.id)
+        .filter(
+            selected_picked_generation.song_id == Generation.song_id,
+            selected_picked_generation.is_picked.is_(True),
+            playable_take_filter(selected_picked_generation),
+        )
+        .order_by(selected_picked_generation.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    latest_playable_generation_number = (
+        session.query(func.max(candidate_generation.generation_number))
+        .filter(
+            candidate_generation.song_id == Generation.song_id,
+            playable_take_filter(candidate_generation),
+        )
+        .scalar_subquery()
+    )
+    matching_generation = (
+        session.query(Generation.id)
+        .join(Song, Generation.song_id == Song.id)
+        .join(Album, Song.album_id == Album.id)
+        .filter(
+            Album.share_slug == slug,
+            Album.is_shared.is_(True),
+            Generation.mp3_path == filename,
+            playable_take_filter(),
+            or_(
+                and_(
+                    Generation.is_picked.is_(True),
+                    Generation.id == selected_playable_pick_id,
+                ),
+                and_(
+                    ~song_has_playable_pick,
+                    Generation.generation_number == latest_playable_generation_number,
+                ),
+            ),
+        )
+        .first()
+    )
+    return matching_generation is not None
 
 
 def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:

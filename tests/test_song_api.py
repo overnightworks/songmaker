@@ -238,12 +238,10 @@ def test_get_song_issues_one_flat_query_per_collection_not_a_cross_join(
     )
 
 
-def test_list_songs_default_loads_one_flat_query_per_collection_not_a_cross_join(
+def test_list_songs_with_full_details_loads_one_flat_query_per_collection_not_a_cross_join(
     worked_through_song_client,
 ) -> None:
-    """The detailed list path must not hide get_song()'s old cross join behind
-    its default argument: versions, generations, and scores each load in a
-    flat statement instead."""
+    """The explicit detailed list path loads each collection flatly."""
     _, factory = worked_through_song_client
     with factory() as probe_session:
         engine = probe_session.get_bind()
@@ -251,7 +249,7 @@ def test_list_songs_default_loads_one_flat_query_per_collection_not_a_cross_join
     all_queries, all_handle = _count_queries(engine)
     try:
         with factory() as session:
-            songs = list_songs(session, album_id="alb")
+            songs = list_songs(session, album_id="alb", light=False)
             assert len(songs) == 1
             assert len(songs[0].versions) == _DETAIL_VERSION_COUNT
             assert len(songs[0].generations) == _DETAIL_GENERATION_COUNT
@@ -260,7 +258,7 @@ def test_list_songs_default_loads_one_flat_query_per_collection_not_a_cross_join
         event.remove(engine, "before_cursor_execute", all_handle)
 
     assert len(all_queries) == 4, (
-        f"expected exactly 4 queries for detailed list_songs() against this "
+        f"expected exactly 4 queries for detailed list_songs(light=False) against this "
         f"fixture (songs+album, versions, generations, scores), "
         f"got {len(all_queries)}: {all_queries}"
     )

@@ -32,7 +32,7 @@ def list_songs(
     session: Session,
     album_id: str | None = None,
     user_id: str | None = None,
-    light: bool = False,
+    light: bool = True,
     with_generations: bool = False,
     offset: int = 0,
     limit: int | None = None,

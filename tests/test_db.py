@@ -202,8 +202,8 @@ def test_create_album_with_owner(db_session: Session) -> None:
     assert album.created_by == user.id
 
 
-def test_list_songs(seeded_session: Session) -> None:
-    songs = list_songs(seeded_session)
+def test_list_songs_with_full_details(seeded_session: Session) -> None:
+    songs = list_songs(seeded_session, light=False)
     assert len(songs) == 1
     assert songs[0].title == "Song One"
 
@@ -1166,13 +1166,13 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
 
 
 def test_list_songs_with_album_filter(seeded_session: Session) -> None:
-    result = list_songs(seeded_session, album_id="test")
+    result = list_songs(seeded_session, album_id="test", light=False)
     assert len(result) >= 1
     assert all(s.album_id == "test" for s in result)
 
 
 def test_list_songs_with_unknown_album_filter(seeded_session: Session) -> None:
-    result = list_songs(seeded_session, album_id="nonexistent")
+    result = list_songs(seeded_session, album_id="nonexistent", light=False)
     assert result == []
 
 

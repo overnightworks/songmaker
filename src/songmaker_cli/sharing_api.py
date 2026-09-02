@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import enforce_rate_limit, get_cached_limiter
@@ -44,12 +43,12 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     song_cover_file_exists,
 )
-from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries import (
     get_album_by_slug,
     get_generation_by_slug,
     get_playlist_by_slug,
     get_song_by_slug,
+    shared_album_audio_filename_is_presented,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -141,72 +140,6 @@ def _picked_generation(song):
 def _picked_filename(song) -> str | None:
     gen = _picked_generation(song)
     return gen.mp3_path if gen else None
-
-
-def _shared_audio_filename_exists(ctx: AppContext, slug: str, filename: str) -> bool:
-    with ctx.db() as db:
-        candidate_generation = aliased(Generation)
-        selected_picked_generation = aliased(Generation)
-        playable_candidate = and_(
-            candidate_generation.mp3_path.isnot(None),
-            candidate_generation.mp3_path != "",
-            candidate_generation.is_archived.is_(False),
-        )
-        song_has_playable_pick = (
-            db.query(candidate_generation.id)
-            .filter(
-                candidate_generation.song_id == Generation.song_id,
-                candidate_generation.is_picked.is_(True),
-                playable_candidate,
-            )
-            .exists()
-        )
-        selected_playable_pick_id = (
-            db.query(selected_picked_generation.id)
-            .filter(
-                selected_picked_generation.song_id == Generation.song_id,
-                selected_picked_generation.is_picked.is_(True),
-                selected_picked_generation.mp3_path.isnot(None),
-                selected_picked_generation.mp3_path != "",
-                selected_picked_generation.is_archived.is_(False),
-            )
-            .order_by(selected_picked_generation.created_at.desc())
-            .limit(1)
-            .scalar_subquery()
-        )
-        latest_playable_generation_number = (
-            db.query(func.max(candidate_generation.generation_number))
-            .filter(
-                candidate_generation.song_id == Generation.song_id,
-                playable_candidate,
-            )
-            .scalar_subquery()
-        )
-        matching_generation = (
-            db.query(Generation.id)
-            .join(Song, Generation.song_id == Song.id)
-            .join(Album, Song.album_id == Album.id)
-            .filter(
-                Album.share_slug == slug,
-                Album.is_shared.is_(True),
-                Generation.mp3_path == filename,
-                Generation.mp3_path.isnot(None),
-                Generation.mp3_path != "",
-                Generation.is_archived.is_(False),
-                or_(
-                    and_(
-                        Generation.is_picked.is_(True),
-                        Generation.id == selected_playable_pick_id,
-                    ),
-                    and_(
-                        ~song_has_playable_pick,
-                        Generation.generation_number == latest_playable_generation_number,
-                    ),
-                ),
-            )
-            .first()
-        )
-    return matching_generation is not None
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -371,10 +304,11 @@ def get_shared_audio(
     slug: str,
     filename: str,
     request: Request,
+    db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not _shared_audio_filename_exists(ctx, slug, filename):
+    if not shared_album_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)

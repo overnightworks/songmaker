@@ -355,6 +355,9 @@ from songmaker_cli.db.queries.sharing import (
 from songmaker_cli.db.queries.sharing import (
     list_shared_inventory as list_shared_inventory,
 )
+from songmaker_cli.db.queries.sharing import (
+    shared_album_audio_filename_is_presented as shared_album_audio_filename_is_presented,
+)
 from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
 from songmaker_cli.db.queries.songs import (
     count_generations_by_song as count_generations_by_song,
