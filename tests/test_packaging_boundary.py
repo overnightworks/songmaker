@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from importlib.metadata import distributions, packages_distributions
 from pathlib import Path
 
+import yaml
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 
@@ -29,7 +31,7 @@ CONTAINERS = {
     "web": ContainerSpec(
         "songmaker-web",
         Path("Dockerfile"),
-        frozenset({"server", "mcp"}),
+        frozenset({"server", "mcp", "claude"}),
         "songmaker_cli.main",
         ("songmaker_cli.main", "songmaker_cli.server"),
         None,
@@ -37,7 +39,7 @@ CONTAINERS = {
     "scoring-worker": ContainerSpec(
         "songmaker-scoring-worker",
         Path("docker/scoring-worker.Dockerfile"),
-        frozenset({"server", "scoring", "whisper"}),
+        frozenset({"server", "scoring", "whisper", "claude"}),
         "songmaker_cli.scoring_worker",
         ("songmaker_cli.scoring_worker",),
         ("songmaker_cli.scoring_worker.ScoringWorkerSettings",),
@@ -153,6 +155,25 @@ def _compose_service_block(service: str) -> str:
     return "\n".join(block)
 
 
+def _raw_compose() -> dict[str, object]:
+    compose = yaml.safe_load((REPOSITORY_ROOT / "docker-compose.yml").read_text())
+    assert isinstance(compose, dict)
+    return compose
+
+
+def _raw_compose_services() -> dict[str, object]:
+    compose = _raw_compose()
+    services = compose["services"]
+    assert isinstance(services, dict)
+    return services
+
+
+def _declared_named_volumes() -> frozenset[str]:
+    volumes = _raw_compose()["volumes"]
+    assert isinstance(volumes, dict)
+    return frozenset(volumes)
+
+
 def _service_dockerfile(service_block: str) -> Path:
     match = re.search(r"^      dockerfile: (.+)$", service_block, re.MULTILINE)
     assert match, "service has no build dockerfile"
@@ -266,7 +287,6 @@ def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() ->
         assert roots == metadata_roots
 
     assert extras_by_distribution["anthropic"] == frozenset({"claude"})
-    assert all("claude" not in spec.extras for spec in CONTAINERS.values())
     assert "hiredis" not in _root_owning_extras()
     assert "lupa" not in _root_owning_extras()
 
@@ -284,39 +304,77 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
 
 
-def test_claude_api_key_without_sdk_is_honestly_unavailable_in_web_container() -> None:
-    spec = CONTAINERS["web"]
-    script = """
-from songmaker_cli.cowriter.catalog import (
-    DependencyUnavailableProvider,
-    get_provider_configuration,
-    list_provider_models,
-)
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
+    """The documented ANTHROPIC_API_KEY path is installed in both images."""
+    owns_the_sdk = _optional_extras_by_distribution()["anthropic"]
 
-configuration = get_provider_configuration("claude")
-assert configuration == DependencyUnavailableProvider(
-    "claude", "anthropic", "ANTHROPIC_API_KEY",
-)
-try:
-    list_provider_models("claude")
-except ProviderUnavailableError as error:
-    assert "required dependency 'anthropic'" in str(error)
-else:
-    raise AssertionError("missing Claude SDK was accepted")
-"""
-    blocked_roots = frozenset(
-        root for root, owners in _root_owning_extras().items()
-        if not owners & spec.extras
-    )
-    assert "anthropic" in blocked_roots
-    completed = _run_with_blocked_optional_imports(
-        spec,
-        blocked_roots,
-        script,
-        {"ANTHROPIC_API_KEY": "packaging-boundary-test"},
-    )
-    assert completed.returncode == 0, (
-        f"web ({spec.entrypoint}) did not report the omitted Claude SDK.\n"
-        f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-    )
+    for container in ("web", "scoring-worker"):
+        assert CONTAINERS[container].extras & owns_the_sdk, container
+    assert not CONTAINERS["music-worker"].extras & owns_the_sdk
+
+
+def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
+    expected_sources_by_target = {
+        "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
+        "/home/songmaker/.claude/.credentials.json": (
+            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
+            "/claude.json"
+        ),
+    }
+    services = _raw_compose_services()
+    declared_named_volumes = _declared_named_volumes()
+
+    for service_name in ("songmaker-web", "songmaker-scoring-worker"):
+        service = services[service_name]
+        assert isinstance(service, dict)
+        assert "extends" not in service, (
+            f"{service_name} must not inherit mounts through Compose extends"
+        )
+        assert "volumes_from" not in service, (
+            f"{service_name} must not inherit mounts through Compose volumes_from"
+        )
+        volumes = service["volumes"]
+        assert isinstance(volumes, list)
+        bind_mounts: list[dict[str, object]] = []
+        for volume in volumes:
+            if isinstance(volume, str):
+                source = volume.split(":", maxsplit=1)[0]
+                assert source in declared_named_volumes, (
+                    f"{service_name} must use Compose long syntax for every bind "
+                    f"mount so its read-only and host-path protections are explicit: "
+                    f"{volume!r} is not a declared named volume"
+                )
+                continue
+
+            assert isinstance(volume, dict), (
+                f"{service_name} has an unsupported volume declaration: {volume!r}"
+            )
+            if volume.get("type") == "bind":
+                bind_mounts.append(volume)
+                continue
+
+            assert volume.get("type") == "volume", (
+                f"{service_name} volume mappings must declare their type: {volume!r}"
+            )
+            source = volume.get("source")
+            assert source in declared_named_volumes, (
+                f"{service_name} volume mapping has an undeclared source: {source!r}"
+            )
+
+        assert bind_mounts, service_name
+        assert {mount.get("target") for mount in bind_mounts} == set(
+            expected_sources_by_target,
+        )
+
+        for mount in bind_mounts:
+            target = mount.get("target")
+            assert isinstance(target, str)
+            source = mount.get("source")
+            assert isinstance(source, str)
+            assert "~/.claude" not in source
+            assert "~/.claude.json" not in source
+            assert source == expected_sources_by_target[target]
+            assert mount.get("read_only") is True
+            bind_options = mount.get("bind")
+            assert isinstance(bind_options, dict)
+            assert bind_options.get("create_host_path") is False

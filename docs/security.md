@@ -382,7 +382,7 @@ being in place.
 - **System prompt**: Hardcoded server-side (`SYSTEM_PROMPT` in `chat_api.py`). Clients cannot override it. Song context is wrapped in `<song_context>` XML tags with an untrusted-data notice instructing Claude to ignore instructions inside tags.
 - **Multi-turn history**: Stored in `chat_messages` table, scoped to song. Ownership enforced via `check_song_access()` on every endpoint. Max 50 messages per song.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
-- **CLI backend, every call shape**: `_build_mcp_cli_cmd()` (the co-writer, MCP tools attached) and `_build_cli_cmd()` (the legacy `/songs/{id}/chat` endpoint and the lyrical-coherence judge, no tools at all) both apply `--tools ""` (removes the CLI's entire built-in tool set, so a tool a future Claude Code version ships cannot be called even though nobody here has heard of it), `--setting-sources ""` (drops the mounted `~/.claude/settings.json`, whose `permissions.allow` and `defaultMode` would otherwise decide what a session may do), `--strict-mcp-config` (ignores MCP servers configured anywhere but in the temporary config we write, when one is attached at all), and `--disable-slash-commands` (the CLI otherwise still resolves its own slash commands and skills from a prompt beginning with `/`; our own prompts never do, but this closes the channel rather than relying on that). The co-writer additionally gets `--allowedTools mcp__songmaker__*`, pre-approving our own MCP tools so the non-interactive session never waits for a permission answer nobody is there to give. No `--disallowedTools` list is kept, and `--permission-mode bypassPermissions` is gone from both — with nothing but the allowlisted tools present, there is nothing left to bypass. The two builders themselves check nothing — they format flags — which is why the next bullet is a separate mechanism, not a property of these functions.
+- **CLI backend, every call shape**: `_build_mcp_cli_cmd()` (the co-writer, MCP tools attached) and `_build_cli_cmd()` (the legacy `/songs/{id}/chat` endpoint and the lyrical-coherence judge, no tools at all) both apply `--tools ""` (removes the CLI's entire built-in tool set, so a tool a future Claude Code version ships cannot be called even though nobody here has heard of it), `--setting-sources ""` (drops any profile `~/.claude/settings.json`, whose `permissions.allow` and `defaultMode` would otherwise decide what a session may do), `--strict-mcp-config` (ignores MCP servers configured anywhere but in the temporary config we write, when one is attached at all), and `--disable-slash-commands` (the CLI otherwise still resolves its own slash commands and skills from a prompt beginning with `/`; our own prompts never do, but this closes the channel rather than relying on that). The co-writer additionally gets `--allowedTools mcp__songmaker__*`, pre-approving our own MCP tools so the non-interactive session never waits for a permission answer nobody is there to give. No `--disallowedTools` list is kept, and `--permission-mode bypassPermissions` is gone from both — with nothing but the allowlisted tools present, there is nothing left to bypass. The two builders themselves check nothing — they format flags — which is why the next bullet is a separate mechanism, not a property of these functions.
 - **Tool-surface verification, one gate per call shape, not per caller**: `_build_cli_cmd()` is reached only through `_call_cli()`/`_acall_cli()`, and those two call `verify_no_builtin_cli_tools()`/`averify_no_builtin_cli_tools()` themselves before building anything — so `chat_api.py`'s legacy endpoint and the lyrical-coherence judge are covered by the same gate without either having called it themselves (#351). `_build_mcp_cli_cmd()` is reached only through the two MCP-attached entry points (`acall_claude_with_mcp`/`acall_claude_with_mcp_stream`), which call `verify_cli_tool_surface()` themselves the same way — a separate gate, not routed through `_call_cli()`/`_acall_cli()`. On a cache **miss**, the CLI is a bind-mounted binary that updates itself, so the relevant gate starts a session with exactly the flags above and reads the tool names — and the `slash_commands` list — out of the CLI's own `system` init event (`subtype` checked too, not just `type`); a cache **hit** returns the remembered verdict without starting a session at all. The co-writer's probe attaches the real `--mcp-config` and requires the reported tool set to equal, exactly, the eleven `mcp__songmaker__*` names — a hand-maintained literal tuple in `provider.py`, not imported from `mcp_server/server.py` (that would pull the `mcp` package into containers that do not carry it), kept honest by a test that compares the two — not merely a subset check, so a tool going missing is caught the same way an extra one is, but an unexpected tool or a reachable slash command is *always* a permanent mismatch regardless of whether the MCP connection itself came up (a CLI reporting `tools=["Bash"]` with its MCP connection also down is confirmed dangerous, not merely unverifiable). The tool-free probe requires no tool and no slash command at all, and deliberately never attaches `--mcp-config`: registering and listing MCP tools touches no database (only a tool *call* does), so that is not why this probe stays separate — it needs the `mcp` extra, which the scoring-worker container does not install; that container does have a reachable database (it writes scores back to it), so the database is not its actual gap (confirmed live: a missing `mcp` package makes the MCP connection fail, and a failed connection reports zero tools, the same shape a clean tool-free CLI reports).
   A mismatch raises `CliToolSurfaceError` and only that call is refused, not the whole server — but a failed MCP connection with nothing else wrong is not a mismatch: it is treated as a probe failure (see below), because it reports the same empty tool list a clean, intentionally tool-free CLI would, and confusing the two used to cache "all eleven missing" forever. A genuine verdict — this build's tool surface, clean or not — is cached per resolved binary build (path, size, mtime) with no expiry, since it only changes when the build does. A probe **failure** (timeout, unparseable output, or a failed MCP connection with nothing else unexpected) is cached separately, only for `CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS`. A process that outlives SIGKILL is a third case, checked before parsing, the MCP check, or the verdict ever run — a clean read followed by a zombie is not trusted either. Not a verdict about the build (the build is fine; this one instance is stuck) and not an ordinary failure either — ten more seconds will not make it healthy — so it gets the much longer `CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS` instead, so the ordinary retry schedule cannot spawn a fresh zombie every ten seconds.
 
@@ -394,17 +394,19 @@ being in place.
 - **A drifted tool surface never fails server startup** (operator ruling, round 6): #351 literally asked for an unknown tool to fail the boot, but once the gate above was confirmed to cover every call path, a server that refuses albums and playback over a co-writer problem is a worse outage than the co-writer being unavailable. `lifecycle.report_claude_cli_tool_surface()` probes at boot, logs the result, and returns `"ok"` (verified clean), `"drift"` (verified, a real mismatch), or `"unverified"` (the probe could not reach a verdict at all — never silently reported as `"ok"`, the exact silent-default shape `check_no_silent_fallbacks.py` exists to catch); that state lives as a live value in `claude/provider.py` (`claude_cli_tool_surface_health()`), updated by every `verify_cli_tool_surface()` call — cache hit or fresh probe alike — not captured once at boot, so a later verdict overrides an earlier one instead of staying stuck at whatever booted; `GET /health` reports it under the same field name, so the state reaches monitoring and the operator, not only the first musician who opens a chat and finds it broken. Nothing polls in the background: the value only changes when the gate itself runs again, so if the CLI disappears without a fresh probe following it, `/health` keeps reporting the last verdict until the next call to the gate. `tests/test_lifecycle_claude_tool_surface.py` and `tests/test_health_api.py` pin the boot report and the live `/health` field across all three states; that a co-writer turn is actually refused on drift is proven separately, in `tests/test_claude_provider.py`'s `test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface` and `test_cowriter_non_stream_turn_refuses_a_cli_with_an_unverified_tool_surface`.
 - **Legacy endpoint**: `POST /api/songs/{id}/chat` (`chat_api.py`) has no caller left — not the frontend, not the CLI, not a test outside its own suite. The live co-writer chat is `POST /chat/turn` in `conversation_api.py`. It is gated the same as every other tool-free call above, but it is a public endpoint, so removing it outright needs the operator's word, not a decision made in this file.
 
-## Agent-CLI Login Mirror (host side)
+## Agent-CLI Mounts
 
-The co-writer and the lyrical-coherence judge sign in to Claude, Grok and
-Codex with the operator's *subscriptions* rather than API keys. Making those
-logins reachable from a container is a separate, later change; what lives here
-is the host-side half, and it is useful and safe on its own.
+The web co-writer uses the operator's Claude *subscription*. Grok and Codex
+catalog and turn paths require `XAI_API_KEY` / `OPENAI_API_KEY`; neither
+service receives their binary or login mirror. The lyrical-coherence judge uses
+Claude's subscription as a fallback and likewise uses API keys for Grok and
+Codex. The host owns the real logins; containers receive only redacted,
+read-only mirror files.
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
-`scripts/install-cli-credentials-mirror.sh`. Nothing reads those copies yet.
+`scripts/install-cli-credentials-mirror.sh`.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
@@ -459,6 +461,13 @@ look right prove nothing about currency if what rewrites them has been
 erroring out since yesterday. The service is not required to be *active* — a
 finished oneshot is legitimately inactive.
 
+`SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` take
+effect only when exported in the deployment environment, not when written only
+in `.env`: the preflight reads its values from the exported environment and
+does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
+therefore belong in the persistent service environment. Compose currently
+mounts only `SONGMAKER_CLAUDE_CLI`.
+
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
 preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
@@ -488,8 +497,9 @@ That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's
 own tests kept passing while the surface the deploy tick runs stopped checking
 anything at all. The shell entry point therefore has its own tests, separate
-from the Python ones. One check, two callers today — the installer and the
-auto-deploy tick (#364) — and a third once the containers mount these files.
+from the Python ones. The installer, boot, and the auto-deploy tick use this
+same check before Compose mounts the credential mirrors and the default or
+environment-selected CLI binaries.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
@@ -528,13 +538,36 @@ looking at it — neither an unset variable at runtime nor a directory whose
 parent does not exist is visible to a syntax check — and it now also pins the
 refusals above, each of which turns it red when removed.
 
-**What this does not yet do.** Nothing mounts these copies. Until the
-container-side change lands, the mirror is a host service that keeps three
-files current and a preflight that can say whether they are sound. The
-preflight does insist that the mirror unit is installed and enabled —
-old-but-valid copies would otherwise pass every content check while nothing
-kept them current — so the auto-deploy tick and boot refuse until the installer
-has been run once.
+### What each service mounts
+
+`songmaker-web` owns a writable `.claude` directory in its image and mounts
+these host files read-only:
+
+| Host path | Container path |
+|---|---|
+| `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
+| `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
+
+`songmaker-scoring-worker` owns only `.claude` and mounts only the Claude
+binary and `claude.json` mirror. Its Grok and Codex judge calls use
+`XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
+only widen the blast radius.
+
+Grok and Codex mirrors are mounted with their consumer in #407, not into these
+services before that consumer needs them.
+
+Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
+Every bind uses Compose long syntax, `read_only: true`, and
+`bind.create_host_path: false`: a missing source fails before a writable host
+directory can be created. Only files, never an operator profile directory, are
+mounted; a compromised container cannot add host-side profile settings or hooks.
+
+### API-key path
+
+Both provider-facing images install the `claude` extra, so
+`ANTHROPIC_API_KEY` serves the Claude judge and model catalog. It does not
+replace the web container's Claude CLI mirror: the co-writer needs the CLI
+with Songmaker's MCP tools, and the SDK has no equivalent tool path.
 
 ## Child Process Secret Scrubbing
 
@@ -552,7 +585,7 @@ Everything a child scorer needs is resolved in the parent and carried into the c
 
 The invariant this protects: no module reachable from `subprocess_runner`'s own import chain may read `os.environ` or construct `Settings()` as a *module-level* side effect (that code runs before the scrub ever gets a chance to act), and no scorer module — all of them imported later, inside `_child_main`, after the scrub — may read `os.environ` or construct `Settings()` at call time either. A future scorer that needs a secret does not belong in the child at all: give its spec `host=ScorerHost.PARENT` and run it in the worker parent on the result the child returned, the way `lyrical_coherence` does. Non-secret configuration reaches a child scorer through a new `PipelineConfig` field filled by the parent, never through a `get_settings()` call in the child.
 
-Moving the judge out of the child (#176) only relocated *where* the provider call happens — it did not give the worker parent a credential to make that call with. `jobs/scoring.py` resolves `judge_provider`/`judge_model` from the DB (`get_judge_provider`/`get_judge_model`, defaulting to Claude, #315) and hands them to `judge_lyrical_coherence()` on a `CoherenceJudgeConfig(provider=..., model=..., timeout=...)` — the config itself carries no credential. The actual key is resolved one level down, in `cowriter/dispatch.py`'s `call_provider_once()`, per provider: for Claude, `call_claude_once()` reads `settings.anthropic_api_key`, and `call_claude()` (`claude/provider.py`) falls through to the CLI backend whenever no API key is passed; until issue #182, `songmaker-scoring-worker` had neither credential, so every judged run raised `UnavailableError: Claude CLI not found` and `lyrical_coherence` never produced a value. For Grok or Codex there is no CLI fallback: `_require_secret()` reads `settings.xai_api_key`/`settings.openai_api_key` and raises a named `ProviderUnavailableError` the instant the key is unset — never a silent fallback to Claude — which is why both keys must be set on `songmaker-scoring-worker` (not just `songmaker-web`) for a non-Claude judge to work at all. #182 gives `songmaker-scoring-worker` the same three Claude CLI bind mounts as `songmaker-web` — `~/.local/bin/claude` (read-only), `~/.claude`, `~/.claude.json` (see CLAUDE.md's Known Technical Debt entry) — so the worker parent authenticates to Claude the same way the web container's co-writer chat does. This works unmodified because both images build `FROM python:3.12-slim` with a `songmaker` user whose home is `/home/songmaker`: the mounted `claude` binary is a self-contained native executable linked only against glibc (no Node.js runtime required in the container), and it reads its session config from `$HOME/.claude` / `$HOME/.claude.json` exactly as it does in `songmaker-web`. This credential lives in the worker *parent*, not the scorer child — the child-process scrub above is unaffected: `jobs/scoring.py` still calls `get_settings()` and resolves the key in the parent process only, and `PipelineConfig` (what actually crosses the pipe to the child) still carries no secret field.
+Moving the judge out of the child (#176) only relocated *where* the provider call happens — it did not give the worker parent a credential to make that call with. `jobs/scoring.py` resolves `judge_provider`/`judge_model` from the DB and hands them to `judge_lyrical_coherence()` on a credential-free `CoherenceJudgeConfig`. `call_provider_once()` resolves the real credential in the worker parent: Claude falls through to the CLI whenever `ANTHROPIC_API_KEY` is unset, while Grok and Codex require `XAI_API_KEY` / `OPENAI_API_KEY`. The scoring image owns a writable `/home/songmaker/.claude` profile and mounts only the self-contained Claude binary plus the redacted `/home/songmaker/.claude/.credentials.json` mirror; Claude creates its own `~/.claude.json`. It deliberately mounts no Grok or Codex login because it never runs those CLIs. The credential remains in the worker parent, not the scorer child, so the child-process scrub and credential-free `PipelineConfig` are unaffected.
 
 The scrub is also weaker than the Popen `env=` path used for the Claude CLI and ACE-Step children: `del os.environ[key]` calls libc's `unsetenv()`, which blocks `getenv()` — every subsequent read via `os.environ`/`os.getenv`, and every process this one execs from here on, sees the key as gone — but it does not erase the bytes the kernel copied onto the process's stack at its own `execve()`, which is what `/proc/<pid>/environ` reads directly. So the scrubbed keys stay visible in `/proc/<pid>/environ` for the child's entire lifetime even though `getenv()` can no longer see them. Accepted risk per CLAUDE.md's "Trust boundaries: subprocesses share OS user" entry: reading another process's `/proc/<pid>/environ` requires being that same OS user (or root), and the scoring-worker container's `songmaker` user has no other tenant sharing it, so this gap adds no new exploitation path beyond the one already accepted there. Never bind-mount `.env` into the `songmaker-scoring-worker` container — `Settings` walks up the filesystem looking for it, and doing so would hand the scrubbed child back every secret the scrub just removed.
 
@@ -714,7 +747,11 @@ After a successful recreate, the tick runs `docker image prune --force --filter 
 
 - `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
 - `ANTHROPIC_API_KEY`: Optional (for server-side Claude chat). Never logged or returned in responses.
-- `.env`: Gitignored. Never committed. Single source for all Docker Compose substitutions and pydantic Settings.
+- `.env`: Gitignored. Never committed. Single source for pydantic Settings and
+  Docker Compose substitutions except the non-secret
+  `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path
+  overrides: systemd boot and auto-deploy must receive those as persistent
+  exported environment values so the preflight sees the same paths as Compose.
 
 ## Input Validation
 
