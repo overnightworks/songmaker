@@ -16,6 +16,14 @@ def audio_filename_is_contained(audio_dir: Path, filename: str) -> bool:
     return (audio_root / filename).resolve().is_relative_to(audio_root)
 
 
+def canonical_audio_filename(audio_dir: Path, filename: str) -> str | None:
+    """Return the root-relative canonical filename, or ``None`` if it escapes."""
+    if not audio_filename_is_contained(audio_dir, filename):
+        return None
+    audio_root = audio_dir.resolve()
+    return (audio_root / filename).resolve().relative_to(audio_root).as_posix()
+
+
 def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
     """Return an existing audio file constrained to ``audio_dir``."""
     audio_root = audio_dir.resolve()

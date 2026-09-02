@@ -6,12 +6,14 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TypeAlias, TypeVar
 
 from sqlalchemy import ColumnElement, and_, func, or_
 from sqlalchemy.orm import Session, aliased, joinedload
 from sqlalchemy.orm.util import AliasedClass
 
+from songmaker_cli.audio_paths import canonical_audio_filename
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_GENERATION,
@@ -95,12 +97,12 @@ def shared_album_audio_filename_is_presented(
     session: Session,
     slug: str,
     filename: str,
+    audio_dir: Path,
 ) -> bool:
-    """Mirror the picked-or-latest-playable selection in the public share
-    page without loading an album graph merely to authorize its audio URL."""
     return _shared_pick_audio_filename_is_presented(
         session,
         filename,
+        audio_dir,
         share_condition=and_(
             Album.share_slug == slug,
             Album.is_shared.is_(True),
@@ -113,12 +115,12 @@ def shared_song_audio_filename_is_presented(
     session: Session,
     slug: str,
     filename: str,
+    audio_dir: Path,
 ) -> bool:
-    """Mirror the picked-or-latest-playable selection in the public share
-    page without loading an album graph merely to authorize its audio URL."""
     return _shared_pick_audio_filename_is_presented(
         session,
         filename,
+        audio_dir,
         share_condition=and_(
             Song.share_slug == slug,
             Song.is_shared.is_(True),
@@ -129,10 +131,13 @@ def shared_song_audio_filename_is_presented(
 def _shared_pick_audio_filename_is_presented(
     session: Session,
     filename: str,
+    audio_dir: Path,
     *,
     share_condition: ShareCondition,
     extra_join: ExtraJoin | None = None,
 ) -> bool:
+    """Mirror the picked-or-latest-playable selection in the public share
+    page without loading an album graph merely to authorize its audio URL."""
     candidate_generation = aliased(Generation)
     selected_picked_generation = aliased(Generation)
     song_has_playable_pick = (
@@ -164,10 +169,9 @@ def _shared_pick_audio_filename_is_presented(
         .scalar_subquery()
     )
     matching_generation_query = (
-        session.query(Generation.id)
+        session.query(Generation.mp3_path)
         .join(Song, Generation.song_id == Song.id)
         .filter(
-            Generation.mp3_path == filename,
             playable_take_filter(),
             or_(
                 and_(
@@ -183,33 +187,40 @@ def _shared_pick_audio_filename_is_presented(
     )
     if extra_join is not None:
         matching_generation_query = matching_generation_query.join(*extra_join)
-    matching_generation = matching_generation_query.filter(share_condition).first()
-    return matching_generation is not None
+    matching_filenames = matching_generation_query.filter(share_condition).all()
+    return any(
+        canonical_audio_filename(audio_dir, stored_filename) == filename
+        for (stored_filename,) in matching_filenames
+    )
 
 
 def shared_playlist_audio_filename_is_presented(
     session: Session,
     slug: str,
     filename: str,
+    audio_dir: Path,
 ) -> bool:
     """Whether the public playlist presents this playable entry's audio URL.
 
     Unlike album and song shares, a playlist presents every playable entry,
     rather than choosing a picked or latest fallback generation.
     """
-    matching_entry = (
-        session.query(PlaylistEntry.id)
+    matching_filenames = (
+        session.query(PlaylistEntry)
         .join(Playlist, PlaylistEntry.playlist_id == Playlist.id)
         .join(Generation, PlaylistEntry.generation_id == Generation.id)
+        .with_entities(Generation.mp3_path)
         .filter(
             Playlist.share_slug == slug,
             Playlist.is_shared.is_(True),
-            Generation.mp3_path == filename,
             playable_take_filter(),
         )
-        .first()
+        .all()
     )
-    return matching_entry is not None
+    return any(
+        canonical_audio_filename(audio_dir, stored_filename) == filename
+        for (stored_filename,) in matching_filenames
+    )
 
 
 def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:

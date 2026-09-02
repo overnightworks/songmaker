@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -250,7 +249,7 @@ def _add_second_shared_audio_take(
         pytest.param("no_pick_uses_latest_fallback", "admin_user/g2.mp3", 200),
         pytest.param("nothing_playable", None, 200),
         pytest.param("album_not_shared", None, 404),
-        pytest.param("in_root_dot_segments", "admin_user/../admin_user/g1.mp3", 200),
+        pytest.param("in_root_dot_segments", "admin_user/g1.mp3", 200),
     ],
 )
 def test_shared_audio_authorization_matches_presented_share_selection(
@@ -310,9 +309,10 @@ def test_shared_audio_authorization_matches_presented_share_selection(
 
     audio_url = shared_response.json()["songs"][0]["audio_url"]
     assert audio_url == f"/shared/{slug}/audio/{expected_filename}"
-    assert unauthed.get(_percent_encoded_dot_segments(audio_url)).status_code == 200
+    assert unauthed.get(audio_url).status_code == 200
     other_filename = "admin_user/g1.mp3"
-    assert unauthed.get(f"/shared/{slug}/audio/{other_filename}").status_code == 404
+    if other_filename != expected_filename:
+        assert unauthed.get(f"/shared/{slug}/audio/{other_filename}").status_code == 404
 
 
 def _add_shared_audio_playlist(session) -> None:
@@ -333,16 +333,19 @@ def _percent_encoded_dot_segments(path: str) -> str:
     return path.replace("..", "%2E%2E")
 
 
-def _presented_audio_filenames(payload: dict, entries_key: str) -> set[str]:
+def _presented_audio_urls(payload: dict, entries_key: str) -> list[str]:
     entries = payload[entries_key]
     if isinstance(entries, list):
         audio_urls = (entry["audio_url"] for entry in entries)
     else:
         audio_urls = (entries,)
+    return [audio_url for audio_url in audio_urls if audio_url is not None]
+
+
+def _presented_audio_filenames(payload: dict, entries_key: str) -> set[str]:
     return {
         audio_url.rsplit("/audio/", maxsplit=1)[1]
-        for audio_url in audio_urls
-        if audio_url is not None
+        for audio_url in _presented_audio_urls(payload, entries_key)
     }
 
 
@@ -356,7 +359,7 @@ def _presented_audio_filenames(payload: dict, entries_key: str) -> set[str]:
         pytest.param("nothing_playable", set()),
         pytest.param("not_shared", set()),
         pytest.param("traversal", set()),
-        pytest.param("in_root_dot_segments", {"admin_user/../admin_user/g1.mp3"}),
+        pytest.param("in_root_dot_segments", {"admin_user/g1.mp3"}),
     ],
 )
 def test_shared_song_audio_authorization_matches_presented_share_selection(
@@ -431,6 +434,10 @@ def test_shared_song_audio_authorization_matches_presented_share_selection(
     if configuration == "traversal":
         assert candidate_statuses["admin_user/../../outside.mp3"] == 404
     assert shared_response.status_code == 200
+    assert all(
+        unauthed.get(audio_url).status_code == 200
+        for audio_url in _presented_audio_urls(shared_response.json(), "audio_url")
+    )
     assert _presented_audio_filenames(shared_response.json(), "audio_url") == delivered_filenames
 
 
@@ -446,7 +453,7 @@ def test_shared_song_audio_authorization_matches_presented_share_selection(
         pytest.param("nothing_playable", set()),
         pytest.param("not_shared", set()),
         pytest.param("traversal", set()),
-        pytest.param("in_root_dot_segments", {"admin_user/../admin_user/g1.mp3"}),
+        pytest.param("in_root_dot_segments", {"admin_user/g1.mp3"}),
     ],
 )
 def test_shared_playlist_audio_authorization_matches_presented_share_selection(
@@ -522,6 +529,10 @@ def test_shared_playlist_audio_authorization_matches_presented_share_selection(
     if configuration == "traversal":
         assert candidate_statuses["admin_user/../../outside.mp3"] == 404
     assert shared_response.status_code == 200
+    assert all(
+        unauthed.get(audio_url).status_code == 200
+        for audio_url in _presented_audio_urls(shared_response.json(), "entries")
+    )
     assert _presented_audio_filenames(shared_response.json(), "entries") == delivered_filenames
 
 
@@ -589,9 +600,9 @@ def test_shared_audio_lookups_run_off_the_event_loop(
     real_lookup = getattr(sharing_api, lookup_name)
     observed_threads: list[int] = []
 
-    def _observing_lookup(db, slug: str, filename: str) -> bool:
+    def _observing_lookup(db, slug: str, filename: str, audio_dir: Path) -> bool:
         observed_threads.append(threading.get_ident())
-        return real_lookup(db, slug, filename)
+        return real_lookup(db, slug, filename, audio_dir)
 
     monkeypatch.setattr(sharing_api, lookup_name, _observing_lookup)
 
@@ -656,7 +667,6 @@ def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
 
 def test_shared_audio_hides_path_traversal_as_a_missing_file(
     sharing_app: TestClient,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
     factory = sharing_app.app.state.ctx.db
@@ -668,7 +678,6 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
         })
         session.commit()
 
-    caplog.set_level(logging.WARNING, logger="songmaker_cli.audio_paths")
     traversal_response = unauthed.get(
         f"/shared/{slug}/audio/admin_user/%2E%2E/%2E%2E/outside.mp3",
     )
@@ -686,12 +695,6 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
     assert missing_response.status_code == 404
     assert missing_response.json()["detail"] == "Not Found"
     assert traversal_response.headers == missing_response.headers
-    traversal_log = next(
-        record for record in caplog.records
-        if record.name == "songmaker_cli.audio_paths"
-    ).getMessage()
-    assert "admin_user/../../outside.mp3" in traversal_log
-    assert str(sharing_app.app.state.ctx.audio_dir) not in traversal_log
 
 
 def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:

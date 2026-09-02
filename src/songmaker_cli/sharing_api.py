@@ -25,7 +25,7 @@ from songmaker_cli.api_models.songs import (
     share_pick_media,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.audio_paths import audio_filename_is_contained, resolve_audio_path
+from songmaker_cli.audio_paths import canonical_audio_filename, resolve_audio_path
 from songmaker_cli.auth import resolve_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
@@ -149,10 +149,12 @@ def _shared_audio_url(
     if (
         generation is None
         or not is_playable_take(generation)
-        or not audio_filename_is_contained(audio_dir, generation.mp3_path)
     ):
         return None
-    return f"{route}/{generation.mp3_path}"
+    filename = canonical_audio_filename(audio_dir, generation.mp3_path)
+    if filename is None:
+        return None
+    return f"{route}/{filename}"
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -318,7 +320,7 @@ def get_shared_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_album_audio_filename_is_presented(db, slug, filename):
+    if not shared_album_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)
@@ -396,7 +398,7 @@ def get_shared_song_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_song_audio_filename_is_presented(db, slug, filename):
+    if not shared_song_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)
@@ -539,7 +541,7 @@ def get_shared_playlist_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    if not shared_playlist_audio_filename_is_presented(db, slug, filename):
+    if not shared_playlist_audio_filename_is_presented(db, slug, filename, ctx.audio_dir):
         raise HTTPException(404, "Not found")
 
     audio_path = resolve_audio_path(ctx.audio_dir, filename)
