@@ -119,7 +119,22 @@ check_mirror_is_running() {
     # The triggers must also be RUNNING; enabled only says "at the next boot".
     _unit_is_active songmaker-cli-credentials-mirror.path || return
     _unit_is_active songmaker-cli-credentials-mirror.timer || return
+    # The oneshot is not asked to be active — a finished one is `inactive`, and
+    # demanding otherwise would cry wolf on every healthy machine. It is asked
+    # not to have FAILED: live triggers plus an old but valid copy prove
+    # nothing about currency if the thing that rewrites it has been erroring
+    # out since yesterday.
+    _unit_has_not_failed songmaker-cli-credentials-mirror.service || return
     echo "ok: the mirror service, its login watch and its timer are all live"
+}
+
+_unit_has_not_failed() {
+    local unit="$1"
+    if systemctl is-failed --quiet "$unit" 2>/dev/null; then
+        problem "$unit is in the failed state, so the mirrored logins are as" \
+            "old as its last success. Look at: systemctl status $unit"
+        return 1
+    fi
 }
 
 _unit_is_installed_and_enabled() {
@@ -144,6 +159,16 @@ _unit_is_active() {
         return 1
     fi
 }
+
+# The credential files themselves. This call was lost once already, and
+# nothing noticed: the systemd checks below still passed, so the preflight
+# reported success while missing files, wrong modes, symlinks and real refresh
+# tokens all went through. tests/test_install_cli_credentials_mirror.py drives
+# THIS script for exactly that reason — the Python function having its own
+# tests is not the same as the surface the deploy tick calls being tested.
+if ! "$MIRROR_SCRIPT" --verify --mirror-dir "$CREDENTIALS_DIR" --home "$HOME_DIR"; then
+    problems=$((problems + 1))
+fi
 
 check_mirror_is_running
 

@@ -10,6 +10,7 @@ nothing outside the temporary directories.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -94,6 +95,7 @@ case "$1" in
         exit 0 ;;
     is-enabled) unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.enabled" ]; exit $? ;;
     is-active)  unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.active" ]; exit $? ;;
+    is-failed)  unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.failed" ]; exit $? ;;
     list-unit-files)
         unit="$(unit_of "$@")"
         if [ -f "$SONGMAKER_UNIT_DIR/$unit" ]; then
@@ -457,7 +459,9 @@ PREFLIGHT_UNITS = (
 )
 
 
-def _run_preflight(run_installer, sabotage=None) -> subprocess.CompletedProcess[str]:
+def _run_preflight(
+    run_installer, sabotage=None, path: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     run_installer()
     if sabotage is not None:
         sabotage()
@@ -469,7 +473,7 @@ def _run_preflight(run_installer, sabotage=None) -> subprocess.CompletedProcess[
         ],
         env={
             **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
+            "PATH": path or f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
             "SANDBOX_ROOT": str(run_installer.sandbox),
             "SYSTEMCTL_LOG": str(run_installer.log),
             "SONGMAKER_UNIT_DIR": str(run_installer.units),
@@ -479,6 +483,97 @@ def _run_preflight(run_installer, sabotage=None) -> subprocess.CompletedProcess[
         },
         text=True, capture_output=True, check=False,
     )
+
+
+@pytest.mark.parametrize(
+    ("cli", "mirror_file"),
+    [("claude", "claude.json"), ("grok", "grok.json"), ("codex", "codex.json")],
+)
+def test_a_missing_credential_file_fails_the_preflight(
+    run_installer, cli, mirror_file,
+) -> None:
+    """Through the shell, not the Python function.
+
+    The verifier call was deleted from this script once and nothing went red:
+    its Python tests kept passing while the surface the deploy tick actually
+    runs stopped checking anything at all.
+    """
+    mirrored = run_installer.home / ".songmaker/agent-cli-credentials"
+
+    result = _run_preflight(run_installer, lambda: (mirrored / mirror_file).unlink())
+
+    assert result.returncode == 1
+    assert "is missing" in result.stderr
+
+
+def test_a_hand_copied_login_fails_the_preflight(run_installer) -> None:
+    """The invariant the whole arrangement exists for, checked where it counts."""
+    mirrored = run_installer.home / ".songmaker/agent-cli-credentials"
+    real_login = (run_installer.home / ".claude/.credentials.json").read_text()
+
+    result = _run_preflight(
+        run_installer,
+        lambda: (mirrored / "claude.json").write_text(real_login),
+    )
+
+    assert result.returncode == 1
+    assert "renewal token" in result.stderr
+
+
+def test_a_world_readable_mirror_file_fails_the_preflight(run_installer) -> None:
+    mirrored = run_installer.home / ".songmaker/agent-cli-credentials"
+
+    result = _run_preflight(
+        run_installer, lambda: (mirrored / "grok.json").chmod(0o644),
+    )
+
+    assert result.returncode == 1
+    assert "0644" in result.stderr
+
+
+def test_a_symlinked_mirror_file_fails_the_preflight(run_installer, tmp_path) -> None:
+    mirrored = run_installer.home / ".songmaker/agent-cli-credentials"
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_text("{}")
+
+    def _swap() -> None:
+        (mirrored / "codex.json").unlink()
+        (mirrored / "codex.json").symlink_to(elsewhere)
+
+    result = _run_preflight(run_installer, _swap)
+
+    assert result.returncode == 1
+
+
+def test_a_failed_mirror_service_fails_the_preflight(run_installer) -> None:
+    """Live triggers and an old valid copy prove nothing about currency."""
+    state = run_installer.sandbox / "systemctl-state"
+
+    result = _run_preflight(
+        run_installer,
+        lambda: (state / "songmaker-cli-credentials-mirror.service.failed").touch(),
+    )
+
+    assert result.returncode == 1
+    assert "failed state" in result.stderr
+
+
+def test_the_preflight_says_so_when_it_cannot_ask_systemd(
+    run_installer, tmp_path,
+) -> None:
+    """A minimal PATH with what the script needs — and no systemctl."""
+    minimal = tmp_path / "minimal-bin"
+    minimal.mkdir()
+    for tool in ("dirname", "readlink", "env", "python3", "sed", "grep", "cut",
+                 "getent", "id", "head", "cat", "mkdir", "bash"):
+        found = shutil.which(tool)
+        if found:
+            (minimal / tool).symlink_to(found)
+
+    result = _run_preflight(run_installer, path=str(minimal))
+
+    assert result.returncode == 1
+    assert "systemctl is not available" in result.stderr
 
 
 def test_the_preflight_passes_once_everything_is_installed(run_installer) -> None:
