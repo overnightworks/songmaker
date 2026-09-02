@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -683,12 +685,24 @@ def test_tool_free_command_offers_no_tool_at_all() -> None:
 # at all. Both are exercised below.
 
 
-def _init_line(tools: list[str], *, slash_commands: list[str] | None = None) -> bytes:
+def _init_line(
+    tools: list[str],
+    *,
+    slash_commands: list[str] | None = None,
+    mcp_connected: bool = True,
+) -> bytes:
+    """A ``system``/``init`` line. ``mcp_connected`` only matters to the
+    MCP-attached probe (the no-MCP probe never reads ``mcp_servers`` at
+    all) — defaults to a connected songmaker server so every existing
+    MCP-attached test keeps proving what it always proved."""
     return json.dumps({
         "type": "system",
         "subtype": "init",
         "tools": tools,
         "slash_commands": slash_commands or [],
+        "mcp_servers": [
+            {"name": "songmaker", "status": "connected" if mcp_connected else "failed"},
+        ],
     }).encode() + b"\n"
 
 
@@ -831,12 +845,43 @@ def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
 def test_tool_surface_is_probed_once_per_cli_build(
     claude_binary, monkeypatch,
 ) -> None:
+    """Proves the cache across two *sequential* calls — not concurrency;
+    see test_tool_surface_single_flight_serializes_concurrent_probes below
+    for that (#351 round 3, Finding 2: a sequential-only stampede test
+    proves nothing about two callers racing for a cold cache)."""
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
 
     asyncio.run(verify_cli_tool_surface())
     asyncio.run(verify_cli_tool_surface())
 
     assert len(commands) == 1
+
+
+def test_tool_surface_single_flight_serializes_concurrent_probes(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 3, Finding 2: two callers racing for the same cold key
+    must share one probe. Genuine concurrency via asyncio.gather — each
+    fake exec sleeps first, so both coroutines are genuinely in flight
+    together before either can finish, the way a sequential test cannot
+    prove."""
+    calls = 0
+
+    async def fake_exec(*_cmd, **_kw):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.05)
+        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    async def _race() -> tuple[str, str]:
+        return await asyncio.gather(verify_cli_tool_surface(), verify_cli_tool_surface())
+
+    first, second = asyncio.run(_race())
+
+    assert calls == 1
+    assert first == second == str(claude_binary)
 
 
 def test_tool_surface_reports_a_cli_that_vanished_mid_update(
@@ -869,9 +914,13 @@ def test_tool_surface_rejects_an_init_event_with_the_wrong_subtype(
         asyncio.run(verify_cli_tool_surface())
 
 
-def test_tool_surface_failure_is_cached_so_a_stampede_does_not_reprobe(
+def test_tool_surface_failure_is_cached_across_sequential_calls(
     claude_binary, monkeypatch,
 ) -> None:
+    """Sequential calls only — see
+    test_tool_surface_single_flight_serializes_concurrent_probes for the
+    genuine-concurrency case a "stampede" claim actually needs (#351 round
+    3, Finding 2)."""
     commands = _answer_with(monkeypatch, b"not json\n")
 
     with pytest.raises(UnavailableError):
@@ -895,6 +944,34 @@ def test_tool_surface_failure_cache_expires_so_a_repair_takes_effect(
     clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
     asyncio.run(verify_cli_tool_surface())
 
+    assert len(commands) == 2
+
+
+def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanent_verdict(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 3, Finding 1: a failed MCP connection reports a valid
+    init event with tools=[] — the same shape "all eleven genuinely
+    missing" has. Confusing the two used to cache the failure forever in
+    the success cache, which no repair — not even a later clean probe —
+    could ever override. It must instead be a short-lived failure: a
+    second call, once that TTL passes, reaches its own, real probe."""
+    commands = _answer_with(
+        monkeypatch,
+        _init_line([], mcp_connected=False),
+        _init_line(_ALL_SONGMAKER_TOOLS),
+    )
+    clock = {"now": 0.0}
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
+
+    with pytest.raises(UnavailableError) as exc:
+        asyncio.run(verify_cli_tool_surface())
+    assert not isinstance(exc.value, CliToolSurfaceError)
+
+    clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
+    binary = asyncio.run(verify_cli_tool_surface())
+
+    assert binary == str(claude_binary)
     assert len(commands) == 2
 
 
@@ -1030,6 +1107,37 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
     verify_no_builtin_cli_tools()
 
     assert killed == [4343]
+
+
+def test_no_builtin_gate_sync_single_flight_serializes_concurrent_probes(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 3, Finding 2, sync side: two real threads racing for the
+    same cold key must share one probe — SCORING_MAX_JOBS=1 limits this in
+    the scoring worker today, but not a web process serving parallel
+    requests through the same async gate's sync twin."""
+    calls = 0
+
+    def fake_popen(_cmd, **_kw):
+        nonlocal calls
+        calls += 1
+        time.sleep(0.05)
+        return _fake_sync_cli(_init_line([]))
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+
+    results: list[str] = []
+    threads = [
+        threading.Thread(target=lambda: results.append(verify_no_builtin_cli_tools()))
+        for _ in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert calls == 1
+    assert results == [str(claude_binary), str(claude_binary)]
 
 
 def test_no_builtin_gate_sync_and_async_share_one_cache(

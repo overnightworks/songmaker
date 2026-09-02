@@ -22,7 +22,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
@@ -114,6 +114,8 @@ def clear_cli_tool_surface_cache() -> None:
     with _tool_surface_lock:
         _tool_surface_verdicts.clear()
         _tool_surface_failures.clear()
+        _tool_surface_sync_locks.clear()
+        _tool_surface_async_locks.clear()
 
 
 def clear_cli_login_status_cache() -> None:
@@ -775,13 +777,23 @@ def _build_mcp_cli_cmd(
 #   chat endpoint and the lyrical-coherence judge both funnel through these):
 #   the CLI must announce no tools at all.
 #
+# Both single-flight concurrent cold-cache callers per (binary build,
+# expectation) key, and both cache a genuine verdict forever per build but
+# a probe *failure* — including, for the MCP-attached probe, a connection
+# that never established — only briefly; see ``_verify_tool_surface_async``/
+# ``_sync`` and ``_cached_tool_surface_verdict`` below for why the two must
+# not be the same cache.
+#
 # Deliberately two checks, not one reused check: the MCP-attached probe
-# spawns the songmaker MCP server subprocess, which needs the ``mcp`` extra
-# and a reachable database — neither is installed on songmaker-scoring-worker
-# (see CLAUDE.md's packaging-boundary note; verified live against the real
-# CLI that a failed MCP connection reports zero tools, not the eleven
-# expected — see docs/security.md). The no-MCP probe needs neither, so it is
-# the one safe to run from every container.
+# spawns the songmaker MCP server subprocess, which needs the ``mcp``
+# extra — registering and listing its tools touches no database, only a
+# tool *call* does, so that is not the reason for the split. The scoring-
+# worker container does not install ``mcp`` (see CLAUDE.md's packaging-
+# boundary note), so this probe would always fail there — verified live
+# against the real CLI that a missing MCP connection reports zero tools,
+# not the eleven expected (see docs/security.md). The no-MCP probe never
+# attaches ``--mcp-config`` at all, so it needs neither and is the one
+# safe to run from every container.
 #
 # The no-MCP check does not need the MCP-attached one's stronger guarantee:
 # the command line ``_build_cli_cmd`` actually runs has no ``--mcp-config``
@@ -802,10 +814,19 @@ class BinaryBuild:
 
 @dataclass(frozen=True)
 class _AnnouncedSurface:
-    """What the CLI's own ``system`` init event says it can reach."""
+    """What the CLI's own ``system`` init event says it can reach.
+
+    ``mcp_connected`` is ``None`` when no ``--mcp-config`` was attached (the
+    no-builtin-tools probe never attaches one, so the question does not
+    apply); ``True``/``False`` otherwise, read from the init event's own
+    ``mcp_servers`` status for our server rather than assumed from the tool
+    list — a failed MCP connection reports the same empty ``tools`` a clean,
+    intentionally tool-free CLI would, and the two must not be confused.
+    """
 
     tools: tuple[str, ...]
     slash_commands: tuple[str, ...]
+    mcp_connected: bool | None
 
 
 @dataclass(frozen=True)
@@ -833,7 +854,21 @@ class _ToolSurfaceMismatch:
 
 _ToolSurfaceKey = tuple[BinaryBuild, frozenset[str]]
 
+# _tool_surface_lock guards the dicts below, including the lazy creation of
+# the per-key probe locks — it is never held across a probe itself. The two
+# per-key lock maps ARE held across a probe (single-flight: the first cold
+# caller for a key probes, concurrent callers for the *same* key wait for
+# its answer instead of each starting their own CLI process). Sync and
+# async callers of the same key do not exclude each other — a threading.Lock
+# cannot be awaited without blocking the whole event loop, and an
+# asyncio.Lock cannot be waited on from a thread with no running loop — so a
+# sync and an async cold-cache call landing on the same key at the same
+# instant can still each spawn one probe. Accepted: within one process the
+# only shared key is _NO_TOOLS_EXPECTED (_call_cli vs _acall_cli), and both
+# still get single-flight against callers in their own domain.
 _tool_surface_lock = threading.Lock()
+_tool_surface_sync_locks: dict[_ToolSurfaceKey, threading.Lock] = {}
+_tool_surface_async_locks: dict[_ToolSurfaceKey, asyncio.Lock] = {}
 _tool_surface_verdicts: dict[_ToolSurfaceKey, _ToolSurfaceMismatch] = {}
 _tool_surface_failures: dict[_ToolSurfaceKey, tuple[float, str]] = {}
 
@@ -845,41 +880,44 @@ async def verify_cli_tool_surface() -> str:
     Probes with the same ``--mcp-config`` a real co-writer turn attaches, so
     "clean" means the CLI is actually still connecting our MCP server and
     reporting exactly its tools — not merely reporting no built-ins with
-    nothing attached to compare against.
+    nothing attached to compare against. A connection that fails to
+    establish is a probe *failure* (short-lived, retried on the next call),
+    never a "the CLI offers zero of our eleven tools" verdict (permanent,
+    per build) — the two look identical in the raw ``tools`` list alone, so
+    ``mcp_connected`` is what tells them apart.
     """
     build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
-    mismatch = _cached_tool_surface_verdict(key)
-    if mismatch is None:
+
+    async def probe() -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
             surface = await _probe_cli_surface_async(
                 build.path, mcp_config_path=config_path,
                 timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
             )
-        except UnavailableError as exc:
-            _record_tool_surface_failure(key, str(exc))
-            raise
         finally:
             _unlink_quiet(config_path)
-        mismatch = _evaluate_tool_surface(key, surface)
-    return _finish_tool_surface_check(build, mismatch)
+        if surface.mcp_connected is False:
+            raise UnavailableError(
+                f"Claude CLI at {build.path} could not connect the songmaker "
+                "MCP server — cannot verify its tool surface",
+            )
+        return surface
+
+    return await _verify_tool_surface_async(build, key, probe)
 
 
 async def averify_no_builtin_cli_tools() -> str:
     """Async twin of ``verify_no_builtin_cli_tools`` for ``_acall_cli``."""
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
-    mismatch = _cached_tool_surface_verdict(key)
-    if mismatch is None:
-        try:
-            surface = await _probe_cli_surface_async(
-                build.path, mcp_config_path=None,
-                timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
-            )
-        except UnavailableError as exc:
-            _record_tool_surface_failure(key, str(exc))
-            raise
-        mismatch = _evaluate_tool_surface(key, surface)
-    return _finish_tool_surface_check(build, mismatch)
+
+    async def probe() -> _AnnouncedSurface:
+        return await _probe_cli_surface_async(
+            build.path, mcp_config_path=None,
+            timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+        )
+
+    return await _verify_tool_surface_async(build, key, probe)
 
 
 def verify_no_builtin_cli_tools() -> str:
@@ -890,18 +928,55 @@ def verify_no_builtin_cli_tools() -> str:
     child, not an async context.
     """
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
-    mismatch = _cached_tool_surface_verdict(key)
-    if mismatch is None:
-        try:
-            surface = _probe_cli_surface_sync(
-                build.path, mcp_config_path=None,
-                timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
-            )
-        except UnavailableError as exc:
-            _record_tool_surface_failure(key, str(exc))
-            raise
-        mismatch = _evaluate_tool_surface(key, surface)
-    return _finish_tool_surface_check(build, mismatch)
+
+    def probe() -> _AnnouncedSurface:
+        return _probe_cli_surface_sync(
+            build.path, mcp_config_path=None,
+            timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+        )
+
+    return _verify_tool_surface_sync(build, key, probe)
+
+
+async def _verify_tool_surface_async(
+    build: BinaryBuild, key: _ToolSurfaceKey,
+    probe: Callable[[], Awaitable[_AnnouncedSurface]],
+) -> str:
+    """Single-flight, cache-checked probe: the first cold caller for ``key``
+    probes while holding that key's lock; a concurrent caller for the same
+    key waits on the same lock and then reuses the answer instead of
+    starting its own CLI process."""
+    cached = _cached_tool_surface_verdict(key)
+    if cached is None:
+        async with _async_probe_lock(key):
+            cached = _cached_tool_surface_verdict(key)
+            if cached is None:
+                try:
+                    surface = await probe()
+                except UnavailableError as exc:
+                    _record_tool_surface_failure(key, str(exc))
+                    raise
+                cached = _evaluate_tool_surface(key, surface)
+    return _finish_tool_surface_check(build, cached)
+
+
+def _verify_tool_surface_sync(
+    build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[], _AnnouncedSurface],
+) -> str:
+    """Sync twin of ``_verify_tool_surface_async`` — same single-flight
+    shape, a ``threading.Lock`` instead of an ``asyncio.Lock``."""
+    cached = _cached_tool_surface_verdict(key)
+    if cached is None:
+        with _sync_probe_lock(key):
+            cached = _cached_tool_surface_verdict(key)
+            if cached is None:
+                try:
+                    surface = probe()
+                except UnavailableError as exc:
+                    _record_tool_surface_failure(key, str(exc))
+                    raise
+                cached = _evaluate_tool_surface(key, surface)
+    return _finish_tool_surface_check(build, cached)
 
 
 def _tool_surface_key(expected_tools: frozenset[str]) -> tuple[BinaryBuild, _ToolSurfaceKey]:
@@ -910,16 +985,36 @@ def _tool_surface_key(expected_tools: frozenset[str]) -> tuple[BinaryBuild, _Too
     return build, (build, expected_tools)
 
 
+def _sync_probe_lock(key: _ToolSurfaceKey) -> threading.Lock:
+    with _tool_surface_lock:
+        lock = _tool_surface_sync_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _tool_surface_sync_locks[key] = lock
+        return lock
+
+
+def _async_probe_lock(key: _ToolSurfaceKey) -> asyncio.Lock:
+    with _tool_surface_lock:
+        lock = _tool_surface_async_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _tool_surface_async_locks[key] = lock
+        return lock
+
+
 def _cached_tool_surface_verdict(key: _ToolSurfaceKey) -> _ToolSurfaceMismatch | None:
     """The remembered verdict for this exact (binary build, expectation)
     pair, or ``None`` when it still needs a fresh probe.
 
     Raises the cached message directly when a probe already failed for this
     pair within ``CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS`` — short on
-    purpose, so every concurrent caller does not each pay the probe's own
-    timeout while a struggling CLI or database recovers, but short enough
-    that a real repair is picked up on the very next request rather than
-    staying failed for the lifetime of the (unbounded) success cache below.
+    purpose, so a struggling CLI or MCP connection does not stay refused for
+    as long as a genuine verdict would (the unbounded cache below): once
+    that window passes, the next call re-probes rather than trusting a
+    stale failure forever. Concurrent callers waiting out that same window
+    together is the *single-flight* lock's job in the caller, not this
+    function's — this only decides whether a fresh probe is needed at all.
     """
     with _tool_surface_lock:
         verdict = _tool_surface_verdicts.get(key)
@@ -1031,7 +1126,7 @@ async def _probe_cli_surface_async(
         )
     finally:
         await _reap_process_group(proc)
-    return _parse_announced_surface(first_line)
+    return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
 
 
 def _probe_cli_surface_sync(
@@ -1068,7 +1163,7 @@ def _probe_cli_surface_sync(
         first_line = _read_line_with_timeout(proc.stdout, timeout_seconds)
     finally:
         _reap_process_group_sync(proc)
-    return _parse_announced_surface(first_line)
+    return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
 
 
 def _read_line_with_timeout(stream, timeout_seconds: float) -> bytes:
@@ -1116,7 +1211,7 @@ def _reap_process_group_sync(proc: subprocess.Popen) -> None:
     proc.wait()
 
 
-def _parse_announced_surface(raw_line: bytes) -> _AnnouncedSurface:
+def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _AnnouncedSurface:
     payload = _safe_json_loads(raw_line)
     if (
         payload is None
@@ -1132,7 +1227,26 @@ def _parse_announced_surface(raw_line: bytes) -> _AnnouncedSurface:
     commands = payload.get("slash_commands")
     if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
         raise UnavailableError("Claude CLI announced an unreadable slash-command list")
-    return _AnnouncedSurface(tools=tuple(tools), slash_commands=tuple(commands))
+    return _AnnouncedSurface(
+        tools=tuple(tools),
+        slash_commands=tuple(commands),
+        mcp_connected=_mcp_connected(payload) if mcp_attached else None,
+    )
+
+
+def _mcp_connected(payload: dict) -> bool:
+    """Whether the init event's own ``mcp_servers`` list reports our server
+    connected — read instead of assumed, because a failed connection
+    reports the same empty ``tools`` a clean tool-free CLI would."""
+    servers = payload.get("mcp_servers")
+    if not isinstance(servers, list):
+        return False
+    return any(
+        isinstance(server, dict)
+        and server.get("name") == MCP_SERVER_NAME
+        and server.get("status") == "connected"
+        for server in servers
+    )
 
 
 def _scrub_env() -> dict[str, str]:
