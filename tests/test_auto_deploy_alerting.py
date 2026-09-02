@@ -33,6 +33,9 @@ ALERT_REPEAT_SECONDS = 600
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS = 60
 CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
 PRUNE_TIMEOUT_SECONDS = 1
+PROMETHEUS_RULES_RESPONSE = """\
+{"status":"success","data":{"groups":[{"rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
+"""
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
 
@@ -68,6 +71,7 @@ class Checkout:
         self.origin = tmp_path / "origin.git"
         self.log_file = tmp_path / "journal.txt"
         self.docker_calls_file = tmp_path / "docker-calls.txt"
+        self.curl_calls_file = tmp_path / "curl-calls.txt"
         self.check_runs_file = tmp_path / "check-runs.txt"
         self.post_merge_marker = tmp_path / "post-merge-ran.txt"
         self._after_check_lookup_script: Path | None = None
@@ -83,6 +87,9 @@ class Checkout:
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
         self._compose_project_name = "songmaker"
+        self._prometheus_reload_exit_code = 0
+        self._prometheus_rules_exit_code = 0
+        self._prometheus_rules_response = PROMETHEUS_RULES_RESPONSE
         self.compose_stderr = ""
         self.check_runs_stderr = ""
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
@@ -99,6 +106,10 @@ class Checkout:
             copy.write_text(source.read_text())
             copy.chmod(source.stat().st_mode)
         self.deploy_script = self.root / "scripts" / DEPLOY_SCRIPT.name
+        (self.root / "monitoring").mkdir()
+        (self.root / "monitoring" / "alert.rules.yml").write_text(
+            (REPO_ROOT / "monitoring" / "alert.rules.yml").read_text(),
+        )
 
         (self.root / "README.md").write_text("initial\n")
         # The deploy guard refuses a dirty tree, and the alert config this
@@ -121,6 +132,7 @@ class Checkout:
             '    exec /usr/bin/date "$@"\n'
             "fi\n",
         )
+        self._write_curl_stub()
         self.set_check_runs(("completed", "success"))
         self.set_active_jobs(0)
 
@@ -144,6 +156,28 @@ class Checkout:
     def set_compose_project_name(self, project_name: str) -> None:
         self._compose_project_name = project_name
         self._write_docker_stub()
+
+    def set_prometheus_rules_response(self, response: str) -> None:
+        self._prometheus_rules_response = response
+        self._write_curl_stub()
+
+    def _write_curl_stub(self) -> None:
+        _write_executable(
+            self._bin / "curl",
+            "#!/bin/bash\n"
+            'printf "%s\\n" "$*" >> "$CURL_CALLS_FILE"\n'
+            'if [[ "$*" == "--fail --silent --show-error --max-time 30 -X POST '
+            'http://127.0.0.1:9090/-/reload" ]]; then\n'
+            f"    exit {self._prometheus_reload_exit_code}\n"
+            "fi\n"
+            'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
+            'http://127.0.0.1:9090/api/v1/rules" ]]; then\n'
+            f"    printf '%s' {shlex.quote(self._prometheus_rules_response)}\n"
+            f"    exit {self._prometheus_rules_exit_code}\n"
+            "fi\n"
+            'echo "unexpected curl invocation: $*" >&2\n'
+            "exit 2\n",
+        )
 
     def _write_docker_stub(self) -> None:
         _write_executable(
@@ -251,6 +285,19 @@ class Checkout:
         _git(clone, "commit", "-am", f"move main {self._commits_pushed}")
         _git(clone, "push", "origin", "main")
 
+    def move_main_forward_with_changed_alert_rules(self) -> None:
+        clone = self.root.parent / "pusher"
+        if not clone.exists():
+            _git(self.root.parent, "clone", str(self.origin), str(clone))
+            _git(clone, "config", "user.email", "test@example.com")
+            _git(clone, "config", "user.name", "Test")
+        _git(clone, "pull", "--ff-only", "origin", "main")
+        rules = clone / "monitoring" / "alert.rules.yml"
+        rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
+        _git(clone, "add", "monitoring/alert.rules.yml")
+        _git(clone, "commit", "-m", "change alert rules")
+        _git(clone, "push", "origin", "main")
+
     def move_main_forward_after_check_lookup(self) -> None:
         """Advance origin after the deploy script has checked its current SHA."""
         clone = self.root.parent / "pusher"
@@ -323,6 +370,7 @@ class Checkout:
                 "HOME": str(self.root.parent),
                 "LOG_CAPTURE_FILE": str(self.log_file),
                 "DOCKER_CALLS_FILE": str(self.docker_calls_file),
+                "CURL_CALLS_FILE": str(self.curl_calls_file),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
                 "GH_EXPECTED_COMMIT_SHA": self.remote_main_sha(),
@@ -355,6 +403,10 @@ class Checkout:
     @property
     def docker_calls(self) -> str:
         return self.docker_calls_file.read_text() if self.docker_calls_file.exists() else ""
+
+    @property
+    def curl_calls(self) -> str:
+        return self.curl_calls_file.read_text() if self.curl_calls_file.exists() else ""
 
     def alert_lines(self) -> list[str]:
         return [line for line in self.journal.splitlines() if "ALERT:" in line]
@@ -702,6 +754,58 @@ def test_a_prune_timeout_resets_the_counters_like_any_successful_deploy(
     assert "failure count now" not in checkout.journal
     assert checkout.failure_count_file.read_text() == "0"
     assert "deploy succeeded, now running" in checkout.journal
+
+
+def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.curl_calls.splitlines() == [
+        "--fail --silent --show-error --max-time 30 -X POST http://127.0.0.1:9090/-/reload",
+        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
+    ]
+    assert "deploy remains successful" not in checkout.journal
+
+
+def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_rules_response(
+        '{"status":"success","data":{"groups":[{"rules":['
+        '{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}] }]}}',
+    )
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "Prometheus alert rule count mismatch after reload: configured 4, loaded 3; "
+        "deploy remains successful"
+    ) in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+
+
+def test_an_unchanged_alert_rule_file_does_not_reload_prometheus(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.curl_calls == ""
 
 
 def test_unavailable_check_status_refuses_to_pull_with_a_named_failure(tmp_path: Path) -> None:
