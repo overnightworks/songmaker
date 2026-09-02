@@ -126,6 +126,11 @@ if [ "$INSTALL_USER" = "root" ]; then
     exit 1
 fi
 
+command -v jq >/dev/null || {
+    echo "ERROR: jq is required for the pre-recreate rollback tagging but is not installed." >&2
+    exit 1
+}
+
 # Escape backslash, the sed delimiter (#), and & (which sed would otherwise
 # expand to "whatever matched the pattern" in the replacement text). The
 # guard above already rejected the '%'/whitespace that systemd itself would

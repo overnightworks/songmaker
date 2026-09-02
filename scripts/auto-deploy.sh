@@ -205,10 +205,6 @@ if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
     exit 1
 fi
-command -v jq >/dev/null || {
-    log_err "jq is required for the pre-recreate rollback tagging but is not installed"
-    exit 1
-}
 # GitHub normally creates the first check run shortly after a push. Do not
 # treat that ordinary propagation delay as a failed deploy, but do surface a
 # workflow that never starts instead of waiting forever on the same SHA.
@@ -239,6 +235,11 @@ compose() {
 }
 
 preserve_running_images() {
+    command -v jq >/dev/null || {
+        log_err "jq is required for the pre-recreate rollback tagging but is not installed"
+        return 1
+    }
+
     local compose_config
     local compose_stderr_file
     local compose_error
