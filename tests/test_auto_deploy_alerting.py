@@ -32,6 +32,7 @@ ALERT_REPEAT_SECONDS = 600
 # short, deterministic deadline.
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS = 60
 CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
+PRUNE_TIMEOUT_SECONDS = 1
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
 
@@ -77,6 +78,7 @@ class Checkout:
         self._commits_pushed = 0
         self._active_job_count = 0
         self._prune_exit_code = 0
+        self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
         self.check_runs_stderr = ""
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
@@ -127,6 +129,10 @@ class Checkout:
         self._prune_exit_code = exit_code
         self._write_docker_stub()
 
+    def set_prune_sleep_seconds(self, seconds: int) -> None:
+        self._prune_sleep_seconds = seconds
+        self._write_docker_stub()
+
     def set_compose_up_exit_code(self, exit_code: int) -> None:
         self._compose_up_exit_code = exit_code
         self._write_docker_stub()
@@ -136,7 +142,20 @@ class Checkout:
             self._bin / "docker",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
+            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--services" ]]; then\n'
+            '    echo songmaker-web\n'
+            "    exit 0\n"
+            "fi\n"
+            'if [[ "$1" == "compose" && "$2" == "ps" ]]; then\n'
+            '    echo container-songmaker-web\n'
+            "    exit 0\n"
+            "fi\n"
+            'if [[ "$1" == "inspect" ]]; then\n'
+            '    echo sha256:previous-songmaker-web\n'
+            "    exit 0\n"
+            "fi\n"
             'if [[ "$1" == "image" || "$1" == "builder" ]]; then\n'
+            '    sleep "$DOCKER_PRUNE_SLEEP_SECONDS"\n'
             f"    exit {self._prune_exit_code}\n"
             "fi\n"
             'if [[ "$1" == "compose" && "$2" == "up" ]]; then\n'
@@ -292,6 +311,8 @@ class Checkout:
                 "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS": str(
                     self.check_run_appearance_grace_seconds,
                 ),
+                "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
+                "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
             },
         )
 
@@ -439,9 +460,32 @@ def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_pa
         ["git", "rev-parse", "origin/main"], cwd=checkout.root, text=True,
     ).strip()
     assert "compose build" in checkout.docker_calls
-    assert "image prune --all --force --filter until=48h" in checkout.docker_calls
-    assert "builder prune --force --filter until=48h" in checkout.docker_calls
+    assert [
+        call for call in checkout.docker_calls.splitlines() if " prune " in call
+    ] == [
+        "image prune --force --filter until=48h",
+        "builder prune --all --force --filter until=48h",
+    ]
     assert "pruned unreferenced Docker images and build cache older than 48h" in checkout.journal
+
+
+def test_recreate_preserves_each_running_service_image_with_a_previous_tag(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    docker_calls = checkout.docker_calls.splitlines()
+    previous_tag = "tag sha256:previous-songmaker-web songmaker-songmaker-web:previous"
+    recreate = "compose up -d --wait --wait-timeout 1200"
+    assert previous_tag in docker_calls
+    assert recreate in docker_calls
+    assert docker_calls.index(previous_tag) < docker_calls.index(recreate)
 
 
 def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
@@ -518,7 +562,41 @@ def test_a_prune_failure_leaves_the_successful_deploy_successful(tmp_path: Path)
     assert "docker image prune failed after deploy (exit 1)" in checkout.journal
     assert "docker builder prune failed after deploy (exit 1)" in checkout.journal
     assert "deploy remains successful" in checkout.journal
-    assert "failure count now" not in checkout.journal
+    assert "failure count now 1 (this tick: docker prune failed)" in checkout.journal
+
+
+def test_a_prune_timeout_counts_as_a_failure_without_rolling_back_the_deploy(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    checkout.set_prune_sleep_seconds(PRUNE_TIMEOUT_SECONDS + 1)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "docker image prune failed after deploy (exit 124)" in checkout.journal
+    assert "docker builder prune failed after deploy (exit 124)" in checkout.journal
+    assert "failure count now 1 (this tick: docker prune failed)" in checkout.journal
+    assert "deploy succeeded, now running" in checkout.journal
+
+
+def test_three_failed_prunes_reach_the_existing_alert_escalation(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prune_exit_code(1)
+
+    results = []
+    for _ in range(FAILURE_ALERT_THRESHOLD):
+        checkout.move_main_forward()
+        results.append(checkout.tick())
+
+    assert [result.returncode for result in results] == [0, 0, 0]
+    assert "failure count now 3 (this tick: docker prune failed)" in checkout.journal
+    assert len(checkout.alert_lines()) == 1
 
 
 def test_unavailable_check_status_refuses_to_pull_with_a_named_failure(tmp_path: Path) -> None:

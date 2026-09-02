@@ -54,8 +54,8 @@
 #     legitimately keeps jobs active for a long time, and that is not the
 #     same emergency as a deploy that keeps failing outright (see
 #     record_failure / fail_tick / record_busy_deferral below). Both
-#     counters reset only on an actual deploy or a genuine "nothing to
-#     deploy" tick.
+#     counters reset only after a deploy and its Docker cleanup both succeed,
+#     or on a genuine "nothing to deploy" tick.
 #   - This host's `.env` and checkout are also the operator's manual
 #     workspace. A dirty tree, a diverged local main, or HEAD sitting on a
 #     branch other than the deploy branch are left completely untouched —
@@ -127,6 +127,8 @@ LOG_TAG="songmaker-autodeploy"
 LOG_PAYLOAD_MAX_CHARS=2000
 DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
 PRUNE_RETENTION_HOURS=48
+PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
+PREVIOUS_IMAGE_TAG="previous"
 
 log() {
     local level="$1"
@@ -199,6 +201,10 @@ if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS:-60}"
+if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
+    exit 1
+fi
 # GitHub normally creates the first check run shortly after a push. Do not
 # treat that ordinary propagation delay as a failed deploy, but do surface a
 # workflow that never starts instead of waiting forever on the same SHA.
@@ -228,12 +234,55 @@ compose() {
     (cd "$REPO_ROOT" && docker compose "$@")
 }
 
+preserve_running_images() {
+    local services
+    local service
+    local containers
+    local container
+    local service_image
+    local current_image
+
+    if ! services="$(compose config --services 2>&1)"; then
+        log_err "cannot list Compose services before recreate: $services"
+        return 1
+    fi
+
+    while IFS= read -r service; do
+        [[ -n "$service" ]] || continue
+
+        if ! containers="$(compose ps -q --status running "$service" 2>&1)"; then
+            log_err "cannot find the running container for $service before recreate: $containers"
+            return 1
+        fi
+        [[ -n "$containers" ]] || continue
+
+        service_image=""
+        while IFS= read -r container; do
+            [[ -n "$container" ]] || continue
+            if ! current_image="$(docker inspect --format '{{.Image}}' "$container" 2>&1)"; then
+                log_err "cannot inspect the running image for $service before recreate: $current_image"
+                return 1
+            fi
+            if [[ -n "$service_image" && "$service_image" != "$current_image" ]]; then
+                log_err "running containers for $service use different images; refusing to replace its single previous image tag"
+                return 1
+            fi
+            service_image="$current_image"
+        done <<<"$containers"
+
+        if ! docker tag "$service_image" "songmaker-${service}:${PREVIOUS_IMAGE_TAG}"; then
+            log_err "cannot preserve the running image for $service before recreate"
+            return 1
+        fi
+    done <<<"$services"
+}
+
 prune_docker_resources() {
     local prune_filter="until=${PRUNE_RETENTION_HOURS}h"
     local prune_failed=false
     local prune_exit_code
 
-    if docker image prune --all --force --filter "$prune_filter"; then
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter"; then
         :
     else
         prune_exit_code=$?
@@ -241,7 +290,7 @@ prune_docker_resources() {
         prune_failed=true
     fi
 
-    if docker builder prune --force --filter "$prune_filter"; then
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker builder prune --all --force --filter "$prune_filter"; then
         :
     else
         prune_exit_code=$?
@@ -251,6 +300,9 @@ prune_docker_resources() {
 
     if [[ "$prune_failed" == false ]]; then
         log_info "pruned unreferenced Docker images and build cache older than ${PRUNE_RETENTION_HOURS}h"
+        reset_counters
+    else
+        record_failure "docker prune failed" || true
     fi
 
     return 0
@@ -343,7 +395,6 @@ record_success() {
         record_failure "deployed-sha readback mismatch" || true
         return 1
     fi
-    reset_counters
     log_info "deploy succeeded, now running $deployed_sha"
 }
 
@@ -829,6 +880,10 @@ fi
 if ! DEPLOYED_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     log_err "cannot determine HEAD in $REPO_ROOT right before recreate: $DEPLOYED_HEAD"
     fail_tick "cannot determine HEAD before recreate"
+fi
+
+if ! preserve_running_images; then
+    fail_tick "cannot preserve running images before recreate"
 fi
 
 if compose up -d --wait --wait-timeout "$COMPOSE_UP_WAIT_TIMEOUT_SECONDS"; then
