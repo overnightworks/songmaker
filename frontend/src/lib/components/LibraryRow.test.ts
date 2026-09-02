@@ -8,6 +8,7 @@ import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, updateAlbumInList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { LIBRARY_ROW_FILTER_EMPTY } from '$lib/constants';
 
 const fetchSongs = vi.fn();
 const fetchPlaylists = vi.fn();
@@ -306,5 +307,93 @@ describe('LibraryRow', () => {
 		} finally {
 			restoreScrollIntoView();
 		}
+	});
+
+	function filterField(root: HTMLElement): HTMLInputElement {
+		const input = root.querySelector<HTMLInputElement>('input');
+		if (!input) throw new Error('Expected the row filter field to render');
+		return input;
+	}
+
+	async function typeFilter(root: HTMLElement, text: string): Promise<void> {
+		const input = filterField(root);
+		input.value = text;
+		input.dispatchEvent(new Event('input'));
+		await tick();
+	}
+
+	it('narrows the row to tiles matching what is typed, without calling the network', async () => {
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' }),
+			album({ id: 'a-3', title: 'Vernissage' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		fetchSongs.mockClear();
+		fetchPlaylists.mockClear();
+		fetchPlaylist.mockClear();
+
+		await typeFilter(root, 'verniss');
+
+		expect(findTileByName(root, 'Vernissage').hidden).toBe(false);
+		expect(findTileByName(root, 'Sommerluft').hidden).toBe(true);
+		expect(fetchSongs).not.toHaveBeenCalled();
+		expect(fetchPlaylists).not.toHaveBeenCalled();
+		expect(fetchPlaylist).not.toHaveBeenCalled();
+	});
+
+	it('keeps the open tile visible and marked even when the filter does not match it', async () => {
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+
+		await typeFilter(root, 'sommer');
+
+		const openTile = findTileByName(root, 'Anfield');
+		expect(openTile.hidden).toBe(false);
+		expect(openTile.getAttribute('aria-current')).toBe('true');
+	});
+
+	it('restores every tile once the filter is cleared', async () => {
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		await typeFilter(root, 'sommer');
+		expect(findTileByName(root, 'Anfield').hidden).toBe(false);
+
+		await typeFilter(root, '');
+
+		expect(findTileByName(root, 'Anfield').hidden).toBe(false);
+		expect(findTileByName(root, 'Sommerluft').hidden).toBe(false);
+	});
+
+	it('shows a short line when nothing matches the filter', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		expect(root.textContent).not.toContain(LIBRARY_ROW_FILTER_EMPTY);
+
+		await typeFilter(root, 'zzz-nothing-matches');
+
+		expect(root.textContent).toContain(LIBRARY_ROW_FILTER_EMPTY);
+	});
+
+	it('clears the filter on Escape', async () => {
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' }),
+			album({ id: 'a-3', title: 'Vernissage' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		await typeFilter(root, 'sommer');
+		expect(findTileByName(root, 'Vernissage').hidden).toBe(true);
+
+		filterField(root).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await tick();
+
+		expect(filterField(root).value).toBe('');
+		expect(findTileByName(root, 'Vernissage').hidden).toBe(false);
 	});
 });

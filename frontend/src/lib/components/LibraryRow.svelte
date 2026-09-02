@@ -9,8 +9,13 @@
 	import { compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { albumSummaryLabel, playlistSummaryLabel } from '$lib/utils/format';
-	import { ALBUM_COVER_ALT_TYPE, LIBRARY_FILTER_LABELS } from '$lib/constants';
+	import {
+		ALBUM_COVER_ALT_TYPE,
+		LIBRARY_FILTER_LABELS,
+		LIBRARY_ROW_FILTER_EMPTY
+	} from '$lib/constants';
 	import LibraryTileContent from './LibraryTileContent.svelte';
+	import LibraryRowFilter from './LibraryRowFilter.svelte';
 
 	interface Props {
 		collection: OpenCollection;
@@ -63,6 +68,40 @@
 		collection.kind === 'album' ? LIBRARY_FILTER_LABELS.albums : LIBRARY_FILTER_LABELS.playlists
 	);
 
+	// The row's own instant filter (#402) -- local component state only, not
+	// a store and not a URL param, so it never outlives this row and never
+	// touches the wall's grid search (LibraryWall.svelte's searchQuery),
+	// which is a different job: server-side, across the whole library.
+	let filterQuery = $state('');
+	const normalizedFilter = $derived(filterQuery.trim().toLowerCase());
+
+	function tileMatchesFilter(tile: RowTile): boolean {
+		return (
+			tile.title.toLowerCase().includes(normalizedFilter) ||
+			tile.subtitle.toLowerCase().includes(normalizedFilter)
+		);
+	}
+
+	// null means "no filter active" -- every tile renders. Once a query is
+	// typed, only its own matches render, except the open tile: it stays
+	// visible and marked no matter what (#348 ruling 6 / #402), so it alone
+	// is exempted from tileHidden below rather than folded into this set.
+	const matchingTileIds = $derived.by((): Set<string> | null => {
+		if (!normalizedFilter) return null;
+		return new Set(tiles.filter(tileMatchesFilter).map((tile) => tile.id));
+	});
+
+	function tileHidden(tile: RowTile): boolean {
+		if (matchingTileIds === null || matchingTileIds.has(tile.id)) return false;
+		return tile.id !== collection.id;
+	}
+
+	function tileFilteredOutButOpen(tile: RowTile): boolean {
+		return matchingTileIds !== null && !matchingTileIds.has(tile.id) && tile.id === collection.id;
+	}
+
+	const hasNoMatches = $derived(matchingTileIds !== null && matchingTileIds.size === 0);
+
 	// Position, not the list contents, is what centring cares about: a
 	// metadata edit to some other tile (a title rename, a cover landing via
 	// SSE) produces a new tiles array without moving the open one, and must
@@ -94,11 +133,15 @@
 	// (album <-> playlist, which swaps the whole tile set) can land on a tile
 	// that isn't. kineticScroll's own snap only runs after a drag/wheel
 	// gesture settles, so centring "whichever one is open" is this
-	// component's own job, on every mount and every change of what's open.
+	// component's own job, on every mount and every change of what's open --
+	// and on every filter keystroke too, since hiding neighbours reflows the
+	// row and can shift the open tile off-centre even though it never moved
+	// in the underlying list.
 	$effect(() => {
 		const row = rowEl;
 		const openId = collection.id;
 		const index = activeIndex;
+		const query = normalizedFilter;
 		if (!row || index === -1) return;
 		const active = row.querySelector<HTMLElement>('.row-tile.active');
 		if (!active || typeof active.scrollIntoView !== 'function') return;
@@ -108,6 +151,7 @@
 			behavior: prefersReducedMotion() ? 'auto' : 'smooth'
 		});
 		void openId;
+		void query;
 	});
 
 	const OVERFLOW_TOLERANCE_PX = 1;
@@ -130,6 +174,7 @@
 			return;
 		}
 		void tiles.length;
+		void normalizedFilter;
 		const measure = () => {
 			hasMoreToTheRight = hasOverflowToTheRight(row);
 		};
@@ -145,6 +190,10 @@
 </script>
 
 <div class="library-row-scrim" class:has-overflow={hasMoreToTheRight}>
+	<LibraryRowFilter bind:value={filterQuery} collectionLabel={rowLabel} />
+	{#if hasNoMatches}
+		<p class="library-row-filter-empty">{LIBRARY_ROW_FILTER_EMPTY}</p>
+	{/if}
 	<div
 		class="library-row"
 		aria-label={rowLabel}
@@ -156,9 +205,11 @@
 				type="button"
 				class="row-tile"
 				class:active={tile.id === collection.id}
+				class:filtered-out-but-open={tileFilteredOutButOpen(tile)}
 				data-tile-id={tile.id}
 				aria-current={tile.id === collection.id}
 				title={tile.title}
+				hidden={tileHidden(tile)}
 			>
 				<LibraryTileContent
 					title={tile.title}
@@ -247,8 +298,21 @@
 		box-shadow: 0 0 0 2px var(--primary);
 	}
 
+	.row-tile.filtered-out-but-open {
+		opacity: 0.4;
+		outline: 1px dashed var(--border);
+		outline-offset: -1px;
+	}
+
 	.row-tile:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
+	}
+
+	.library-row-filter-empty {
+		margin: 0;
+		padding: 0.3rem 0.9rem 0;
+		font-size: 0.72rem;
+		color: var(--text-subtle);
 	}
 </style>
