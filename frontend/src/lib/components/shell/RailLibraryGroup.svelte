@@ -25,6 +25,7 @@
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
+	import { RAIL_ALBUM_ITEM_CLASS } from './rail-item-selector';
 
 	// Local to this component rather than promoted to constants.ts: nothing
 	// else reads this key, matching how RailGroup's own groupId is already
@@ -207,7 +208,7 @@
 						</button>
 						<button
 							type="button"
-							class="album-label"
+							class={RAIL_ALBUM_ITEM_CLASS}
 							class:row-active={album.id === openAlbumId}
 							onclick={() => onAlbumLabelClick(album.id)}
 						>

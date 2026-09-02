@@ -28,6 +28,54 @@ import Rail from './Rail.svelte';
 const onlogout = vi.fn();
 const { render, cleanup } = createComponentMount(Rail, { username: 'felix', onlogout });
 
+function findButtonByText(root: ParentNode, text: string): HTMLButtonElement {
+	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((candidate) =>
+		candidate.textContent?.includes(text)
+	);
+	if (!button) throw new Error(`Expected a button named ${text}`);
+	return button;
+}
+
+function firePointer(
+	target: EventTarget,
+	type: 'pointerdown' | 'pointermove' | 'pointerup',
+	clientY: number,
+	timeStamp: number
+): void {
+	const event = new PointerEvent(type, {
+		pointerId: 1,
+		pointerType: 'mouse',
+		button: 0,
+		bubbles: true,
+		cancelable: true,
+		clientY
+	});
+	Object.defineProperty(event, 'timeStamp', { value: timeStamp, configurable: true });
+	target.dispatchEvent(event);
+}
+
+function fireClick(target: EventTarget): void {
+	target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+}
+
+function stubMomentumTiming(): void {
+	vi.stubGlobal(
+		'requestAnimationFrame',
+		vi.fn(() => 1)
+	);
+	vi.stubGlobal('cancelAnimationFrame', vi.fn());
+	vi.stubGlobal('performance', { now: () => 0 });
+}
+
+async function openRailGroup(root: ParentNode, index: number): Promise<void> {
+	const disclosure = root.querySelectorAll<HTMLButtonElement>(
+		'.rail-group > .disclose-row > button.disclose'
+	)[index];
+	if (!disclosure) throw new Error('Expected the Library disclosure');
+	if (disclosure.getAttribute('aria-expanded') === 'false') disclosure.click();
+	await tick();
+}
+
 beforeEach(() => {
 	localStorage.clear();
 	resetLibraryContextForTests();
@@ -39,6 +87,7 @@ afterEach(async () => {
 	await cleanup();
 	resetLibraryContextForTests();
 	resetPlaylists();
+	vi.unstubAllGlobals();
 });
 
 describe('Rail', () => {
@@ -99,6 +148,92 @@ describe('Rail', () => {
 		const bottom = requireElement(target, '.rail-bottom');
 		expect(bottom.textContent).toContain('felix');
 		expect(target.querySelector('.rail-scroll ~ .rail-settings-pin ~ .rail-bottom')).not.toBeNull();
+	});
+
+	it('opens an album through the kinetic rail click', async () => {
+		albumList.set([
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Sonnwendfeuer' })
+		]);
+		setOpenCollection({ kind: 'album', id: 'a1' });
+		const target = await render();
+		await openRailGroup(target, 0);
+		const albumButton = findButtonByText(target, 'Sonnwendfeuer');
+
+		fireClick(albumButton);
+
+		await vi.waitFor(() => {
+			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' });
+		});
+	});
+
+	it('does not open an album after dragging the kinetic rail', async () => {
+		stubMomentumTiming();
+		albumList.set([
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Sonnwendfeuer' })
+		]);
+		setOpenCollection({ kind: 'album', id: 'a1' });
+		const target = await render();
+		await openRailGroup(target, 0);
+		const scroll = requireElement<HTMLElement>(target, '.rail-scroll');
+		scroll.style.flexDirection = 'column';
+		Object.defineProperty(scroll, 'clientHeight', { value: 100, configurable: true });
+		Object.defineProperty(scroll, 'scrollHeight', { value: 400, configurable: true });
+
+		firePointer(scroll, 'pointerdown', 200, 1000);
+		firePointer(scroll, 'pointermove', 150, 1010);
+		firePointer(scroll, 'pointerup', 150, 1040);
+		fireClick(findButtonByText(target, 'Sonnwendfeuer'));
+		await tick();
+
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('does not open an album when a click catches the rail momentum', async () => {
+		stubMomentumTiming();
+		albumList.set([
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Sonnwendfeuer' })
+		]);
+		playlistList.set([
+			playlist({ id: 'p1', title: 'Night Drive' }),
+			playlist({ id: 'p2', title: 'Morning Run' })
+		]);
+		setOpenCollection({ kind: 'album', id: 'a1' });
+		const target = await render();
+		await openRailGroup(target, 0);
+		await openRailGroup(target, 1);
+		const scroll = requireElement<HTMLElement>(target, '.rail-scroll');
+		scroll.style.flexDirection = 'column';
+		Object.defineProperty(scroll, 'clientHeight', { value: 100, configurable: true });
+		Object.defineProperty(scroll, 'scrollHeight', { value: 400, configurable: true });
+
+		firePointer(scroll, 'pointerdown', 200, 1000);
+		firePointer(scroll, 'pointermove', 150, 1010);
+		firePointer(scroll, 'pointerup', 150, 1040);
+		fireClick(findButtonByText(target, 'Sonnwendfeuer'));
+		firePointer(scroll, 'pointerdown', 150, 1100);
+		firePointer(scroll, 'pointerup', 150, 1100);
+		fireClick(findButtonByText(target, 'Morning Run'));
+		await tick();
+
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('opens a playlist through the kinetic rail click', async () => {
+		playlistList.set([
+			playlist({ id: 'p1', title: 'Night Drive' }),
+			playlist({ id: 'p2', title: 'Morning Run' })
+		]);
+		const target = await render();
+		await openRailGroup(target, 1);
+
+		fireClick(findButtonByText(target, 'Morning Run'));
+
+		await vi.waitFor(() => {
+			expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p2' });
+		});
 	});
 
 	it('does not collapse an open playlist when an album row is expanded by its own chevron -- Library and Playlists do not share a slot', async () => {

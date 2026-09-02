@@ -143,6 +143,27 @@ describe('kineticScroll', () => {
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
 	});
 
+	it('lets a plain item click reach its handler and document listener once', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		const existingHandler = vi.fn();
+		const documentHandler = vi.fn();
+		const onOpen = vi.fn();
+		items[1].addEventListener('click', existingHandler);
+		document.addEventListener('click', documentHandler);
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+
+		try {
+			fireClick(items[1]);
+		} finally {
+			document.removeEventListener('click', documentHandler);
+		}
+
+		expect(existingHandler).toHaveBeenCalledOnce();
+		expect(documentHandler).toHaveBeenCalledOnce();
+		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
+	});
+
 	it.each<KineticScrollAxis>(['x', 'y'])(
 		'drags the %s axis 1:1 with the pointer once past the threshold',
 		(axis) => {
@@ -187,14 +208,24 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
+		const itemHandler = vi.fn();
+		const documentHandler = vi.fn();
+		items[0].addEventListener('click', itemHandler);
+		document.addEventListener('click', documentHandler);
 		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1010 });
 		firePointer(container, 'pointerup', { pos: 150, axis: 'x', t: 1010 });
 
-		fireClick(items[0]);
+		try {
+			fireClick(items[0]);
+		} finally {
+			document.removeEventListener('click', documentHandler);
+		}
 		expect(onOpen).not.toHaveBeenCalled();
+		expect(itemHandler).not.toHaveBeenCalled();
+		expect(documentHandler).not.toHaveBeenCalled();
 	});
 
 	it('rolls the strip on with momentum computed from the release, past where the drag stopped', () => {
@@ -228,14 +259,24 @@ describe('kineticScroll', () => {
 		// under test, matching how a real pointerup is always followed by click.
 		fireClick(items[0]);
 		const scrollAtRelease = container.scrollLeft;
+		const itemHandler = vi.fn();
+		const documentHandler = vi.fn();
+		items[0].addEventListener('click', itemHandler);
+		document.addEventListener('click', documentHandler);
 
 		firePointer(container, 'pointerdown', { pos: 150, axis: 'x', t: 1100 });
 		firePointer(container, 'pointerup', { pos: 150, axis: 'x', t: 1100 });
 		runFrame(16);
 		expect(container.scrollLeft).toBe(scrollAtRelease);
 
-		fireClick(items[0]);
+		try {
+			fireClick(items[0]);
+		} finally {
+			document.removeEventListener('click', documentHandler);
+		}
 		expect(onOpen).not.toHaveBeenCalled();
+		expect(itemHandler).not.toHaveBeenCalled();
+		expect(documentHandler).not.toHaveBeenCalled();
 
 		fireClick(items[0]);
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[0]);

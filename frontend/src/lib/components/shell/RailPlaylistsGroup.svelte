@@ -11,6 +11,7 @@
 	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import type { PlaylistEntryItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
+	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
 
 	// Local to this component, matching RailLibraryGroup's own
 	// LIBRARY_OPEN_STORAGE_KEY -- nothing else reads this key.
@@ -86,7 +87,7 @@
 				<li>
 					<button
 						type="button"
-						class="playlist-label"
+						class={RAIL_PLAYLIST_ITEM_CLASS}
 						class:row-active={expanded}
 						onclick={() => onPlaylistLabelClick(playlist.id)}
 					>
