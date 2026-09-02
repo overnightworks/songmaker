@@ -28,6 +28,8 @@ from songmaker_cli.api_models.songs import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
     canonical_audio_filename,
+    canonical_audio_path,
+    require_existing_audio_path,
     resolve_audio_path,
     resolve_canonical_audio_path,
 )
@@ -335,10 +337,11 @@ def get_shared_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_album_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
+    audio_path = require_existing_audio_path(audio_path)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -413,10 +416,11 @@ def get_shared_song_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_song_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
+    audio_path = require_existing_audio_path(audio_path)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -559,10 +563,11 @@ def get_shared_playlist_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = resolve_canonical_audio_path(ctx.audio_dir, filename)
+    audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_playlist_audio_filename_is_presented(db, slug, filename):
         raise HTTPException(404, "Not found")
 
+    audio_path = require_existing_audio_path(audio_path)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 

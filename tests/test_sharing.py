@@ -656,10 +656,54 @@ def test_shared_audio_lookups_issue_one_scalar_filename_query(
     assert response.status_code == 200
     assert len(queries) == 1, f"expected one scalar filename lookup, got {queries}"
     statement, parameters = queries[0]
-    assert f"from {surface.query_table}" in statement.lower()
-    assert "mp3_path" in statement.lower()
-    assert "admin_user/g1.mp3" in parameters
-    assert "versions" not in statement.lower()
+    normalized_statement = " ".join(statement.lower().split())
+    filename_predicate = "generations.mp3_path = ?"
+    assert f"from {surface.query_table}" in normalized_statement
+    assert filename_predicate in normalized_statement
+    filename_predicate_index = normalized_statement.index(filename_predicate)
+    filename_parameter_index = normalized_statement[:filename_predicate_index].count("?")
+    assert parameters[filename_parameter_index] == "admin_user/g1.mp3"
+    assert "versions" not in normalized_statement
+
+
+@pytest.mark.parametrize(
+    "surface",
+    _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
+)
+def test_shared_audio_lookups_authorize_canonical_missing_names_before_file_checks(
+    sharing_app: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: SharedAudioSurface,
+) -> None:
+    if surface.seed is not None:
+        with sharing_app.app.state.ctx.db() as session:
+            surface.seed(session)
+            session.commit()
+    slug = sharing_app.post(surface.share_path).json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    checked_paths: list[Path] = []
+    original_exists = Path.exists
+
+    def record_exists(path: Path) -> bool:
+        checked_paths.append(path)
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", record_exists)
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(
+            surface.audio_path.replace("g1.mp3", "missing.mp3").format(slug=slug),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 404
+    assert len(queries) == 1
+    assert checked_paths == []
 
 
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:

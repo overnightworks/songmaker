@@ -49,8 +49,8 @@ def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
     return audio_path
 
 
-def resolve_canonical_audio_path(audio_dir: Path, filename: str) -> Path:
-    """Return an existing canonical audio filename constrained to ``audio_dir``."""
+def canonical_audio_path(audio_dir: Path, filename: str) -> Path:
+    """Return a canonical audio path constrained to ``audio_dir``."""
     audio_path = _resolved_within_root(audio_dir, filename)
     if (
         audio_path is None
@@ -58,6 +58,16 @@ def resolve_canonical_audio_path(audio_dir: Path, filename: str) -> Path:
     ):
         log.warning("Audio path traversal denied: %r", filename)
         raise HTTPException(404, "Not Found")
+    return audio_path
+
+
+def require_existing_audio_path(audio_path: Path) -> Path:
+    """Return ``audio_path`` when its file still exists."""
     if not audio_path.exists():
         raise HTTPException(404, "Not Found")
     return audio_path
+
+
+def resolve_canonical_audio_path(audio_dir: Path, filename: str) -> Path:
+    """Return an existing canonical audio filename constrained to ``audio_dir``."""
+    return require_existing_audio_path(canonical_audio_path(audio_dir, filename))

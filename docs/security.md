@@ -171,14 +171,13 @@ Album, song, generation, and playlist shares expose public read-only endpoints w
 Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; an audio URL is present only when its stored relative path is already canonical and remains below the audio root. A noncanonical stored path is a data defect: it is not silently repaired, is omitted from the response, and is logged at `WARNING`. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists — never the parent album's art. Public cover bytes are served from `/shared/{slug}/cover` or `/shared/song/{slug}/cover` using that same slug gate — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
 
 `audio_paths` owns stored-audio path resolution: queue-stream assembly uses
-`resolve_audio_path()`, while shared-audio handlers use
-`resolve_canonical_audio_path()`. Shared-audio handlers first require the
-requested filename to already be canonical and below the audio root, then make
-their allowlist decision with a scalar query before delivering bytes. A missing
-file, a noncanonical filename, and a path that would escape the audio root
-(including through a symlink) all return the indistinguishable visitor response
-`404 Not Found`. Traversal rejection is logged at `WARNING` with the requested
-relative path rendered via `%r`; the resolved server path is never logged.
+`resolve_audio_path()`, while the album, song, and playlist shared-audio
+handlers validate the requested canonical filename and make their allowlist
+decision with a scalar query before delivering bytes. A missing file, a
+noncanonical filename, and a path that would escape the audio root (including
+through a symlink) all return the indistinguishable visitor response `404 Not
+Found`. Traversal rejection is logged at `WARNING` with the requested relative
+path rendered via `%r`; the resolved server path is never logged.
 
 ### Per-IP (global middleware)
 
@@ -706,7 +705,7 @@ All request models use Pydantic with strict constraints:
 
 ## Path Traversal Protection
 
-Audio file serving resolves the requested path and verifies that it remains below the configured audio root to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints reject a requested filename unless it is already canonical, log traversal rejection without the root, and then decide the share allowlist in the query layer before delivering bytes. Their public JSON routes present stored audio paths only when those paths already meet the same canonical rule, so the scalar SQL filename equality is exact. Album and song covers are never served from `/audio/{owner_id}/{filename}`; authenticated covers use `/api/albums/{id}/cover` and `/api/songs/{id}/cover`, and public covers use `/shared/{slug}/cover` and `/shared/song/{slug}/cover`.
+Audio file serving resolves the requested path and verifies that it remains below the configured audio root to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Album, song, and playlist shared-audio endpoints reject a requested filename unless it is already canonical, log traversal rejection without the root, and then decide the share allowlist in the query layer before delivering bytes. Their public JSON routes present stored audio paths only when those paths already meet the same canonical rule, so the scalar SQL filename equality is exact. Album and song covers are never served from `/audio/{owner_id}/{filename}`; authenticated covers use `/api/albums/{id}/cover` and `/api/songs/{id}/cover`, and public covers use `/shared/{slug}/cover` and `/shared/song/{slug}/cover`.
 
 ## GPU Resource Safety
 
