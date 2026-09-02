@@ -6,6 +6,12 @@ import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	buildAlbum as album,
+	buildPlaylist as playlist,
+	buildPlaylistDetail as detail,
+	requireElement
+} from './rail-test-fixtures';
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined),
@@ -45,12 +51,6 @@ import Rail from './Rail.svelte';
 let mounted: ReturnType<typeof mount> | undefined;
 const onlogout = vi.fn();
 
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
-
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -76,22 +76,7 @@ afterEach(async () => {
 
 describe('Rail', () => {
 	it('renders the brand, the LIBRARY and PLAYLISTS groups, the settings disclosure, and the user row', async () => {
-		albumList.set([
-			{
-				id: 'a1',
-				title: 'A',
-				artist: '',
-				subtitle: '',
-				year: '',
-				colors: {},
-				song_count: 0,
-				picked_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00',
-				is_archived: false
-			}
-		]);
+		albumList.set([album({ id: 'a1', title: 'A' })]);
 		const target = await render();
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
 		// Scoped to the top-level group toggles: a nested album row is also a
@@ -150,44 +135,12 @@ describe('Rail', () => {
 	});
 
 	it('does not collapse an open playlist when an album row is expanded by its own chevron -- Library and Playlists do not share a slot', async () => {
-		albumList.set([
-			{
-				id: 'a1',
-				title: 'Nachtstrom',
-				artist: '',
-				subtitle: '',
-				year: '',
-				colors: {},
-				song_count: 0,
-				picked_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00',
-				is_archived: false
-			}
-		]);
-		playlistList.set([
-			{
-				id: 'p1',
-				title: 'Night Drive',
-				slug: 'night-drive',
-				entry_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00'
-			}
-		]);
+		albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
+		playlistList.set([playlist({ id: 'p1', title: 'Night Drive', entry_count: 0 })]);
 		setOpenCollection({ kind: 'playlist', id: 'p1' });
-		selectedPlaylistDetail.set({
-			id: 'p1',
-			title: 'Night Drive',
-			slug: 'night-drive',
-			entry_count: 0,
-			is_shared: false,
-			share_slug: null,
-			created_at: '2026-01-01T00:00:00+00:00',
-			entries: []
-		});
+		selectedPlaylistDetail.set(
+			detail({ id: 'p1', title: 'Night Drive', entry_count: 0, entries: [] })
+		);
 		const target = await render();
 		const playlistPanel = requireElement<HTMLDivElement>(target, '.playlist-songs');
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
@@ -202,54 +155,12 @@ describe('Rail', () => {
 
 	it('marks the open album and the open playlist with the same row-active highlight', async () => {
 		albumList.set([
-			{
-				id: 'a1',
-				title: 'Nachtstrom',
-				artist: '',
-				subtitle: '',
-				year: '',
-				colors: {},
-				song_count: 0,
-				picked_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00',
-				is_archived: false
-			},
-			{
-				id: 'a2',
-				title: 'Sonnwendfeuer',
-				artist: '',
-				subtitle: '',
-				year: '',
-				colors: {},
-				song_count: 0,
-				picked_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00',
-				is_archived: false
-			}
+			album({ id: 'a1', title: 'Nachtstrom' }),
+			album({ id: 'a2', title: 'Sonnwendfeuer' })
 		]);
 		playlistList.set([
-			{
-				id: 'p1',
-				title: 'Night Drive',
-				slug: 'night-drive',
-				entry_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00'
-			},
-			{
-				id: 'p2',
-				title: 'Morning Run',
-				slug: 'morning-run',
-				entry_count: 0,
-				is_shared: false,
-				share_slug: null,
-				created_at: '2026-01-01T00:00:00+00:00'
-			}
+			playlist({ id: 'p1', title: 'Night Drive', entry_count: 0 }),
+			playlist({ id: 'p2', title: 'Morning Run', entry_count: 0 })
 		]);
 		setOpenCollection({ kind: 'album', id: 'a1' });
 		selectedPlaylistDetail.set(null);

@@ -262,6 +262,9 @@ export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
 // label button may match that -- every album's chevron sharing this exact
 // name is why a flow must scope to the album's own row before finding it.
 export const RAIL_ALBUM_DISCLOSE_LABEL = 'Toggle album tracks';
+// Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
+// could not reach at all does not look like one that is merely empty.
+export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
