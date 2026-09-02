@@ -465,6 +465,17 @@ def api_get_cowriter_settings(
         raise HTTPException(422, str(exc)) from exc
 
 
+def _require_provider_can_answer(provider: str, surface: "ProviderSurface") -> None:
+    status = _surface_status(provider, surface)
+    if status.state is ProviderSurfaceState.CONFIGURED:
+        return
+    raise HTTPException(
+        422,
+        f"{provider} cannot answer as {surface.value}: "
+        f"{status.model_dump_json(exclude_none=True)}",
+    )
+
+
 @router.put("/settings/cowriter")
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
@@ -476,10 +487,19 @@ def api_set_cowriter_settings(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
+    if stored_settings.provider is None or stored_settings.provider in COWRITER_PROVIDERS:
+        stored_provider = get_cowriter_provider(session)
+        stored_model = get_cowriter_model(session, stored_provider)
+    else:
+        stored_provider = stored_settings.provider
+        stored_model = stored_settings.model
     provider_or_model_changed = (
-        req.provider != stored_settings.provider or req.model != stored_settings.model
+        req.provider != stored_provider or req.model != stored_model
     )
     if provider_or_model_changed:
+        from songmaker_cli.cowriter.catalog import ProviderSurface
+
+        _require_provider_can_answer(req.provider, ProviderSurface.CO_WRITER)
         allowed, catalog_error = _models_for_provider(req.provider)
         if catalog_error:
             raise HTTPException(503, catalog_error)
@@ -545,14 +565,23 @@ def api_set_judge_settings(
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
-    allowed, catalog_error = _models_for_provider(req.provider)
-    if catalog_error:
-        raise HTTPException(503, catalog_error)
-    if req.model not in allowed:
-        raise HTTPException(
-            422,
-            f"Unknown {req.provider} model '{req.model}'",
-        )
+    stored_provider = get_judge_provider(session)
+    stored_model = get_judge_model(session, stored_provider)
+    provider_or_model_changed = (
+        req.provider != stored_provider or req.model != stored_model
+    )
+    if provider_or_model_changed:
+        from songmaker_cli.cowriter.catalog import ProviderSurface
+
+        _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
+        allowed, catalog_error = _models_for_provider(req.provider)
+        if catalog_error:
+            raise HTTPException(503, catalog_error)
+        if req.model not in allowed:
+            raise HTTPException(
+                422,
+                f"Unknown {req.provider} model '{req.model}'",
+            )
     set_judge_settings(session, req.provider, req.model)
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,

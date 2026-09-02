@@ -320,3 +320,15 @@ def make_song_md():
         return md
 
     return _make
+
+
+@pytest.fixture
+def every_provider_is_configured(monkeypatch):
+    from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
+
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        lambda provider, surface: ConfiguredProvider(
+            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
+        ),
+    )
