@@ -1,3 +1,6 @@
+import { mount, tick, unmount, type Component } from 'svelte';
+import { vi } from 'vitest';
+
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -8,14 +11,10 @@ import type {
 	SongItem
 } from '$lib/api/types';
 
-// Shared across every Rail*.test.ts in this directory (Rail, RailLibraryGroup,
-// RailPlaylistsGroup, RailSettings, RailGroup) so a shell test does not carry
-// its own copy of the same lookup helper, domain builders, and page shapes.
-//
-// vi.mock(...) factories are hoisted above this file's own imports, so a
-// factory that reads a plain re-exported binding by value can hit a TDZ;
-// each *.test.ts's own vi.mock(...) bodies stay inline for that reason
-// (see https://vitest.dev/api/vi.html#vi-mock).
+// Shared across every Rail*.test.ts in this directory. Vitest only hoists
+// vi.mock from the test file, so each test still registers the modules; the
+// factories live here and the tests load them with a dynamic import so a
+// hoisted factory does not read this module in TDZ.
 
 export function requireElement<T extends Element>(root: ParentNode, selector: string): T {
 	const element = root.querySelector<T>(selector);
@@ -156,4 +155,76 @@ export function songsPage(
 	overrides: Partial<PaginatedResponse<SongItem>> = {}
 ): PaginatedResponse<SongItem> {
 	return { items: [], total: 0, offset: 0, limit: 200, has_more: false, ...overrides };
+}
+
+export function railNavigationMock() {
+	return {
+		goto: vi.fn().mockResolvedValue(undefined),
+		afterNavigate: vi.fn()
+	};
+}
+
+export function railPathsMock() {
+	return { resolve: vi.fn((path: string) => path) };
+}
+
+export function railLibraryApiMock() {
+	return {
+		searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+	};
+}
+
+export function railAlbumsApiMock() {
+	return {
+		fetchAlbum: vi.fn(),
+		fetchAlbums: vi.fn().mockResolvedValue(albumsPage())
+	};
+}
+
+export function railSongsApiMock() {
+	return {
+		fetchSong: vi.fn(),
+		fetchSongs: vi.fn().mockResolvedValue(songsPage())
+	};
+}
+
+export function railClientApiMock(overrides: Record<string, (...args: unknown[]) => unknown> = {}) {
+	return {
+		fetchAlbums: vi.fn().mockResolvedValue(albumsPage()),
+		fetchAlbum: vi.fn(),
+		fetchSong: vi.fn(),
+		fetchSongs: vi.fn().mockResolvedValue(songsPage()),
+		fetchPlaylists: vi.fn().mockResolvedValue([]),
+		fetchPlaylist: vi.fn(),
+		fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null }),
+		...overrides
+	};
+}
+
+export function createComponentMount<Props extends Record<string, unknown>>(
+	component: Component<Props>,
+	props: Props
+): { render: () => Promise<HTMLElement>; cleanup: () => Promise<void> };
+export function createComponentMount(component: Component<Record<string, never>>): {
+	render: () => Promise<HTMLElement>;
+	cleanup: () => Promise<void>;
+};
+export function createComponentMount(component: Component, props?: Record<string, unknown>) {
+	let mounted: ReturnType<typeof mount> | undefined;
+
+	async function render(): Promise<HTMLElement> {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(component, props === undefined ? { target } : { target, props });
+		await tick();
+		return target;
+	}
+
+	async function cleanup(): Promise<void> {
+		if (mounted) await unmount(mounted);
+		mounted = undefined;
+		document.body.replaceChildren();
+	}
+
+	return { render, cleanup };
 }

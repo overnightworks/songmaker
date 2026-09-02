@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -10,54 +10,23 @@ import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
+	createComponentMount,
 	requireElement
 } from './rail-test-fixtures';
 
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined),
-	afterNavigate: vi.fn()
-}));
-vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
-}));
-vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
-	fetchAlbums: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
-}));
-vi.mock('$lib/api/songs', () => ({
-	fetchSong: vi.fn(),
-	fetchSongs: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
-}));
-vi.mock('$lib/api/client', () => ({
-	fetchAlbums: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false }),
-	fetchAlbum: vi.fn(),
-	fetchSong: vi.fn(),
-	fetchSongs: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
-	fetchPlaylists: vi.fn().mockResolvedValue([]),
-	fetchPlaylist: vi.fn()
-}));
+vi.mock('$app/navigation', async () => (await import('./rail-test-fixtures')).railNavigationMock());
+vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
+vi.mock('$lib/api/library', async () =>
+	(await import('./rail-test-fixtures')).railLibraryApiMock()
+);
+vi.mock('$lib/api/albums', async () => (await import('./rail-test-fixtures')).railAlbumsApiMock());
+vi.mock('$lib/api/songs', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
+vi.mock('$lib/api/client', async () => (await import('./rail-test-fixtures')).railClientApiMock());
 
 import Rail from './Rail.svelte';
 
-let mounted: ReturnType<typeof mount> | undefined;
 const onlogout = vi.fn();
-
-async function render(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(Rail, { target, props: { username: 'felix', onlogout } });
-	await tick();
-	return target;
-}
+const { render, cleanup } = createComponentMount(Rail, { username: 'felix', onlogout });
 
 beforeEach(() => {
 	localStorage.clear();
@@ -67,9 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	if (mounted) await unmount(mounted);
-	mounted = undefined;
-	document.body.replaceChildren();
+	await cleanup();
 	resetLibraryContextForTests();
 	resetPlaylists();
 });

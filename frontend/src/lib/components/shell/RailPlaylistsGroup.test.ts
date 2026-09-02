@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -15,52 +15,30 @@ import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
 	buildPlaylistEntry as entry,
+	createComponentMount,
 	requireElement
 } from './rail-test-fixtures';
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
-}));
-vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
-	fetchAlbums: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
-}));
-vi.mock('$lib/api/songs', () => ({
-	fetchSong: vi.fn(),
-	fetchSongs: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
-}));
+vi.mock('$app/navigation', async () => (await import('./rail-test-fixtures')).railNavigationMock());
+vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
+vi.mock('$lib/api/library', async () =>
+	(await import('./rail-test-fixtures')).railLibraryApiMock()
+);
+vi.mock('$lib/api/albums', async () => (await import('./rail-test-fixtures')).railAlbumsApiMock());
+vi.mock('$lib/api/songs', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
 const fetchPlaylists = vi.fn().mockResolvedValue([]);
 const fetchPlaylist = vi.fn();
-vi.mock('$lib/api/client', () => ({
-	fetchAlbums: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false }),
-	fetchAlbum: vi.fn(),
-	fetchSong: vi.fn(),
-	fetchSongs: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
-	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
-	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args)
-}));
+vi.mock('$lib/api/client', async () => {
+	const { railClientApiMock } = await import('./rail-test-fixtures');
+	return railClientApiMock({
+		fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
+		fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args)
+	});
+});
 
 import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 
-let mounted: ReturnType<typeof mount> | undefined;
-
-async function render(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(RailPlaylistsGroup, { target });
-	await tick();
-	return target;
-}
+const { render, cleanup } = createComponentMount(RailPlaylistsGroup);
 
 beforeEach(() => {
 	localStorage.clear();
@@ -81,9 +59,7 @@ afterEach(async () => {
 	audioPlayer.status = 'idle';
 	queueContext.set({ type: 'library' });
 	closeNowPlaying();
-	if (mounted) await unmount(mounted);
-	mounted = undefined;
-	document.body.replaceChildren();
+	await cleanup();
 	resetPlaylists();
 	resetLibraryContextForTests();
 });
