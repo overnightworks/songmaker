@@ -6,9 +6,20 @@ vi.stubGlobal('fetch', mockFetch);
 const mockClearAuth = vi.fn();
 const mockGoto = vi.fn();
 
-vi.mock('$lib/stores/auth', async () => {
-	const { writable } = await import('svelte/store');
-	const currentUser = writable<{ id: string } | null>(null);
+vi.mock('$lib/stores/auth', () => {
+	let user: { id: string } | null = null;
+	const subscribers = new Set<(value: typeof user) => void>();
+	const currentUser = {
+		subscribe(fn: (value: typeof user) => void) {
+			fn(user);
+			subscribers.add(fn);
+			return () => subscribers.delete(fn);
+		},
+		set(value: typeof user) {
+			user = value;
+			subscribers.forEach((fn) => fn(user));
+		}
+	};
 	return {
 		clearAuth: (...args: unknown[]) => {
 			currentUser.set(null);
@@ -319,14 +330,8 @@ describe('Auth API', () => {
 	});
 });
 
-// The fine-grained behavior of the shared session-lost reaction (the
-// redirect's exact target, the currentUser gate, deduping a concurrent
-// second caller) is pinned once in api/fetch.test.ts, which calls apiFetch
-// directly. This suite's own contribution -- the only thing it can prove
-// that fetch.test.ts can't -- is that a client.ts wrapper (going through a
-// domain function, not apiFetch itself) still reaches that one owner, and
-// that the AUTH_ENDPOINTS exemption survives the real path strings login()
-// and setupAdmin() call.
+// Fine-grained reaction behavior is pinned in api/fetch.test.ts; this suite
+// only proves a client.ts wrapper still reaches that owner.
 describe('401 session expiry handler', () => {
 	it('routes a 401 from a client wrapper (not apiFetch directly) to the shared session-lost owner', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);

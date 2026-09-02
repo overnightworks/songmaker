@@ -83,30 +83,27 @@ function isSessionLostResponse(status: number, path: string): boolean {
 	return status === 401 && !AUTH_ENDPOINTS.includes(path);
 }
 
-// The one reaction to "the session is gone", for the whole app (issue #385).
-// apiFetch and sseFetch below call this directly on their own 401 (every
-// other response reads its own status, but what a 401 *means* and what to do
-// about it is decided here, once). Two callers outside this module reach it
-// too, because they detect a lost session a way apiFetch never sees: an
-// audio element's stream/media probe (`stores/player.ts`'s `onAuthLost`
-// callback, wired from `audioPlayer.svelte.ts`) and a dropped SSE
-// connection's auth probe (`stores/resourceSync.ts`'s `onUnauthorized`,
-// which also treats a 403 on `/api/auth/me` as a lost session -- a disabled
-// account -- something a plain 401 check can't tell apart from an ordinary
-// ownership 403 elsewhere in the app). All three funnel into this one
-// function instead of each clearing auth and navigating on their own.
-//
-// A visitor who was never signed in (first load with no cookie, or a second
-// caller losing the race after the first already cleared it) has no session
-// to lose: `currentUser` is already null, and the app's own unauthenticated
-// routing (`+layout.svelte`'s `initAuth`) already knows whether that sends
-// them to /login or /setup, so this leaves it alone rather than forcing a
-// redirect that can race that more informed choice.
-//
-// A concurrent second caller -- e.g. resourceSync's own auth probe racing an
-// ordinary apiFetch call that both fail with 401 at once -- joins the same
-// in-flight run instead of repeating the redirect, so the listener is told
-// exactly once no matter how many places noticed at the same time.
+const SAFE_INTERNAL_PATH_FALLBACK = '/';
+
+// The one owner of "is this a safe internal path" -- write and read sides
+// (a future login page reading SESSION_LOST_REDIRECT_PARAM back) must both
+// call this. An origin check catches a scheme-relative escape and a
+// leading backslash (URL parsing treats `\` as `/` for http(s)) in one
+// pass, where a slash-pattern regex would miss them.
+export function safeInternalPath(candidate: string): string {
+	try {
+		const resolved = new URL(candidate, window.location.origin);
+		if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
+		return resolved.pathname + resolved.search + resolved.hash;
+	} catch {
+		return SAFE_INTERNAL_PATH_FALLBACK;
+	}
+}
+
+// The one reaction to "the session is gone" (issue #385). player.ts's
+// stream/media probe and resourceSync.ts's SSE-drop probe detect a lost
+// session a way apiFetch never sees, so they call this instead of
+// redirecting on their own.
 let sessionLostRun: Promise<void> | null = null;
 
 export function handleSessionLost(): Promise<void> {
@@ -118,12 +115,16 @@ export function handleSessionLost(): Promise<void> {
 	return sessionLostRun;
 }
 
+// No-ops when `currentUser` is already null: that caller has no session to
+// lose (first load, or a second caller that lost the in-flight race above),
+// so this leaves +layout.svelte's own /login-vs-/setup routing to decide
+// instead of forcing a redirect that could race it.
 async function reactToSessionLost(): Promise<void> {
 	const { currentUser, clearAuth } = await import('$lib/stores/auth');
 	if (get(currentUser) === null) return;
 	clearAuth();
 	const { goto } = await import('$app/navigation');
-	const returnTo = window.location.pathname + window.location.search;
+	const returnTo = safeInternalPath(window.location.pathname + window.location.search);
 	await goto(`/login?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(returnTo)}`);
 }
 

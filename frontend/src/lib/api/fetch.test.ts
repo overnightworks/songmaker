@@ -4,14 +4,35 @@ import { get } from 'svelte/store';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('$lib/stores/auth', async () => {
-	const { writable } = await import('svelte/store');
-	const currentUser = writable<{ id: string } | null>(null);
+// Synchronous factory -- an async one leaves a window where a concurrent
+// dynamic import('$lib/stores/auth') can bypass the mock.
+vi.mock('$lib/stores/auth', () => {
+	let user: { id: string } | null = null;
+	const subscribers = new Set<(value: typeof user) => void>();
+	const currentUser = {
+		subscribe(fn: (value: typeof user) => void) {
+			fn(user);
+			subscribers.add(fn);
+			return () => subscribers.delete(fn);
+		},
+		set(value: typeof user) {
+			user = value;
+			subscribers.forEach((fn) => fn(user));
+		}
+	};
 	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
+import {
+	API_TIMEOUT_MS,
+	apiFetch,
+	sseFetch,
+	ApiError,
+	isRateLimited,
+	safeInternalPath,
+	handleSessionLost
+} from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { clearAuth, currentUser } from '$lib/stores/auth';
@@ -293,7 +314,8 @@ describe('session lost (401)', () => {
 	}
 
 	beforeEach(() => {
-		vi.mocked(clearAuth).mockClear();
+		vi.mocked(clearAuth).mockReset();
+		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
 		vi.mocked(goto).mockClear();
 		currentUser.set(null);
 		history.replaceState(null, '', '/');
@@ -352,16 +374,44 @@ describe('session lost (401)', () => {
 		expect(goto).not.toHaveBeenCalled();
 	});
 
-	it('folds concurrent 401s from separate requests into a single reaction', async () => {
+	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockFetch.mockResolvedValue(unauthorizedResponse());
+		// clearAuth stays a no-op here so a removed guard can't look deduped
+		// by accident (second call seeing hadSession false only because
+		// clearAuth already ran). Firing the second call from inside clearAuth
+		// lands it while the first reaction is genuinely still in flight.
+		let retriggered = false;
+		let second: Promise<void> | undefined;
+		vi.mocked(clearAuth).mockImplementation(() => {
+			if (retriggered) return;
+			retriggered = true;
+			second = handleSessionLost();
+		});
 
-		await Promise.all([
-			apiFetch('/api/songs/s1').catch((e: unknown) => e),
-			apiFetch('/api/songs/s2').catch((e: unknown) => e)
-		]);
+		await handleSessionLost();
+		await second;
 
 		expect(clearAuth).toHaveBeenCalledOnce();
 		expect(goto).toHaveBeenCalledOnce();
+	});
+});
+
+describe('safeInternalPath', () => {
+	it('keeps an already-safe local path, including its query and hash', () => {
+		expect(safeInternalPath('/album/a1/song-1?tab=lyrics#top')).toBe(
+			'/album/a1/song-1?tab=lyrics#top'
+		);
+	});
+
+	it('discards a scheme-relative escape (//host/path resolves to a foreign origin)', () => {
+		expect(safeInternalPath('//attacker.example/x')).toBe('/');
+	});
+
+	it('discards a full cross-origin URL', () => {
+		expect(safeInternalPath('https://attacker.example')).toBe('/');
+	});
+
+	it('discards a leading-backslash escape (parsed as a host separator, same as a browser)', () => {
+		expect(safeInternalPath('/\\attacker.example')).toBe('/');
 	});
 });

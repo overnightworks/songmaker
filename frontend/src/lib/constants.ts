@@ -2,11 +2,8 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// The query param the one session-lost handler (see `handleSessionLost` in
-// `lib/api/fetch.ts`) appends to its redirect to /login, carrying the page
-// the listener was on so a future sign-in can return them there. Named here
-// because it is a cross-file contract, not a one-off string: whichever
-// route reads it back after a successful login must use the same name.
+// Cross-file contract: fetch.ts's handleSessionLost writes this param,
+// whatever reads it back (the login page) must use the same name.
 export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
 
 // The share succeeded server-side even when the follow-up clipboard write
@@ -343,6 +340,10 @@ export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = 'Library sync failed';
+// Not a session loss (issue #385 finding 2): the account exists and is
+// still logged in, an admin disabled it, so this must not read as "sign in
+// again" -- that would only fail the same way.
+export const RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR = 'Your account has been disabled.';
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;

@@ -14,6 +14,7 @@ import {
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
@@ -34,7 +35,7 @@ import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 export type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
-export type ResourceAuthProbe = 'ok' | 'unauthorized' | 'retryable';
+export type ResourceAuthProbe = 'ok' | 'unauthorized' | 'disabled' | 'retryable';
 
 export interface ResourceSyncState {
 	status: ResourceSyncStatus;
@@ -330,6 +331,15 @@ export class ResourceSyncController {
 		const source = this.source;
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
+		if (result === 'disabled') {
+			// A 403 here means the account itself was disabled, not that the
+			// session died -- signing in again would fail the same way, so this
+			// must not run the session-lost redirect (finding 2).
+			this.teardown({ resetStore: false });
+			this.setVisibleError(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+			this.resolveReady(false);
+			return;
+		}
 		if (result === 'unauthorized') {
 			this.teardown({ resetStore: false });
 			this.setVisibleError(RESOURCE_SYNC_ERROR);
@@ -679,9 +689,9 @@ export async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 		await fetchMe();
 		return 'ok';
 	} catch (err) {
-		if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-			return 'unauthorized';
-		}
+		if (!(err instanceof ApiError)) return 'retryable';
+		if (err.status === 403) return 'disabled';
+		if (err.status === 401) return 'unauthorized';
 		return 'retryable';
 	}
 }

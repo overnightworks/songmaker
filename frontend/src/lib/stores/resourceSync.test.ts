@@ -1,9 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
-vi.mock('$lib/stores/auth', async () => {
-	const { writable } = await import('svelte/store');
-	const currentUser = writable<{ id: string } | null>(null);
+vi.mock('$lib/stores/auth', () => {
+	let user: { id: string } | null = null;
+	const subscribers = new Set<(value: typeof user) => void>();
+	const currentUser = {
+		subscribe(fn: (value: typeof user) => void) {
+			fn(user);
+			subscribers.add(fn);
+			return () => subscribers.delete(fn);
+		},
+		set(value: typeof user) {
+			user = value;
+			subscribers.forEach((fn) => fn(user));
+		}
+	};
 	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -19,6 +30,7 @@ import type {
 } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
@@ -29,6 +41,7 @@ import {
 import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
+	probeResourceAuth,
 	resetResourceSyncForTests,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
@@ -516,6 +529,22 @@ describe('resource sync owner', () => {
 		expect(onUnauthorized).toHaveBeenCalledOnce();
 	});
 
+	it('a disabled-account probe stops the owner without running the session-lost reaction', async () => {
+		const onUnauthorized = vi.fn(async () => undefined);
+		const { controller, sources, store } = setup({
+			probeAuth: async () => 'disabled',
+			onUnauthorized
+		});
+		controller.start();
+		const source = latestSource(sources);
+		source.error();
+		await flush();
+		expect(source.closed).toBe(true);
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toBe(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+	});
+
 	it('opens a native EventSource with credentials and cleans it up', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();
@@ -788,6 +817,35 @@ describe('resource sync owner', () => {
 	});
 });
 
+function stubFetchOnce(status: number) {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn().mockResolvedValue({
+			ok: false,
+			status,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: '' })
+		})
+	);
+}
+
+describe('probeResourceAuth', () => {
+	it('classifies 403 as a disabled account, distinct from an expired session', async () => {
+		stubFetchOnce(403);
+		expect(await probeResourceAuth()).toBe('disabled');
+	});
+
+	it('classifies 401 as an expired session', async () => {
+		stubFetchOnce(401);
+		expect(await probeResourceAuth()).toBe('unauthorized');
+	});
+
+	it('classifies any other failure as retryable', async () => {
+		stubFetchOnce(500);
+		expect(await probeResourceAuth()).toBe('retryable');
+	});
+});
+
 describe('library resource sync wiring', () => {
 	it('starts a credentialed EventSource and stops it on demand', () => {
 		vi.stubGlobal('EventSource', MockEventSource);
@@ -814,9 +872,8 @@ describe('library resource sync wiring', () => {
 
 		startLibraryResourceSync();
 		MockEventSource.instances[0].error();
-		// The reaction chain here is deeper than elsewhere in this file --
-		// a real apiFetch round trip plus two dynamic imports -- so one
-		// `flush()` is not always enough ticks to drain it.
+		// Deeper chain than elsewhere here (a real apiFetch round trip plus
+		// two dynamic imports), so one flush() isn't always enough ticks.
 		await flush();
 		await flush();
 
