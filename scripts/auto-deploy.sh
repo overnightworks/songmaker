@@ -376,6 +376,7 @@ reload_prometheus_rules() {
     local compose_error
     local compose_exit_code
     local metrics_response
+    local reload_status_line
 
     if [[ -z "$previous_deployed_sha" ]]; then
         changed_files="$PROMETHEUS_CONFIG_FILE"
@@ -421,8 +422,16 @@ reload_prometheus_rules() {
         log_err "cannot read Prometheus reload status after deploy; deploy remains successful"
         return 0
     fi
-    if ! grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+1([.]0+)?([[:space:]]|$)' <<<"$metrics_response"; then
-        log_err "Prometheus reload did not apply"
+    if ! reload_status_line="$(grep -E '^prometheus_config_last_reload_successful([[:space:]]|$)' <<<"$metrics_response")"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+0([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "Prometheus reload did not apply; deploy remains successful"
+        return 0
+    fi
+    if ! grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+1([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
         return 0
     fi
     if ! rules_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_RULES_URL")"; then

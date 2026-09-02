@@ -182,6 +182,10 @@ class Checkout:
         self._prometheus_rules_exit_code = exit_code
         self._write_curl_stub()
 
+    def set_prometheus_metrics_exit_code(self, exit_code: int) -> None:
+        self._prometheus_metrics_exit_code = exit_code
+        self._write_curl_stub()
+
     def set_prometheus_rules_response(self, response: str) -> None:
         self._prometheus_rules_response = response
         self._write_curl_stub()
@@ -972,11 +976,57 @@ def test_a_failed_prometheus_config_reload_is_logged_without_failing_the_tick(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "-t songmaker-autodeploy -p user.err -- Prometheus reload did not apply" in (
-        checkout.journal.splitlines()
-    )
+    assert (
+        "-t songmaker-autodeploy -p user.err -- Prometheus reload did not apply; "
+        "deploy remains successful"
+    ) in checkout.journal.splitlines()
     assert checkout.failure_count_file.read_text() == "0"
     assert "failure count now" not in checkout.journal
+    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
+
+
+def test_an_unreadable_prometheus_reload_status_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_metrics_exit_code(1)
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "cannot read Prometheus reload status after deploy; deploy remains successful"
+        in checkout.journal
+    )
+    assert checkout.failure_count_file.read_text() == "0"
+    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
+    assert "Prometheus alert rule count mismatch" not in checkout.journal
+
+
+def test_a_missing_prometheus_reload_status_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_metrics_response("other_metric 1\n")
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        in checkout.journal
+    )
+    assert "Prometheus reload did not apply" not in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
     assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
 
 
