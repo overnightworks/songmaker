@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_RETRY_LABEL } from '$lib/constants';
+import { LIBRARY_RETRY_LABEL, RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -19,6 +19,7 @@ import {
 	buildGeneration as generation,
 	buildSong as song,
 	createComponentMount,
+	findElementByRoleAndName,
 	requireButtonContainingText,
 	requireElement,
 	songsPage
@@ -327,7 +328,9 @@ describe('RailLibraryGroup', () => {
 
 			for (const trackTitle of ['Tide', 'Ebb']) {
 				const track = requireButtonContainingText(target, trackTitle);
-				expect(track.querySelector('.equalizer') !== null).toBe(trackTitle === markedTrack);
+				expect(findElementByRoleAndName(track, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(
+					trackTitle === markedTrack
+				);
 			}
 		}
 	);

@@ -30,6 +30,18 @@ export function requireButtonContainingText(root: ParentNode, text: string): HTM
 	return button;
 }
 
+export function findElementByRoleAndName(
+	root: ParentNode,
+	role: string,
+	name: string
+): HTMLElement | null {
+	return (
+		Array.from(root.querySelectorAll<HTMLElement>(`[role="${role}"]`)).find(
+			(element) => element.getAttribute('aria-label') === name
+		) ?? null
+	);
+}
+
 export function buildAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a1',

@@ -21,7 +21,8 @@
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
 		RAIL_LIBRARY_LOAD_ERROR,
-		RAIL_LIBRARY_NAV_LABEL
+		RAIL_LIBRARY_NAV_LABEL,
+		RAIL_PLAYING_MARKER_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
 	import RailGroup from './RailGroup.svelte';
@@ -172,10 +173,12 @@
 >
 	<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
 		{#if loadStatus === 'error'}
-			<p class="rail-status" role="alert">{loadError ?? RAIL_LIBRARY_LOAD_ERROR}</p>
-			<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
-				{LIBRARY_RETRY_LABEL}
-			</button>
+			<div class="rail-load-error">
+				<p class="rail-status" role="alert">{loadError ?? RAIL_LIBRARY_LOAD_ERROR}</p>
+				<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
+					{LIBRARY_RETRY_LABEL}
+				</button>
+			</div>
 		{/if}
 		<ul class="album-list">
 			{#each albums as album (album.id)}
@@ -233,7 +236,7 @@
 											onclick={() => onTrackClick(song)}
 										>
 											{#if isSongPlaying(song)}
-												<span class="equalizer" aria-hidden="true">
+												<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
 													<span></span><span></span><span></span>
 												</span>
 											{/if}
@@ -260,19 +263,35 @@
 
 	.rail-status {
 		margin: 0;
-		padding: 8px 16px;
 		font-size: 0.8rem;
-		color: var(--text-muted);
+		color: var(--score-bad);
+		overflow-wrap: anywhere;
+	}
+
+	.rail-load-error {
+		display: grid;
+		gap: 8px;
+		min-width: 0;
+		margin: 4px 8px 8px;
+		padding: 8px;
+		border-left: 3px solid var(--score-bad);
+		background: var(--score-bad-bg);
 	}
 
 	.rail-retry {
-		margin: 0 16px 8px;
+		justify-self: start;
+		max-width: 100%;
 		padding: 4px 8px;
 		background: none;
-		border: 1px solid var(--border);
-		color: var(--text);
+		border: 1px solid var(--score-bad);
+		color: var(--score-bad);
 		font-size: 0.75rem;
+		font-family: inherit;
 		cursor: pointer;
+	}
+
+	.rail-retry:hover {
+		background: var(--score-bad-bg);
 	}
 
 	.row {
