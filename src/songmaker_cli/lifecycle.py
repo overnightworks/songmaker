@@ -310,6 +310,30 @@ def auto_setup_admin(ctx: AppContext) -> None:
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
+async def report_claude_cli_tool_surface() -> None:
+    """Say in the boot log whether the mounted Claude CLI stays inside its allowlist.
+
+    The co-writer's CLI transport verifies this itself and refuses a drifted
+    binary, so this does not decide anything; it makes the drift visible at
+    boot instead of the first time a musician opens a chat.
+    """
+    from songmaker_cli.claude.provider import (
+        CliToolSurfaceError,
+        UnavailableError,
+        verify_cli_tool_surface,
+    )
+
+    try:
+        await verify_cli_tool_surface()
+    except CliToolSurfaceError as exc:
+        log.error("Claude CLI co-writer disabled: %s", exc)
+        return
+    except UnavailableError as exc:
+        log.info("Claude CLI tool surface not verified: %s", exc)
+        return
+    log.info("Claude CLI tool surface verified: songmaker MCP tools only")
+
+
 def _sync_sessions(ctx: AppContext, session_cache) -> int:
     """Sync Redis session TTLs to the database. Returns count of synced sessions.
 

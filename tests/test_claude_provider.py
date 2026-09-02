@@ -10,21 +10,29 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import (
+    MCP_ALLOWED_TOOLS,
     ClaudeResponse,
+    CliToolSurfaceError,
     UnavailableError,
     _acall_cli,
+    _build_cli_cmd,
+    _build_mcp_cli_cmd,
     _call_api,
     _call_cli,
     _find_claude_binary,
     acall_claude,
+    acall_claude_with_mcp_stream,
     call_claude,
     clear_cli_login_status_cache,
+    clear_cli_tool_surface_cache,
     clear_client_cache,
     cli_login_status,
     is_available,
     list_cli_model_aliases,
     parse_json_response,
+    verify_cli_tool_surface,
 )
 from songmaker_cli.constants import SECRET_ENV_KEYS
 
@@ -33,9 +41,11 @@ from songmaker_cli.constants import SECRET_ENV_KEYS
 def _clear_claude_clients():
     clear_client_cache()
     clear_cli_login_status_cache()
+    clear_cli_tool_surface_cache()
     yield
     clear_client_cache()
     clear_cli_login_status_cache()
+    clear_cli_tool_surface_cache()
 
 
 def _leaked_secret_env_values() -> dict[str, str]:
@@ -566,3 +576,196 @@ def test_parse_json_response_markdown_no_lang() -> None:
     text = '```\n{"score": 7}\n```'
     result = parse_json_response(text)
     assert result["score"] == 7
+
+
+# ── tool allowlist ──────────────────────────────────────────────────
+
+
+def _flag_value(cmd: list[str], flag: str) -> str:
+    return cmd[cmd.index(flag) + 1]
+
+
+def test_cowriter_command_offers_no_builtin_tool() -> None:
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
+
+    assert _flag_value(cmd, "--tools") == ""
+    assert _flag_value(cmd, "--allowedTools") == MCP_ALLOWED_TOOLS
+    assert "--disallowedTools" not in cmd
+    assert "bypassPermissions" not in cmd
+
+
+def test_cowriter_command_ignores_the_mounted_settings_file() -> None:
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
+
+    assert _flag_value(cmd, "--setting-sources") == ""
+    assert "--strict-mcp-config" in cmd
+
+
+def test_tool_free_command_offers_no_tool_at_all() -> None:
+    cmd = _build_cli_cmd("claude", "opus")
+
+    assert _flag_value(cmd, "--tools") == ""
+    assert "--allowedTools" not in cmd
+
+
+# ── tool-surface verification ───────────────────────────────────────
+
+
+def _init_line(tools: list[str]) -> bytes:
+    return json.dumps(
+        {"type": "system", "subtype": "init", "tools": tools},
+    ).encode() + b"\n"
+
+
+def _fake_cli(first_line: bytes, *, still_running: bool = False) -> MagicMock:
+    proc = MagicMock()
+    proc.pid = 4242
+    proc.returncode = None if still_running else 0
+    proc.stdin = MagicMock()
+    proc.stdin.drain = AsyncMock()
+    proc.stdout = MagicMock()
+    proc.stdout.readline = AsyncMock(return_value=first_line)
+    proc.wait = AsyncMock(return_value=None)
+    return proc
+
+
+@pytest.fixture
+def claude_binary(tmp_path: Path):
+    """A stand-in binary file, so its build identity can be stat()ed."""
+    binary = tmp_path / "claude"
+    binary.write_bytes(b"cli-build-one")
+    with patch(
+        "songmaker_cli.claude.provider._require_claude_binary",
+        return_value=str(binary),
+    ):
+        yield binary
+
+
+def _answer_with(monkeypatch, *lines: bytes) -> list[tuple[str, ...]]:
+    """Let the next probes read ``lines`` in turn; collect the commands used."""
+    commands: list[tuple[str, ...]] = []
+    queued = list(lines)
+
+    async def fake_exec(*cmd, **_kw):
+        commands.append(cmd)
+        return _fake_cli(queued.pop(0))
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    return commands
+
+
+def test_tool_surface_accepts_a_cli_offering_only_songmaker_tools(
+    claude_binary, monkeypatch,
+) -> None:
+    _answer_with(monkeypatch, _init_line(["mcp__songmaker__get_song"]))
+
+    asyncio.run(verify_cli_tool_surface())
+
+
+def test_tool_surface_rejects_a_cli_offering_an_unlisted_tool(
+    claude_binary, monkeypatch,
+) -> None:
+    _answer_with(monkeypatch, _init_line(["mcp__songmaker__get_song", "Bash"]))
+
+    with pytest.raises(CliToolSurfaceError) as exc:
+        asyncio.run(verify_cli_tool_surface())
+    assert "Bash" in str(exc.value)
+
+
+def test_tool_surface_is_probed_with_the_cowriter_restrictions(
+    claude_binary, monkeypatch,
+) -> None:
+    commands = _answer_with(monkeypatch, _init_line([]))
+
+    asyncio.run(verify_cli_tool_surface())
+
+    probe = list(commands[0])
+    assert _flag_value(probe, "--tools") == ""
+    assert _flag_value(probe, "--setting-sources") == ""
+    assert "--strict-mcp-config" in probe
+
+
+def test_tool_surface_probe_stops_the_session_it_started(
+    claude_binary, monkeypatch,
+) -> None:
+    killed: list[int] = []
+
+    async def fake_exec(*_cmd, **_kw):
+        return _fake_cli(_init_line([]), still_running=True)
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
+
+    asyncio.run(verify_cli_tool_surface())
+
+    assert killed == [4242]
+
+
+def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
+    claude_binary, monkeypatch,
+) -> None:
+    _answer_with(
+        monkeypatch,
+        _init_line(["mcp__songmaker__get_song"]),
+        _init_line(["mcp__songmaker__get_song", "FutureTool"]),
+    )
+
+    asyncio.run(verify_cli_tool_surface())
+    claude_binary.write_bytes(b"cli-build-two-is-a-different-size")
+
+    with pytest.raises(CliToolSurfaceError) as exc:
+        asyncio.run(verify_cli_tool_surface())
+    assert "FutureTool" in str(exc.value)
+
+
+def test_tool_surface_is_probed_once_per_cli_build(
+    claude_binary, monkeypatch,
+) -> None:
+    commands = _answer_with(monkeypatch, _init_line([]))
+
+    asyncio.run(verify_cli_tool_surface())
+    asyncio.run(verify_cli_tool_surface())
+
+    assert len(commands) == 1
+
+
+def test_tool_surface_reports_a_cli_that_vanished_mid_update(
+    claude_binary, monkeypatch,
+) -> None:
+    claude_binary.unlink()
+
+    with pytest.raises(UnavailableError):
+        asyncio.run(verify_cli_tool_surface())
+
+
+def test_tool_surface_rejects_a_cli_that_announces_nothing(
+    claude_binary, monkeypatch,
+) -> None:
+    _answer_with(monkeypatch, b'{"type": "assistant"}\n')
+
+    with pytest.raises(UnavailableError):
+        asyncio.run(verify_cli_tool_surface())
+
+
+def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        provider, "verify_cli_tool_surface",
+        AsyncMock(side_effect=CliToolSurfaceError("FutureTool")),
+    )
+    spawned: list[tuple[str, ...]] = []
+
+    async def fake_exec(*cmd, **_kw):
+        spawned.append(cmd)
+        raise AssertionError("the co-writer must not spawn an unverified CLI")
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    async def _turn() -> None:
+        async for _ in acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"):
+            pass
+
+    with pytest.raises(CliToolSurfaceError):
+        asyncio.run(_turn())
+    assert spawned == []

@@ -299,7 +299,8 @@ closes the owner before the logout request.
 - **System prompt**: Hardcoded server-side (`SYSTEM_PROMPT` in `chat_api.py`). Clients cannot override it. Song context is wrapped in `<song_context>` XML tags with an untrusted-data notice instructing Claude to ignore instructions inside tags.
 - **Multi-turn history**: Stored in `chat_messages` table, scoped to song. Ownership enforced via `check_song_access()` on every endpoint. Max 50 messages per song.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
-- **CLI backend**: All known tools disabled via `--disallowedTools` denylist. Note: `--tools ""` and `--allowedTools ""` do not reliably block tools in current Claude CLI versions, so a comprehensive denylist is used instead. This list must be updated when new tools are added to Claude Code.
+- **CLI backend**: The session is built so that only the songmaker MCP tools exist. `--tools ""` removes the CLI's entire built-in tool set, so a tool a future Claude Code version ships cannot be called even though nobody here has heard of it; `--allowedTools mcp__songmaker__*` pre-approves our own MCP tools so the non-interactive session never waits for a permission answer nobody is there to give; `--setting-sources ""` drops the mounted `~/.claude/settings.json`, whose `permissions.allow` and `defaultMode` would otherwise decide what a co-writer session may do; `--strict-mcp-config` ignores MCP servers configured anywhere but in the temporary config we write. No `--disallowedTools` list is kept, and `--permission-mode bypassPermissions` is gone — with nothing but the allowlisted tools present, there is nothing left to bypass.
+- **Tool-surface verification**: The CLI is a bind-mounted binary that updates itself, so before every co-writer turn — and once at server startup, for the boot log — `verify_cli_tool_surface()` starts a session with exactly these flags and reads the tool names out of the CLI's own `system` init event. Anything outside `mcp__songmaker__*` raises `CliToolSurfaceError` and the turn is refused. The verdict is cached per binary build (resolved path, size, mtime), so a self-update is verified again instead of inheriting the old answer.
 - **API backend**: Uses the Anthropic Python SDK with `max_tokens=1024` to limit response cost.
 
 ## Child Process Secret Scrubbing
@@ -503,7 +504,7 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 
 ## Known Limitations
 
-- **Claude CLI tool denylist**: Uses `--disallowedTools` (denylist, not allowlist) because `--tools ""` doesn't reliably block tools. New Claude Code tools require updating the list in `provider.py`.
+- **Claude CLI skills and slash commands**: `--tools ""` removes the built-in tools, but the CLI still resolves its own skills and slash commands, and a prompt that *starts* with `/` is read as one. The co-writer's prompt always starts with our system text, so untrusted song content is never in that position; a future CLI that dispatched slash commands from anywhere in the prompt would reopen this.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Redis session staleness**: If Redis delete fails during user deactivation or after a failed login commit, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.

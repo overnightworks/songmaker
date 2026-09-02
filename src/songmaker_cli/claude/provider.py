@@ -24,12 +24,13 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel, Field
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS,
+    CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     SECRET_ENV_KEYS,
@@ -46,14 +47,29 @@ _cli_login_status_cache: CliLoginStatus | None = None
 _cli_login_status_cache_at: float = 0.0
 _cli_login_status_lock = threading.Lock()
 
-_DISALLOWED_TOOLS = (
-    "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,"
-    "Agent,NotebookEdit,TodoWrite,EnterPlanMode,"
-    "CronCreate,CronDelete,CronList,RemoteTrigger,"
-    "EnterWorktree,ExitWorktree,ExitPlanMode,Skill,"
-    "TaskOutput,TaskStop,SendMessage,AskUserQuestion,"
-    "ToolSearch"
+MCP_SERVER_NAME: Final = "songmaker"
+COWRITER_TOOL_PREFIX: Final = f"mcp__{MCP_SERVER_NAME}__"
+MCP_ALLOWED_TOOLS: Final = f"{COWRITER_TOOL_PREFIX}*"
+
+_NO_BUILTIN_TOOLS: Final = ""
+_NO_SETTING_SOURCES: Final = ""
+
+# The CLI is a bind-mounted, self-updating binary reading a prompt that carries
+# untrusted content (lyrics, @-mentions, tool results). These flags make its
+# reachable tool surface a property of this command line alone: `--tools ""`
+# removes the whole built-in set, so a tool shipped by a future version cannot
+# be called even though nobody here has heard of it; `--setting-sources ""`
+# drops the mounted settings file, whose `permissions.allow` and `defaultMode`
+# would otherwise decide what a co-writer session may do; `--strict-mcp-config`
+# ignores MCP servers configured anywhere but in our own `--mcp-config`.
+_TOOL_ISOLATION_FLAGS: Final = (
+    "--tools", _NO_BUILTIN_TOOLS,
+    "--setting-sources", _NO_SETTING_SOURCES,
+    "--strict-mcp-config",
 )
+
+_CLI_INIT_EVENT_TYPE: Final = "system"
+_TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
 
@@ -62,6 +78,11 @@ def clear_client_cache() -> None:
     with _client_lock:
         _sync_clients.clear()
         _async_clients.clear()
+
+
+def clear_cli_tool_surface_cache() -> None:
+    with _tool_surface_lock:
+        _unexpected_tools_by_binary.clear()
 
 
 def clear_cli_login_status_cache() -> None:
@@ -73,6 +94,15 @@ def clear_cli_login_status_cache() -> None:
 
 class UnavailableError(Exception):
     """Raised when no Claude backend is available."""
+
+
+class CliToolSurfaceError(UnavailableError):
+    """Raised when the mounted CLI offers tools outside the co-writer allowlist.
+
+    Deliberately an ``UnavailableError``: a CLI whose tool surface we cannot
+    vouch for is not a CLI we run untrusted song content through, so every
+    caller that already handles "no backend" refuses the turn.
+    """
 
 
 @dataclass
@@ -166,13 +196,14 @@ async def acall_claude_with_mcp(
     """Call the Claude CLI with the songmaker MCP server attached.
 
     Spawns the CLI which in turn spawns the MCP server subprocess with
-    ``SONGMAKER_MCP_USER_ID`` set. All of Claude's built-in tools remain
-    denied; only ``mcp__songmaker__*`` is allowed. This path exists
+    ``SONGMAKER_MCP_USER_ID`` set. Claude's built-in tools are removed from
+    the session; only ``mcp__songmaker__*`` is reachable. This path exists
     exclusively for the co-writer chat flow and requires the CLI backend
     (the Anthropic SDK does not expose MCP servers).
     """
     if model is None:
         model = get_settings().claude_chat_model
+    await verify_cli_tool_surface()
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
@@ -243,6 +274,7 @@ async def acall_claude_with_mcp_stream(
     """
     if model is None:
         model = get_settings().claude_chat_model
+    await verify_cli_tool_surface()
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
@@ -589,16 +621,13 @@ def _flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str
 def _build_cli_cmd(
     binary: str, model: str,
 ) -> list[str]:
+    """Command for a single-turn completion that needs no tools at all."""
     return [
         binary, "-p",
         "--model", model,
         "--output-format", "json",
-        "--disallowedTools", _DISALLOWED_TOOLS,
+        *_TOOL_ISOLATION_FLAGS,
     ]
-
-
-MCP_SERVER_NAME = "songmaker"
-MCP_ALLOWED_TOOLS = f"mcp__{MCP_SERVER_NAME}__*"
 
 
 _MCP_SUBPROCESS_PLACEHOLDER = "unused-in-mcp-subprocess"
@@ -681,20 +710,141 @@ def _build_mcp_cli_cmd(
     *,
     stream: bool = False,
 ) -> list[str]:
+    """Command for a co-writer turn: our MCP tools and nothing else.
+
+    ``--allowedTools`` pre-approves the songmaker MCP tools so the session
+    never needs a permission answer nobody is there to give. Everything else
+    is either absent (``--tools ""``) or falls through to the CLI's default
+    permission mode, which in ``--print`` mode can only refuse.
+    """
     output_format = "stream-json" if stream else "json"
     cmd = [
         binary, "-p",
         "--model", model,
         "--output-format", output_format,
-        "--disallowedTools", _DISALLOWED_TOOLS,
+        *_TOOL_ISOLATION_FLAGS,
         "--allowedTools", MCP_ALLOWED_TOOLS,
         "--mcp-config", config_path,
-        "--strict-mcp-config",
-        "--permission-mode", "bypassPermissions",
     ]
     if stream:
         cmd.append("--verbose")
     return cmd
+
+
+# ── Tool-surface verification ──────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class BinaryBuild:
+    """Identity of the CLI build behind the ``claude`` path, mount and all."""
+
+    path: str
+    mtime_ns: int
+    size: int
+
+
+_tool_surface_lock = threading.Lock()
+_unexpected_tools_by_binary: dict[BinaryBuild, tuple[str, ...]] = {}
+
+
+async def verify_cli_tool_surface() -> None:
+    """Raise unless the mounted CLI reaches nothing but our own MCP tools.
+
+    ``--tools ""`` is what actually keeps built-in tools out of a co-writer
+    session; this asks the binary in front of us whether it still honours
+    that, so a version that changes the rules is caught by its own answer
+    instead of by a hand-kept list of tool names going stale.
+
+    The verdict is remembered per binary build, not per process: the CLI is a
+    bind-mounted install that updates itself under a running container, and an
+    update is exactly the event this check exists for.
+    """
+    binary = _require_claude_binary()
+    build = _binary_build(binary)
+    with _tool_surface_lock:
+        unexpected = _unexpected_tools_by_binary.get(build)
+    if unexpected is None:
+        advertised = await _announced_tools(binary)
+        unexpected = tuple(
+            sorted(
+                name for name in advertised
+                if not name.startswith(COWRITER_TOOL_PREFIX)
+            ),
+        )
+        with _tool_surface_lock:
+            _unexpected_tools_by_binary[build] = unexpected
+    if unexpected:
+        raise CliToolSurfaceError(
+            f"Claude CLI at {build.path} offers tools outside the co-writer "
+            f"allowlist: {', '.join(unexpected)}",
+        )
+
+
+def _binary_build(binary: str) -> BinaryBuild:
+    resolved = Path(binary).resolve()
+    try:
+        stat = resolved.stat()
+    except OSError as exc:
+        raise UnavailableError(f"Claude CLI at {resolved} cannot be read: {exc}") from exc
+    return BinaryBuild(str(resolved), stat.st_mtime_ns, stat.st_size)
+
+
+async def _announced_tools(binary: str) -> list[str]:
+    """Tool names the CLI announces for a session built like a co-writer turn.
+
+    The CLI emits its ``system`` init event, tool list included, before it
+    contacts the model, so the probe reads that one line and kills the
+    session rather than paying for a turn.
+    """
+    cmd = [
+        binary, "-p",
+        "--output-format", "stream-json", "--verbose",
+        "--no-session-persistence",
+        *_TOOL_ISOLATION_FLAGS,
+        "--allowedTools", MCP_ALLOWED_TOOLS,
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=_scrub_env(),
+            start_new_session=True,
+        )
+    except FileNotFoundError:
+        raise UnavailableError("Claude CLI binary not found")
+    if proc.stdin is None or proc.stdout is None:
+        await _reap_process_group(proc)
+        raise UnavailableError("Claude CLI probe could not open its pipes")
+    try:
+        proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
+        await proc.stdin.drain()
+        proc.stdin.close()
+        first_line = await asyncio.wait_for(
+            proc.stdout.readline(),
+            timeout=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise UnavailableError(
+            "Claude CLI did not announce its tools within "
+            f"{CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS}s",
+        )
+    finally:
+        await _reap_process_group(proc)
+    return _parse_announced_tools(first_line)
+
+
+def _parse_announced_tools(raw_line: bytes) -> list[str]:
+    payload = _safe_json_loads(raw_line)
+    if payload is None or payload.get("type") != _CLI_INIT_EVENT_TYPE:
+        raise UnavailableError(
+            "Claude CLI did not open with the expected session init event",
+        )
+    tools = payload.get("tools")
+    if not isinstance(tools, list) or not all(isinstance(t, str) for t in tools):
+        raise UnavailableError("Claude CLI announced an unreadable tool list")
+    return tools
 
 
 def _scrub_env() -> dict[str, str]:
@@ -771,11 +921,6 @@ async def _acall_api(
 
 
 # ── CLI backends ───────────────────────────────────────────────────
-#
-# All known tools are denied via --disallowedTools. This is a denylist
-# (not ideal), but --tools "" and --allowedTools "" don't actually block
-# tool use in current Claude CLI versions. The list should be updated
-# when new tools are added to Claude Code.
 
 
 def _call_cli(

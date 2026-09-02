@@ -90,7 +90,7 @@ Read the entire codebase. Then tear it apart across these dimensions:
 
 ### 11. Trust Boundaries
 - **ACE-Step subprocess**: Runs model inference code as the same OS user. If model weights or ACE-Step code are compromised, what's the blast radius? Does the subprocess inherit more privileges than it needs?
-- **Claude CLI**: Runs as the server's OS user. Even with the tool denylist, what can a future Claude Code version do?
+- **Claude CLI**: Runs as the server's OS user. The session offers only our MCP tools and is verified against the mounted binary before each turn — what could a future Claude Code version still do?
 - **Frontend build artifacts**: Are the SvelteKit build outputs served directly? Could a compromised build inject scripts?
 
 ## Output Format
