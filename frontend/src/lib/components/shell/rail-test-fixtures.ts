@@ -203,8 +203,13 @@ export function railClientApiMock(overrides: Record<string, (...args: unknown[])
 
 export function createComponentMount<Props extends Record<string, unknown>>(
 	component: Component<Props>,
-	props?: Props
-) {
+	props: Props
+): { render: () => Promise<HTMLElement>; cleanup: () => Promise<void> };
+export function createComponentMount(component: Component<Record<string, never>>): {
+	render: () => Promise<HTMLElement>;
+	cleanup: () => Promise<void>;
+};
+export function createComponentMount(component: Component, props?: Record<string, unknown>) {
 	let mounted: ReturnType<typeof mount> | undefined;
 
 	async function render(): Promise<HTMLElement> {
