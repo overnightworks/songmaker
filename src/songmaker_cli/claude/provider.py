@@ -34,6 +34,7 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     SECRET_ENV_KEYS,
@@ -716,6 +717,20 @@ def _unlink_quiet(path: str) -> None:
 
 
 async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
+    """Terminate ``proc``'s whole process group and wait for it to exit.
+
+    SIGKILL cannot be ignored, so the final wait below is bounded on the
+    assumption it will return almost immediately — but "almost immediately"
+    is not "immediately", and this function runs inside a single-flight
+    probe's lock (``_verify_tool_surface_async``): an unbounded wait here
+    would hold that lock forever if the process ever got stuck in an
+    uninterruptible kernel sleep, locking out every later caller for the
+    same key rather than just the one hung probe. On that (pathological,
+    not normal-exit) timeout, the wait is handed to a background task
+    instead of abandoned outright, so the process is still reaped — never
+    left a zombie — once it does exit; the caller here gets its answer back
+    within budget either way.
+    """
     if proc.returncode is not None:
         await proc.wait()
         return
@@ -735,8 +750,28 @@ async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
-        pass
-    await proc.wait()
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        log.error(
+            "Claude CLI process group %d did not exit within %ds of SIGKILL; "
+            "continuing to reap it in the background instead of blocking on it",
+            proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+        )
+        asyncio.create_task(_reap_in_background(proc))
+
+
+async def _reap_in_background(proc: asyncio.subprocess.Process) -> None:
+    """Finish waiting for a process ``_reap_process_group`` gave up waiting
+    on, off any caller's critical path, so it is reaped once it does exit
+    rather than left a zombie for the rest of the container's life."""
+    try:
+        await proc.wait()
+    except Exception:
+        log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
+    else:
+        log.info("Claude CLI process group %s reaped in the background", proc.pid)
 
 
 def _build_mcp_cli_cmd(
@@ -1193,6 +1228,11 @@ def _read_line_with_timeout(stream, timeout_seconds: float) -> bytes:
 
 
 def _reap_process_group_sync(proc: subprocess.Popen) -> None:
+    """Sync twin of ``_reap_process_group`` — same bounded-final-wait shape,
+    a daemon thread instead of a background task for the pathological
+    post-SIGKILL hang, since this runs where ``_call_cli``'s single-flight
+    lock is a plain ``threading.Lock`` with no event loop to hand work off
+    to."""
     if proc.poll() is not None:
         return
     try:
@@ -1207,8 +1247,25 @@ def _reap_process_group_sync(proc: subprocess.Popen) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
-        pass
-    proc.wait()
+        return
+    try:
+        proc.wait(timeout=CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        log.error(
+            "Claude CLI process group %d did not exit within %ds of SIGKILL; "
+            "continuing to reap it in the background instead of blocking on it",
+            proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+        )
+        threading.Thread(target=_reap_in_background_sync, args=(proc,), daemon=True).start()
+
+
+def _reap_in_background_sync(proc: subprocess.Popen) -> None:
+    try:
+        proc.wait()
+    except OSError:
+        log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
+    else:
+        log.info("Claude CLI process group %s reaped in the background", proc.pid)
 
 
 def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _AnnouncedSurface:

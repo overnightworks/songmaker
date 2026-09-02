@@ -151,6 +151,12 @@ CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS = 5
 # reinstalled, DB reachable again) is picked up on the next request rather
 # than staying failed for the lifetime of the success cache.
 CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS = 10
+# After SIGKILL a process cannot ignore the signal, so this bounds only the
+# pathological case (an uninterruptible kernel sleep, a stuck watcher) —
+# not a normal exit, which is immediate. Chosen well above that normal case
+# so it never fires in practice, and well below any caller's own timeout so
+# a stuck reap cannot hold a single-flight probe lock past it.
+CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS = 5
 COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
 COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"

@@ -825,6 +825,140 @@ def test_tool_surface_probe_stops_the_session_it_started(
     assert killed == [4242]
 
 
+# ── reap after SIGKILL is bounded (#351 round 4, Finding 1) ──────────
+#
+# Round 3 added single-flight: the per-key lock is now held across the
+# whole probe, reap included. SIGKILL cannot be ignored, so a normal exit
+# is immediate — but the final ``proc.wait()`` after it was still
+# unbounded, so a process stuck in an uninterruptible kernel sleep (or a
+# watcher that never notices it exit) would hold that lock, and every
+# later caller of the same key, forever. These tests drive the real reap
+# functions directly against a process double whose ``wait()`` never
+# returns, proving the bound holds and the pathological case is at least
+# logged rather than silently abandoned.
+
+
+def test_reap_process_group_gives_up_on_a_process_that_outlives_sigkill(
+    monkeypatch, caplog,
+) -> None:
+    caplog.set_level("ERROR")
+    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
+    signals: list[int] = []
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
+
+    async def _hang() -> None:
+        await asyncio.sleep(999)
+
+    proc = MagicMock()
+    proc.pid = 9999
+    proc.returncode = None
+    proc.wait = AsyncMock(side_effect=_hang)
+
+    async def _run() -> None:
+        await asyncio.wait_for(provider._reap_process_group(proc), timeout=3)
+
+    asyncio.run(_run())
+
+    assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
+    assert any("did not exit" in r.message for r in caplog.records)
+
+
+def test_reap_in_background_eventually_reaps_and_logs_it(caplog) -> None:
+    """The zombie case is not silent: once the process this function was
+    handed to actually does exit, that is logged too — this is where a
+    stuck reap's process ultimately gets cleaned up."""
+    caplog.set_level("INFO")
+    proc = MagicMock()
+    proc.pid = 8888
+    proc.wait = AsyncMock(return_value=0)
+
+    asyncio.run(provider._reap_in_background(proc))
+
+    assert any("reaped in the background" in r.message for r in caplog.records)
+
+
+def test_reap_process_group_sync_gives_up_on_a_process_that_outlives_sigkill(
+    monkeypatch, caplog,
+) -> None:
+    caplog.set_level("ERROR")
+    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
+    signals: list[int] = []
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
+
+    def _wait(timeout=None):
+        if timeout is not None:
+            raise subprocess.TimeoutExpired(cmd="claude", timeout=timeout)
+        return 0
+
+    proc = MagicMock()
+    proc.pid = 7777
+    proc.poll.return_value = None
+    proc.wait.side_effect = _wait
+
+    start = time.monotonic()
+    provider._reap_process_group_sync(proc)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 3
+    assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
+    assert any("did not exit" in r.message for r in caplog.records)
+
+
+def test_reap_in_background_sync_eventually_reaps_and_logs_it(caplog) -> None:
+    caplog.set_level("INFO")
+    proc = MagicMock()
+    proc.pid = 6666
+    proc.wait.return_value = 0
+
+    provider._reap_in_background_sync(proc)
+
+    assert any("reaped in the background" in r.message for r in caplog.records)
+
+
+def test_tool_surface_single_flight_lock_releases_even_when_the_reap_hangs(
+    claude_binary, monkeypatch,
+) -> None:
+    """The risk single-flight (round 3) introduced: the per-key lock is
+    held across the whole probe including its reap. Two genuinely
+    concurrent cold-cache callers must both come back — refused, since the
+    process never answers — within a bounded time, never hang, even though
+    the underlying CLI process never exits, not even after SIGKILL."""
+    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
+    # A real killpg against this fake pid would raise ProcessLookupError and
+    # take an entirely different (already-dead-process) path than the one
+    # under test — stand in for a process that is genuinely still there to
+    # receive both signals.
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, _sig: None)
+
+    async def _hang() -> None:
+        await asyncio.sleep(999)
+
+    async def fake_exec(*_cmd, **_kw):
+        proc = MagicMock()
+        proc.pid = 6161
+        proc.returncode = None
+        proc.stdin = MagicMock()
+        proc.stdin.drain = AsyncMock()
+        proc.stdout = MagicMock()
+        proc.stdout.readline = AsyncMock(side_effect=_hang)
+        proc.wait = AsyncMock(side_effect=_hang)
+        return proc
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    async def _race():
+        return await asyncio.gather(
+            averify_no_builtin_cli_tools(), averify_no_builtin_cli_tools(),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(asyncio.wait_for(_race(), timeout=5))
+
+    assert len(results) == 2
+    assert all(isinstance(r, UnavailableError) for r in results)
+
+
 def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
     claude_binary, monkeypatch,
 ) -> None:
@@ -857,14 +991,15 @@ def test_tool_surface_is_probed_once_per_cli_build(
     assert len(commands) == 1
 
 
-def test_tool_surface_single_flight_serializes_concurrent_probes(
+def test_tool_surface_single_flight_shares_one_successful_probe(
     claude_binary, monkeypatch,
 ) -> None:
     """#351 round 3, Finding 2: two callers racing for the same cold key
     must share one probe. Genuine concurrency via asyncio.gather — each
     fake exec sleeps first, so both coroutines are genuinely in flight
     together before either can finish, the way a sequential test cannot
-    prove."""
+    prove. Covers the success path only — see the fail-closed test below
+    for the mutation this one alone cannot catch."""
     calls = 0
 
     async def fake_exec(*_cmd, **_kw):
@@ -882,6 +1017,50 @@ def test_tool_surface_single_flight_serializes_concurrent_probes(
 
     assert calls == 1
     assert first == second == str(claude_binary)
+
+
+def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 4, Finding 2: a mutation that marks the key "in flight"
+    and lets every other caller return immediately with some default,
+    instead of actually waiting for the first probe's answer, would still
+    pass a bare ``calls == 1`` check — for a security gate that is the one
+    mutation that matters. Holds the first probe open with an
+    asyncio.Event, confirms the second caller has had every chance to run
+    and is still genuinely blocked (not finished) before resolving it, and
+    resolves it with a real mismatch so a wrongly-early "clean" placeholder
+    would be caught."""
+    calls = 0
+    probe_started = asyncio.Event()
+    release_probe = asyncio.Event()
+
+    async def fake_exec(*_cmd, **_kw):
+        nonlocal calls
+        calls += 1
+        probe_started.set()
+        await release_probe.wait()
+        return _fake_cli(_init_line([*_ALL_SONGMAKER_TOOLS, "Bash"]))
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    async def _race() -> list[BaseException]:
+        first = asyncio.create_task(verify_cli_tool_surface())
+        second = asyncio.create_task(verify_cli_tool_surface())
+        await probe_started.wait()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not second.done(), (
+            "second caller returned before the in-flight probe resolved — "
+            "it must wait for the real answer, not assume success"
+        )
+        release_probe.set()
+        return await asyncio.gather(first, second, return_exceptions=True)
+
+    results = asyncio.run(asyncio.wait_for(_race(), timeout=5))
+
+    assert calls == 1
+    assert all(isinstance(r, CliToolSurfaceError) for r in results)
 
 
 def test_tool_surface_reports_a_cli_that_vanished_mid_update(
@@ -1109,35 +1288,55 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
     assert killed == [4343]
 
 
-def test_no_builtin_gate_sync_single_flight_serializes_concurrent_probes(
+def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_placeholder(
     claude_binary, monkeypatch,
 ) -> None:
-    """#351 round 3, Finding 2, sync side: two real threads racing for the
-    same cold key must share one probe — SCORING_MAX_JOBS=1 limits this in
-    the scoring worker today, but not a web process serving parallel
-    requests through the same async gate's sync twin."""
+    """#351 round 4, Finding 2, sync side: the same "in flight" mutation
+    the async test guards against, and the same reason a bare ``calls == 1``
+    check cannot catch it. No sleep anywhere: a real ``threading.Event``
+    holds the first probe open, and ``Thread.join(timeout=...)`` — not a
+    fixed delay — is what proves the second thread is still genuinely
+    blocked rather than having returned early, the way SCORING_MAX_JOBS=1
+    limits real concurrency in the scoring worker today but not a web
+    process serving parallel requests through this same sync twin."""
     calls = 0
+    probe_started = threading.Event()
+    release_probe = threading.Event()
 
     def fake_popen(_cmd, **_kw):
         nonlocal calls
         calls += 1
-        time.sleep(0.05)
-        return _fake_sync_cli(_init_line([]))
+        probe_started.set()
+        release_probe.wait()
+        return _fake_sync_cli(_init_line(["Bash"]))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
-    results: list[str] = []
-    threads = [
-        threading.Thread(target=lambda: results.append(verify_no_builtin_cli_tools()))
-        for _ in range(2)
-    ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    results: list[object] = [None, None]
+
+    def _call(index: int) -> None:
+        try:
+            results[index] = verify_no_builtin_cli_tools()
+        except Exception as exc:  # noqa: BLE001 - captured, asserted below
+            results[index] = exc
+
+    first = threading.Thread(target=_call, args=(0,))
+    second = threading.Thread(target=_call, args=(1,))
+    first.start()
+    assert probe_started.wait(timeout=2), "first caller never reached its probe"
+    second.start()
+    second.join(timeout=0.2)
+    assert second.is_alive(), (
+        "second caller returned before the in-flight probe resolved — "
+        "it must wait for the real answer, not assume success"
+    )
+
+    release_probe.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
 
     assert calls == 1
-    assert results == [str(claude_binary), str(claude_binary)]
+    assert all(isinstance(r, CliToolSurfaceError) for r in results)
 
 
 def test_no_builtin_gate_sync_and_async_share_one_cache(
