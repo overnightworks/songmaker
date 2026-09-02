@@ -361,6 +361,11 @@ PROM_ACESTEP_WORKER_VRAM_USED_GB = "songmaker_acestep_worker_vram_used_gigabytes
 PROM_ACESTEP_WORKER_VRAM_TOTAL_GB = "songmaker_acestep_worker_vram_total_gigabytes"
 PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
+# Background loop health (issue #396)
+BACKGROUND_LOOP_FAILURE_THRESHOLD: Final[int] = 3
+PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES = "songmaker_background_loop_consecutive_failures"
+PROM_BACKGROUND_LOOP_ALIVE = "songmaker_background_loop_alive"
+
 # Rate limit setting keys (stored in rate_limit_settings table)
 SETTING_GENERATION_RATE_LIMIT = "generation_rate_limit"
 SETTING_SCORING_RATE_LIMIT = "scoring_rate_limit"

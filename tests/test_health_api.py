@@ -20,7 +20,9 @@ from conftest import make_test_app
 
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker
+from songmaker_cli.lifecycle import BackgroundLoopName
 
 
 @pytest.fixture(autouse=True)
@@ -145,6 +147,38 @@ def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "unverified"
+
+
+def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool) -> None:
+    client, _ = make_test_app(tmp_path)
+    with client:
+        registry = client.app.state.background_loop_registry
+        for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
+            registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
+        registry.mark_dead(BackgroundLoopName.SESSION_SYNC, None)
+
+        health = client.get("/health")
+        metrics = client.get("/metrics")
+
+    assert health.status_code == 200
+    assert health.json()["background_loops"] == {
+        "session_sync": {
+            "state": "dead", "consecutive_failures": 0, "last_error": "task ended",
+        },
+        "resource_event_cleanup": {
+            "state": "ok", "consecutive_failures": 0, "last_error": None,
+        },
+        "score_backfill": {
+            "state": "failing", "consecutive_failures": 3, "last_error": "RuntimeError",
+        },
+        "stale_job_reaper": {
+            "state": "ok", "consecutive_failures": 0, "last_error": None,
+        },
+    }
+    assert metrics.status_code == 200
+    assert 'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3' in metrics.text
+    assert 'songmaker_background_loop_alive{loop="score_backfill"} 1' in metrics.text
+    assert 'songmaker_background_loop_alive{loop="session_sync"} 0' in metrics.text
 
 
 def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(

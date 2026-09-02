@@ -1,13 +1,13 @@
 # Prometheus alert rules for Songmaker (issue #333).
 #
-# These are the source of truth for the three conditions — checkable with
+# These are the source of truth for the four conditions — checkable with
 # `promtool check rules monitoring/alert.rules.yml` independent of any UI —
 # evaluated by Prometheus itself (see rule_files: in prometheus.yml) and
 # delivered by Alertmanager's own SMTP client (monitoring/
 # alertmanager.yml.template), not duplicated as a second set of native
-# Grafana alert rules: that would mean maintaining the same three
+# Grafana alert rules: that would mean maintaining the same four
 # thresholds in two schemas, which is exactly the kind of side-by-side
-# duplication this design avoids. All three notify the same address
+# duplication this design avoids. All four notify the same address
 # configured in .env (ALERT_EMAIL_TO) — see alertmanager.yml.template.
 groups:
   - name: songmaker
@@ -50,3 +50,12 @@ groups:
         annotations:
           summary: Songmaker jobs are failing
           description: At least one job failed within the last 15 minutes.
+
+      - alert: SongmakerBackgroundLoopUnhealthy
+        expr: songmaker_background_loop_alive == 0 or songmaker_background_loop_consecutive_failures >= 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: A Songmaker background loop is unhealthy
+          description: A background loop has stopped or failed three consecutive ticks.

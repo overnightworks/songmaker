@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel, TypeAdapter
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -16,6 +17,8 @@ from songmaker_cli.constants import (
     PROM_ACESTEP_WORKER_VRAM_USED_GB,
     PROM_ACESTEP_WORKERS_TOTAL,
     PROM_ACTIVE_SESSIONS,
+    PROM_BACKGROUND_LOOP_ALIVE,
+    PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES,
     PROM_CONTENT_TYPE,
     PROM_HTTP_REQUEST_DURATION_MS,
     PROM_HTTP_REQUESTS_TOTAL,
@@ -25,8 +28,20 @@ from songmaker_cli.constants import (
     PROM_NEVER_FAILED_TIMESTAMP,
     PROM_QUEUE_DEPTH,
 )
+from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopStatus
 
 router = APIRouter()
+
+
+class BackgroundLoopResponse(BaseModel):
+    state: BackgroundLoopStatus
+    consecutive_failures: int
+    last_error: str | None
+
+
+_background_loop_response_adapter = TypeAdapter(
+    dict[BackgroundLoopName, BackgroundLoopResponse],
+)
 
 
 def _compute_script_hashes(index_html: Path) -> list[str]:
@@ -70,6 +85,8 @@ def _format_prometheus(
     acestep_worker_queue_depths: dict[str, int],
     acestep_worker_vram_used_gb: dict[str, float],
     acestep_worker_vram_total_gb: dict[str, float],
+    background_loop_consecutive_failures: dict[str, int],
+    background_loop_alive: dict[str, bool],
 ) -> str:
     lines: list[str] = []
 
@@ -172,6 +189,21 @@ def _format_prometheus(
             f'{PROM_ACESTEP_WORKER_VRAM_TOTAL_GB}{{worker_id="{worker_id}"}} {total_gb}',
         )
 
+    lines.append(
+        f"# HELP {PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES} "
+        "Consecutive failures per background loop.",
+    )
+    lines.append(f"# TYPE {PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES} gauge")
+    for name, failures in sorted(background_loop_consecutive_failures.items()):
+        lines.append(
+            f'{PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES}{{loop="{name}"}} {failures}',
+        )
+
+    lines.append(f"# HELP {PROM_BACKGROUND_LOOP_ALIVE} Whether each background loop task is alive.")
+    lines.append(f"# TYPE {PROM_BACKGROUND_LOOP_ALIVE} gauge")
+    for name, alive in sorted(background_loop_alive.items()):
+        lines.append(f'{PROM_BACKGROUND_LOOP_ALIVE}{{loop="{name}"}} {int(alive)}')
+
     lines.append("")
     return "\n".join(lines)
 
@@ -209,6 +241,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     scoring_queue_depth = await get_scoring_queue_depth()
 
     pool = get_arq_pool()
+    background_loop_metrics = request.app.state.background_loop_registry.loop_health()
     workers_online = 0
     workers_loading = 0
     workers_offline = 0
@@ -254,6 +287,13 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         acestep_worker_queue_depths=queue_depths,
         acestep_worker_vram_used_gb=vram_used_gb,
         acestep_worker_vram_total_gb=vram_total_gb,
+        background_loop_consecutive_failures={
+            name.value: health.consecutive_failures
+            for name, health in background_loop_metrics.items()
+        },
+        background_loop_alive={
+            name.value: health.is_alive for name, health in background_loop_metrics.items()
+        },
     )
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
@@ -307,6 +347,15 @@ async def health_check(request: Request) -> JSONResponse:
 
     from songmaker_cli.redis_client import redis_health
     redis_ok = redis_health(ctx.redis)
+    background_loop_health = request.app.state.background_loop_registry.loop_health()
+    background_loops = _background_loop_response_adapter.validate_python({
+        name: {
+            "state": health.status,
+            "consecutive_failures": health.consecutive_failures,
+            "last_error": health.last_error,
+        }
+        for name, health in background_loop_health.items()
+    })
 
     session_cache = getattr(request.app.state, "session_cache", None)
     session_cache_failures = (
@@ -346,4 +395,7 @@ async def health_check(request: Request) -> JSONResponse:
         # "ok". Defaults to "unverified" (never a silent "ok") for the
         # narrow window before the boot-time check has run at all.
         "claude_cli_tool_surface": claude_cli_tool_surface_health(),
+        "background_loops": _background_loop_response_adapter.dump_python(
+            background_loops, mode="json",
+        ),
     })

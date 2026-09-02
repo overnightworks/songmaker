@@ -101,9 +101,10 @@ def test_backfill_dispatches_auto_score_for_every_unscored_generation(
     ctx = _FakeContext(db=seeded_generations)
     auto_score = AsyncMock()
     with patch("songmaker_cli.jobs._auto_score_generation", auto_score):
-        scored = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
+        result = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
 
-    assert scored == 2
+    assert result.dispatched == 2
+    assert result.first_error is None
     dispatched = {call.args[2] for call in auto_score.await_args_list}
     assert dispatched == {"g1", "g2"}
 
@@ -124,10 +125,27 @@ def test_backfill_survives_one_generations_failure_and_scores_the_rest(
     auto_score = AsyncMock(side_effect=[RuntimeError("boom"), None])
     ctx = _FakeContext(db=seeded_generations)
     with patch("songmaker_cli.jobs._auto_score_generation", auto_score):
-        scored = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
+        result = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
 
-    assert scored == 1
+    assert result.dispatched == 1
+    assert isinstance(result.first_error, RuntimeError)
     assert auto_score.await_count == 2
+
+
+def test_backfill_logs_every_failed_generation(seeded_generations, caplog) -> None:
+    auto_score = AsyncMock(side_effect=[RuntimeError("first"), RuntimeError("second")])
+    ctx = _FakeContext(db=seeded_generations)
+
+    with patch("songmaker_cli.jobs._auto_score_generation", auto_score):
+        result = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
+
+    assert result.dispatched == 0
+    assert isinstance(result.first_error, RuntimeError)
+    failure_records = [
+        record for record in caplog.records
+        if record.getMessage().startswith("Score backfill failed for generation")
+    ]
+    assert [record.args for record in failure_records] == [("g1",), ("g2",)]
 
 
 def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
@@ -146,9 +164,10 @@ def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
     ctx = _FakeContext(db=factory)
     auto_score = AsyncMock()
     with patch("songmaker_cli.jobs._auto_score_generation", auto_score):
-        scored = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
+        result = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
 
-    assert scored == SCORE_BACKFILL_BATCH_SIZE
+    assert result.dispatched == SCORE_BACKFILL_BATCH_SIZE
+    assert result.first_error is None
 
 
 # ── Starvation guard (issue #222 review) ───────────────────────────
