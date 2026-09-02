@@ -175,6 +175,19 @@ def test_shorter_content_is_padded_rather_than_truncated(mirror_dir: Path) -> No
     assert json.loads(target.read_text()) == {"b": 1}
 
 
+def test_it_will_not_pad_a_target_that_has_somehow_grown(
+    monkeypatch, mirror_dir: Path,
+) -> None:
+    """The existing size decides the padding, so it is not taken on trust."""
+    mirror.prepare_mirror_directory(mirror_dir)
+    target = mirror_dir / "claude.json"
+    mirror.write_in_place(target, b"{}" + b" " * 400)
+    monkeypatch.setattr(mirror, "SOURCE_READ_LIMIT_BYTES", 64)
+
+    with pytest.raises(mirror.MirrorError, match="is already"):
+        mirror.write_in_place(target, b"{}")
+
+
 def test_a_write_that_does_not_land_completely_is_reported(
     monkeypatch: pytest.MonkeyPatch, mirror_dir: Path,
 ) -> None:

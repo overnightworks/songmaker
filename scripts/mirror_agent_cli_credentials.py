@@ -438,6 +438,14 @@ def write_in_place(path: Path, payload: bytes) -> None:
     descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, MIRROR_FILE_MODE)
     try:
         info = _checked(descriptor, str(path))
+        # The existing size decides how much padding is written, so it is not
+        # taken on trust: a target that had somehow grown would otherwise pull
+        # a payload that size into memory and back onto disk on every run.
+        if info.st_size > SOURCE_READ_LIMIT_BYTES:
+            raise MirrorError(
+                f"{path} is already {info.st_size} bytes, more than the "
+                f"{SOURCE_READ_LIMIT_BYTES} a login document may be",
+            )
         os.fchmod(descriptor, MIRROR_FILE_MODE)
         padded = payload.ljust(info.st_size)
         _write_all(descriptor, padded, path)

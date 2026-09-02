@@ -427,20 +427,32 @@ it, fails rather than reporting success.
 **How it refuses.** Every path is opened with `O_NOFOLLOW` and checked on the
 open descriptor before it is read or written: a regular file, owned by us,
 with exactly one hard link, and no larger than a login document can be — a
-file too big to read in full is refused rather than judged on its first bytes.
-The mirror directory is created `0700` rather than chmodded afterwards. A
-mirrored file's mode is *set* to `0600` when it is written and *required* to
-be `0600` when it is verified; the difference is deliberate, since the writer
-owns that file and the verifier only inspects it.
+file too big to read in full is refused rather than judged on its first bytes,
+and a target that had somehow grown is refused rather than padded back out to
+its own size. `O_NOFOLLOW` covers the last path segment; a symlink somewhere
+in a parent directory is followed, which is why the mirror directory is
+required to be ours and `0700` before anything in it is touched. It is created
+`0700` rather than chmodded afterwards. A mirrored file's mode is *set* to
+`0600` when it is written and *required* to be `0600` when it is verified; the
+difference is deliberate, since the writer owns that file and the verifier only
+inspects it.
 
 `scripts/check_agent_cli_mounts.sh` is the preflight: it calls
 `mirror_agent_cli_credentials.py --verify`, which applies those same checks to
 each published file, parses the JSON, and refuses any non-empty value under a
 renewal-token key found anywhere in it — so a login copied in by hand is
 caught rather than mounted. It also asks systemd whether the mirror service,
-its login watch and its timer are installed, enabled and — for the two
-triggers — running: files that look right prove nothing about currency if
-nothing rewrites them. One check, two callers today — the installer and the
+its login watch and its timer are installed and enabled, whether the two
+triggers are running, and whether the service itself has failed: files that
+look right prove nothing about currency if what rewrites them has been
+erroring out since yesterday. The service is not required to be *active* — a
+finished oneshot is legitimately inactive.
+
+That call has been deleted from this script once already, by an edit that
+rearranged the systemd checks around it, and nothing went red: the verifier's
+own tests kept passing while the surface the deploy tick runs stopped checking
+anything at all. The shell entry point therefore has its own tests, separate
+from the Python ones. One check, two callers today — the installer and the
 auto-deploy tick (#364) — and a third once the containers mount these files.
 
 Where the mirror lives has one answer, owned by that same module: an exported
@@ -467,9 +479,14 @@ rather than half-installed.
 The installer is driven end to end by
 `tests/test_install_cli_credentials_mirror.py` against a throwaway checkout.
 Every invocation goes through one harness that replaces `sudo`, `systemctl`
-and `getent`, and those fakes refuse anything outside the test's own
-directory rather than complying: a run that reached the real `sudo` because a
-guard regressed must fail on the fake, not on the machine. That test exists
+and `getent`, and those fakes refuse rather than comply: a candidate path is
+resolved with `readlink -m` before it is compared, so `..` and symlinked
+parents cannot walk out of the test's own directory, and an unmodelled
+`systemctl` command is an error rather than a success. The variables that hold
+that containment together cannot be overridden by a test. A run that reached
+the real `sudo` because a guard regressed must fail on the fake, not on the
+machine, and there is a test that points the installer at `/etc/systemd/system`
+from the main checkout to prove exactly that. That test exists
 because two crashes shipped in this script while `bash -n` was the only thing
 looking at it — neither an unset variable at runtime nor a directory whose
 parent does not exist is visible to a syntax check — and it now also pins the
