@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -507,6 +508,42 @@ def test_provider_status_reports_a_missing_dependency_instead_of_crashing(
         "environment_key": "ANTHROPIC_API_KEY",
         "missing_dependency": "anthropic",
     }
+
+
+def test_provider_status_treats_a_hanging_claude_cli_as_logged_out(
+    admin_client, monkeypatch,
+):
+    from songmaker_cli.agent_cli import clear_agent_cli_caches
+    from songmaker_cli.settings import get_settings
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def _hanging_output(_binary: str) -> str | None:
+        started.set()
+        release.wait(timeout=1)
+        return None
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    get_settings.cache_clear()
+    clear_agent_cli_caches()
+    monkeypatch.setattr(
+        "songmaker_cli.claude.provider._find_claude_binary", lambda: "/mounted/claude",
+    )
+    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
+    try:
+        client, _ = admin_client
+        resp = client.get("/api/settings/providers")
+    finally:
+        release.set()
+        clear_agent_cli_caches()
+        get_settings.cache_clear()
+
+    assert started.is_set()
+    assert resp.status_code == 200
+    by_provider = {item["provider"]: item for item in resp.json()}
+    assert by_provider["claude"]["configured"] is False
 
 
 def test_models_errors_cover_every_provider_not_only_the_saved_one(admin_client, monkeypatch):

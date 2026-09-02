@@ -7,13 +7,14 @@ import os
 import subprocess
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     CachedProbe,
+    CliProbeBudgetExceeded,
     CliRun,
     _cli_output,
     claude_cli_login,
@@ -84,6 +85,26 @@ def test_claude_without_a_parseable_status_is_logged_out(output: str | None) -> 
 
     assert login.logged_in is False
     assert login.auth_method is None
+
+
+def test_a_claude_probe_that_exceeds_its_caller_budget_is_logged_out(monkeypatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def _hanging_output(_binary: str) -> str | None:
+        started.set()
+        release.wait(timeout=1)
+        return None
+
+    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
+    try:
+        login = claude_cli_login("/mounted/claude")
+    finally:
+        release.set()
+
+    assert started.is_set()
+    assert login.logged_in is False
 
 
 def test_grok_reports_the_account_it_is_signed_in_with() -> None:
@@ -259,7 +280,6 @@ def test_parallel_cold_asks_share_one_failure() -> None:
 def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None:
     started = threading.Event()
     release = threading.Event()
-    first_failure: list[Exception] = []
 
     def probe() -> str:
         started.set()
@@ -267,45 +287,66 @@ def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None
         return "answer"
 
     cached = CachedProbe(probe)
-    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
 
     def first_ask() -> None:
-        with pytest.raises(AgentCliUnavailableError) as raised:
+        try:
             cached.get()
-        first_failure.append(raised.value)
+        except CliProbeBudgetExceeded:
+            pass
 
     first = threading.Thread(target=first_ask)
     first.start()
     assert started.wait(timeout=1)
 
     started_waiting = time.monotonic()
-    with pytest.raises(AgentCliUnavailableError, match="caller budget"):
+    with pytest.raises(CliProbeBudgetExceeded, match="caller budget"):
         cached.get()
     assert time.monotonic() - started_waiting < 0.2
 
     release.set()
     first.join(timeout=1)
-    assert len(first_failure) == 1
+    assert not first.is_alive()
     assert cached.get() == "answer"
 
 
-def test_run_cli_shares_one_deadline_between_spawn_and_read() -> None:
-    process = MagicMock(spec=subprocess.Popen)
-    process.returncode = 0
-    output = MagicMock()
-    output.stdout = bytearray(b"ok")
-    output.stderr = bytearray()
-    output.complete = True
+def test_run_cli_returns_after_its_answer_budget_and_cleanup_grace(monkeypatch) -> None:
+    answer_budget = 0.05
+    cleanup_grace = 0.05
+    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", answer_budget)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", cleanup_grace)
 
-    with (
-        patch("songmaker_cli.agent_cli._spawn_cli", return_value=process) as spawn,
-        patch("songmaker_cli.agent_cli._read_bounded", return_value=output) as read,
-        patch("songmaker_cli.agent_cli._reap_process_group"),
-    ):
-        run = run_cli("grok", ("models",))
+    started_at = time.monotonic()
+    run = run_cli("/bin/sh", ("-c", "trap '' TERM; while :; do :; done"))
+    elapsed = time.monotonic() - started_at
 
-    assert run == CliRun(returncode=0, stdout="ok", stderr="", complete=True)
-    assert spawn.call_args.args[2] == read.call_args.args[1]
+    assert run is not None
+    assert run.complete is False
+    assert elapsed < answer_budget + (2 * cleanup_grace) + 0.15
+
+
+def test_clearing_a_probe_does_not_restore_its_pre_clear_result() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    results = iter(("before clear", "after clear"))
+
+    def probe() -> str:
+        started.set()
+        release.wait(timeout=1)
+        return next(results)
+
+    cached = CachedProbe(probe)
+    first_answer: list[str] = []
+    first = threading.Thread(target=lambda: first_answer.append(cached.get()))
+    first.start()
+    assert started.wait(timeout=1)
+
+    cached.clear()
+    release.set()
+    first.join(timeout=1)
+
+    assert first_answer == ["before clear"]
+    assert cached.get() == "after clear"
 
 
 def test_a_cli_that_floods_us_is_read_only_up_to_the_limit() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import logging
 import os
 import selectors
 import shutil
@@ -39,6 +40,10 @@ from songmaker_cli.constants import (
 
 class AgentCliUnavailableError(Exception):
     """Raised when a CLI's login response does not match its contract."""
+
+
+class CliProbeBudgetExceeded(AgentCliUnavailableError):
+    """Raised when one caller outwaits a still-running cached probe."""
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,17 @@ class _SpawnState:
 
 LOGGED_OUT = CliLogin(logged_in=False, auth_method=None)
 
+# A probe can spend its answer budget and then two termination grace periods
+# reaping its process group. Give callers enough time to receive that outcome.
+CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS = 0.1
+CLI_PROBE_CALLER_TIMEOUT_SECONDS = (
+    COWRITER_MODELS_TIMEOUT_SECONDS
+    + (2 * CLI_TERMINATION_GRACE_SECONDS)
+    + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
+)
+
+log = logging.getLogger(__name__)
+
 
 def scrubbed_env() -> dict[str, str]:
     """Return the inherited environment without application secrets."""
@@ -101,6 +117,7 @@ class CachedProbe[T]:
         self._failure: Exception | None = None
         self._answered_at = 0.0
         self._inflight: concurrent.futures.Future[T] | None = None
+        self._generation = 0
 
     def get(self) -> T:
         with self._lock:
@@ -112,15 +129,15 @@ class CachedProbe[T]:
                 self._inflight = future
                 threading.Thread(
                     target=self._run_and_resolve,
-                    args=(future,),
+                    args=(future, self._generation),
                     daemon=True,
                 ).start()
 
-        deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
+        deadline = time.monotonic() + CLI_PROBE_CALLER_TIMEOUT_SECONDS
         try:
             return future.result(timeout=max(deadline - time.monotonic(), 0))
         except concurrent.futures.TimeoutError as exc:
-            raise AgentCliUnavailableError(
+            raise CliProbeBudgetExceeded(
                 "agent CLI probe did not answer within its caller budget",
             ) from exc
 
@@ -129,25 +146,31 @@ class CachedProbe[T]:
             self._value = None
             self._failure = None
             self._answered_at = 0.0
+            self._generation += 1
+            self._inflight = None
 
-    def _run_and_resolve(self, future: concurrent.futures.Future[T]) -> None:
+    def _run_and_resolve(
+        self, future: concurrent.futures.Future[T], generation: int,
+    ) -> None:
         try:
             result = self._probe()
         except Exception as exc:  # noqa: BLE001 - preserve a probe's failure for its TTL
             with self._lock:
-                self._value = None
-                self._failure = exc
-                self._answered_at = time.monotonic()
-                if self._inflight is future:
-                    self._inflight = None
+                if generation == self._generation:
+                    self._value = None
+                    self._failure = exc
+                    self._answered_at = time.monotonic()
+                    if self._inflight is future:
+                        self._inflight = None
             future.set_exception(exc)
         else:
             with self._lock:
-                self._value = result
-                self._failure = None
-                self._answered_at = time.monotonic()
-                if self._inflight is future:
-                    self._inflight = None
+                if generation == self._generation:
+                    self._value = result
+                    self._failure = None
+                    self._answered_at = time.monotonic()
+                    if self._inflight is future:
+                        self._inflight = None
             future.set_result(result)
 
     def _is_fresh(self) -> bool:
@@ -293,7 +316,8 @@ def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
     _bounded_wait(process, CLI_TERMINATION_GRACE_SECONDS)
     if _process_group_exists(process.pid):
         _signal_process_group(process.pid, signal.SIGKILL)
-        _wait_for_process_group_exit(process, CLI_TERMINATION_GRACE_SECONDS)
+        if not _wait_for_process_group_exit(process, CLI_TERMINATION_GRACE_SECONDS):
+            log.warning("agent CLI process group %s survived its SIGKILL grace period", process.pid)
 
 
 def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
@@ -441,15 +465,24 @@ def claude_cli_login(binary: str | None) -> CliLogin:
             binary,
             CachedProbe(lambda: _probe_claude_login(binary)),
         )
-    return probe.get()
+    try:
+        return probe.get()
+    except CliProbeBudgetExceeded:
+        return LOGGED_OUT
 
 
 def grok_cli_status() -> GrokCliStatus:
-    return _grok_status_probe.get()
+    try:
+        return _grok_status_probe.get()
+    except CliProbeBudgetExceeded:
+        return GrokCliStatus(login=LOGGED_OUT, model_names=())
 
 
 def codex_cli_login() -> CliLogin:
-    return _codex_login_probe.get()
+    try:
+        return _codex_login_probe.get()
+    except CliProbeBudgetExceeded:
+        return LOGGED_OUT
 
 
 def clear_claude_cli_login_cache() -> None:
