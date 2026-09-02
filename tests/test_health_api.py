@@ -72,7 +72,7 @@ def _use_real_gate_with_fake_cli(monkeypatch, binary_path: Path, *lines: bytes) 
 
 
 def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch, mock_arq_pool,
 ) -> None:
     binary = tmp_path / "claude"
     binary.write_bytes(b"cli-build")
@@ -88,7 +88,9 @@ def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
     assert resp.json()["claude_cli_tool_surface"] == "ok"
 
 
-def test_health_reports_drift_without_failing_the_server(tmp_path: Path, monkeypatch) -> None:
+def test_health_reports_drift_without_failing_the_server(
+    tmp_path: Path, monkeypatch, mock_arq_pool,
+) -> None:
     """#351 round 6, Finding 1 / the operator's ruling: a drifted Claude
     CLI must not stop the server from starting or serving albums and
     playback — it must be visible on /health, not only in the boot log,
@@ -107,7 +109,7 @@ def test_health_reports_drift_without_failing_the_server(tmp_path: Path, monkeyp
 
 
 def test_health_reports_unverified_when_the_probe_itself_could_not_check(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch, mock_arq_pool,
 ) -> None:
     """#351 round 6 follow-up: "could not check" (no CLI mounted, a
     timeout, a zombie, MCP never connecting — anything UnavailableError
@@ -127,7 +129,7 @@ def test_health_reports_unverified_when_the_probe_itself_could_not_check(
 
 
 def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
-    tmp_path: Path,
+    tmp_path: Path, mock_arq_pool,
 ) -> None:
     """The live state defaults to "unverified" (never a silent "ok")
     until something actually calls verify_cli_tool_surface() and records
@@ -146,7 +148,7 @@ def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
 
 
 def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch, mock_arq_pool,
 ) -> None:
     """#351 round 7, Finding 4: /health must follow the tool-surface
     gate's live state, not a value captured once at boot — a later
@@ -182,7 +184,7 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
 
 
 def test_health_drift_does_not_by_itself_mark_the_server_degraded(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch, mock_arq_pool,
 ) -> None:
     """A drifted co-writer is not the same outage as a down database or
     Redis — /health's overall status is unaffected; only the dedicated

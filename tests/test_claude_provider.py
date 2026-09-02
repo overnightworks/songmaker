@@ -1198,7 +1198,7 @@ def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
 
 
 def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_callers(
-    monkeypatch,
+    claude_binary, monkeypatch,
 ) -> None:
     """A process that outlives SIGKILL turns into a _ZombieProbeError, not
     a hang: single-flight must still resolve *both* concurrent callers to
@@ -1206,6 +1206,17 @@ def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_ca
     real timing anywhere, deliberately, since the reap bound is already
     proven at the unit level above; this is only about single-flight
     correctly propagating a zombie failure to every waiter.
+
+    Needs the ``claude_binary`` fixture like its sibling tests: without
+    it, ``_require_claude_binary()`` resolves whatever real ``claude``
+    happens to be on *this* machine's ``PATH`` — present on a desktop
+    with the CLI installed (green), absent on CI (``UnavailableError``
+    raised before ``fake_probe`` is ever reached, so ``calls`` stays 0
+    and the single-flight claim under test never actually runs). Not a
+    real race — the coroutines already register/join the in-flight
+    future synchronously before either ever yields — but a hidden
+    dependency on real host state, same shape as depending on a real
+    service.
     """
     calls = 0
 
