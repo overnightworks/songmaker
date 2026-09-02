@@ -63,6 +63,15 @@
 		collection.kind === 'album' ? LIBRARY_FILTER_LABELS.albums : LIBRARY_FILTER_LABELS.playlists
 	);
 
+	// Position, not the list contents, is what centring cares about: a
+	// metadata edit to some other tile (a title rename, a cover landing via
+	// SSE) produces a new tiles array without moving the open one, and must
+	// not drag the row back to it while the user has scrolled elsewhere.
+	// Tracking this index (a plain number) rather than the tiles array
+	// itself is what lets Svelte's own dependency tracking skip the
+	// scrollIntoView effect below on every such unrelated change.
+	const activeIndex = $derived(tiles.findIndex((tile) => tile.id === collection.id));
+
 	function openTile(item: HTMLElement): void {
 		const id = item.dataset.tileId;
 		if (!id) return;
@@ -89,8 +98,8 @@
 	$effect(() => {
 		const row = rowEl;
 		const openId = collection.id;
-		void tiles;
-		if (!row) return;
+		const index = activeIndex;
+		if (!row || index === -1) return;
 		const active = row.querySelector<HTMLElement>('.row-tile.active');
 		if (!active || typeof active.scrollIntoView !== 'function') return;
 		active.scrollIntoView({
@@ -149,6 +158,7 @@
 				class:active={tile.id === collection.id}
 				data-tile-id={tile.id}
 				aria-current={tile.id === collection.id}
+				aria-label={tile.title}
 				title={tile.title}
 			>
 				<LibraryTileContent
