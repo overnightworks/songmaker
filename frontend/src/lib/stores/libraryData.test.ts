@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { AlbumItem, GenerationItem, PaginatedResponse, SongItem } from '$lib/api/types';
+import { ApiError } from '$lib/api/fetch';
+import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
 
 vi.mock('$lib/api/client', () => ({
 	fetchSongs: vi.fn().mockResolvedValue({
@@ -169,6 +171,15 @@ describe('song list mutations', () => {
 		expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error: 'offline' });
 	});
 
+	it('shows a readable sentence, not a raw status line, when the server sends no detail', async () => {
+		vi.mocked(fetchSongs).mockRejectedValueOnce(new ApiError(500, '', '/api/albums/a1/songs'));
+		await loadSongsForAlbum('a1');
+		expect(get(albumSongsLoad).a1).toEqual({
+			status: 'error',
+			error: API_ERROR_GENERIC_MESSAGE
+		});
+	});
+
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
 		songList.set([makeSong({ id: 's-page', album_id: 'a1' })]);
 		vi.mocked(fetchSongs).mockResolvedValueOnce({
@@ -332,5 +343,15 @@ describe('ensureAllAlbumsLoaded', () => {
 		const ok = await ensureAllAlbumsLoaded();
 		expect(ok).toBe(false);
 		expect(get(allAlbumsLoad)).toEqual({ status: 'error', error: 'offline' });
+	});
+
+	it('shows a readable sentence, not a raw status line, when the server sends no detail', async () => {
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(new ApiError(500, '', '/api/albums'));
+		const ok = await ensureAllAlbumsLoaded();
+		expect(ok).toBe(false);
+		expect(get(allAlbumsLoad)).toEqual({
+			status: 'error',
+			error: API_ERROR_GENERIC_MESSAGE
+		});
 	});
 });

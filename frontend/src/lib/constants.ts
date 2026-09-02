@@ -1,5 +1,7 @@
 export const APP_NAME = 'Hallucinai';
 
+export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
+
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
 // share failure, since the link exists and only the copy step didn't.

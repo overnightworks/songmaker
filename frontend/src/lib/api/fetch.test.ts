@@ -8,7 +8,7 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
-import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
+import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
@@ -86,6 +86,48 @@ describe('sseFetch', () => {
 		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
 		const headers = call[1].headers as Record<string, string>;
 		expect(headers['X-CSRF-Token']).toBe('token-xyz');
+	});
+});
+
+describe('ApiError', () => {
+	it('falls back to a readable sentence when the server sends no detail', () => {
+		const err = new ApiError(500, '', '/api/albums');
+		expect(err.message).toBe(API_ERROR_GENERIC_MESSAGE);
+	});
+
+	it('uses the server detail as the message when one is sent', () => {
+		const err = new ApiError(500, 'Album not found', '/api/albums/x');
+		expect(err.message).toBe('Album not found');
+	});
+});
+
+describe('apiFetch error detail', () => {
+	it('surfaces a readable sentence, not the raw status line, for a non-JSON error body', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			headers: { get: () => null },
+			json: () => Promise.reject(new SyntaxError('Unexpected token'))
+		});
+
+		const err = await apiFetch('/api/albums').catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect((err as ApiError).detail).toBe('');
+		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
+	});
+
+	it('surfaces a readable sentence for a JSON body with no detail field', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			headers: { get: () => null },
+			json: () => Promise.resolve({})
+		});
+
+		const err = await apiFetch('/api/albums').catch((e: unknown) => e);
+
+		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
 	});
 });
 
