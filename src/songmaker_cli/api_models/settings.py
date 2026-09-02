@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
@@ -133,12 +134,26 @@ class JudgeSettingsResponse(BaseModel):
     models_errors: dict[str, str] = Field(default_factory=dict)
 
 
-class ProviderStatusResponse(BaseModel):
-    provider: str
-    configured: bool
-    setup_method: Literal["api_key", "claude_cli"] | None = None
+class ProviderSurfaceState(StrEnum):
+    CONFIGURED = "configured"
+    CLI_LOGIN_NEEDS_API_KEY = "cli_login_needs_api_key"
+    API_KEY_NEEDS_CLI_LOGIN = "api_key_needs_cli_login"
+    MISSING_DEPENDENCY = "missing_dependency"
+    UNCONFIGURED = "unconfigured"
+
+
+class ProviderSurfaceStatus(BaseModel):
+    state: ProviderSurfaceState
+    needs: Literal["cli_login", "api_key"] | None = None
+    setup_method: Literal["api_key", "claude_cli", "grok_cli", "codex_cli"] | None = None
     environment_key: str | None = None
     missing_dependency: str | None = None
+
+
+class ProviderStatusResponse(BaseModel):
+    provider: str
+    cowriter: ProviderSurfaceStatus
+    judge: ProviderSurfaceStatus
 
 
 class ChatRequest(BaseModel):

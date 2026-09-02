@@ -7,12 +7,16 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from songmaker_cli.claude.provider import CliLogin
+from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
+    ApiKeyNeedsCliLoginProvider,
+    CliLoginNeedsApiKeyProvider,
     ConfiguredProvider,
     DependencyUnavailableProvider,
+    ProviderNeed,
     ProviderSetupMethod,
+    ProviderSurface,
     UnconfiguredProvider,
     get_provider_configuration,
     list_provider_models,
@@ -104,7 +108,7 @@ def test_api_key_marks_provider_as_configured(monkeypatch):
         "songmaker_cli.cowriter.catalog.find_spec", lambda _name: object(),
     )
 
-    assert get_provider_configuration("claude") == ConfiguredProvider(
+    assert get_provider_configuration("claude", ProviderSurface.JUDGE) == ConfiguredProvider(
         "claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY",
     )
 
@@ -119,8 +123,10 @@ def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
         lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
-    assert get_provider_configuration("claude") == DependencyUnavailableProvider(
-        "claude", "anthropic", "ANTHROPIC_API_KEY",
+    assert get_provider_configuration(
+        "claude", ProviderSurface.JUDGE,
+    ) == DependencyUnavailableProvider(
+        "claude", "anthropic",
     )
     with pytest.raises(ProviderUnavailableError, match="required dependency 'anthropic'"):
         list_provider_models("claude")
@@ -134,8 +140,10 @@ def test_claude_key_without_sdk_handles_a_blocked_import(monkeypatch):
 
     monkeypatch.setattr("songmaker_cli.cowriter.catalog.find_spec", _blocked)
 
-    assert get_provider_configuration("claude") == DependencyUnavailableProvider(
-        "claude", "anthropic", "ANTHROPIC_API_KEY",
+    assert get_provider_configuration(
+        "claude", ProviderSurface.JUDGE,
+    ) == DependencyUnavailableProvider(
+        "claude", "anthropic",
     )
 
 
@@ -146,7 +154,7 @@ def test_claude_cli_login_marks_provider_as_configured(monkeypatch):
         lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
-    assert get_provider_configuration("claude") == ConfiguredProvider(
+    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == ConfiguredProvider(
         "claude", ProviderSetupMethod.CLAUDE_CLI,
     )
 
@@ -158,8 +166,8 @@ def test_claude_cli_not_logged_in_is_unconfigured(monkeypatch):
         lambda: CliLogin(logged_in=False, auth_method=None),
     )
 
-    assert get_provider_configuration("claude") == UnconfiguredProvider(
-        "claude", "ANTHROPIC_API_KEY",
+    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == UnconfiguredProvider(
+        "claude", ProviderNeed.CLI_LOGIN,
     )
 
 
@@ -174,9 +182,17 @@ def test_unconfigured_provider_names_missing_environment_key(
     monkeypatch, provider, environment_key,
 ):
     monkeypatch.delenv(environment_key, raising=False)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.grok_cli_status",
+        lambda: GrokCliStatus(login=LOGGED_OUT, model_names=()),
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_login",
+        lambda: LOGGED_OUT,
+    )
 
-    assert get_provider_configuration(provider) == UnconfiguredProvider(
-        provider, environment_key,
+    assert get_provider_configuration(provider, ProviderSurface.JUDGE) == UnconfiguredProvider(
+        provider, ProviderNeed.API_KEY, environment_key,
     )
 
 
@@ -220,6 +236,81 @@ def test_claude_cli_catalog_failure_is_named_error(monkeypatch):
 
 def test_catalog_without_api_credentials_names_missing_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_login", lambda: LOGGED_OUT,
+    )
 
     with pytest.raises(ProviderUnavailableError, match="OPENAI_API_KEY"):
         list_provider_models("codex")
+
+
+def test_grok_and_codex_cli_logins_need_the_api_key_for_turns(monkeypatch):
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.grok_cli_status",
+        lambda: GrokCliStatus(
+            login=CliLogin(logged_in=True, auth_method="grok"),
+            model_names=("grok-4.6",),
+        ),
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_login",
+        lambda: CliLogin(logged_in=True, auth_method="codex"),
+    )
+
+    assert get_provider_configuration("grok", ProviderSurface.CO_WRITER) == (
+        CliLoginNeedsApiKeyProvider(
+            "grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY",
+        )
+    )
+    assert get_provider_configuration("codex", ProviderSurface.JUDGE) == (
+        CliLoginNeedsApiKeyProvider(
+            "codex", ProviderSetupMethod.CODEX_CLI, "OPENAI_API_KEY",
+        )
+    )
+    for provider, method, environment_key in (
+        ("grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY"),
+        ("codex", ProviderSetupMethod.CODEX_CLI, "OPENAI_API_KEY"),
+    ):
+        assert get_provider_configuration(provider, ProviderSurface.JUDGE) == (
+            CliLoginNeedsApiKeyProvider(provider, method, environment_key)
+        )
+        with pytest.raises(ProviderUnavailableError, match=environment_key):
+            list_provider_models(provider)
+
+
+def test_claude_key_needs_a_cli_login_for_the_co_writer(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.cli_login_status", lambda: LOGGED_OUT,
+    )
+
+    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == (
+        ApiKeyNeedsCliLoginProvider("claude")
+    )
+
+
+@pytest.mark.parametrize(
+    ("configuration", "message"),
+    [
+        (
+            ApiKeyNeedsCliLoginProvider("claude"),
+            "claude cannot list models until its CLI login is available",
+        ),
+        (
+            UnconfiguredProvider("claude", ProviderNeed.CLI_LOGIN),
+            "claude cannot list models until cli_login is configured",
+        ),
+    ],
+)
+def test_catalog_reports_every_configuration_without_an_attribute_error(
+    monkeypatch, configuration, message,
+):
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._provider_configuration",
+        lambda *_args: configuration,
+    )
+
+    with pytest.raises(ProviderUnavailableError, match=message):
+        list_provider_models("claude")

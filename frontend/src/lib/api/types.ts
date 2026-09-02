@@ -401,12 +401,18 @@ export interface JudgeSettings {
 	models_errors: Record<string, string>;
 }
 
-export interface ProviderStatus {
-	provider: string;
-	configured: boolean;
-	setup_method?: 'api_key' | 'claude_cli' | null;
+export interface ProviderSurfaceStatus {
+	state: 'configured' | 'cli_login_needs_api_key' | 'api_key_needs_cli_login' | 'missing_dependency' | 'unconfigured';
+	needs?: 'cli_login' | 'api_key' | null;
+	setup_method?: 'api_key' | 'claude_cli' | 'grok_cli' | 'codex_cli' | null;
 	environment_key?: string | null;
 	missing_dependency?: string | null;
+}
+
+export interface ProviderStatus {
+	provider: string;
+	cowriter: ProviderSurfaceStatus;
+	judge: ProviderSurfaceStatus;
 }
 
 export interface MemoryScopeItem {

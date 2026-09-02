@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -74,6 +75,7 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "ChatTurnV2Response": "ChatTurnV2Result",
     "CowriterSettingsResponse": "CowriterSettings",
     "JudgeSettingsResponse": "JudgeSettings",
+    "ProviderSurfaceStatus": "ProviderSurfaceStatus",
     "ProviderStatusResponse": "ProviderStatus",
     "MemoryScopeResponse": "MemoryScopeItem",
     "MemoryBundleResponse": "MemoryBundle",
@@ -160,6 +162,7 @@ _EMIT_ORDER: list[str] = [
     "ChatTurnV2Result",
     "CowriterSettings",
     "JudgeSettings",
+    "ProviderSurfaceStatus",
     "ProviderStatus",
     "MemoryScopeItem",
     "MemoryBundle",
@@ -259,6 +262,9 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return _RESPONSE_MODEL_NAMES.get(annotation.__name__, annotation.__name__)
 
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return " | ".join(f"'{member.value}'" for member in annotation)
+
     if hasattr(annotation, "__name__"):
         return type_map.get(annotation.__name__, "unknown")
 
@@ -353,6 +359,7 @@ def generate() -> str:
         PlaylistResponse,
         PresetResponse,
         ProviderStatusResponse,
+        ProviderSurfaceStatus,
         QueueStreamLibraryRequest,
         QueueStreamManifestResponse,
         QueueStreamSkipResponse,
@@ -430,6 +437,7 @@ def generate() -> str:
         "CowriterSettings": CowriterSettingsResponse,
         "JudgeSettings": JudgeSettingsResponse,
         "ProviderStatus": ProviderStatusResponse,
+        "ProviderSurfaceStatus": ProviderSurfaceStatus,
         "MemoryScopeItem": MemoryScopeResponse,
         "MemoryBundle": MemoryBundleResponse,
         "RateResult": RateResponse,

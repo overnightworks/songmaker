@@ -115,6 +115,46 @@ export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
 
+export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
+	claude_cli: 'Claude Code CLI login',
+	grok_cli: 'Grok CLI login',
+	codex_cli: 'Codex CLI login'
+};
+export const PROVIDER_CONFIGURED_LABEL = 'configured';
+export const PROVIDER_NOT_CONFIGURED_LABEL = 'not configured';
+export const PROVIDER_LOGIN_ONLY_LABEL = 'login only';
+export const PROVIDER_KEY_ONLY_LABEL = 'key only';
+export const PROVIDER_MISSING_DEPENDENCY_LABEL = 'missing dependency';
+export const PROVIDER_STATUS_DESCRIPTION =
+	"Each provider's real reachability — whether it can answer you, by what means, and what is still missing when it cannot.";
+export const PROVIDER_STATUS_REFRESHING_MESSAGE = 'Refreshing provider status...';
+export const PROVIDER_STATUS_EMPTY_MESSAGE = 'No provider status is available.';
+export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
+export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
+export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
+
+export function providerMissingDependencyDetail(dependency: string | null | undefined): string {
+	return `Missing ${dependency ?? 'required dependency'}`;
+}
+
+export function providerMissingRequirementDetail(requirement: string | null | undefined): string {
+	return `Missing ${requirement ?? 'required API key'}`;
+}
+
+export function providerCliLoginNeedsApiKeyDetail(cliLogin: string | undefined): string {
+	return `${cliLogin} found — but answering needs its API key`;
+}
+
+export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL =
+	'Key is set, but answering needs the Claude Code CLI login';
+
+export function providerConfiguredDetail(
+	cliLogin: string | undefined,
+	environmentKey: string | null | undefined
+): string {
+	return `${PROVIDER_CONFIGURED_LABEL} — ${cliLogin ?? `${environmentKey} set`}`;
+}
+
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal
 // streamed while song X is open can target song Y. Every tool-call badge
 // that attributes a proposal to its target song shares this copy.

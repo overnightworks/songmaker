@@ -45,10 +45,9 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
-# Only Claude owns a profile today. #407 adds Grok and Codex profiles with
-# their consumer; Compose mounts the Claude binary and credential mirror
-# read-only.
-RUN install -d -o songmaker -g songmaker /home/songmaker/.claude
+# The web consumer owns the mounted CLI profile directories; Compose mounts
+# the binaries and credential mirrors read-only.
+RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
 # Both are volume mount points. Docker seeds an empty named volume from
 # whichever image mounts it first — as root when that image lacks the
 # directory, which the app can never chown back under cap_drop: ALL.

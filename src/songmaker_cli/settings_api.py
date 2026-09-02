@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,6 +31,8 @@ from songmaker_cli.api_models.settings import (
     JudgeSettingsRequest,
     JudgeSettingsResponse,
     ProviderStatusResponse,
+    ProviderSurfaceState,
+    ProviderSurfaceStatus,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
@@ -76,6 +80,9 @@ from songmaker_cli.db.queries.settings import (
     update_preset,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
+
+if TYPE_CHECKING:
+    from songmaker_cli.cowriter.catalog import ProviderSurface
 
 router = APIRouter()
 
@@ -354,48 +361,61 @@ def api_set_claude_models(
 def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[ProviderStatusResponse]:
+    from songmaker_cli.cowriter.catalog import ProviderSurface
+
+    return [
+        ProviderStatusResponse(
+            provider=name,
+            cowriter=_surface_status(name, ProviderSurface.CO_WRITER),
+            judge=_surface_status(name, ProviderSurface.JUDGE),
+        )
+        for name in sorted(COWRITER_PROVIDERS)
+    ]
+
+
+def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfaceStatus:
     from songmaker_cli.cowriter.catalog import (
+        ApiKeyNeedsCliLoginProvider,
+        CliLoginNeedsApiKeyProvider,
         ConfiguredProvider,
         DependencyUnavailableProvider,
         UnconfiguredProvider,
         get_provider_configuration,
     )
 
-    statuses: list[ProviderStatusResponse] = []
-    for name in sorted(COWRITER_PROVIDERS):
-        configuration = get_provider_configuration(name)
-        match configuration:
-            case ConfiguredProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=True,
-                        setup_method=configuration.method.value,
-                        environment_key=configuration.environment_key,
-                    ),
-                )
-            case DependencyUnavailableProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=False,
-                        environment_key=configuration.environment_key,
-                        missing_dependency=configuration.dependency,
-                    ),
-                )
-            case UnconfiguredProvider():
-                statuses.append(
-                    ProviderStatusResponse(
-                        provider=name,
-                        configured=False,
-                        environment_key=configuration.missing_environment_key,
-                    ),
-                )
-            case _:
-                raise AssertionError(
-                    f"unhandled provider configuration state: {configuration!r}",
-                )
-    return statuses
+    configuration = get_provider_configuration(provider, surface)
+    match configuration:
+        case ConfiguredProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.CONFIGURED,
+                setup_method=configuration.method.value,
+                environment_key=configuration.environment_key,
+            )
+        case CliLoginNeedsApiKeyProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.CLI_LOGIN_NEEDS_API_KEY,
+                needs="api_key",
+                setup_method=configuration.method.value,
+                environment_key=configuration.missing_environment_key,
+            )
+        case ApiKeyNeedsCliLoginProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.API_KEY_NEEDS_CLI_LOGIN,
+                needs="cli_login",
+                setup_method="api_key",
+            )
+        case DependencyUnavailableProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.MISSING_DEPENDENCY,
+                missing_dependency=configuration.dependency,
+            )
+        case UnconfiguredProvider():
+            return ProviderSurfaceStatus(
+                state=ProviderSurfaceState.UNCONFIGURED,
+                needs=configuration.need.value,
+                environment_key=configuration.missing_environment_key,
+            )
+    raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
 def _models_for_provider(provider: str) -> tuple[list[str], str | None]:

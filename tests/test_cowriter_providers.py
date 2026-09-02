@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,6 +14,7 @@ from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
 from songmaker_cli.constants import (
@@ -42,6 +44,15 @@ LIVE_CATALOG = {
     "grok": ["grok-4.6", "grok-4.5"],
     "codex": ["gpt-5.4"],
 }
+
+
+@pytest.fixture(autouse=True)
+def _clear_agent_cli_caches():
+    from songmaker_cli.agent_cli import clear_agent_cli_caches
+
+    clear_agent_cli_caches()
+    yield
+    clear_agent_cli_caches()
 
 
 def _fake_user(user_id: str, role: str = "user"):
@@ -441,109 +452,258 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
     assert execute.call_count == 8
 
 
-def test_provider_status_reports_setup_method_and_missing_key(admin_client, monkeypatch):
-    from songmaker_cli.cowriter.catalog import (
-        ConfiguredProvider,
-        ProviderSetupMethod,
-        UnconfiguredProvider,
-    )
-
-    def _fake_configuration(provider: str):
-        if provider == "claude":
-            return ConfiguredProvider("claude", ProviderSetupMethod.CLAUDE_CLI)
-        if provider == "codex":
-            return ConfiguredProvider("codex", ProviderSetupMethod.API_KEY, "OPENAI_API_KEY")
-        return UnconfiguredProvider("grok", "XAI_API_KEY")
-
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.get_provider_configuration", _fake_configuration,
-    )
-    client, _ = admin_client
-    resp = client.get("/api/settings/providers")
-    assert resp.status_code == 200
-    by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"] == {
-        "provider": "claude",
-        "configured": True,
-        "setup_method": "claude_cli",
-        "environment_key": None,
-        "missing_dependency": None,
-    }
-    assert by_provider["codex"] == {
-        "provider": "codex",
-        "configured": True,
-        "setup_method": "api_key",
-        "environment_key": "OPENAI_API_KEY",
-        "missing_dependency": None,
-    }
-    assert by_provider["grok"] == {
-        "provider": "grok",
-        "configured": False,
-        "setup_method": None,
-        "environment_key": "XAI_API_KEY",
-        "missing_dependency": None,
+def _status(
+    state: str,
+    *,
+    needs: str | None = None,
+    setup_method: str | None = None,
+    environment_key: str | None = None,
+    missing_dependency: str | None = None,
+) -> dict[str, str | None]:
+    return {
+        "state": state,
+        "needs": needs,
+        "setup_method": setup_method,
+        "environment_key": environment_key,
+        "missing_dependency": missing_dependency,
     }
 
 
-def test_provider_status_reports_a_missing_dependency_instead_of_crashing(
-    admin_client, monkeypatch,
+def _stub_cli_runners(
+    monkeypatch,
+    *,
+    claude: CliLogin = LOGGED_OUT,
+    grok: GrokCliStatus | None = None,
+    codex: CliLogin = LOGGED_OUT,
+) -> dict[str, int]:
+    calls = {"claude": 0, "grok": 0, "codex": 0}
+    monkeypatch.setattr("songmaker_cli.claude.provider._find_claude_binary", lambda: "claude")
+
+    def fake_claude_output(_binary: str) -> str:
+        calls["claude"] += 1
+        return json.dumps({"loggedIn": claude.logged_in, "authMethod": claude.auth_method})
+
+    def fake_cli_output(binary: str, _args: tuple[str, ...]) -> str:
+        if binary == "grok":
+            calls["grok"] += 1
+            status = grok or GrokCliStatus(login=LOGGED_OUT, model_names=())
+            if not status.login.logged_in:
+                return "You are not authenticated."
+            models = "\n".join(f"  * {model}" for model in status.model_names)
+            return (
+                f"You are logged in with {status.login.auth_method or 'grok.com'}."
+                f"\n\nAvailable models:\n{models}"
+            )
+        calls["codex"] += 1
+        return "Logged in using ChatGPT" if codex.logged_in else "Not logged in"
+
+    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", fake_claude_output)
+    monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", fake_cli_output)
+    return calls
+
+
+@pytest.mark.parametrize(
+    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected"),
+    [
+        (
+            {},
+            LOGGED_OUT,
+            LOGGED_OUT,
+            LOGGED_OUT,
+            True,
+            {
+                "claude": (
+                    _status("unconfigured", needs="cli_login"),
+                    _status(
+                        "unconfigured", needs="api_key", environment_key="ANTHROPIC_API_KEY"
+                    ),
+                ),
+                "grok": (
+                    _status("unconfigured", needs="api_key", environment_key="XAI_API_KEY"),
+                ) * 2,
+                "codex": (
+                    _status("unconfigured", needs="api_key", environment_key="OPENAI_API_KEY"),
+                ) * 2,
+            },
+        ),
+        (
+            {},
+            CliLogin(logged_in=True, auth_method="claude.ai"),
+            CliLogin(logged_in=True, auth_method="grok"),
+            CliLogin(logged_in=True, auth_method="chatgpt"),
+            True,
+            {
+                "claude": (_status("configured", setup_method="claude_cli"),) * 2,
+                "grok": (
+                    _status(
+                        "cli_login_needs_api_key",
+                        needs="api_key",
+                        setup_method="grok_cli",
+                        environment_key="XAI_API_KEY",
+                    ),
+                ) * 2,
+                "codex": (
+                    _status(
+                        "cli_login_needs_api_key",
+                        needs="api_key",
+                        setup_method="codex_cli",
+                        environment_key="OPENAI_API_KEY",
+                    ),
+                ) * 2,
+            },
+        ),
+        (
+            {"ANTHROPIC_API_KEY": "ant", "XAI_API_KEY": "xai", "OPENAI_API_KEY": "oa"},
+            LOGGED_OUT,
+            LOGGED_OUT,
+            LOGGED_OUT,
+            True,
+            {
+                "claude": (
+                    _status("api_key_needs_cli_login", needs="cli_login", setup_method="api_key"),
+                    _status(
+                        "configured", setup_method="api_key", environment_key="ANTHROPIC_API_KEY"
+                    ),
+                ),
+                "grok": (
+                    _status("configured", setup_method="api_key", environment_key="XAI_API_KEY"),
+                ) * 2,
+                "codex": (
+                    _status("configured", setup_method="api_key", environment_key="OPENAI_API_KEY"),
+                ) * 2,
+            },
+        ),
+        (
+            {"ANTHROPIC_API_KEY": "ant"},
+            LOGGED_OUT,
+            LOGGED_OUT,
+            LOGGED_OUT,
+            False,
+            {
+                "claude": (
+                    _status("api_key_needs_cli_login", needs="cli_login", setup_method="api_key"),
+                    _status("missing_dependency", missing_dependency="anthropic"),
+                ),
+                "grok": (
+                    _status("unconfigured", needs="api_key", environment_key="XAI_API_KEY"),
+                ) * 2,
+                "codex": (
+                    _status("unconfigured", needs="api_key", environment_key="OPENAI_API_KEY"),
+                ) * 2,
+            },
+        ),
+    ],
+)
+def test_provider_status_projects_the_catalog_contract(
+    admin_client,
+    monkeypatch,
+    keys,
+    claude_login,
+    grok_login,
+    codex_login,
+    sdk_available,
+    expected,
 ):
-    from songmaker_cli.settings import get_settings
-
+    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in keys.items():
+        monkeypatch.setenv(key, value)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: None,
+        "songmaker_cli.cowriter.catalog.find_spec",
+        lambda _name: object() if sdk_available else None,
     )
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-    get_settings.cache_clear()
+    grok = GrokCliStatus(login=grok_login, model_names=("grok-4.6",))
+    calls = _stub_cli_runners(
+        monkeypatch, claude=claude_login, grok=grok, codex=codex_login,
+    )
 
     client, _ = admin_client
-    resp = client.get("/api/settings/providers")
+    response = client.get("/api/settings/providers")
 
-    assert resp.status_code == 200
-    by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"] == {
-        "provider": "claude",
-        "configured": False,
-        "setup_method": None,
-        "environment_key": "ANTHROPIC_API_KEY",
-        "missing_dependency": "anthropic",
-    }
+    assert response.status_code == 200
+    actual = {item["provider"]: (item["cowriter"], item["judge"]) for item in response.json()}
+    assert actual == expected
+    assert all(count <= 1 for count in calls.values())
 
 
-def test_provider_status_treats_a_hanging_claude_cli_as_logged_out(
-    admin_client, monkeypatch,
+@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
+def test_provider_status_keeps_unparseable_cli_output_unconfigured(
+    admin_client, monkeypatch, provider, caplog
 ):
-    from songmaker_cli.agent_cli import clear_agent_cli_caches
-    from songmaker_cli.settings import get_settings
+    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    _stub_cli_runners(monkeypatch)
 
-    started = threading.Event()
-    release = threading.Event()
+    if provider == "claude":
+        monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", lambda _binary: "not JSON")
+    else:
+        monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", lambda *_args: "not status")
+    client, _ = admin_client
+    response = client.get("/api/settings/providers")
 
-    def _hanging_output(_binary: str) -> str | None:
-        started.set()
-        release.wait(timeout=1)
-        return None
+    assert response.status_code == 200
+    by_provider = {item["provider"]: item for item in response.json()}
+    for surface in ("cowriter", "judge"):
+        status = by_provider[provider][surface]
+        assert status["state"] == "unconfigured"
+    if provider != "claude":
+        assert any(
+            record.name == "songmaker_cli.cowriter.catalog"
+            and record.levelno == logging.WARNING
+            and provider in record.getMessage()
+            for record in caplog.records
+        )
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    get_settings.cache_clear()
-    clear_agent_cli_caches()
-    monkeypatch.setattr(
-        "songmaker_cli.claude.provider._find_claude_binary", lambda: "/mounted/claude",
-    )
-    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
+
+@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
+def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkeypatch, provider):
+    from songmaker_cli import agent_cli
+
+    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    _stub_cli_runners(monkeypatch)
+
+    def timed_out():
+        raise agent_cli.CliProbeBudgetExceeded("probe timed out")
+
+    if provider == "claude":
+        started = threading.Event()
+        release = threading.Event()
+
+        def _hanging_output(_binary: str) -> str | None:
+            started.set()
+            release.wait(timeout=1)
+            return None
+
+        monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
+        monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
+    elif provider == "grok":
+        monkeypatch.setattr(
+            agent_cli._grok_status_probe,
+            "get",
+            timed_out,
+        )
+    else:
+        monkeypatch.setattr(
+            agent_cli._codex_login_probe,
+            "get",
+            timed_out,
+        )
+
+    client, _ = admin_client
     try:
-        client, _ = admin_client
-        resp = client.get("/api/settings/providers")
+        response = client.get("/api/settings/providers")
     finally:
-        release.set()
-        clear_agent_cli_caches()
-        get_settings.cache_clear()
+        if provider == "claude":
+            release.set()
 
-    assert started.is_set()
-    assert resp.status_code == 200
-    by_provider = {item["provider"]: item for item in resp.json()}
-    assert by_provider["claude"]["configured"] is False
+    assert response.status_code == 200
+    if provider == "claude":
+        assert started.is_set()
+    statuses = next(item for item in response.json() if item["provider"] == provider)
+    assert {
+        surface["state"] for surface in statuses.values() if isinstance(surface, dict)
+    } == {"unconfigured"}
 
 
 def test_models_errors_cover_every_provider_not_only_the_saved_one(admin_client, monkeypatch):

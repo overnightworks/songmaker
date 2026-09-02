@@ -675,7 +675,7 @@ stream.
 | PUT | `/api/settings/cowriter` | admin | Persist co-writer provider, model, and history-tail budget. Validates the model against that provider's live catalog only when the provider or model actually changes from what's saved — a budget-only save is never blocked by a temporarily unreachable catalog |
 | GET | `/api/settings/judge` | user | `lyrical_coherence` judge provider, selected model, and live model catalogs per provider, plus `models_errors` (same shape as the co-writer response) |
 | PUT | `/api/settings/judge` | admin | Persist judge provider and a model id that exists in that provider's live catalog |
-| GET | `/api/settings/providers` | admin | Each co-writer/judge provider's real reachability — configured (API key or mounted agent-CLI login) or not, with the missing environment key. The common agent-CLI login runner caches its probes for `CLI_LOGIN_STATUS_CACHE_SECONDS` so one Models-tab load doesn't spawn three subprocesses |
+| GET | `/api/settings/providers` | admin | Provider reachability per `cowriter` and `judge` surface. `configured` means a turn can run on that surface; the other states name the missing API key, CLI login, or dependency. The agent-CLI runner caches its probes for `CLI_LOGIN_STATUS_CACHE_SECONDS`. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
