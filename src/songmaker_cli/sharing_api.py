@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -25,7 +25,7 @@ from songmaker_cli.api_models.songs import (
     share_pick_media,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.audio_paths import resolve_audio_path
+from songmaker_cli.audio_paths import audio_filename_is_contained, resolve_audio_path
 from songmaker_cli.auth import resolve_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
@@ -144,19 +144,15 @@ def _picked_generation(song):
 def _shared_audio_url(
     route: str,
     generation,
+    audio_dir: Path,
 ) -> str | None:
     if (
         generation is None
         or not is_playable_take(generation)
-        or not _is_safe_shared_audio_filename(generation.mp3_path)
+        or not audio_filename_is_contained(audio_dir, generation.mp3_path)
     ):
         return None
     return f"{route}/{generation.mp3_path}"
-
-
-def _is_safe_shared_audio_filename(filename: str) -> bool:
-    path = PurePosixPath(filename)
-    return not path.is_absolute() and ".." not in path.parts
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -234,7 +230,7 @@ def get_shared_album(
             id=s.id,
             title=s.title,
             track_number=s.track_number,
-            audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen),
+            audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen, ctx.audio_dir),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
@@ -353,7 +349,7 @@ def get_shared_song(
         title=song.title,
         artist=song.album.artist if song.album else "",
         album_title=song.album.title if song.album else "",
-        audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen),
+        audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen, ctx.audio_dir),
         cover=cover,
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
@@ -463,6 +459,7 @@ def get_shared_playlist(
     slug: str,
     request: Request,
     db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JSONResponse:
     _check_shared_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
@@ -480,7 +477,9 @@ def get_shared_playlist(
             song_title=gen.song.title if gen.song else "",
             artist=gen.song.album.artist if gen.song and gen.song.album else "",
             generation_number=gen.generation_number,
-            audio_url=_shared_audio_url(f"/shared/playlist/{slug}/audio", gen),
+            audio_url=_shared_audio_url(
+                f"/shared/playlist/{slug}/audio", gen, ctx.audio_dir,
+            ),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
