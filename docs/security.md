@@ -392,6 +392,123 @@ being in place.
 - **A drifted tool surface never fails server startup** (operator ruling, round 6): #351 literally asked for an unknown tool to fail the boot, but once the gate above was confirmed to cover every call path, a server that refuses albums and playback over a co-writer problem is a worse outage than the co-writer being unavailable. `lifecycle.report_claude_cli_tool_surface()` probes at boot, logs the result, and returns `"ok"` (verified clean), `"drift"` (verified, a real mismatch), or `"unverified"` (the probe could not reach a verdict at all — never silently reported as `"ok"`, the exact silent-default shape `check_no_silent_fallbacks.py` exists to catch); that state lives as a live value in `claude/provider.py` (`claude_cli_tool_surface_health()`), updated by every `verify_cli_tool_surface()` call — cache hit or fresh probe alike — not captured once at boot, so a later verdict overrides an earlier one instead of staying stuck at whatever booted; `GET /health` reports it under the same field name, so the state reaches monitoring and the operator, not only the first musician who opens a chat and finds it broken. Nothing polls in the background: the value only changes when the gate itself runs again, so if the CLI disappears without a fresh probe following it, `/health` keeps reporting the last verdict until the next call to the gate. `tests/test_lifecycle_claude_tool_surface.py` and `tests/test_health_api.py` pin the boot report and the live `/health` field across all three states; that a co-writer turn is actually refused on drift is proven separately, in `tests/test_claude_provider.py`'s `test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface` and `test_cowriter_non_stream_turn_refuses_a_cli_with_an_unverified_tool_surface`.
 - **Legacy endpoint**: `POST /api/songs/{id}/chat` (`chat_api.py`) has no caller left — not the frontend, not the CLI, not a test outside its own suite. The live co-writer chat is `POST /chat/turn` in `conversation_api.py`. It is gated the same as every other tool-free call above, but it is a public endpoint, so removing it outright needs the operator's word, not a decision made in this file.
 
+## Agent-CLI Login Mirror (host side)
+
+The co-writer and the lyrical-coherence judge sign in to Claude, Grok and
+Codex with the operator's *subscriptions* rather than API keys. Making those
+logins reachable from a container is a separate, later change; what lives here
+is the host-side half, and it is useful and safe on its own.
+
+`scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
+login into `~/.songmaker/agent-cli-credentials/`, kept current by
+`songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
+`scripts/install-cli-credentials-mirror.sh`. Nothing reads those copies yet.
+
+**The renewal secret never leaves the host.** The mirror publishes the
+short-lived access token and blanks the long-lived one, so whatever eventually
+reads a copy can spend what it holds until it expires but cannot mint a new
+one. What each CLI tolerates was measured on 2026-09-02, each variant run in a
+throwaway container against the real binaries:
+
+| CLI | what the mirror publishes | measured |
+|---|---|---|
+| claude | an **allowlist**: `accessToken`, `expiresAt`, `scopes` — nothing else | `accessToken` + `scopes` is the whole requirement; dropping `scopes` alone flips `claude auth status` to `loggedIn:false`. Without `refreshToken` a full turn runs unchanged. |
+| grok | the document, with `refresh_token` blanked and the four personal fields dropped | its CLI needs every other field (dropping `create_time` alone yields "You are not authenticated"), but tolerates a blank refresh token and the loss of `email`, `first_name`, `last_name`, `profile_image_asset_id`. |
+| codex | the document, with `tokens.refresh_token` blanked and `OPENAI_API_KEY` nulled | the refresh field may not be absent ("missing field `refresh_token`") but may be empty; `id_token` must stay a well-formed JWT. |
+
+The two shapes are not an inconsistency. Claude's allowlist cannot leak: a
+field added tomorrow is simply not carried. Grok and Codex must carry their
+whole document or their CLI refuses it, so for those two **an unknown field
+stops the mirror with a named error** instead of being copied — a CLI update
+introducing `device_refresh_token` would otherwise ride along unnoticed.
+
+**How it writes.** In place: one write into the existing inode, never a
+rename, because a file bind-mount is pinned to the inode it was made from and
+would not follow a rename. It never truncates — shorter content is padded with
+trailing spaces, which every JSON reader ignores — and it reads the bytes back
+through the same descriptor before reporting success. That is not a universal
+atomicity guarantee and is not claimed as one: on ext4 and xfs a *completed*
+buffered write is serialised against a concurrent read, a retried short write
+is the one window, and a reader using `mmap` can still straddle the change.
+Two runs cannot overlap: the second waits for an `flock` and, if it never gets
+it, fails rather than reporting success.
+
+**How it refuses.** Every path is opened with `O_NOFOLLOW` and checked on the
+open descriptor before it is read or written: a regular file, owned by us,
+with exactly one hard link, and no larger than a login document can be — a
+file too big to read in full is refused rather than judged on its first bytes,
+and a target that had somehow grown is refused rather than padded back out to
+its own size. `O_NOFOLLOW` covers the last path segment; a symlink somewhere
+in a parent directory is followed, which is why the mirror directory is
+required to be ours and `0700` before anything in it is touched. It is created
+`0700` rather than chmodded afterwards. A mirrored file's mode is *set* to
+`0600` when it is written and *required* to be `0600` when it is verified; the
+difference is deliberate, since the writer owns that file and the verifier only
+inspects it.
+
+`scripts/check_agent_cli_mounts.sh` is the preflight: it calls
+`mirror_agent_cli_credentials.py --verify`, which applies those same checks to
+each published file, parses the JSON, and refuses any non-empty value under a
+renewal-token key found anywhere in it — so a login copied in by hand is
+caught rather than mounted. It also asks systemd whether the mirror service,
+its login watch and its timer are installed and enabled, whether the two
+triggers are running, and whether the service itself has failed: files that
+look right prove nothing about currency if what rewrites them has been
+erroring out since yesterday. The service is not required to be *active* — a
+finished oneshot is legitimately inactive.
+
+That call has been deleted from this script once already, by an edit that
+rearranged the systemd checks around it, and nothing went red: the verifier's
+own tests kept passing while the surface the deploy tick runs stopped checking
+anything at all. The shell entry point therefore has its own tests, separate
+from the Python ones. One check, two callers today — the installer and the
+auto-deploy tick (#364) — and a third once the containers mount these files.
+
+Where the mirror lives has one answer, owned by that same module: an exported
+`SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
+default under the stack owner's home — compose's own order. The value must be
+an absolute path or `~/…` with no whitespace and no `%`, because systemd
+splits directive values on whitespace and expands `%` as a specifier; anything
+else is refused loudly rather than mangled into a unit.
+
+**Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
+from a linked worktree — these units outlive the shell that installed them,
+and the day a throwaway worktree is removed the unit stops — refuses to run as
+root, whose logins are not the operator's, and refuses to silently replace any
+of the four units it writes when that unit belongs to something else. Ownership
+is judged per unit by the one directive that names its owner: the script an
+`ExecStart` runs, the file a `PathChanged` watches, the service a timer drives.
+A unit carrying no such directive counts as foreign — a file that cannot be
+identified is the one to stop at — and the comparison must reach a token
+boundary, so our own unit with different arguments is still ours while a
+lookalike path is not. `--force` overrides. Every one of those checks runs
+before the first write, so a refusal leaves the machine exactly as it was
+rather than half-installed.
+
+The installer is driven end to end by
+`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout.
+Every invocation goes through one harness that replaces `sudo`, `systemctl`
+and `getent`, and those fakes refuse rather than comply: a candidate path is
+resolved with `readlink -m` before it is compared, so `..` and symlinked
+parents cannot walk out of the test's own directory, and an unmodelled
+`systemctl` command is an error rather than a success. The variables that hold
+that containment together cannot be overridden by a test. A run that reached
+the real `sudo` because a guard regressed must fail on the fake, not on the
+machine, and there is a test that points the installer at `/etc/systemd/system`
+from the main checkout to prove exactly that. That test exists
+because two crashes shipped in this script while `bash -n` was the only thing
+looking at it — neither an unset variable at runtime nor a directory whose
+parent does not exist is visible to a syntax check — and it now also pins the
+refusals above, each of which turns it red when removed.
+
+**What this does not yet do.** Nothing mounts these copies. Until the
+container-side change lands, the mirror is a host service that keeps three
+files current and a preflight that can say whether they are sound; the stack
+starts exactly as it does today. The preflight does insist that the mirror
+unit is installed and enabled — old-but-valid copies would otherwise pass
+every content check while nothing kept them current — so the auto-deploy tick
+refuses to deploy until the installer has been run once.
+
 ## Child Process Secret Scrubbing
 
 Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
