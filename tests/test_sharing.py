@@ -228,9 +228,98 @@ def test_shared_audio(sharing_app: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_shared_audio_allows_only_the_share_page_selected_pick(
+    sharing_app: TestClient,
+) -> None:
+    slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
+    ctx = sharing_app.app.state.ctx
+    selected_at = datetime(2026, 1, 2, tzinfo=timezone.utc)
+
+    with ctx.db() as session:
+        first_pick = session.get(Generation, "g1")
+        assert first_pick is not None
+        first_pick.created_at = selected_at - timedelta(days=1)
+        session.add(Generation(
+            id="g2", song_id="s1", version_id="v1", generation_number=2,
+            mp3_path="admin_user/g2.mp3", seed=43, is_picked=True,
+            created_at=selected_at,
+        ))
+        session.commit()
+
+    (ctx.audio_dir / "admin_user" / "g2.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    unauthed = TestClient(sharing_app.app, cookies={})
+
+    shared_song = unauthed.get(f"/shared/{slug}").json()["songs"][0]
+    assert shared_song["audio_url"].endswith("admin_user/g2.mp3")
+    assert unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3").status_code == 404
+    assert unauthed.get(f"/shared/{slug}/audio/admin_user/g2.mp3").status_code == 200
+
+
+def test_shared_audio_issues_one_scalar_filename_query(sharing_app: TestClient) -> None:
+    slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 200
+    assert len(queries) == 1, (
+        f"expected one scalar filename lookup for shared audio, "
+        f"got {len(queries)}: {queries}"
+    )
+    assert "from generations" in queries[0].lower()
+    assert "versions" not in queries[0].lower()
+
+
+def test_shared_audio_filename_lookup_runs_off_the_event_loop(
+    sharing_app: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+    import threading
+
+    import httpx
+
+    from songmaker_cli import sharing_api
+
+    slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
+    real_lookup = sharing_api._shared_audio_filename_exists
+    observed_threads: list[int] = []
+
+    def _observing_lookup(ctx: AppContext, slug: str, filename: str) -> bool:
+        observed_threads.append(threading.get_ident())
+        return real_lookup(ctx, slug, filename)
+
+    monkeypatch.setattr(sharing_api, "_shared_audio_filename_exists", _observing_lookup)
+
+    async def _request_audio() -> tuple[int, int]:
+        event_loop_thread = threading.get_ident()
+        transport = httpx.ASGITransport(app=sharing_app.app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver",
+        ) as client:
+            response = await client.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
+        return response.status_code, event_loop_thread
+
+    status_code, event_loop_thread = asyncio.run(_request_audio())
+
+    assert status_code == 200
+    assert observed_threads
+    assert observed_threads[0] != event_loop_thread
+
+
 def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
-    audio_dir.mkdir(parents=True)
+    user_dir = audio_dir / "admin_user"
+    user_dir.mkdir(parents=True)
+    (user_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    (user_dir / "g2.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)
 
@@ -255,6 +344,10 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
             mp3_path="admin_user/g1.mp3", seed=42, is_picked=False,
         )
         session.add(gen)
+        session.add(Generation(
+            id="g2", song_id="s1", generation_number=2,
+            mp3_path="admin_user/g2.mp3", seed=42, is_picked=False,
+        ))
         session.commit()
 
     redis = make_fake_redis()
@@ -272,7 +365,10 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
     resp = unauthed.get(f"/shared/{slug}")
     data = resp.json()
     assert data["songs"][0]["audio_url"] is not None
-    assert "g1.mp3" in data["songs"][0]["audio_url"]
+    assert "g2.mp3" in data["songs"][0]["audio_url"]
+
+    assert unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3").status_code == 404
+    assert unauthed.get(f"/shared/{slug}/audio/admin_user/g2.mp3").status_code == 200
 
 
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:

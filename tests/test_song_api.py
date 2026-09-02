@@ -22,6 +22,7 @@ from sqlalchemy import event
 
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.db.queries.songs import list_songs
 
 _ADMIN_USER = "admin"
 _ADMIN_PASSWORD = "admin12345"
@@ -233,5 +234,33 @@ def test_get_song_issues_one_flat_query_per_collection_not_a_cross_join(
     assert len(all_queries) == 4, (
         f"expected exactly 4 queries for GET /api/songs/{{id}} against this "
         f"fixture (song+album, versions, generations, scores), "
+        f"got {len(all_queries)}: {all_queries}"
+    )
+
+
+def test_list_songs_default_loads_one_flat_query_per_collection_not_a_cross_join(
+    worked_through_song_client,
+) -> None:
+    """The detailed list path must not hide get_song()'s old cross join behind
+    its default argument: versions, generations, and scores each load in a
+    flat statement instead."""
+    _, factory = worked_through_song_client
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    all_queries, all_handle = _count_queries(engine)
+    try:
+        with factory() as session:
+            songs = list_songs(session, album_id="alb")
+            assert len(songs) == 1
+            assert len(songs[0].versions) == _DETAIL_VERSION_COUNT
+            assert len(songs[0].generations) == _DETAIL_GENERATION_COUNT
+            assert len(songs[0].generations[0].scores) == _DETAIL_SCORES_PER_GENERATION
+    finally:
+        event.remove(engine, "before_cursor_execute", all_handle)
+
+    assert len(all_queries) == 4, (
+        f"expected exactly 4 queries for detailed list_songs() against this "
+        f"fixture (songs+album, versions, generations, scores), "
         f"got {len(all_queries)}: {all_queries}"
     )
