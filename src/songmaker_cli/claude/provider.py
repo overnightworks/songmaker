@@ -30,8 +30,14 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli.agent_cli import (
+    CliLogin as CliLoginStatus,
+)
+from songmaker_cli.agent_cli import (
+    claude_cli_login,
+    clear_claude_cli_login_cache,
+)
 from songmaker_cli.constants import (
-    CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS,
     CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
@@ -50,10 +56,6 @@ log = logging.getLogger(__name__)
 _sync_clients: dict[str, object] = {}
 _async_clients: dict[str, object] = {}
 _client_lock = threading.Lock()
-
-_cli_login_status_cache: CliLoginStatus | None = None
-_cli_login_status_cache_at: float = 0.0
-_cli_login_status_lock = threading.Lock()
 
 MCP_SERVER_NAME: Final = "songmaker"
 COWRITER_TOOL_PREFIX: Final = f"mcp__{MCP_SERVER_NAME}__"
@@ -116,10 +118,7 @@ def clear_client_cache() -> None:
 
 
 def clear_cli_login_status_cache() -> None:
-    global _cli_login_status_cache, _cli_login_status_cache_at
-    with _cli_login_status_lock:
-        _cli_login_status_cache = None
-        _cli_login_status_cache_at = 0.0
+    clear_claude_cli_login_cache()
 
 
 class UnavailableError(Exception):
@@ -509,69 +508,9 @@ def is_available(api_key: str | None = None) -> bool:
     return _find_claude_binary() is not None
 
 
-@dataclass(frozen=True)
-class CliLoginStatus:
-    """What `claude auth status` reports, not just whether the binary exists."""
-
-    logged_in: bool
-    auth_method: str | None
-
-
 def cli_login_status() -> CliLoginStatus:
-    """Ask the CLI itself whether it is logged in, and with what auth method.
-
-    Any failure to get a clean answer (binary missing, non-zero exit, a
-    timeout, or output that doesn't parse as the expected JSON) is reported
-    as logged out — a discovery probe degrades to "unavailable" rather than
-    raising, since the caller iterates every co-writer provider and one
-    provider's probe must not abort the others.
-
-    The result is cached for ``CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS``: a
-    single Models-tab page load calls this once per settings section
-    (providers, co-writer, judge), and each would otherwise spawn its own
-    ``claude auth status`` subprocess.
-    """
-    global _cli_login_status_cache, _cli_login_status_cache_at
-    now = time.monotonic()
-    with _cli_login_status_lock:
-        cached = _cli_login_status_cache
-        if (
-            cached is not None
-            and now - _cli_login_status_cache_at < CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS
-        ):
-            return cached
-    status = _probe_cli_login_status()
-    with _cli_login_status_lock:
-        _cli_login_status_cache = status
-        _cli_login_status_cache_at = now
-    return status
-
-
-def _probe_cli_login_status() -> CliLoginStatus:
-    binary = _find_claude_binary()
-    if binary is None:
-        return CliLoginStatus(logged_in=False, auth_method=None)
-    try:
-        result = subprocess.run(
-            [binary, "auth", "status"],
-            capture_output=True,
-            text=True,
-            timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
-            env=_scrub_env(),
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return CliLoginStatus(logged_in=False, auth_method=None)
-    try:
-        payload = json.loads(result.stdout)
-    except ValueError:
-        return CliLoginStatus(logged_in=False, auth_method=None)
-    if not isinstance(payload, dict) or not isinstance(payload.get("loggedIn"), bool):
-        return CliLoginStatus(logged_in=False, auth_method=None)
-    auth_method = payload.get("authMethod")
-    return CliLoginStatus(
-        logged_in=payload["loggedIn"],
-        auth_method=auth_method if isinstance(auth_method, str) else None,
-    )
+    """Return the mounted Claude CLI's cached login probe."""
+    return claude_cli_login(_find_claude_binary())
 
 
 def list_cli_model_aliases() -> list[str]:

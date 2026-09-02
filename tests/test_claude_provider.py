@@ -127,122 +127,46 @@ def test_is_available_neither() -> None:
 # ── cli_login_status ───────────────────────────────────────────────
 
 
-def _auth_status_result(stdout: str, returncode: int = 0) -> MagicMock:
-    return MagicMock(stdout=stdout, stderr="", returncode=returncode)
-
-
-def test_cli_login_status_reads_logged_in_json() -> None:
-    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
+def test_cli_login_status_delegates_to_the_shared_runner() -> None:
+    runner_status = provider.CliLoginStatus(logged_in=True, auth_method="claude.ai")
     with (
         patch(
             "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
+            return_value="/mounted/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            return_value=_auth_status_result(payload),
-        ),
+            "songmaker_cli.claude.provider.claude_cli_login",
+            return_value=runner_status,
+        ) as login,
     ):
         status = cli_login_status()
 
-    assert status.logged_in is True
-    assert status.auth_method == "claude.ai"
+    assert status is runner_status
+    login.assert_called_once_with("/mounted/claude")
 
 
-def test_cli_login_status_no_binary_is_logged_out() -> None:
-    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
-        status = cli_login_status()
-
-    assert status.logged_in is False
-    assert status.auth_method is None
-
-
-def test_cli_login_status_not_logged_in() -> None:
-    payload = json.dumps({"loggedIn": False})
+def test_cli_login_status_without_a_binary_delegates_the_unavailable_probe() -> None:
+    logged_out = provider.CliLoginStatus(logged_in=False, auth_method=None)
     with (
+        patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None),
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
-        ),
-        patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            return_value=_auth_status_result(payload),
-        ),
+            "songmaker_cli.claude.provider.claude_cli_login",
+            return_value=logged_out,
+        ) as login,
     ):
         status = cli_login_status()
 
-    assert status.logged_in is False
-    assert status.auth_method is None
+    assert status is logged_out
+    login.assert_called_once_with(None)
 
 
-def test_cli_login_status_malformed_json_is_logged_out() -> None:
-    with (
-        patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
-        ),
-        patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            return_value=_auth_status_result("not json"),
-        ),
-    ):
-        status = cli_login_status()
-
-    assert status.logged_in is False
-
-
-def test_cli_login_status_timeout_is_logged_out() -> None:
-    with (
-        patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
-        ),
-        patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=15),
-        ),
-    ):
-        status = cli_login_status()
-
-    assert status.logged_in is False
-
-
-def test_cli_login_status_reuses_a_recent_probe_instead_of_spawning_again() -> None:
-    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
-    with (
-        patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
-        ),
-        patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            return_value=_auth_status_result(payload),
-        ) as run,
-    ):
-        first = cli_login_status()
-        second = cli_login_status()
-
-    assert first == second
-    run.assert_called_once()
-
-
-def test_cli_login_status_probes_again_once_the_cache_is_cleared() -> None:
-    payload = json.dumps({"loggedIn": True, "authMethod": "claude.ai"})
-    with (
-        patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
-            return_value="/usr/bin/claude",
-        ),
-        patch(
-            "songmaker_cli.claude.provider.subprocess.run",
-            return_value=_auth_status_result(payload),
-        ) as run,
-    ):
-        cli_login_status()
+def test_clearing_the_provider_login_cache_delegates_to_the_runner() -> None:
+    with patch(
+        "songmaker_cli.claude.provider.clear_claude_cli_login_cache",
+    ) as clear:
         clear_cli_login_status_cache()
-        cli_login_status()
 
-    assert run.call_count == 2
+    clear.assert_called_once()
 
 
 # ── list_cli_model_aliases ───────────────────────────────────────────

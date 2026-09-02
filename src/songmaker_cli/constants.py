@@ -140,7 +140,12 @@ COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000
 COWRITER_CLI_TIMEOUT_SECONDS = 600
 COWRITER_MAX_TOOL_ROUNDS = 8
 COWRITER_MODELS_TIMEOUT_SECONDS = 15
-CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS = 30
+CLI_LOGIN_STATUS_CACHE_SECONDS = 30
+CLI_MAX_CONCURRENT_SPAWNS = 8
+# Agent CLI login probes return only a few hundred bytes. These bounds keep a
+# broken mounted binary from holding a request or its memory indefinitely.
+CLI_OUTPUT_READ_LIMIT_BYTES = 64 * 1024
+CLI_TERMINATION_GRACE_SECONDS = 1
 # The real init event measured 0.34s (see docs/security.md); these budgets
 # keep a wide margin over that without letting a stuck probe block a request
 # for anywhere near as long as the old 30s did.
@@ -190,6 +195,21 @@ COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
 )
 COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
 COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER = "Available: "
+
+CLAUDE_CLI_BINARY: Final[str] = "claude"
+CLAUDE_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("auth", "status")
+CLAUDE_CLI_LOGGED_IN_FIELD: Final[str] = "loggedIn"
+CLAUDE_CLI_AUTH_METHOD_FIELD: Final[str] = "authMethod"
+GROK_CLI_BINARY: Final[str] = "grok"
+GROK_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("models",)
+GROK_CLI_LOGGED_IN_MARKER: Final[str] = "You are logged in with "
+GROK_CLI_LOGGED_OUT_MARKER: Final[str] = "You are not authenticated."
+GROK_CLI_MODEL_LIST_MARKER: Final[str] = "Available models:"
+GROK_CLI_MODEL_BULLETS: Final[tuple[str, ...]] = ("* ", "- ")
+CODEX_CLI_BINARY: Final[str] = "codex"
+CODEX_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("login", "status")
+CODEX_CLI_LOGGED_IN_MARKER: Final[str] = "Logged in using "
+CODEX_CLI_LOGGED_OUT_MARKER: Final[str] = "Not logged in"
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 
