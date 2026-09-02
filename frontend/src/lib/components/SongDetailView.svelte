@@ -135,6 +135,7 @@
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
+	import PlaylistPicker from './PlaylistPicker.svelte';
 
 	let showDeleteConfirm = $state(false);
 	let compact = $state(false);
@@ -843,15 +844,13 @@
 	{/snippet}
 
 	{#if songPlaylistPickerOpen}
-		{#await import('./PlaylistPicker.svelte') then { default: PlaylistPicker }}
-			<PlaylistPicker
-				onselect={(playlistId) => {
-					void onAddSongToPlaylist(playlistId);
-					songPlaylistPickerOpen = false;
-				}}
-				onclose={() => (songPlaylistPickerOpen = false)}
-			/>
-		{/await}
+		<PlaylistPicker
+			onselect={(playlistId) => {
+				void onAddSongToPlaylist(playlistId);
+				songPlaylistPickerOpen = false;
+			}}
+			onclose={() => (songPlaylistPickerOpen = false)}
+		/>
 	{/if}
 
 	{#if compact}
