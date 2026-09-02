@@ -1,10 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
+vi.mock('$lib/stores/auth', () => {
+	let user: { id: string } | null = null;
+	const subscribers = new Set<(value: typeof user) => void>();
+	const currentUser = {
+		subscribe(fn: (value: typeof user) => void) {
+			fn(user);
+			subscribers.add(fn);
+			return () => subscribers.delete(fn);
+		},
+		set(value: typeof user) {
+			user = value;
+			subscribers.forEach((fn) => fn(user));
+		}
+	};
+	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+});
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
 import { ApiError } from '$lib/api/fetch';
-import type { GenerationCreatedResourceEvent, GenerationItem, SongItem } from '$lib/api/types';
+import { clearAuth, currentUser } from '$lib/stores/auth';
+import { goto } from '$app/navigation';
+import type {
+	AuthUser,
+	GenerationCreatedResourceEvent,
+	GenerationItem,
+	SongItem
+} from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
@@ -15,6 +41,7 @@ import {
 import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
+	probeResourceAuth,
 	resetResourceSyncForTests,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
@@ -502,6 +529,49 @@ describe('resource sync owner', () => {
 		expect(onUnauthorized).toHaveBeenCalledOnce();
 	});
 
+	it('a disabled-account probe stops the owner without running the session-lost reaction', async () => {
+		const onUnauthorized = vi.fn(async () => undefined);
+		const { controller, sources, store } = setup({
+			probeAuth: async () => 'disabled',
+			onUnauthorized
+		});
+		controller.start();
+		const source = latestSource(sources);
+		source.error();
+		await flush();
+		expect(source.closed).toBe(true);
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toBe(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+	});
+
+	it('does not schedule a timer reconnect after a disabled-account probe', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
+		controller.start();
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		await flush();
+		expect(sources).toHaveLength(1);
+	});
+
+	it('a manual retry after a disabled-account probe opens exactly one new EventSource', async () => {
+		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
+		controller.start();
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		expect(sources[0].closed).toBe(true);
+
+		void controller.retry();
+		await flush();
+
+		expect(sources).toHaveLength(2);
+		expect(sources[1].closed).toBe(false);
+	});
+
 	it('opens a native EventSource with credentials and cleans it up', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();
@@ -774,6 +844,35 @@ describe('resource sync owner', () => {
 	});
 });
 
+function stubFetchOnce(status: number) {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn().mockResolvedValue({
+			ok: false,
+			status,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: '' })
+		})
+	);
+}
+
+describe('probeResourceAuth', () => {
+	it('classifies 403 as a disabled account, distinct from an expired session', async () => {
+		stubFetchOnce(403);
+		expect(await probeResourceAuth()).toBe('disabled');
+	});
+
+	it('classifies 401 as an expired session', async () => {
+		stubFetchOnce(401);
+		expect(await probeResourceAuth()).toBe('unauthorized');
+	});
+
+	it('classifies any other failure as retryable', async () => {
+		stubFetchOnce(500);
+		expect(await probeResourceAuth()).toBe('retryable');
+	});
+});
+
 describe('library resource sync wiring', () => {
 	it('starts a credentialed EventSource and stops it on demand', () => {
 		vi.stubGlobal('EventSource', MockEventSource);
@@ -783,5 +882,30 @@ describe('library resource sync wiring', () => {
 		expect(MockEventSource.instances[0].withCredentials).toBe(true);
 		stopLibraryResourceSync();
 		expect(MockEventSource.instances[0].closed).toBe(true);
+	});
+
+	it('routes a 401 on its auth probe through the one shared session-lost reaction', async () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 401,
+				headers: { get: () => null },
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			})
+		);
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+
+		startLibraryResourceSync();
+		MockEventSource.instances[0].error();
+		// Deeper chain than elsewhere here (a real apiFetch round trip plus
+		// two dynamic imports), so one flush() isn't always enough ticks.
+		await flush();
+		await flush();
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+		expect(vi.mocked(goto).mock.calls[0][0]).toMatch(/^\/login\?redirect=/);
 	});
 });

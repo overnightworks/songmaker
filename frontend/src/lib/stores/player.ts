@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, handleSessionLost } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -1413,12 +1413,7 @@ export function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'):
 audioPlayer.swapCallbacks({
 	onEnded: handlePlaybackEnded,
 	onPlaybackStarted: clearWindowEnd,
-	onAuthLost: async () => {
-		const { clearAuth } = await import('$lib/stores/auth');
-		const { goto } = await import('$app/navigation');
-		clearAuth();
-		await goto('/login');
-	},
+	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: updateMediaSessionMetadata
 });

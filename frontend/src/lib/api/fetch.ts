@@ -1,6 +1,10 @@
 import { get } from 'svelte/store';
 import type { JobItem } from './types';
-import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
+import {
+	API_ERROR_GENERIC_MESSAGE,
+	RATE_LIMITED_TOAST_MESSAGE,
+	SESSION_LOST_REDIRECT_PARAM
+} from '$lib/constants';
 import { addToast, toasts } from '$lib/stores/toast';
 
 export const API_TIMEOUT_MS = 30_000;
@@ -75,6 +79,55 @@ function notifyIfRateLimited(status: number, path: string): void {
 	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
 }
 
+function isSessionLostResponse(status: number, path: string): boolean {
+	return status === 401 && !AUTH_ENDPOINTS.includes(path);
+}
+
+const SAFE_INTERNAL_PATH_FALLBACK = '/';
+
+// The one owner of "is this a safe internal path" -- write and read sides
+// (a future login page reading SESSION_LOST_REDIRECT_PARAM back) must both
+// call this. An origin check catches a scheme-relative escape and a
+// leading backslash (URL parsing treats `\` as `/` for http(s)) in one
+// pass, where a slash-pattern regex would miss them.
+export function safeInternalPath(candidate: string): string {
+	try {
+		const resolved = new URL(candidate, window.location.origin);
+		if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
+		return resolved.pathname + resolved.search + resolved.hash;
+	} catch {
+		return SAFE_INTERNAL_PATH_FALLBACK;
+	}
+}
+
+// The one reaction to "the session is gone" (issue #385). player.ts's
+// stream/media probe and resourceSync.ts's SSE-drop probe detect a lost
+// session a way apiFetch never sees, so they call this instead of
+// redirecting on their own.
+let sessionLostRun: Promise<void> | null = null;
+
+export function handleSessionLost(): Promise<void> {
+	if (!sessionLostRun) {
+		sessionLostRun = reactToSessionLost().finally(() => {
+			sessionLostRun = null;
+		});
+	}
+	return sessionLostRun;
+}
+
+// No-ops when `currentUser` is already null: that caller has no session to
+// lose (first load, or a second caller that lost the in-flight race above),
+// so this leaves +layout.svelte's own /login-vs-/setup routing to decide
+// instead of forcing a redirect that could race it.
+async function reactToSessionLost(): Promise<void> {
+	const { currentUser, clearAuth } = await import('$lib/stores/auth');
+	if (get(currentUser) === null) return;
+	clearAuth();
+	const { goto } = await import('$app/navigation');
+	const returnTo = safeInternalPath(window.location.pathname + window.location.search);
+	await goto(`/login?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(returnTo)}`);
+}
+
 function abortOnCallerOrTimeout(
 	callerSignal: AbortSignal | null | undefined,
 	timeoutSignal: AbortSignal
@@ -115,12 +168,7 @@ export async function apiFetch<T>(
 				// response body not JSON — use empty detail
 			}
 			notifyIfRateLimited(resp.status, path);
-			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
-				const { clearAuth } = await import('$lib/stores/auth');
-				const { goto } = await import('$app/navigation');
-				clearAuth();
-				await goto('/login');
-			}
+			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
 			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		return resp.json() as Promise<T>;
@@ -168,12 +216,7 @@ export async function* sseFetch<T = unknown>(
 				// non-JSON body on error
 			}
 			notifyIfRateLimited(resp.status, path);
-			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
-				const { clearAuth } = await import('$lib/stores/auth');
-				const { goto } = await import('$app/navigation');
-				clearAuth();
-				await goto('/login');
-			}
+			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
 			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		if (!resp.body) {

@@ -4,12 +4,40 @@ import { get } from 'svelte/store';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
+// Synchronous factory -- an async one leaves a window where a concurrent
+// dynamic import('$lib/stores/auth') can bypass the mock.
+vi.mock('$lib/stores/auth', () => {
+	let user: { id: string } | null = null;
+	const subscribers = new Set<(value: typeof user) => void>();
+	const currentUser = {
+		subscribe(fn: (value: typeof user) => void) {
+			fn(user);
+			subscribers.add(fn);
+			return () => subscribers.delete(fn);
+		},
+		set(value: typeof user) {
+			user = value;
+			subscribers.forEach((fn) => fn(user));
+		}
+	};
+	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+});
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
+import {
+	API_TIMEOUT_MS,
+	apiFetch,
+	sseFetch,
+	ApiError,
+	isRateLimited,
+	safeInternalPath,
+	handleSessionLost
+} from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
+import { clearAuth, currentUser } from '$lib/stores/auth';
+import { goto } from '$app/navigation';
+import type { AuthUser } from '$lib/api/types';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -272,5 +300,127 @@ describe('apiFetch abort signal', () => {
 		vi.advanceTimersByTime(1);
 		expect(signalPassedToFetch().aborted).toBe(true);
 		expect(caller.signal.aborted).toBe(false);
+	});
+});
+
+describe('session lost (401)', () => {
+	function unauthorizedResponse() {
+		return {
+			ok: false,
+			status: 401,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: 'Not authenticated' })
+		};
+	}
+
+	beforeEach(() => {
+		vi.mocked(clearAuth).mockReset();
+		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
+		vi.mocked(goto).mockClear();
+		currentUser.set(null);
+		history.replaceState(null, '', '/');
+	});
+
+	it('clears auth and redirects to /login, carrying the current page, when a session existed', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		history.replaceState(null, '', '/album/a1/song-1');
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent('/album/a1/song-1')}`);
+	});
+
+	it('reacts the same way through sseFetch as through apiFetch', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
+		await gen.next().catch((e: unknown) => e);
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+	});
+
+	it('still rejects with an ApiError so the caller can show its own message', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		const err = await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect((err as ApiError).status).toBe(401);
+	});
+
+	it('does not react for a visitor who was never signed in, leaving app routing to decide', async () => {
+		currentUser.set(null);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(clearAuth).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('does not react to a 401 from the login form itself (wrong credentials, not a lost session)', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
+
+		expect(clearAuth).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		// clearAuth stays a no-op here so a removed guard can't look deduped
+		// by accident (second call seeing hadSession false only because
+		// clearAuth already ran). Firing the second call from inside clearAuth
+		// lands it while the first reaction is genuinely still in flight.
+		let retriggered = false;
+		let second: Promise<void> | undefined;
+		vi.mocked(clearAuth).mockImplementation(() => {
+			if (retriggered) return;
+			retriggered = true;
+			second = handleSessionLost();
+		});
+
+		await handleSessionLost();
+		await second;
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+	});
+});
+
+describe('safeInternalPath', () => {
+	it.each([
+		[
+			'an already-safe local path, kept with its query and hash',
+			'/album/a1/song-1?tab=lyrics#top',
+			'/album/a1/song-1?tab=lyrics#top'
+		],
+		['a scheme-relative escape (resolves to a foreign origin)', '//attacker.example/x', '/'],
+		['a full cross-origin URL', 'https://attacker.example', '/'],
+		[
+			'a leading backslash (a host separator for http(s), same as a browser)',
+			'/\\attacker.example',
+			'/'
+		],
+		['a javascript: URL', 'javascript:alert(1)', '/'],
+		['a data: URL', 'data:text/html,hi', '/'],
+		['a leading newline hiding a scheme-relative escape', '\n//attacker.example', '/'],
+		['an embedded newline hiding a host separator', '/\n/attacker', '/'],
+		[
+			'percent-encoded slashes, which stay literal path characters, not a host escape',
+			'%2F%2Fattacker.example/x',
+			'/%2F%2Fattacker.example/x'
+		],
+		['an empty string', '', '/']
+	])('resolves %s to the safe redirect target', (_label, input, expected) => {
+		expect(safeInternalPath(input)).toBe(expected);
 	});
 });
