@@ -24,7 +24,12 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
   on dict-like collections is forbidden (the 2026-04-08 surface).
 * W2 — generic ``dict[str, Any]`` in function parameters masks domain
   shapes. Use a Pydantic model. Return annotations and nested forms are
-  not this rule.
+  not this rule. Exempt: ``cowriter/tools.py`` — ``execute_cowriter_tool``
+  dispatches raw MCP tool-call JSON across ten heterogeneous handlers
+  whose only shared shape is the per-tool JSON Schema already carried in
+  ``CowriterTool.parameters``; turning that into ten named argument
+  models is a multi-file rework, tracked as a follow-up rather than
+  fixed by this checker slice.
 * W3 — silent dict-fallback patterns like ``cfg.get("key", "default")``
   on domain variables hide config drift.
 * W4 — ``Optional`` on timestamp fields lies about non-null DB columns.
@@ -50,6 +55,7 @@ from typing import Final
 PACKAGE_SETTINGS_MODULE = r"^src/[^/]+/settings\.py$"
 ALEMBIC_ENV_MODULE = r"^src/[^/]+/db/migrations/env\.py$"
 ENV_OVERRIDE_MODULE = r"^src/[^/]+/env_override\.py$"
+COWRITER_TOOL_DISPATCH_MODULE = r"^src/songmaker_cli/cowriter/tools\.py$"
 
 SITE_UNIT_FILES: Final = "files"
 SITE_UNIT_FUNCTIONS: Final = "functions"
@@ -255,6 +261,7 @@ RULES: list[Rule] = [
             "Function signature uses dict[str, Any] for what should be a "
             "domain object. Define a Pydantic model."
         ),
+        exempt_roles=(COWRITER_TOOL_DISPATCH_MODULE,),
     ),
     Rule(
         name="optional-on-default-utcnow-column",

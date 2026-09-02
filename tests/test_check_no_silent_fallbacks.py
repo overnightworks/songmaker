@@ -171,6 +171,22 @@ def test_dict_any_in_signature_caught(
     assert checker.DICT_ANY_IN_SIGNATURE in out
 
 
+def test_cowriter_tool_dispatch_module_is_exempt_from_dict_any_in_signature(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """execute_cowriter_tool dispatches raw MCP tool-call JSON across ten
+    handlers whose only shared shape is each tool's own JSON Schema —
+    collapsing that into named argument models is a tracked follow-up,
+    not owed by this rule."""
+    _seed(tmp_path, {
+        "songmaker_cli/cowriter/tools.py": (
+            "from typing import Any\n"
+            "def execute_cowriter_tool(x: dict[str, Any]) -> None: ...\n"
+        ),
+    })
+    assert _run(monkeypatch, tmp_path) == 0
+
+
 def test_multiline_dict_any_parameter_is_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
