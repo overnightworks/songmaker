@@ -158,7 +158,6 @@
 				class:active={tile.id === collection.id}
 				data-tile-id={tile.id}
 				aria-current={tile.id === collection.id}
-				aria-label={tile.title}
 				title={tile.title}
 			>
 				<LibraryTileContent

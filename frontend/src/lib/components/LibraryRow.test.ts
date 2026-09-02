@@ -90,12 +90,15 @@ function firePointer(
 	target.dispatchEvent(event);
 }
 
-// A user (or assistive tech) finds a tile by its role and accessible name,
-// never by an internal hook -- data-tile-id exists only for kineticScroll's
-// own click handler, the same way TakeStrip's data-generation-id does.
+// A user (or assistive tech) finds a tile by its role and its visible name --
+// the button carries no separate aria-label (that would silently drop the
+// subtitle from the accessible name a screen reader announces), so the
+// button's own accessible name is its rendered text, title included.
+// data-tile-id exists only for kineticScroll's own click handler, the same
+// way TakeStrip's data-generation-id does, and is never a lookup key here.
 function findTileByName(root: ParentNode, name: string): HTMLButtonElement {
-	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-		(el) => el.getAttribute('aria-label') === name
+	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((el) =>
+		(el.textContent ?? '').includes(name)
 	);
 	if (!button) throw new Error(`Expected a tile named "${name}"`);
 	return button;
@@ -167,12 +170,10 @@ async function render(collection: {
 }
 
 describe('LibraryRow', () => {
-	it('renders one tile per sibling album, naming the open one for assistive tech', async () => {
+	it('renders one tile per sibling album, marking the open one for assistive tech', async () => {
 		const root = await render({ kind: 'album', id: 'a-1' });
-		const names = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).map((el) =>
-			el.getAttribute('aria-label')
-		);
-		expect(names).toEqual(['Anfield', 'Sommerluft']);
+		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);
+		expect(titles).toEqual(['Anfield', 'Sommerluft']);
 
 		expect(root.querySelectorAll('[aria-current="true"]')).toHaveLength(1);
 		expect(findTileByName(root, 'Anfield').getAttribute('aria-current')).toBe('true');
@@ -180,10 +181,8 @@ describe('LibraryRow', () => {
 
 	it('renders one tile per sibling playlist when a playlist is open', async () => {
 		const root = await render({ kind: 'playlist', id: 'p-1' });
-		const names = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).map((el) =>
-			el.getAttribute('aria-label')
-		);
-		expect(names).toEqual(['Sommer 2026', 'Für Thomas']);
+		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);
+		expect(titles).toEqual(['Sommer 2026', 'Für Thomas']);
 	});
 
 	it('shows an album the store adds after mount', async () => {
@@ -267,20 +266,24 @@ describe('LibraryRow', () => {
 	it('centres whichever tile owns the open collection, on mount and again after switching within the same instance', async () => {
 		const calls = stubScrollIntoView();
 		try {
+			// Letters, not numbers -- "Album 1" would also match "Album 10"/"Album
+			// 11" under findTileByName's substring search, which is exactly the
+			// ambiguity a real screen-reader user's visible name never has here
+			// because every title actually is distinct.
 			const many = Array.from({ length: 12 }, (_, i) =>
-				album({ id: `a-${i}`, title: `Album ${i}` })
+				album({ id: `a-${i}`, title: `Album ${String.fromCharCode(65 + i)}` })
 			);
 			albumList.set(many);
 
 			const root = await render({ kind: 'album', id: 'a-9' });
-			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Album 9'));
+			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Album J'));
 			expect(calls.at(-1)?.options).toMatchObject({ inline: 'center', block: 'nearest' });
 
 			calls.length = 0;
 			openCollection.set({ kind: 'album', id: 'a-1' });
 			await tick();
 
-			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Album 1'));
+			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Album B'));
 		} finally {
 			restoreScrollIntoView();
 		}
