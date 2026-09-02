@@ -466,7 +466,8 @@ effect only when exported in the deployment environment, not when written only
 in `.env`: the preflight reads its values from the exported environment and
 does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
-mounts only `SONGMAKER_CLAUDE_CLI`.
+mounts `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and
+`SONGMAKER_CODEX_CLI` into `songmaker-web`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -540,21 +541,24 @@ refusals above, each of which turns it red when removed.
 
 ### What each service mounts
 
-`songmaker-web` owns a writable `.claude` directory in its image and mounts
-these host files read-only:
+`songmaker-web` receives these host files read-only:
 
 | Host path | Container path |
 |---|---|
 | `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
 | `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
+| `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
+| `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
+| `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
+| `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
 
 `songmaker-scoring-worker` owns only `.claude` and mounts only the Claude
 binary and `claude.json` mirror. Its Grok and Codex judge calls use
 `XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
 only widen the blast radius.
 
-Grok and Codex mirrors are mounted with their consumer in #407, not into these
-services before that consumer needs them.
+Grok and Codex mirrors are mounted only into their `songmaker-web` consumer,
+not into the scoring worker.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and

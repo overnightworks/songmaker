@@ -314,17 +314,42 @@ def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
 
 
 def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
-    expected_sources_by_target = {
+    expected_web_sources_by_target = {
         "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
         "/home/songmaker/.claude/.credentials.json": (
             "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
             "/claude.json"
         ),
+        "/usr/local/bin/grok": "${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}",
+        "/home/songmaker/.grok/auth.json": (
+            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
+            "/grok.json"
+        ),
+        "/usr/local/bin/codex": (
+            "${SONGMAKER_CODEX_CLI:-~/.local/node/lib/node_modules/@openai/codex/"
+            "node_modules/@openai/codex-linux-x64/vendor/"
+            "x86_64-unknown-linux-musl/bin/codex}"
+        ),
+        "/home/songmaker/.codex/auth.json": (
+            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
+            "/codex.json"
+        ),
+    }
+    expected_sources_by_service = {
+        "songmaker-web": expected_web_sources_by_target,
+        "songmaker-scoring-worker": {
+            target: source
+            for target, source in expected_web_sources_by_target.items()
+            if target in {
+                "/usr/local/bin/claude",
+                "/home/songmaker/.claude/.credentials.json",
+            }
+        },
     }
     services = _raw_compose_services()
     declared_named_volumes = _declared_named_volumes()
 
-    for service_name in ("songmaker-web", "songmaker-scoring-worker"):
+    for service_name, expected_sources_by_target in expected_sources_by_service.items():
         service = services[service_name]
         assert isinstance(service, dict)
         assert "extends" not in service, (
