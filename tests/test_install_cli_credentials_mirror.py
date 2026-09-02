@@ -32,19 +32,6 @@ COPIED_SCRIPTS = (
     "songmaker-alert@.service",
 )
 
-# `sudo install ...` and `sudo -u USER CMD ...` are the only two shapes the
-# installer uses; both run without privilege here.
-#
-# It refuses any absolute path outside the sandbox instead of running it. A
-# fake that quietly did as it was told would, the moment the installer's early
-# guards regressed, hand a test run the real /etc/systemd/system — and on a
-# root test run it would write there. A fake stands in for a dangerous thing;
-# it must be the *safe* half of it, not the compliant half.
-# Refuses anything whose *resolved* location is outside the sandbox, then
-# execs. Textual "does it start with /" was not enough: a relative path, a
-# `$SANDBOX_ROOT/../../etc/...`, or a path through a symlinked directory all
-# reached the real `install`. A fake stands in for a dangerous thing; it has to
-# be the safe half of it, not the compliant half.
 # The fakes below RECORD. They do not run anything.
 #
 # Earlier versions of this file exec'd what they were asked to run, behind a
