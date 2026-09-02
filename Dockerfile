@@ -45,10 +45,10 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
-# Agent CLIs own their profiles inside this image. Compose mounts only their
-# read-only binaries and mirrored credential files into these directories.
-RUN install -d -o songmaker -g songmaker \
-    /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
+# Only Claude owns a profile today. #407 adds Grok and Codex profiles with
+# their consumer; Compose mounts the Claude binary and credential mirror
+# read-only.
+RUN install -d -o songmaker -g songmaker /home/songmaker/.claude
 # Both are volume mount points. Docker seeds an empty named volume from
 # whichever image mounts it first — as root when that image lacks the
 # directory, which the app can never chown back under cap_drop: ALL.

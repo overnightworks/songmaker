@@ -155,11 +155,23 @@ def _compose_service_block(service: str) -> str:
     return "\n".join(block)
 
 
-def _raw_compose_services() -> dict[str, object]:
+def _raw_compose() -> dict[str, object]:
     compose = yaml.safe_load((REPOSITORY_ROOT / "docker-compose.yml").read_text())
+    assert isinstance(compose, dict)
+    return compose
+
+
+def _raw_compose_services() -> dict[str, object]:
+    compose = _raw_compose()
     services = compose["services"]
     assert isinstance(services, dict)
     return services
+
+
+def _declared_named_volumes() -> frozenset[str]:
+    volumes = _raw_compose()["volumes"]
+    assert isinstance(volumes, dict)
+    return frozenset(volumes)
 
 
 def _service_dockerfile(service_block: str) -> Path:
@@ -301,7 +313,7 @@ def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
     assert not CONTAINERS["music-worker"].extras & owns_the_sdk
 
 
-def test_agent_cli_bind_mounts_are_read_only_files_without_host_profiles() -> None:
+def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
     expected_sources_by_target = {
         "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
         "/home/songmaker/.claude/.credentials.json": (
@@ -310,27 +322,53 @@ def test_agent_cli_bind_mounts_are_read_only_files_without_host_profiles() -> No
         ),
     }
     services = _raw_compose_services()
+    declared_named_volumes = _declared_named_volumes()
 
     for service_name in ("songmaker-web", "songmaker-scoring-worker"):
         service = services[service_name]
         assert isinstance(service, dict)
         volumes = service["volumes"]
         assert isinstance(volumes, list)
-        bind_mounts = [
-            volume
-            for volume in volumes
-            if isinstance(volume, dict) and volume.get("type") == "bind"
-        ]
+        bind_mounts: list[dict[str, object]] = []
+        for volume in volumes:
+            if isinstance(volume, str):
+                source = volume.split(":", maxsplit=1)[0]
+                assert source in declared_named_volumes, (
+                    f"{service_name} must use Compose long syntax for every bind "
+                    f"mount so its read-only and host-path protections are explicit: "
+                    f"{volume!r} is not a declared named volume"
+                )
+                continue
+
+            assert isinstance(volume, dict), (
+                f"{service_name} has an unsupported volume declaration: {volume!r}"
+            )
+            if volume.get("type") == "bind":
+                bind_mounts.append(volume)
+                continue
+
+            assert volume.get("type") == "volume", (
+                f"{service_name} volume mappings must declare their type: {volume!r}"
+            )
+            source = volume.get("source")
+            assert source in declared_named_volumes, (
+                f"{service_name} volume mapping has an undeclared source: {source!r}"
+            )
+
         assert bind_mounts, service_name
-        assert {mount["target"] for mount in bind_mounts} == set(
+        assert {mount.get("target") for mount in bind_mounts} == set(
             expected_sources_by_target,
         )
 
         for mount in bind_mounts:
-            source = mount["source"]
+            target = mount.get("target")
+            assert isinstance(target, str)
+            source = mount.get("source")
             assert isinstance(source, str)
             assert "~/.claude" not in source
             assert "~/.claude.json" not in source
-            assert source == expected_sources_by_target[mount["target"]]
-            assert mount["read_only"] is True
-            assert mount["bind"]["create_host_path"] is False
+            assert source == expected_sources_by_target[target]
+            assert mount.get("read_only") is True
+            bind_options = mount.get("bind")
+            assert isinstance(bind_options, dict)
+            assert bind_options.get("create_host_path") is False

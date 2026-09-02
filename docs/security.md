@@ -462,7 +462,9 @@ finished oneshot is legitimately inactive.
 `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` take
 effect only when exported in the deployment environment, not when written only
 in `.env`: the preflight reads its values from the exported environment and
-does not load `.env`. Compose currently mounts only `SONGMAKER_CLAUDE_CLI`.
+does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
+therefore belong in the persistent service environment. Compose currently
+mounts only `SONGMAKER_CLAUDE_CLI`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -743,7 +745,11 @@ After a successful recreate, the tick runs `docker image prune --force --filter 
 
 - `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
 - `ANTHROPIC_API_KEY`: Optional (for server-side Claude chat). Never logged or returned in responses.
-- `.env`: Gitignored. Never committed. Single source for all Docker Compose substitutions and pydantic Settings.
+- `.env`: Gitignored. Never committed. Single source for pydantic Settings and
+  Docker Compose substitutions except the non-secret
+  `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path
+  overrides: systemd boot and auto-deploy must receive those as persistent
+  exported environment values so the preflight sees the same paths as Compose.
 
 ## Input Validation
 

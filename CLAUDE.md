@@ -32,8 +32,11 @@ Two special flags on generations: **pick** marks "this is THE one for this song 
 
 The live app is **Docker-only** — there is no `uv run songmaker server`
 local-dev path. The local `.venv` is for tests, type checking, and IDE
-autocomplete only. All secrets and config live in a single `.env` file
-at the project root (gitignored).
+autocomplete only. Application secrets and settings live in a single `.env`
+file at the project root (gitignored). The non-secret
+`SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path
+overrides are an exception: the preflight reads only their exported deployment
+environment values.
 
 ```bash
 # Local toolchain (tests, lint, IDE)
