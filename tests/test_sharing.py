@@ -949,14 +949,22 @@ def test_shared_generation_audio_authorizes_canonical_missing_names_before_file_
         engine = probe_session.get_bind()
 
     queries, handle = _count_queries(engine, "select")
-    checked_paths: list[Path] = []
-    original_exists = Path.exists
+    filesystem_calls: list[str] = []
 
-    def record_exists(path: Path) -> bool:
-        checked_paths.append(path)
-        return original_exists(path)
+    for method_name in ("resolve", "lstat", "stat", "exists"):
+        original_method = getattr(Path, method_name)
 
-    monkeypatch.setattr(Path, "exists", record_exists)
+        def record_filesystem_call(
+            path: Path,
+            *args,
+            _name=method_name,
+            _method=original_method,
+            **kwargs,
+        ):
+            filesystem_calls.append(_name)
+            return _method(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, method_name, record_filesystem_call)
     try:
         unauthed = TestClient(sharing_app.app, cookies={})
         response = unauthed.get(f"/shared/gen/{slug}/audio/admin_user/missing.mp3")
@@ -965,7 +973,7 @@ def test_shared_generation_audio_authorizes_canonical_missing_names_before_file_
 
     assert response.status_code == 404
     assert len(queries) == 1
-    assert checked_paths == []
+    assert filesystem_calls == []
 
 
 def test_shared_generation_reports_the_takes_measured_duration(

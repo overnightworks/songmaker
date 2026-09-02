@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from fastapi import HTTPException
 
@@ -21,6 +21,20 @@ def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:
     if not audio_path.is_relative_to(audio_root):
         return None
     return audio_path
+
+
+def canonical_audio_filename_lexically(filename: str) -> str:
+    """Return a canonical relative filename without inspecting the filesystem."""
+    audio_path = PurePosixPath(filename)
+    canonical_filename = audio_path.as_posix()
+    if (
+        audio_path.is_absolute()
+        or ".." in audio_path.parts
+        or canonical_filename != filename
+    ):
+        log.warning("Audio path traversal denied: %r", filename)
+        raise HTTPException(404, "Not Found")
+    return canonical_filename
 
 
 def audio_filename_is_contained(audio_dir: Path, filename: str) -> bool:
