@@ -37,11 +37,19 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 MIRROR_SCRIPT="$SCRIPT_DIR/mirror_agent_cli_credentials.py"
+MIRROR_SERVICE_UNIT="songmaker-cli-credentials-mirror.service"
+MIRROR_PATH_UNIT="songmaker-cli-credentials-mirror.path"
+MIRROR_TIMER_UNIT="songmaker-cli-credentials-mirror.timer"
 # shellcheck source=scripts/agent-cli-paths.sh
 source "$SCRIPT_DIR/agent-cli-paths.sh"
 
 HOME_DIR=""
 CREDENTIALS_DIR=""
+IS_ARGUMENTLESS=0
+
+if [ $# -eq 0 ]; then
+    IS_ARGUMENTLESS=1
+fi
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -113,19 +121,61 @@ check_mirror_is_running() {
     # would report "kept current" while the path watch and the timer sat
     # disabled or stopped, and the copies would then age quietly until the
     # first refresh stranded whatever reads them.
-    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.service || return
-    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.path || return
-    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.timer || return
+    _unit_is_installed_and_enabled "$MIRROR_SERVICE_UNIT" || return
+    _unit_is_installed_and_enabled "$MIRROR_PATH_UNIT" || return
+    _unit_is_installed_and_enabled "$MIRROR_TIMER_UNIT" || return
     # The triggers must also be RUNNING; enabled only says "at the next boot".
-    _unit_is_active songmaker-cli-credentials-mirror.path || return
-    _unit_is_active songmaker-cli-credentials-mirror.timer || return
+    _unit_is_active "$MIRROR_PATH_UNIT" || return
+    _unit_is_active "$MIRROR_TIMER_UNIT" || return
     # The oneshot is not asked to be active — a finished one is `inactive`, and
     # demanding otherwise would cry wolf on every healthy machine. It is asked
     # not to have FAILED: live triggers plus an old but valid copy prove
     # nothing about currency if the thing that rewrites it has been erroring
     # out since yesterday.
-    _unit_has_not_failed songmaker-cli-credentials-mirror.service || return
+    _unit_has_not_failed "$MIRROR_SERVICE_UNIT" || return
+    if [ "$IS_ARGUMENTLESS" = "1" ]; then
+        check_frozen_mirror_dir || return
+    fi
     echo "ok: the mirror service, its login watch and its timer are all live"
+}
+
+check_frozen_mirror_dir() {
+    local unit_dir="${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"
+    local unit="$unit_dir/$MIRROR_SERVICE_UNIT"
+    local line value index=0 frozen_dir="" frozen_count=0
+    local -a words
+
+    if [ ! -r "$unit" ]; then
+        problem "could not read $unit to verify its frozen --mirror-dir. Spiegel-Installer erneut ausführen."
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            ExecStart=*) ;;
+            *) continue ;;
+        esac
+        read -r -a words <<< "${line#ExecStart=}"
+        for ((index = 0; index < ${#words[@]}; index += 1)); do
+            [ "${words[$index]}" = "--mirror-dir" ] || continue
+            frozen_count=$((frozen_count + 1))
+            if [ "$index" -lt $((${#words[@]} - 1)) ]; then
+                value="${words[$((index + 1))]}"
+            else
+                value=""
+            fi
+            frozen_dir="$value"
+        done
+    done < "$unit"
+
+    if [ "$frozen_count" -ne 1 ] || [ -z "$frozen_dir" ]; then
+        problem "$unit has no unique frozen --mirror-dir. Spiegel-Installer erneut ausführen."
+        return 1
+    fi
+    if [ "$frozen_dir" != "$CREDENTIALS_DIR" ]; then
+        problem "the mirror service freezes --mirror-dir '$frozen_dir', but this preflight resolves '$CREDENTIALS_DIR'. Spiegel-Installer erneut ausführen."
+        return 1
+    fi
 }
 
 _unit_has_not_failed() {
