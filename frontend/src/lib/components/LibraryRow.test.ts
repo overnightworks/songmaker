@@ -9,6 +9,7 @@ import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, updateAlbumInList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { LIBRARY_ROW_FILTER_EMPTY } from '$lib/constants';
+import { searchQuery } from '$lib/stores/filter';
 
 const fetchSongs = vi.fn();
 const fetchPlaylists = vi.fn();
@@ -156,6 +157,7 @@ afterEach(async () => {
 	resetLibrarySearchForTests();
 	resetPlaylists();
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 async function render(collection: {
@@ -322,25 +324,91 @@ describe('LibraryRow', () => {
 		await tick();
 	}
 
-	it('narrows the row to tiles matching what is typed, without calling the network', async () => {
+	it('narrows the row to only its own matches, keeping the open tile pinned', async () => {
 		albumList.set([
 			album({ id: 'a-1', title: 'Anfield' }),
 			album({ id: 'a-2', title: 'Sommerluft' }),
 			album({ id: 'a-3', title: 'Vernissage' })
 		]);
 		const root = await render({ kind: 'album', id: 'a-1' });
-		fetchSongs.mockClear();
-		fetchPlaylists.mockClear();
-		fetchPlaylist.mockClear();
 
 		await typeFilter(root, 'verniss');
 
 		expect(findTileByName(root, 'Vernissage').hidden).toBe(false);
 		expect(findTileByName(root, 'Sommerluft').hidden).toBe(true);
-		expect(fetchSongs).not.toHaveBeenCalled();
-		expect(fetchPlaylists).not.toHaveBeenCalled();
-		expect(fetchPlaylist).not.toHaveBeenCalled();
 	});
+
+	interface FilterMatchCase {
+		name: string;
+		targetTitle: string;
+		targetSongCount?: number;
+		decoyTitle: string;
+		decoySongCount?: number;
+		query: string;
+	}
+
+	// Matching is plain substring search on lower-cased text, never
+	// `new RegExp(query)` -- a user's own text (a title with "(", ".", or a
+	// bare "*") must filter literally, not be reinterpreted as a pattern. A
+	// bare "*" would even throw as an invalid regex, so that case also
+	// proves the row survives it.
+	const filterMatchCases: FilterMatchCase[] = [
+		{
+			name: 'matches on the subtitle text, not just the title',
+			targetTitle: 'Vault',
+			targetSongCount: 7,
+			decoyTitle: 'Crate',
+			decoySongCount: 3,
+			query: '7 songs'
+		},
+		{
+			name: 'matches regardless of letter case',
+			targetTitle: 'Anfield',
+			decoyTitle: 'Sommerluft',
+			query: 'ANFIELD'
+		},
+		{
+			name: 'ignores leading and trailing whitespace in the typed query',
+			targetTitle: 'Anfield',
+			decoyTitle: 'Sommerluft',
+			query: '  anfield  '
+		},
+		{
+			name: 'treats a dot in the query as a literal character, not a wildcard',
+			targetTitle: 'a.b Sessions',
+			decoyTitle: 'aXb Sessions',
+			query: 'a.b'
+		},
+		{
+			name: 'treats a bare asterisk as a literal character without throwing',
+			targetTitle: 'Take 5 * Remix',
+			decoyTitle: 'Take 5 Only',
+			query: '*'
+		},
+		{
+			name: 'treats parentheses in the query as literal characters',
+			targetTitle: 'Anfield (Live)',
+			decoyTitle: 'Anfield Studio',
+			query: '(Live)'
+		}
+	];
+
+	it.each(filterMatchCases)(
+		'$name',
+		async ({ targetTitle, targetSongCount, decoyTitle, decoySongCount, query }) => {
+			albumList.set([
+				album({ id: 'a-open', title: 'Open Anchor' }),
+				album({ id: 'a-target', title: targetTitle, song_count: targetSongCount ?? 2 }),
+				album({ id: 'a-decoy', title: decoyTitle, song_count: decoySongCount ?? 2 })
+			]);
+			const root = await render({ kind: 'album', id: 'a-open' });
+
+			await typeFilter(root, query);
+
+			expect(findTileByName(root, targetTitle).hidden).toBe(false);
+			expect(findTileByName(root, decoyTitle).hidden).toBe(true);
+		}
+	);
 
 	it('keeps the open tile visible and marked even when the filter does not match it', async () => {
 		albumList.set([
@@ -395,5 +463,111 @@ describe('LibraryRow', () => {
 
 		expect(filterField(root).value).toBe('');
 		expect(findTileByName(root, 'Vernissage').hidden).toBe(false);
+	});
+
+	it('lets Tab move from the filter field straight into the row, skipping the clear button', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		await typeFilter(root, 'a');
+
+		const tabbable = Array.from(root.querySelectorAll<HTMLElement>('input, button')).filter(
+			(el) => el.tabIndex !== -1
+		);
+		expect(tabbable[0]).toBe(filterField(root));
+		expect(tabbable[1].classList.contains('row-tile')).toBe(true);
+	});
+
+	it('never calls fetch or the wall grid search while typing, and never touches the wall search state or the address', async () => {
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' }),
+			album({ id: 'a-3', title: 'Vernissage' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		const searchLibraryModule = await import('$lib/api/library');
+		const fetchSpy = vi
+			.spyOn(globalThis, 'fetch')
+			.mockRejectedValue(new Error('LibraryRow filter must never call fetch'));
+		const searchLibrarySpy = vi
+			.spyOn(searchLibraryModule, 'searchLibrary')
+			.mockRejectedValue(new Error('LibraryRow filter must never call the grid search'));
+		const searchQueryBefore = get(searchQuery);
+		const addressBefore = window.location.href;
+
+		await typeFilter(root, 'verniss');
+
+		expect(findTileByName(root, 'Vernissage').hidden).toBe(false);
+		expect(findTileByName(root, 'Sommerluft').hidden).toBe(true);
+		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(searchLibrarySpy).not.toHaveBeenCalled();
+		expect(get(searchQuery)).toBe(searchQueryBefore);
+		expect(window.location.href).toBe(addressBefore);
+	});
+
+	it('recentres on the open tile only when its visible neighbours actually change, not on every keystroke', async () => {
+		const calls = stubScrollIntoView();
+		try {
+			albumList.set([
+				album({ id: 'a-1', title: 'Anfield' }),
+				album({ id: 'a-2', title: 'Sommerluft' })
+			]);
+			const root = await render({ kind: 'album', id: 'a-1' });
+			await typeFilter(root, 'an');
+			calls.length = 0;
+
+			// 'an' and 'anf' both match only the open tile ('Anfield') and hide
+			// the same neighbour ('Sommerluft') -- the set of visible tiles is
+			// identical across the two keystrokes, so nothing here should
+			// justify a second scrollIntoView call.
+			await typeFilter(root, 'anf');
+
+			expect(calls).toHaveLength(0);
+		} finally {
+			restoreScrollIntoView();
+		}
+	});
+
+	it('recentres once a filter keystroke actually changes which tiles are visible', async () => {
+		const calls = stubScrollIntoView();
+		try {
+			albumList.set([
+				album({ id: 'a-1', title: 'Anfield' }),
+				album({ id: 'a-2', title: 'Sommerluft' })
+			]);
+			const root = await render({ kind: 'album', id: 'a-1' });
+			await typeFilter(root, 'an');
+			calls.length = 0;
+
+			// Clearing the filter brings 'Sommerluft' back into view -- the
+			// visible set changes, so the row must recentre on the open tile
+			// again.
+			await typeFilter(root, '');
+
+			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Anfield'));
+		} finally {
+			restoreScrollIntoView();
+		}
+	});
+
+	it("does not recentre when a sibling's metadata changes under the same filter query", async () => {
+		const calls = stubScrollIntoView();
+		try {
+			albumList.set([
+				album({ id: 'a-1', title: 'Anfield' }),
+				album({ id: 'a-2', title: 'Sommerluft' })
+			]);
+			const root = await render({ kind: 'album', id: 'a-1' });
+			await typeFilter(root, 'an');
+			calls.length = 0;
+
+			// 'Sommerluft' stays hidden before and after the rename -- the
+			// visible set is unchanged, so this must not recentre either, the
+			// same guarantee the unfiltered-row test above pins for renames.
+			updateAlbumInList('a-2', (a) => ({ ...a, title: 'Renamed while hidden' }));
+			await tick();
+
+			expect(calls).toHaveLength(0);
+		} finally {
+			restoreScrollIntoView();
+		}
 	});
 });

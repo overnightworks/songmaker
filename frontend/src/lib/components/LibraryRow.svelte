@@ -102,6 +102,19 @@
 
 	const hasNoMatches = $derived(matchingTileIds !== null && matchingTileIds.size === 0);
 
+	// The row's actual on-screen layout in one comparable value: the ordered
+	// ids of the tiles that are not hidden. Centring and the overflow
+	// measurement below only need to redo their work when this changes --
+	// not on every keystroke (most keystrokes narrow the match set further
+	// without changing which tiles are currently shown) and not when a
+	// sibling's title or subtitle changes without moving in or out of view.
+	const visibleTileKey = $derived(
+		tiles
+			.filter((tile) => !tileHidden(tile))
+			.map((tile) => tile.id)
+			.join('\u0000')
+	);
+
 	// Position, not the list contents, is what centring cares about: a
 	// metadata edit to some other tile (a title rename, a cover landing via
 	// SSE) produces a new tiles array without moving the open one, and must
@@ -134,14 +147,17 @@
 	// that isn't. kineticScroll's own snap only runs after a drag/wheel
 	// gesture settles, so centring "whichever one is open" is this
 	// component's own job, on every mount and every change of what's open --
-	// and on every filter keystroke too, since hiding neighbours reflows the
-	// row and can shift the open tile off-centre even though it never moved
-	// in the underlying list.
+	// and whenever a filter keystroke actually hides or reveals a neighbour
+	// (visibleTileKey), since that reflows the row and can shift the open
+	// tile off-centre even though it never moved in the underlying list. A
+	// keystroke that only narrows the match set further without changing
+	// what's currently shown -- or a sibling's title/subtitle changing while
+	// its visibility doesn't -- must not recentre.
 	$effect(() => {
 		const row = rowEl;
 		const openId = collection.id;
 		const index = activeIndex;
-		const query = normalizedFilter;
+		const visibleKey = visibleTileKey;
 		if (!row || index === -1) return;
 		const active = row.querySelector<HTMLElement>('.row-tile.active');
 		if (!active || typeof active.scrollIntoView !== 'function') return;
@@ -151,7 +167,7 @@
 			behavior: prefersReducedMotion() ? 'auto' : 'smooth'
 		});
 		void openId;
-		void query;
+		void visibleKey;
 	});
 
 	const OVERFLOW_TOLERANCE_PX = 1;
@@ -173,8 +189,7 @@
 			hasMoreToTheRight = false;
 			return;
 		}
-		void tiles.length;
-		void normalizedFilter;
+		void visibleTileKey;
 		const measure = () => {
 			hasMoreToTheRight = hasOverflowToTheRight(row);
 		};

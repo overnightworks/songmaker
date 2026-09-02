@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import LibraryRowFilter from './LibraryRowFilter.harness.svelte';
-import { LIBRARY_ROW_FILTER_CLEAR_LABEL } from '$lib/constants';
+import { LIBRARY_ROW_FILTER_CLEAR_GLYPH, LIBRARY_ROW_FILTER_CLEAR_LABEL } from '$lib/constants';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -75,5 +75,33 @@ describe('LibraryRowFilter', () => {
 		const input = root.querySelector<HTMLInputElement>('input');
 		expect(input?.placeholder).toBe('Filter playlists…');
 		expect(input?.getAttribute('aria-label')).toBe('Filter playlists by name');
+	});
+
+	it('shows the shared clear glyph on the clear button', async () => {
+		const root = render();
+		await type(root, 'a');
+		expect(root.querySelector<HTMLButtonElement>('button')?.textContent?.trim()).toBe(
+			LIBRARY_ROW_FILTER_CLEAR_GLYPH
+		);
+	});
+
+	it('takes the clear button out of the Tab order, so Tab from the field skips it', async () => {
+		const root = render();
+		await type(root, 'a');
+		const clearButton = root.querySelector<HTMLButtonElement>('button');
+		expect(clearButton?.tabIndex).toBe(-1);
+	});
+
+	it('does not consume Escape on an already-empty field', async () => {
+		const root = render();
+		const input = root.querySelector<HTMLInputElement>('input');
+		if (!input) throw new Error('Expected the filter input to render');
+
+		const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		input.dispatchEvent(event);
+		await tick();
+
+		expect(event.defaultPrevented).toBe(false);
+		expect(probeValue(root)).toBe('');
 	});
 });

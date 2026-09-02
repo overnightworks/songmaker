@@ -5,6 +5,7 @@
 	// open. Purely local, controlled state: no store, no URL param, so the
 	// text is gone the moment this row unmounts.
 	import {
+		LIBRARY_ROW_FILTER_CLEAR_GLYPH,
 		LIBRARY_ROW_FILTER_CLEAR_LABEL,
 		libraryRowFilterAriaLabel,
 		libraryRowFilterPlaceholder
@@ -48,8 +49,9 @@
 			class="library-row-filter-clear"
 			onclick={clear}
 			aria-label={LIBRARY_ROW_FILTER_CLEAR_LABEL}
+			tabindex="-1"
 		>
-			×
+			{LIBRARY_ROW_FILTER_CLEAR_GLYPH}
 		</button>
 	{/if}
 </div>

@@ -294,6 +294,7 @@ export function libraryRowFilterAriaLabel(collectionLabel: string): string {
 	return `Filter ${collectionLabel.toLowerCase()} by name`;
 }
 export const LIBRARY_ROW_FILTER_CLEAR_LABEL = 'Clear filter';
+export const LIBRARY_ROW_FILTER_CLEAR_GLYPH = '×';
 export const LIBRARY_ROW_FILTER_EMPTY = 'Nothing matches';
 
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
