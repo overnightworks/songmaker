@@ -245,7 +245,7 @@ class Settings(BaseSettings):
     # ── Alert channel (issue #333) ─────────────────────────────────────
     # Read directly from .env by scripts/alert.sh (systemd OnFailure=)
     # and by the alertmanager container's startup command (fed by
-    # monitoring/alert.rules.yml) — neither goes through this app
+    # monitoring/rules/alert.rules.yml) — neither goes through this app
     # process. Declared here only so extra="forbid" recognizes them
     # instead of raising ValidationError the moment an operator sets
     # them up.

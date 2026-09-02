@@ -1,4 +1,4 @@
-# Unit tests for the alert rules in alert.rules.yml, run by
+# Unit tests for the alert rules in rules/alert.rules.yml, run by
 # Prometheus' own promtool against the real rule file (issue #333):
 #
 #   docker run --rm -v "$PWD/monitoring:/monitoring" -w /monitoring \
@@ -15,7 +15,7 @@
 # minutes from epoch and every eval_time is past the 15-minute window to
 # keep "never failed" (a metric reading 0) from looking recent.
 rule_files:
-  - alert.rules.yml
+  - rules/alert.rules.yml
 
 evaluation_interval: 1m
 

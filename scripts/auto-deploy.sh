@@ -129,6 +129,14 @@ DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
+PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
+PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
+PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
+PROMETHEUS_URL="http://127.0.0.1:9090"
+PROMETHEUS_READY_URL="${PROMETHEUS_URL}/-/ready"
+PROMETHEUS_METRICS_URL="${PROMETHEUS_URL}/metrics"
+PROMETHEUS_RULES_URL="${PROMETHEUS_URL}/api/v1/rules"
+PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
 
 log() {
     local level="$1"
@@ -354,6 +362,93 @@ prune_docker_resources() {
     fi
 
     return 0
+}
+
+reload_prometheus_rules() {
+    local previous_deployed_sha="$1"
+    local deployed_sha="$2"
+    local changed_files
+    local configured_rule_count
+    local loaded_rule_count
+    local rules_response
+    local prometheus_container
+    local compose_stderr_file
+    local compose_error
+    local compose_exit_code
+    local metrics_response
+    local reload_status_line
+
+    if [[ -z "$previous_deployed_sha" ]]; then
+        changed_files="$PROMETHEUS_CONFIG_FILE"
+    elif ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_CONFIG_FILE" "$PROMETHEUS_RULE_FILE" 2>&1)"; then
+        log_err "cannot determine whether Prometheus configuration changed after deploy: $changed_files; deploy remains successful"
+        return 0
+    fi
+    if ! grep -Fxq "$PROMETHEUS_CONFIG_FILE" <<<"$changed_files" \
+        && ! grep -Fxq "$PROMETHEUS_RULE_FILE" <<<"$changed_files"; then
+        return 0
+    fi
+
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.prometheus-ps-stderr.XXXXXX" 2>/dev/null)"; then
+        log_err "cannot create temporary file for Prometheus Compose ps stderr after deploy; deploy remains successful"
+        return 0
+    fi
+    if prometheus_container="$(compose ps -q prometheus 2>"$compose_stderr_file")"; then
+        rm -f "$compose_stderr_file"
+    else
+        compose_exit_code=$?
+        compose_error="$(<"$compose_stderr_file")"
+        rm -f "$compose_stderr_file"
+        log_err "cannot find the Prometheus container to reload rules after deploy (exit $compose_exit_code): $compose_error; deploy remains successful"
+        return 0
+    fi
+    if [[ -z "$prometheus_container" ]]; then
+        log_err "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! [[ "$prometheus_container" =~ ^[0-9a-f]{12,64}$ ]]; then
+        log_err "Prometheus container ID '$prometheus_container' contains unsupported characters after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! docker kill -s HUP "$prometheus_container" >/dev/null; then
+        log_err "Prometheus rule reload failed after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" --retry 5 --retry-connrefused --retry-delay 2 "$PROMETHEUS_READY_URL"; then
+        log_err "Prometheus did not become ready after rule reload; deploy remains successful"
+        return 0
+    fi
+    if ! metrics_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_METRICS_URL")"; then
+        log_err "cannot read Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! reload_status_line="$(grep -E '^prometheus_config_last_reload_successful([[:space:]]|$)' <<<"$metrics_response")"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+0([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "Prometheus reload did not apply; deploy remains successful"
+        return 0
+    fi
+    if ! grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+1([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! rules_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_RULES_URL")"; then
+        log_err "cannot read Prometheus rules after reload; deploy remains successful"
+        return 0
+    fi
+    if ! loaded_rule_count="$(jq -er --arg rule_file "$PROMETHEUS_LOADED_RULE_FILE" '[.data.groups[]? | select(.file == $rule_file) | .rules[]? | select(.type == "alerting")] | length' <<<"$rules_response")"; then
+        log_err "cannot read Prometheus rules after reload; deploy remains successful"
+        return 0
+    fi
+    if ! configured_rule_count="$(grep -cE '^[[:space:]]*-[[:space:]]*alert:' "$REPO_ROOT/$PROMETHEUS_RULE_FILE" || true)" || ! [[ "$configured_rule_count" =~ ^[0-9]+$ ]]; then
+        log_err "cannot count configured Prometheus alert rules after reload; deploy remains successful"
+        return 0
+    fi
+    if [[ "$loaded_rule_count" != "$configured_rule_count" ]]; then
+        log_err "Prometheus alert rule count mismatch after reload: configured $configured_rule_count, loaded $loaded_rule_count; deploy remains successful"
+    fi
 }
 
 # --- Active-jobs guard, called once before the pull and once again right
@@ -937,6 +1032,7 @@ fi
 
 if compose up -d --wait --wait-timeout "$COMPOSE_UP_WAIT_TIMEOUT_SECONDS"; then
     if record_success "$DEPLOYED_HEAD"; then
+        reload_prometheus_rules "$DEPLOYED_SHA" "$DEPLOYED_HEAD"
         prune_docker_resources
         exit 0
     fi

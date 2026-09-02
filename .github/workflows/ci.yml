@@ -131,7 +131,9 @@ jobs:
             docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
               --entrypoint promtool prom/prometheus:latest "$@"
           }
-          run_promtool check rules alert.rules.yml
+          docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+          run_promtool check rules rules/alert.rules.yml
           run_promtool test rules alert.rules.test.yml
 
   postgresql-contract:

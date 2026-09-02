@@ -89,7 +89,7 @@ boundary, and over seeded files at every path that used to be exempt.
 
 ### Alert rules (promtool)
 
-`monitoring/alert.rules.yml` is Prometheus' own schema, so Prometheus' own
+`monitoring/rules/alert.rules.yml` is Prometheus' own schema, so Prometheus' own
 tool checks and unit-tests it rather than pytest.
 `monitoring/alert.rules.test.yml` feeds the real rule file synthetic series
 and asserts which alerts fire — in particular that a job failure is caught

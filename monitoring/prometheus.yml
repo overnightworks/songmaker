@@ -6,7 +6,7 @@ global:
 # monitoring/alertmanager.yml.template for why it — not this file's own
 # rule evaluation, and not a webhook back into a script — owns delivery).
 rule_files:
-  - /etc/prometheus/alert.rules.yml
+  - /etc/prometheus/rules/alert.rules.yml
 
 alerting:
   alertmanagers:
