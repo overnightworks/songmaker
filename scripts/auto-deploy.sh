@@ -3,9 +3,9 @@
 #
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin/main every couple of minutes (see songmaker-autodeploy.timer) and
-# fast-forwards + redeploys the local checkout when main has moved. CI is
-# green on every merge to main by process, so "origin/main moved" already
-# means "this is deployable" — the script itself does not re-run tests.
+# fast-forwards + redeploys the local checkout when main has moved. Before it
+# pulls, it verifies through GitHub that every check run for the fetched
+# commit has completed successfully; the script itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -142,10 +142,35 @@ log_info() { log info "$*"; }
 log_warning() { log warning "$*"; }
 log_err() { log err "$*"; }
 
+# Every Git command in this tick goes through this narrow runner. The deploy
+# checkout is a privileged execution boundary: repository hooks and an
+# fsmonitor configured in its admin directory must not run from the timer.
+# Keep the environment equally narrow, following requirement_binder.py's
+# trusted-Git pattern, rather than inheriting arbitrary Git configuration from
+# the service or its caller.
+GIT_BINARY="/usr/bin/git"
+GIT_PATH="/usr/bin:/bin"
+safe_git() {
+    env -i \
+        PATH="$GIT_PATH" \
+        LANG="C.UTF-8" \
+        LC_ALL="C.UTF-8" \
+        GIT_CONFIG_NOSYSTEM="1" \
+        GIT_CONFIG_GLOBAL="/dev/null" \
+        GIT_NO_LAZY_FETCH="1" \
+        GIT_NO_REPLACE_OBJECTS="1" \
+        GIT_TERMINAL_PROMPT="0" \
+        GIT_OPTIONAL_LOCKS="0" \
+        "$GIT_BINARY" \
+        -c core.hooksPath=/dev/null \
+        -c core.fsmonitor=false \
+        -C "$REPO_ROOT" "$@"
+}
+
 # Resolve the real git ADMIN directory instead of assuming $REPO_ROOT/.git
 # is one (see the LOCK_FILE/state-file comment above) — must run after log()
 # is defined, since a failure here has to log_err before it exits.
-if ! GIT_ADMIN_DIR="$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir 2>&1)"; then
+if ! GIT_ADMIN_DIR="$(safe_git rev-parse --absolute-git-dir 2>&1)"; then
     log_err "cannot resolve the git admin directory for $REPO_ROOT: $GIT_ADMIN_DIR"
     exit 1
 fi
@@ -172,6 +197,19 @@ if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     exit 1
 fi
 DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
+CHECK_RUN_LOOKUP_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS:-60}"
+# GitHub normally creates the first check run shortly after a push. Do not
+# treat that ordinary propagation delay as a failed deploy, but do surface a
+# workflow that never starts instead of waiting forever on the same SHA.
+CHECK_RUN_APPEARANCE_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS:-1800}"
+if ! [[ "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_APPEARANCE_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS must be a positive integer, got '$CHECK_RUN_APPEARANCE_GRACE_SECONDS'"
+    exit 1
+fi
 # Bounds the container-readiness wait of step 10 only; the image build in
 # step 9 stays deliberately unbounded, because a cold-cache build takes
 # 8-15 minutes by design. Without a bound, one service that can never
@@ -402,6 +440,121 @@ log_guard_reason() {
     fi
 }
 
+# Prints exactly one of green, waiting, or failed. An API/CLI failure is a
+# named error return because it is not evidence that the fetched commit is
+# safe to deploy. The API's explicit zero-run envelope waits only until the
+# commit is old enough that a workflow which never started needs attention.
+# A missing/malformed envelope is never mistaken for zero runs.
+remote_check_status() {
+    local commit_sha="$1"
+    local commit_timestamp="$2"
+    local check_runs gh_error gh_stderr_file lookup_exit
+    if ! command -v gh >/dev/null 2>&1; then
+        printf '%s' "GitHub CLI (gh) is unavailable on PATH"
+        return 1
+    fi
+    if ! gh_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.gh-stderr.XXXXXX" 2>/dev/null)"; then
+        printf '%s' 'cannot create temporary file for check-run lookup stderr'
+        return 1
+    fi
+    if check_runs="$(timeout "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
+        "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
+        --jq 'if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\t\(.total_count)", (.check_runs[] | "check\t\(.status // "")\t\(.conclusion // "")") else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
+        rm -f "$gh_stderr_file"
+    else
+        lookup_exit=$?
+        gh_error="$(<"$gh_stderr_file")"
+        rm -f "$gh_stderr_file"
+        if ((lookup_exit == 124)); then
+            printf '%s' 'check-run lookup timed out'
+        else
+            printf '%s' "$gh_error"
+        fi
+        return 1
+    fi
+
+    local record status conclusion
+    local expected_check_count=""
+    local observed_check_count=0
+    local has_envelope=false
+    local has_running_check=false
+    local has_failed_check=false
+    while IFS=$'\t' read -r record status conclusion; do
+        case "$record" in
+            envelope)
+                if [[ ! "$status" =~ ^[0-9]+$ || -n "$conclusion" ]]; then
+                    printf 'GitHub returned a malformed check-runs envelope'
+                    return 1
+                fi
+                if [[ -n "$expected_check_count" && "$expected_check_count" != "$status" ]]; then
+                    printf 'GitHub returned inconsistent paginated check-run counts'
+                    return 1
+                fi
+                expected_check_count="$status"
+                has_envelope=true
+                ;;
+            check)
+                ((observed_check_count += 1))
+                if [[ -z "$status" ]]; then
+                    printf 'GitHub returned an incomplete check-run status'
+                    return 1
+                fi
+                case "$status" in
+                    queued|in_progress|pending|requested|waiting)
+                        has_running_check=true
+                        ;;
+                    completed)
+                        if [[ -z "$conclusion" ]]; then
+                            printf 'GitHub returned an incomplete check-run status'
+                            return 1
+                        fi
+                        if [[ "$conclusion" != "success" ]]; then
+                            has_failed_check=true
+                        fi
+                        ;;
+                    *)
+                        printf 'GitHub returned an unknown check-run status'
+                        return 1
+                        ;;
+                esac
+                ;;
+            *)
+                printf 'GitHub returned a malformed check-runs response'
+                return 1
+                ;;
+        esac
+    done <<<"$check_runs"
+
+    if [[ "$has_envelope" != true || "$observed_check_count" != "$expected_check_count" ]]; then
+        printf 'GitHub returned an incomplete check-runs response'
+        return 1
+    fi
+    if ((observed_check_count == 0)); then
+        local now
+        if ! now="$(now_seconds)" || ! [[ "$now" =~ ^[0-9]+$ ]]; then
+            printf 'cannot determine current time for check-run grace period'
+            return 1
+        fi
+        if ((now - commit_timestamp >= CHECK_RUN_APPEARANCE_GRACE_SECONDS)); then
+            printf 'failed (GitHub has not reported a check run within %ss of its commit)' "$CHECK_RUN_APPEARANCE_GRACE_SECONDS"
+        else
+            printf 'waiting (GitHub has not reported a check run yet)'
+        fi
+        return
+    fi
+
+    # A run that GitHub still considers active means this SHA is not green
+    # yet, even if another completed run has already failed. Waiting avoids
+    # escalating while CI is still producing its final verdict.
+    if [[ "$has_running_check" == true ]]; then
+        printf 'waiting (one or more GitHub check runs are still running)'
+    elif [[ "$has_failed_check" == true ]]; then
+        printf 'failed (one or more GitHub check runs did not succeed)'
+    else
+        printf 'green'
+    fi
+}
+
 # --- 1. Refuse to overlap with another run in flight (a slow cold-cache
 # build can outlive one 2-minute tick). Busy is the expected steady state
 # under a running build, not an error — logged at debug so an unfiltered
@@ -420,17 +573,17 @@ fi
 # failure tick like every other refusal below, instead of only logging and
 # exiting — without this a stuck fetch would never reach the consecutive-
 # failure ALERT.
-if ! LOCAL_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>&1)"; then
+if ! LOCAL_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     log_err "cannot determine local HEAD in $REPO_ROOT: $LOCAL_HEAD"
     fail_tick "cannot determine local HEAD"
 fi
 
-if ! FETCH_OUTPUT="$(git -C "$REPO_ROOT" fetch origin "$DEPLOY_BRANCH" --quiet 2>&1)"; then
+if ! FETCH_OUTPUT="$(safe_git fetch origin "$DEPLOY_BRANCH" --quiet 2>&1)"; then
     log_err "git fetch origin $DEPLOY_BRANCH failed in $REPO_ROOT: $FETCH_OUTPUT"
     fail_tick "git fetch failed"
 fi
 
-if ! REMOTE_HEAD="$(git -C "$REPO_ROOT" rev-parse "origin/$DEPLOY_BRANCH" 2>&1)"; then
+if ! REMOTE_HEAD="$(safe_git rev-parse "origin/$DEPLOY_BRANCH" 2>&1)"; then
     log_err "cannot resolve origin/$DEPLOY_BRANCH in $REPO_ROOT: $REMOTE_HEAD"
     fail_tick "cannot resolve origin/$DEPLOY_BRANCH"
 fi
@@ -471,7 +624,7 @@ fi
 # therefore only re-logs at prio=err when the reason actually changes
 # (log_guard_reason); record_failure still counts every tick regardless, so
 # the ALERT threshold is unaffected by the log-level damping.
-if ! CURRENT_BRANCH="$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD 2>&1)"; then
+if ! CURRENT_BRANCH="$(safe_git symbolic-ref --quiet --short HEAD 2>&1)"; then
     log_guard_reason "HEAD at $REPO_ROOT is not on a branch (detached?) — refusing to deploy, not touching the tree: $CURRENT_BRANCH"
     fail_tick "HEAD not on a branch"
 fi
@@ -489,7 +642,7 @@ rm -f "$GUARD_REASON_FILE"
 # --- 5. Safe to touch? A dirty working tree or a diverged (non-fast-
 # forwardable) local main stops here — the host's checkout is also the
 # operator's manual workspace.
-if ! STATUS_OUTPUT="$(git -C "$REPO_ROOT" status --porcelain 2>&1)"; then
+if ! STATUS_OUTPUT="$(safe_git status --porcelain 2>&1)"; then
     log_err "cannot determine working tree status in $REPO_ROOT: $STATUS_OUTPUT"
     fail_tick "git status failed"
 fi
@@ -499,7 +652,7 @@ if [[ -n "$STATUS_OUTPUT" ]]; then
     fail_tick "working tree dirty"
 fi
 
-if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
+if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
     log_err "local HEAD ($LOCAL_HEAD) has diverged from origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — not fast-forwardable, refusing to deploy, not touching the tree"
     fail_tick "local HEAD diverged from origin/$DEPLOY_BRANCH"
 fi
@@ -549,17 +702,72 @@ elif ! MOUNT_PREFLIGHT_ERROR="$(bash "$MOUNT_PREFLIGHT_SCRIPT" 2>&1)"; then
     fail_tick "agent CLI mount preflight failed"
 fi
 
-# --- 9. Pull, then build. No timeout around the build (CLAUDE.md) — a
+# --- 9. Only pull a commit whose checks are green. A check run that is
+# still queued/in progress is an ordinary wait, not a deploy failure: the
+# next timer tick will query the same fetched SHA again. A completed non-green
+# run, an aged SHA with no runs, or inability to query GitHub at all, is a
+# named fail-closed refusal.
+if ! REMOTE_COMMIT_TIMESTAMP="$(safe_git show -s --format=%ct "$REMOTE_HEAD" 2>&1)"; then
+    log_err "cannot determine commit time for verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD: $REMOTE_COMMIT_TIMESTAMP"
+    fail_tick "cannot determine verified commit time"
+fi
+if ! [[ "$REMOTE_COMMIT_TIMESTAMP" =~ ^[0-9]+$ ]]; then
+    log_err "verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD has an invalid commit time '$REMOTE_COMMIT_TIMESTAMP'"
+    fail_tick "invalid verified commit time"
+fi
+
+if ! REMOTE_CHECK_STATUS="$(remote_check_status "$REMOTE_HEAD" "$REMOTE_COMMIT_TIMESTAMP")"; then
+    log_err "cannot determine GitHub check status for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — refusing to deploy: $REMOTE_CHECK_STATUS"
+    if [[ "$REMOTE_CHECK_STATUS" == "check-run lookup timed out" ]]; then
+        fail_tick "check-run lookup timed out"
+    fi
+    fail_tick "GitHub check status undetermined"
+fi
+
+case "$REMOTE_CHECK_STATUS" in
+    green)
+        ;;
+    waiting\ *)
+        log_info "GitHub checks for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) are not green yet: $REMOTE_CHECK_STATUS"
+        exit 0
+        ;;
+    failed\ *)
+        log_err "GitHub checks for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) are not green — refusing to deploy: $REMOTE_CHECK_STATUS"
+        if [[ "$REMOTE_CHECK_STATUS" == "failed (GitHub has not reported a check run within "* ]]; then
+            fail_tick "no GitHub check runs reported within ${CHECK_RUN_APPEARANCE_GRACE_SECONDS}s of commit"
+        fi
+        fail_tick "GitHub checks are not green"
+        ;;
+    *)
+        log_err "cannot determine GitHub check status for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — refusing to deploy: unexpected result '$REMOTE_CHECK_STATUS'"
+        fail_tick "GitHub check status undetermined"
+        ;;
+esac
+
+# --- 10. Fast-forward exactly the fetched-and-verified commit, then build.
+# Do not use `git pull` here: it would fetch a second time and could move the
+# checkout past $REMOTE_HEAD after its checks were accepted. No timeout around
+# the build (CLAUDE.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
-# itself — the recheck in step 10 is what guards the actual recreate. Both
-# `git pull` and `compose build` stream straight to this process's own
+# itself — the recheck in step 11 is what guards the actual recreate. Both
+# the fast-forward and `compose build` stream straight to this process's own
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
 # only a short log_err line with the exit code goes through `logger`.
-if ! PULL_OUTPUT="$(git -C "$REPO_ROOT" pull --ff-only origin "$DEPLOY_BRANCH" 2>&1)"; then
-    log_err "git pull --ff-only failed in $REPO_ROOT despite passing the fast-forward check: $PULL_OUTPUT"
-    fail_tick "git pull failed"
+if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$REMOTE_HEAD" 2>&1)"; then
+    log_err "git merge --ff-only to verified origin/$DEPLOY_BRANCH ($REMOTE_HEAD) failed in $REPO_ROOT: $MERGE_OUTPUT"
+    fail_tick "git fast-forward failed"
+fi
+
+if ! CHECKED_OUT_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
+    log_err "cannot determine HEAD in $REPO_ROOT after fast-forward: $CHECKED_OUT_HEAD"
+    fail_tick "cannot determine HEAD after fast-forward"
+fi
+
+if [[ "$CHECKED_OUT_HEAD" != "$REMOTE_HEAD" ]]; then
+    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD — refusing to build"
+    fail_tick "checked out commit differs from verified commit"
 fi
 
 if compose build; then
@@ -570,7 +778,7 @@ else
     fail_tick "compose build failed"
 fi
 
-# --- 10. Recheck immediately before the recreate — the only step that can
+# --- 11. Recheck immediately before the recreate — the only step that can
 # kill an in-flight job. This shrinks the unsafe window from the build's
 # 8-15 minutes down to the seconds between this check and `compose up`. A
 # deferral here finds the image already built on the next tick, so the
@@ -589,7 +797,7 @@ fi
 # Resolved once, right before the recreate — not after `compose up`
 # succeeds — so a broken `rev-parse` here fails the tick outright instead of
 # leaving a just-recreated stack with no way to record what it is running.
-if ! DEPLOYED_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>&1)"; then
+if ! DEPLOYED_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     log_err "cannot determine HEAD in $REPO_ROOT right before recreate: $DEPLOYED_HEAD"
     fail_tick "cannot determine HEAD before recreate"
 fi
