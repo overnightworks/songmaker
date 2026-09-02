@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from importlib.metadata import distributions, packages_distributions
 from pathlib import Path
 
+import yaml
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 
@@ -153,6 +155,13 @@ def _compose_service_block(service: str) -> str:
     return "\n".join(block)
 
 
+def _raw_compose_services() -> dict[str, object]:
+    compose = yaml.safe_load((REPOSITORY_ROOT / "docker-compose.yml").read_text())
+    services = compose["services"]
+    assert isinstance(services, dict)
+    return services
+
+
 def _service_dockerfile(service_block: str) -> Path:
     match = re.search(r"^      dockerfile: (.+)$", service_block, re.MULTILINE)
     assert match, "service has no build dockerfile"
@@ -290,3 +299,38 @@ def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
     for container in ("web", "scoring-worker"):
         assert CONTAINERS[container].extras & owns_the_sdk, container
     assert not CONTAINERS["music-worker"].extras & owns_the_sdk
+
+
+def test_agent_cli_bind_mounts_are_read_only_files_without_host_profiles() -> None:
+    expected_sources_by_target = {
+        "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
+        "/home/songmaker/.claude/.credentials.json": (
+            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
+            "/claude.json"
+        ),
+    }
+    services = _raw_compose_services()
+
+    for service_name in ("songmaker-web", "songmaker-scoring-worker"):
+        service = services[service_name]
+        assert isinstance(service, dict)
+        volumes = service["volumes"]
+        assert isinstance(volumes, list)
+        bind_mounts = [
+            volume
+            for volume in volumes
+            if isinstance(volume, dict) and volume.get("type") == "bind"
+        ]
+        assert bind_mounts, service_name
+        assert {mount["target"] for mount in bind_mounts} == set(
+            expected_sources_by_target,
+        )
+
+        for mount in bind_mounts:
+            source = mount["source"]
+            assert isinstance(source, str)
+            assert "~/.claude" not in source
+            assert "~/.claude.json" not in source
+            assert source == expected_sources_by_target[mount["target"]]
+            assert mount["read_only"] is True
+            assert mount["bind"]["create_host_path"] is False

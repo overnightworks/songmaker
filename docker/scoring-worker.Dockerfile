@@ -13,8 +13,6 @@ WORKDIR /app
 
 RUN useradd --create-home --shell /bin/bash songmaker
 RUN chown songmaker:songmaker /app
-# The judge uses only Claude's CLI fallback; Grok and Codex use HTTP APIs.
-RUN install -d -o songmaker -g songmaker /home/songmaker/.claude
 USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
@@ -35,6 +33,9 @@ COPY --chown=songmaker src/ src/
 COPY --chown=songmaker alembic.ini ./
 COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
 RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper --extra claude
+
+# The judge uses only Claude's CLI fallback; Grok and Codex use HTTP APIs.
+RUN install -d /home/songmaker/.claude
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

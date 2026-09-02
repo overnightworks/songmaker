@@ -102,32 +102,8 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}
-        target: /usr/local/bin/grok
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CODEX_CLI:-~/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex}
-        target: /usr/local/bin/codex
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
         source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
         target: /home/songmaker/.claude/.credentials.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/grok.json
-        target: /home/songmaker/.grok/auth.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/codex.json
-        target: /home/songmaker/.codex/auth.json
         read_only: true
         bind:
           create_host_path: false

@@ -394,12 +394,12 @@ being in place.
 
 ## Agent-CLI Mounts
 
-The web co-writer uses the operator's Claude *subscription*. Its Grok and
-Codex binary/mirror mounts support CLI login and reachability inspection only;
-their catalog and turn paths require `XAI_API_KEY` / `OPENAI_API_KEY`. The
-lyrical-coherence judge uses Claude's subscription as a fallback and likewise
-uses API keys for Grok and Codex. The host owns the real logins; containers
-receive only redacted, read-only mirror files.
+The web co-writer uses the operator's Claude *subscription*. Grok and Codex
+catalog and turn paths require `XAI_API_KEY` / `OPENAI_API_KEY`; neither
+service receives their binary or login mirror. The lyrical-coherence judge uses
+Claude's subscription as a fallback and likewise uses API keys for Grok and
+Codex. The host owns the real logins; containers receive only redacted,
+read-only mirror files.
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
@@ -458,6 +458,11 @@ triggers are running, and whether the service itself has failed: files that
 look right prove nothing about currency if what rewrites them has been
 erroring out since yesterday. The service is not required to be *active* — a
 finished oneshot is legitimately inactive.
+
+`SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` take
+effect only when exported in the deployment environment, not when written only
+in `.env`: the preflight reads its values from the exported environment and
+does not load `.env`. Compose currently mounts only `SONGMAKER_CLAUDE_CLI`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -531,22 +536,21 @@ refusals above, each of which turns it red when removed.
 
 ### What each service mounts
 
-`songmaker-web` owns writable `.claude`, `.grok`, and `.codex` directories in
-its image and mounts these host files read-only:
+`songmaker-web` owns a writable `.claude` directory in its image and mounts
+these host files read-only:
 
 | Host path | Container path |
 |---|---|
 | `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
-| `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
-| `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
 | `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
-| `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
-| `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
 
 `songmaker-scoring-worker` owns only `.claude` and mounts only the Claude
 binary and `claude.json` mirror. Its Grok and Codex judge calls use
 `XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
 only widen the blast radius.
+
+Grok and Codex mirrors are mounted with their consumer in #407, not into these
+services before that consumer needs them.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
