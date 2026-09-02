@@ -126,6 +126,7 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 LOG_TAG="songmaker-autodeploy"
 LOG_PAYLOAD_MAX_CHARS=2000
 DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
+PRUNE_RETENTION_HOURS=48
 
 log() {
     local level="$1"
@@ -225,6 +226,34 @@ POSTGRES_DB="${POSTGRES_DB:-songmaker}"
 
 compose() {
     (cd "$REPO_ROOT" && docker compose "$@")
+}
+
+prune_docker_resources() {
+    local prune_filter="until=${PRUNE_RETENTION_HOURS}h"
+    local prune_failed=false
+    local prune_exit_code
+
+    if docker image prune --all --force --filter "$prune_filter"; then
+        :
+    else
+        prune_exit_code=$?
+        log_err "docker image prune failed after deploy (exit $prune_exit_code); deploy remains successful"
+        prune_failed=true
+    fi
+
+    if docker builder prune --force --filter "$prune_filter"; then
+        :
+    else
+        prune_exit_code=$?
+        log_err "docker builder prune failed after deploy (exit $prune_exit_code); deploy remains successful"
+        prune_failed=true
+    fi
+
+    if [[ "$prune_failed" == false ]]; then
+        log_info "pruned unreferenced Docker images and build cache older than ${PRUNE_RETENTION_HOURS}h"
+    fi
+
+    return 0
 }
 
 # --- Active-jobs guard, called once before the pull and once again right
@@ -804,6 +833,7 @@ fi
 
 if compose up -d --wait --wait-timeout "$COMPOSE_UP_WAIT_TIMEOUT_SECONDS"; then
     if record_success "$DEPLOYED_HEAD"; then
+        prune_docker_resources
         exit 0
     fi
     # record_success's own failure path (deployed-sha readback mismatch)
