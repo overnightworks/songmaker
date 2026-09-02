@@ -1,8 +1,14 @@
-"""Song list API tests — generation_count on SongSummaryResponse (#340).
+"""Song list/detail API tests — query-cost regressions (#340, #331 Finding 1).
 
 The song list previously touched each song's (unloaded) generations
 relationship just to count it, costing one lazy-load query per row.
 generation_count is now computed server-side in one aggregate query.
+
+GET /api/songs/{id} previously joinedload()ed three sibling/nested
+collections (versions, generations, generations.scores) in one query,
+producing a SQL cross join -- one row per (version, generation, score)
+combination. This file also pins its query count after the selectinload()
+fix (#331 Finding 1).
 """
 
 from __future__ import annotations
@@ -15,7 +21,7 @@ from conftest import login_and_csrf, make_test_app
 from sqlalchemy import event
 
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.models import Album, Generation, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 
 _ADMIN_USER = "admin"
 _ADMIN_PASSWORD = "admin12345"
@@ -142,4 +148,90 @@ def test_list_songs_computes_generation_count_in_one_aggregate_query(
     assert len(all_queries) == 3, (
         f"expected exactly 3 queries for GET /api/songs against this fixture "
         f"(count + page + aggregate generation-count), got {len(all_queries)}: {all_queries}"
+    )
+
+
+# ── GET /api/songs/{id} — selectinload() over the sibling collections ────
+# (#331 Finding 1). A worked-through song with 12 versions, 25 generations,
+# and 7 scores per generation used to joinedload() all three onto one query,
+# producing the SQL cross join versions x generations x scores: 12 * 25 * 7
+# = 2,100 rows, each repeating the full lyrics text and score JSON
+# (including the whisper transcript). selectinload() replaces the cross
+# join with one flat batched query per collection.
+
+_DETAIL_VERSION_COUNT = 12
+_DETAIL_GENERATION_COUNT = 25
+_DETAIL_SCORES_PER_GENERATION = 7
+
+
+def _seed_worked_through_song(session) -> None:
+    session.add(User(
+        username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+    ))
+    session.add(Album(id="alb", title="Album", artist="A"))
+    session.add(Song(id="s1", title="s1", album_id="alb", track_number=1, slug="s1"))
+    for i in range(_DETAIL_VERSION_COUNT):
+        session.add(Version(
+            id=f"v{i}", song_id="s1", version_number=i + 1, lyrics="lyrics " * 200,
+        ))
+    for i in range(_DETAIL_GENERATION_COUNT):
+        gen_id = f"g{i}"
+        session.add(Generation(
+            id=gen_id, song_id="s1", version_id="v0",
+            generation_number=i + 1, mp3_path=f"{_ADMIN_USER}/{gen_id}.mp3", seed=1,
+        ))
+        for j in range(_DETAIL_SCORES_PER_GENERATION):
+            session.add(Score(
+                id=f"{gen_id}-sc{j}", generation_id=gen_id, scorer=f"scorer{j}",
+                value={f"whisper_text_{j}": "transcript " * 100},
+            ))
+
+
+@pytest.fixture()
+def worked_through_song_client(tmp_path: Path):
+    client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
+    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    return client, factory
+
+
+def test_get_song_returns_all_versions_generations_and_scores(
+    worked_through_song_client,
+) -> None:
+    client, _ = worked_through_song_client
+    resp = client.get("/api/songs/s1")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["version_count"] == _DETAIL_VERSION_COUNT
+    assert body["generation_count"] == _DETAIL_GENERATION_COUNT
+    assert len(body["generations"]) == _DETAIL_GENERATION_COUNT
+    assert len(body["generations"][0]["scores"]) == _DETAIL_SCORES_PER_GENERATION
+
+
+def test_get_song_issues_one_flat_query_per_collection_not_a_cross_join(
+    worked_through_song_client,
+) -> None:
+    """Pins the exact query count for GET /api/songs/{id}: one for the song
+    row (+album via joinedload), one selectinload() batch each for versions,
+    generations, and generations.scores -- never a single query whose row
+    count multiplies across all three collections, and never a query per
+    row (which would also prove the #340 weak-identity-map pitfall doesn't
+    apply here: gen.version is read, but it's the forward relation loaded
+    directly per-row, not a Generation.song back-populate off a parent list
+    that has gone out of scope, and nothing on this path reads that
+    direction at all)."""
+    client, factory = worked_through_song_client
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    all_queries, all_handle = _count_queries(engine)
+    try:
+        resp = client.get("/api/songs/s1")
+    finally:
+        event.remove(engine, "before_cursor_execute", all_handle)
+
+    assert resp.status_code == 200
+    assert len(all_queries) == 4, (
+        f"expected exactly 4 queries for GET /api/songs/{{id}} against this "
+        f"fixture (song+album, versions, generations, scores), "
+        f"got {len(all_queries)}: {all_queries}"
     )

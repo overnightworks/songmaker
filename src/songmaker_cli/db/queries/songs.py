@@ -150,12 +150,33 @@ def _apply_song_filters(
 def get_song(
     session: Session, song_id: str, *, include_deleted_rows: bool = False,
 ) -> Song | None:
+    # versions, generations, and generations.scores are all sibling/nested
+    # collections off one Song -- joinedload()ing more than one of them
+    # produces a SQL cross join (versions x generations x scores), returning
+    # one row per combination with the lyrics text and score JSON (whisper
+    # transcript included) repeated on every row (#331 Finding 1: a
+    # 12-version/25-generation/7-score song returned 2,100 rows for one
+    # fetch). selectinload() issues one flat batched query per collection
+    # instead. rating/src_generation/version stay joinedload()ed off the
+    # generations selectinload -- they're scalar (one row per generation),
+    # so chaining them there adds columns, not cross-joined rows. This
+    # function always returns a single Song kept alive by the caller's own
+    # reference for as long as it's used, so the weak-identity-map pitfall
+    # in list_songs() (#340) -- where a *list* of parents going out of scope
+    # silently turns a back-populate access into a lazy query per row --
+    # does not apply here. SongResponse.from_orm does read gen.version, but
+    # that's the forward relation (Generation -> Version), populated
+    # directly in the same generations-selectin row via the joinedload
+    # above -- not an identity-map lookup, so it's unaffected by parent
+    # lifetime either way. Nothing on this path reads the Generation.song
+    # back-populate, which is the direction #340's pitfall actually depends
+    # on (see tests/test_song_api.py for the query-count proof).
     query = session.query(Song).options(
-        joinedload(Song.versions),
-        joinedload(Song.generations).joinedload(Generation.scores),
-        joinedload(Song.generations).joinedload(Generation.rating),
-        joinedload(Song.generations).joinedload(Generation.src_generation),
-        joinedload(Song.generations).joinedload(Generation.version),
+        selectinload(Song.versions),
+        selectinload(Song.generations).selectinload(Generation.scores),
+        selectinload(Song.generations).joinedload(Generation.rating),
+        selectinload(Song.generations).joinedload(Generation.src_generation),
+        selectinload(Song.generations).joinedload(Generation.version),
         joinedload(Song.album),
     )
     if include_deleted_rows:

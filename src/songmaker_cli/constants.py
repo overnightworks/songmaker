@@ -207,6 +207,8 @@ REDIS_SESSION_PREFIX = f"{REDIS_KEY_PREFIX}:session"
 REDIS_USER_SESSIONS_PREFIX = f"{REDIS_KEY_PREFIX}:user_sessions"
 REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:resource-stream:user"
 REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:resource-stream:global"
+REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
+REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 REDIS_SESSION_SYNC_INTERVAL_SECONDS = 300
 REDIS_DEGRADED_THRESHOLD = 3
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
@@ -352,6 +354,17 @@ RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
 )
 LAST_EVENT_ID_INVALID: Final[str] = "Last-Event-ID must be a non-negative decimal"
 POSTGRES_BIGINT_MAX: Final[int] = (1 << 63) - 1
+# Job SSE stream (#331 Finding 2). Forces the same kind of periodic
+# reconnect as the resource-event stream, for the same reason: bound the
+# worst case a single stream can stay open rather than let a queued/running
+# job hold it (and, before the to_thread fix, the event loop) indefinitely.
+# The frontend (jobs.ts) already reconnects an EventSource with backoff on
+# any drop and resets its attempt counter on the next message, so a forced
+# close here is a cheap, already-handled event, not a new failure mode.
+JOB_STREAM_CONNECTION_SECONDS: Final[int] = RESOURCE_EVENT_STREAM_CONNECTION_SECONDS
+JOB_STREAM_LEASE_SECONDS: Final[int] = JOB_STREAM_CONNECTION_SECONDS + 5
+JOB_STREAM_LIMIT_DETAIL: Final[str] = "Too many job streams"
+JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {

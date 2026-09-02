@@ -154,6 +154,29 @@ class Settings(BaseSettings):
     # per-user budget in a way production traffic across many real users
     # never is.
     resource_event_stream_open_limit: int = 12
+    # Concurrency lease for GET /api/jobs/{id}/stream (#331 Finding 2, and
+    # review rounds 2026-09-01/02 on Finding 1 below). The endpoint takes no
+    # request-scoped `Depends()` at all -- not `get_db_session`, and not
+    # `get_current_user` either, because that dependency itself takes
+    # `Depends(get_db_session)` and a first attempt that only dropped the
+    # former still pinned a pool connection through the latter for the
+    # whole stream. Auth and the access check instead run as plain function
+    # calls against one short-lived `ctx.db()` session that closes before
+    # the lease is acquired or the StreamingResponse exists (see
+    # api_stream_job, which follows resource_event_api.py's
+    # api_stream_resource_events exactly); every poll does the same (see
+    # _fetch_job_response). So no single job stream pins a pool connection
+    # for its lifetime, and this lease is NOT a share of
+    # database_pool_size/max_overflow the way the resource-event lease is;
+    # it is a flat, hard concurrency cap against a runaway client (bug or
+    # storm) opening far more job streams than any real page load does.
+    # max_per_user mirrors max_user_active_jobs above (a user cannot
+    # legitimately watch more job streams than active jobs); max_global
+    # matches the already-vetted worst case in stream_rate_limit's comment
+    # (one resource stream + one job stream per active job, several page
+    # loads within a minute).
+    job_stream_lease_max_per_user: int = 10
+    job_stream_lease_max_global: int = 40
 
     # ── arq workers ───────────────────────────────────────────────────
     arq_job_timeout: int = 1000
