@@ -1,10 +1,10 @@
-# Unit tests for the job-failure rule in alert.rules.yml, run by
+# Unit tests for the alert rules in alert.rules.yml, run by
 # Prometheus' own promtool against the real rule file (issue #333):
 #
 #   docker run --rm -v "$PWD/monitoring:/monitoring" -w /monitoring \
 #     prom/prometheus:latest promtool test rules alert.rules.test.yml
 #
-# The two cases below are the same failure seen from the two histories
+# The first two cases below are the same failure seen from the two histories
 # Prometheus can have: one where it watched the metric before anything
 # failed, and one where its very first sample of the series already
 # carries the failure — a job that fails between songmaker-web becoming
@@ -104,6 +104,36 @@ tests:
           - exp_labels:
               severity: critical
               loop: session_sync
+            exp_annotations:
+              summary: A Songmaker background loop is unhealthy
+              description: A background loop has stopped or failed three consecutive ticks.
+
+  - interval: 1m
+    name: a healthy background loop stays quiet
+    input_series:
+      - series: 'songmaker_background_loop_alive{loop="stale_job_reaper"}'
+        values: "1x10"
+      - series: 'songmaker_background_loop_consecutive_failures{loop="stale_job_reaper"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts: []
+
+  - interval: 1m
+    name: a dead and failing loop produces one alert
+    input_series:
+      - series: 'songmaker_background_loop_alive{loop="resource_event_cleanup"}'
+        values: "0x10"
+      - series: 'songmaker_background_loop_consecutive_failures{loop="resource_event_cleanup"}'
+        values: "3x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              loop: resource_event_cleanup
             exp_annotations:
               summary: A Songmaker background loop is unhealthy
               description: A background loop has stopped or failed three consecutive ticks.

@@ -28,7 +28,7 @@ from songmaker_cli.constants import (
     PROM_NEVER_FAILED_TIMESTAMP,
     PROM_QUEUE_DEPTH,
 )
-from songmaker_cli.lifecycle import BackgroundLoopStatus
+from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopStatus
 
 router = APIRouter()
 
@@ -40,10 +40,7 @@ class BackgroundLoopResponse(BaseModel):
 
 
 class BackgroundLoopsResponse(BaseModel):
-    session_sync: BackgroundLoopResponse
-    resource_event_cleanup: BackgroundLoopResponse
-    score_backfill: BackgroundLoopResponse
-    stale_job_reaper: BackgroundLoopResponse
+    background_loops: dict[BackgroundLoopName, BackgroundLoopResponse]
 
 
 def _compute_script_hashes(index_html: Path) -> list[str]:
@@ -243,7 +240,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     scoring_queue_depth = await get_scoring_queue_depth()
 
     pool = get_arq_pool()
-    background_loop_metrics = request.app.state.background_loop_registry.metrics_snapshot()
+    background_loop_metrics = request.app.state.background_loop_registry.loop_health()
     workers_online = 0
     workers_loading = 0
     workers_offline = 0
@@ -290,11 +287,11 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         acestep_worker_vram_used_gb=vram_used_gb,
         acestep_worker_vram_total_gb=vram_total_gb,
         background_loop_consecutive_failures={
-            name: health.consecutive_failures
+            name.value: health.consecutive_failures
             for name, health in background_loop_metrics.items()
         },
         background_loop_alive={
-            name: health.is_alive for name, health in background_loop_metrics.items()
+            name.value: health.is_alive for name, health in background_loop_metrics.items()
         },
     )
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
@@ -349,8 +346,8 @@ async def health_check(request: Request) -> JSONResponse:
 
     from songmaker_cli.redis_client import redis_health
     redis_ok = redis_health(ctx.redis)
-    background_loop_health = request.app.state.background_loop_registry.metrics_snapshot()
-    background_loops = BackgroundLoopsResponse(**{
+    background_loop_health = request.app.state.background_loop_registry.loop_health()
+    background_loops = BackgroundLoopsResponse(background_loops={
         name: {
             "state": health.status,
             "consecutive_failures": health.consecutive_failures,
@@ -397,5 +394,5 @@ async def health_check(request: Request) -> JSONResponse:
         # "ok". Defaults to "unverified" (never a silent "ok") for the
         # narrow window before the boot-time check has run at all.
         "claude_cli_tool_surface": claude_cli_tool_surface_health(),
-        "background_loops": background_loops.model_dump(mode="json"),
+        "background_loops": background_loops.model_dump(mode="json")["background_loops"],
     })

@@ -344,7 +344,6 @@ PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 # Background loop health (issue #396)
 BACKGROUND_LOOP_FAILURE_THRESHOLD: Final[int] = 3
-BACKGROUND_LOOP_LAST_ERROR_MAX_LENGTH: Final[int] = 120
 PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES = "songmaker_background_loop_consecutive_failures"
 PROM_BACKGROUND_LOOP_ALIVE = "songmaker_background_loop_alive"
 

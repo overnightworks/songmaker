@@ -12,11 +12,13 @@ never a lucky real GPU.
 from __future__ import annotations
 
 import json
+from enum import StrEnum
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from conftest import make_test_app
+from pydantic import BaseModel
 
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
@@ -179,6 +181,43 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
     assert 'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3' in metrics.text
     assert 'songmaker_background_loop_alive{loop="score_backfill"} 1' in metrics.text
     assert 'songmaker_background_loop_alive{loop="session_sync"} 0' in metrics.text
+
+
+def test_health_includes_each_loop_registered_by_the_enum(
+    tmp_path: Path, monkeypatch, mock_arq_pool,
+) -> None:
+    import songmaker_cli.health_api as health_api
+    import songmaker_cli.lifecycle as lifecycle
+
+    class ExtendedBackgroundLoopName(StrEnum):
+        SESSION_SYNC = "session_sync"
+        RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
+        SCORE_BACKFILL = "score_backfill"
+        STALE_JOB_REAPER = "stale_job_reaper"
+        TEST_LOOP = "test_loop"
+
+    class ExtendedBackgroundLoopsResponse(BaseModel):
+        background_loops: dict[ExtendedBackgroundLoopName, health_api.BackgroundLoopResponse]
+
+    original_lifecycle_name = lifecycle.BackgroundLoopName
+    original_health_api_name = health_api.BackgroundLoopName
+    original_response_model = health_api.BackgroundLoopsResponse
+    monkeypatch.setattr(lifecycle, "BackgroundLoopName", ExtendedBackgroundLoopName)
+    monkeypatch.setattr(health_api, "BackgroundLoopName", ExtendedBackgroundLoopName)
+    monkeypatch.setattr(health_api, "BackgroundLoopsResponse", ExtendedBackgroundLoopsResponse)
+    try:
+        client, _ = make_test_app(tmp_path)
+        with client:
+            response = client.get("/health")
+    finally:
+        lifecycle.BackgroundLoopName = original_lifecycle_name
+        health_api.BackgroundLoopName = original_health_api_name
+        health_api.BackgroundLoopsResponse = original_response_model
+
+    assert response.status_code == 200
+    assert set(response.json()["background_loops"]) == {
+        name.value for name in ExtendedBackgroundLoopName
+    }
 
 
 def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
