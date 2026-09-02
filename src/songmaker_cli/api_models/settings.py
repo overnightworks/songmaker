@@ -150,6 +150,12 @@ class ProviderSurfaceStatus(BaseModel):
     missing_dependency: str | None = None
 
 
+class ProviderNotConfiguredDetail(BaseModel):
+    provider: str
+    surface: Literal["cowriter", "judge"]
+    status: ProviderSurfaceStatus
+
+
 class ProviderStatusResponse(BaseModel):
     provider: str
     cowriter: ProviderSurfaceStatus
@@ -331,4 +337,3 @@ class UserRateLimitsResponse(BaseModel):
     user_id: str
     overrides: list[RateLimitItem]
     effective: list[RateLimitItem]
-

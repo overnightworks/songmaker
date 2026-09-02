@@ -30,6 +30,7 @@ from songmaker_cli.api_models.settings import (
     DefaultConfigResponse,
     JudgeSettingsRequest,
     JudgeSettingsResponse,
+    ProviderNotConfiguredDetail,
     ProviderStatusResponse,
     ProviderSurfaceState,
     ProviderSurfaceStatus,
@@ -66,6 +67,7 @@ from songmaker_cli.db.queries.settings import (
     get_judge_model,
     get_judge_provider,
     get_preset,
+    get_raw_stored_judge_settings,
     list_active_models,
     list_all_models,
     list_presets,
@@ -471,8 +473,26 @@ def _require_provider_can_answer(provider: str, surface: "ProviderSurface") -> N
         return
     raise HTTPException(
         422,
-        f"{provider} cannot answer as {surface.value}: "
-        f"{status.model_dump_json(exclude_none=True)}",
+        ProviderNotConfiguredDetail(
+            provider=provider,
+            surface=surface.value,
+            status=status,
+        ).model_dump(mode="json", exclude_none=True),
+    )
+
+
+def _matches_complete_stored_provider_and_model(
+    stored_provider: str | None,
+    stored_model: str | None,
+    provider: str,
+    model: str,
+) -> bool:
+    """Only a complete persisted pair can make a co-writer save unchanged."""
+    return (
+        stored_provider not in (None, "")
+        and stored_model not in (None, "")
+        and provider == stored_provider
+        and model == stored_model
     )
 
 
@@ -487,14 +507,11 @@ def api_set_cowriter_settings(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
-    if stored_settings.provider is None or stored_settings.provider in COWRITER_PROVIDERS:
-        stored_provider = get_cowriter_provider(session)
-        stored_model = get_cowriter_model(session, stored_provider)
-    else:
-        stored_provider = stored_settings.provider
-        stored_model = stored_settings.model
-    provider_or_model_changed = (
-        req.provider != stored_provider or req.model != stored_model
+    provider_or_model_changed = not _matches_complete_stored_provider_and_model(
+        stored_settings.provider,
+        stored_settings.model,
+        req.provider,
+        req.model,
     )
     if provider_or_model_changed:
         from songmaker_cli.cowriter.catalog import ProviderSurface
@@ -565,23 +582,21 @@ def api_set_judge_settings(
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
-    stored_provider = get_judge_provider(session)
-    stored_model = get_judge_model(session, stored_provider)
-    provider_or_model_changed = (
-        req.provider != stored_provider or req.model != stored_model
-    )
-    if provider_or_model_changed:
-        from songmaker_cli.cowriter.catalog import ProviderSurface
+    # Read the raw pair so a retired stored provider never prevents an admin
+    # from replacing it. Judge settings have no independent field, so every
+    # save still validates the requested provider and model below.
+    get_raw_stored_judge_settings(session)
+    from songmaker_cli.cowriter.catalog import ProviderSurface
 
-        _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
-        allowed, catalog_error = _models_for_provider(req.provider)
-        if catalog_error:
-            raise HTTPException(503, catalog_error)
-        if req.model not in allowed:
-            raise HTTPException(
-                422,
-                f"Unknown {req.provider} model '{req.model}'",
-            )
+    _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
+    allowed, catalog_error = _models_for_provider(req.provider)
+    if catalog_error:
+        raise HTTPException(503, catalog_error)
+    if req.model not in allowed:
+        raise HTTPException(
+            422,
+            f"Unknown {req.provider} model '{req.model}'",
+        )
     set_judge_settings(session, req.provider, req.model)
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,

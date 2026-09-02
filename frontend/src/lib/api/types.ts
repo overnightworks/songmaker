@@ -574,6 +574,12 @@ export interface ProviderStatus {
 	judge: ProviderSurfaceStatus;
 }
 
+export interface ProviderNotConfiguredDetail {
+	provider: string;
+	surface: 'cowriter' | 'judge';
+	status: ProviderSurfaceStatus;
+}
+
 export interface ProviderSurfaceStatus {
 	state: 'configured' | 'cli_login_needs_api_key' | 'api_key_needs_cli_login' | 'missing_dependency' | 'unconfigured';
 	needs?: 'cli_login' | 'api_key' | null;

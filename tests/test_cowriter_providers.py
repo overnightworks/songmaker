@@ -23,6 +23,8 @@ from songmaker_cli.constants import (
     SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COWRITER_MODEL,
     SETTING_COWRITER_PROVIDER,
+    SETTING_JUDGE_MODEL,
+    SETTING_JUDGE_PROVIDER,
 )
 from songmaker_cli.cowriter.catalog import ProviderSurface
 from songmaker_cli.cowriter.errors import (
@@ -36,12 +38,14 @@ from songmaker_cli.cowriter.openai_adapter import (
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, ChatMessage, Job, Song, User
-from songmaker_cli.db.queries import get_raw_stored_cowriter_settings
 from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
     get_cowriter_provider,
+    get_cowriter_tail_token_budget,
     get_judge_model,
     get_judge_provider,
+    get_raw_stored_cowriter_settings,
+    get_raw_stored_judge_settings,
     set_claude_model,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
@@ -129,6 +133,18 @@ def _save_removed_cowriter_provider(factory) -> None:
         session.commit()
 
 
+def _save_removed_judge_provider(factory) -> None:
+    with factory() as session:
+        set_claude_model(session, SETTING_JUDGE_PROVIDER, "retired-provider")
+        set_claude_model(session, SETTING_JUDGE_MODEL, "retired-model")
+        session.commit()
+
+
+def _stored_cowriter_state(session) -> tuple[str | None, str | None, int]:
+    stored = get_raw_stored_cowriter_settings(session)
+    return stored.provider, stored.model, get_cowriter_tail_token_budget(session)
+
+
 def test_raw_stored_cowriter_settings_preserve_the_unresolved_pair(admin_client):
     _, factory = admin_client
     with factory() as session:
@@ -141,6 +157,17 @@ def test_raw_stored_cowriter_settings_preserve_the_unresolved_pair(admin_client)
 
     assert stored.provider == "retired-provider"
     assert stored.model == ""
+
+
+def test_raw_stored_judge_settings_preserve_the_unresolved_pair(admin_client):
+    _, factory = admin_client
+    _save_removed_judge_provider(factory)
+
+    with factory() as session:
+        stored = get_raw_stored_judge_settings(session)
+
+    assert stored.provider == "retired-provider"
+    assert stored.model == "retired-model"
 
 
 def test_get_cowriter_settings_names_a_removed_saved_provider(admin_client):
@@ -186,6 +213,50 @@ def test_invalid_cowriter_put_rejects_a_removed_saved_provider_without_server_er
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == "Unknown co-writer provider 'retired-provider'"
+
+
+def test_valid_judge_put_replaces_a_removed_saved_provider(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    _save_removed_judge_provider(factory)
+
+    resp = client.put(
+        "/api/settings/judge",
+        json={"provider": "grok", "model": "grok-4.6"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["provider"] == "grok"
+    with factory() as session:
+        assert get_raw_stored_judge_settings(session).provider == "grok"
+
+
+def test_judge_put_rejects_a_replacement_when_the_new_provider_is_unconfigured(
+    admin_client,
+):
+    client, factory = admin_client
+    _save_removed_judge_provider(factory)
+    status = ProviderSurfaceStatus(
+        state=ProviderSurfaceState.UNCONFIGURED,
+        needs="api_key",
+        environment_key="XAI_API_KEY",
+    )
+
+    with patch("songmaker_cli.settings_api._surface_status", return_value=status):
+        response = client.put(
+            "/api/settings/judge",
+            json={"provider": "grok", "model": "grok-4.6"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "provider": "grok",
+        "surface": "judge",
+        "status": status.model_dump(exclude_none=True),
+    }
+    with factory() as session:
+        assert get_raw_stored_judge_settings(session).provider == "retired-provider"
 
 
 def test_chat_rejects_a_removed_saved_provider_without_creating_a_job(admin_client):
@@ -799,7 +870,9 @@ def test_provider_change_requires_a_configured_surface(
         return status
 
     monkeypatch.setattr("songmaker_cli.settings_api._surface_status", _surface_status)
-    client, _ = admin_client
+    client, factory = admin_client
+    with factory() as session:
+        original_cowriter_state = _stored_cowriter_state(session)
 
     response = client.put(path, json={"provider": "grok", "model": "grok-4.6"})
 
@@ -808,9 +881,14 @@ def test_provider_change_requires_a_configured_surface(
         assert response.status_code == 200
     else:
         assert response.status_code == 422
-        assert response.json()["detail"].endswith(
-            status.model_dump_json(exclude_none=True),
-        )
+        assert response.json()["detail"] == {
+            "provider": "grok",
+            "surface": surface.value,
+            "status": status.model_dump(exclude_none=True),
+        }
+        if path == "/api/settings/cowriter":
+            with factory() as session:
+                assert _stored_cowriter_state(session) == original_cowriter_state
 
 
 @pytest.mark.parametrize(
@@ -841,21 +919,28 @@ def test_model_change_requires_a_configured_surface(
         return next(statuses)
 
     monkeypatch.setattr("songmaker_cli.settings_api._surface_status", _surface_status)
-    client, _ = admin_client
+    client, factory = admin_client
 
     first = client.put(path, json={"provider": "grok", "model": "grok-4.6"})
+    with factory() as session:
+        original_cowriter_state = _stored_cowriter_state(session)
     response = client.put(path, json={"provider": "grok", "model": "grok-4.5"})
 
     assert first.status_code == 200
     assert response.status_code == 422
     assert calls == [("grok", surface)] * 2
-    assert response.json()["detail"].endswith(
-        ProviderSurfaceStatus(
-            state=ProviderSurfaceState.UNCONFIGURED,
-            needs="api_key",
-            environment_key="XAI_API_KEY",
-        ).model_dump_json(exclude_none=True),
-    )
+    assert response.json()["detail"] == {
+        "provider": "grok",
+        "surface": surface.value,
+        "status": {
+            "state": "unconfigured",
+            "needs": "api_key",
+            "environment_key": "XAI_API_KEY",
+        },
+    }
+    if path == "/api/settings/cowriter":
+        with factory() as session:
+            assert _stored_cowriter_state(session) == original_cowriter_state
 
 
 def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(
@@ -910,13 +995,19 @@ def test_cowriter_save_with_unchanged_provider_and_model_survives_a_down_catalog
     assert budget_only.json()["model"] == "grok-4.6"
 
 
-def test_cowriter_budget_save_with_default_settings_skips_the_surface_check(admin_client):
+def test_cowriter_budget_save_with_default_settings_requires_the_surface_check(admin_client):
     client, factory = admin_client
     with factory() as session:
         provider = get_cowriter_provider(session)
         model = get_cowriter_model(session, provider)
+        original_state = _stored_cowriter_state(session)
 
-    with patch("songmaker_cli.settings_api._surface_status", side_effect=AssertionError):
+    status = ProviderSurfaceStatus(
+        state=ProviderSurfaceState.UNCONFIGURED,
+        needs="api_key",
+        environment_key="ANTHROPIC_API_KEY",
+    )
+    with patch("songmaker_cli.settings_api._surface_status", return_value=status):
         response = client.put(
             "/api/settings/cowriter",
             json={
@@ -926,18 +1017,56 @@ def test_cowriter_budget_save_with_default_settings_skips_the_surface_check(admi
             },
         )
 
-    assert response.status_code == 200
-    assert response.json()["tail_token_budget"] == 12000
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "provider": provider,
+        "surface": "cowriter",
+        "status": status.model_dump(exclude_none=True),
+    }
+    with factory() as session:
+        assert _stored_cowriter_state(session) == original_state
+
+
+def test_cowriter_save_with_an_incomplete_stored_pair_requires_the_surface_check(admin_client):
+    client, factory = admin_client
+    with factory() as session:
+        set_claude_model(session, SETTING_COWRITER_PROVIDER, "claude")
+        set_claude_model(session, SETTING_COWRITER_MODEL, "")
+        session.commit()
+    with factory() as session:
+        original_state = _stored_cowriter_state(session)
+    status = ProviderSurfaceStatus(
+        state=ProviderSurfaceState.UNCONFIGURED,
+        needs="api_key",
+        environment_key="ANTHROPIC_API_KEY",
+    )
+
+    with patch("songmaker_cli.settings_api._surface_status", return_value=status):
+        response = client.put(
+            "/api/settings/cowriter",
+            json={"provider": "claude", "model": "", "tail_token_budget": 12000},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "provider": "claude",
+        "surface": "cowriter",
+        "status": status.model_dump(exclude_none=True),
+    }
+    with factory() as session:
+        assert _stored_cowriter_state(session) == original_state
 
 
 def test_cowriter_save_that_actually_changes_the_model_still_needs_a_live_catalog(
     admin_client, every_provider_is_configured,
 ):
-    client, _ = admin_client
+    client, factory = admin_client
     client.put(
         "/api/settings/cowriter",
         json={"provider": "grok", "model": "grok-4.6"},
     )
+    with factory() as session:
+        original_state = _stored_cowriter_state(session)
 
     def _down(provider: str) -> list[str]:
         raise ProviderModelCatalogUnavailableError(
@@ -951,21 +1080,103 @@ def test_cowriter_save_that_actually_changes_the_model_still_needs_a_live_catalo
         )
 
     assert resp.status_code == 503
+    with factory() as session:
+        assert _stored_cowriter_state(session) == original_state
 
 
-def test_judge_save_with_unchanged_provider_and_model_skips_the_surface_check(admin_client):
+def test_invalid_cowriter_budget_does_not_persist_a_validated_provider_change(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    assert client.put(
+        "/api/settings/cowriter",
+        json={"provider": "grok", "model": "grok-4.6", "tail_token_budget": 20000},
+    ).status_code == 200
+    with factory() as session:
+        original_state = _stored_cowriter_state(session)
+
+    response = client.put(
+        "/api/settings/cowriter",
+        json={
+            "provider": "codex",
+            "model": "gpt-5.4",
+            "tail_token_budget": 1_000_000,
+        },
+    )
+
+    assert response.status_code == 422
+    with factory() as session:
+        assert _stored_cowriter_state(session) == original_state
+
+
+def test_judge_save_with_default_settings_requires_the_surface_check(admin_client):
     client, factory = admin_client
     with factory() as session:
         provider = get_judge_provider(session)
         model = get_judge_model(session, provider)
 
-    with patch("songmaker_cli.settings_api._surface_status", side_effect=AssertionError):
+    status = ProviderSurfaceStatus(
+        state=ProviderSurfaceState.UNCONFIGURED,
+        needs="api_key",
+        environment_key="ANTHROPIC_API_KEY",
+    )
+    with patch("songmaker_cli.settings_api._surface_status", return_value=status):
         response = client.put(
             "/api/settings/judge",
             json={"provider": provider, "model": model},
         )
 
-    assert response.status_code == 200
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "provider": provider,
+        "surface": "judge",
+        "status": status.model_dump(exclude_none=True),
+    }
+    with factory() as session:
+        assert get_raw_stored_judge_settings(session).provider is None
+
+
+def test_judge_save_with_a_persisted_pair_always_checks_surface_and_catalog(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    request = {"provider": "grok", "model": "grok-4.6"}
+    assert client.put("/api/settings/judge", json=request).status_code == 200
+    with factory() as session:
+        original = get_raw_stored_judge_settings(session)
+    unavailable = ProviderSurfaceStatus(
+        state=ProviderSurfaceState.UNCONFIGURED,
+        needs="api_key",
+        environment_key="XAI_API_KEY",
+    )
+
+    with patch("songmaker_cli.settings_api._surface_status", return_value=unavailable):
+        surface_response = client.put("/api/settings/judge", json=request)
+
+    assert surface_response.status_code == 422
+    assert surface_response.json()["detail"] == {
+        "provider": "grok",
+        "surface": "judge",
+        "status": unavailable.model_dump(exclude_none=True),
+    }
+    with factory() as session:
+        assert get_raw_stored_judge_settings(session) == original
+
+    with (
+        patch(
+            "songmaker_cli.settings_api._surface_status",
+            return_value=ProviderSurfaceStatus(state=ProviderSurfaceState.CONFIGURED),
+        ),
+        patch(
+            "songmaker_cli.settings_api._models_for_provider",
+            return_value=([], "could not list grok models"),
+        ),
+    ):
+        catalog_response = client.put("/api/settings/judge", json=request)
+
+    assert catalog_response.status_code == 503
+    with factory() as session:
+        assert get_raw_stored_judge_settings(session) == original
 
 
 def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():

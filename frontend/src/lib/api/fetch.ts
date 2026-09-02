@@ -15,10 +15,30 @@ export class ApiError extends Error {
 		public readonly status: number,
 		public readonly detail: string,
 		public readonly path: string,
-		public readonly retryAfterSeconds: number | null = null
+		public readonly retryAfterSeconds: number | null = null,
+		public readonly responseDetail: unknown = detail
 	) {
 		super(detail || API_ERROR_GENERIC_MESSAGE);
 		this.name = 'ApiError';
+	}
+}
+
+async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
+	detail: string;
+	responseDetail: unknown;
+}> {
+	try {
+		const body: unknown = await response.json();
+		if (typeof body !== 'object' || body === null || !('detail' in body)) {
+			return { detail: '', responseDetail: '' };
+		}
+		const responseDetail = body.detail;
+		return {
+			detail: typeof responseDetail === 'string' ? responseDetail : '',
+			responseDetail
+		};
+	} catch {
+		return { detail: '', responseDetail: '' };
 	}
 }
 
@@ -160,16 +180,10 @@ export async function apiFetch<T>(
 	try {
 		const resp = await fetch(path, opts);
 		if (!resp.ok) {
-			let detail = '';
-			try {
-				const body = await resp.json();
-				detail = body.detail ?? '';
-			} catch {
-				// response body not JSON — use empty detail
-			}
+			const { detail, responseDetail } = await readErrorDetail(resp);
 			notifyIfRateLimited(resp.status, path);
 			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
-			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
+			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp), responseDetail);
 		}
 		return resp.json() as Promise<T>;
 	} finally {
@@ -208,16 +222,10 @@ export async function* sseFetch<T = unknown>(
 	try {
 		const resp = await fetch(path, opts);
 		if (!resp.ok) {
-			let detail = '';
-			try {
-				const body = await resp.json();
-				detail = body.detail ?? '';
-			} catch {
-				// non-JSON body on error
-			}
+			const { detail, responseDetail } = await readErrorDetail(resp);
 			notifyIfRateLimited(resp.status, path);
 			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
-			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
+			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp), responseDetail);
 		}
 		if (!resp.body) {
 			return;
