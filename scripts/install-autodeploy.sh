@@ -44,6 +44,9 @@
 #
 # Usage:
 #   ./scripts/install-autodeploy.sh
+#
+# Prerequisites: Docker Compose v2 and jq. auto-deploy.sh uses jq to read the
+# non-interpolated Compose project and build-service list before a recreate.
 
 set -euo pipefail
 
@@ -122,6 +125,11 @@ if [ "$INSTALL_USER" = "root" ]; then
     echo "  sudo ./scripts/install-autodeploy.sh" >&2
     exit 1
 fi
+
+command -v jq >/dev/null || {
+    echo "ERROR: jq is required for the pre-recreate rollback tagging but is not installed." >&2
+    exit 1
+}
 
 # Escape backslash, the sed delimiter (#), and & (which sed would otherwise
 # expand to "whatever matched the pattern" in the replacement text). The
