@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     allowed_hosts: str = ""
     cors_origin: str | None = None
     trusted_proxies: str = ""
+    # The one owner of "what address am I reachable at from outside" for
+    # share links (#339). Empty means unconfigured: share endpoints then
+    # fail loudly (api_helpers.resolve_public_base_url()) instead of
+    # guessing a scheme from the request.
+    public_base_url: str = ""
     max_request_body_bytes: int = Field(default=JSON_REQUEST_BODY_MAX_BYTES)
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
     max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)

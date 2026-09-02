@@ -14,6 +14,7 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
+os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
 
 import struct  # noqa: E402
 import wave  # noqa: E402

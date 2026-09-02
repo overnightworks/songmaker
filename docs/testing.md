@@ -259,7 +259,7 @@ frontend/e2e/
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
 - **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation")`
 - **Factory fixtures** in conftest.py for WAV bytes, stereo audio, song files
-- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`)
+- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`)
 
 ### Frontend
 

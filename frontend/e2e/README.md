@@ -196,6 +196,7 @@ export POSTGRES_PASSWORD=e2e-ci-postgres-password
 export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
 export ADMIN_USERNAME=e2e-ci-admin ADMIN_PASSWORD='E2eCiSmoke#2026!'
+export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
 docker compose -f docker-compose.yml -f docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web
 
