@@ -6,9 +6,21 @@ vi.stubGlobal('fetch', mockFetch);
 const mockClearAuth = vi.fn();
 const mockGoto = vi.fn();
 
-vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClearAuth(...args) }));
+vi.mock('$lib/stores/auth', async () => {
+	const { writable } = await import('svelte/store');
+	const currentUser = writable<{ id: string } | null>(null);
+	return {
+		clearAuth: (...args: unknown[]) => {
+			currentUser.set(null);
+			return mockClearAuth(...args);
+		},
+		currentUser
+	};
+});
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
 
+import { currentUser } from '$lib/stores/auth';
+import type { AuthUser } from './types';
 import {
 	deleteAlbumCover,
 	deleteSongCover,
@@ -68,6 +80,7 @@ beforeEach(() => {
 	mockFetch.mockReset();
 	mockClearAuth.mockReset();
 	mockGoto.mockReset();
+	currentUser.set(null);
 });
 
 describe('API client', () => {
@@ -306,15 +319,25 @@ describe('Auth API', () => {
 	});
 });
 
+// The fine-grained behavior of the shared session-lost reaction (the
+// redirect's exact target, the currentUser gate, deduping a concurrent
+// second caller) is pinned once in api/fetch.test.ts, which calls apiFetch
+// directly. This suite's own contribution -- the only thing it can prove
+// that fetch.test.ts can't -- is that a client.ts wrapper (going through a
+// domain function, not apiFetch itself) still reaches that one owner, and
+// that the AUTH_ENDPOINTS exemption survives the real path strings login()
+// and setupAdmin() call.
 describe('401 session expiry handler', () => {
-	it('clears auth and redirects on 401 from non-auth endpoint', async () => {
+	it('routes a 401 from a client wrapper (not apiFetch directly) to the shared session-lost owner', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Session expired');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
-		expect(mockClearAuth).toHaveBeenCalled();
-		expect(mockGoto).toHaveBeenCalledWith('/login');
+		expect(mockClearAuth).toHaveBeenCalledOnce();
+		expect(mockGoto).toHaveBeenCalledOnce();
 	});
 
 	it('does not redirect on 401 from login endpoint', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Invalid credentials');
 		await expect(login('alice', 'wrong')).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
@@ -322,6 +345,7 @@ describe('401 session expiry handler', () => {
 	});
 
 	it('does not redirect on 401 from setup endpoint', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Bad request');
 		await expect(setupAdmin('admin', 'pass')).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
@@ -329,6 +353,7 @@ describe('401 session expiry handler', () => {
 	});
 
 	it('does not redirect on non-401 errors', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(500, 'Internal error');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
