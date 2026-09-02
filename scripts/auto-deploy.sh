@@ -129,6 +129,7 @@ DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
+PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
 PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
 PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
 PROMETHEUS_URL="http://127.0.0.1:9090"
@@ -372,12 +373,15 @@ reload_prometheus_rules() {
     local prometheus_container
 
     if [[ -z "$previous_deployed_sha" ]]; then
-        changed_files="$PROMETHEUS_RULE_FILE"
-    elif ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_RULE_FILE" 2>&1)"; then
-        log_err "cannot determine whether $PROMETHEUS_RULE_FILE changed after deploy: $changed_files; deploy remains successful"
+        changed_files="$PROMETHEUS_CONFIG_FILE"
+    elif ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_CONFIG_FILE" "$PROMETHEUS_RULE_FILE" 2>&1)"; then
+        log_err "cannot determine whether Prometheus configuration changed after deploy: $changed_files; deploy remains successful"
         return 0
     fi
-    grep -Fxq "$PROMETHEUS_RULE_FILE" <<<"$changed_files" || return 0
+    if ! grep -Fxq "$PROMETHEUS_CONFIG_FILE" <<<"$changed_files" \
+        && ! grep -Fxq "$PROMETHEUS_RULE_FILE" <<<"$changed_files"; then
+        return 0
+    fi
 
     if ! prometheus_container="$(compose ps -q prometheus 2>&1)" || [[ -z "$prometheus_container" ]]; then
         log_err "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
@@ -396,7 +400,7 @@ reload_prometheus_rules() {
         return 0
     fi
     if ! loaded_rule_count="$(jq -er --arg rule_file "$PROMETHEUS_LOADED_RULE_FILE" '[.data.groups[]? | select(.file == $rule_file) | .rules[]? | select(.type == "alerting")] | length' <<<"$rules_response")"; then
-        log_err "cannot count loaded Prometheus alert rules after reload; deploy remains successful"
+        log_err "cannot read Prometheus rules after reload; deploy remains successful"
         return 0
     fi
     if ! configured_rule_count="$(grep -cE '^[[:space:]]*-[[:space:]]*alert:' "$REPO_ROOT/$PROMETHEUS_RULE_FILE" || true)" || ! [[ "$configured_rule_count" =~ ^[0-9]+$ ]]; then

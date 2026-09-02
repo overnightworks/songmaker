@@ -111,6 +111,9 @@ class Checkout:
         (self.root / "monitoring" / "rules" / "alert.rules.yml").write_text(
             (REPO_ROOT / "monitoring" / "rules" / "alert.rules.yml").read_text(),
         )
+        (self.root / "monitoring" / "prometheus.yml").write_text(
+            (REPO_ROOT / "monitoring" / "prometheus.yml").read_text(),
+        )
 
         (self.root / "README.md").write_text("initial\n")
         # The deploy guard refuses a dirty tree, and the alert config this
@@ -317,6 +320,19 @@ class Checkout:
         rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
         _git(clone, "add", "monitoring/rules/alert.rules.yml")
         _git(clone, "commit", "-m", "change alert rules")
+        _git(clone, "push", "origin", "main")
+
+    def move_main_forward_with_changed_prometheus_config(self) -> None:
+        clone = self.root.parent / "pusher"
+        if not clone.exists():
+            _git(self.root.parent, "clone", str(self.origin), str(clone))
+            _git(clone, "config", "user.email", "test@example.com")
+            _git(clone, "config", "user.name", "Test")
+        _git(clone, "pull", "--ff-only", "origin", "main")
+        config = clone / "monitoring" / "prometheus.yml"
+        config.write_text(config.read_text() + "\n# changed by deploy test\n")
+        _git(clone, "add", "monitoring/prometheus.yml")
+        _git(clone, "commit", "-m", "change Prometheus config")
         _git(clone, "push", "origin", "main")
 
     def move_main_forward_after_check_lookup(self) -> None:
@@ -797,6 +813,24 @@ def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
     assert "deploy remains successful" not in checkout.journal
 
 
+def test_a_changed_prometheus_config_reloads_and_verifies_prometheus_rules(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward_with_changed_prometheus_config()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.curl_calls.splitlines() == [
+        "--fail --silent --show-error --max-time 30 --retry 5 --retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready",
+        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
+    ]
+    assert "kill -s HUP container-prometheus" in checkout.docker_calls
+
+
 def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
     tmp_path: Path,
 ) -> None:
@@ -903,7 +937,7 @@ def test_an_invalid_prometheus_rule_api_response_keeps_a_successful_deploy_succe
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "cannot count loaded Prometheus alert rules after reload; deploy remains successful" in checkout.journal
+    assert "cannot read Prometheus rules after reload; deploy remains successful" in checkout.journal
     assert checkout.failure_count_file.read_text() == "0"
     assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
