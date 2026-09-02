@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -24,6 +25,14 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
+
+
+@dataclass(frozen=True)
+class RawStoredCowriterSettings:
+    """The provider and model exactly as stored, without resolving defaults."""
+
+    provider: str | None
+    model: str | None
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -211,6 +220,27 @@ def _get_claude_model_row(session: Session, setting_key: str) -> str | None:
     if row is not None and row.value_text:
         return str(row.value_text)
     return None
+
+
+def get_raw_stored_cowriter_settings(session: Session) -> RawStoredCowriterSettings:
+    """Return the co-writer provider and model values without resolving defaults."""
+    stored_values = {
+        str(setting_key): value_text
+        for setting_key, value_text in (
+            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
+            .filter(
+                RateLimitSetting.setting_key.in_(
+                    (SETTING_COWRITER_PROVIDER, SETTING_COWRITER_MODEL),
+                ),
+                RateLimitSetting.user_id.is_(None),
+            )
+            .all()
+        )
+    }
+    return RawStoredCowriterSettings(
+        provider=stored_values.get(SETTING_COWRITER_PROVIDER),
+        model=stored_values.get(SETTING_COWRITER_MODEL),
+    )
 
 
 def get_claude_chat_model(session: Session) -> str:
