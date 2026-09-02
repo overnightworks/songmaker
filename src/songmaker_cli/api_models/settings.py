@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 
 class GenerationDefaultsRequest(RootModel[dict[str, GenerationParams]]):
+
     @model_validator(mode="before")
     @classmethod
     def _validate_keys(cls, values: object) -> object:
@@ -218,10 +219,13 @@ class ConversationResponse(BaseModel):
             title=row["title"],
             created_at=row["created_at"].isoformat(),
             updated_at=row["updated_at"].isoformat(),
-            archived_at=(row["archived_at"].isoformat() if row["archived_at"] else None),
+            archived_at=(
+                row["archived_at"].isoformat() if row["archived_at"] else None
+            ),
             message_count=row["message_count"],
             last_message_at=(
-                row["last_message_at"].isoformat() if row["last_message_at"] else None
+                row["last_message_at"].isoformat()
+                if row["last_message_at"] else None
             ),
         )
 

@@ -223,9 +223,7 @@ def _build_model_response(model) -> AvailableModelResponse:
         hidden_params=caps["hidden_params"],
     )
     return AvailableModelResponse(
-        id=model.id,
-        is_active=model.is_active,
-        capabilities=capabilities,
+        id=model.id, is_active=model.is_active, capabilities=capabilities,
     )
 
 
@@ -258,12 +256,8 @@ def api_toggle_model(
     if not model:
         raise HTTPException(404, "Model not found")
     record_audit(
-        session,
-        admin.id,
-        AuditAction.UPDATE,
-        ResourceType.MODEL,
-        model_id,
-        f"active={active}",
+        session, admin.id, AuditAction.UPDATE, ResourceType.MODEL,
+        model_id, f"active={active}",
     )
     session.commit()
     return AvailableModelResponse(id=model.id, is_active=model.is_active)
@@ -281,7 +275,6 @@ def api_get_default_config(
     session: Session = Depends(get_db_session),
 ) -> DefaultConfigResponse:
     from songmaker_cli.db.models import User
-
     db_user = session.query(User).filter_by(id=user.id).first()
     return DefaultConfigResponse(config=db_user.default_generation_config if db_user else None)
 
@@ -293,27 +286,21 @@ def api_set_default_config(
     session: Session = Depends(get_db_session),
 ) -> DefaultConfigResponse:
     from songmaker_cli.db.models import User
-
     if req.config is not None and req.config not in VALID_BUILTIN_CONFIGS:
         preset = get_preset(session, req.config, user.id)
         if not preset:
             from songmaker_cli.db.queries.settings import list_shared_presets as _shared
-
             shared_ids = {p.id for p in _shared(session)}
             if req.config not in shared_ids:
                 raise HTTPException(
-                    400,
-                    "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
+                    400, "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
                 )
     db_user = session.query(User).filter_by(id=user.id).first()
     if not db_user:
         raise HTTPException(404, "User not found")
     db_user.default_generation_config = req.config
     record_audit(
-        session,
-        user.id,
-        AuditAction.UPDATE,
-        ResourceType.DEFAULT_CONFIG,
+        session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
         detail=req.config or "inherit",
     )
     session.commit()
@@ -356,13 +343,8 @@ def api_set_claude_models(
 
     set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
     set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
-    record_audit(
-        session,
-        admin.id,
-        AuditAction.UPDATE,
-        ResourceType.CLAUDE_MODELS,
-        detail=f"chat={req.chat_model} scoring={req.scoring_model}",
-    )
+    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.CLAUDE_MODELS,
+                 detail=f"chat={req.chat_model} scoring={req.scoring_model}")
     session.commit()
 
     return ClaudeModelsResponse(
@@ -491,8 +473,7 @@ def api_set_cowriter_settings(
 ) -> CowriterSettingsResponse:
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
-            422,
-            f"Unknown co-writer provider '{req.provider}'",
+            422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
     provider_or_model_changed = (
@@ -514,10 +495,7 @@ def api_set_cowriter_settings(
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
     record_audit(
-        session,
-        admin.id,
-        AuditAction.UPDATE,
-        ResourceType.COWRITER,
+        session, admin.id, AuditAction.UPDATE, ResourceType.COWRITER,
         detail=f"provider={req.provider} model={req.model}",
     )
     session.commit()
@@ -565,8 +543,7 @@ def api_set_judge_settings(
 ) -> JudgeSettingsResponse:
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
-            422,
-            f"Unknown judge provider '{req.provider}'",
+            422, f"Unknown judge provider '{req.provider}'",
         )
     allowed, catalog_error = _models_for_provider(req.provider)
     if catalog_error:
@@ -578,10 +555,7 @@ def api_set_judge_settings(
         )
     set_judge_settings(session, req.provider, req.model)
     record_audit(
-        session,
-        admin.id,
-        AuditAction.UPDATE,
-        ResourceType.JUDGE,
+        session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,
         detail=f"provider={req.provider} model={req.model}",
     )
     session.commit()
@@ -589,7 +563,6 @@ def api_set_judge_settings(
 
 
 # ── Rate limits ────────────────────────────────────────────────────
-
 
 def _get_env_defaults() -> dict[str, int]:
     """Snapshot of the per-user rate-limit defaults from Settings."""
@@ -663,17 +636,11 @@ def api_get_user_rate_limits(
     effective = []
     for key, env_val in env_defaults.items():
         val = resolve_rate_limit(session, user_id, key, env_val)
-        effective.append(
-            RateLimitItem(
-                setting_key=key,
-                value=val,
-                is_override=key in override_keys,
-            )
-        )
+        effective.append(RateLimitItem(
+            setting_key=key, value=val, is_override=key in override_keys,
+        ))
     return UserRateLimitsResponse(
-        user_id=user_id,
-        overrides=override_items,
-        effective=effective,
+        user_id=user_id, overrides=override_items, effective=effective,
     )
 
 

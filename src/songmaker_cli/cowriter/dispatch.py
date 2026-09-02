@@ -38,35 +38,26 @@ async def stream_cowriter_turn(
 ) -> AsyncIterator[StreamEvent]:
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(
-            provider,
-            f"Unknown co-writer provider '{provider}'",
+            provider, f"Unknown co-writer provider '{provider}'",
         )
     if not model:
         raise ProviderUnavailableError(
-            provider,
-            f"No co-writer model configured for {provider}",
+            provider, f"No co-writer model configured for {provider}",
         )
     if provider == "claude":
         async for event in stream_claude_turn(
-            user_id=user_id,
-            system=system,
-            model=model,
-            messages=messages,
+            user_id=user_id, system=system, model=model, messages=messages,
         ):
             yield event
         return
     if provider == "grok":
         api_key = _require_secret(
-            "grok",
-            get_settings().xai_api_key,
-            XAI_API_KEY_ENVIRONMENT,
+            "grok", get_settings().xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_GROK_CHAT_URL
     else:
         api_key = _require_secret(
-            "codex",
-            get_settings().openai_api_key,
-            OPENAI_API_KEY_ENVIRONMENT,
+            "codex", get_settings().openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_OPENAI_CHAT_URL
     async for event in stream_openai_compatible_turn(
@@ -83,12 +74,7 @@ async def stream_cowriter_turn(
 
 
 def call_provider_once(
-    *,
-    provider: str,
-    model: str,
-    prompt: str,
-    timeout: int,
-    system: str | None = None,
+    *, provider: str, model: str, prompt: str, timeout: int, system: str | None = None,
 ) -> str:
     """One-shot completion from the selected provider — no tools, no session,
     no chat history.
@@ -100,38 +86,27 @@ def call_provider_once(
     """
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(
-            provider,
-            f"Unknown provider '{provider}'",
+            provider, f"Unknown provider '{provider}'",
         )
     if not model:
         raise ProviderUnavailableError(
-            provider,
-            f"No model configured for {provider}",
+            provider, f"No model configured for {provider}",
         )
     if provider == "claude":
         return call_claude_once(model=model, prompt=prompt, system=system)
     if provider == "grok":
         api_key = _require_secret(
-            "grok",
-            get_settings().xai_api_key,
-            XAI_API_KEY_ENVIRONMENT,
+            "grok", get_settings().xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_GROK_CHAT_URL
     else:
         api_key = _require_secret(
-            "codex",
-            get_settings().openai_api_key,
-            OPENAI_API_KEY_ENVIRONMENT,
+            "codex", get_settings().openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_OPENAI_CHAT_URL
     return call_openai_compatible_once(
-        provider=provider,
-        api_url=api_url,
-        api_key=api_key,
-        model=model,
-        prompt=prompt,
-        timeout=timeout,
-        system=system,
+        provider=provider, api_url=api_url, api_key=api_key, model=model,
+        prompt=prompt, timeout=timeout, system=system,
     )
 
 
@@ -139,7 +114,6 @@ def _require_secret(provider: str, secret, environment_key: str) -> str:
     value = secret.get_secret_value() if secret is not None else ""
     if not value:
         raise ProviderUnavailableError(
-            provider,
-            f"{provider} turns go over the {provider} API and need {environment_key}",
+            provider, f"{provider} turns go over the {provider} API and need {environment_key}",
         )
     return value

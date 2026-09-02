@@ -62,7 +62,6 @@ class ProviderSetupMethod(StrEnum):
 class ProviderSurface(StrEnum):
     CO_WRITER = "cowriter"
     JUDGE = "judge"
-    CATALOG = "catalog"
 
 
 class ProviderNeed(StrEnum):
@@ -126,20 +125,36 @@ def get_provider_configuration(
 
 def list_provider_models(provider: str) -> list[str]:
     settings = get_settings()
-    configuration = _provider_configuration(provider, ProviderSurface.CATALOG, settings)
-    if isinstance(configuration, DependencyUnavailableProvider):
-        raise ProviderUnavailableError(
-            provider,
-            f"{provider} is unavailable: required dependency "
-            f"'{configuration.dependency}' is not installed",
-        )
-    if isinstance(configuration, (CliLoginNeedsApiKeyProvider, UnconfiguredProvider)):
-        environment_key = configuration.missing_environment_key
-        raise ProviderUnavailableError(
-            provider,
-            f"{provider} is not configured: missing {environment_key}",
-        )
-    return _models_for_setup_method(provider, configuration.method, settings)
+    configuration = _provider_configuration(provider, ProviderSurface.JUDGE, settings)
+    match configuration:
+        case ConfiguredProvider():
+            return _models_for_setup_method(provider, configuration.method, settings)
+        case DependencyUnavailableProvider():
+            raise ProviderUnavailableError(
+                provider,
+                f"{provider} is unavailable: required dependency "
+                f"'{configuration.dependency}' is not installed",
+            )
+        case CliLoginNeedsApiKeyProvider(missing_environment_key=environment_key):
+            raise ProviderUnavailableError(
+                provider,
+                f"{provider} is not configured: missing {environment_key}",
+            )
+        case ApiKeyNeedsCliLoginProvider():
+            raise ProviderUnavailableError(
+                provider,
+                f"{provider} cannot list models until its CLI login is available",
+            )
+        case UnconfiguredProvider(missing_environment_key=environment_key) if environment_key:
+            raise ProviderUnavailableError(
+                provider,
+                f"{provider} is not configured: missing {environment_key}",
+            )
+        case UnconfiguredProvider():
+            raise ProviderUnavailableError(
+                provider,
+                f"{provider} cannot list models until {configuration.need.value} is configured",
+            )
 
 
 def _models_for_setup_method(
@@ -188,7 +203,7 @@ def _provider_configuration(
             credential.environment_key,
         )
     cli_method = _cli_setup_method(provider)
-    if cli_method is not None and _cli_carries(cli_method, surface):
+    if cli_method is not None and _cli_carries(cli_method):
         return ConfiguredProvider(provider, cli_method)
     if cli_method is not None:
         return CliLoginNeedsApiKeyProvider(
@@ -210,7 +225,7 @@ def _api_key_carries(provider: str, surface: ProviderSurface) -> bool:
     return not (provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER)
 
 
-def _cli_carries(method: ProviderSetupMethod, _surface: ProviderSurface) -> bool:
+def _cli_carries(method: ProviderSetupMethod) -> bool:
     return method is ProviderSetupMethod.CLAUDE_CLI
 
 
@@ -241,32 +256,26 @@ def _anthropic_sdk_available() -> bool:
 
 
 def _provider_api_credential(
-    provider: str,
-    settings: Settings,
+    provider: str, settings: Settings,
 ) -> _ProviderApiCredential:
     if provider == _CLAUDE_PROVIDER:
         return _ProviderApiCredential(
-            settings.anthropic_api_key,
-            ANTHROPIC_API_KEY_ENVIRONMENT,
+            settings.anthropic_api_key, ANTHROPIC_API_KEY_ENVIRONMENT,
         )
     if provider == _GROK_PROVIDER:
         return _ProviderApiCredential(
-            settings.xai_api_key,
-            XAI_API_KEY_ENVIRONMENT,
+            settings.xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
     if provider == _CODEX_PROVIDER:
         return _ProviderApiCredential(
-            settings.openai_api_key,
-            OPENAI_API_KEY_ENVIRONMENT,
+            settings.openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(
-            provider,
-            f"Unknown co-writer provider '{provider}'",
+            provider, f"Unknown co-writer provider '{provider}'",
         )
     raise ProviderUnavailableError(
-        provider,
-        f"No API credential is defined for co-writer provider '{provider}'",
+        provider, f"No API credential is defined for co-writer provider '{provider}'",
     )
 
 
@@ -279,32 +288,26 @@ def _secret(value) -> str:
 def _http_model_ids(url: str, headers: dict[str, str], provider: str) -> list[str]:
     try:
         response = httpx.get(
-            url,
-            headers=headers,
-            timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
+            url, headers=headers, timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
         )
     except httpx.HTTPError as exc:
         raise ProviderModelCatalogUnavailableError(
-            provider,
-            f"could not list {provider} models",
+            provider, f"could not list {provider} models",
         ) from exc
     if response.status_code >= 400:
         raise ProviderModelCatalogUnavailableError(
-            provider,
-            f"could not list {provider} models",
+            provider, f"could not list {provider} models",
         )
     try:
         payload = response.json()
     except ValueError as exc:
         raise ProviderModelCatalogUnavailableError(
-            provider,
-            f"could not list {provider} models",
+            provider, f"could not list {provider} models",
         ) from exc
     rows = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ProviderModelCatalogUnavailableError(
-            provider,
-            f"could not list {provider} models",
+            provider, f"could not list {provider} models",
         )
     ids: list[str] = []
     for row in rows:
@@ -320,15 +323,13 @@ def _list_grok_models(key: str) -> list[str]:
         _GROK_PROVIDER,
     )
     chat = [
-        model_id
-        for model_id in ids
+        model_id for model_id in ids
         if model_id.startswith(COWRITER_GROK_MODEL_PREFIX)
         and not _contains_marker(model_id, COWRITER_GROK_NON_CHAT_MARKERS)
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER,
-            "no chat models returned by grok",
+            _GROK_PROVIDER, "no chat models returned by grok",
         )
     return sorted(chat)
 
@@ -340,15 +341,13 @@ def _list_openai_models(key: str) -> list[str]:
         _CODEX_PROVIDER,
     )
     chat = [
-        model_id
-        for model_id in ids
+        model_id for model_id in ids
         if model_id.startswith(COWRITER_OPENAI_CHAT_PREFIXES)
         and not _contains_marker(model_id, COWRITER_OPENAI_NON_CHAT_MARKERS)
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _CODEX_PROVIDER,
-            "no chat models returned by codex",
+            _CODEX_PROVIDER, "no chat models returned by codex",
         )
     return sorted(chat)
 
@@ -358,13 +357,11 @@ def _list_claude_cli_models() -> list[str]:
         aliases = list_cli_model_aliases()
     except ClaudeCliUnavailableError as exc:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER,
-            f"could not list claude CLI models: {exc}",
+            _CLAUDE_PROVIDER, f"could not list claude CLI models: {exc}",
         ) from exc
     if not aliases:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER,
-            "no chat models returned by claude CLI",
+            _CLAUDE_PROVIDER, "no chat models returned by claude CLI",
         )
     return sorted(aliases)
 
@@ -378,11 +375,13 @@ def _list_claude_models(key: str) -> list[str]:
         },
         _CLAUDE_PROVIDER,
     )
-    chat = [model_id for model_id in ids if model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)]
+    chat = [
+        model_id for model_id in ids
+        if model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)
+    ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER,
-            "no chat models returned by claude",
+            _CLAUDE_PROVIDER, "no chat models returned by claude",
         )
     return sorted(chat)
 
