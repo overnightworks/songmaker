@@ -327,6 +327,12 @@ def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
     for service_name in ("songmaker-web", "songmaker-scoring-worker"):
         service = services[service_name]
         assert isinstance(service, dict)
+        assert "extends" not in service, (
+            f"{service_name} must not inherit mounts through Compose extends"
+        )
+        assert "volumes_from" not in service, (
+            f"{service_name} must not inherit mounts through Compose volumes_from"
+        )
         volumes = service["volumes"]
         assert isinstance(volumes, list)
         bind_mounts: list[dict[str, object]] = []
