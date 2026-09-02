@@ -72,12 +72,18 @@ def run_autostart(tmp_path: Path):
 
     def _run(
         *arguments: str, from_checkout: Path | None = None,
+        sudo_u_exit: str | None = None, sudo_u_output: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         started_from = from_checkout or checkout
+        environment = _environment()
+        if sudo_u_exit is not None:
+            environment["FAKE_SUDO_U_EXIT"] = sudo_u_exit
+        if sudo_u_output is not None:
+            environment["FAKE_SUDO_U_OUTPUT"] = sudo_u_output
         return subprocess.run(
             [str(started_from / "scripts" / "install-autostart.sh"), *arguments],
             cwd=started_from,
-            env=_environment(),
+            env=environment,
             text=True,
             capture_output=True,
             check=False,
@@ -161,3 +167,14 @@ def test_installed_unit_requires_the_mirror_and_runs_argumentless_preflight(
         f"sudo -u operator {checkout}/scripts/check_agent_cli_mounts.sh"
         in run_autostart.recording.read_text().splitlines()
     )
+
+
+def test_installer_keeps_a_failing_preflight_diagnosis(run_autostart) -> None:
+    result = run_autostart(
+        sudo_u_exit="1", sudo_u_output="the mirror is missing",
+    )
+
+    assert result.returncode == 1
+    assert "the agent-CLI mount preflight does not pass yet" in result.stderr
+    assert "the mirror is missing" in result.stderr
+    assert not any(run_autostart.units.iterdir())

@@ -460,9 +460,14 @@ finished oneshot is legitimately inactive.
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
 preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
-therefore prevents the stack from starting at boot, rather than leaving it up
-with stale login copies. The two-minute deploy tick runs that same argumentless
-preflight, so boot and deploy resolve the same mirror location.
+means `songmaker.service` does not run its boot-time `docker compose up -d`:
+the boot catch-up stays off and the unit reports its named failure through
+`OnFailure=`. Containers dockerd restarts itself under `restart: unless-stopped`
+are unaffected. The two-minute deploy tick runs that same argumentless
+preflight, so boot and deploy resolve the same mirror location. That preflight
+also requires all three agent-CLI binaries, including Codex's Node path, to be
+resolvable; this blast radius is likewise limited to the boot catch-up, not to
+containers dockerd restarts itself.
 
 The mirror installer freezes its resolved directory in the mirror service's
 `--mirror-dir` argument. An argumentless preflight reads that installed service
@@ -471,6 +476,8 @@ different value refuses with `Spiegel-Installer erneut ausführen`. After
 changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
 `sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
 checkout before the next boot or deploy.
+
+Refresh the mirror with `sudo systemctl start songmaker-cli-credentials-mirror.service`, not `restart`: restarting this required unit also restarts `songmaker.service` and therefore runs `docker compose up -d` against the live stack.
 
 That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's

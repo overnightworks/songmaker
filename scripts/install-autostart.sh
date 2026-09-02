@@ -130,9 +130,13 @@ refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \
 refuse_silent_takeover "$ALERT_UNIT_TARGET" ExecStart \
     "$PROJECT_ROOT/scripts/alert.sh" "$FORCE" command || exit 1
 
-if ! sudo -u "$INSTALL_USER" "$PREFLIGHT_SCRIPT" \
-        >/dev/null 2>&1; then
+if PREFLIGHT_OUTPUT="$(sudo -u "$INSTALL_USER" "$PREFLIGHT_SCRIPT" 2>&1)"; then
+    :
+else
     echo "ERROR: the agent-CLI mount preflight does not pass yet." >&2
+    if [ -n "$PREFLIGHT_OUTPUT" ]; then
+        printf '%s\n' "$PREFLIGHT_OUTPUT" >&2
+    fi
     echo "songmaker.service would then refuse to start the stack at boot." >&2
     echo "Set the login mirror up first:" >&2
     echo "  sudo ./scripts/install-cli-credentials-mirror.sh" >&2

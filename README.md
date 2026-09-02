@@ -17,8 +17,11 @@ docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
 # (see CLAUDE.md "Docker" section for the full reasoning).
 
-# 2. Install the boot autostart unit (one-time, needs sudo)
-./scripts/install-autostart.sh
+# 2. Install the agent-CLI login mirror (one-time, needs sudo)
+sudo ./scripts/install-cli-credentials-mirror.sh
+
+# 3. Install the boot autostart unit (one-time, needs sudo)
+sudo ./scripts/install-autostart.sh
 ```
 
 `restart: unless-stopped` alone does not survive every reboot: a container that

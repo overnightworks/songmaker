@@ -180,8 +180,8 @@ exit $?
 # The first is matched EXACTLY, argument count included, rather than by
 # parsing GNU install's option grammar — every attempt at that grammar left
 # another way to name a second destination. The third is recorded and
-# answered as a success without running anything; what the preflight would
-# have reported is asserted directly in the tests that drive it.
+# answered according to FAKE_SUDO_U_EXIT without running anything; what the
+# preflight would have reported is asserted directly in the tests that drive it.
 FAKE_SUDO = (
     '#!/bin/bash\nFAKE_NAME=sudo\n' + RECORDER + SYSTEMCTL_STATE + """
 record "sudo $*"
@@ -190,7 +190,10 @@ if [ "${1:-}" = "-u" ]; then
     [ $# -ge 3 ] || refuse "-u without both a user and a command"
     shift 2
     inside "${1:-}" || refuse "-u command '${1:-}' outside the sandbox"
-    exit 0
+    if [ -n "${FAKE_SUDO_U_OUTPUT:-}" ]; then
+        printf '%s\n' "$FAKE_SUDO_U_OUTPUT"
+    fi
+    exit "${FAKE_SUDO_U_EXIT:-0}"
 fi
 
 case "${1:-}" in
@@ -907,6 +910,23 @@ def test_argumentless_preflight_rejects_a_different_frozen_mirror_dir(
         lambda: service.write_text(
             service.read_text().replace(str(expected), str(different)),
         ),
+    )
+
+    assert result.returncode == 1
+    assert "Spiegel-Installer erneut ausführen" in result.stderr
+
+
+def test_argumentless_preflight_rejects_a_mirror_dir_changed_in_dotenv(
+    run_installer,
+) -> None:
+    run_installer()
+    (run_installer.checkout / ".env").write_text(
+        "SONGMAKER_CLI_CREDENTIALS_DIR=/opt/songmaker/credentials\n",
+    )
+
+    result = subprocess.run(
+        [str(run_installer.checkout / "scripts" / "check_agent_cli_mounts.sh")],
+        env=run_installer.environment(), text=True, capture_output=True, check=False,
     )
 
     assert result.returncode == 1
