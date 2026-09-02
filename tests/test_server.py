@@ -646,6 +646,62 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
     asyncio.run(_run())
 
 
+def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
+    """The chat/lora_training reaper (#371) must actually be scheduled by the
+    running server, not just exist as a function -- generate/score get their
+    equivalent from the arq-worker cron unconditionally; the web-process side
+    only takes effect if _lifespan starts it like the other three loops."""
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.server import _lifespan
+
+    factory = init_db(tmp_path / "test.db")
+    mock_app = MagicMock()
+    mock_app.state.ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+
+    async def _run():
+        reaper_started = asyncio.Event()
+        reaper_cancelled = asyncio.Event()
+
+        async def _reaper_loop(_app):
+            reaper_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                reaper_cancelled.set()
+                raise
+
+        with (
+            patch(
+                "songmaker_cli.arq_pool.init_arq_pool",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "songmaker_cli.arq_pool.close_arq_pool",
+                new_callable=AsyncMock,
+            ),
+            patch("songmaker_cli.server.resource_event_cleanup_loop", new=AsyncMock()),
+            patch("songmaker_cli.server.score_backfill_loop", new=AsyncMock()),
+            patch("songmaker_cli.server.session_sync_loop", new=AsyncMock()),
+            patch(
+                "songmaker_cli.server.stale_job_reaper_loop",
+                new=AsyncMock(side_effect=_reaper_loop),
+            ) as reaper_loop,
+        ):
+            async with _lifespan(mock_app):
+                await asyncio.wait_for(reaper_started.wait(), timeout=1)
+        reaper_loop.assert_awaited_once_with(mock_app)
+        assert reaper_cancelled.is_set()
+
+    asyncio.run(_run())
+
+
 def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 

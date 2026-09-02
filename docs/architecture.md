@@ -813,10 +813,16 @@ parent's coherence budget, which is spent after the child returns.
 **Music worker** (`music_worker.py`):
 - Thin orchestrator — no GPU, no ACE-Step process. Dispatches generation jobs
   to acestep-worker peer containers via the scheduler (`scheduler.py`).
-- Handles `generate` and `load_model_on_worker` tasks
+- Handles `generate`, `load_model_on_worker`, `download_model_on_worker`, and
+  `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: recovers stale generate jobs every 2 minutes, audits orphaned audio files
+- Cron: recovers stale **generate** jobs every 2 minutes, audits orphaned audio
+  files. `train_lora` runs in this same process but is a different `job_type`
+  (`JobType.LORA_TRAINING`) — `WorkerBase`'s recovery is scoped to one
+  `job_type` per worker class (`MusicWorker.job_type = JobType.GENERATE`), so
+  this cron does not reach it. See "Chat and LoRA-training job recovery" below
+  for how a dead worker's `train_lora` job still gets terminal-ized.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -834,6 +840,31 @@ parent's coherence budget, which is spent after the child returns.
 - Common startup (logging configuration, stale-job recovery)
 - Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
+
+**Chat and LoRA-training job recovery** (`lifecycle.py`, web process — #371):
+`chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
+never inside an arq worker, so they have no worker-scoped cron at all.
+`lora_training` jobs run inside the music worker but, as noted above, fall
+outside its `job_type`-scoped recovery. Both therefore need a web-process-side
+equivalent of `WorkerBase.cleanup_stale_cron`, reusing the same generic
+`recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that backs
+generate/score:
+- `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
+  minutes, matching the arq-worker cron cadence), behind the same
+  single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
+  so only one web replica reaps a given tick.
+- `reap_stale_chat_jobs()` uses `CHAT_STALE_JOB_THRESHOLD_SECONDS` (900s) —
+  chat has no `arq_job_timeout` envelope; the in-process Claude call already
+  times out at `COWRITER_CLI_TIMEOUT_SECONDS` (600s), so this threshold only
+  needs a margin above that to catch a web process that died mid-request.
+- `reap_stale_lora_training_jobs()` uses the same default
+  `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
+  MusicWorker's `arq_job_timeout` envelope.
+- `reconcile_crashed_loras()` (also run once at web startup) now reaps stale
+  `lora_training` jobs itself before checking for a terminal/missing
+  `training_job_id` — previously it only *waited* for something else to
+  terminal-ize that job, which nothing did, so a LoRA row could stay stuck in
+  `TRAINING`/`PREPROCESSING`/`EXPORTING` forever.
 
 **Backwards-compatible shim** (`worker.py`):
 - Imports tasks from music_worker and scoring_worker
