@@ -372,6 +372,19 @@ def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
     assert resp.status_code == 422
 
 
+def test_generate_rejects_a_missing_required_config_field(tmp_path: Path) -> None:
+    """lyrics has no default on AceStepConfig — omitting it must 422, not
+    construct a half-built config."""
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    payload = _full_ace_step_config_payload()
+    del payload["lyrics"]
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+    assert resp.status_code == 422
+
+
 def test_download_model_returns_task_id(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
