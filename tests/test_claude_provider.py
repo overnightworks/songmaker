@@ -6,7 +6,6 @@ import asyncio
 import json
 import subprocess
 import threading
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -825,49 +824,179 @@ def test_tool_surface_probe_stops_the_session_it_started(
     assert killed == [4242]
 
 
-# ── reap after SIGKILL is bounded (#351 round 4, Finding 1) ──────────
+# ── reap after SIGKILL is bounded (#351 rounds 4-5) ───────────────────
 #
-# Round 3 added single-flight: the per-key lock is now held across the
-# whole probe, reap included. SIGKILL cannot be ignored, so a normal exit
-# is immediate — but the final ``proc.wait()`` after it was still
-# unbounded, so a process stuck in an uninterruptible kernel sleep (or a
-# watcher that never notices it exit) would hold that lock, and every
-# later caller of the same key, forever. These tests drive the real reap
-# functions directly against a process double whose ``wait()`` never
-# returns, proving the bound holds and the pathological case is at least
-# logged rather than silently abandoned.
+# Round 3 added single-flight; round 4 bounded the post-SIGKILL wait but
+# left it inside the same held lock, so a stuck reap could still block
+# every later caller of that key. Round 5 removed the held lock entirely
+# (see the single-flight section below) and added a capped, deduplicated
+# registry for the background reapers a stuck process gets handed to —
+# without a cap, a run of bad probes could grow an unbounded pool of
+# waiting tasks/threads (the review's own math: ~225/hour at one per
+# immediately-invalid probe).
+#
+# _bounded_wait / _bounded_wait_sync are the one seam where these tests
+# genuinely need real (tiny) timing — that is their actual job. Everything
+# built on top of them (zombie tracking, the registry cap, dedup) is
+# tested by stubbing that seam instead: deterministic, no clock involved.
 
 
-def test_reap_process_group_gives_up_on_a_process_that_outlives_sigkill(
-    monkeypatch, caplog,
-) -> None:
-    caplog.set_level("ERROR")
-    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
-    signals: list[int] = []
-    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
-
+def test_bounded_wait_respects_its_timeout() -> None:
     async def _hang() -> None:
         await asyncio.sleep(999)
 
     proc = MagicMock()
-    proc.pid = 9999
-    proc.returncode = None
     proc.wait = AsyncMock(side_effect=_hang)
 
-    async def _run() -> None:
-        await asyncio.wait_for(provider._reap_process_group(proc), timeout=3)
+    completed = asyncio.run(asyncio.wait_for(provider._bounded_wait(proc, 0.02), timeout=2))
 
-    asyncio.run(_run())
+    assert completed is False
 
+
+def test_bounded_wait_sync_respects_its_timeout() -> None:
+    def _hang(timeout=None):
+        raise subprocess.TimeoutExpired(cmd="claude", timeout=timeout)
+
+    proc = MagicMock()
+    proc.wait.side_effect = _hang
+
+    assert provider._bounded_wait_sync(proc, 0.02) is False
+
+
+def test_reap_process_group_tracks_a_zombie_when_the_wait_never_confirms_exit(
+    monkeypatch, caplog,
+) -> None:
+    """No real waiting anywhere: _bounded_wait is stubbed to always report
+    'not yet', so the zombie path is exercised deterministically rather
+    than resting on a real (even if tiny) wall-clock budget."""
+    caplog.set_level("ERROR")
+    signals: list[int] = []
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
+    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    tracked: list[int] = []
+    monkeypatch.setattr(
+        provider, "_track_zombie_reap_async",
+        lambda proc: tracked.append(proc.pid) or True,
+    )
+
+    proc = MagicMock()
+    proc.pid = 9999
+    proc.returncode = None
+
+    became_zombie = asyncio.run(provider._reap_process_group(proc))
+
+    assert became_zombie is True
+    assert tracked == [9999]
     assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
+
+
+def test_reap_process_group_sync_tracks_a_zombie_when_the_wait_never_confirms_exit(
+    monkeypatch,
+) -> None:
+    signals: list[int] = []
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
+    monkeypatch.setattr(provider, "_bounded_wait_sync", lambda _proc, _timeout: False)
+    tracked: list[int] = []
+    monkeypatch.setattr(
+        provider, "_track_zombie_reap_sync",
+        lambda proc: tracked.append(proc.pid) or True,
+    )
+
+    proc = MagicMock()
+    proc.pid = 7777
+    proc.poll.return_value = None
+
+    became_zombie = provider._reap_process_group_sync(proc)
+
+    assert became_zombie is True
+    assert tracked == [7777]
+    assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
+
+
+def test_reap_process_group_confirms_a_normal_exit_without_signaling_a_zombie(
+    monkeypatch,
+) -> None:
+    signals: list[int] = []
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
+    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=True))
+    tracked: list[int] = []
+    monkeypatch.setattr(provider, "_track_zombie_reap_async", lambda proc: tracked.append(proc.pid))
+
+    proc = MagicMock()
+    proc.pid = 4321
+    proc.returncode = None
+
+    became_zombie = asyncio.run(provider._reap_process_group(proc))
+
+    assert became_zombie is False
+    assert tracked == []
+
+
+def test_track_zombie_reap_logs_and_starts_a_background_reaper(monkeypatch, caplog) -> None:
+    caplog.set_level("ERROR")
+    scheduled: list[int] = []
+    monkeypatch.setattr(
+        provider, "_claim_zombie_reap_slot", lambda pid: scheduled.append(pid) or True,
+    )
+    monkeypatch.setattr(provider, "_reap_in_background", AsyncMock())
+
+    async def _run() -> bool:
+        proc = MagicMock()
+        proc.pid = 5150
+        return provider._track_zombie_reap_async(proc)
+
+    became_zombie = asyncio.run(_run())
+
+    assert became_zombie is True
+    assert scheduled == [5150]
     assert any("did not exit" in r.message for r in caplog.records)
 
 
-def test_reap_in_background_eventually_reaps_and_logs_it(caplog) -> None:
+def test_track_zombie_reap_does_not_start_a_reaper_when_the_slot_is_denied(monkeypatch) -> None:
+    """Dedup and the pool cap both express themselves the same way to the
+    caller: the process is still reported a zombie (it is one), but no
+    reaper is started for it."""
+    monkeypatch.setattr(provider, "_claim_zombie_reap_slot", lambda pid: False)
+    created: list[object] = []
+    monkeypatch.setattr("asyncio.create_task", lambda coro: created.append(coro))
+
+    proc = MagicMock()
+    proc.pid = 5150
+    became_zombie = provider._track_zombie_reap_async(proc)
+
+    assert became_zombie is True
+    assert created == []
+
+
+def test_zombie_reap_slot_is_deduplicated_by_pid() -> None:
+    assert provider._claim_zombie_reap_slot(101) is True
+    assert provider._claim_zombie_reap_slot(101) is False
+
+    provider._release_zombie_reap_slot(101)
+    assert provider._claim_zombie_reap_slot(101) is True
+    provider._release_zombie_reap_slot(101)
+
+
+def test_zombie_reap_slot_pool_has_a_hard_cap(monkeypatch, caplog) -> None:
+    caplog.set_level("ERROR")
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 2)
+
+    assert provider._claim_zombie_reap_slot(1) is True
+    assert provider._claim_zombie_reap_slot(2) is True
+    assert provider._claim_zombie_reap_slot(3) is False
+    assert any("at its cap" in r.message for r in caplog.records)
+
+    provider._release_zombie_reap_slot(1)
+    provider._release_zombie_reap_slot(2)
+
+
+def test_reap_in_background_eventually_reaps_logs_and_releases_its_slot(caplog) -> None:
     """The zombie case is not silent: once the process this function was
-    handed to actually does exit, that is logged too — this is where a
-    stuck reap's process ultimately gets cleaned up."""
+    handed to actually does exit, that is logged too, and its registry
+    slot is freed for a later zombie to use — this is where a stuck
+    reap's process ultimately gets cleaned up."""
     caplog.set_level("INFO")
+    provider._claim_zombie_reap_slot(8888)
     proc = MagicMock()
     proc.pid = 8888
     proc.wait = AsyncMock(return_value=0)
@@ -875,37 +1004,13 @@ def test_reap_in_background_eventually_reaps_and_logs_it(caplog) -> None:
     asyncio.run(provider._reap_in_background(proc))
 
     assert any("reaped in the background" in r.message for r in caplog.records)
+    assert provider._claim_zombie_reap_slot(8888) is True  # released, so claimable again
+    provider._release_zombie_reap_slot(8888)
 
 
-def test_reap_process_group_sync_gives_up_on_a_process_that_outlives_sigkill(
-    monkeypatch, caplog,
-) -> None:
-    caplog.set_level("ERROR")
-    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
-    signals: list[int] = []
-    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
-
-    def _wait(timeout=None):
-        if timeout is not None:
-            raise subprocess.TimeoutExpired(cmd="claude", timeout=timeout)
-        return 0
-
-    proc = MagicMock()
-    proc.pid = 7777
-    proc.poll.return_value = None
-    proc.wait.side_effect = _wait
-
-    start = time.monotonic()
-    provider._reap_process_group_sync(proc)
-    elapsed = time.monotonic() - start
-
-    assert elapsed < 3
-    assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
-    assert any("did not exit" in r.message for r in caplog.records)
-
-
-def test_reap_in_background_sync_eventually_reaps_and_logs_it(caplog) -> None:
+def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_slot(caplog) -> None:
     caplog.set_level("INFO")
+    provider._claim_zombie_reap_slot(6666)
     proc = MagicMock()
     proc.pid = 6666
     proc.wait.return_value = 0
@@ -913,50 +1018,27 @@ def test_reap_in_background_sync_eventually_reaps_and_logs_it(caplog) -> None:
     provider._reap_in_background_sync(proc)
 
     assert any("reaped in the background" in r.message for r in caplog.records)
+    assert provider._claim_zombie_reap_slot(6666) is True
+    provider._release_zombie_reap_slot(6666)
 
 
-def test_tool_surface_single_flight_lock_releases_even_when_the_reap_hangs(
-    claude_binary, monkeypatch,
-) -> None:
-    """The risk single-flight (round 3) introduced: the per-key lock is
-    held across the whole probe including its reap. Two genuinely
-    concurrent cold-cache callers must both come back — refused, since the
-    process never answers — within a bounded time, never hang, even though
-    the underlying CLI process never exits, not even after SIGKILL."""
-    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.05)
-    monkeypatch.setattr(provider, "CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS", 0.05)
-    # A real killpg against this fake pid would raise ProcessLookupError and
-    # take an entirely different (already-dead-process) path than the one
-    # under test — stand in for a process that is genuinely still there to
-    # receive both signals.
-    monkeypatch.setattr(provider.os, "killpg", lambda _pid, _sig: None)
-
+def test_shutdown_zombie_reapers_cancels_every_tracked_task() -> None:
     async def _hang() -> None:
         await asyncio.sleep(999)
 
-    async def fake_exec(*_cmd, **_kw):
-        proc = MagicMock()
-        proc.pid = 6161
-        proc.returncode = None
-        proc.stdin = MagicMock()
-        proc.stdin.drain = AsyncMock()
-        proc.stdout = MagicMock()
-        proc.stdout.readline = AsyncMock(side_effect=_hang)
-        proc.wait = AsyncMock(side_effect=_hang)
-        return proc
+    async def _run() -> bool:
+        task = asyncio.create_task(_hang())
+        with provider._zombie_registry_lock:
+            provider._zombie_reap_tasks.add(task)
+        await provider.shutdown_zombie_reapers()
+        return task.cancelled()
 
-    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    cancelled = asyncio.run(asyncio.wait_for(_run(), timeout=2))
 
-    async def _race():
-        return await asyncio.gather(
-            averify_no_builtin_cli_tools(), averify_no_builtin_cli_tools(),
-            return_exceptions=True,
-        )
+    assert cancelled is True
 
-    results = asyncio.run(asyncio.wait_for(_race(), timeout=5))
 
-    assert len(results) == 2
-    assert all(isinstance(r, UnavailableError) for r in results)
+
 
 
 def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
@@ -999,7 +1081,7 @@ def test_tool_surface_single_flight_shares_one_successful_probe(
     fake exec sleeps first, so both coroutines are genuinely in flight
     together before either can finish, the way a sequential test cannot
     prove. Covers the success path only — see the fail-closed test below
-    for the mutation this one alone cannot catch."""
+    for the mutations this one alone cannot catch."""
     calls = 0
 
     async def fake_exec(*_cmd, **_kw):
@@ -1022,34 +1104,51 @@ def test_tool_surface_single_flight_shares_one_successful_probe(
 def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
     claude_binary, monkeypatch,
 ) -> None:
-    """#351 round 4, Finding 2: a mutation that marks the key "in flight"
-    and lets every other caller return immediately with some default,
-    instead of actually waiting for the first probe's answer, would still
-    pass a bare ``calls == 1`` check — for a security gate that is the one
-    mutation that matters. Holds the first probe open with an
-    asyncio.Event, confirms the second caller has had every chance to run
-    and is still genuinely blocked (not finished) before resolving it, and
-    resolves it with a real mismatch so a wrongly-early "clean" placeholder
-    would be caught."""
+    """#351 rounds 4-5, Finding 2: two mutations a bare ``calls == 1`` check
+    on a *successful* probe cannot catch, both deterministically red here:
+
+    1. A follower that sees the key "in flight" and returns some default
+       immediately instead of waiting for the real answer.
+    2. A follower that, on discovering the leader's probe *failed*, starts
+       its own second probe instead of accepting the shared failure —
+       invisible to a success-only test, since ``calls`` would still read 1
+       there. The probe here fails outright (malformed output), not just a
+       tool mismatch, specifically to exercise that path.
+
+    No sleep loop stands in for "the follower has reached its wait": an
+    explicit event, set from inside ``_await_follower_result_async`` right
+    before it actually waits, is what the test awaits. The 5s wrapper is a
+    deadlock guard only — everything above resolves in well under 100ms.
+    """
     calls = 0
     probe_started = asyncio.Event()
     release_probe = asyncio.Event()
+    follower_waiting = asyncio.Event()
 
     async def fake_exec(*_cmd, **_kw):
         nonlocal calls
         calls += 1
         probe_started.set()
         await release_probe.wait()
-        return _fake_cli(_init_line([*_ALL_SONGMAKER_TOOLS, "Bash"]))
+        return _fake_cli(b"not valid json\n")
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    real_await_follower = provider._await_follower_result_async
+
+    async def _instrumented_await_follower(build, future, timeout_seconds):
+        follower_waiting.set()
+        return await real_await_follower(build, future, timeout_seconds)
+
+    monkeypatch.setattr(
+        provider, "_await_follower_result_async", _instrumented_await_follower,
+    )
 
     async def _race() -> list[BaseException]:
         first = asyncio.create_task(verify_cli_tool_surface())
         second = asyncio.create_task(verify_cli_tool_surface())
         await probe_started.wait()
-        for _ in range(5):
-            await asyncio.sleep(0)
+        await follower_waiting.wait()
         assert not second.done(), (
             "second caller returned before the in-flight probe resolved — "
             "it must wait for the real answer, not assume success"
@@ -1059,8 +1158,44 @@ def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
 
     results = asyncio.run(asyncio.wait_for(_race(), timeout=5))
 
+    assert calls == 1, "a follower must not start its own second probe on failure"
+    assert all(isinstance(r, UnavailableError) for r in results)
+    assert not any(isinstance(r, CliToolSurfaceError) for r in results)
+
+
+def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_callers(
+    monkeypatch,
+) -> None:
+    """A process that outlives SIGKILL turns into a _ZombieProbeError, not
+    a hang: single-flight must still resolve *both* concurrent callers to
+    that one refusal. The probe itself is stubbed to fail instantly — no
+    real timing anywhere, deliberately, since the reap bound is already
+    proven at the unit level above; this is only about single-flight
+    correctly propagating a zombie failure to every waiter.
+    """
+    calls = 0
+
+    async def fake_probe(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise provider._ZombieProbeError(
+            "Claude CLI process group 6161 did not exit within its budget",
+        )
+
+    monkeypatch.setattr(provider, "_probe_cli_surface_async", fake_probe)
+
+    async def _race() -> list[BaseException]:
+        return await asyncio.gather(
+            averify_no_builtin_cli_tools(), averify_no_builtin_cli_tools(),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(asyncio.wait_for(_race(), timeout=2))
+
     assert calls == 1
-    assert all(isinstance(r, CliToolSurfaceError) for r in results)
+    assert all(isinstance(r, UnavailableError) for r in results)
+
+
 
 
 def test_tool_surface_reports_a_cli_that_vanished_mid_update(
@@ -1291,26 +1426,43 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
 def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_placeholder(
     claude_binary, monkeypatch,
 ) -> None:
-    """#351 round 4, Finding 2, sync side: the same "in flight" mutation
-    the async test guards against, and the same reason a bare ``calls == 1``
-    check cannot catch it. No sleep anywhere: a real ``threading.Event``
-    holds the first probe open, and ``Thread.join(timeout=...)`` — not a
-    fixed delay — is what proves the second thread is still genuinely
-    blocked rather than having returned early, the way SCORING_MAX_JOBS=1
-    limits real concurrency in the scoring worker today but not a web
-    process serving parallel requests through this same sync twin."""
+    """#351 rounds 4-5, Finding 2, sync side: the same two mutations the
+    async test guards against (a placeholder-success follower; a follower
+    that starts its own second probe on failure instead of accepting the
+    shared one), and the same reason a bare ``calls == 1`` check on a
+    *successful* probe cannot catch either. The probe fails outright
+    (malformed output) specifically to exercise the second one.
+
+    No timing assumption stands in for "the second caller reached the
+    in-flight wait": a real ``threading.Event``, set from inside
+    ``_claim_or_join_inflight_sync`` the moment it identifies the caller as
+    a follower, is what the test waits on. The remaining timeouts are
+    deadlock guards only (generous, never the expected path) — everything
+    above resolves in well under 100ms.
+    """
     calls = 0
     probe_started = threading.Event()
     release_probe = threading.Event()
+    follower_joined = threading.Event()
 
     def fake_popen(_cmd, **_kw):
         nonlocal calls
         calls += 1
         probe_started.set()
         release_probe.wait()
-        return _fake_sync_cli(_init_line(["Bash"]))
+        return _fake_sync_cli(b"not valid json\n")
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+
+    real_claim = provider._claim_or_join_inflight_sync
+
+    def _instrumented_claim(key):
+        future, is_leader = real_claim(key)
+        if not is_leader:
+            follower_joined.set()
+        return future, is_leader
+
+    monkeypatch.setattr(provider, "_claim_or_join_inflight_sync", _instrumented_claim)
 
     results: list[object] = [None, None]
 
@@ -1323,20 +1475,23 @@ def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_plac
     first = threading.Thread(target=_call, args=(0,))
     second = threading.Thread(target=_call, args=(1,))
     first.start()
-    assert probe_started.wait(timeout=2), "first caller never reached its probe"
+    assert probe_started.wait(timeout=5), "first caller never reached its probe"
     second.start()
-    second.join(timeout=0.2)
-    assert second.is_alive(), (
+    assert follower_joined.wait(timeout=5), "second caller never reached the in-flight wait"
+    assert results[1] is None, (
         "second caller returned before the in-flight probe resolved — "
         "it must wait for the real answer, not assume success"
     )
 
     release_probe.set()
-    first.join(timeout=2)
-    second.join(timeout=2)
+    first.join(timeout=5)
+    second.join(timeout=5)
 
-    assert calls == 1
-    assert all(isinstance(r, CliToolSurfaceError) for r in results)
+    assert calls == 1, "a follower must not start its own second probe on failure"
+    assert all(isinstance(r, UnavailableError) for r in results)
+    assert not any(isinstance(r, CliToolSurfaceError) for r in results)
+
+
 
 
 def test_no_builtin_gate_sync_and_async_share_one_cache(

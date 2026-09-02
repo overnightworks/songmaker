@@ -11,6 +11,7 @@ use this module. The backend is selected based on available credentials:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
@@ -31,9 +32,12 @@ from pydantic import BaseModel, Field
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS,
+    CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
@@ -111,14 +115,6 @@ def clear_client_cache() -> None:
         _async_clients.clear()
 
 
-def clear_cli_tool_surface_cache() -> None:
-    with _tool_surface_lock:
-        _tool_surface_verdicts.clear()
-        _tool_surface_failures.clear()
-        _tool_surface_sync_locks.clear()
-        _tool_surface_async_locks.clear()
-
-
 def clear_cli_login_status_cache() -> None:
     global _cli_login_status_cache, _cli_login_status_cache_at
     with _cli_login_status_lock:
@@ -139,6 +135,16 @@ class CliToolSurfaceError(UnavailableError):
     Deliberately an ``UnavailableError``: a CLI whose tool surface we cannot
     vouch for is not a CLI we run untrusted song content through, so every
     caller that already handles "no backend" refuses the turn.
+    """
+
+
+class _ZombieProbeError(UnavailableError):
+    """Raised when a tool-surface probe's own CLI process outlived
+    SIGKILL. Not a plain ``UnavailableError``: it tells
+    ``_record_tool_surface_failure`` to use the much longer
+    ``CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS`` TTL instead of the ordinary
+    one — a process stuck past SIGKILL will not become healthy in ten
+    seconds, and probing again on that schedule only spawns another zombie.
     """
 
 
@@ -812,14 +818,34 @@ def _build_mcp_cli_cmd(
 #   chat endpoint and the lyrical-coherence judge both funnel through these):
 #   the CLI must announce no tools at all.
 #
-# Both single-flight concurrent cold-cache callers per (binary build,
-# expectation) key, and both cache a genuine verdict forever per build but
-# a probe *failure* — including, for the MCP-attached probe, a connection
-# that never established — only briefly; see ``_verify_tool_surface_async``/
-# ``_sync`` and ``_cached_tool_surface_verdict`` below for why the two must
-# not be the same cache.
+# Round 5 changed the *shape* of single-flight, not another detail of it.
+# Rounds 3 and 4 held a per-key mutex across the whole probe and then spent
+# two rounds finding a new unbounded wait inside that held lock. A lock
+# held across external I/O always has another hole next to the one just
+# patched, so this round removes the held lock entirely:
 #
-# Deliberately two checks, not one reused check: the MCP-attached probe
+# - The dict lock (``_tool_surface_lock``) now only ever guards a dict
+#   lookup/insert — never a probe, never an await. The first cold caller
+#   for a key publishes a future/event under that lock and releases it
+#   immediately, then probes with *no lock held at all*. Every other
+#   caller finds the published future and awaits it, each with its own
+#   timeout — see ``_verify_tool_surface_async``/``_sync``.
+# - The probe itself runs under one overall deadline covering every step
+#   (process start, stdin write, stdout read) — not a separate timeout per
+#   step that can add up to an unknown total. Only the final cleanup (SIGTERM
+#   grace, then the post-SIGKILL wait) has its own, separate, small bound —
+#   cleanup must always be attempted regardless of how much of the answer
+#   budget is left. See ``_probe_cli_surface_async``/``_sync``.
+# - A process that survives SIGKILL is handed to a background
+#   reaper — capped and deduplicated by PID (``_claim_zombie_reap_slot``),
+#   so a run of bad probes cannot grow an unbounded pool of waiting
+#   tasks/threads — and its failure is cached for
+#   ``CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS`` (much longer than an
+#   ordinary probe failure): ten more seconds will not make a process that
+#   ignored SIGKILL healthy, and probing again on that schedule only
+#   spawns another zombie.
+#
+# Deliberately two probe kinds, not one reused kind: the MCP-attached probe
 # spawns the songmaker MCP server subprocess, which needs the ``mcp``
 # extra — registering and listing its tools touches no database, only a
 # tool *call* does, so that is not the reason for the split. The scoring-
@@ -887,25 +913,78 @@ class _ToolSurfaceMismatch:
         return "; ".join(parts)
 
 
+@dataclass(frozen=True)
+class _ToolSurfaceFailure:
+    """A probe failure, remembered separately from a genuine verdict — see
+    the module-level comment above for why the two must never share a
+    cache. ``is_zombie`` picks the TTL: a process that outlived SIGKILL
+    gets the much longer ``CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS``."""
+
+    recorded_at: float
+    message: str
+    is_zombie: bool
+
+    def ttl_seconds(self) -> float:
+        return (
+            CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS if self.is_zombie
+            else CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS
+        )
+
+
 _ToolSurfaceKey = tuple[BinaryBuild, frozenset[str]]
 
-# _tool_surface_lock guards the dicts below, including the lazy creation of
-# the per-key probe locks — it is never held across a probe itself. The two
-# per-key lock maps ARE held across a probe (single-flight: the first cold
-# caller for a key probes, concurrent callers for the *same* key wait for
-# its answer instead of each starting their own CLI process). Sync and
-# async callers of the same key do not exclude each other — a threading.Lock
-# cannot be awaited without blocking the whole event loop, and an
-# asyncio.Lock cannot be waited on from a thread with no running loop — so a
-# sync and an async cold-cache call landing on the same key at the same
-# instant can still each spawn one probe. Accepted: within one process the
-# only shared key is _NO_TOOLS_EXPECTED (_call_cli vs _acall_cli), and both
-# still get single-flight against callers in their own domain.
+# Extra margin a follower waits beyond the leader's own worst case before
+# giving up on its own — generous, since this only ever fires if the
+# leader's own bound (probe deadline + SIGTERM grace + zombie-reap budget)
+# somehow failed to hold; it is a defense-in-depth backstop, not the
+# expected path.
+_FOLLOWER_WAIT_MARGIN_SECONDS: Final = 2
+
+# _tool_surface_lock guards only the dicts below — a plain lookup/insert,
+# never held across a probe or an await. Single-flight is a *published
+# future*, not a held mutex: the leader claims the in-flight slot under
+# this lock, releases it immediately, and probes with nothing held at all.
 _tool_surface_lock = threading.Lock()
-_tool_surface_sync_locks: dict[_ToolSurfaceKey, threading.Lock] = {}
-_tool_surface_async_locks: dict[_ToolSurfaceKey, asyncio.Lock] = {}
 _tool_surface_verdicts: dict[_ToolSurfaceKey, _ToolSurfaceMismatch] = {}
-_tool_surface_failures: dict[_ToolSurfaceKey, tuple[float, str]] = {}
+_tool_surface_failures: dict[_ToolSurfaceKey, _ToolSurfaceFailure] = {}
+_tool_surface_inflight_async: dict[_ToolSurfaceKey, asyncio.Future[_ToolSurfaceMismatch]] = {}
+_tool_surface_inflight_sync: dict[
+    _ToolSurfaceKey, concurrent.futures.Future[_ToolSurfaceMismatch]
+] = {}
+
+# The zombie-reaper registry is process-wide and shared by both the async
+# and sync gates (a PID is a PID regardless of which one spawned it) — its
+# own lock, since it is touched from plain threads as well as the event
+# loop and must never be entangled with the tool-surface dicts' lock.
+_zombie_registry_lock = threading.Lock()
+_zombie_tracked_pids: set[int] = set()
+_zombie_reap_tasks: set[asyncio.Task] = set()
+
+
+def clear_cli_tool_surface_cache() -> None:
+    with _tool_surface_lock:
+        _tool_surface_verdicts.clear()
+        _tool_surface_failures.clear()
+        _tool_surface_inflight_async.clear()
+        _tool_surface_inflight_sync.clear()
+    with _zombie_registry_lock:
+        _zombie_tracked_pids.clear()
+        _zombie_reap_tasks.clear()
+
+
+async def shutdown_zombie_reapers() -> None:
+    """Cancel every outstanding background zombie reaper — call from the
+    app's own shutdown (``server.py``'s lifespan), the same way it already
+    cancels its other background loops. Does not touch the processes
+    themselves (they are already past SIGKILL); it only stops this process
+    from continuing to wait on them once it is shutting down anyway.
+    """
+    with _zombie_registry_lock:
+        tasks = list(_zombie_reap_tasks)
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def verify_cli_tool_surface() -> str:
@@ -923,12 +1002,11 @@ async def verify_cli_tool_surface() -> str:
     """
     build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
 
-    async def probe() -> _AnnouncedSurface:
+    async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
             surface = await _probe_cli_surface_async(
-                build.path, mcp_config_path=config_path,
-                timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+                build.path, mcp_config_path=config_path, deadline=deadline,
             )
         finally:
             _unlink_quiet(config_path)
@@ -939,20 +1017,23 @@ async def verify_cli_tool_surface() -> str:
             )
         return surface
 
-    return await _verify_tool_surface_async(build, key, probe)
+    return await _verify_tool_surface_async(
+        build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+    )
 
 
 async def averify_no_builtin_cli_tools() -> str:
     """Async twin of ``verify_no_builtin_cli_tools`` for ``_acall_cli``."""
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
 
-    async def probe() -> _AnnouncedSurface:
+    async def probe(deadline: float) -> _AnnouncedSurface:
         return await _probe_cli_surface_async(
-            build.path, mcp_config_path=None,
-            timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+            build.path, mcp_config_path=None, deadline=deadline,
         )
 
-    return await _verify_tool_surface_async(build, key, probe)
+    return await _verify_tool_surface_async(
+        build, key, probe, timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    )
 
 
 def verify_no_builtin_cli_tools() -> str:
@@ -964,54 +1045,183 @@ def verify_no_builtin_cli_tools() -> str:
     """
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
 
-    def probe() -> _AnnouncedSurface:
+    def probe(deadline: float) -> _AnnouncedSurface:
         return _probe_cli_surface_sync(
-            build.path, mcp_config_path=None,
-            timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+            build.path, mcp_config_path=None, deadline=deadline,
         )
 
-    return _verify_tool_surface_sync(build, key, probe)
+    return _verify_tool_surface_sync(
+        build, key, probe, timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    )
+
+
+# ── single-flight: async ────────────────────────────────────────────
 
 
 async def _verify_tool_surface_async(
     build: BinaryBuild, key: _ToolSurfaceKey,
-    probe: Callable[[], Awaitable[_AnnouncedSurface]],
+    probe: Callable[[float], Awaitable[_AnnouncedSurface]],
+    *, timeout_seconds: float,
 ) -> str:
-    """Single-flight, cache-checked probe: the first cold caller for ``key``
-    probes while holding that key's lock; a concurrent caller for the same
-    key waits on the same lock and then reuses the answer instead of
-    starting its own CLI process."""
+    """Single-flight through a published future, never a held lock.
+
+    The dict lock is taken twice, briefly: once to check the cache, once
+    to claim the in-flight slot (or find someone else already holds it).
+    It is never held while probing. The leader (whoever claims the slot)
+    probes with nothing held at all and resolves the future itself when
+    done; everyone else awaits that future with its own timeout, so a
+    leader that somehow never resolves it degrades every later caller to
+    "wait, then give up" rather than a permanent block.
+    """
     cached = _cached_tool_surface_verdict(key)
-    if cached is None:
-        async with _async_probe_lock(key):
-            cached = _cached_tool_surface_verdict(key)
-            if cached is None:
-                try:
-                    surface = await probe()
-                except UnavailableError as exc:
-                    _record_tool_surface_failure(key, str(exc))
-                    raise
-                cached = _evaluate_tool_surface(key, surface)
-    return _finish_tool_surface_check(build, cached)
+    if cached is not None:
+        return _finish_tool_surface_check(build, cached)
+
+    future, is_leader = _claim_or_join_inflight_async(key)
+    if not is_leader:
+        mismatch = await _await_follower_result_async(build, future, timeout_seconds)
+        return _finish_tool_surface_check(build, mismatch)
+
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    try:
+        surface = await probe(deadline)
+    except UnavailableError as exc:
+        _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
+        _resolve_inflight_async(key, future, exception=exc)
+        raise
+    except BaseException as exc:
+        _resolve_inflight_async(key, future, exception=exc)
+        raise
+    mismatch = _evaluate_tool_surface(key, surface)
+    _resolve_inflight_async(key, future, result=mismatch)
+    return _finish_tool_surface_check(build, mismatch)
+
+
+async def _await_follower_result_async(
+    build: BinaryBuild, future: asyncio.Future[_ToolSurfaceMismatch],
+    probe_timeout_seconds: float,
+) -> _ToolSurfaceMismatch:
+    follower_budget = _follower_wait_budget_seconds(probe_timeout_seconds)
+    try:
+        # shield: this follower's own wait_for must not cancel the shared
+        # future out from under the leader (or every other follower) just
+        # because *this* caller gave up waiting on it.
+        return await asyncio.wait_for(asyncio.shield(future), timeout=follower_budget)
+    except asyncio.TimeoutError:
+        raise UnavailableError(
+            f"Claude CLI at {build.path} did not answer within {follower_budget}s "
+            "waiting on another caller's in-flight probe",
+        )
+
+
+def _claim_or_join_inflight_async(
+    key: _ToolSurfaceKey,
+) -> tuple[asyncio.Future[_ToolSurfaceMismatch], bool]:
+    with _tool_surface_lock:
+        future = _tool_surface_inflight_async.get(key)
+        if future is not None:
+            return future, False
+        future = asyncio.get_running_loop().create_future()
+        _tool_surface_inflight_async[key] = future
+        return future, True
+
+
+def _resolve_inflight_async(
+    key: _ToolSurfaceKey, future: asyncio.Future[_ToolSurfaceMismatch],
+    *, result: _ToolSurfaceMismatch | None = None, exception: BaseException | None = None,
+) -> None:
+    with _tool_surface_lock:
+        _tool_surface_inflight_async.pop(key, None)
+    if future.done():
+        return
+    if exception is not None:
+        future.set_exception(exception)
+        # The leader already re-raises this same exception itself and
+        # never awaits its own future — without this, asyncio logs
+        # "exception was never retrieved" the moment nothing else was
+        # waiting on it (no followers this round).
+        future.exception()
+    else:
+        future.set_result(result)
+
+
+# ── single-flight: sync ─────────────────────────────────────────────
 
 
 def _verify_tool_surface_sync(
-    build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[], _AnnouncedSurface],
+    build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[float], _AnnouncedSurface],
+    *, timeout_seconds: float,
 ) -> str:
-    """Sync twin of ``_verify_tool_surface_async`` — same single-flight
-    shape, a ``threading.Lock`` instead of an ``asyncio.Lock``."""
+    """Sync twin of ``_verify_tool_surface_async`` — a
+    ``concurrent.futures.Future`` instead of an ``asyncio.Future``, since
+    this runs where ``_call_cli`` has no event loop to publish one on."""
     cached = _cached_tool_surface_verdict(key)
-    if cached is None:
-        with _sync_probe_lock(key):
-            cached = _cached_tool_surface_verdict(key)
-            if cached is None:
-                try:
-                    surface = probe()
-                except UnavailableError as exc:
-                    _record_tool_surface_failure(key, str(exc))
-                    raise
-                cached = _evaluate_tool_surface(key, surface)
-    return _finish_tool_surface_check(build, cached)
+    if cached is not None:
+        return _finish_tool_surface_check(build, cached)
+
+    future, is_leader = _claim_or_join_inflight_sync(key)
+    if not is_leader:
+        follower_budget = _follower_wait_budget_seconds(timeout_seconds)
+        try:
+            mismatch = future.result(timeout=follower_budget)
+        except concurrent.futures.TimeoutError:
+            raise UnavailableError(
+                f"Claude CLI at {build.path} did not answer within {follower_budget}s "
+                "waiting on another caller's in-flight probe",
+            )
+        return _finish_tool_surface_check(build, mismatch)
+
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        surface = probe(deadline)
+    except UnavailableError as exc:
+        _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
+        _resolve_inflight_sync(key, future, exception=exc)
+        raise
+    except BaseException as exc:
+        _resolve_inflight_sync(key, future, exception=exc)
+        raise
+    mismatch = _evaluate_tool_surface(key, surface)
+    _resolve_inflight_sync(key, future, result=mismatch)
+    return _finish_tool_surface_check(build, mismatch)
+
+
+def _claim_or_join_inflight_sync(
+    key: _ToolSurfaceKey,
+) -> tuple[concurrent.futures.Future[_ToolSurfaceMismatch], bool]:
+    with _tool_surface_lock:
+        future = _tool_surface_inflight_sync.get(key)
+        if future is not None:
+            return future, False
+        future = concurrent.futures.Future()
+        _tool_surface_inflight_sync[key] = future
+        return future, True
+
+
+def _resolve_inflight_sync(
+    key: _ToolSurfaceKey, future: concurrent.futures.Future[_ToolSurfaceMismatch],
+    *, result: _ToolSurfaceMismatch | None = None, exception: BaseException | None = None,
+) -> None:
+    with _tool_surface_lock:
+        _tool_surface_inflight_sync.pop(key, None)
+    if future.done():
+        return
+    if exception is not None:
+        future.set_exception(exception)
+    else:
+        future.set_result(result)
+
+
+def _follower_wait_budget_seconds(probe_timeout_seconds: float) -> float:
+    return (
+        probe_timeout_seconds
+        + CLAUDE_CLI_SIGTERM_GRACE_SECONDS
+        + CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS
+        + _FOLLOWER_WAIT_MARGIN_SECONDS
+    )
+
+
+# ── cache lookups shared by both domains ────────────────────────────
 
 
 def _tool_surface_key(expected_tools: frozenset[str]) -> tuple[BinaryBuild, _ToolSurfaceKey]:
@@ -1020,36 +1230,16 @@ def _tool_surface_key(expected_tools: frozenset[str]) -> tuple[BinaryBuild, _Too
     return build, (build, expected_tools)
 
 
-def _sync_probe_lock(key: _ToolSurfaceKey) -> threading.Lock:
-    with _tool_surface_lock:
-        lock = _tool_surface_sync_locks.get(key)
-        if lock is None:
-            lock = threading.Lock()
-            _tool_surface_sync_locks[key] = lock
-        return lock
-
-
-def _async_probe_lock(key: _ToolSurfaceKey) -> asyncio.Lock:
-    with _tool_surface_lock:
-        lock = _tool_surface_async_locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            _tool_surface_async_locks[key] = lock
-        return lock
-
-
 def _cached_tool_surface_verdict(key: _ToolSurfaceKey) -> _ToolSurfaceMismatch | None:
     """The remembered verdict for this exact (binary build, expectation)
     pair, or ``None`` when it still needs a fresh probe.
 
     Raises the cached message directly when a probe already failed for this
-    pair within ``CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS`` — short on
-    purpose, so a struggling CLI or MCP connection does not stay refused for
-    as long as a genuine verdict would (the unbounded cache below): once
-    that window passes, the next call re-probes rather than trusting a
-    stale failure forever. Concurrent callers waiting out that same window
-    together is the *single-flight* lock's job in the caller, not this
-    function's — this only decides whether a fresh probe is needed at all.
+    pair within its failure's own TTL (ordinary or, for a zombie, the much
+    longer one) — short on purpose for the ordinary case, so a struggling
+    CLI or MCP connection does not stay refused for as long as a genuine
+    verdict would (the unbounded cache below): once that window passes, the
+    next call re-probes rather than trusting a stale failure forever.
     """
     with _tool_surface_lock:
         verdict = _tool_surface_verdicts.get(key)
@@ -1058,15 +1248,14 @@ def _cached_tool_surface_verdict(key: _ToolSurfaceKey) -> _ToolSurfaceMismatch |
         failure = _tool_surface_failures.get(key)
     if failure is None:
         return None
-    recorded_at, message = failure
-    if time.monotonic() - recorded_at >= CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS:
+    if time.monotonic() - failure.recorded_at >= failure.ttl_seconds():
         return None
-    raise UnavailableError(message)
+    raise UnavailableError(failure.message)
 
 
-def _record_tool_surface_failure(key: _ToolSurfaceKey, message: str) -> None:
+def _record_tool_surface_failure(key: _ToolSurfaceKey, message: str, *, is_zombie: bool) -> None:
     with _tool_surface_lock:
-        _tool_surface_failures[key] = (time.monotonic(), message)
+        _tool_surface_failures[key] = _ToolSurfaceFailure(time.monotonic(), message, is_zombie)
 
 
 def _evaluate_tool_surface(
@@ -1118,145 +1307,280 @@ def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list
     return cmd
 
 
+# ── the probe itself: one overall deadline, async ───────────────────
+
+
 async def _probe_cli_surface_async(
-    binary: str, *, mcp_config_path: str | None, timeout_seconds: int,
+    binary: str, *, mcp_config_path: str | None, deadline: float,
 ) -> _AnnouncedSurface:
     """What a session built like ``cmd`` announces it can reach.
 
-    The CLI emits its ``system`` init event, tool list included, before it
-    contacts the model, so the probe reads that one line and kills the
-    session rather than paying for a turn. This bounds but does not
-    eliminate the API call's cost: the full probe prompt is already on the
-    wire by the time we read that line, so a request already in flight is
-    not excluded — the CLI's own ``--max-budget-usd`` was checked live and
-    only aborts a session *after* a call completes, not before one starts,
-    so it does not close that gap either.
+    Every step that produces the answer — spawn, stdin write, stdout read —
+    shares ``deadline``, one overall budget, rather than each getting its
+    own fresh allowance that could add up to an unknown total. Only cleanup
+    (SIGTERM grace, then the post-SIGKILL wait) has its own separate, small
+    bound: cleanup must always be attempted no matter how much of the
+    answer budget is already spent.
+
+    Reading the ``system`` init event and then killing the session bounds
+    but does not eliminate the API call's cost: the full probe prompt is
+    already on the wire by the time we read that line, so a request already
+    in flight is not excluded — the CLI's own ``--max-budget-usd`` was
+    checked live and only aborts a session *after* a call completes, not
+    before one starts, so it does not close that gap either.
     """
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-            env=_scrub_env(),
-            start_new_session=True,
+        proc = await _await_with_deadline(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=_scrub_env(),
+                start_new_session=True,
+            ),
+            deadline,
         )
     except FileNotFoundError:
         raise UnavailableError("Claude CLI binary not found")
-    if proc.stdin is None or proc.stdout is None:
-        await _reap_process_group(proc)
-        raise UnavailableError("Claude CLI probe could not open its pipes")
+    except TimeoutError:
+        raise UnavailableError("Claude CLI probe did not start within its budget")
+
+    answer_error: UnavailableError | None = None
+    first_line = b""
     try:
+        if proc.stdin is None or proc.stdout is None:
+            raise UnavailableError("Claude CLI probe could not open its pipes")
         proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
-        await proc.stdin.drain()
+        await _await_with_deadline(proc.stdin.drain(), deadline)
         proc.stdin.close()
-        first_line = await asyncio.wait_for(
-            proc.stdout.readline(),
-            timeout=timeout_seconds,
-        )
-    except asyncio.TimeoutError:
-        raise UnavailableError(
-            f"Claude CLI did not announce its tools within {timeout_seconds}s",
-        )
-    finally:
-        await _reap_process_group(proc)
+        first_line = await _await_with_deadline(proc.stdout.readline(), deadline)
+    except TimeoutError:
+        answer_error = UnavailableError("Claude CLI did not answer within its probe budget")
+    except UnavailableError as exc:
+        answer_error = exc
+
+    became_zombie = await _reap_process_group(proc)
+
+    if answer_error is not None:
+        if became_zombie:
+            raise _ZombieProbeError(str(answer_error)) from answer_error
+        raise answer_error
     return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
+
+
+async def _await_with_deadline(awaitable, deadline: float):
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        raise TimeoutError
+    return await asyncio.wait_for(awaitable, timeout=remaining)
+
+
+# ── the probe itself: one overall deadline, sync ────────────────────
 
 
 def _probe_cli_surface_sync(
-    binary: str, *, mcp_config_path: str | None, timeout_seconds: int,
+    binary: str, *, mcp_config_path: str | None, deadline: float,
 ) -> _AnnouncedSurface:
-    """Sync twin of ``_probe_cli_surface_async`` for callers with no event
-    loop — same cost caveat applies.
+    """Sync twin of ``_probe_cli_surface_async`` — same one-deadline shape,
+    same cost caveat.
 
-    Cannot use ``subprocess.run``: it blocks until the child's stdout hits
-    EOF, i.e. until the whole turn finishes, not until the one init line we
-    actually want has arrived — confirmed the hard way against the real CLI,
-    where that turned a 5s budget into a guaranteed timeout. Reads the first
-    line off a background thread instead, exactly so the *read* is what is
-    bounded by ``timeout_seconds``, not the child's total lifetime; the
-    child is then killed in ``finally`` the same way the async probe kills
-    its session rather than paying for a full turn.
+    ``subprocess.Popen`` and a pipe write have no native timeout parameter,
+    so spawn, write, and read all run on one background thread; the calling
+    thread bounds the *whole sequence* with a single ``queue.get(timeout=)``
+    against the remaining budget, exactly so no individual step (Popen()
+    itself included — confirmed the hard way that even the read alone,
+    bounded on its own, still let a hung ``subprocess.run`` swallow the
+    whole budget in an earlier round) can block without one shared limit.
+    The process handle is reported back as soon as it exists, so even a
+    timed-out read still has something to reap.
     """
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
+    env = _scrub_env()
+    spawned: list[subprocess.Popen] = []
+    result: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def _run() -> None:
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, env=env, start_new_session=True,
+            )
+        except OSError as exc:
+            result.put((False, exc))
+            return
+        spawned.append(proc)
+        try:
+            assert proc.stdin is not None and proc.stdout is not None
+            proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
+            proc.stdin.close()
+            result.put((True, proc.stdout.readline()))
+        except OSError as exc:
+            result.put((False, exc))
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    answer_error: UnavailableError | None = None
+    first_line = b""
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=_scrub_env(),
-            start_new_session=True,
+        remaining = max(deadline - time.monotonic(), 0)
+        ok, payload = result.get(timeout=remaining)
+    except queue.Empty:
+        answer_error = UnavailableError("Claude CLI probe did not answer within its budget")
+    else:
+        if ok:
+            first_line = payload
+        else:
+            answer_error = UnavailableError(f"Claude CLI probe failed to run: {payload}")
+
+    if not spawned:
+        # subprocess.Popen() itself never returned within budget — there is
+        # no process handle here to reap; if it eventually does spawn, it
+        # is orphaned from this function's point of view. Pathological
+        # (fork+exec blocking is not a normal-operation case) and logged,
+        # not silently swallowed.
+        log.error(
+            "Claude CLI probe's subprocess.Popen() did not return within its budget; "
+            "no process handle to reap",
         )
-    except OSError:
-        raise UnavailableError("Claude CLI binary not found")
-    try:
-        assert proc.stdin is not None and proc.stdout is not None
-        proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
-        proc.stdin.close()
-        first_line = _read_line_with_timeout(proc.stdout, timeout_seconds)
-    finally:
-        _reap_process_group_sync(proc)
+        raise answer_error or UnavailableError(
+            "Claude CLI probe produced no process handle within its budget",
+        )
+
+    proc = spawned[0]
+    became_zombie = _reap_process_group_sync(proc)
+
+    if answer_error is not None:
+        if became_zombie:
+            raise _ZombieProbeError(str(answer_error)) from answer_error
+        raise answer_error
     return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
 
 
-def _read_line_with_timeout(stream, timeout_seconds: float) -> bytes:
-    """Read one line off a blocking stream, bounded by ``timeout_seconds``.
+# ── reap: async ──────────────────────────────────────────────────────
 
-    A plain file object has no read-with-timeout of its own, so the actual
-    read runs on a daemon thread; a timed-out read is abandoned rather than
-    cancelled (Python cannot interrupt a blocking read), but the caller
-    kills the child process right after this raises, which unblocks it via
-    EOF and lets the thread exit on its own.
+
+async def _reap_process_group(proc: asyncio.subprocess.Process) -> bool:
+    """Terminate ``proc``'s whole process group and confirm it exited.
+
+    Every wait below is bounded — a process the OS has already confirmed
+    dead (``proc.returncode`` set, or SIGTERM raising ``ProcessLookupError``)
+    is expected to report its exit almost instantly, but "expected" is not
+    "guaranteed", and an unbounded wait anywhere in this function used to
+    be able to block whoever was waiting on it (rounds 3 and 4) forever.
+
+    Returns ``True`` when the process outlived SIGKILL and was handed to
+    a background reaper instead of being confirmed dead here — a zombie,
+    not a normal exit.
     """
-    result: queue.Queue[bytes] = queue.Queue(maxsize=1)
+    if proc.returncode is not None or proc.pid is None:
+        return await _confirm_exit_or_track_zombie(proc)
 
-    def _read() -> None:
-        try:
-            result.put(stream.readline())
-        except OSError:
-            result.put(b"")
-
-    threading.Thread(target=_read, daemon=True).start()
-    try:
-        return result.get(timeout=timeout_seconds)
-    except queue.Empty:
-        raise UnavailableError(
-            f"Claude CLI did not announce its tools within {timeout_seconds}s",
-        )
-
-
-def _reap_process_group_sync(proc: subprocess.Popen) -> None:
-    """Sync twin of ``_reap_process_group`` — same bounded-final-wait shape,
-    a daemon thread instead of a background task for the pathological
-    post-SIGKILL hang, since this runs where ``_call_cli``'s single-flight
-    lock is a plain ``threading.Lock`` with no event loop to hand work off
-    to."""
-    if proc.poll() is not None:
-        return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
-        return
-    try:
-        proc.wait(timeout=1)
-        return
-    except subprocess.TimeoutExpired:
-        pass
+        return await _confirm_exit_or_track_zombie(proc)
+
+    if await _bounded_wait(proc, CLAUDE_CLI_SIGTERM_GRACE_SECONDS):
+        return False
+
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
-        return
+        return await _confirm_exit_or_track_zombie(proc)
+
+    return await _confirm_exit_or_track_zombie(proc)
+
+
+async def _bounded_wait(proc: asyncio.subprocess.Process, timeout: float) -> bool:
     try:
-        proc.wait(timeout=CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS)
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        return True
+    except asyncio.TimeoutError:
+        return False
+
+
+async def _confirm_exit_or_track_zombie(proc: asyncio.subprocess.Process) -> bool:
+    if await _bounded_wait(proc, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS):
+        return False
+    return _track_zombie_reap_async(proc)
+
+
+def _track_zombie_reap_async(proc: asyncio.subprocess.Process) -> bool:
+    log.error(
+        "Claude CLI process group %d did not exit within %ds of SIGKILL",
+        proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+    )
+    if _claim_zombie_reap_slot(proc.pid):
+        task = asyncio.create_task(_reap_in_background(proc))
+        with _zombie_registry_lock:
+            _zombie_reap_tasks.add(task)
+        task.add_done_callback(_zombie_reap_tasks.discard)
+    return True
+
+
+async def _reap_in_background(proc: asyncio.subprocess.Process) -> None:
+    """Finish waiting for a process ``_reap_process_group`` gave up waiting
+    on, off any caller's critical path, so it is reaped once it does exit
+    rather than left a zombie for the rest of the container's life."""
+    try:
+        await proc.wait()
+    except Exception:
+        log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
+    else:
+        log.info("Claude CLI process group %s reaped in the background", proc.pid)
+    finally:
+        _release_zombie_reap_slot(proc.pid)
+
+
+# ── reap: sync ───────────────────────────────────────────────────────
+
+
+def _reap_process_group_sync(proc: subprocess.Popen) -> bool:
+    """Sync twin of ``_reap_process_group``."""
+    if proc.poll() is not None or proc.pid is None:
+        return _confirm_exit_or_track_zombie_sync(proc)
+
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return _confirm_exit_or_track_zombie_sync(proc)
+
+    if _bounded_wait_sync(proc, CLAUDE_CLI_SIGTERM_GRACE_SECONDS):
+        return False
+
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return _confirm_exit_or_track_zombie_sync(proc)
+
+    return _confirm_exit_or_track_zombie_sync(proc)
+
+
+def _bounded_wait_sync(proc: subprocess.Popen, timeout: float) -> bool:
+    try:
+        proc.wait(timeout=timeout)
+        return True
     except subprocess.TimeoutExpired:
-        log.error(
-            "Claude CLI process group %d did not exit within %ds of SIGKILL; "
-            "continuing to reap it in the background instead of blocking on it",
-            proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
-        )
+        return False
+
+
+def _confirm_exit_or_track_zombie_sync(proc: subprocess.Popen) -> bool:
+    if _bounded_wait_sync(proc, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS):
+        return False
+    return _track_zombie_reap_sync(proc)
+
+
+def _track_zombie_reap_sync(proc: subprocess.Popen) -> bool:
+    log.error(
+        "Claude CLI process group %d did not exit within %ds of SIGKILL",
+        proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+    )
+    if _claim_zombie_reap_slot(proc.pid):
         threading.Thread(target=_reap_in_background_sync, args=(proc,), daemon=True).start()
+    return True
 
 
 def _reap_in_background_sync(proc: subprocess.Popen) -> None:
@@ -1266,6 +1590,35 @@ def _reap_in_background_sync(proc: subprocess.Popen) -> None:
         log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
     else:
         log.info("Claude CLI process group %s reaped in the background", proc.pid)
+    finally:
+        _release_zombie_reap_slot(proc.pid)
+
+
+# ── zombie-reaper registry: cap + dedup, shared by both domains ──────
+
+
+def _claim_zombie_reap_slot(pid: int) -> bool:
+    """Whether a background reaper may be started for ``pid`` — ``False``
+    if one already is (dedup by PID) or the pool is already at its cap,
+    in which case the process is logged and abandoned to the OS/asyncio's
+    own child-reaping rather than growing an unbounded pool of trackers."""
+    with _zombie_registry_lock:
+        if pid in _zombie_tracked_pids:
+            return False
+        if len(_zombie_tracked_pids) >= CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS:
+            log.error(
+                "Zombie-reaper pool at its cap of %d; abandoning process group "
+                "%d without a background reaper",
+                CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS, pid,
+            )
+            return False
+        _zombie_tracked_pids.add(pid)
+        return True
+
+
+def _release_zombie_reap_slot(pid: int) -> None:
+    with _zombie_registry_lock:
+        _zombie_tracked_pids.discard(pid)
 
 
 def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _AnnouncedSurface:
