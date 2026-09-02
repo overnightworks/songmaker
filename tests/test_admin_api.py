@@ -668,6 +668,7 @@ def test_list_workers_online(client: TestClient) -> None:
         "available_modes": ["sft", "turbo"],
         "pinned": [],
         "last_heartbeat_at": "2026-04-07T12:00:00+00:00",
+        "gpu_healthy": True,
     }
     pool._store[worker_state_key("acestep-worker-0")] = json.dumps(state)
     _override_pool(client, pool)
@@ -698,6 +699,7 @@ def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> No
             "loaded": [],
             "target_loading": "xl-turbo",
             "loading_last_log_line": "vllm: loading shard 3/4",
+            "gpu_healthy": True,
         },
     )
     _override_pool(client, pool)
@@ -716,7 +718,7 @@ def test_list_workers_loading(client: TestClient) -> None:
     _seed_worker(client, "w1")
     pool = _make_fake_pool()
     pool._store[worker_state_key("w1")] = json.dumps(
-        {"loaded": [], "target_loading": "xl-sft"},
+        {"loaded": [], "target_loading": "xl-sft", "gpu_healthy": True},
     )
     _override_pool(client, pool)
 
@@ -732,6 +734,28 @@ def test_list_workers_offline_when_redis_missing(client: TestClient) -> None:
     data = resp.json()
     assert data["workers"][0]["status"] == "offline"
     assert data["workers"][0]["state"] is None
+
+
+def test_list_workers_offline_when_gpu_broken(client: TestClient) -> None:
+    """Issue #367 finding 3: a worker whose GPU has gone away keeps
+    heartbeating fine, so the worker pool must not show it as "online" on
+    heartbeat presence alone — simulated NVML failure, not a lucky real
+    GPU."""
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps(
+        {"loaded": ["sft"], "gpu_healthy": False},
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+    data = resp.json()
+    assert data["workers"][0]["status"] == "offline"
 
 
 def test_list_workers_includes_queue_depth(client: TestClient) -> None:
@@ -760,10 +784,16 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     _seed_worker(client, "w2")
     pool = _make_fake_pool()
     pool._store[worker_state_key("w1")] = json.dumps(
-        {"loaded": ["sft"], "target_loading": None, "available_modes": ["sft"]},
+        {
+            "loaded": ["sft"], "target_loading": None, "available_modes": ["sft"],
+            "gpu_healthy": True,
+        },
     )
     pool._store[worker_state_key("w2")] = json.dumps(
-        {"loaded": [], "target_loading": "turbo", "available_modes": ["turbo"]},
+        {
+            "loaded": [], "target_loading": "turbo", "available_modes": ["turbo"],
+            "gpu_healthy": True,
+        },
     )
     _override_pool(client, pool)
 
@@ -777,6 +807,30 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     assert by_mode["turbo"]["loaded_on"] == []
     assert by_mode["turbo"]["loading_on"] == ["w2"]
     assert by_mode["xl-sft"]["availability"] == "not_downloaded"
+
+
+def test_registry_unknown_availability_when_only_worker_gpu_broken(
+    client: TestClient,
+) -> None:
+    """Same as "no worker online" (issue #252) — a worker whose only
+    heartbeat says gpu_healthy: false must not make the registry think a
+    real worker is answering."""
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps(
+        {"loaded": ["sft"], "available_modes": ["sft"], "gpu_healthy": False},
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/registry")
+    assert resp.status_code == 200
+    availabilities = {m["availability"] for m in resp.json()["models"]}
+    assert availabilities == {"unknown_no_worker"}
 
 
 def test_registry_unknown_availability_when_no_worker_online(client: TestClient) -> None:
@@ -1126,7 +1180,13 @@ def test_restart_worker_requires_admin(client: TestClient) -> None:
 # ── download_model_endpoint ─────────────────────────────────────────
 
 
-def _make_pool_with_state(states: dict[str, dict | None]) -> object:
+def _make_pool_with_state(
+    states: dict[str, dict | None], *, gpu_healthy: bool = True,
+) -> object:
+    """Defaults every present worker's heartbeat to a healthy GPU so the
+    many download-endpoint tests unrelated to issue #367 don't need to know
+    about it. A state dict that already carries "gpu_healthy" (e.g. to
+    simulate a broken worker) is never overridden."""
     import json
 
     from songmaker_cli.acestep_state import worker_state_key
@@ -1134,7 +1194,9 @@ def _make_pool_with_state(states: dict[str, dict | None]) -> object:
     pool = _make_fake_pool()
     for wid, state in states.items():
         if state is not None:
-            pool._store[worker_state_key(wid)] = json.dumps(state)
+            payload = dict(state)
+            payload.setdefault("gpu_healthy", gpu_healthy)
+            pool._store[worker_state_key(wid)] = json.dumps(payload)
     return pool
 
 
@@ -1152,6 +1214,22 @@ def test_download_endpoint_no_workers(client: TestClient) -> None:
     _override_pool(client, _make_pool_with_state({"w1": None}))
     resp = client.post("/api/admin/registry/sft/download")
     assert resp.status_code == 503
+
+
+def test_download_endpoint_no_workers_when_gpu_broken(client: TestClient) -> None:
+    """Issue #367 finding 3: the download precheck must not treat a
+    heartbeating-but-GPU-broken worker as available — it would otherwise
+    fail asynchronously later with a generic "no workers", exactly the
+    delayed-symptom pattern from issue #252."""
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(
+        client,
+        _make_pool_with_state({"w1": {"available_modes": [], "gpu_healthy": False}}),
+    )
+    resp = client.post("/api/admin/registry/sft/download")
+    assert resp.status_code == 503
+    assert "No online workers available to download" in resp.json()["detail"]
 
 
 def test_download_endpoint_already_downloaded(client: TestClient) -> None:

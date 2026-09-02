@@ -62,6 +62,12 @@ class WorkerEphemeralState(BaseModel):
     available_modes: list[str] = []
     pinned: list[str] = []
     last_heartbeat_at: str | None = None
+    # None means the heartbeat predates this field (an old worker build) —
+    # distinct from False (NVML present but the GPU didn't answer). The
+    # admin worker pool (issue #367) shows a different sentence for each;
+    # neither is an operable "Idle" worker.
+    gpu_healthy: bool | None = None
+    gpu_health_detail: str | None = None
 
 
 WorkerStatus = Literal["online", "loading", "offline"]

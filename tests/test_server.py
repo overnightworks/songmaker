@@ -1633,6 +1633,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
             "vram_used_gb": 18.0,
             "vram_total_gb": 24.0,
             "available_modes": ["sft", "xl-sft"],
+            "gpu_healthy": True,
         }),
     )
     sync_redis.set(queue_depth_key("acestep-worker-0"), "0")

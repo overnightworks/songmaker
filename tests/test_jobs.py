@@ -1750,7 +1750,9 @@ def _seed_online_worker(factory, redis: _FakeRedis, worker_id: str = "w1") -> No
             vram_total_gb=24.0,
         )
         session.commit()
-    redis.store[worker_state_key(worker_id)] = json.dumps({"loaded": []})
+    redis.store[worker_state_key(worker_id)] = json.dumps(
+        {"loaded": [], "gpu_healthy": True},
+    )
 
 
 def test_download_model_on_worker_unknown_mode(seeded_db) -> None:

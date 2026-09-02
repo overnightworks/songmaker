@@ -1071,6 +1071,56 @@ def _mock_worker(mock_pool=None):
     return _ctx()
 
 
+def _mock_worker_process_health(mock_pool=None):
+    """Like _mock_worker, but leaves _has_online_acestep_worker real — for
+    tests that must exercise its own GPU-health decision rather than have
+    it stubbed away."""
+    from contextlib import contextmanager
+    from unittest.mock import AsyncMock, patch
+
+    if mock_pool is None:
+        mock_pool = AsyncMock()
+
+    @contextmanager
+    def _ctx():
+        with (
+            patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+            patch(
+                "songmaker_cli.generation_api.is_music_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+            patch(
+                "songmaker_cli.generation_api.is_scoring_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+        ):
+            yield mock_pool
+
+    return _ctx()
+
+
+def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
+    """Issue #367 finding 1: a registered worker whose only heartbeat says
+    gpu_healthy: false must never look online to the generate/repaint/cover
+    preflight — simulated NVML failure, not a lucky real GPU."""
+    import json
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.db.queries import register_worker
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        register_worker(
+            session, worker_id="broken-gpu-w", host="h", port=8001,
+            gpu_id=0, vram_total_gb=24.0,
+        )
+        session.commit()
+
+    mock_pool.get = AsyncMock(
+        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": False}).encode(),
+    )
+
+
 def test_generate_song_submits_job(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
         resp = client.post(
@@ -1361,6 +1411,27 @@ def test_repaint_submits_job(client: TestClient) -> None:
     assert repaint["repainting_end"] == 0.8
 
 
+def test_repaint_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post("/api/generations/g1/repaint", json={
+            "src_generation_id": "g1",
+            "repainting_start": 0.2,
+            "repainting_end": 0.8,
+            "model": "sft",
+        })
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
+
+
 def test_repaint_invalid_range(client: TestClient) -> None:
     resp = client.post("/api/generations/g1/repaint", json={
         "src_generation_id": "g1",
@@ -1486,6 +1557,27 @@ def test_cover_submits_job(client: TestClient) -> None:
     assert cover["prompt"] == "jazz version"
 
 
+def test_cover_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post("/api/generations/g1/cover", json={
+            "src_generation_id": "g1",
+            "audio_cover_strength": 0.7,
+            "prompt": "jazz version",
+            "model": "sft",
+        })
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
+
+
 def test_cover_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/cover", json={
         "src_generation_id": "g2",
@@ -1609,6 +1701,25 @@ def test_upload_reference_audio_too_small(client: TestClient) -> None:
     )
     assert resp.status_code == 400
     assert "too small" in resp.json()["detail"]
+
+
+def test_generate_song_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "sft"},
+        )
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
 
 
 def test_generate_song_redis_down(client: TestClient) -> None:

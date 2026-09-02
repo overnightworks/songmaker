@@ -82,8 +82,19 @@ def _seed(session, worker_id: str, *, host="h", port=8001):
     session.commit()
 
 
-def _set_state(redis, worker_id: str, state: dict) -> None:
-    redis.store[worker_state_key(worker_id)] = json.dumps(state)
+def _set_state(
+    redis, worker_id: str, state: dict, *, gpu_healthy: bool | None = True,
+) -> None:
+    """Write a worker heartbeat. Defaults to a healthy GPU so the many tests
+    unrelated to issue #367 don't need to know about it; pass
+    gpu_healthy=None to omit the key entirely (simulating an old worker
+    build) or gpu_healthy=False to simulate a broken one — the latter reads
+    more naturally as an explicit "gpu_healthy": False in the state dict,
+    which this never overrides."""
+    payload = dict(state)
+    if gpu_healthy is not None:
+        payload.setdefault("gpu_healthy", gpu_healthy)
+    redis.store[worker_state_key(worker_id)] = json.dumps(payload)
 
 
 def _set_queue(redis, worker_id: str, depth: int) -> None:
@@ -138,6 +149,41 @@ def test_pick_worker_skips_offline(db_session) -> None:
 def test_pick_worker_no_online_raises(db_session) -> None:
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
+    with pytest.raises(NoCapacityError):
+        _run(pick_worker(db_session, redis, "sft"))
+
+
+def test_pick_worker_skips_worker_with_broken_gpu(db_session) -> None:
+    """Issue #367: a worker whose GPU has gone away (NVML present but
+    unreachable) keeps heartbeating fine, so heartbeat presence alone must
+    not make it a candidate. Simulated via gpu_healthy: False in the
+    heartbeat, never a lucky real GPU — the scheduler must route the job to
+    its healthy neighbor instead."""
+    _seed(db_session, "broken-gpu-w", host="h1")
+    _seed(db_session, "healthy-w", host="h2")
+    redis = _InMemoryRedis()
+    _set_state(redis, "broken-gpu-w", {"loaded": ["sft"], "gpu_healthy": False})
+    _set_state(redis, "healthy-w", {"loaded": ["sft"], "gpu_healthy": True})
+
+    picked = _run(pick_worker(db_session, redis, "sft"))
+    assert picked.id == "healthy-w"
+
+
+def test_pick_worker_no_online_when_only_worker_has_broken_gpu(db_session) -> None:
+    _seed(db_session, "broken-gpu-w")
+    redis = _InMemoryRedis()
+    _set_state(redis, "broken-gpu-w", {"loaded": ["sft"], "gpu_healthy": False})
+    with pytest.raises(NoCapacityError):
+        _run(pick_worker(db_session, redis, "sft"))
+
+
+def test_pick_worker_missing_gpu_healthy_field_is_treated_as_not_online(db_session) -> None:
+    """Fail-closed: a heartbeat with no gpu_healthy key at all (an old or
+    broken worker build that never learned to publish it) must never be
+    routed a job on the silent assumption that it is fine."""
+    _seed(db_session, "w1")
+    redis = _InMemoryRedis()
+    _set_state(redis, "w1", {"loaded": ["sft"]}, gpu_healthy=None)
     with pytest.raises(NoCapacityError):
         _run(pick_worker(db_session, redis, "sft"))
 

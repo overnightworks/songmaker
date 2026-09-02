@@ -10,6 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
 from acestep_worker.models import GenerationTaskResult, WorkerTaskEvent
@@ -124,6 +125,58 @@ def test_health_endpoint(tmp_path: Path) -> None:
         resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+def test_health_returns_503_when_gpu_is_unavailable(tmp_path: Path) -> None:
+    """Issue #367: a worker whose NVML call fails (GPU vanished, driver
+    mismatch) must fail its own healthcheck — never stay green while
+    unable to generate. Simulated, not a lucky real GPU."""
+    deps, _ = _make_deps(tmp_path)
+    deps.gpu_health_checker = lambda: GpuHealth(
+        GpuHealthStatus.UNAVAILABLE, detail="Driver/library version mismatch",
+    )
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.get("/health")
+    assert resp.status_code == 503
+    assert "GPU unavailable" in resp.json()["detail"]
+    assert "Driver/library version mismatch" in resp.json()["detail"]
+
+
+def test_health_stays_200_when_pynvml_not_installed(tmp_path: Path) -> None:
+    """A CI/test host with no NVIDIA driver is not a broken worker."""
+    deps, _ = _make_deps(tmp_path)
+    deps.gpu_health_checker = lambda: GpuHealth(GpuHealthStatus.NOT_INSTALLED)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_build_state_payload_carries_gpu_healthy_false_when_gpu_unavailable(
+    tmp_path: Path,
+) -> None:
+    from acestep_worker.wrapper import build_state_payload
+
+    deps, _ = _make_deps(tmp_path)
+    deps.gpu_health_checker = lambda: GpuHealth(
+        GpuHealthStatus.UNAVAILABLE, detail="Driver/library version mismatch",
+    )
+    payload = _run(build_state_payload(deps))
+    assert payload["gpu_healthy"] is False
+    assert payload["gpu_health_detail"] == "Driver/library version mismatch"
+
+
+def test_build_state_payload_carries_gpu_healthy_true_by_default(
+    tmp_path: Path,
+) -> None:
+    from acestep_worker.wrapper import build_state_payload
+
+    deps, _ = _make_deps(tmp_path)
+    payload = _run(build_state_payload(deps))
+    assert payload["gpu_healthy"] is True
+    assert payload["gpu_health_detail"] is None
 
 
 def test_loaded_models_initial(tmp_path: Path) -> None:

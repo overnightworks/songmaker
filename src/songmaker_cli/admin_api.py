@@ -17,6 +17,7 @@ from songmaker_cli.acestep_state import (
     read_download_in_progress,
     read_queue_depth,
     read_worker_state,
+    worker_is_online,
 )
 from songmaker_cli.api_helpers import (
     AdminPagination,
@@ -306,7 +307,7 @@ def force_logout_endpoint(
 
 
 def _derive_worker_status(state: dict | None) -> str:
-    if state is None:
+    if not worker_is_online(state):
         return "offline"
     if state.get("target_loading"):
         return "loading"
@@ -351,6 +352,8 @@ def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralSta
         available_modes=list(state.get("available_modes", [])),
         pinned=list(state.get("pinned", [])),
         last_heartbeat_at=state.get("last_heartbeat_at"),
+        gpu_healthy=state.get("gpu_healthy"),
+        gpu_health_detail=state.get("gpu_health_detail"),
     )
 
 
@@ -397,7 +400,7 @@ async def get_registry_endpoint(
     for w in workers:
         states[w.id] = await read_worker_state(pool, w.id)
 
-    any_worker_online = any(st is not None for st in states.values())
+    any_worker_online = any(worker_is_online(st) for st in states.values())
 
     downloaded_union: set[str] = set()
     for st in states.values():
@@ -598,7 +601,7 @@ async def download_model_endpoint(
     for w in workers:
         online_states[w.id] = await read_worker_state(pool, w.id)
 
-    if not any(state is not None for state in online_states.values()):
+    if not any(worker_is_online(state) for state in online_states.values()):
         raise HTTPException(503, "No online workers available to download")
 
     downloaded_union: set[str] = set()

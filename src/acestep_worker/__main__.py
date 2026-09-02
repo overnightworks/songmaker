@@ -8,7 +8,7 @@ import uvicorn
 from redis.asyncio import Redis
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
-from acestep_worker.gpu_util import read_gpu_vram_stats
+from acestep_worker.gpu_util import check_gpu_health, read_gpu_vram_stats
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import ModelCache
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
@@ -81,6 +81,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         audio_output_dir=audio_dir,
         generate_runner=default_generate_runner,
         train_lora_runner=default_train_lora_runner,
+        gpu_health_checker=lambda: check_gpu_health(settings.gpu_id or 0),
     )
 
     deps.heartbeat = HeartbeatLoop(

@@ -22,6 +22,7 @@ from songmaker_cli.acestep_state import (
     read_queue_depth,
     read_worker_state,
     set_download_in_progress,
+    worker_is_online,
     worker_state_key,
 )
 
@@ -150,6 +151,30 @@ def test_read_worker_state_present(redis, event_loop) -> None:
     )
     result = event_loop.run_until_complete(read_worker_state(redis, "w1"))
     assert result == payload
+
+
+# ── worker_is_online ─────────────────────────────────────────────
+
+
+def test_worker_is_online_false_when_no_heartbeat() -> None:
+    assert worker_is_online(None) is False
+
+
+def test_worker_is_online_true_when_gpu_healthy() -> None:
+    assert worker_is_online({"loaded": [], "gpu_healthy": True}) is True
+
+
+def test_worker_is_online_false_when_gpu_unhealthy() -> None:
+    """Issue #367: a worker whose GPU has gone away keeps heartbeating fine
+    — its heartbeat existing is not enough, gpu_healthy must say True."""
+    assert worker_is_online({"loaded": [], "gpu_healthy": False}) is False
+
+
+def test_worker_is_online_false_when_gpu_healthy_field_missing() -> None:
+    """Fail-closed (issue #367 revision): a heartbeat with no gpu_healthy
+    key at all — an old or broken worker build that never learned to
+    publish it — must never be silently assumed fine."""
+    assert worker_is_online({"loaded": []}) is False
 
 
 def test_read_queue_depth_missing_returns_zero(redis, event_loop) -> None:

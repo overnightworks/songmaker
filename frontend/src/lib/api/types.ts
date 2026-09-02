@@ -674,6 +674,8 @@ export interface WorkerEphemeralStateItem {
 	available_modes: string[];
 	pinned: string[];
 	last_heartbeat_at?: string | null;
+	gpu_healthy?: boolean | null;
+	gpu_health_detail?: string | null;
 }
 
 export interface WorkerInfoItem {
