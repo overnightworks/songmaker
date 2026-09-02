@@ -14,6 +14,7 @@ from songmaker_cli.cowriter.catalog import (
     CliLoginNeedsApiKeyProvider,
     ConfiguredProvider,
     DependencyUnavailableProvider,
+    ProviderNeed,
     ProviderSetupMethod,
     ProviderSurface,
     UnconfiguredProvider,
@@ -132,15 +133,14 @@ def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
         lambda _name: None,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: CliLogin(logged_in=True, auth_method="claude.ai"),
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     configuration = get_provider_configuration("claude", ProviderSurface.JUDGE)
     assert configuration == DependencyUnavailableProvider(
         "claude",
         "anthropic",
-        "ANTHROPIC_API_KEY",
     )
     with pytest.raises(ProviderUnavailableError, match="required dependency 'anthropic'"):
         list_provider_models("claude")
@@ -158,15 +158,14 @@ def test_claude_key_without_sdk_handles_a_blocked_import(monkeypatch):
     assert configuration == DependencyUnavailableProvider(
         "claude",
         "anthropic",
-        "ANTHROPIC_API_KEY",
     )
 
 
 def test_claude_cli_login_marks_provider_as_configured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: CliLogin(logged_in=True, auth_method="claude.ai"),
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == ConfiguredProvider(
@@ -178,13 +177,13 @@ def test_claude_cli_login_marks_provider_as_configured(monkeypatch):
 def test_claude_cli_not_logged_in_is_unconfigured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: CliLogin(logged_in=False, auth_method=None),
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLogin(logged_in=False, auth_method=None),
     )
 
     assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == UnconfiguredProvider(
         "claude",
-        "ANTHROPIC_API_KEY",
+        ProviderNeed.CLI_LOGIN,
     )
 
 
@@ -212,6 +211,7 @@ def test_unconfigured_provider_names_missing_environment_key(
 
     assert get_provider_configuration(provider, ProviderSurface.JUDGE) == UnconfiguredProvider(
         provider,
+        ProviderNeed.API_KEY,
         environment_key,
     )
 
@@ -219,8 +219,8 @@ def test_unconfigured_provider_names_missing_environment_key(
 def test_claude_cli_catalog_uses_cli_model_aliases(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: CliLogin(logged_in=True, auth_method="claude.ai"),
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_cli_model_aliases",
@@ -233,8 +233,8 @@ def test_claude_cli_catalog_uses_cli_model_aliases(monkeypatch):
 def test_claude_cli_catalog_failure_is_named_error(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: CliLogin(logged_in=True, auth_method="claude.ai"),
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     def _boom():
@@ -296,15 +296,24 @@ def test_grok_and_codex_cli_logins_need_the_api_key_for_turns(monkeypatch):
             "OPENAI_API_KEY",
         )
     )
+    for provider, method, environment_key in (
+        ("grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY"),
+        ("codex", ProviderSetupMethod.CODEX_CLI, "OPENAI_API_KEY"),
+    ):
+        assert get_provider_configuration(provider, ProviderSurface.CATALOG) == (
+            CliLoginNeedsApiKeyProvider(provider, method, environment_key)
+        )
+        with pytest.raises(ProviderUnavailableError, match=environment_key):
+            list_provider_models(provider)
 
 
 def test_claude_key_needs_a_cli_login_for_the_co_writer(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.claude_cli_login",
-        lambda _binary: LOGGED_OUT,
+        "songmaker_cli.cowriter.catalog.cli_login_status",
+        lambda: LOGGED_OUT,
     )
 
     assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == (
-        ApiKeyNeedsCliLoginProvider("claude", "ANTHROPIC_API_KEY")
+        ApiKeyNeedsCliLoginProvider("claude")
     )

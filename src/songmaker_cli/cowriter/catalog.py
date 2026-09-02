@@ -6,6 +6,7 @@ not a fallback list.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from importlib.util import find_spec
@@ -16,12 +17,11 @@ from pydantic import SecretStr
 
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
-    claude_cli_login,
     codex_cli_login,
     grok_cli_status,
 )
 from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
-from songmaker_cli.claude.provider import _find_claude_binary, list_cli_model_aliases
+from songmaker_cli.claude.provider import cli_login_status, list_cli_model_aliases
 from songmaker_cli.constants import (
     ANTHROPIC_API_VERSION,
     COWRITER_ANTHROPIC_MODELS_URL,
@@ -49,6 +49,8 @@ ANTHROPIC_API_KEY_ENVIRONMENT: Final = "ANTHROPIC_API_KEY"
 XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
 
+log = logging.getLogger(__name__)
+
 
 class ProviderSetupMethod(StrEnum):
     API_KEY = "api_key"
@@ -61,6 +63,11 @@ class ProviderSurface(StrEnum):
     CO_WRITER = "cowriter"
     JUDGE = "judge"
     CATALOG = "catalog"
+
+
+class ProviderNeed(StrEnum):
+    CLI_LOGIN = "cli_login"
+    API_KEY = "api_key"
 
 
 @dataclass(frozen=True)
@@ -80,20 +87,19 @@ class CliLoginNeedsApiKeyProvider:
 @dataclass(frozen=True)
 class ApiKeyNeedsCliLoginProvider:
     provider: str
-    environment_key: str
 
 
 @dataclass(frozen=True)
 class UnconfiguredProvider:
     provider: str
-    missing_environment_key: str
+    need: ProviderNeed
+    missing_environment_key: str | None = None
 
 
 @dataclass(frozen=True)
 class DependencyUnavailableProvider:
     provider: str
     dependency: str
-    environment_key: str | None = None
 
 
 type ProviderConfiguration = (
@@ -127,10 +133,11 @@ def list_provider_models(provider: str) -> list[str]:
             f"{provider} is unavailable: required dependency "
             f"'{configuration.dependency}' is not installed",
         )
-    if isinstance(configuration, UnconfiguredProvider):
+    if isinstance(configuration, (CliLoginNeedsApiKeyProvider, UnconfiguredProvider)):
+        environment_key = configuration.missing_environment_key
         raise ProviderUnavailableError(
             provider,
-            f"{provider} is not configured: missing {configuration.missing_environment_key}",
+            f"{provider} is not configured: missing {environment_key}",
         )
     return _models_for_setup_method(provider, configuration.method, settings)
 
@@ -142,8 +149,6 @@ def _models_for_setup_method(
 ) -> list[str]:
     if method is ProviderSetupMethod.CLAUDE_CLI:
         return _list_claude_cli_models()
-    if method is ProviderSetupMethod.GROK_CLI:
-        return _list_grok_cli_models()
     if method is ProviderSetupMethod.CODEX_CLI:
         raise ProviderModelCatalogUnavailableError(
             provider,
@@ -176,7 +181,6 @@ def _provider_configuration(
             return DependencyUnavailableProvider(
                 provider,
                 _ANTHROPIC_SDK_DISTRIBUTION,
-                credential.environment_key,
             )
         return ConfiguredProvider(
             provider,
@@ -193,27 +197,39 @@ def _provider_configuration(
             credential.environment_key,
         )
     if key_is_set:
-        return ApiKeyNeedsCliLoginProvider(provider, credential.environment_key)
-    return UnconfiguredProvider(provider, credential.environment_key)
+        return ApiKeyNeedsCliLoginProvider(provider)
+    need = _needed_setup(provider, surface)
+    return UnconfiguredProvider(
+        provider,
+        need,
+        credential.environment_key if need is ProviderNeed.API_KEY else None,
+    )
 
 
 def _api_key_carries(provider: str, surface: ProviderSurface) -> bool:
     return not (provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER)
 
 
-def _cli_carries(method: ProviderSetupMethod, surface: ProviderSurface) -> bool:
-    return surface is ProviderSurface.CATALOG or method is ProviderSetupMethod.CLAUDE_CLI
+def _cli_carries(method: ProviderSetupMethod, _surface: ProviderSurface) -> bool:
+    return method is ProviderSetupMethod.CLAUDE_CLI
+
+
+def _needed_setup(provider: str, surface: ProviderSurface) -> ProviderNeed:
+    if provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER:
+        return ProviderNeed.CLI_LOGIN
+    return ProviderNeed.API_KEY
 
 
 def _cli_setup_method(provider: str) -> ProviderSetupMethod | None:
-    if provider == _CLAUDE_PROVIDER:
-        if claude_cli_login(_find_claude_binary()).logged_in:
+    try:
+        if provider == _CLAUDE_PROVIDER and cli_login_status().logged_in:
             return ProviderSetupMethod.CLAUDE_CLI
-        return None
-    if provider == _GROK_PROVIDER and grok_cli_status().login.logged_in:
-        return ProviderSetupMethod.GROK_CLI
-    if provider == _CODEX_PROVIDER and codex_cli_login().logged_in:
-        return ProviderSetupMethod.CODEX_CLI
+        if provider == _GROK_PROVIDER and grok_cli_status().login.logged_in:
+            return ProviderSetupMethod.GROK_CLI
+        if provider == _CODEX_PROVIDER and codex_cli_login().logged_in:
+            return ProviderSetupMethod.CODEX_CLI
+    except AgentCliUnavailableError as exc:
+        log.warning("%s CLI probe unavailable: %s: %s", provider, type(exc).__name__, exc)
     return None
 
 
@@ -351,22 +367,6 @@ def _list_claude_cli_models() -> list[str]:
             "no chat models returned by claude CLI",
         )
     return sorted(aliases)
-
-
-def _list_grok_cli_models() -> list[str]:
-    try:
-        model_names = grok_cli_status().model_names
-    except AgentCliUnavailableError as exc:
-        raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER,
-            f"could not list grok CLI models: {exc}",
-        ) from exc
-    if not model_names:
-        raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER,
-            "the grok CLI is no longer logged in",
-        )
-    return sorted(model_names)
 
 
 def _list_claude_models(key: str) -> list[str]:

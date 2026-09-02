@@ -47,12 +47,11 @@
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import {
 		ADMIN_TABS_LABEL,
-		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON,
 		PROVIDER_CLI_LOGIN_LABELS,
-		PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON,
 		PROVIDER_CONFIGURED_LABEL,
 		PROVIDER_KEY_ONLY_LABEL,
 		PROVIDER_LOGIN_ONLY_LABEL,
+		PROVIDER_MISSING_DEPENDENCY_LABEL,
 		PROVIDER_NOT_CONFIGURED_LABEL
 	} from '$lib/constants';
 	import {
@@ -287,13 +286,15 @@
 	function surfaceDetail(surface: ProviderSurfaceStatus): string {
 		switch (surface.state) {
 			case 'missing_dependency':
-				return `key set, but the '${surface.missing_dependency}' package is not installed`;
+				return `Missing ${surface.missing_dependency ?? 'required dependency'}`;
 			case 'unconfigured':
-				return `${PROVIDER_NOT_CONFIGURED_LABEL} — missing ${surface.environment_key}`;
+				return surface.needs === 'cli_login'
+					? 'Missing Claude Code CLI login'
+					: `Missing ${surface.environment_key ?? 'required API key'}`;
 			case 'cli_login_needs_api_key':
 				return `${cliLoginLabel(surface)} found — but answering needs its API key`;
 			case 'api_key_needs_cli_login':
-				return `${surface.environment_key} set — but answering needs the Claude Code CLI login`;
+				return 'Key is set, but answering needs the Claude Code CLI login';
 			case 'configured':
 				return `${PROVIDER_CONFIGURED_LABEL} — ${cliLoginLabel(surface) ?? `${surface.environment_key} set`}`;
 		}
@@ -306,7 +307,16 @@
 	}
 
 	function worstState(status: ProviderStatus): ProviderSurfaceStatus['state'] {
-		return status.cowriter.state === 'configured' ? status.judge.state : status.cowriter.state;
+		const stateRank: Record<ProviderSurfaceStatus['state'], number> = {
+			unconfigured: 0,
+			missing_dependency: 1,
+			cli_login_needs_api_key: 2,
+			api_key_needs_cli_login: 2,
+			configured: 3
+		};
+		return stateRank[status.cowriter.state] <= stateRank[status.judge.state]
+			? status.cowriter.state
+			: status.judge.state;
 	}
 
 	function surfaceFor(provider: string, surface: 'cowriter' | 'judge') {
@@ -318,7 +328,9 @@
 	}
 
 	function pickerStatus(provider: string, surface: 'cowriter' | 'judge'): string {
-		const state = surfaceFor(provider, surface)?.state;
+		const status = surfaceFor(provider, surface);
+		const state = status?.state;
+		if (state === 'missing_dependency') return PROVIDER_MISSING_DEPENDENCY_LABEL;
 		if (state === 'cli_login_needs_api_key') return PROVIDER_LOGIN_ONLY_LABEL;
 		return state === 'api_key_needs_cli_login'
 			? PROVIDER_KEY_ONLY_LABEL
@@ -327,13 +339,7 @@
 
 	function pickerReason(provider: string, surface: 'cowriter' | 'judge'): string {
 		const status = surfaceFor(provider, surface);
-		if (status?.state === 'cli_login_needs_api_key') {
-			return PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON;
-		}
-		if (status?.state === 'api_key_needs_cli_login') {
-			return PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON;
-		}
-		return `Missing ${status?.environment_key}`;
+		return status ? surfaceDetail(status) : 'Provider status is unavailable';
 	}
 
 	async function loadModelsTab() {

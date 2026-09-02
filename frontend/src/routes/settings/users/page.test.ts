@@ -88,16 +88,19 @@ function providerStatus(
 
 const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
 	state: 'configured',
+	needs: null,
 	setup_method: 'claude_cli',
 	environment_key: null
 };
 const SIGNED_IN_GROK_CLI: ProviderSurfaceStatus = {
 	state: 'cli_login_needs_api_key',
+	needs: 'api_key',
 	setup_method: 'grok_cli',
 	environment_key: 'XAI_API_KEY'
 };
 const NO_CODEX_KEY: ProviderSurfaceStatus = {
 	state: 'unconfigured',
+	needs: 'api_key',
 	setup_method: null,
 	environment_key: 'OPENAI_API_KEY'
 };
@@ -111,10 +114,16 @@ const CLAUDE_KEY_WITHOUT_CLI: ProviderStatus[] = [
 		'claude',
 		{
 			state: 'api_key_needs_cli_login',
+			needs: 'cli_login',
+			setup_method: 'api_key',
+			environment_key: null
+		},
+		{
+			state: 'configured',
+			needs: null,
 			setup_method: 'api_key',
 			environment_key: 'ANTHROPIC_API_KEY'
-		},
-		{ state: 'configured', setup_method: 'api_key', environment_key: 'ANTHROPIC_API_KEY' }
+		}
 	),
 	providerStatus('codex', NO_CODEX_KEY),
 	providerStatus('grok', SIGNED_IN_GROK_CLI)
@@ -228,11 +237,13 @@ beforeEach(() => {
 		providerStatus('claude', CLAUDE_VIA_CLI),
 		providerStatus('codex', {
 			state: 'configured',
+			needs: null,
 			setup_method: 'api_key',
 			environment_key: 'OPENAI_API_KEY'
 		}),
 		providerStatus('grok', {
 			state: 'unconfigured',
+			needs: 'api_key',
 			setup_method: null,
 			environment_key: 'XAI_API_KEY'
 		})
@@ -395,7 +406,7 @@ describe('admin models tab', () => {
 
 		expect(providers.textContent).toContain('Claude Code CLI login');
 		expect(providers.textContent).toContain('OPENAI_API_KEY set');
-		expect(providers.textContent).toContain('missing XAI_API_KEY');
+		expect(providers.textContent).toContain('Missing XAI_API_KEY');
 	});
 
 	it('names the CLI each provider is signed in with', async () => {
@@ -428,8 +439,28 @@ describe('admin models tab', () => {
 		for (const heading of ['Co-Writer', 'Scoring']) {
 			const picker = sectionByHeading(target, heading);
 			expect(pillNamed(picker, 'Grok').disabled).toBe(true);
-			expect(picker.textContent).toContain('Signed in, but answering needs its API key');
+			expect(picker.textContent).toContain('answering needs its API key');
 		}
+	});
+
+	it('names a missing dependency and a missing status without inventing an API key', async () => {
+		api.fetchProviderStatus.mockResolvedValue([
+			providerStatus('claude', {
+				state: 'missing_dependency',
+				needs: null,
+				setup_method: null,
+				environment_key: null,
+				missing_dependency: 'anthropic'
+			})
+		]);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(sectionByHeading(target, 'Providers').textContent).toContain('Missing anthropic');
+		expect(sectionByHeading(target, 'Co-Writer').textContent).toContain(
+			'Provider status is unavailable'
+		);
+		expect(target.textContent).not.toContain('Missing undefined');
 	});
 
 	it('offers a Claude API key to the judge but not the co-writer', async () => {

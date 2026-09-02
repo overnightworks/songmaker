@@ -124,9 +124,7 @@ export const PROVIDER_CONFIGURED_LABEL = 'configured';
 export const PROVIDER_NOT_CONFIGURED_LABEL = 'not configured';
 export const PROVIDER_LOGIN_ONLY_LABEL = 'login only';
 export const PROVIDER_KEY_ONLY_LABEL = 'key only';
-export const PROVIDER_CLI_LOGIN_NEEDS_API_KEY_REASON = 'Signed in, but answering needs its API key';
-export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_REASON =
-	'Key is set, but answering needs the Claude Code CLI login';
+export const PROVIDER_MISSING_DEPENDENCY_LABEL = 'missing dependency';
 
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal
 // streamed while song X is open can target song Y. Every tool-call badge

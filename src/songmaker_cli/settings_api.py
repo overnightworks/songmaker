@@ -412,24 +412,25 @@ def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfac
         case CliLoginNeedsApiKeyProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.CLI_LOGIN_NEEDS_API_KEY,
+                needs="api_key",
                 setup_method=configuration.method.value,
                 environment_key=configuration.missing_environment_key,
             )
         case ApiKeyNeedsCliLoginProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.API_KEY_NEEDS_CLI_LOGIN,
+                needs="cli_login",
                 setup_method="api_key",
-                environment_key=configuration.environment_key,
             )
         case DependencyUnavailableProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.MISSING_DEPENDENCY,
-                environment_key=configuration.environment_key,
                 missing_dependency=configuration.dependency,
             )
         case UnconfiguredProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.UNCONFIGURED,
+                needs=configuration.need.value,
                 environment_key=configuration.missing_environment_key,
             )
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
