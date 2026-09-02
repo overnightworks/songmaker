@@ -461,12 +461,15 @@ finished oneshot is legitimately inactive.
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
 preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
 means `songmaker.service` does not run its boot-time `docker compose up -d`:
-the boot catch-up stays off and the unit reports its named failure through
+the boot catch-up stays off; a red preflight fails the unit and alerts through
+`OnFailure=`, while a missing or failed mirror aborts the start job as a
+dependency failure (journal: result 'dependency'), which is not covered by
 `OnFailure=`. Containers dockerd restarts itself under `restart: unless-stopped`
 are unaffected. The two-minute deploy tick runs that same argumentless
 preflight, so boot and deploy resolve the same mirror location. That preflight
 also requires all three agent-CLI binaries, including Codex's Node path, to be
-resolvable; this blast radius is likewise limited to the boot catch-up, not to
+resolvable; this blast radius is likewise limited to the boot catch-up and the
+deploy tick, not to
 containers dockerd restarts itself.
 
 The mirror installer freezes its resolved directory in the mirror service's
