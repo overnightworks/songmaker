@@ -6,14 +6,10 @@
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
+	import { RAIL_ITEM_SELECTOR } from './rail-item-selector';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
-	const RAIL_ITEM_SELECTOR = '.album-label, .playlist-label';
-
-	function openRailItem(item: HTMLElement): void {
-		item.click();
-	}
 </script>
 
 <nav class="rail" aria-label={RAIL_NAV_LABEL}>
@@ -25,7 +21,7 @@
 
 	<div
 		class="rail-scroll"
-		use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR, onOpen: openRailItem }}
+		use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}
 	>
 		<RailLibraryGroup />
 		<RailPlaylistsGroup />
@@ -81,6 +77,13 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
+		cursor: grab;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+
+	.rail-scroll:global(.is-dragging) {
+		cursor: grabbing;
 	}
 
 	.rail-settings-pin {
