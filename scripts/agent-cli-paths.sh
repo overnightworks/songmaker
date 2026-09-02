@@ -72,29 +72,38 @@ require_main_checkout() {
 #   * a unit WITHOUT that directive counted as ours. It is now foreign: a file
 #     we cannot identify is exactly the one to stop at.
 #   * the comparison was an unbounded prefix, so `…/mirror.py.evil` passed as
-#     `…/mirror.py`. It now has to match to a token boundary — end of string,
-#     or a space before the arguments — which is what keeps our own unit with
-#     changed arguments ours while a lookalike is not.
+#     `…/mirror.py`.
 #
-# The third weakness was in the caller, not here: the path unit was compared
-# against the operator's home rather than the file it watches, so a second
-# checkout watching the same operator passed. It is compared against the full
-# path now.
+# How the comparison ends depends on what the directive holds. `ExecStart=`
+# carries a command followed by arguments, so ours-with-different-arguments is
+# still ours: the match may end at a space. `PathChanged=` and `Unit=` carry
+# one value and nothing else, so anything after it is somebody else's — those
+# are compared exactly. Getting that backwards let `PathChanged=/expected
+# other-stuff` count as ours.
 #
-#   refuse_silent_takeover TARGET DIRECTIVE EXPECTED FORCE
+# A directive that may appear more than once is checked in every occurrence,
+# not just the first: the path unit watches three files, and reading only the
+# first left a foreign watch on the other two invisible.
+#
+#   refuse_silent_takeover TARGET DIRECTIVE EXPECTED FORCE [command|exact]
 refuse_silent_takeover() {
-    local target="$1" directive="$2" expected="$3" force="$4"
-    local installed reason=""
+    local target="$1" directive="$2" expected="$3" force="$4" mode="${5:-exact}"
+    local installed reason="" line found=0
     [ -f "$target" ] || return 0
-    installed="$(sed -n "s/^${directive}=//p" "$target" | head -1)"
 
-    if [ -z "$installed" ]; then
-        reason="it has no $directive= line, so it cannot be identified"
-    else
-        case "$installed" in
-            "$expected"|"$expected "*) ;;
-            *) reason="its $directive is: $installed" ;;
+    while IFS= read -r line; do
+        found=1
+        case "$mode" in
+            command) case "$line" in "$expected"|"$expected "*) continue ;; esac ;;
+            *)       [ "$line" != "$expected" ] || continue ;;
         esac
+        installed="$line"
+        reason="its $directive is: $line"
+        break
+    done < <(sed -n "s/^${directive}=//p" "$target")
+
+    if [ "$found" = "0" ]; then
+        reason="it has no $directive= line, so it cannot be identified"
     fi
     [ -n "$reason" ] || return 0
 

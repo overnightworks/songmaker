@@ -143,19 +143,42 @@ ESCAPED_CHECK_SCRIPT="$(sed_escape_replacement "$CHECK_SCRIPT")"
 MIRROR_EXEC="$MIRROR_SCRIPT --home $INSTALL_HOME --mirror-dir $MIRROR_DIR"
 ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/alert.sh"
 
+# The path unit repeats PathChanged= and PathModified= per watched file, so
+# "does any line equal this" is the question — while a line that matches no
+# expected file at all is the foreign one refuse_silent_takeover reports.
+_watch_is_ours() {
+    local target="$1" watched="$2"
+    [ -f "$target" ] || return 0
+    if ! grep -qxF "PathChanged=$watched" "$target"; then
+        if [ "$FORCE" = "1" ]; then
+            echo "Replacing $target (--force): it does not watch $watched"
+            return 0
+        fi
+        echo "ERROR: $target belongs to something else." >&2
+        echo "  it does not watch $watched" >&2
+        echo "Another checkout installed it, or it was edited by hand. Look" >&2
+        echo "first; re-run with --force to take it over." >&2
+        return 1
+    fi
+}
+
 # EVERY check before the FIRST write. Half an installation is worse than none:
 # a run that replaces the alert unit and then refuses at the mirror unit
 # leaves two checkouts owning one machine's systemd, which is exactly the
 # state --force exists to make someone look at.
-# The path unit is compared against the file it watches, not against the home
-# it sits under: "some PathChanged below this home" is not ownership, and a
-# second checkout watching the same operator would have passed.
-refuse_silent_takeover "$SERVICE_TARGET" ExecStart "$MIRROR_SCRIPT" "$FORCE" || exit 1
-refuse_silent_takeover "$PATH_TARGET" PathChanged \
-    "$INSTALL_HOME/.claude/.credentials.json" "$FORCE" || exit 1
+# ExecStart is a command with arguments, so ours-with-other-arguments is still
+# ours. PathChanged and Unit hold one value, so they are compared exactly —
+# and the path unit's three watches are each compared, since a foreign watch
+# on the second or third line would otherwise be invisible. Each watched file
+# is checked against the home this run installs for, which is what makes a
+# second checkout watching the same operator visible.
+refuse_silent_takeover "$SERVICE_TARGET" ExecStart "$MIRROR_SCRIPT" "$FORCE" command || exit 1
+refuse_silent_takeover "$ALERT_SERVICE_TARGET" ExecStart "$ALERT_EXEC_PREFIX" "$FORCE" command || exit 1
 refuse_silent_takeover "$TIMER_TARGET" Unit \
     "songmaker-cli-credentials-mirror.service" "$FORCE" || exit 1
-refuse_silent_takeover "$ALERT_SERVICE_TARGET" ExecStart "$ALERT_EXEC_PREFIX" "$FORCE" || exit 1
+for watched in .claude/.credentials.json .grok/auth.json .codex/auth.json; do
+    _watch_is_ours "$PATH_TARGET" "$INSTALL_HOME/$watched" || exit 1
+done
 
 TMP_SERVICE="$(mktemp)"
 TMP_PATH="$(mktemp)"

@@ -477,6 +477,23 @@ FOREIGN_UNITS = {
         "songmaker-cli-credentials-mirror.timer",
         "[Timer]\nUnit=somebody-elses.service\n",
     ),
+    # Unit= holds one value; anything after it is not ours. Treating it like a
+    # command line, where a space starts the arguments, let this through.
+    "timer-with-trailing-junk": (
+        "songmaker-cli-credentials-mirror.timer",
+        "[Timer]\nUnit=songmaker-cli-credentials-mirror.service other\n",
+    ),
+    "path-with-trailing-junk": (
+        "songmaker-cli-credentials-mirror.path",
+        "[Path]\nPathChanged={home}/.claude/.credentials.json other\n",
+    ),
+    # The first watch is ours, the ones after it are not. Reading only the
+    # first PathChanged= line left these invisible.
+    "path-foreign-watch-on-a-later-line": (
+        "songmaker-cli-credentials-mirror.path",
+        "[Path]\nPathChanged={home}/.claude/.credentials.json\n"
+        "PathChanged=/home/someone-else/.grok/auth.json\n",
+    ),
     "alert-another-checkout": (
         "songmaker-alert@.service",
         "[Service]\nExecStart=/somewhere/else/scripts/alert.sh \"subject\"\n",
