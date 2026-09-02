@@ -65,28 +65,46 @@ require_main_checkout() {
 # files: a unit legitimately changes between versions of this repository, and a
 # guard that fired on every upgrade would be turned off within a week. The
 # directive is the one that names who the unit belongs to — the script an
-# ExecStart runs, the home a PathChanged watches, the service a timer drives —
-# and it is compared as a prefix, so our own unit with changed arguments is
-# still ours.
+# ExecStart runs, the home a PathChanged watches, the service a timer drives.
 #
-#   refuse_silent_takeover TARGET DIRECTIVE EXPECTED_PREFIX FORCE
+# Two ways this used to wave a stranger through, both closed:
+#
+#   * a unit WITHOUT that directive counted as ours. It is now foreign: a file
+#     we cannot identify is exactly the one to stop at.
+#   * the comparison was an unbounded prefix, so `…/mirror.py.evil` passed as
+#     `…/mirror.py`. It now has to match to a token boundary — end of string,
+#     or a space before the arguments — which is what keeps our own unit with
+#     changed arguments ours while a lookalike is not.
+#
+# The third weakness was in the caller, not here: the path unit was compared
+# against the operator's home rather than the file it watches, so a second
+# checkout watching the same operator passed. It is compared against the full
+# path now.
+#
+#   refuse_silent_takeover TARGET DIRECTIVE EXPECTED FORCE
 refuse_silent_takeover() {
-    local target="$1" directive="$2" expected="$3" force="$4" installed
+    local target="$1" directive="$2" expected="$3" force="$4"
+    local installed reason=""
     [ -f "$target" ] || return 0
     installed="$(sed -n "s/^${directive}=//p" "$target" | head -1)"
-    [ -n "$installed" ] || return 0
-    case "$installed" in
-        "$expected"*) return 0 ;;
-    esac
+
+    if [ -z "$installed" ]; then
+        reason="it has no $directive= line, so it cannot be identified"
+    else
+        case "$installed" in
+            "$expected"|"$expected "*) ;;
+            *) reason="its $directive is: $installed" ;;
+        esac
+    fi
+    [ -n "$reason" ] || return 0
+
     if [ "$force" = "1" ]; then
-        echo "Replacing $target (--force):"
-        echo "  its $directive was:  $installed"
-        echo "  this run expects:    $expected..."
+        echo "Replacing $target (--force): $reason"
         return 0
     fi
     echo "ERROR: $target belongs to something else." >&2
-    echo "  its $directive is: $installed" >&2
-    echo "  this run expects:  $expected..." >&2
+    echo "  $reason" >&2
+    echo "  this run expects $directive: $expected" >&2
     echo "Another checkout installed it, or it was edited by hand. Look first;" >&2
     echo "re-run with --force to take it over." >&2
     return 1

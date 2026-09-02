@@ -325,17 +325,92 @@ def _linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
     return linked
 
 
-def test_it_refuses_a_unit_that_belongs_to_another_checkout(run_installer) -> None:
+# Every unit the installer writes, and every way a stranger used to slip past.
+FOREIGN_UNITS = {
+    "service-another-checkout": (
+        "songmaker-cli-credentials-mirror.service",
+        "[Service]\nExecStart=/somewhere/else/mirror_agent_cli_credentials.py\n",
+    ),
+    # An unbounded prefix let this through: it starts with our script's path.
+    "service-lookalike-suffix": (
+        "songmaker-cli-credentials-mirror.service",
+        "[Service]\nExecStart={mirror_script}.evil\n",
+    ),
+    # No directive at all: a file we cannot identify is the one to stop at.
+    "service-unidentifiable": (
+        "songmaker-cli-credentials-mirror.service",
+        "[Service]\nType=oneshot\n",
+    ),
+    "path-another-home": (
+        "songmaker-cli-credentials-mirror.path",
+        "[Path]\nPathChanged=/home/someone-else/.claude/.credentials.json\n",
+    ),
+    # Same operator, different checkout: "somewhere under this home" is not
+    # ownership, which is why the path unit is matched exactly.
+    "path-same-home-other-file": (
+        "songmaker-cli-credentials-mirror.path",
+        "[Path]\nPathChanged={home}/.grok/auth.json\n",
+    ),
+    "timer-drives-another-service": (
+        "songmaker-cli-credentials-mirror.timer",
+        "[Timer]\nUnit=somebody-elses.service\n",
+    ),
+    "alert-another-checkout": (
+        "songmaker-alert@.service",
+        "[Service]\nExecStart=/somewhere/else/scripts/alert.sh \"subject\"\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_UNITS))
+def test_it_refuses_any_unit_that_belongs_to_something_else(
+    run_installer, case,
+) -> None:
     run_installer()
-    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    name, body = FOREIGN_UNITS[case]
+    unit = run_installer.units / name
     unit.write_text(
-        unit.read_text().replace("ExecStart=", "ExecStart=/somewhere/else/", 1),
+        body.format(
+            mirror_script=run_installer.checkout
+            / "scripts" / "mirror_agent_cli_credentials.py",
+            home=run_installer.home,
+        ),
     )
 
     result = run_installer()
 
-    assert result.returncode == 1
+    assert result.returncode == 1, f"stdout:\n{result.stdout}"
     assert "belongs to something else" in result.stderr
+
+
+@pytest.mark.parametrize("case", sorted(FOREIGN_UNITS))
+def test_force_takes_any_of_them_over(run_installer, case) -> None:
+    run_installer()
+    name, body = FOREIGN_UNITS[case]
+    unit = run_installer.units / name
+    unit.write_text(
+        body.format(
+            mirror_script=run_installer.checkout
+            / "scripts" / "mirror_agent_cli_credentials.py",
+            home=run_installer.home,
+        ),
+    )
+
+    result = run_installer("--force")
+
+    assert result.returncode == 0, f"stderr:\n{result.stderr}"
+    assert "somewhere else" not in unit.read_text()
+
+
+def test_our_own_unit_with_changed_arguments_is_still_ours(run_installer) -> None:
+    """A guard that fired on every upgrade would be switched off within a week."""
+    run_installer()
+    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
+    unit.write_text(unit.read_text().replace("--mirror-dir", "--verbose --mirror-dir"))
+
+    result = run_installer()
+
+    assert result.returncode == 0, f"stderr:\n{result.stderr}"
 
 
 def test_a_refused_takeover_replaces_nothing_at_all(run_installer) -> None:
@@ -351,19 +426,6 @@ def test_a_refused_takeover_replaces_nothing_at_all(run_installer) -> None:
     run_installer()
 
     assert alert.read_text() == "[Service]\nExecStart=/untouched\n"
-
-
-def test_force_takes_a_foreign_unit_over(run_installer) -> None:
-    run_installer()
-    unit = run_installer.units / "songmaker-cli-credentials-mirror.service"
-    unit.write_text(
-        unit.read_text().replace("ExecStart=", "ExecStart=/somewhere/else/", 1),
-    )
-
-    result = run_installer("--force")
-
-    assert result.returncode == 0
-    assert "/somewhere/else/" not in unit.read_text()
 
 
 def test_running_it_twice_changes_nothing_the_second_time(run_installer) -> None:

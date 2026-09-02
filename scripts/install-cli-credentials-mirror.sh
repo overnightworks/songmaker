@@ -133,8 +133,12 @@ ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/alert.sh"
 # a run that replaces the alert unit and then refuses at the mirror unit
 # leaves two checkouts owning one machine's systemd, which is exactly the
 # state --force exists to make someone look at.
+# The path unit is compared against the file it watches, not against the home
+# it sits under: "some PathChanged below this home" is not ownership, and a
+# second checkout watching the same operator would have passed.
 refuse_silent_takeover "$SERVICE_TARGET" ExecStart "$MIRROR_SCRIPT" "$FORCE" || exit 1
-refuse_silent_takeover "$PATH_TARGET" PathChanged "$INSTALL_HOME/" "$FORCE" || exit 1
+refuse_silent_takeover "$PATH_TARGET" PathChanged \
+    "$INSTALL_HOME/.claude/.credentials.json" "$FORCE" || exit 1
 refuse_silent_takeover "$TIMER_TARGET" Unit \
     "songmaker-cli-credentials-mirror.service" "$FORCE" || exit 1
 refuse_silent_takeover "$ALERT_SERVICE_TARGET" ExecStart "$ALERT_EXEC_PREFIX" "$FORCE" || exit 1
