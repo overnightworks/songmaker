@@ -115,6 +115,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	let isAnimating = false;
 	let dragState: DragState | null = null;
 	let suppressNextClick = false;
+	let forwardingOpen = false;
 	// A click is pointerdown+pointerup: by the time the paired 'click' event
 	// fires, isAnimating has already been cleared by the pointerdown handler —
 	// so whether this press interrupted a still-rolling strip has to be
@@ -274,6 +275,10 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	}
 
 	function onClick(event: MouseEvent) {
+		if (forwardingOpen) {
+			forwardingOpen = false;
+			return;
+		}
 		if (suppressNextClick) {
 			suppressNextClick = false;
 			event.preventDefault();
@@ -289,7 +294,14 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (!(event.target instanceof Element)) return;
 		const item = event.target.closest<HTMLElement>(options.itemSelector);
 		if (!item || item.hidden) return;
-		options.onOpen(item);
+		event.preventDefault();
+		event.stopPropagation();
+		forwardingOpen = true;
+		try {
+			options.onOpen(item);
+		} finally {
+			forwardingOpen = false;
+		}
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
@@ -345,7 +357,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	node.addEventListener('pointermove', onPointerMove);
 	node.addEventListener('pointerup', endDrag);
 	node.addEventListener('pointercancel', endDrag);
-	node.addEventListener('click', onClick);
+	node.addEventListener('click', onClick, true);
 	node.addEventListener('keydown', onKeyDown);
 	reducedMotion.addEventListener('change', onReducedMotionChange);
 
@@ -360,7 +372,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 			node.removeEventListener('pointermove', onPointerMove);
 			node.removeEventListener('pointerup', endDrag);
 			node.removeEventListener('pointercancel', endDrag);
-			node.removeEventListener('click', onClick);
+			node.removeEventListener('click', onClick, true);
 			node.removeEventListener('keydown', onKeyDown);
 			reducedMotion.removeEventListener('change', onReducedMotionChange);
 		}

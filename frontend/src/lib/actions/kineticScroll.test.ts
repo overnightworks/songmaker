@@ -143,6 +143,18 @@ describe('kineticScroll', () => {
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
 	});
 
+	it('opens an item through its existing click handler once', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		const existingHandler = vi.fn();
+		items[1].addEventListener('click', existingHandler);
+		kineticScroll(container, { itemSelector: '.item', onOpen: (item) => item.click() });
+
+		fireClick(items[1]);
+
+		expect(existingHandler).toHaveBeenCalledOnce();
+	});
+
 	it.each<KineticScrollAxis>(['x', 'y'])(
 		'drags the %s axis 1:1 with the pointer once past the threshold',
 		(axis) => {

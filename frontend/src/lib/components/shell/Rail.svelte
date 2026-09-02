@@ -1,12 +1,19 @@
 <script lang="ts">
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
+	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
+
+	const RAIL_ITEM_SELECTOR = '.album-label, .playlist-label';
+
+	function openRailItem(item: HTMLElement): void {
+		item.click();
+	}
 </script>
 
 <nav class="rail" aria-label={RAIL_NAV_LABEL}>
@@ -16,7 +23,10 @@
 		>
 	</div>
 
-	<div class="rail-scroll">
+	<div
+		class="rail-scroll"
+		use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR, onOpen: openRailItem }}
+	>
 		<RailLibraryGroup />
 		<RailPlaylistsGroup />
 	</div>
