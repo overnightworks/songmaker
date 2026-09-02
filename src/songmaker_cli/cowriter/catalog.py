@@ -125,6 +125,7 @@ def get_provider_configuration(
 
 def list_provider_models(provider: str) -> list[str]:
     settings = get_settings()
+    # The catalog is for models that can serve a turn; JUDGE is the weaker surface.
     configuration = _provider_configuration(provider, ProviderSurface.JUDGE, settings)
     match configuration:
         case ConfiguredProvider():
@@ -155,6 +156,7 @@ def list_provider_models(provider: str) -> list[str]:
                 provider,
                 f"{provider} cannot list models until {configuration.need.value} is configured",
             )
+    raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
 def _models_for_setup_method(

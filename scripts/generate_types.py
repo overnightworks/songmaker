@@ -228,7 +228,6 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
 
     try:
         import typing
-
         if origin is typing.Union:
             args = get_args(annotation)
             non_none = [a for a in args if a is not type(None)]
@@ -240,7 +239,6 @@ def _py_type_to_ts(annotation: Any, field_info: FieldInfo | None = None) -> str:
 
     try:
         import typing
-
         if origin is typing.Literal:
             args = get_args(annotation)
             return " | ".join(f"'{a}'" if isinstance(a, str) else str(a) for a in args)
@@ -284,7 +282,10 @@ def _model_to_interface(model: type[BaseModel], ts_name: str) -> str:
         else:
             ts_type = _py_type_to_ts(field_info.annotation, field_info)
 
-        has_none_default = not field_info.is_required() and field_info.default is None
+        has_none_default = (
+            not field_info.is_required()
+            and field_info.default is None
+        )
         optional_marker = "?" if has_none_default else ""
 
         lines.append(f"\t{field_name}{optional_marker}: {ts_type};")

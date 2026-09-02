@@ -475,14 +475,17 @@ def _stub_cli_runners(
     claude: CliLogin = LOGGED_OUT,
     grok: GrokCliStatus | None = None,
     codex: CliLogin = LOGGED_OUT,
-) -> None:
+) -> dict[str, int]:
+    calls = {"claude": 0, "grok": 0, "codex": 0}
     monkeypatch.setattr("songmaker_cli.claude.provider._find_claude_binary", lambda: "claude")
 
     def fake_claude_output(_binary: str) -> str:
+        calls["claude"] += 1
         return json.dumps({"loggedIn": claude.logged_in, "authMethod": claude.auth_method})
 
     def fake_cli_output(binary: str, _args: tuple[str, ...]) -> str:
         if binary == "grok":
+            calls["grok"] += 1
             status = grok or GrokCliStatus(login=LOGGED_OUT, model_names=())
             if not status.login.logged_in:
                 return "You are not authenticated."
@@ -491,10 +494,12 @@ def _stub_cli_runners(
                 f"You are logged in with {status.login.auth_method or 'grok.com'}."
                 f"\n\nAvailable models:\n{models}"
             )
+        calls["codex"] += 1
         return "Logged in using ChatGPT" if codex.logged_in else "Not logged in"
 
     monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", fake_claude_output)
     monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", fake_cli_output)
+    return calls
 
 
 @pytest.mark.parametrize(
@@ -608,7 +613,9 @@ def test_provider_status_projects_the_catalog_contract(
         lambda _name: object() if sdk_available else None,
     )
     grok = GrokCliStatus(login=grok_login, model_names=("grok-4.6",))
-    _stub_cli_runners(monkeypatch, claude=claude_login, grok=grok, codex=codex_login)
+    calls = _stub_cli_runners(
+        monkeypatch, claude=claude_login, grok=grok, codex=codex_login,
+    )
 
     client, _ = admin_client
     response = client.get("/api/settings/providers")
@@ -616,6 +623,7 @@ def test_provider_status_projects_the_catalog_contract(
     assert response.status_code == 200
     actual = {item["provider"]: (item["cowriter"], item["judge"]) for item in response.json()}
     assert actual == expected
+    assert all(count <= 1 for count in calls.values())
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
@@ -655,6 +663,9 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
         monkeypatch.delenv(key, raising=False)
     _stub_cli_runners(monkeypatch)
 
+    def timed_out():
+        raise agent_cli.CliProbeBudgetExceeded("probe timed out")
+
     if provider == "claude":
         started = threading.Event()
         release = threading.Event()
@@ -670,13 +681,13 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
         monkeypatch.setattr(
             agent_cli._grok_status_probe,
             "get",
-            lambda: (_ for _ in ()).throw(agent_cli.CliProbeBudgetExceeded("probe timed out")),
+            timed_out,
         )
     else:
         monkeypatch.setattr(
             agent_cli._codex_login_probe,
             "get",
-            lambda: (_ for _ in ()).throw(agent_cli.CliProbeBudgetExceeded("probe timed out")),
+            timed_out,
         )
 
     client, _ = admin_client
@@ -693,6 +704,7 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
     assert {
         surface["state"] for surface in statuses.values() if isinstance(surface, dict)
     } == {"unconfigured"}
+
 
 def test_models_errors_cover_every_provider_not_only_the_saved_one(admin_client, monkeypatch):
     client, _ = admin_client
