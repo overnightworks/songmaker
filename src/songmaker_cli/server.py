@@ -74,7 +74,7 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
-    from songmaker_cli.claude.provider import shutdown_zombie_reapers
+    from songmaker_cli.claude.provider import shutdown_tool_surface_background_tasks
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
@@ -92,7 +92,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     auto_setup_admin(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-    app.state.claude_cli_tool_surface = await report_claude_cli_tool_surface()
+    # Logs the result at boot; /health reads the live state from
+    # provider.claude_cli_tool_surface_health() instead of this call's
+    # return value, since a later co-writer turn can change it.
+    await report_claude_cli_tool_surface()
 
     await init_arq_pool()
     log.info("arq pool connected")
@@ -111,7 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             sync_task, event_cleanup_task, score_backfill_task, return_exceptions=True,
         )
         await close_arq_pool()
-        await shutdown_zombie_reapers()
+        await shutdown_tool_surface_background_tasks()
 
 
 def create_app(

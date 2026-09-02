@@ -1048,7 +1048,7 @@ def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_slot(cap
     provider._release_zombie_reap_slot(6666)
 
 
-def test_shutdown_zombie_reapers_cancels_every_tracked_task() -> None:
+def test_shutdown_tool_surface_background_tasks_cancels_every_tracked_task() -> None:
     async def _hang() -> None:
         await asyncio.sleep(999)
 
@@ -1056,7 +1056,7 @@ def test_shutdown_zombie_reapers_cancels_every_tracked_task() -> None:
         task = asyncio.create_task(_hang())
         with provider._zombie_registry_lock:
             provider._zombie_reap_tasks.add(task)
-        await provider.shutdown_zombie_reapers()
+        await provider.shutdown_tool_surface_background_tasks()
         return task.cancelled()
 
     cancelled = asyncio.run(asyncio.wait_for(_run(), timeout=2))
@@ -1321,6 +1321,55 @@ def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanen
     assert binary == str(claude_binary)
     assert len(commands) == 2
 
+
+# ── #351 round 7, Finding 4: /health follows the gate's live verdict ─
+
+
+def test_claude_cli_tool_surface_health_transitions_from_unverified_to_ok(
+    claude_binary, monkeypatch,
+) -> None:
+    """/health must not be a frozen boot snapshot — a later successful
+    co-writer probe (e.g. the CLI was briefly unreachable at boot but is
+    fine by the time someone actually opens a chat) must clear an
+    earlier "unverified"."""
+    commands = _answer_with(monkeypatch, b"not json\n", _init_line(_ALL_SONGMAKER_TOOLS))
+    clock = {"now": 0.0}
+    monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
+
+    with pytest.raises(UnavailableError):
+        asyncio.run(verify_cli_tool_surface())
+    assert provider.claude_cli_tool_surface_health() == "unverified"
+
+    clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
+    asyncio.run(verify_cli_tool_surface())
+
+    assert provider.claude_cli_tool_surface_health() == "ok"
+    assert len(commands) == 2
+
+
+def test_claude_cli_tool_surface_health_transitions_from_ok_to_drift_after_a_build_change(
+    claude_binary, monkeypatch,
+) -> None:
+    """A later drifted build (after a self-update) must replace an
+    earlier "ok" — /health must not go on claiming clean forever just
+    because the boot-time check once found it so."""
+    commands = _answer_with(
+        monkeypatch,
+        _init_line(_ALL_SONGMAKER_TOOLS),
+        _init_line([*_ALL_SONGMAKER_TOOLS, "FutureTool"]),
+    )
+
+    asyncio.run(verify_cli_tool_surface())
+    assert provider.claude_cli_tool_surface_health() == "ok"
+
+    claude_binary.write_bytes(b"a-different-build-entirely")
+    with pytest.raises(CliToolSurfaceError):
+        asyncio.run(verify_cli_tool_surface())
+
+    assert provider.claude_cli_tool_surface_health() == "drift"
+    assert len(commands) == 2
+
+
 # ── #351 round 6: unexpected tool/slash command always permanent ─────
 
 
@@ -1493,38 +1542,87 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
     assert not isinstance(exc.value, provider._ZombieProbeError)
 
 
-def test_tool_surface_a_cancelled_leader_gives_followers_a_normal_error(
+def test_probe_runner_task_cancellation_gives_waiters_a_normal_error(
     claude_binary, monkeypatch,
 ) -> None:
-    """#351 round 6, Finding 3: a leader whose own task is cancelled (an
-    aborted request, say) must not hand followers its literal
-    CancelledError — that would make an unrelated follower's own task look
-    cancelled too. Followers get a normal, catchable UnavailableError."""
+    """#351 round 6, Finding 3, updated for round 7's redesign: the probe
+    now runs as its own independent task (``_run_probe_and_resolve_async``)
+    that no single caller's own cancellation can reach — so what *can*
+    still be cancelled directly is that task itself (exactly what
+    ``shutdown_tool_surface_background_tasks()`` does). Its own
+    CancelledError must not become a waiting caller's literal
+    CancelledError — that would make an unrelated caller's own task look
+    cancelled too. Every waiter gets a normal, catchable UnavailableError.
+    """
+    probe_started = threading.Event()
+
+    def fake_popen(*_cmd, **_kw):
+        probe_started.set()
+        threading.Event().wait(999)  # never returns on its own
+        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+
+    async def _race():
+        waiter = asyncio.create_task(verify_cli_tool_surface())
+        await asyncio.to_thread(probe_started.wait, 5)
+
+        with provider._tool_surface_lock:
+            probe_tasks = list(provider._tool_surface_probe_tasks)
+        assert len(probe_tasks) == 1
+        probe_tasks[0].cancel()
+
+        with pytest.raises(UnavailableError) as exc:
+            await waiter
+        return exc.value
+
+    error = asyncio.run(asyncio.wait_for(_race(), timeout=5))
+
+    assert not isinstance(error, asyncio.CancelledError)
+
+
+def test_tool_surface_a_cancelled_leader_does_not_reopen_single_flight(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 7, Finding 2: the probe runs as a task independent of
+    whoever triggered it (``_run_probe_and_resolve_async``), not inline in
+    the triggering caller's own coroutine — cancelling that caller's own
+    wait must not remove the in-flight entry while the real probe is
+    still running in the background. A third caller landing in exactly
+    that window must still find it (or, if the probe finished by then,
+    the verdict it already cached) rather than starting a second probe.
+    """
+    calls = 0
     probe_started = threading.Event()
     release_probe = threading.Event()
 
     def fake_popen(*_cmd, **_kw):
+        nonlocal calls
+        calls += 1
         probe_started.set()
         release_probe.wait()
         return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
-    async def _race():
-        leader = asyncio.create_task(verify_cli_tool_surface())
-        follower = asyncio.create_task(verify_cli_tool_surface())
+    async def _race() -> str:
+        first = asyncio.create_task(verify_cli_tool_surface())
         await asyncio.to_thread(probe_started.wait, 5)
-        leader.cancel()
+        first.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await leader
+            await first
+
+        # The real probe (its own independent task, on its own worker
+        # thread) is still running here — first's cancellation only
+        # interrupted first's own wait on the shared future.
+        third = asyncio.create_task(verify_cli_tool_surface())
         release_probe.set()
-        with pytest.raises(UnavailableError) as exc:
-            await follower
-        return exc.value
+        return await third
 
-    error = asyncio.run(asyncio.wait_for(_race(), timeout=5))
+    result = asyncio.run(asyncio.wait_for(_race(), timeout=5))
 
-    assert not isinstance(error, asyncio.CancelledError)
+    assert calls == 1
+    assert result == str(claude_binary)
 
 
 def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_raises(
@@ -1533,14 +1631,22 @@ def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_ra
     """#351 round 6, Finding 7: _evaluate_tool_surface used to run outside
     the try/except that resolves the in-flight future — a bug there would
     leave the future (and the dict entry) dangling, degrading every later
-    caller for that key to a follower timeout instead of a fresh probe."""
+    caller for that key to a follower timeout instead of a fresh probe.
+
+    Since round 7 (Finding 2), the probe runs as its own task and every
+    caller — including whichever one triggered it — reaches the shared
+    future through the same follower-safe path, so what a caller actually
+    sees for a bug here is the translated UnavailableError
+    (_follower_safe_exception), not the raw RuntimeError; the dict cleanup
+    is what this test is really about.
+    """
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
     monkeypatch.setattr(
         provider, "_evaluate_tool_surface",
         lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(UnavailableError, match="boom"):
         asyncio.run(verify_cli_tool_surface())
 
     with provider._tool_surface_lock:
@@ -1571,9 +1677,50 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
     try:
         with pytest.raises(UnavailableError) as exc:
             asyncio.run(asyncio.wait_for(averify_no_builtin_cli_tools(), timeout=3))
-        assert "did not answer" in str(exc.value)
+        # Two independent bounds can be what actually fires first — the
+        # outer asyncio.wait_for around asyncio.to_thread (round 7,
+        # Finding 1) or the inner queue.get inside the sync twin — both
+        # are the deadline correctly holding, just observed from either
+        # side of the thread boundary.
+        assert "did not answer" in str(exc.value) or "did not start" in str(exc.value)
     finally:
         popen_may_return.set()  # let the orphaned thread finish, do not leave it hanging
+
+
+def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
+    claude_binary, monkeypatch,
+) -> None:
+    """#351 round 7, Finding 1: reaping used to happen only in the calling
+    function, after it successfully read the background thread's result
+    — so a Popen() that returned *after* the caller had already given up
+    was never reaped by anyone. Reaping now happens inside the thread's
+    own finally, so it still runs even though nothing is listening for
+    the answer by the time Popen() finally does return.
+    """
+    popen_may_return = threading.Event()
+    reaped = threading.Event()
+    reaped_pids: list[int] = []
+
+    def fake_popen(*_cmd, **_kw):
+        popen_may_return.wait(5)
+        return _fake_cli(_init_line([]))
+
+    def fake_reap(proc) -> bool:
+        reaped_pids.append(proc.pid)
+        reaped.set()
+        return False
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
+
+    with pytest.raises(UnavailableError, match="did not answer"):
+        verify_no_builtin_cli_tools()  # gives up long before Popen() returns
+
+    popen_may_return.set()  # only now does the "late" spawn actually complete
+
+    assert reaped.wait(5), "the late-returning process was never reaped"
+    assert reaped_pids == [4343]
 
 
 # ── #351 round 6, Finding 6: the reaper pool caps new probes too ─────
@@ -1587,7 +1734,7 @@ def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
     abandoned child of a still-live parent on its own. Refusing to spawn a
     new probe once the pool is already full is simpler and safer than
     hoping a tracking slot appears later."""
-    monkeypatch.setattr(provider, "_zombie_reap_pool_is_saturated", lambda: True)
+    monkeypatch.setattr(provider, "_reserve_zombie_admission", lambda: False)
     spawned: list[int] = []
     monkeypatch.setattr(
         provider.subprocess, "Popen",
@@ -1601,14 +1748,48 @@ def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
     assert spawned == []
 
 
-def test_zombie_reap_pool_saturation_check_uses_the_real_registry(monkeypatch) -> None:
+def test_zombie_reap_admission_is_reserved_atomically_not_just_counted(monkeypatch) -> None:
+    """#351 round 7, Finding 3: the old check-then-claim-later version let
+    two concurrent probes both see room at cap-minus-one and both
+    proceed. A real reservation closes that: the second concurrent
+    attempt at the cap must be refused right at the reservation, not
+    discover the gap only later when it happens to become a zombie."""
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
-    assert provider._claim_zombie_reap_slot(1) is True
+
+    assert provider._reserve_zombie_admission() is True
+    assert provider._reserve_zombie_admission() is False  # the pool is full
+    provider._release_zombie_admission()
+    assert provider._reserve_zombie_admission() is True  # released, so claimable again
+    provider._release_zombie_admission()
+
+
+def test_zombie_reap_admission_reservation_has_no_toctou_window_under_real_concurrency(
+    monkeypatch,
+) -> None:
+    """The same property, proven with two genuinely concurrent threads
+    racing the same 1-slot pool rather than two sequential calls."""
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    both_may_proceed = threading.Barrier(2)
+    results: list[bool] = []
+    results_lock = threading.Lock()
+
+    def _attempt() -> None:
+        both_may_proceed.wait(timeout=5)
+        reserved = provider._reserve_zombie_admission()
+        with results_lock:
+            results.append(reserved)
+
+    threads = [threading.Thread(target=_attempt) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
     try:
-        assert provider._zombie_reap_pool_is_saturated() is True
+        assert sorted(results) == [False, True]
     finally:
-        provider._release_zombie_reap_slot(1)
-    assert provider._zombie_reap_pool_is_saturated() is False
+        if True in results:
+            provider._release_zombie_admission()
 
 
 # ── #351 round 6, Finding 8: the non-streaming MCP entry point ───────
