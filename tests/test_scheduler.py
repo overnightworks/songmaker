@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -614,8 +615,7 @@ def test_submit_generation_returns_task_id() -> None:
     assert task_id == "gen-1"
     args, kwargs = client.post.call_args
     assert args[0].endswith("/generate")
-    assert kwargs["json"]["mode"] == "sft"
-    assert "config" in kwargs["json"]
+    assert kwargs["json"] == {"mode": "sft", "config": asdict(_make_ace_config())}
 
 
 # ── _iterate_task_events ─────────────────────────────────────────────

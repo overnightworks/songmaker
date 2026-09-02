@@ -78,6 +78,10 @@ class RegistryClient:
             self._delays_factory = default_retry_delays
         self._sleeper = sleeper
 
+    @property
+    def control_plane_url(self) -> str:
+        return self._control_plane_url
+
     async def register(self, registration: WorkerRegistration) -> None:
         url = f"{self._control_plane_url}{REGISTER_PATH}"
         headers = {"X-Internal-Token": self._internal_token}

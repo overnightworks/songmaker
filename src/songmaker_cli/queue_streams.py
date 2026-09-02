@@ -477,10 +477,12 @@ def read_audio_duration(audio_path: Path) -> float | None:
         from mutagen import File as MutagenFile
 
         audio = MutagenFile(audio_path)
-        duration = float(getattr(getattr(audio, "info", None), "length", 0) or 0)
+        if audio is None:
+            return None
+        length = float(audio.info.length)
     except Exception:
         return None
-    return duration if duration > 0 else None
+    return length if length > 0 else None
 
 
 def probe_audio_duration(audio_path: Path) -> float:

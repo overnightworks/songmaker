@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -10,6 +11,14 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import check_no_silent_fallbacks as checker  # noqa: E402
+
+LINE_REGEX_RULES = (
+    "env-read-outside-settings",
+    "next-iter-fallback",
+    "dict-get-domain-fallback",
+    "optional-on-default-utcnow-column",
+    "engine-isolation-violation",
+)
 
 
 def _seed(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -26,6 +35,12 @@ def _run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *args: str) -> int:
     return checker.main(list(args) if args else ["src/"])
 
 
+def _checked_site_count(output: str, rule_name: str) -> int:
+    match = re.search(rf"{re.escape(rule_name)}=(\d+)", output)
+    assert match is not None, output
+    return int(match.group(1))
+
+
 def test_clean_codebase_returns_zero(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -35,6 +50,7 @@ def test_clean_codebase_returns_zero(
     out = capsys.readouterr().out
     assert rc == 0
     assert "No silent-fallback smells" in out
+    assert f"{checker.CHECKED_LABEL}:" in out
 
 
 @pytest.mark.parametrize(("statement", "is_read"), [
@@ -133,20 +149,131 @@ def test_dict_get_domain_fallback_caught(
     assert "dict-get-domain-fallback" in out
 
 
+@pytest.mark.parametrize("signature", [
+    "def f(x: dict[str, Any]) -> None: ...",
+    "def f(x: dict[str, Any], /) -> None: ...",
+    "def f(*, x: dict[str, Any]) -> None: ...",
+    "def f(*x: dict[str, Any]) -> None: ...",
+    "def f(**x: dict[str, Any]) -> None: ...",
+    "def f(x: Dict[str, Any]) -> None: ...",
+    "async def f(x: dict[str, Any]) -> None: ...",
+])
 def test_dict_any_in_signature_caught(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str], signature: str,
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": f"from typing import Any\n{signature}\n",
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert checker.DICT_ANY_IN_SIGNATURE in out
+
+
+def test_cowriter_tool_dispatch_module_is_exempt_from_dict_any_in_signature(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """execute_cowriter_tool dispatches raw MCP tool-call JSON across ten
+    handlers whose only shared shape is each tool's own JSON Schema —
+    collapsing that into named argument models is a tracked follow-up,
+    not owed by this rule."""
+    _seed(tmp_path, {
+        "songmaker_cli/cowriter/tools.py": (
+            "from typing import Any\n"
+            "def execute_cowriter_tool(x: dict[str, Any]) -> None: ...\n"
+        ),
+    })
+    assert _run(monkeypatch, tmp_path) == 0
+
+
+def test_multiline_dict_any_parameter_is_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _seed(tmp_path, {
         "songmaker_cli/m.py": (
             "from typing import Any\n"
-            "def f(x: dict[str, Any]) -> None: ...\n"
+            "def f(\n"
+            "    x: dict[str, Any],\n"
+            ") -> None: ...\n"
         ),
     })
     rc = _run(monkeypatch, tmp_path)
     out = capsys.readouterr().out
     assert rc == 1
-    assert "dict-any-in-signature" in out
+    assert checker.DICT_ANY_IN_SIGNATURE in out
+    assert "songmaker_cli/m.py:3" in out
+
+
+def test_dict_any_outside_a_parameter_is_not_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": (
+            "from typing import Any\n"
+            "class C:\n"
+            "    config: dict[str, Any]\n"
+            "def f(\n"
+            "    x: dict[str, str],\n"
+            ") -> dict[str, Any]:\n"
+            "    nested: list[dict[str, Any]] = []\n"
+            "    return {}\n"
+        ),
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert f"[{checker.DICT_ANY_IN_SIGNATURE}]" not in out
+    assert f"{checker.CHECKED_LABEL}:" in out
+
+
+def test_getattr_literal_default_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": 'value = getattr(obj, "status", "ok")\n',
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert checker.GETATTR_LITERAL_DEFAULT in out
+    assert "songmaker_cli/m.py:1" in out
+
+
+def test_getattr_signed_numeric_literal_default_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """getattr(obj, "retries", -1) is a UnaryOp(USub, Constant) in the AST,
+    not a bare Constant — must still be recognized as a literal default."""
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": 'value = getattr(obj, "retries", -1)\n',
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert checker.GETATTR_LITERAL_DEFAULT in out
+    assert "songmaker_cli/m.py:1" in out
+
+
+@pytest.mark.parametrize("source", [
+    'value = getattr(obj, "status")\n',
+    'value = getattr(obj, "status", None)\n',
+    'DEFAULT = "ok"\nvalue = getattr(obj, "status", DEFAULT)\n',
+    'DEFAULT = 1\nvalue = getattr(obj, "retries", -DEFAULT)\n',
+])
+def test_getattr_without_a_literal_default_is_not_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str], source: str,
+) -> None:
+    _seed(tmp_path, {"songmaker_cli/m.py": source})
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert f"[{checker.GETATTR_LITERAL_DEFAULT}]" not in out
 
 
 def test_optional_timestamp_caught(
@@ -185,12 +312,23 @@ def test_engine_isolation_does_not_fire_on_songmaker_cli_itself(
     assert rc == 0
 
 
-def test_real_codebase_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The actual src/ directory is clean with no exemptions at all —
-    every rule below is enforced on every file it governs."""
+def test_real_codebase_passes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The real src/ tree must be clean under every rule — exit 0, not just
+    a quiet stdout. A future real violation must fail this test, not only
+    print louder; checked-site counts must be non-zero per rule too, so a
+    rule that silently stopped running would fail it as well."""
     project_root = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(project_root)
-    assert checker.main(["src/"]) == 0
+    rc = checker.main(["src/"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    for name in LINE_REGEX_RULES:
+        assert f"[{name}]" not in out
+    assert f"{checker.CHECKED_LABEL}:" in out
+    for rule in checker.RULES:
+        assert _checked_site_count(out, rule.name) > 0
 
 
 def test_missing_root_returns_2(

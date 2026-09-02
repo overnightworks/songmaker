@@ -52,6 +52,11 @@ def _client_with_transport(transport: httpx.MockTransport) -> RegistryClient:
     return client
 
 
+def test_control_plane_url_strips_trailing_slash() -> None:
+    client = RegistryClient(control_plane_url="http://web:8080/", internal_token="secret")
+    assert client.control_plane_url == "http://web:8080"
+
+
 def test_payload_shape() -> None:
     payload = _make_registration().to_payload()
     assert payload["worker_id"] == "acestep-worker-0"

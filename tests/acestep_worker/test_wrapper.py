@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -10,6 +11,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_engine.models import AceStepConfig
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
@@ -55,7 +57,7 @@ def _make_deps(
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:
@@ -313,6 +315,76 @@ def test_generate_returns_task_id(tmp_path: Path) -> None:
     assert resp.json()["task_id"].startswith("gen-")
 
 
+def _full_ace_step_config_payload() -> dict[str, Any]:
+    """A generation request shaped like the real scheduler payload — every
+    AceStepConfig field present, several set away from their defaults."""
+    return asdict(AceStepConfig(
+        prompt="synthwave anthem",
+        lyrics="verse one\nchorus",
+        bpm=128,
+        audio_duration=90,
+        seed=42,
+        inference_steps=12,
+        guidance_scale=1.5,
+        batch_size=2,
+    ))
+
+
+def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> None:
+    """Issue #383 finding 1: an unrecognized config field must not silently
+    fall back to a default — prove the honest path first: every field of a
+    full, valid payload survives the HTTP boundary as a typed AceStepConfig."""
+    deps, _ = _make_deps(tmp_path)
+    received: list[AceStepConfig] = []
+
+    async def capturing_runner(
+        store: TaskStore, task_id: str, *,
+        mode: str, config: AceStepConfig, port: int, audio_output_dir: Path,
+    ) -> None:
+        received.append(config)
+        await store.mark_running(task_id)
+        await store.complete(
+            task_id, GenerationTaskResult(mode=mode, audio_path="/x", seed=0),
+        )
+
+    deps.generate_runner = capturing_runner
+    app = create_app(deps)
+    payload = _full_ace_step_config_payload()
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+
+    assert resp.status_code == 200
+    assert len(received) == 1
+    assert isinstance(received[0], AceStepConfig)
+    assert asdict(received[0]) == payload
+
+
+def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
+    """A typo'd or renamed field (audio_duraton vs audio_duration) must 422,
+    not silently vanish behind AceStepConfig's default for the real field."""
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    payload = {**_full_ace_step_config_payload(), "audio_duraton": 91}
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+    assert resp.status_code == 422
+
+
+def test_generate_rejects_a_missing_required_config_field(tmp_path: Path) -> None:
+    """lyrics has no default on AceStepConfig — omitting it must 422, not
+    construct a half-built config."""
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    payload = _full_ace_step_config_payload()
+    del payload["lyrics"]
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+    assert resp.status_code == 422
+
+
 def test_download_model_returns_task_id(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
@@ -398,18 +470,13 @@ def test_stream_task_yields_done(tmp_path: Path) -> None:
 
 
 def _patch_engine_modules(monkeypatch: pytest.MonkeyPatch, generate) -> None:
-    """Point the runner's lazy engine imports at a stub client."""
+    """Point the runner's lazy engine-client import at a stub client."""
     import sys
 
     fake_client_cls = MagicMock()
     fake_client_cls.return_value.generate = generate
     monkeypatch.setitem(
         sys.modules, "acestep_engine.client", MagicMock(AceStepClient=fake_client_cls),
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "acestep_engine.models",
-        MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw)),
     )
 
 
@@ -428,7 +495,7 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=out_dir,
         )
@@ -464,7 +531,7 @@ def test_default_generate_runner_carries_delivered_batch_size(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -509,7 +576,7 @@ def test_default_generate_runner_emits_progress(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -532,7 +599,7 @@ def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.Mon
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -559,7 +626,7 @@ def test_default_generate_runner_reports_acestep_cause_verbatim(
             store,
             task_id,
             mode="sft",
-            config={"prompt": "x", "lyrics": ""},
+            config=AceStepConfig(prompt="x", lyrics=""),
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
@@ -614,6 +681,8 @@ def test_lifespan_calls_registry(tmp_path: Path) -> None:
     register_calls = []
 
     class FakeRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             register_calls.append(registration)
 
@@ -645,6 +714,8 @@ def test_health_returns_503_until_registered_then_200(tmp_path: Path) -> None:
         register_release = _asyncio.Event()
 
         class SlowRegistry:
+            control_plane_url = "http://control-plane.test"
+
             async def register(self, registration):
                 register_started.set()
                 await register_release.wait()
@@ -692,6 +763,8 @@ def test_lifespan_cancels_pending_registration_on_shutdown(tmp_path: Path) -> No
     cancelled = _asyncio.Event()
 
     class HangingRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             try:
                 await _asyncio.sleep(60)
@@ -731,6 +804,8 @@ def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) ->
     deps, _ = _make_deps(tmp_path)
 
     class FailingRegistry:
+        control_plane_url = "http://control-plane.test"
+
         async def register(self, registration):
             await _asyncio.sleep(60)
             raise RuntimeError("should not reach this")
@@ -857,7 +932,7 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:
@@ -913,7 +988,7 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
         task_id: str,
         *,
         mode: str,
-        config: dict[str, Any],
+        config: AceStepConfig,
         port: int,
         audio_output_dir: Path,
     ) -> None:
