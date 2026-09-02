@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from songmaker_cli.claude.provider import CliLoginStatus
+from songmaker_cli.claude.provider import CliLogin
 from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
     ConfiguredProvider,
@@ -116,7 +116,7 @@ def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLoginStatus(logged_in=True, auth_method="claude.ai"),
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     assert get_provider_configuration("claude") == DependencyUnavailableProvider(
@@ -143,7 +143,7 @@ def test_claude_cli_login_marks_provider_as_configured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLoginStatus(logged_in=True, auth_method="claude.ai"),
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     assert get_provider_configuration("claude") == ConfiguredProvider(
@@ -155,7 +155,7 @@ def test_claude_cli_not_logged_in_is_unconfigured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLoginStatus(logged_in=False, auth_method=None),
+        lambda: CliLogin(logged_in=False, auth_method=None),
     )
 
     assert get_provider_configuration("claude") == UnconfiguredProvider(
@@ -184,7 +184,7 @@ def test_claude_cli_catalog_uses_cli_model_aliases(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLoginStatus(logged_in=True, auth_method="claude.ai"),
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_cli_model_aliases",
@@ -198,7 +198,7 @@ def test_claude_cli_catalog_failure_is_named_error(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLoginStatus(logged_in=True, auth_method="claude.ai"),
+        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
     )
 
     def _boom():
