@@ -33,7 +33,24 @@ COPIED_SCRIPTS = (
 
 # `sudo install ...` and `sudo -u USER CMD ...` are the only two shapes the
 # installer uses; both run without privilege here.
+#
+# It refuses any absolute path outside the sandbox instead of running it. A
+# fake that quietly did as it was told would, the moment the installer's early
+# guards regressed, hand a test run the real /etc/systemd/system — and on a
+# root test run it would write there. A fake stands in for a dangerous thing;
+# it must be the *safe* half of it, not the compliant half.
 FAKE_SUDO = """#!/bin/bash
+for argument in "$@"; do
+    case "$argument" in
+        /*)
+            case "$argument" in
+                "$SANDBOX_ROOT"/*) ;;
+                *)
+                    echo "fake sudo: refusing '$argument' outside $SANDBOX_ROOT" >&2
+                    exit 97 ;;
+            esac ;;
+    esac
+done
 if [ "$1" = "-u" ]; then shift 2; fi
 exec "$@"
 """
@@ -43,6 +60,13 @@ exec "$@"
 # ExecStart on `start`. Faking that away would have hidden the missing parent
 # directory the mirror could not create.
 FAKE_SYSTEMCTL = """#!/bin/bash
+case "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}" in
+    "$SANDBOX_ROOT"/*) ;;
+    *)
+        echo "fake systemctl: unit dir ${SONGMAKER_UNIT_DIR:-unset} is outside" \
+            "$SANDBOX_ROOT" >&2
+        exit 97 ;;
+esac
 echo "$*" >> "$SYSTEMCTL_LOG"
 case "$1" in
     is-enabled)
@@ -139,22 +163,39 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
     systemctl_log = tmp_path / "systemctl.log"
     systemctl_log.write_text("")
 
-    def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+
+    def _run(
+        *arguments: str,
+        from_checkout: Path | None = None,
+        **overrides: str,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run the installer. Every invocation goes through here, always.
+
+        There is deliberately no second way to start it: a test that built its
+        own environment would be one PATH away from the real `sudo` and the
+        real /etc/systemd/system the moment an early guard regressed.
+        """
+        started_from = from_checkout or checkout
         environment = {
             **os.environ,
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "HOME": str(home),
+            "TMPDIR": str(scratch),
+            "SANDBOX_ROOT": str(tmp_path),
             "SYSTEMCTL_LOG": str(systemctl_log),
             "SONGMAKER_UNIT_DIR": str(units),
             "FAKE_OPERATOR_HOME": str(home),
             "SONGMAKER_CLAUDE_CLI": "/bin/sh",
             "SONGMAKER_GROK_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CLI": "/bin/sh",
+            **overrides,
         }
         environment.pop("SONGMAKER_CLI_CREDENTIALS_DIR", None)
         return subprocess.run(
-            [str(checkout / "scripts" / INSTALLER.name), *arguments],
-            cwd=checkout,
+            [str(started_from / "scripts" / INSTALLER.name), *arguments],
+            cwd=started_from,
             env=environment,
             text=True,
             capture_output=True,
@@ -164,6 +205,8 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
     _run.units = units
     _run.log = systemctl_log
     _run.home = home
+    _run.checkout = checkout
+    _run.sandbox = tmp_path
     return _run
 
 
@@ -233,8 +276,37 @@ def test_it_enables_the_units_rather_than_only_writing_them(run_installer) -> No
     assert "enable --now songmaker-cli-credentials-mirror.timer" in asked
 
 
-def test_it_refuses_a_linked_worktree(run_installer, checkout: Path, tmp_path) -> None:
+def test_it_refuses_a_linked_worktree(run_installer, tmp_path) -> None:
     """These units outlive the shell; a throwaway checkout must not own them."""
+    linked = _linked_worktree_of(run_installer.checkout, tmp_path)
+
+    result = run_installer(from_checkout=linked)
+
+    assert result.returncode == 1
+    assert "linked worktree" in result.stderr
+
+
+def test_a_regressed_worktree_guard_still_cannot_reach_the_real_system(
+    run_installer, tmp_path,
+) -> None:
+    """The fakes are the safety net, not the guard they protect.
+
+    If the worktree refusal ever regresses, this run must still fail against
+    the fakes rather than reach the real sudo and /etc/systemd/system. Proved
+    by taking the guard away — SONGMAKER_UNIT_DIR removed is the same shape of
+    accident — and insisting the fake, not the machine, is what stops it.
+    """
+    linked = _linked_worktree_of(run_installer.checkout, tmp_path)
+
+    result = run_installer(
+        from_checkout=linked, SONGMAKER_UNIT_DIR="/etc/systemd/system",
+    )
+
+    assert result.returncode != 0
+    assert not Path("/etc/systemd/system/songmaker-cli-credentials-mirror.path").exists()
+
+
+def _linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
     identity = {
         **os.environ,
         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
@@ -250,14 +322,7 @@ def test_it_refuses_a_linked_worktree(run_installer, checkout: Path, tmp_path) -
         ["git", "worktree", "add", "-q", "--detach", str(linked)],
         cwd=checkout, check=True,
     )
-
-    result = subprocess.run(
-        [str(linked / "scripts" / INSTALLER.name)],
-        cwd=linked, text=True, capture_output=True, check=False,
-    )
-
-    assert result.returncode == 1
-    assert "linked worktree" in result.stderr
+    return linked
 
 
 def test_it_refuses_a_unit_that_belongs_to_another_checkout(run_installer) -> None:
