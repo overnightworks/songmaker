@@ -68,19 +68,38 @@ case "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}" in
         exit 97 ;;
 esac
 echo "$*" >> "$SYSTEMCTL_LOG"
+
+state_dir="$SANDBOX_ROOT/systemctl-state"
+mkdir -p "$state_dir"
+# Answers per unit, not per repository: a fake that said yes for every unit
+# would have let the preflight's path- and timer-checks pass without ever
+# being exercised.
+unit_of() { shift; for a in "$@"; do case "$a" in --*) ;; *) echo "$a"; return;; esac; done; }
+
 case "$1" in
-    is-enabled)
-        grep -q "^enable .*songmaker-cli-credentials-mirror.service" "$SYSTEMCTL_LOG" \\
-            && exit 0 || exit 1 ;;
-    list-unit-files)
-        grep -q "^enable .*songmaker-cli-credentials-mirror.service" "$SYSTEMCTL_LOG" \\
-            && echo "songmaker-cli-credentials-mirror.service enabled enabled" \\
-            || true
+    enable)
+        unit="$(unit_of "$@")"
+        touch "$state_dir/$unit.enabled"
+        case "$*" in *--now*) touch "$state_dir/$unit.active" ;; esac
         exit 0 ;;
     start)
-        unit="$SONGMAKER_UNIT_DIR/$2"
-        [ -f "$unit" ] || exit 1
-        exec $(sed -n 's/^ExecStart=//p' "$unit" | head -1) ;;
+        unit="$(unit_of "$@")"
+        touch "$state_dir/$unit.active"
+        file="$SONGMAKER_UNIT_DIR/$unit"
+        [ -f "$file" ] || exit 1
+        case "$unit" in
+            *.service)
+                exec $(sed -n 's/^ExecStart=//p' "$file" | head -1) ;;
+        esac
+        exit 0 ;;
+    is-enabled) unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.enabled" ]; exit $? ;;
+    is-active)  unit="$(unit_of "$@")"; [ -e "$state_dir/$unit.active" ]; exit $? ;;
+    list-unit-files)
+        unit="$(unit_of "$@")"
+        if [ -f "$SONGMAKER_UNIT_DIR/$unit" ]; then
+            echo "$unit enabled enabled"
+        fi
+        exit 0 ;;
 esac
 exit 0
 """
@@ -426,6 +445,87 @@ def test_a_refused_takeover_replaces_nothing_at_all(run_installer) -> None:
     run_installer()
 
     assert alert.read_text() == "[Service]\nExecStart=/untouched\n"
+
+
+# The preflight the installer ends with, and the auto-deploy tick calls on its
+# own. Files that look right prove nothing about currency: something has to be
+# running that rewrites them when the host refreshes a token.
+PREFLIGHT_UNITS = (
+    "songmaker-cli-credentials-mirror.service",
+    "songmaker-cli-credentials-mirror.path",
+    "songmaker-cli-credentials-mirror.timer",
+)
+
+
+def _run_preflight(run_installer, sabotage=None) -> subprocess.CompletedProcess[str]:
+    run_installer()
+    if sabotage is not None:
+        sabotage()
+    return subprocess.run(
+        [
+            str(run_installer.checkout / "scripts" / "check_agent_cli_mounts.sh"),
+            "--home", str(run_installer.home),
+            "--mirror-dir", str(run_installer.home / ".songmaker/agent-cli-credentials"),
+        ],
+        env={
+            **os.environ,
+            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
+            "SANDBOX_ROOT": str(run_installer.sandbox),
+            "SYSTEMCTL_LOG": str(run_installer.log),
+            "SONGMAKER_UNIT_DIR": str(run_installer.units),
+            "SONGMAKER_CLAUDE_CLI": "/bin/sh",
+            "SONGMAKER_GROK_CLI": "/bin/sh",
+            "SONGMAKER_CODEX_CLI": "/bin/sh",
+        },
+        text=True, capture_output=True, check=False,
+    )
+
+
+def test_the_preflight_passes_once_everything_is_installed(run_installer) -> None:
+    result = _run_preflight(run_installer)
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.parametrize("unit", PREFLIGHT_UNITS)
+def test_an_uninstalled_unit_fails_the_preflight(run_installer, unit) -> None:
+    result = _run_preflight(
+        run_installer, lambda: (run_installer.units / unit).unlink(),
+    )
+
+    assert result.returncode == 1
+    assert "is not installed" in result.stderr
+
+
+@pytest.mark.parametrize("unit", PREFLIGHT_UNITS)
+def test_a_disabled_unit_fails_the_preflight(run_installer, unit) -> None:
+    state = run_installer.sandbox / "systemctl-state"
+
+    result = _run_preflight(
+        run_installer, lambda: (state / f"{unit}.enabled").unlink(),
+    )
+
+    assert result.returncode == 1
+    assert "not enabled" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "songmaker-cli-credentials-mirror.path",
+        "songmaker-cli-credentials-mirror.timer",
+    ],
+)
+def test_a_stopped_trigger_fails_the_preflight(run_installer, unit) -> None:
+    """Enabled only says "at the next boot"; nothing triggers the mirror now."""
+    state = run_installer.sandbox / "systemctl-state"
+
+    result = _run_preflight(
+        run_installer, lambda: (state / f"{unit}.active").unlink(),
+    )
+
+    assert result.returncode == 1
+    assert "is not running" in result.stderr
 
 
 def test_running_it_twice_changes_nothing_the_second_time(run_installer) -> None:

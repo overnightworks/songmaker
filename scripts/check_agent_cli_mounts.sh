@@ -103,30 +103,47 @@ check_binary() {
 # was disabled, the next token refresh on the host silently strands whatever
 # reads these — and it strands it hours later, with no change to blame.
 check_mirror_is_running() {
-    local unit="songmaker-cli-credentials-mirror.service"
     if ! command -v systemctl >/dev/null 2>&1; then
         problem "systemctl is not available, so it cannot be confirmed that" \
-            "$unit keeps the mirror current."
+            "anything keeps the mirrored logins current."
         return
     fi
-    if ! systemctl list-unit-files "$unit" >/dev/null 2>&1 \
-        || [ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]; then
+    # The oneshot alone proves nothing about currency: it is what *writes* the
+    # copies, and it only ever runs because something triggers it. Enabled-only
+    # would report "kept current" while the path watch and the timer sat
+    # disabled or stopped, and the copies would then age quietly until the
+    # first refresh stranded whatever reads them.
+    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.service || return
+    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.path || return
+    _unit_is_installed_and_enabled songmaker-cli-credentials-mirror.timer || return
+    # The triggers must also be RUNNING; enabled only says "at the next boot".
+    _unit_is_active songmaker-cli-credentials-mirror.path || return
+    _unit_is_active songmaker-cli-credentials-mirror.timer || return
+    echo "ok: the mirror service, its login watch and its timer are all live"
+}
+
+_unit_is_installed_and_enabled() {
+    local unit="$1"
+    if [ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]; then
         problem "$unit is not installed. Nothing keeps the mirrored logins" \
-            "current; the containers would strand on the token they started" \
-            "with. Run: sudo ./scripts/install-cli-credentials-mirror.sh"
-        return
+            "current. Run: sudo ./scripts/install-cli-credentials-mirror.sh"
+        return 1
     fi
     if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
         problem "$unit is installed but not enabled, so a reboot leaves the" \
             "mirror unwritten. Run: sudo systemctl enable $unit"
-        return
+        return 1
     fi
-    echo "ok: $unit is installed and enabled"
 }
 
-if ! "$MIRROR_SCRIPT" --verify --mirror-dir "$CREDENTIALS_DIR" --home "$HOME_DIR"; then
-    problems=$((problems + 1))
-fi
+_unit_is_active() {
+    local unit="$1"
+    if ! systemctl is-active --quiet "$unit" 2>/dev/null; then
+        problem "$unit is not running, so nothing triggers the mirror until" \
+            "the next boot. Run: sudo systemctl start $unit"
+        return 1
+    fi
+}
 
 check_mirror_is_running
 
