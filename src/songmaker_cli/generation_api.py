@@ -9,12 +9,13 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from songmaker_cli.acestep_state import read_worker_state
+from songmaker_cli.acestep_state import read_worker_state, worker_is_online
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_lora_ready_for_generation,
@@ -22,6 +23,7 @@ from songmaker_cli.api_helpers import (
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
+    resolve_public_base_url,
 )
 from songmaker_cli.api_models import (
     BulkDeleteRequest,
@@ -100,12 +102,19 @@ def _check_version_lora_ready(
     check_lora_ready_for_generation(session, params.user_lora_id, user)
 
 
+# Read verbatim by the frontend (ApiError.message -> addToast, issue #359) —
+# never a component name like "No online ACE-Step workers".
+NO_ONLINE_WORKER_DETAIL: Final = (
+    "No worker can generate music right now. Check the worker pool."
+)
+
+
 async def _has_online_acestep_worker(session: Session) -> bool:
     from songmaker_cli.db.queries import list_worker_identities
 
     pool = get_arq_pool()
     for w in list_worker_identities(session):
-        if await read_worker_state(pool, w.id) is not None:
+        if worker_is_online(await read_worker_state(pool, w.id)):
             return True
     return False
 
@@ -287,7 +296,7 @@ async def api_generate_song(
             raise HTTPException(503, "Worker not running")
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "No online ACE-Step workers")
+            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
         await pool.enqueue_job(
             JobFunction.GENERATE, job.id, song_id, version.id, req.count, user.id, req.seed,
             req.model,
@@ -380,7 +389,7 @@ async def api_repaint_generation(
             raise HTTPException(503, "Worker not running")
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "No online ACE-Step workers")
+            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
         repaint_task = RepaintTaskParams(
             src_wav_path=str(wav_path),
             src_generation_id=gen_id,
@@ -452,7 +461,7 @@ async def api_cover_generation(
             raise HTTPException(503, "Worker not running")
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "No online ACE-Step workers")
+            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
         cover_task = CoverTaskParams(
             src_wav_path=str(wav_path),
             src_generation_id=gen_id,
@@ -589,18 +598,17 @@ def api_unarchive_generation(
 @router.post("/generations/{gen_id}/share")
 def api_share_generation(
     gen_id: str,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_generation_access(session, gen_id, user)
+    base_url = resolve_public_base_url()
     try:
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     session.commit()
-    base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
         share_url=f"{base_url}/share/gen/{gen.share_slug}",
         share_slug=gen.share_slug,

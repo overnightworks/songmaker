@@ -217,7 +217,8 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "stacking": { "mode": "normal" }
-          }
+          },
+          "unit": "ops"
         },
         "overrides": [
           {
@@ -242,11 +243,11 @@
       },
       "targets": [
         {
-          "expr": "songmaker_jobs_total",
+          "expr": "rate(songmaker_jobs_total[1h])",
           "legendFormat": "{{type}} — {{status}}"
         }
       ],
-      "title": "Jobs by Type & Status",
+      "title": "Job Rate by Type & Status (1h)",
       "type": "timeseries"
     },
     {
@@ -297,7 +298,8 @@
               { "color": "yellow", "value": 5 },
               { "color": "red", "value": 20 }
             ]
-          }
+          },
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -310,11 +312,11 @@
       },
       "targets": [
         {
-          "expr": "songmaker_jobs_total{status=\"failed\"}",
+          "expr": "rate(songmaker_jobs_total{status=\"failed\"}[15m])",
           "legendFormat": "{{type}}"
         }
       ],
-      "title": "Failed Jobs",
+      "title": "Failed Job Rate (15m)",
       "type": "stat"
     },
     {

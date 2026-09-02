@@ -40,6 +40,12 @@ jobs:
         run: docker compose $COMPOSE_FILES down -v
 
       - name: Boot stack
+        env:
+          # Share links (album/song/generation/playlist) need a configured
+          # public address (#339) — this stack has no proxy in front of it,
+          # so the address it's really reachable at is the same host:port
+          # the smoke test and Playwright drive it through below.
+          PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
         run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
 
       - name: Smoke test

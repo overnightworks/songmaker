@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import { ApiError } from '$lib/api/fetch';
 import { openCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -12,31 +12,24 @@ import {
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { AlbumItem } from '$lib/api/types';
+import {
+	albumsPage,
+	buildAlbum as album,
+	buildGeneration as generation,
+	buildSong as song,
+	requireElement,
+	songsPage
+} from './rail-test-fixtures';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
-	fetchAlbums: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
-}));
-vi.mock('$lib/api/songs', () => ({
-	fetchSong: vi.fn(),
-	fetchSongs: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
-}));
-const fetchAlbums = vi
-	.fn()
-	.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false });
-const fetchSongs = vi
-	.fn()
-	.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
+vi.mock('$lib/api/albums', () => ({ fetchAlbum: vi.fn(), fetchAlbums: vi.fn() }));
+vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
+const fetchAlbums = vi.fn();
+const fetchSongs = vi.fn();
 vi.mock('$lib/api/client', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchAlbum: vi.fn(),
@@ -53,85 +46,6 @@ import RailLibraryGroup from './RailLibraryGroup.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
-
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a1',
-		title: 'Nachtstrom',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 2,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'tide',
-		title: 'Tide',
-		album_id: 'a1',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -143,20 +57,8 @@ async function render(): Promise<HTMLElement> {
 beforeEach(() => {
 	localStorage.clear();
 	resetLibraryContextForTests();
-	fetchAlbums.mockClear().mockResolvedValue({
-		items: [],
-		total: 0,
-		offset: 0,
-		limit: 50,
-		has_more: false
-	});
-	fetchSongs.mockClear().mockResolvedValue({
-		items: [],
-		total: 0,
-		offset: 0,
-		limit: 200,
-		has_more: false
-	});
+	fetchAlbums.mockClear().mockResolvedValue(albumsPage());
+	fetchSongs.mockClear().mockResolvedValue(songsPage());
 	allAlbumsLoad.set({ status: 'idle', error: null });
 	albumList.set([album()]);
 	songList.set([
@@ -173,6 +75,7 @@ beforeEach(() => {
 
 afterEach(async () => {
 	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
 	setShuffle(false);
 	closeNowPlaying();
 	if (mounted) await unmount(mounted);
@@ -272,16 +175,14 @@ describe('RailLibraryGroup', () => {
 		]);
 		songList.set([]);
 		fetchSongs.mockImplementation((albumId: string) =>
-			Promise.resolve({
-				items:
-					albumId === 'a2'
-						? [song({ id: 's9', title: 'Kickoff', album_id: 'a2', track_number: 1 })]
-						: [],
-				total: 0,
-				offset: 0,
-				limit: 200,
-				has_more: false
-			})
+			Promise.resolve(
+				songsPage({
+					items:
+						albumId === 'a2'
+							? [song({ id: 's9', title: 'Kickoff', album_id: 'a2', track_number: 1 })]
+							: []
+				})
+			)
 		);
 		const target = await render();
 		const albumToggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
@@ -367,16 +268,14 @@ describe('RailLibraryGroup', () => {
 		]);
 		songList.set([]);
 		fetchSongs.mockImplementation((albumId: string) =>
-			Promise.resolve({
-				items:
-					albumId === 'a2'
-						? [song({ id: 's9', title: 'Kickoff', album_id: 'a2', track_number: 1 })]
-						: [],
-				total: 0,
-				offset: 0,
-				limit: 200,
-				has_more: false
-			})
+			Promise.resolve(
+				songsPage({
+					items:
+						albumId === 'a2'
+							? [song({ id: 's9', title: 'Kickoff', album_id: 'a2', track_number: 1 })]
+							: []
+				})
+			)
 		);
 		const target = await render();
 		const albumToggles = target.querySelectorAll<HTMLButtonElement>('.album-disclose');
@@ -418,5 +317,51 @@ describe('RailLibraryGroup', () => {
 		albumToggle.click();
 		await tick();
 		expect(albumToggle.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('marks the currently playing track with the equalizer', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		songList.set([
+			song({ id: 's1', title: 'Tide', track_number: 1 }),
+			song({ id: 's2', title: 'Ebb', track_number: 2 })
+		]);
+		selectedSongId.set('s2');
+		audioPlayer.current = { songId: 's2' } as unknown as typeof audioPlayer.current;
+		audioPlayer.status = 'playing';
+
+		const target = await render();
+
+		const active = target.querySelector('.row-sub2.row-active .row-title');
+		expect(active?.textContent).toBe('Ebb');
+		expect(target.querySelector('.row-sub2.row-active .equalizer')).not.toBeNull();
+	});
+
+	it('summarizes a single take in the singular, with no pick suffix', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		songList.set([
+			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 1, generations: [] })
+		]);
+		const target = await render();
+		expect(target.querySelector('.row-sub2 .row-meta')?.textContent).toBe('1 take');
+	});
+
+	it('shows a retry-able error instead of a silent empty library when the load fails', async () => {
+		albumList.set([]);
+		fetchAlbums.mockRejectedValueOnce(new ApiError(503, 'Backend unreachable', '/api/albums'));
+		const target = await render();
+
+		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('true'));
+		const panel = requireElement<HTMLDivElement>(target, '#rail-library-group');
+		expect(panel.inert).toBe(false);
+		expect(requireElement(target, '.rail-status').textContent).toBe('Backend unreachable');
+
+		fetchAlbums.mockResolvedValueOnce(
+			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
+		);
+		requireElement<HTMLButtonElement>(target, '.rail-retry').click();
+
+		await vi.waitFor(() => expect(target.querySelector('.rail-status')).toBeNull());
+		expect(target.querySelector('.album-label .row-title')?.textContent).toBe('Recovered');
 	});
 });

@@ -11,6 +11,7 @@ see ``tests/test_acestep_state.py`` for the cross-package assertion.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from arq.connections import ArqRedis
@@ -47,6 +48,29 @@ async def read_worker_state(pool: ArqRedis, worker_id: str) -> dict[str, Any] | 
     if text is None:
         return None
     return json.loads(text)
+
+
+def worker_is_online(state: Mapping[str, Any] | None) -> bool:
+    """The one place that answers "does this worker take jobs right now?"
+
+    A worker whose GPU has gone away (NVML present but unreachable — a
+    driver/GPU mismatch, a vanished device) keeps heartbeating fine, so
+    heartbeat presence alone is not enough (issue #367); it must also report
+    ``gpu_healthy: true``. Fail-closed on purpose: a heartbeat missing the
+    ``gpu_healthy`` key entirely — an old or broken worker build that never
+    learned to publish it — counts as not online, never as a silent "assume
+    fine forever". This is a single-host deployment where every container is
+    rebuilt in one `docker compose up --build`; the mixed-version window a
+    lenient default would have covered is seconds on the first deploy after
+    this change, not an ongoing state worth trusting indefinitely.
+
+    Every caller that decides "is this worker available" (``/health``,
+    ``/metrics``, the scheduler's own worker picker, the generate/repaint/
+    cover preflight, the admin worker pool and model registry) must go
+    through this function, not re-read the heartbeat dict itself, so the
+    definition of "online" cannot drift between them.
+    """
+    return state is not None and state.get("gpu_healthy") is True
 
 
 async def read_queue_depth(pool: ArqRedis, worker_id: str) -> int:

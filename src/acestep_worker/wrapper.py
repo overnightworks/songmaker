@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import signal
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +21,7 @@ from acestep_worker.downloads import (
     spawn_background,
     start_download,
 )
+from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import (
     CapacityError,
@@ -72,6 +73,11 @@ class WorkerDeps:
     train_lora_runner: TrainLoraRunner | None = None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
+    # Injectable so tests can simulate an NVML failure without a real GPU.
+    # Defaults to "always healthy" so tests exercising unrelated endpoints
+    # need not know about GPU health; __main__.py wires the real
+    # gpu_util.check_gpu_health in production.
+    gpu_health_checker: Callable[[], GpuHealth] = lambda: GpuHealth(GpuHealthStatus.OK)
 
 
 def _format_sse(event: WorkerTaskEvent) -> bytes:
@@ -86,6 +92,7 @@ async def read_queue_depth(redis: Redis, worker_id: str) -> int:
 
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
+    gpu_health = deps.gpu_health_checker()
     return {
         "loaded": [
             {"mode": info.mode, "size_gb": info.size_gb}
@@ -104,6 +111,8 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
         "pinned": list(snapshot.pinned),
+        "gpu_healthy": not gpu_health.is_broken,
+        "gpu_health_detail": gpu_health.detail,
     }
 
 
@@ -116,6 +125,12 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             raise HTTPException(
                 status_code=503,
                 detail="awaiting control plane registration",
+            )
+        gpu_health = deps.gpu_health_checker()
+        if gpu_health.is_broken:
+            raise HTTPException(
+                status_code=503,
+                detail=f"GPU unavailable: {gpu_health.detail}",
             )
         return HealthResponse(status="ok")
 

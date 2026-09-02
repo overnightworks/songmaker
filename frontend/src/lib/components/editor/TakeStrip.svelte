@@ -3,6 +3,7 @@
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import { playTake } from '$lib/stores/player';
+	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -20,17 +21,26 @@
 	);
 
 	const playingGenId = $derived(audioPlayer.current?.generation.id ?? null);
+
+	function openTakeChip(item: HTMLElement) {
+		const gen = sorted.find((candidate) => candidate.id === item.dataset.generationId);
+		if (gen) void playTake(gen, song);
+	}
 </script>
 
 {#if sorted.length > 0}
-	<div class="take-strip" aria-label="Takes">
+	<div
+		class="take-strip"
+		aria-label="Takes"
+		use:kineticScroll={{ itemSelector: '.take-chip', onOpen: openTakeChip }}
+	>
 		{#each sorted as gen (gen.id)}
 			{@const label = nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 			<button
 				type="button"
 				class="take-chip"
 				class:playing={playingGenId === gen.id}
-				onclick={() => void playTake(gen, song)}
+				data-generation-id={gen.id}
 				title={label}
 			>
 				<Icon name={playingGenId === gen.id ? 'pause' : 'play'} size={14} />
@@ -51,6 +61,18 @@
 		gap: 0.5rem;
 		overflow-x: auto;
 		padding: 0.4rem 0.1rem;
+		cursor: grab;
+		user-select: none;
+		-webkit-user-select: none;
+		/* Native touch panning is scoped to the axis the strip actually
+		   scrolls on — the vertical layout below overrides this to pan-y, or a
+		   touchscreen laptop wide enough for that layout would have vertical
+		   touch scrolling disabled by a rule written for the row layout. */
+		touch-action: pan-x;
+	}
+
+	.take-strip:global(.is-dragging) {
+		cursor: grabbing;
 	}
 
 	.take-chip {

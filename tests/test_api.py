@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.middleware import (
+    SESSION_COOKIE,
     AuthenticatedUser,
     SelectiveGZipMiddleware,
     get_current_user,
@@ -1070,6 +1071,56 @@ def _mock_worker(mock_pool=None):
     return _ctx()
 
 
+def _mock_worker_process_health(mock_pool=None):
+    """Like _mock_worker, but leaves _has_online_acestep_worker real — for
+    tests that must exercise its own GPU-health decision rather than have
+    it stubbed away."""
+    from contextlib import contextmanager
+    from unittest.mock import AsyncMock, patch
+
+    if mock_pool is None:
+        mock_pool = AsyncMock()
+
+    @contextmanager
+    def _ctx():
+        with (
+            patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+            patch(
+                "songmaker_cli.generation_api.is_music_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+            patch(
+                "songmaker_cli.generation_api.is_scoring_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+        ):
+            yield mock_pool
+
+    return _ctx()
+
+
+def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
+    """Issue #367 finding 1: a registered worker whose only heartbeat says
+    gpu_healthy: false must never look online to the generate/repaint/cover
+    preflight — simulated NVML failure, not a lucky real GPU."""
+    import json
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.db.queries import register_worker
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        register_worker(
+            session, worker_id="broken-gpu-w", host="h", port=8001,
+            gpu_id=0, vram_total_gb=24.0,
+        )
+        session.commit()
+
+    mock_pool.get = AsyncMock(
+        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": False}).encode(),
+    )
+
+
 def test_generate_song_submits_job(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
         resp = client.post(
@@ -1360,6 +1411,27 @@ def test_repaint_submits_job(client: TestClient) -> None:
     assert repaint["repainting_end"] == 0.8
 
 
+def test_repaint_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post("/api/generations/g1/repaint", json={
+            "src_generation_id": "g1",
+            "repainting_start": 0.2,
+            "repainting_end": 0.8,
+            "model": "sft",
+        })
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
+
+
 def test_repaint_invalid_range(client: TestClient) -> None:
     resp = client.post("/api/generations/g1/repaint", json={
         "src_generation_id": "g1",
@@ -1485,6 +1557,27 @@ def test_cover_submits_job(client: TestClient) -> None:
     assert cover["prompt"] == "jazz version"
 
 
+def test_cover_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post("/api/generations/g1/cover", json={
+            "src_generation_id": "g1",
+            "audio_cover_strength": 0.7,
+            "prompt": "jazz version",
+            "model": "sft",
+        })
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
+
+
 def test_cover_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/cover", json={
         "src_generation_id": "g2",
@@ -1608,6 +1701,25 @@ def test_upload_reference_audio_too_small(client: TestClient) -> None:
     )
     assert resp.status_code == 400
     assert "too small" in resp.json()["detail"]
+
+
+def test_generate_song_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+    client: TestClient,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    mock_pool = AsyncMock()
+    _register_worker_with_broken_gpu(client, mock_pool)
+
+    with _mock_worker_process_health(mock_pool):
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "sft"},
+        )
+
+    assert resp.status_code == 503
+    assert "No worker can generate music right now" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
 
 
 def test_generate_song_redis_down(client: TestClient) -> None:
@@ -2172,6 +2284,40 @@ def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
 
 
 # ── Job SSE streaming ─────────────────────────────────────────────────
+#
+# api_stream_job calls get_current_user directly rather than through
+# Depends() (#331 Findings 1/2, review round 2, 2026-09-02 -- see the
+# function's own comment block), matching resource_event_api.py's
+# api_stream_resource_events. That means `app.dependency_overrides[
+# get_current_user]`, which every other endpoint's tests in this file rely
+# on, does NOT apply to it: it needs a real, signed session cookie, the
+# same way test_resource_event_api.py's _authenticated_clients builds one.
+# Tests that hit the real route (client.stream/.get on /jobs/{id}/stream)
+# call _authenticate_job_stream_client first; tests that drive
+# _job_event_generator directly never go through auth at all and don't
+# need it.
+
+
+def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
+    from datetime import timedelta
+
+    from songmaker_cli.auth import sign_session_id
+    from songmaker_cli.db.queries import create_session
+
+    expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+    with ctx.db() as session:
+        user_session = create_session(session, user_id, expires_at)
+        session.commit()
+        session_id = user_session.id
+    return sign_session_id(session_id, ctx.session_secret)
+
+
+def _authenticate_job_stream_client(
+    client: TestClient, user_id: str = _DEFAULT_USER_ID,
+) -> None:
+    client.cookies.set(
+        SESSION_COOKIE, _sign_job_stream_session(client.app.state.ctx, user_id),
+    )
 
 
 def test_stream_job_initial_state(client: TestClient) -> None:
@@ -2186,6 +2332,7 @@ def test_stream_job_initial_state(client: TestClient) -> None:
         session.commit()
         job_id = job.id
 
+    _authenticate_job_stream_client(client)
     events = []
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
         assert resp.status_code == 200
@@ -2275,6 +2422,7 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
         session.commit()
         job_id = job.id
 
+    _authenticate_job_stream_client(client)
     events = []
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
         for line in resp.iter_lines():
@@ -2287,6 +2435,7 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
 
 
 def test_stream_job_not_found(client: TestClient) -> None:
+    _authenticate_job_stream_client(client)
     resp = client.get("/api/jobs/nonexistent/stream")
     assert resp.status_code == 404
 
@@ -2294,6 +2443,433 @@ def test_stream_job_not_found(client: TestClient) -> None:
 def test_stream_job_auth_required(unauthed_client: TestClient) -> None:
     resp = unauthed_client.get("/api/jobs/some-job/stream")
     assert resp.status_code in (401, 403)
+
+
+# ── #331 Findings 1 & 2: no held connection, off-loop reads, a deadline,
+# a lease (review 2026-09-01 corrected the original lease-sizing rationale
+# for Finding 1: api_stream_job took Depends(get_db_session), which FastAPI
+# keeps open for a StreamingResponse's whole body -- every open job stream
+# pinned a pool connection for up to JOB_STREAM_CONNECTION_SECONDS
+# regardless of how brief each poll was) ──────────────────────────────────
+
+
+def _make_pool_capacity_limited_client(
+    tmp_path: Path, *, pool_size: int, max_overflow: int, pool_timeout: float,
+):
+    """A stripped-down app like the `client` fixture, but bound to a real
+    (non-test-default) QueuePool sized down to `pool_size`/`max_overflow`.
+
+    Lets a test prove an endpoint does or doesn't pin a connection for its
+    whole lifetime by actually exhausting a real pool, rather than only
+    instrumenting checkout/checkin events.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from songmaker_cli.api import router
+    from songmaker_cli.db.engine import _enable_sqlite_pragmas, _seed_available_models
+    from songmaker_cli.db.models import Base
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    url = f"sqlite:///{data_dir / 'songmaker.db'}"
+    engine = create_engine(
+        url, echo=False, connect_args={"timeout": 30},
+        pool_size=pool_size, max_overflow=max_overflow, pool_timeout=pool_timeout,
+    )
+    _enable_sqlite_pragmas(engine)
+    Base.metadata.create_all(engine)
+    _seed_available_models(engine)
+    factory = sessionmaker(bind=engine)
+
+    with factory() as session:
+        session.add(User(
+            id=_DEFAULT_USER_ID, username="test_user", password_hash="unused", role="user",
+        ))
+        session.commit()
+
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    ctx = AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
+    )
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.include_router(router)
+    # No app.dependency_overrides[get_current_user] here on purpose (#331
+    # Findings 1/2, review round 2): api_stream_job calls get_current_user
+    # directly, not through Depends(), so an override would never reach it
+    # anyway -- and the whole point of this client is to exercise the real
+    # auth path, the same one production traffic goes through.
+    return TestClient(app), factory
+
+
+def _job_stream_scope(job_id: str, *, cookie: str) -> dict:
+    path = f"/api/jobs/{job_id}/stream"
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", b"testserver"),
+            (b"cookie", f"{SESSION_COOKIE}={cookie}".encode()),
+        ],
+        "client": ("testclient", 50_000),
+        "server": ("testserver", 80),
+    }
+
+
+def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime(
+    tmp_path: Path,
+) -> None:
+    """#331 Finding 1 (review 2026-09-01): api_stream_job must not hold a
+    Depends(get_db_session) session open for the whole StreamingResponse --
+    FastAPI keeps a yield-dependency open until the whole response finishes,
+    which for a StreamingResponse is the full stream lifetime. With a real
+    pool of exactly one connection and no overflow, a job stream that is
+    still live (a "running" job, not yet at a terminal status) must not
+    starve a second, completely unrelated request that also needs the DB --
+    before the fix, the second request would have blocked for pool_timeout
+    and then failed, because the still-open stream's Depends session would
+    already own the pool's only connection.
+
+    Drives the real ASGI app directly (bypassing TestClient's request/
+    response cycle, which fully drains a streaming response before
+    returning control -- it cannot observe an in-progress stream) so the
+    two requests genuinely run concurrently on one event loop, the same
+    technique test_resource_event_api.py's outer-deadline test uses."""
+    import asyncio
+
+    from songmaker_cli import jobs_api
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    client, factory = _make_pool_capacity_limited_client(
+        tmp_path, pool_size=1, max_overflow=0, pool_timeout=2,
+    )
+    app = client.app
+    ctx: AppContext = app.state.ctx
+    cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
+
+    with factory() as session:
+        job_a = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job_a.id, "running", progress=0.1)
+        job_b = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_a_id, job_b_id = job_a.id, job_b.id
+
+    async def _drive():
+        first_frame_sent = asyncio.Event()
+        response_status: dict[str, int] = {}
+
+        async def _receive() -> dict:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def _send(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                response_status["status"] = message["status"]
+            elif message["type"] == "http.response.body" and message.get("body"):
+                # Only a genuine 200 SSE frame counts as "the stream is live" --
+                # an auth failure also sends a body, and must not be mistaken
+                # for one (that was a real bug in the first version of this
+                # test: it asserted nothing about response_status at all).
+                if response_status.get("status") == 200:
+                    first_frame_sent.set()
+
+        stream_task = asyncio.create_task(
+            app(_job_stream_scope(job_a_id, cookie=cookie), _receive, _send),
+        )
+        await asyncio.wait_for(first_frame_sent.wait(), timeout=5)
+
+        # Stream A is live (first "running" frame sent, generator now
+        # sleeping between polls). Job B's status must still be fetchable
+        # through the same one-connection pool right now, not after A closes.
+        response_b = await asyncio.wait_for(
+            asyncio.to_thread(jobs_api._fetch_job_response, ctx, job_b_id),
+            timeout=2,
+        )
+
+        with ctx.db() as session:
+            update_job_status(session, job_a_id, "completed", progress=1.0)
+            session.commit()
+        await asyncio.wait_for(stream_task, timeout=5)
+        return response_status["status"], response_b
+
+    status_a, response_b = asyncio.run(_drive())
+
+    assert status_a == 200
+
+    assert response_b is not None
+    assert response_b.status == "queued"
+
+
+def test_fetch_job_response_before_bounds_a_slow_poll_to_the_remaining_deadline(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#331 Finding 2 (review 2026-09-01): a bare `await
+    asyncio.to_thread(_fetch_job_response, ...)` can still run past the
+    stream's own deadline if it starts right before the wall and then
+    blocks (e.g. on an exhausted DB pool, up to pool_timeout -- 60s could
+    become 90s). asyncio.wait_for(remaining) bounds it to the deadline
+    instead, returning None (closing the stream) rather than waiting out
+    the full block."""
+    import asyncio
+    import time
+    from time import monotonic
+
+    from songmaker_cli import jobs_api
+
+    def _slow_fetch(_ctx: AppContext, _job_id: str):
+        time.sleep(5)
+        return None
+
+    monkeypatch.setattr(jobs_api, "_fetch_job_response", _slow_fetch)
+    ctx: AppContext = client.app.state.ctx
+
+    async def _bounded_poll() -> tuple[float, object]:
+        deadline = monotonic() + 0.2
+        started = monotonic()
+        result = await jobs_api._fetch_job_response_before(ctx, "any-job", deadline)
+        return monotonic() - started, result
+
+    elapsed, result = asyncio.run(asyncio.wait_for(_bounded_poll(), timeout=5))
+
+    assert result is None
+    assert elapsed < 1.0
+
+
+def test_stream_job_fetches_status_off_the_event_loop(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The blocking DB read must run through asyncio.to_thread(), not
+    directly on the loop -- proven by observing it execute on a different
+    thread than the one driving the async generator."""
+    import asyncio
+    import threading
+
+    from songmaker_cli import jobs_api
+    from songmaker_cli.db.queries import create_job
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_id = job.id
+
+    real_fetch = jobs_api._fetch_job_response
+    observed_threads: list[int] = []
+
+    def _observing_fetch(ctx: AppContext, job_id: str):
+        observed_threads.append(threading.get_ident())
+        return real_fetch(ctx, job_id)
+
+    monkeypatch.setattr(jobs_api, "_fetch_job_response", _observing_fetch)
+
+    async def _first_frame() -> None:
+        stream = jobs_api._job_event_generator(ctx, job_id)
+        await anext(stream)
+        await stream.aclose()
+
+    generator_thread = threading.get_ident()
+    asyncio.run(_first_frame())
+
+    assert observed_threads
+    assert observed_threads[0] != generator_thread
+
+
+def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job stuck at "running" must not be polled forever -- the stream's
+    own lifetime deadline closes it, letting the frontend's already-handled
+    EventSource reconnect (jobs.ts) pick it back up."""
+    import asyncio
+
+    from songmaker_cli import jobs_api
+    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.jobs_api import _job_event_generator
+
+    monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
+    monkeypatch.setattr(jobs_api, "SSE_POLL_INTERVAL_SECONDS", 0.01)
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, "running", progress=0.1)
+        session.commit()
+        job_id = job.id
+
+    async def _drain_until_closed() -> int:
+        frame_count = 0
+        async for _frame in _job_event_generator(ctx, job_id):
+            frame_count += 1
+        return frame_count
+
+    frame_count = asyncio.run(asyncio.wait_for(_drain_until_closed(), timeout=5))
+
+    assert frame_count >= 1
+
+
+def test_stream_job_lease_is_acquired_and_released_around_the_stream(
+    client: TestClient,
+) -> None:
+    """The lease release (`_schedule_job_stream_lease_release`) is
+    intentionally fire-and-forget -- a background `asyncio.create_task`,
+    off the generator's own execution path, the same way
+    resource_event_api.py's `_schedule_stream_lease_release` is (see that
+    module's `test_disconnect_releases_lease_off_loop_and_contains_failure`:
+    release must not block the stream's own close). That makes
+    TestClient.stream() the wrong tool to observe it with: TestClient never
+    entered via `with TestClient(app) as client:` opens a fresh
+    `anyio.from_thread` portal per call and tears it down the instant that
+    call's response finishes (starlette's ASGITransport.handle_request), so
+    the fire-and-forget task is racing that teardown, not the test's own
+    wait -- no `released.wait(N)` duration, however generous, fixes a task
+    that can be cancelled before it runs. Driving the app directly inside
+    one asyncio.run() (the same technique
+    test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime
+    uses, and test_resource_event_api.py's outer-deadline tests) keeps the
+    loop that scheduled the task alive, so the test can wait on the real
+    condition -- the task's own completion, observed via
+    jobs_api._LEASE_RELEASE_TASKS emptying, mirroring
+    test_resource_event_api.py's _wait_for_released_lease."""
+    import asyncio
+
+    from songmaker_cli import jobs_api
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, "completed", progress=1.0)
+        session.commit()
+        job_id = job.id
+
+    acquire_calls: list[str] = []
+    release_calls: list[tuple[str, str]] = []
+
+    class _Limiter:
+        def acquire(self, user_id: str) -> str:
+            acquire_calls.append(user_id)
+            return "lease-token"
+
+        def release(self, user_id: str, token: str) -> None:
+            release_calls.append((user_id, token))
+
+    client.app.state._job_stream_lease_limiter = _Limiter()
+    cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
+    app = client.app
+
+    async def _drive() -> int:
+        response_status: dict[str, int] = {}
+
+        async def _receive() -> dict:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def _send(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                response_status["status"] = message["status"]
+
+        await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
+
+        for _ in range(500):
+            if not jobs_api._LEASE_RELEASE_TASKS:
+                break
+            await asyncio.sleep(0.01)
+
+        return response_status["status"]
+
+    status = asyncio.run(asyncio.wait_for(_drive(), timeout=5))
+
+    assert status == 200
+    assert not jobs_api._LEASE_RELEASE_TASKS
+    assert acquire_calls == [_DEFAULT_USER_ID]
+    assert release_calls == [(_DEFAULT_USER_ID, "lease-token")]
+
+
+def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
+    from songmaker_cli.db.queries import create_job
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_id = job.id
+
+    class _ExhaustedLimiter:
+        def acquire(self, _user_id: str) -> str | None:
+            return None
+
+    client.app.state._job_stream_lease_limiter = _ExhaustedLimiter()
+
+    _authenticate_job_stream_client(client)
+    resp = client.get(f"/api/jobs/{job_id}/stream")
+    assert resp.status_code == 429
+
+
+def test_stream_job_lease_fails_closed_when_limiter_errors(client: TestClient) -> None:
+    from songmaker_cli.db.queries import create_job
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_id = job.id
+
+    class _BrokenLimiter:
+        def acquire(self, _user_id: str) -> str:
+            raise ConnectionError("redis unavailable")
+
+    client.app.state._job_stream_lease_limiter = _BrokenLimiter()
+
+    _authenticate_job_stream_client(client)
+    resp = client.get(f"/api/jobs/{job_id}/stream")
+    assert resp.status_code == 503
+
+
+def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#296 regression: a running job with no status/progress change still
+    emits periodic heartbeats rather than going silent, unaffected by the
+    #331 Finding 2 off-loop fetch, deadline, and lease additions."""
+    import asyncio
+
+    from songmaker_cli import jobs_api
+    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.jobs_api import _job_event_generator
+
+    monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
+    monkeypatch.setattr(jobs_api, "SSE_POLL_INTERVAL_SECONDS", 0)
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, "running", progress=0.1)
+        session.commit()
+        job_id = job.id
+
+    async def _collect_frames() -> list[str]:
+        stream = _job_event_generator(ctx, job_id)
+        first = await anext(stream)
+        second = await anext(stream)
+        await stream.aclose()
+        return [first, second]
+
+    frames = asyncio.run(_collect_frames())
+
+    assert frames[0].startswith("data: ")
+    assert frames[1] == ": heartbeat\n\n"
 
 
 # ── Coverage gap tests ───────────────────────────────────────────────

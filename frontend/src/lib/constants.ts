@@ -1,5 +1,7 @@
 export const APP_NAME = 'Hallucinai';
 
+export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
+
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
 // share failure, since the link exists and only the copy step didn't.
@@ -262,6 +264,9 @@ export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
 // label button may match that -- every album's chevron sharing this exact
 // name is why a flow must scope to the album's own row before finding it.
 export const RAIL_ALBUM_DISCLOSE_LABEL = 'Toggle album tracks';
+// Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
+// could not reach at all does not look like one that is merely empty.
+export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];

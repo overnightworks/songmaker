@@ -25,6 +25,7 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.audio_paths import resolve_audio_path
 from songmaker_cli.db.models import Generation
 
 log = logging.getLogger(__name__)
@@ -464,16 +465,6 @@ def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
     root = _stream_dir(ctx)
     for suffix in (".json", ".mp3", ".tmp.mp3", ".concat.txt"):
         (root / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
-
-
-def resolve_audio_path(audio_dir: Path, rel_path: str) -> Path:
-    audio_root = audio_dir.resolve()
-    audio_path = (audio_root / rel_path).resolve()
-    if not audio_path.is_relative_to(audio_root):
-        raise HTTPException(403, "Path traversal denied")
-    if not audio_path.exists():
-        raise HTTPException(404, "Audio file not found")
-    return audio_path
 
 
 def read_audio_duration(audio_path: Path) -> float | None:

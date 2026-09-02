@@ -2,6 +2,7 @@ import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
+import { requireElement } from './rail-test-fixtures';
 import RailGroup from './RailGroup.svelte';
 
 const STORAGE_KEY = 'songmaker.rail-group-test-open';
@@ -16,12 +17,6 @@ const iconSnippet = createRawSnippet(() => ({
 }));
 
 let mounted: ReturnType<typeof mount> | undefined;
-
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
 
 interface RenderOverrides {
 	label?: string;

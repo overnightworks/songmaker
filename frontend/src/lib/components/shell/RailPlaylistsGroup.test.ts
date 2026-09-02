@@ -2,7 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { PlaylistDetailItem, PlaylistEntryItem, PlaylistItem } from '$lib/api/types';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -12,6 +11,12 @@ import {
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import {
+	buildPlaylist as playlist,
+	buildPlaylistDetail as detail,
+	buildPlaylistEntry as entry,
+	requireElement
+} from './rail-test-fixtures';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
@@ -48,60 +53,6 @@ vi.mock('$lib/api/client', () => ({
 import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
-
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
-
-function playlist(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
-	return {
-		id: 'p1',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 2,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function entry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
-	return {
-		id: 'pe1',
-		position: 0,
-		generation_id: 'g1',
-		song_id: 's1',
-		song_title: 'Tide',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		generation_number: 1,
-		version_number: 1,
-		is_picked: false,
-		audio_duration: 180,
-		mp3_path: 'tide.mp3',
-		seed: 1,
-		model_mode: 'sft',
-		lyrics: null,
-		...overrides
-	};
-}
-
-function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 1,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [entry()],
-		...overrides
-	};
-}
 
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');

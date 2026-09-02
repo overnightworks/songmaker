@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries import get_user_lora
 from songmaker_cli.lifecycle import reconcile_crashed_loras
+from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture()
@@ -111,3 +113,40 @@ def test_reconciliation_removes_dataset_dir(ctx) -> None:
 
 def test_no_stuck_loras_returns_zero(ctx) -> None:
     assert reconcile_crashed_loras(ctx) == 0
+
+
+def test_reconciles_when_worker_process_died_without_terminal_izing_the_job(
+    ctx,
+) -> None:
+    """Before #371: a dead MusicWorker process never terminal-izes the
+    LORA_TRAINING job it was running (WorkerBase's recovery is scoped to
+    GENERATE only), so this row stayed TRAINING forever — the job it waits
+    on was never going to change. reconcile_crashed_loras must now reap the
+    job itself instead of waiting on it.
+    """
+    stale = datetime.now(timezone.utc) - timedelta(
+        seconds=get_settings().stale_job_threshold_seconds + 60,
+    )
+    with ctx.db() as session:
+        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add(
+            Job(
+                id="job-L6", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING,
+                started_at=stale, heartbeat_at=stale,
+            ),
+        )
+        session.add(
+            UserLora(
+                id="L6", user_id="u1", name="L6", slug="L6",
+                status=LoraStatus.TRAINING, training_job_id="job-L6",
+            ),
+        )
+        session.commit()
+
+    n = reconcile_crashed_loras(ctx)
+
+    assert n == 1
+    with ctx.db() as s:
+        assert get_user_lora(s, "L6", include_deleted_rows=True).status == LoraStatus.FAILED
+        job = s.query(Job).filter_by(id="job-L6").first()
+        assert job.status == JobStatus.FAILED

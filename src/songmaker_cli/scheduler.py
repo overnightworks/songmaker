@@ -39,6 +39,7 @@ from songmaker_cli.acestep_state import (
     incr_queue_depth,
     read_queue_depth,
     read_worker_state,
+    worker_is_online,
 )
 from songmaker_cli.db.queries import list_worker_identities
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
@@ -126,7 +127,7 @@ async def _list_online_workers(
     online: list[_PickedWorker] = []
     for ident in identities:
         state = await read_worker_state(redis, ident.id)
-        if state is None:
+        if not worker_is_online(state):
             continue
         queue_depth = await read_queue_depth(redis, ident.id)
         online.append(

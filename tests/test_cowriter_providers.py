@@ -14,7 +14,12 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
-from songmaker_cli.constants import COWRITER_MAX_TOOL_ROUNDS, SETTING_CLAUDE_SCORING_MODEL
+from songmaker_cli.constants import (
+    COWRITER_MAX_TOOL_ROUNDS,
+    SETTING_CLAUDE_SCORING_MODEL,
+    SETTING_COWRITER_MODEL,
+    SETTING_COWRITER_PROVIDER,
+)
 from songmaker_cli.cowriter.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
@@ -25,7 +30,8 @@ from songmaker_cli.cowriter.openai_adapter import (
 )
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, AvailableModel, ChatMessage, Song, User
+from songmaker_cli.db.models import Album, AvailableModel, ChatMessage, Job, Song, User
+from songmaker_cli.db.queries import get_raw_stored_cowriter_settings
 from songmaker_cli.db.queries.settings import set_claude_model
 from songmaker_cli.mcp_server.tools import tool_create_song
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -95,6 +101,81 @@ def test_unknown_provider_rejected_at_settings_boundary(admin_client):
     client, _ = admin_client
     resp = client.put("/api/settings/cowriter", json={"provider": "bob", "model": "x"})
     assert resp.status_code == 422
+
+
+def _save_removed_cowriter_provider(factory) -> None:
+    with factory() as session:
+        set_claude_model(session, SETTING_COWRITER_PROVIDER, "retired-provider")
+        session.commit()
+
+
+def test_raw_stored_cowriter_settings_preserve_the_unresolved_pair(admin_client):
+    _, factory = admin_client
+    with factory() as session:
+        set_claude_model(session, SETTING_COWRITER_PROVIDER, "retired-provider")
+        set_claude_model(session, SETTING_COWRITER_MODEL, "")
+        session.commit()
+
+    with factory() as session:
+        stored = get_raw_stored_cowriter_settings(session)
+
+    assert stored.provider == "retired-provider"
+    assert stored.model == ""
+
+
+def test_get_cowriter_settings_names_a_removed_saved_provider(admin_client):
+    client, factory = admin_client
+    _save_removed_cowriter_provider(factory)
+
+    resp = client.get("/api/settings/cowriter")
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Unknown co-writer provider 'retired-provider'"
+
+
+def test_valid_cowriter_put_replaces_a_removed_saved_provider(admin_client):
+    client, factory = admin_client
+    _save_removed_cowriter_provider(factory)
+
+    resp = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "grok", "model": "grok-4.6"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["provider"] == "grok"
+
+    saved = client.get("/api/settings/cowriter")
+
+    assert saved.status_code == 200
+    assert saved.json()["provider"] == "grok"
+
+
+def test_invalid_cowriter_put_rejects_a_removed_saved_provider_without_server_error(
+    admin_client,
+):
+    client, factory = admin_client
+    _save_removed_cowriter_provider(factory)
+
+    resp = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "retired-provider", "model": "retired-model"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Unknown co-writer provider 'retired-provider'"
+
+
+def test_chat_rejects_a_removed_saved_provider_without_creating_a_job(admin_client):
+    client, factory = admin_client
+    _save_removed_cowriter_provider(factory)
+
+    resp = client.post("/api/chat/turn", json={"message": "hello"})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Unknown co-writer provider 'retired-provider'"
+    with factory() as session:
+        assert session.query(Job).count() == 0
 
 
 def test_model_must_be_in_the_live_catalog(admin_client):

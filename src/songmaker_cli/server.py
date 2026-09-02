@@ -39,6 +39,7 @@ from songmaker_cli.lifecycle import (
     resource_event_cleanup_loop,
     score_backfill_loop,
     session_sync_loop,
+    stale_job_reaper_loop,
 )
 from songmaker_cli.middleware import (
     AccessLogMiddleware,
@@ -104,14 +105,17 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     sync_task = asyncio.create_task(session_sync_loop(app))
     event_cleanup_task = asyncio.create_task(resource_event_cleanup_loop(app))
     score_backfill_task = asyncio.create_task(score_backfill_loop(app))
+    job_reaper_task = asyncio.create_task(stale_job_reaper_loop(app))
     try:
         yield
     finally:
         sync_task.cancel()
         event_cleanup_task.cancel()
         score_backfill_task.cancel()
+        job_reaper_task.cancel()
         await asyncio.gather(
-            sync_task, event_cleanup_task, score_backfill_task, return_exceptions=True,
+            sync_task, event_cleanup_task, score_backfill_task, job_reaper_task,
+            return_exceptions=True,
         )
         await close_arq_pool()
         await shutdown_tool_surface_background_tasks()

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_song_access,
+    resolve_public_base_url,
     unique_playlist_slug,
 )
 from songmaker_cli.api_models import (
@@ -259,18 +260,17 @@ def api_reorder_playlist_entry(
 @router.post("/playlists/{playlist_id}/share")
 def api_share_playlist(
     playlist_id: str,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     _check_playlist_access(session, playlist_id, user)
+    base_url = resolve_public_base_url()
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
     except ValueError:
         raise HTTPException(404, "Playlist not found")
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
-    base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
         share_url=f"{base_url}/share/playlist/{playlist.share_slug}",
         share_slug=playlist.share_slug,

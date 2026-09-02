@@ -99,6 +99,8 @@ def build_env(
         env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     for secret in SECRET_ENV_KEYS:
         env.pop(secret, None)
+    # Inherited VIRTUAL_ENV doesn't apply to the child's project; it only makes uv warn.
+    env.pop("VIRTUAL_ENV", None)
     return env
 
 

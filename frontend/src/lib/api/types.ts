@@ -674,6 +674,8 @@ export interface WorkerEphemeralStateItem {
 	available_modes: string[];
 	pinned: string[];
 	last_heartbeat_at?: string | null;
+	gpu_healthy?: boolean | null;
+	gpu_health_detail?: string | null;
 }
 
 export interface WorkerInfoItem {
@@ -688,7 +690,7 @@ export interface WorkerPoolResponse {
 
 export interface RegistryModelItem {
 	mode: string;
-	downloaded: boolean;
+	availability: 'downloaded' | 'not_downloaded' | 'unknown_no_worker';
 	loaded_on: string[];
 	loading_on: string[];
 }

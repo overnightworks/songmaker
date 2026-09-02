@@ -121,6 +121,18 @@ truth for one decision. `TrustedProxies` is the only owner. Uvicorn's default
 deployment (the peer is the bridge gateway, `172.18.0.1`); a proxy that ever
 reaches the server over loopback must be named in `TRUSTED_PROXIES` instead.
 
+One consequence (#339): with proxy header rewriting off, `scope["scheme"]` —
+and therefore Starlette's `request.base_url` — stays `http` for the whole
+life of the Docker deployment, because the literal connection into the
+container is never TLS; only `auth.request_is_https()` resolves the real
+(proxy-forwarded) scheme, by reading the same trusted, verified
+`X-Forwarded-Proto` this section describes. The four share endpoints
+(album/song/generation/playlist) do not read either signal at request time:
+building a public URL from a request is redundant when the public address is
+a deployment-time fact, so they call `api_helpers.resolve_public_base_url()`
+instead, backed by the validated `PUBLIC_BASE_URL` setting — see "Production
+Deployment" below.
+
 ## CSRF Protection
 
 Four-layer defense:
@@ -157,6 +169,13 @@ Album, song, generation, and playlist shares expose public read-only endpoints w
 | Playlist | `/shared/playlist/{slug}` | `/shared/playlist/{slug}/audio/{file}` |
 
 Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; audio URLs include the exact stored relative audio path needed by the filename allowlist. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists — never the parent album's art. Public cover bytes are served from `/shared/{slug}/cover` or `/shared/song/{slug}/cover` using that same slug gate — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
+
+`audio_paths.resolve_audio_path()` is the single resolver for stored audio paths
+used by shared-audio handlers and queue-stream assembly. A missing file and a
+path that would escape the audio root, including through a symlink, both return
+the indistinguishable visitor response `404 Not Found`. Traversal rejection is
+logged at `WARNING` with the stored relative path rendered via `%r`; the
+resolved server path is never logged.
 
 ### Per-IP (global middleware)
 
@@ -217,6 +236,50 @@ carry absolute expiry scores and release targets that exact token on disconnect.
 crashed process cannot retain a slot beyond 65 seconds. Lease release runs off the async loop; the
 Redis client bounds connect and socket waits to two seconds, with expiry as the final
 fallback. Redis failure returns 503 rather than opening an unbounded poller.
+
+### Job streams
+
+`GET /api/jobs/{id}/stream` polls a job's status once per second. It used
+to do that with blocking psycopg2 calls directly on the event loop — one
+waiting generation meant one blocking round trip per second on the loop,
+and an exhausted DB pool could stall it for up to 30 seconds. The poll now
+runs through `asyncio.to_thread()`, bounded by `asyncio.wait_for()` to the
+stream's remaining lifetime so a poll cannot itself outrun the deadline by
+waiting on an exhausted pool, matching the resource-event stream's
+`_read_event_page_before` pattern exactly.
+
+The endpoint also takes **no request-scoped `Depends()` at all** — matching
+`api_stream_resource_events` exactly, not just in spirit. A first attempt
+(review 2026-09-01) only dropped `Depends(get_db_session)` from the
+endpoint's own signature but kept `Depends(get_current_user)`; a second,
+independent review (2026-09-02) found that `get_current_user` itself takes
+`Depends(get_db_session)`, and FastAPI keeps a yield dependency open until
+the whole *response* finishes — for a `StreamingResponse` that's the full
+stream lifetime, so the connection was still pinned one level up (measured:
+`enter=1, exit=0` after the first body chunk, `exit=1` only once the stream
+closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
+thread-offloads the whole handler body, exactly like
+`api_stream_resource_events`; auth (`get_current_user(request, session)`)
+and the access check run as plain function calls against one short-lived
+`ctx.db()` session that closes before the lease is acquired or the
+`StreamingResponse` is even constructed, and every poll opens and closes
+its own short-lived session the same way. No open job stream pins a pool
+connection for longer than one query, at any point in the request.
+
+The stream has the same kind of bounded lifetime as the resource-event
+stream: a 60-second wall (`JOB_STREAM_CONNECTION_SECONDS`) after which it
+closes; the frontend's `EventSource` reconnect with backoff (`jobs.ts`)
+already handles the drop and resets its retry count on the next message. A
+Redis lease (`RedisConcurrentLeaseLimiter`, the same class the
+resource-event stream uses) caps concurrent job streams per user
+(`job_stream_lease_max_per_user`, default 10 — matches
+`max_user_active_jobs`) and globally (`job_stream_lease_max_global`,
+default 40). Unlike the resource-event lease, this one is not sized against
+spare DB pool capacity — precisely because no job stream holds a pool
+connection for its lifetime, there is no pool share to compute. It is a
+flat, hard concurrency cap against a runaway client opening far more
+streams than any real page load does. Redis failure fails closed (503),
+matching the resource-event lease.
 
 ## Security Headers
 
@@ -293,6 +356,24 @@ emits 15-second comment heartbeats so a correctly configured proxy sees activity
 before the deliberate reconnect. The library page's native EventSource probes
 `/api/auth/me` on `onerror`; 401/403 stop the stream and clear auth, and logout
 closes the owner before the logout request.
+
+The job-progress SSE (`/api/jobs/{id}/stream`) has the same monotonic 60-second wall
+and off-loop, deadline-bounded DB polling, and the same 15-second comment heartbeats.
+It does not have the resource-event stream's outer ASGI-level send wall
+(`ResourceStreamDeadlineMiddleware` governs only the resource-event path) — a reader
+so slow its TCP window blocks the next `send()` can still hold the connection past
+the in-generator deadline check. This gap is narrower than it looks: the endpoint
+takes no request-scoped `Depends()` at all (neither `get_db_session` nor
+`get_current_user`, which itself takes `get_db_session` — see "Job streams" above)
+and no poll holds a DB session across a `send()` or a sleep, so a stuck slow-reader
+`send()` pins neither a pool connection nor a blocked thread — only the ASGI
+connection itself, capped in turn by the Redis lease's concurrent-stream ceiling.
+Two earlier attempts (2026-09-01 and 2026-09-02) still had a `Depends()`-held
+session somewhere in the request -- first directly, then one level up through
+`get_current_user` -- and each would have let this same slow-reader gap also pin a
+pool connection for as long as the reader stayed stuck, which is why the lease's
+own sizing docs (see "Job streams" above) depend on this fix, in its final form,
+being in place.
 
 ## Claude Chat Security
 
@@ -470,6 +551,7 @@ All mutating operations are logged to the `audit_log` table:
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
+| Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the compose network needs it. |
 | Published ports | `docker-compose.yml` publishes `songmaker-web` and Grafana as `127.0.0.1:8080:8080` / `127.0.0.1:3000:3000`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
@@ -478,6 +560,8 @@ All mutating operations are logged to the `audit_log` table:
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. |
 | Resource-event stream open limit | `RESOURCE_EVENT_STREAM_OPEN_LIMIT` (per-user resource-events stream opens, default 12/min). CI overrides it — see "Resource-event streams" above. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
+
+The two-minute auto-deploy tick checks the active-job queue and required alert-channel configuration before it pulls or builds. It also runs `scripts/check_agent_cli_mounts.sh` before those steps when that verifier is installed; a verifier failure is a named deploy refusal, so it increments the tick's existing consecutive-failure counter and follows its alert escalation. A checkout that predates the verifier logs `mount preflight not installed, skipping` and continues with its installed guards, making the temporary compatibility state visible rather than silently bypassing it. After fetching `origin/main`, the tick asks GitHub for that exact commit's check runs and pulls only when every reported run has completed successfully. Running runs stay neutral, and no runs stay neutral only for the 30-minute grace period measured from the commit time; a missing first run beyond that period, failed runs, an unavailable or malformed GitHub answer, or a 60-second check-run lookup timeout are named deploy refusals that use the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment.
 
 ### Secrets
 

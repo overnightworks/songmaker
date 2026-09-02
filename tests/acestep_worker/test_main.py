@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from acestep_worker.__main__ import build_deps, main
+from acestep_worker.gpu_util import GpuHealth
 
 
 def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,6 +30,7 @@ def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
     assert deps.registry_client is None
     assert deps.registration is None
     assert deps.heartbeat is not None
+    assert isinstance(deps.gpu_health_checker(), GpuHealth)
 
 
 def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:

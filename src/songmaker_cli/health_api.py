@@ -180,7 +180,11 @@ def _format_prometheus(
 async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 
-    from songmaker_cli.acestep_state import read_queue_depth, read_worker_state
+    from songmaker_cli.acestep_state import (
+        read_queue_depth,
+        read_worker_state,
+        worker_is_online,
+    )
     from songmaker_cli.arq_pool import (
         get_arq_pool,
         get_music_queue_depth,
@@ -214,7 +218,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     vram_total_gb: dict[str, float] = {}
     for w in acestep_workers:
         state = await read_worker_state(pool, w.id)
-        if state is None:
+        if not worker_is_online(state):
             workers_offline += 1
             loaded_counts[w.id] = 0
             queue_depths[w.id] = 0
@@ -264,7 +268,7 @@ async def health_check(request: Request) -> JSONResponse:
 
     db_ok = _check_db(ctx)
 
-    from songmaker_cli.acestep_state import read_worker_state
+    from songmaker_cli.acestep_state import read_worker_state, worker_is_online
     from songmaker_cli.arq_pool import (
         get_arq_pool,
         get_music_queue_depth,
@@ -290,7 +294,8 @@ async def health_check(request: Request) -> JSONResponse:
     workers_total = len(acestep_workers)
     workers_online = 0
     for w in acestep_workers:
-        if await read_worker_state(pool, w.id) is not None:
+        state = await read_worker_state(pool, w.id)
+        if worker_is_online(state):
             workers_online += 1
 
     if workers_online > 0:
@@ -312,6 +317,7 @@ async def health_check(request: Request) -> JSONResponse:
         not db_ok
         or (not music_running and not scoring_running)
         or not redis_ok
+        or acestep == "unhealthy"
     )
     return JSONResponse({
         "status": "degraded" if degraded else "ok",

@@ -6,11 +6,12 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
 
-| File                       | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `library.spec.ts`          | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out. A second test walks the rail itself (issue #326): a playlist track click, an album row's label and chevron (on-demand load, no navigation, the one-open-album rule as real CSS visibility, not an attribute), the LIBRARY group's own title, and the Settings/user-row pin promise proven by actually scrolling |
-| `album-address.spec.ts`    | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284)                                     |
-| `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                                                    |
+| File                       | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `library.spec.ts`          | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → play and judge a playlist row → shuffle → open the public album link logged out. A second test walks the rail itself (issue #326): a playlist track click, an album row's label and chevron (on-demand load, no navigation, the one-open-album rule as real CSS visibility, not an attribute), the LIBRARY group's own title, and the Settings/user-row pin promise proven by actually scrolling                                                                                                                                                                                                    |
+| `album-address.spec.ts`    | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284)                                                                                                                                                                                                                                        |
+| `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `kinetic-strip.spec.ts`    | The take strip's kinetic scrolling (issue #358) against a real render, in both layouts its own container query switches it between: dragged, released with momentum that coasts past where the drag stopped, and a click that catches it mid-roll without opening the take it lands on — then a plain click still opens one, the wheel is proven directly against the dispatched event (native on the column layout, converted on the row layout), and Home/End/arrow keys follow the real axis. A third test proves the strip's absence on the compact shell at phone width, not kinetic behaviour — there is nothing of this action's to exercise there yet (WriteColumn.svelte's own `!compact` guard) |
 
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
@@ -23,6 +24,19 @@ workspace standing or tears it down. `album-address.spec.ts`'s evidence that
 nothing was torn down is that the page opened the live event stream exactly
 once; `playlist-address.spec.ts` is a standalone cold open with nothing to
 cross from, the same shape as the standalone cold song and take opens below.
+
+`kinetic-strip.spec.ts` also runs on **desktop only**, for a different
+reason: the strip it drives has no compact-shell counterpart to exercise —
+its own third test proves exactly that absence, once, rather than every
+other test silently skipping on `mobile`. It is here rather than in the unit
+suite because jsdom computes no layout at all: whether a drag actually moves
+the strip, whether momentum coasts past the release point on a real
+container query's real overflow, and which axis that container query puts
+the strip on are all unprovable without a real render (its own file header
+has the full reasoning). Its takes are seeded directly against the database
+(`seedTakeStripSong` in `seed.ts`, `scripts/seed_e2e_song_takes.py`) rather
+than through individual reimport requests — the same reasoning as the rail's
+filler albums below.
 
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
@@ -100,6 +114,14 @@ either side of these numbers; the budget's headroom is sized for exactly
 that, not for a real regression. A flow that suddenly needs several more
 round trips is a regression — find the extra requests instead of raising the
 number. The measured count is printed on every run.
+
+`kinetic-strip.spec.ts` carries its own, `KINETIC_STRIP_FLOW_API_REQUEST_BUDGET`
+(local to the spec, same as `album-address.spec.ts`'s own): 24-28 measured
+over several green runs for the column and row tests (a cold song open, the
+co-writer toggle, playing two takes), against a ceiling of 35; the
+mobile-absence test costs 15 and never comes close. Seeding the strip's own
+takes never touches this budget at all — it runs directly against the
+database (`seedTakeStripSong`), the same way the rail's filler albums do.
 
 Summed together, the per-flow `FlowGuard` totals above (158 `/api` requests
 on **desktop**, 59 on **mobile**) are **not** what the server's own IP rate
@@ -196,6 +218,7 @@ export POSTGRES_PASSWORD=e2e-ci-postgres-password
 export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
 export ADMIN_USERNAME=e2e-ci-admin ADMIN_PASSWORD='E2eCiSmoke#2026!'
+export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
 docker compose -f docker-compose.yml -f docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web
 

@@ -175,7 +175,8 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     from conftest import login_and_csrf
     login_and_csrf(client, "admin6", "admin12345")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
-    assert resp.status_code == 403
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Not Found"
 
 
 @pytest.fixture()
@@ -642,6 +643,62 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         cleanup.assert_called_once_with(mock_app.state.ctx)
         cleanup_loop.assert_awaited_once_with(mock_app)
         assert cleanup_cancelled.is_set()
+
+    asyncio.run(_run())
+
+
+def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
+    """The chat/lora_training reaper (#371) must actually be scheduled by the
+    running server, not just exist as a function -- generate/score get their
+    equivalent from the arq-worker cron unconditionally; the web-process side
+    only takes effect if _lifespan starts it like the other three loops."""
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.server import _lifespan
+
+    factory = init_db(tmp_path / "test.db")
+    mock_app = MagicMock()
+    mock_app.state.ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+
+    async def _run():
+        reaper_started = asyncio.Event()
+        reaper_cancelled = asyncio.Event()
+
+        async def _reaper_loop(_app):
+            reaper_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                reaper_cancelled.set()
+                raise
+
+        with (
+            patch(
+                "songmaker_cli.arq_pool.init_arq_pool",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "songmaker_cli.arq_pool.close_arq_pool",
+                new_callable=AsyncMock,
+            ),
+            patch("songmaker_cli.server.resource_event_cleanup_loop", new=AsyncMock()),
+            patch("songmaker_cli.server.score_backfill_loop", new=AsyncMock()),
+            patch("songmaker_cli.server.session_sync_loop", new=AsyncMock()),
+            patch(
+                "songmaker_cli.server.stale_job_reaper_loop",
+                new=AsyncMock(side_effect=_reaper_loop),
+            ) as reaper_loop,
+        ):
+            async with _lifespan(mock_app):
+                await asyncio.wait_for(reaper_started.wait(), timeout=1)
+        reaper_loop.assert_awaited_once_with(mock_app)
+        assert reaper_cancelled.is_set()
 
     asyncio.run(_run())
 
@@ -1577,6 +1634,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
             "vram_used_gb": 18.0,
             "vram_total_gb": 24.0,
             "available_modes": ["sft", "xl-sft"],
+            "gpu_healthy": True,
         }),
     )
     sync_redis.set(queue_depth_key("acestep-worker-0"), "0")

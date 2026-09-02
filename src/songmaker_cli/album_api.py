@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
+    resolve_public_base_url,
     unique_album_id,
 )
 from songmaker_cli.api_models import (
@@ -281,17 +282,16 @@ def api_cleanup_album(
 @router.post("/albums/{album_id}/share")
 def api_share_album(
     album_id: str,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
+    base_url = resolve_public_base_url()
     album = enable_album_sharing(session, album_id)
     missing = songs_without_playable_take(session, album_id)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.ALBUM, album_id)
     session.commit()
-    base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
         share_url=f"{base_url}/share/{album.share_slug}",
         share_slug=album.share_slug,

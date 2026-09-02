@@ -2,6 +2,7 @@
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		albumList,
+		allAlbumsLoad,
 		ensureAllAlbumsLoaded,
 		loadSongsForAlbum,
 		songList
@@ -15,9 +16,11 @@
 	} from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
+		LIBRARY_RETRY_LABEL,
 		RAIL_ALBUM_DISCLOSE_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
+		RAIL_LIBRARY_LOAD_ERROR,
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
@@ -35,6 +38,8 @@
 	const current = $derived(audioPlayer.current);
 	const playing = $derived(audioPlayer.status === 'playing');
 	const openAlbumId = $derived(collection?.kind === 'album' ? collection.id : null);
+	const loadStatus = $derived($allAlbumsLoad.status);
+	const loadError = $derived($allAlbumsLoad.error);
 
 	// ensureAllAlbumsLoaded is route-independent (#304) -- the rail needs the
 	// complete album list regardless of which library page, or which non-library
@@ -42,6 +47,10 @@
 	$effect(() => {
 		void ensureAllAlbumsLoaded();
 	});
+
+	function retryLibraryLoad(): void {
+		void ensureAllAlbumsLoaded();
+	}
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
 	// letting every once-opened row accumulate would stop showing where the
@@ -156,11 +165,17 @@
 	groupId="rail-library-group"
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albums.length}
-	expandTrigger={openAlbumId !== null}
+	expandTrigger={openAlbumId !== null || loadStatus === 'error'}
 	onTitleClick={onLibraryTitleClick}
 	{icon}
 >
 	<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
+		{#if loadStatus === 'error'}
+			<p class="rail-status" role="alert">{loadError ?? RAIL_LIBRARY_LOAD_ERROR}</p>
+			<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
+				{LIBRARY_RETRY_LABEL}
+			</button>
+		{/if}
 		<ul class="album-list">
 			{#each albums as album (album.id)}
 				{@const expanded = isAlbumExpanded(album.id)}
@@ -240,6 +255,23 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
+	}
+
+	.rail-status {
+		margin: 0;
+		padding: 8px 16px;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	.rail-retry {
+		margin: 0 16px 8px;
+		padding: 4px 8px;
+		background: none;
+		border: 1px solid var(--border);
+		color: var(--text);
+		font-size: 0.75rem;
+		cursor: pointer;
 	}
 
 	.row {

@@ -813,10 +813,16 @@ parent's coherence budget, which is spent after the child returns.
 **Music worker** (`music_worker.py`):
 - Thin orchestrator — no GPU, no ACE-Step process. Dispatches generation jobs
   to acestep-worker peer containers via the scheduler (`scheduler.py`).
-- Handles `generate` and `load_model_on_worker` tasks
+- Handles `generate`, `load_model_on_worker`, `download_model_on_worker`, and
+  `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: recovers stale generate jobs every 2 minutes, audits orphaned audio files
+- Cron: recovers stale **generate** jobs every 2 minutes, audits orphaned audio
+  files. `train_lora` runs in this same process but is a different `job_type`
+  (`JobType.LORA_TRAINING`) — `WorkerBase`'s recovery is scoped to one
+  `job_type` per worker class (`MusicWorker.job_type = JobType.GENERATE`), so
+  this cron does not reach it. See "Chat and LoRA-training job recovery" below
+  for how a dead worker's `train_lora` job still gets terminal-ized.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -834,6 +840,31 @@ parent's coherence budget, which is spent after the child returns.
 - Common startup (logging configuration, stale-job recovery)
 - Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
+
+**Chat and LoRA-training job recovery** (`lifecycle.py`, web process — #371):
+`chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
+never inside an arq worker, so they have no worker-scoped cron at all.
+`lora_training` jobs run inside the music worker but, as noted above, fall
+outside its `job_type`-scoped recovery. Both therefore need a web-process-side
+equivalent of `WorkerBase.cleanup_stale_cron`, reusing the same generic
+`recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that backs
+generate/score:
+- `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
+  minutes, matching the arq-worker cron cadence), behind the same
+  single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
+  so only one web replica reaps a given tick.
+- `reap_stale_chat_jobs()` uses `CHAT_STALE_JOB_THRESHOLD_SECONDS` (900s) —
+  chat has no `arq_job_timeout` envelope; the in-process Claude call already
+  times out at `COWRITER_CLI_TIMEOUT_SECONDS` (600s), so this threshold only
+  needs a margin above that to catch a web process that died mid-request.
+- `reap_stale_lora_training_jobs()` uses the same default
+  `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
+  MusicWorker's `arq_job_timeout` envelope.
+- `reconcile_crashed_loras()` (also run once at web startup) now reaps stale
+  `lora_training` jobs itself before checking for a terminal/missing
+  `training_job_id` — previously it only *waited* for something else to
+  terminal-ize that job, which nothing did, so a LoRA row could stay stuck in
+  `TRAINING`/`PREPROCESSING`/`EXPORTING` forever.
 
 **Backwards-compatible shim** (`worker.py`):
 - Imports tasks from music_worker and scoring_worker
@@ -895,8 +926,8 @@ Health endpoint at `/health` reports:
 - `music_worker`: running/stopped
 - `scoring_worker`: running/stopped
 - `music_queue_depth`, `scoring_queue_depth`: jobs waiting per queue
-- `db`, `redis`, `acestep`: component health
-- `status`: "ok" or "degraded" (degraded if both workers down, DB down, or Redis down)
+- `db`, `redis`, `acestep`: component health. An ACE-Step worker only counts as online (`songmaker_cli.acestep_state.worker_is_online`, the one function every caller — `/health`, `/metrics`, the scheduler's worker picker, the generate/repaint/cover preflight, the admin worker pool and model registry — goes through) if its heartbeat both exists in Redis *and* reports `gpu_healthy: true` — a worker whose GPU has gone away (NVML present but unreachable: a driver/GPU mismatch, a vanished device) keeps heartbeating just fine, so heartbeat presence alone is not enough (issue #367). A heartbeat missing the `gpu_healthy` key entirely counts as **not** online — fail-closed, since this is a single-host deployment where every container is rebuilt in one `docker compose up --build`; a lenient default would only ever hide an old or broken worker build forever. That deploy has no ordering guarantee between `songmaker-web` and the acestep-worker — they share no `depends_on`, so which finishes building and starts first is not assured — and `docker compose up -d --wait` can run for up to `COMPOSE_UP_WAIT_TIMEOUT_SECONDS` (20 minutes) on a cold cache. The worker publishes its first heartbeat immediately on start, so the mixed-version window is normally seconds; the worst case is however long the new worker container takes to start, not a fixed bound. For the deployment this project runs — a single host, one operator watching the deploy — that worst case is acceptable to simply wait out: every caller above honestly reports "no worker online" for as long as the window lasts, rather than guessing. A staged or ordered rollout that shortens the window is a separate concern, not one this single-machine deployment needs solved here.
+- `status`: "ok" or "degraded" (degraded if both workers down, DB down, Redis down, or `acestep` is unhealthy). The HTTP status code stays 200 even when degraded: a 503 here would fail `songmaker-web`'s own Docker healthcheck over a *different* container's GPU going away, and auto-deploy's `--wait` would then refuse every deploy for the exact duration of the outage a fix is meant to end. `songmaker_acestep_workers_total{status="online"} == 0` (issue #333) carries the alert instead — the Docker healthcheck answers "is this container alive", not "is the fleet healthy".
 
 ### Alerting (issue #333)
 

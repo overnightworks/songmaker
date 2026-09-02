@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, TypeVar
+from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
@@ -98,6 +100,75 @@ def check_redis_health(request) -> None:
     cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
+
+
+_PUBLIC_BASE_URL_SCHEMES = frozenset({"http", "https"})
+
+# A netloc urlsplit hands back verbatim even when it is nonsense: e.g.
+# "http://https://host" splits into scheme="http", netloc="https:" -- a
+# non-empty netloc that is not a host. Requiring the whole netloc to match a
+# plain hostname (or bracketed IPv6) with an optional numeric port closes
+# that gap; credentials ("user:pass@host") are rejected the same way, since
+# a public base address has no business carrying any.
+_PUBLIC_BASE_URL_HOSTNAME = (
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*"
+)
+_PUBLIC_BASE_URL_IPV6 = r"\[[0-9A-Fa-f:]+\]"
+_PUBLIC_BASE_URL_NETLOC_RE = re.compile(
+    rf"^(?:{_PUBLIC_BASE_URL_HOSTNAME}|{_PUBLIC_BASE_URL_IPV6})(?::[0-9]{{1,5}})?$",
+)
+
+
+def resolve_public_base_url() -> str:
+    """The one owner of "what address am I reachable at from outside".
+
+    Every share endpoint (album/song/generation/playlist) calls this instead
+    of trusting ``request.base_url``. ``base_url`` reflects the scheme of the
+    literal ASGI transport — always ``http`` behind a TLS-terminating proxy
+    (Cloudflare Tunnel today), because ``run_server()`` intentionally runs
+    uvicorn with ``proxy_headers=False`` (see #328 and ``auth.py``) so no
+    second, unaudited trust decision rewrites it. A deployment's public
+    address does not change per request, so there is nothing to negotiate at
+    request time: it is validated configuration, the same way
+    ``TRUSTED_PROXIES`` and ``ALLOWED_HOSTS`` are.
+
+    Callers must call this *before* mutating anything: it is the first thing
+    a share endpoint does, ahead of ``enable_*_sharing()`` and the commit
+    that follows it, so a resource is never flipped public on a request that
+    goes on to fail here (#339).
+
+    Raises ``HTTPException(500)`` — named, not a half-built link — when
+    ``PUBLIC_BASE_URL`` is unset, is not an absolute ``http(s)`` URL with a
+    plain ``host[:port]``, or carries a path (a subdirectory deployment is
+    not supported — silently dropping the path would build exactly the
+    half-link this function exists to prevent). A query string or fragment
+    is discarded rather than rejected: neither belongs in an origin, and
+    dropping them is unambiguous, unlike a path.
+    """
+    raw = get_settings().public_base_url.strip()
+    if not raw:
+        raise HTTPException(
+            500,
+            "PUBLIC_BASE_URL is not configured — cannot build a share link "
+            "without knowing the address this server is reachable at.",
+        )
+    parsed = urlsplit(raw)
+    if parsed.scheme not in _PUBLIC_BASE_URL_SCHEMES or not _PUBLIC_BASE_URL_NETLOC_RE.match(
+        parsed.netloc
+    ):
+        raise HTTPException(
+            500,
+            f"PUBLIC_BASE_URL={raw!r} is not an absolute http:// or https:// URL "
+            "with a plain host[:port].",
+        )
+    if parsed.path not in ("", "/"):
+        raise HTTPException(
+            500,
+            f"PUBLIC_BASE_URL={raw!r} carries a path ({parsed.path!r}). Configure "
+            "the bare origin (scheme://host[:port]) — a subdirectory deployment "
+            "is not supported here.",
+        )
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def _job_type_rate_limits(job_type: JobType) -> tuple[int, int, str]:

@@ -77,15 +77,20 @@ describe('admin worker pool API', () => {
 	it('getRegistry calls GET /api/admin/registry', async () => {
 		mockOk({
 			models: [
-				{ mode: 'sft', downloaded: true, loaded_on: ['acestep-worker-0'], loading_on: [] },
-				{ mode: 'xl-base', downloaded: false, loaded_on: [], loading_on: [] }
+				{
+					mode: 'sft',
+					availability: 'downloaded',
+					loaded_on: ['acestep-worker-0'],
+					loading_on: []
+				},
+				{ mode: 'xl-base', availability: 'not_downloaded', loaded_on: [], loading_on: [] }
 			]
 		});
 		const result = await getRegistry();
 		expect(result.models).toHaveLength(2);
 		expect(result.models[0].mode).toBe('sft');
-		expect(result.models[0].downloaded).toBe(true);
-		expect(result.models[1].downloaded).toBe(false);
+		expect(result.models[0].availability).toBe('downloaded');
+		expect(result.models[1].availability).toBe('not_downloaded');
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/admin/registry',
 			expect.objectContaining({ credentials: 'include' })
