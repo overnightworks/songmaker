@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -66,7 +68,10 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             background_loop_registry=registry,
-            ctx=SimpleNamespace(redis=SimpleNamespace(set=lambda *_args, **_kwargs: True)),
+            ctx=SimpleNamespace(
+                db=lambda: nullcontext(),
+                redis=SimpleNamespace(set=lambda *_args, **_kwargs: True),
+            ),
         ),
     )
     tick_started = False
@@ -77,18 +82,21 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
             raise asyncio.CancelledError()
         tick_started = True
 
-    async def failing_backfill(_ctx, _redis, on_failure) -> int:
-        on_failure(RuntimeError("token=top-secret"))
-        return 0
+    failing_auto_score = AsyncMock(side_effect=RuntimeError("token=top-secret"))
 
     monkeypatch.setattr(lifecycle.asyncio, "sleep", fake_sleep)
-    monkeypatch.setattr(lifecycle, "backfill_unscored_generations", failing_backfill)
+    monkeypatch.setattr(lifecycle, "_clear_resolved_backfill_attempts", AsyncMock())
+    monkeypatch.setattr(lifecycle, "_pick_unscored_generations", lambda *_args: [("g1", "s1")])
+    monkeypatch.setattr(lifecycle, "_exhausted_backfill_ids", AsyncMock(return_value=set()))
+    monkeypatch.setattr(lifecycle, "_record_backfill_attempt", AsyncMock())
     monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
+    monkeypatch.setattr("songmaker_cli.jobs._auto_score_generation", failing_auto_score)
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(lifecycle.score_backfill_loop(app))
 
     health = registry.metrics_snapshot()[BackgroundLoopName.SCORE_BACKFILL.value]
+    failing_auto_score.assert_awaited_once()
     assert health.consecutive_failures == 1
     assert health.last_error == "RuntimeError"
 
