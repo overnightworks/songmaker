@@ -4,4 +4,8 @@ packages:
 overrides:
   picomatch: '>=4.0.4'
   brace-expansion: '>=5.0.5'
+  # Floor is a CVE hardening (cookie <0.7.0), not a compat statement; it has no
+  # ceiling, so it floats to ESM-only cookie@2, whose renamed exports
+  # @sveltejs/kit's import doesn't know. frontend/package.json's
+  # pnpm.overrides.cookie pin sets the ceiling — read both together.
   cookie: '>=0.7.0'
