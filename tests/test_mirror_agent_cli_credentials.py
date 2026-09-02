@@ -5,12 +5,14 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+MIRROR_SCRIPT = SCRIPTS / "mirror_agent_cli_credentials.py"
 sys.path.insert(0, str(SCRIPTS))
 import mirror_agent_cli_credentials as mirror  # noqa: E402
 
@@ -241,6 +243,65 @@ def test_a_new_mirror_directory_is_private_from_the_start(mirror_dir: Path) -> N
     mirror.prepare_mirror_directory(mirror_dir)
 
     assert mirror_dir.stat().st_mode & 0o777 == 0o700
+
+
+# ── the script as the unit runs it ─────────────────────────────────
+#
+# This is what the installer test used to prove by having a fake systemctl
+# execute the unit's ExecStart. That fake now records instead of running, so
+# the claim lives here, against the real script and no fake at all: started
+# the way the unit starts it, with a home that has no ~/.songmaker yet, it
+# creates the whole path and creates it private.
+
+
+def _run_the_script(home: Path, mirror_dir: Path, environment=None):
+    return subprocess.run(
+        [
+            str(MIRROR_SCRIPT),
+            "--home", str(home),
+            "--mirror-dir", str(mirror_dir),
+        ],
+        env=environment or {"PATH": "/usr/bin:/bin"},
+        text=True, capture_output=True, check=False,
+    )
+
+
+def test_the_script_creates_the_whole_path_when_songmaker_does_not_exist(
+    home: Path, tmp_path: Path,
+) -> None:
+    """The unit names a directory two levels deep in a home that has neither."""
+    mirror_dir = tmp_path / "fresh-home/.songmaker/agent-cli-credentials"
+
+    result = _run_the_script(home, mirror_dir)
+
+    assert result.returncode == 0, f"{result.stdout}{result.stderr}"
+    assert mirror_dir.is_dir()
+    assert {path.name for path in mirror_dir.iterdir()} >= {
+        "claude.json", "grok.json", "codex.json",
+    }
+
+
+def test_the_directory_the_script_creates_is_private(
+    home: Path, tmp_path: Path,
+) -> None:
+    mirror_dir = tmp_path / "fresh-home/.songmaker/agent-cli-credentials"
+
+    _run_the_script(home, mirror_dir)
+
+    assert mirror_dir.stat().st_mode & 0o777 == 0o700
+    for published in mirror_dir.glob("*.json"):
+        assert published.stat().st_mode & 0o777 == 0o600
+
+
+def test_the_script_publishes_no_renewal_secret_when_run_that_way(
+    home: Path, tmp_path: Path,
+) -> None:
+    mirror_dir = tmp_path / "fresh-home/.songmaker/agent-cli-credentials"
+
+    _run_the_script(home, mirror_dir)
+
+    published = "\n".join(p.read_text() for p in mirror_dir.glob("*.json"))
+    assert "the-long-lived-secret" not in published
 
 
 def test_a_source_larger_than_a_login_document_is_refused(

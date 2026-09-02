@@ -45,128 +45,64 @@ COPIED_SCRIPTS = (
 # `$SANDBOX_ROOT/../../etc/...`, or a path through a symlinked directory all
 # reached the real `install`. A fake stands in for a dangerous thing; it has to
 # be the safe half of it, not the compliant half.
-CONTAINMENT = """
-inside_sandbox() {
-    local resolved
-    [ -n "${1:-}" ] || return 1
-    # An ABSOLUTE path only. This is the trap that rebooted the operator's
-    # machine: `readlink -m` happily resolves a bare name like `reboot` — or an
-    # ExecStart of `touch` — against the current directory, which is inside the
-    # sandbox, so the check said "contained" and the command then ran through
-    # PATH as the real binary. A relative path makes no containment statement
-    # at all, so it is refused rather than resolved.
-    case "$1" in
-        /*) ;;
-        *) return 1 ;;
-    esac
-    resolved="$(readlink -m -- "$1" 2>/dev/null)" || return 1
-    case "$resolved/" in
-        "$SANDBOX_REAL"/*) return 0 ;;
+# The fakes below RECORD. They do not run anything.
+#
+# Earlier versions of this file exec'd what they were asked to run, behind a
+# growing wall of allowlists, and one of them rebooted the operator's machine.
+# Every round of hardening found the next way through — `install -tDIR SRC`,
+# `install -d OUT IN`, `--strip-program=/usr/bin/id`, a glob in an ExecStart
+# that expands after the check, a shebang in an otherwise contained script.
+# That is not a series of bugs; a shell stand-in that executes cannot be
+# contained, because containing it means reimplementing the argument grammar
+# of every program it might start.
+#
+# So there is one rule, and it is structural rather than enumerated: no branch
+# of either fake starts a program. Everything below is a bash builtin. The one
+# effect they still have — `install` putting a file where the installer put it
+# — is a builtin read and a redirect, and only into a path that is textually
+# under the sandbox and contains no `..`.
+#
+# `grep -nE 'exec|[$][(]|`' over both bodies must come back empty.
+
+RECORDER = """
+refuse() { printf 'fake %s: refusing %s\n' "$FAKE_NAME" "$*" >&2; exit 97; }
+
+[ -n "${SANDBOX_ROOT:-}" ] || refuse "SANDBOX_ROOT is not set"
+[ -n "${RECORDING:-}" ] || refuse "RECORDING is not set"
+
+# A textual prefix and no dot-dot. Deliberately NOT a resolution: resolving meant
+# running readlink, and a resolved answer was still stale by the time anything
+# used it. Nothing here follows a path far enough for that to matter.
+inside() {
+    case "${1:-}" in
+        *..*) return 1 ;;
+        "$SANDBOX_ROOT"/*) return 0 ;;
     esac
     return 1
 }
 
-refuse() {
-    echo "fake $FAKE_NAME: refusing $*" >&2
-    exit 97
+inside "$RECORDING" || refuse "recording file outside the sandbox"
+
+record() { printf '%s\n' "$*" >> "$RECORDING"; }
+"""
+
+# One state table for both fakes, so `sudo systemctl enable X` and a later
+# `systemctl is-enabled X` cannot disagree. The test seeds it to describe a
+# machine — a failed service, a stopped timer — instead of a fake pretending
+# to run one.
+SYSTEMCTL_STATE = """
+STATE_FILE="$SANDBOX_ROOT/systemctl-state"
+
+state_add() { printf '%s\n' "$1" >> "$STATE_FILE"; }
+
+state_has() {
+    local wanted="$1" line
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ "$line" = "$wanted" ] && return 0
+    done < "$STATE_FILE" 2> /dev/null
+    return 1
 }
 
-# Without the harness there is no sandbox to be inside of, and every check
-# below would be comparing against an empty prefix. Refuse rather than guess.
-[ -n "${SANDBOX_REAL:-}" ] || refuse "SANDBOX_REAL is not set"
-[ -n "${SANDBOX_ROOT:-}" ] || refuse "SANDBOX_ROOT is not set"
-"""
-
-# An ALLOWLIST of the two command shapes the installer uses, and NOTHING else
-# runs. This fake once rebooted the operator's machine: it scanned the
-# arguments for things that looked like paths, `reboot` looked like none, and
-# the command reached the real binary. The rewrite that followed was no better
-# — its default branch resolved the bare name `reboot` against the sandbox
-# working directory, decided it was contained, and exec'd it anyway.
-#
-# Hence the shape below: every permitted form ends in its own `exec`, and
-# falling out of the case statement is a refusal. There is no shared exec at
-# the bottom that a future branch could reach by forgetting something.
-FAKE_SUDO = '#!/bin/bash\nFAKE_NAME=sudo\n' + CONTAINMENT + """
-# The installer uses `sudo -u USER CMD ...` for the preflight and plain
-# `sudo CMD ...` for the rest. The command after -u still has to be allowed.
-dropped_privilege=0
-if [ "${1:-}" = "-u" ]; then
-    [ $# -ge 3 ] || refuse "-u without both a user and a command"
-    dropped_privilege=1
-    shift 2
-fi
-
-command_name="${1:-}"
-[ -n "$command_name" ] || refuse "sudo with no command"
-shift
-
-case "$command_name" in
-    install)
-        # Parsed from a COPY: consuming the real arguments would leave nothing
-        # to exec, and the destination can hide in an option value —
-        # `--target-directory=/etc/systemd/system` is not path-shaped as an
-        # argument, but it is exactly where the file would land.
-        destination=""
-        directory_option=""
-        arguments=("$@")
-        index=0
-        while [ "$index" -lt "${#arguments[@]}" ]; do
-            case "${arguments[$index]}" in
-                --target-directory=*)
-                    directory_option="${arguments[$index]#--target-directory=}" ;;
-                -t|--target-directory)
-                    index=$((index + 1))
-                    directory_option="${arguments[$index]:-}" ;;
-                -m) index=$((index + 1)) ;;
-                -*) ;;
-                *) destination="${arguments[$index]}" ;;
-            esac
-            index=$((index + 1))
-        done
-        # With -t or --target-directory, THAT is where the file lands and every
-        # positional argument is a source. Letting the last positional win
-        # meant checking a source inside the sandbox while the real
-        # destination sat in /etc.
-        [ -z "$directory_option" ] || destination="$directory_option"
-        [ -n "$destination" ] || refuse "install without a destination"
-        inside_sandbox "$destination" \
-            || refuse "install into '$destination' outside $SANDBOX_REAL"
-        exec install "$@"
-        ;;
-    systemctl)
-        inside_sandbox "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}" \
-            || refuse "systemctl with unit dir ${SONGMAKER_UNIT_DIR:-unset}" \
-                      "outside $SANDBOX_REAL"
-        # By path, not through PATH: which `systemctl` runs must not depend on
-        # the order of a variable somebody could reorder.
-        exec "$(dirname "$0")/systemctl" "$@"
-        ;;
-    *)
-        # The installer's third shape: `sudo -u OPERATOR <script>` to run the
-        # preflight unprivileged. Allowed only in that shape, and only for a
-        # program that is itself inside the sandbox — an absolute path, since
-        # a bare name would be resolved against the working directory and
-        # that is precisely how `reboot` once got through.
-        [ "$dropped_privilege" = "1" ] \
-            || refuse "command '$command_name' — only install, systemctl, and" \
-                      "a sandbox program under -u are modelled"
-        inside_sandbox "$command_name" \
-            || refuse "-u command '$command_name' outside $SANDBOX_REAL"
-        exec "$command_name" "$@"
-        ;;
-esac
-
-refuse "fell through the command table for '$command_name'"
-"""
-
-# Records what would have been asked of systemd, answers per unit, and — for
-# the one command that has a real effect — runs the unit's ExecStart, because
-# faking that away would have hidden the missing parent directory the mirror
-# could not create. Everything it was not taught is refused: a fake that
-# succeeds at a command nobody modelled is lying about what happened.
-FAKE_SYSTEMCTL = '#!/bin/bash\nFAKE_NAME=systemctl\n' + CONTAINMENT + """
-# A unit name reaches the filesystem twice below, so it may not carry a path.
 valid_unit_name() {
     case "${1:-}" in
         "") return 1 ;;
@@ -176,86 +112,124 @@ valid_unit_name() {
     return 0
 }
 
-inside_sandbox "${SONGMAKER_UNIT_DIR:-/etc/systemd/system}" \
-    || refuse "unit dir ${SONGMAKER_UNIT_DIR:-unset} outside $SANDBOX_REAL"
-
-# Both of these are writes, and both come from the environment rather than
-# from the arguments — so they are checked like any other destination.
-inside_sandbox "${SYSTEMCTL_LOG:-}" \
-    || refuse "log ${SYSTEMCTL_LOG:-unset} outside $SANDBOX_REAL"
-state_dir="$SANDBOX_ROOT/systemctl-state"
-inside_sandbox "$state_dir" || refuse "state dir $state_dir outside $SANDBOX_REAL"
-
-echo "$*" >> "$SYSTEMCTL_LOG"
-mkdir -p "$state_dir"
-# Answers per unit, not per repository: a fake that said yes for every unit
-# would have let the preflight's path- and timer-checks pass without ever
-# being exercised.
-unit_of() { shift; for a in "$@"; do case "$a" in --*) ;; *) echo "$a"; return;; esac; done; }
-
-operation="${1:-}"
-case "$operation" in
-    daemon-reload) exit 0 ;;
-    enable|start|is-enabled|is-active|is-failed|list-unit-files) ;;
-    *) refuse "unmodelled command '$operation'" ;;
-esac
-
-unit="$(unit_of "$@")"
-valid_unit_name "$unit" || refuse "unit name '$unit' is not a plain unit name"
-
-case "$operation" in
-    enable)
-        touch "$state_dir/$unit.enabled"
-        case "$*" in *--now*) touch "$state_dir/$unit.active" ;; esac
-        exit 0 ;;
-    start)
-        touch "$state_dir/$unit.active"
-        file="$SONGMAKER_UNIT_DIR/$unit"
-        [ -f "$file" ] || exit 1
-        case "$unit" in
-            *.service)
-                exec_line="$(sed -n 's/^ExecStart=//p' "$file" | head -1)"
-                [ -n "$exec_line" ] || exit 1
-                # Only the program this unit names, and only if it lives in the
-                # sandbox: a mutated unit could otherwise name any binary on
-                # the machine and this fake would run it.
-                inside_sandbox "${exec_line%% *}" \
-                    || refuse "ExecStart '${exec_line%% *}' outside $SANDBOX_REAL"
-                exec $exec_line ;;
+# Sets a variable rather than echoing, so no branch of these fakes needs a
+# command substitution at all — the containment claim is then a grep, not an
+# argument about which substitutions fork.
+UNIT_NAME=""
+unit_of() {
+    shift
+    UNIT_NAME=""
+    for one in "$@"; do
+        case "$one" in
+            --*) ;;
+            *) UNIT_NAME="$one"; return ;;
         esac
-        exit 0 ;;
-    is-enabled) [ -e "$state_dir/$unit.enabled" ]; exit $? ;;
-    is-active)  [ -e "$state_dir/$unit.active" ]; exit $? ;;
-    is-failed)  [ -e "$state_dir/$unit.failed" ]; exit $? ;;
-    list-unit-files)
-        if [ -f "$SONGMAKER_UNIT_DIR/$unit" ]; then
-            echo "$unit enabled enabled"
-        fi
-        exit 0 ;;
-esac
+    done
+}
 
-refuse "fell through the operation table for '$operation'"
+# systemd's verbs, answered from the table. A start records the request and
+# changes the table; it does NOT run the unit's ExecStart. That the mirror
+# script really creates its directories is pinned directly against the script
+# in tests/test_mirror_agent_cli_credentials.py, where no fake is involved.
+systemctl_dispatch() {
+    local operation="${1:-}" unit
+    case "$operation" in
+        daemon-reload) return 0 ;;
+        enable|start|is-enabled|is-active|is-failed|list-unit-files) ;;
+        *) refuse "unmodelled command '$operation'" ;;
+    esac
+
+    unit_of "$@"
+    unit="$UNIT_NAME"
+    valid_unit_name "$unit" || refuse "unit name '$unit' is not a plain unit name"
+
+    case "$operation" in
+        enable)
+            state_add "enabled $unit"
+            case "$*" in *--now*) state_add "active $unit" ;; esac
+            return 0 ;;
+        start)
+            state_add "active $unit"
+            return 0 ;;
+        is-enabled) state_has "enabled $unit"; return $? ;;
+        is-active) state_has "active $unit"; return $? ;;
+        is-failed) state_has "failed $unit"; return $? ;;
+        list-unit-files)
+            if [ -f "$SONGMAKER_UNIT_DIR/$unit" ]; then
+                printf '%s enabled enabled\n' "$unit"
+            fi
+            return 0 ;;
+    esac
+}
 """
 
-# The installer reads the operator's home from passwd, never from $HOME (a run
-# under `sudo -H` would otherwise mirror /root). The test therefore has to
-# answer as passwd would.
+FAKE_SYSTEMCTL = (
+    '#!/bin/bash\nFAKE_NAME=systemctl\n' + RECORDER + SYSTEMCTL_STATE + """
+inside "${SONGMAKER_UNIT_DIR:-}" || refuse "unit dir outside the sandbox"
+record "systemctl $*"
+systemctl_dispatch "$@"
+exit $?
+"""
+)
+
+# The installer runs exactly three shapes through sudo:
+#   sudo install -m MODE SOURCE TARGET
+#   sudo systemctl ...
+#   sudo -u OPERATOR <preflight script> ...
+# The first is matched EXACTLY, argument count included, rather than by
+# parsing GNU install's option grammar — every attempt at that grammar left
+# another way to name a second destination. The third is recorded and
+# answered as a success without running anything; what the preflight would
+# have reported is asserted directly in the tests that drive it.
+FAKE_SUDO = (
+    '#!/bin/bash\nFAKE_NAME=sudo\n' + RECORDER + SYSTEMCTL_STATE + """
+record "sudo $*"
+
+if [ "${1:-}" = "-u" ]; then
+    [ $# -ge 3 ] || refuse "-u without both a user and a command"
+    shift 2
+    inside "${1:-}" || refuse "-u command '${1:-}' outside the sandbox"
+    exit 0
+fi
+
+case "${1:-}" in
+    install)
+        [ $# -eq 5 ] \
+            || refuse "install with an argument count the installer never uses;" \
+                      "it uses: install -m MODE SOURCE TARGET"
+        [ "$2" = "-m" ] || refuse "install without -m as its first option"
+        inside "$4" || refuse "install reading '$4' outside the sandbox"
+        inside "$5" || refuse "install writing '$5' outside the sandbox"
+        mapfile -t -d '' whole < "$4"
+        printf '%s' "${whole[0]-}" > "$5"
+        exit 0 ;;
+    systemctl)
+        inside "${SONGMAKER_UNIT_DIR:-}" || refuse "unit dir outside the sandbox"
+        shift
+        systemctl_dispatch "$@"
+        exit $? ;;
+esac
+
+refuse "command '${1:-}' — this fake records install, systemctl and -u only"
+"""
+)
+
 FAKE_GETENT = """#!/bin/bash
 if [ "$1" = "passwd" ]; then
-    echo "$2:x:1000:1000::$FAKE_OPERATOR_HOME:/bin/bash"
+    printf '%s:x:1000:1000::%s:/bin/bash\n' "$2" "$FAKE_OPERATOR_HOME"
     exit 0
 fi
 exit 2
 """
 
 
-# What a test may not replace: everything that keeps the run inside the
-# sandbox. SONGMAKER_UNIT_DIR is deliberately not on the list — pointing it at
-# /etc/systemd/system is how the safety net itself is tested — because the
-# fakes refuse that target rather than trusting the variable.
-RESERVED_ENVIRONMENT = frozenset({
-    "PATH", "SANDBOX_ROOT", "SANDBOX_REAL", "TMPDIR", "HOME",
-})
+# What a subprocess started by this test is allowed to inherit. Everything
+# else is dropped, not merged: BASH_ENV runs a file before any fake's first
+# line, an exported shell function named `sudo` beats PATH, LD_PRELOAD acts
+# before the program starts, and PYTHONPATH reaches the mirror script. None of
+# those need to be enumerated as attacks if the environment is built rather
+# than inherited.
+INHERITED_ENVIRONMENT = ("LANG", "LC_ALL", "TERM")
 
 
 def _executable(path: Path, body: str) -> None:
@@ -321,66 +295,90 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
     _executable(fake_bin / "getent", FAKE_GETENT)
     units = tmp_path / "systemd"
     units.mkdir()
-    systemctl_log = tmp_path / "systemctl.log"
-    systemctl_log.write_text("")
-
+    recording = tmp_path / "recording"
+    recording.write_text("")
+    state = tmp_path / "systemctl-state"
+    state.write_text("")
     scratch = tmp_path / "tmp"
     scratch.mkdir()
+
+    def _environment(**overrides: str) -> dict[str, str]:
+        built = {name: os.environ[name] for name in INHERITED_ENVIRONMENT
+                 if name in os.environ}
+        built.update(overrides)
+        built.update({
+            # Last word, always: these are the containment itself.
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "TMPDIR": str(scratch),
+            "HOME": str(home),
+            "SANDBOX_ROOT": str(tmp_path),
+            "RECORDING": str(recording),
+            "FAKE_OPERATOR_HOME": str(home),
+            "SONGMAKER_CLAUDE_CLI": "/bin/sh",
+            "SONGMAKER_GROK_CLI": "/bin/sh",
+            "SONGMAKER_CODEX_CLI": "/bin/sh",
+        })
+        built.setdefault("SONGMAKER_UNIT_DIR", str(units))
+        if "SONGMAKER_UNIT_DIR" in overrides:
+            built["SONGMAKER_UNIT_DIR"] = overrides["SONGMAKER_UNIT_DIR"]
+        return built
+
+    def _seed_mirror() -> None:
+        """What systemd would do when the installer asks it to start the unit.
+
+        The fakes do not run anything, so the effect of `systemctl start` on
+        the mirror service is produced here instead — by the real mirror
+        script, in the same sandbox, which is what systemd would have run.
+        Without it the installer's own closing preflight would fail on files
+        that nobody wrote. That the script really creates its directories, and
+        with which mode, is pinned against the script itself in
+        tests/test_mirror_agent_cli_credentials.py — not through a fake.
+        """
+        subprocess.run(
+            [
+                str(checkout / "scripts" / "mirror_agent_cli_credentials.py"),
+                "--home", str(home),
+                "--mirror-dir", str(home / ".songmaker/agent-cli-credentials"),
+            ],
+            env=_environment(), text=True, capture_output=True, check=True,
+        )
 
     def _run(
         *arguments: str,
         from_checkout: Path | None = None,
+        seed_mirror: bool = True,
         **overrides: str,
     ) -> subprocess.CompletedProcess[str]:
         """Run the installer. Every invocation goes through here, always.
 
         There is deliberately no second way to start it: a test that built its
-        own environment would be one PATH away from the real `sudo` and the
-        real /etc/systemd/system the moment an early guard regressed.
+        own environment would be one PATH away from the real sudo and the real
+        /etc/systemd/system the moment an early guard regressed.
         """
         started_from = from_checkout or checkout
-        reserved = set(overrides) & RESERVED_ENVIRONMENT
-        if reserved:
-            raise AssertionError(
-                f"a test may not override {sorted(reserved)}: those are what "
-                f"keep the run inside the sandbox",
-            )
-        environment = {
-            **os.environ,
-            **overrides,
-            # After the overrides, never before: these are the containment,
-            # and a test that could replace PATH or SANDBOX_ROOT would be one
-            # keyword argument away from the real sudo.
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "TMPDIR": str(scratch),
-            "SANDBOX_ROOT": str(tmp_path),
-            "SANDBOX_REAL": str(tmp_path.resolve()),
-            "HOME": str(home),
-            "SYSTEMCTL_LOG": str(systemctl_log),
-            "FAKE_OPERATOR_HOME": str(home),
-            "SONGMAKER_CLAUDE_CLI": "/bin/sh",
-            "SONGMAKER_GROK_CLI": "/bin/sh",
-            "SONGMAKER_CODEX_CLI": "/bin/sh",
-        }
-        environment.setdefault("SONGMAKER_UNIT_DIR", str(units))
-        if "SONGMAKER_UNIT_DIR" in overrides:
-            environment["SONGMAKER_UNIT_DIR"] = overrides["SONGMAKER_UNIT_DIR"]
-        environment.pop("SONGMAKER_CLI_CREDENTIALS_DIR", None)
+        if seed_mirror:
+            _seed_mirror()
         return subprocess.run(
             [str(started_from / "scripts" / INSTALLER.name), *arguments],
             cwd=started_from,
-            env=environment,
+            env=_environment(**overrides),
             text=True,
             capture_output=True,
             check=False,
         )
 
     _run.units = units
-    _run.log = systemctl_log
     _run.home = home
     _run.checkout = checkout
     _run.sandbox = tmp_path
+    _run.recording = recording
+    _run.state = state
+    _run.environment = _environment
     return _run
+
+
+def _recorded(run_installer) -> list[str]:
+    return run_installer.recording.read_text().splitlines()
 
 
 def test_the_installer_runs_through(run_installer) -> None:
@@ -440,13 +438,39 @@ def test_no_renewal_secret_is_in_anything_it_published(
     assert "secret" not in published
 
 
-def test_it_enables_the_units_rather_than_only_writing_them(run_installer) -> None:
+def test_it_asks_systemd_for_each_unit_in_the_right_order(run_installer) -> None:
+    """Read from the recording: the fakes do nothing else worth asserting."""
     run_installer()
 
-    asked = run_installer.log.read_text()
-    assert "enable songmaker-cli-credentials-mirror.service" in asked
-    assert "enable --now songmaker-cli-credentials-mirror.path" in asked
-    assert "enable --now songmaker-cli-credentials-mirror.timer" in asked
+    asked = [line for line in _recorded(run_installer) if "systemctl" in line]
+    assert any("daemon-reload" in line for line in asked)
+    for expected in (
+        "enable songmaker-cli-credentials-mirror.service",
+        "enable --now songmaker-cli-credentials-mirror.path",
+        "enable --now songmaker-cli-credentials-mirror.timer",
+        "start songmaker-cli-credentials-mirror.service",
+    ):
+        assert any(line.endswith(expected) for line in asked), f"{expected}\n{asked}"
+    reloaded = next(i for i, line in enumerate(asked) if "daemon-reload" in line)
+    started = next(
+        i for i, line in enumerate(asked)
+        if line.endswith("start songmaker-cli-credentials-mirror.service")
+    )
+    assert reloaded < started, "units must be on disk and reloaded before a start"
+
+
+def test_nothing_it_asked_for_named_a_target_outside_the_sandbox(
+    run_installer,
+) -> None:
+    """The whole containment claim, as one assertion over what was recorded."""
+    run_installer()
+
+    for line in _recorded(run_installer):
+        for word in line.split():
+            if word.startswith("/"):
+                assert str(run_installer.sandbox) in word or word == "/bin/sh", (
+                    f"{word} is outside the sandbox\n{line}"
+                )
 
 
 def test_it_refuses_a_linked_worktree(run_installer, tmp_path) -> None:
@@ -459,185 +483,62 @@ def test_it_refuses_a_linked_worktree(run_installer, tmp_path) -> None:
     assert "linked worktree" in result.stderr
 
 
-def test_the_fakes_and_not_the_machine_are_what_stop_a_real_target(
-    run_installer,
-) -> None:
-    """From the MAIN checkout, so nothing earlier refuses first.
+def test_a_regressed_guard_reaches_a_fake_that_does_nothing(run_installer) -> None:
+    """The net under the guards, stated as what it is now.
 
-    The previous version of this test ran from a linked worktree and was
-    stopped by require_main_checkout before a fake was ever consulted — it
-    proved the guard, not the net under it. Pointed at /etc/systemd/system,
-    the run must die on the fake, with the fake's own exit code, and leave the
-    real directory untouched.
+    Pointed at the real unit directory, the run must die on the fake — and
+    because the fakes execute nothing, "die on the fake" is provable: the call
+    is in the recording, and /etc/systemd/system is untouched.
     """
     before = sorted(Path("/etc/systemd/system").glob("songmaker-cli-credentials-*"))
 
     result = run_installer(SONGMAKER_UNIT_DIR="/etc/systemd/system")
 
-    assert result.returncode == 97, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-    assert "fake systemctl" in result.stderr or "fake sudo" in result.stderr
+    assert result.returncode == 97, f"{result.stdout}{result.stderr}"
+    assert "outside the sandbox" in result.stderr
+    assert any("/etc/systemd/system" in line for line in _recorded(run_installer))
     assert sorted(Path("/etc/systemd/system").glob("songmaker-cli-credentials-*")) == before
 
 
 @pytest.mark.parametrize(
-    "escape",
+    ("program", "argv"),
     [
-        "{sandbox}/../../../etc/systemd/system/evil.service",
-        "relative/../../../../etc/systemd/system/evil.service",
-        "{sandbox}/through-a-symlink/evil.service",
+        ("sudo", ["install", "-m", "0644", "{source}", "/etc/systemd/system/x"]),
+        ("sudo", ["install", "-m", "0644", "{source}", "{sandbox}/../escape"]),
+        ("sudo", ["-u", "somebody", "/usr/bin/id"]),
+        ("sudo", ["id"]),
+        ("sudo", ["install", "-m", "0644", "{source}"]),
+        ("sudo", ["install", "-t", "/etc/systemd/system", "{source}"]),
+        ("systemctl", ["mask", "songmaker-cli-credentials-mirror.service"]),
+        ("systemctl", ["start", "../../../evil.service"]),
     ],
 )
-def test_the_fake_sudo_refuses_a_path_that_only_looks_contained(
-    run_installer, tmp_path, escape,
-) -> None:
-    """Textual containment let `..` and symlinked parents through to real install."""
-    (tmp_path / "through-a-symlink").symlink_to("/etc/systemd/system")
-    # The source lives inside the sandbox on purpose: the destination is what
-    # is under test, and an out-of-sandbox source would be refused first and
-    # make the test pass without ever judging the escape.
+def test_a_fake_refuses_and_does_nothing(run_installer, tmp_path, program, argv) -> None:
+    """Refusal is rc 97, and nothing happened — there is nothing that could."""
     source = tmp_path / "unit-to-install"
     source.write_text("[Service]\n")
+    filled = [a.format(source=source, sandbox=run_installer.sandbox) for a in argv]
 
     result = subprocess.run(
-        ["sudo", "install", "-m", "0644", str(source),
-         escape.format(sandbox=tmp_path)],
-        env={
-            **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-        },
-        text=True, capture_output=True, check=False, cwd=tmp_path,
-    )
-
-    assert result.returncode == 97, result.stderr
-    assert "fake sudo: refusing" in result.stderr
-
-
-@pytest.mark.parametrize(
-    ("argv", "why"),
-    [
-        # A command the installer never runs, and one with no path-shaped
-        # argument — which is what a scan for paths saw nothing in.
-        #
-        # Deliberately harmless. The command that exposed this was `reboot`,
-        # and putting it in a test meant a regressed fake took the operator's
-        # machine down to report the regression. A test may not be able to do
-        # that, however well guarded: `id` proves the same refusal and costs
-        # nothing when the guard is gone.
-        (["id"], "a command the installer never runs"),
-        # The destination hides in an option value.
-        (["install", "-m", "0644", "{source}",
-          "--target-directory=/etc/systemd/system"], "--target-directory"),
-        (["install", "-m", "0644", "{source}", "-t", "/etc/systemd/system"], "-t"),
-    ],
-)
-def test_the_fake_sudo_runs_only_the_shapes_the_installer_uses(
-    run_installer, tmp_path, argv, why,
-) -> None:
-    """An allowlist, not a scan: what is not listed does not run."""
-    source = tmp_path / "unit-to-install"
-    source.write_text("[Service]\n")
-
-    result = subprocess.run(
-        ["sudo", *[a.format(source=source) for a in argv]],
-        env={
-            **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-        },
-        text=True, capture_output=True, check=False, cwd=tmp_path,
-    )
-
-    assert result.returncode == 97, f"{why}: {result.stdout}{result.stderr}"
-    assert "fake sudo: refusing" in result.stderr
-
-
-def test_the_fake_systemctl_refuses_a_command_it_does_not_model(
-    run_installer,
-) -> None:
-    """Succeeding at an unmodelled command would be the fake lying."""
-    result = subprocess.run(
-        ["systemctl", "mask", "songmaker-cli-credentials-mirror.service"],
-        env={
-            **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-            "SONGMAKER_UNIT_DIR": str(run_installer.units),
-            "SYSTEMCTL_LOG": str(run_installer.log),
-        },
-        text=True, capture_output=True, check=False,
-    )
-
-    assert result.returncode == 97
-    assert "unmodelled command" in result.stderr
-
-
-@pytest.mark.parametrize(
-    ("exec_start", "why"),
-    [
-        ("/usr/bin/touch {canary}", "an absolute path outside the sandbox"),
-        ("touch {canary}", "a bare name, resolved against the working directory"),
-    ],
-)
-def test_the_fake_systemctl_will_not_run_an_execstart_outside_the_sandbox(
-    run_installer, tmp_path, exec_start, why,
-) -> None:
-    """`systemctl start` really runs ExecStart, so ExecStart chooses a program.
-
-    A mutated unit could otherwise name any binary on the machine and this
-    fake would run it. The payload here is `touch` against a canary inside the
-    sandbox: harmless if the guard is gone, and visible either way.
-    """
-    canary = tmp_path / "canary-should-not-exist"
-    unit = run_installer.units / "probe.service"
-    unit.parent.mkdir(parents=True, exist_ok=True)
-    unit.write_text(f"[Service]\nExecStart={exec_start.format(canary=canary)}\n")
-
-    result = subprocess.run(
-        ["systemctl", "start", "probe.service"],
-        env={
-            **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-            "SONGMAKER_UNIT_DIR": str(run_installer.units),
-            "SYSTEMCTL_LOG": str(run_installer.log),
-        },
+        [program, *filled], env=run_installer.environment(),
         text=True, capture_output=True, check=False, cwd=run_installer.sandbox,
     )
 
-    assert result.returncode == 97, f"{why}: {result.stdout}{result.stderr}"
-    assert "ExecStart" in result.stderr
-    assert not canary.exists(), "the guard was gone and the program ran"
+    assert result.returncode == 97, f"{result.stdout}{result.stderr}"
+    assert f"fake {program}: refusing" in result.stderr
+    assert not Path("/etc/systemd/system/x").exists()
+    assert not (run_installer.sandbox.parent / "escape").exists()
 
 
-def test_the_fake_systemctl_refuses_a_unit_name_that_is_a_path(
-    run_installer,
-) -> None:
-    """The unit name reaches the filesystem twice, so it may not traverse."""
-    result = subprocess.run(
-        ["systemctl", "start", "../../../evil.service"],
-        env={
-            **os.environ,
-            "PATH": f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-            "SONGMAKER_UNIT_DIR": str(run_installer.units),
-            "SYSTEMCTL_LOG": str(run_installer.log),
-        },
+def test_a_fake_records_even_what_it_refuses(run_installer) -> None:
+    """A refusal that left no trace would be a fake that hid what was asked."""
+    subprocess.run(
+        ["sudo", "id"], env=run_installer.environment(),
         text=True, capture_output=True, check=False,
     )
 
-    assert result.returncode == 97
-    assert "not a plain unit name" in result.stderr
+    assert any(line == "sudo id" for line in _recorded(run_installer))
 
-
-def test_a_test_cannot_override_what_keeps_the_run_contained(run_installer) -> None:
-    with pytest.raises(AssertionError, match="keep the run inside the sandbox"):
-        run_installer(PATH="/usr/bin:/bin")
 
 
 def _linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
@@ -809,28 +710,30 @@ PREFLIGHT_UNITS = (
 def _run_preflight(
     run_installer, sabotage=None, path: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    """The shell entry point the auto-deploy tick calls, in the same sandbox."""
     run_installer()
     if sabotage is not None:
         sabotage()
+    environment = run_installer.environment()
+    if path is not None:
+        environment["PATH"] = path
     return subprocess.run(
         [
             str(run_installer.checkout / "scripts" / "check_agent_cli_mounts.sh"),
             "--home", str(run_installer.home),
             "--mirror-dir", str(run_installer.home / ".songmaker/agent-cli-credentials"),
         ],
-        env={
-            **os.environ,
-            "PATH": path or f"{run_installer.sandbox / 'bin'}:{os.environ['PATH']}",
-            "SANDBOX_ROOT": str(run_installer.sandbox),
-            "SANDBOX_REAL": str(run_installer.sandbox.resolve()),
-            "SYSTEMCTL_LOG": str(run_installer.log),
-            "SONGMAKER_UNIT_DIR": str(run_installer.units),
-            "SONGMAKER_CLAUDE_CLI": "/bin/sh",
-            "SONGMAKER_GROK_CLI": "/bin/sh",
-            "SONGMAKER_CODEX_CLI": "/bin/sh",
-        },
-        text=True, capture_output=True, check=False,
+        env=environment, text=True, capture_output=True, check=False,
     )
+
+
+def _forget(run_installer, fact: str) -> None:
+    """Take one line out of the state table the fakes answer from."""
+    kept = [
+        line for line in run_installer.state.read_text().splitlines()
+        if line != fact
+    ]
+    run_installer.state.write_text("".join(f"{line}\n" for line in kept))
 
 
 @pytest.mark.parametrize(
@@ -895,11 +798,12 @@ def test_a_symlinked_mirror_file_fails_the_preflight(run_installer, tmp_path) ->
 
 def test_a_failed_mirror_service_fails_the_preflight(run_installer) -> None:
     """Live triggers and an old valid copy prove nothing about currency."""
-    state = run_installer.sandbox / "systemctl-state"
-
     result = _run_preflight(
         run_installer,
-        lambda: (state / "songmaker-cli-credentials-mirror.service.failed").touch(),
+        lambda: run_installer.state.write_text(
+            run_installer.state.read_text()
+            + "failed songmaker-cli-credentials-mirror.service\n",
+        ),
     )
 
     assert result.returncode == 1
@@ -942,10 +846,8 @@ def test_an_uninstalled_unit_fails_the_preflight(run_installer, unit) -> None:
 
 @pytest.mark.parametrize("unit", PREFLIGHT_UNITS)
 def test_a_disabled_unit_fails_the_preflight(run_installer, unit) -> None:
-    state = run_installer.sandbox / "systemctl-state"
-
     result = _run_preflight(
-        run_installer, lambda: (state / f"{unit}.enabled").unlink(),
+        run_installer, lambda: _forget(run_installer, f"enabled {unit}"),
     )
 
     assert result.returncode == 1
@@ -961,10 +863,8 @@ def test_a_disabled_unit_fails_the_preflight(run_installer, unit) -> None:
 )
 def test_a_stopped_trigger_fails_the_preflight(run_installer, unit) -> None:
     """Enabled only says "at the next boot"; nothing triggers the mirror now."""
-    state = run_installer.sandbox / "systemctl-state"
-
     result = _run_preflight(
-        run_installer, lambda: (state / f"{unit}.active").unlink(),
+        run_installer, lambda: _forget(run_installer, f"active {unit}"),
     )
 
     assert result.returncode == 1
