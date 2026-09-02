@@ -80,6 +80,8 @@ class Checkout:
         self._prune_exit_code = 0
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
+        self._compose_project_name = "songmaker"
+        self.compose_stderr = ""
         self.check_runs_stderr = ""
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
         self.check_run_appearance_grace_seconds = CHECK_RUN_APPEARANCE_GRACE_SECONDS
@@ -137,16 +139,26 @@ class Checkout:
         self._compose_up_exit_code = exit_code
         self._write_docker_stub()
 
+    def set_compose_project_name(self, project_name: str) -> None:
+        self._compose_project_name = project_name
+        self._write_docker_stub()
+
     def _write_docker_stub(self) -> None:
         _write_executable(
             self._bin / "docker",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
-            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--services" ]]; then\n'
-            '    echo songmaker-web\n'
+            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" && "$4" == "json" ]]; then\n'
+            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
+            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
+            "    fi\n"
+            '    printf \'{"name":"%s","services":{"songmaker-web":{"build":{"context":"."}},"postgres":{"image":"postgres:16"}}}\\n\' "$DOCKER_COMPOSE_PROJECT_NAME"\n'
             "    exit 0\n"
             "fi\n"
             'if [[ "$1" == "compose" && "$2" == "ps" ]]; then\n'
+            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
+            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
+            "    fi\n"
             '    echo container-songmaker-web\n'
             "    exit 0\n"
             "fi\n"
@@ -313,6 +325,8 @@ class Checkout:
                 ),
                 "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
                 "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
+                "DOCKER_COMPOSE_PROJECT_NAME": self._compose_project_name,
+                "DOCKER_COMPOSE_STDERR": self.compose_stderr,
             },
         )
 
@@ -326,6 +340,14 @@ class Checkout:
 
     def alert_lines(self) -> list[str]:
         return [line for line in self.journal.splitlines() if "ALERT:" in line]
+
+    @property
+    def failure_count_file(self) -> Path:
+        return self.root / ".git" / "songmaker-autodeploy.failcount"
+
+    @property
+    def deployed_sha_file(self) -> Path:
+        return self.root / ".git" / "songmaker-autodeploy.deployed-sha"
 
 
 @pytest.fixture
@@ -484,8 +506,39 @@ def test_recreate_preserves_each_running_service_image_with_a_previous_tag(
     previous_tag = "tag sha256:previous-songmaker-web songmaker-songmaker-web:previous"
     recreate = "compose up -d --wait --wait-timeout 1200"
     assert previous_tag in docker_calls
+    assert "tag sha256:previous-songmaker-web songmaker-postgres:previous" not in docker_calls
     assert recreate in docker_calls
     assert docker_calls.index(previous_tag) < docker_calls.index(recreate)
+
+
+def test_recreate_uses_the_compose_project_name_for_rollback_tags(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_compose_project_name("issue-384-prune")
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (
+        "tag sha256:previous-songmaker-web "
+        "issue-384-prune-songmaker-web:previous"
+    ) in checkout.docker_calls
+
+
+def test_compose_warning_on_stderr_does_not_prevent_the_recreate(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.compose_stderr = "variable is not set. Defaulting to a blank string"
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "compose up -d --wait" in checkout.docker_calls
+    assert "cannot preserve running images before recreate" not in checkout.journal
 
 
 def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
@@ -549,23 +602,27 @@ def test_a_failed_container_recreate_does_not_prune(tmp_path: Path) -> None:
     assert "builder prune" not in checkout.docker_calls
 
 
-def test_a_prune_failure_leaves_the_successful_deploy_successful(tmp_path: Path) -> None:
+def test_a_prune_failure_logs_the_command_without_changing_deploy_state_or_counters(
+    tmp_path: Path,
+) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     checkout.set_prune_exit_code(1)
+    checkout.failure_count_file.write_text("2")
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "docker image prune failed after deploy (exit 1)" in checkout.journal
-    assert "docker builder prune failed after deploy (exit 1)" in checkout.journal
+    assert "docker image prune --force --filter until=48h failed after deploy (exit 1)" in checkout.journal
+    assert "docker builder prune --all --force --filter until=48h failed after deploy (exit 1)" in checkout.journal
     assert "deploy remains successful" in checkout.journal
-    assert "failure count now 1 (this tick: docker prune failed)" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "2"
+    assert checkout.deployed_sha_file.read_text() == checkout.remote_main_sha()
 
 
-def test_a_prune_timeout_counts_as_a_failure_without_rolling_back_the_deploy(
+def test_a_prune_timeout_leaves_the_successful_deploy_and_counters_unchanged(
     tmp_path: Path,
 ) -> None:
     checkout = Checkout(tmp_path)
@@ -573,30 +630,16 @@ def test_a_prune_timeout_counts_as_a_failure_without_rolling_back_the_deploy(
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     checkout.set_prune_sleep_seconds(PRUNE_TIMEOUT_SECONDS + 1)
+    checkout.failure_count_file.write_text("2")
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "docker image prune failed after deploy (exit 124)" in checkout.journal
-    assert "docker builder prune failed after deploy (exit 124)" in checkout.journal
-    assert "failure count now 1 (this tick: docker prune failed)" in checkout.journal
+    assert "docker image prune --force --filter until=48h failed after deploy (exit 124)" in checkout.journal
+    assert "docker builder prune --all --force --filter until=48h failed after deploy (exit 124)" in checkout.journal
+    assert "failure count now" not in checkout.journal
+    assert checkout.failure_count_file.read_text() == "2"
     assert "deploy succeeded, now running" in checkout.journal
-
-
-def test_three_failed_prunes_reach_the_existing_alert_escalation(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prune_exit_code(1)
-
-    results = []
-    for _ in range(FAILURE_ALERT_THRESHOLD):
-        checkout.move_main_forward()
-        results.append(checkout.tick())
-
-    assert [result.returncode for result in results] == [0, 0, 0]
-    assert "failure count now 3 (this tick: docker prune failed)" in checkout.journal
-    assert len(checkout.alert_lines()) == 1
 
 
 def test_unavailable_check_status_refuses_to_pull_with_a_named_failure(tmp_path: Path) -> None:

@@ -235,30 +235,76 @@ compose() {
 }
 
 preserve_running_images() {
-    local services
+    local compose_config
+    local compose_stderr_file
+    local compose_error
+    local compose_exit_code
+    local project_name
+    local build_services
     local service
     local containers
     local container
     local service_image
     local current_image
 
-    if ! services="$(compose config --services 2>&1)"; then
-        log_err "cannot list Compose services before recreate: $services"
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.compose-stderr.XXXXXX" 2>/dev/null)"; then
+        log_err "cannot create temporary file for Compose config stderr before recreate"
         return 1
     fi
 
-    while IFS= read -r service; do
-        [[ -n "$service" ]] || continue
+    if compose_config="$(compose config --format json 2>"$compose_stderr_file")"; then
+        rm -f "$compose_stderr_file"
+    else
+        compose_exit_code=$?
+        compose_error="$(<"$compose_stderr_file")"
+        rm -f "$compose_stderr_file"
+        log_err "cannot read Compose config before recreate (exit $compose_exit_code): $compose_error"
+        return 1
+    fi
 
-        if ! containers="$(compose ps -q --status running "$service" 2>&1)"; then
-            log_err "cannot find the running container for $service before recreate: $containers"
+    if ! project_name="$(jq -er '.name | if type == "string" then . else error("missing Compose project name") end' <<<"$compose_config")"; then
+        log_err "cannot read the Compose project name before recreate"
+        return 1
+    fi
+    if ! [[ "$project_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        log_err "Compose project name '$project_name' contains unsupported characters"
+        return 1
+    fi
+
+    if ! build_services="$(jq -r 'if (.services | type) == "object" then [.services | to_entries[] | select((.value | type) == "object" and (.value.build != null)) | .key][]? else error("missing Compose services") end' <<<"$compose_config")"; then
+        log_err "cannot identify build services from Compose config before recreate"
+        return 1
+    fi
+    [[ -n "$build_services" ]] || return 0
+
+    while IFS= read -r service; do
+        if ! [[ "$service" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            log_err "Compose build service '$service' contains unsupported characters"
+            return 1
+        fi
+
+        if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.compose-stderr.XXXXXX" 2>/dev/null)"; then
+            log_err "cannot create temporary file for Compose ps stderr before recreate"
+            return 1
+        fi
+
+        if containers="$(compose ps -q --status running "$service" 2>"$compose_stderr_file")"; then
+            rm -f "$compose_stderr_file"
+        else
+            compose_exit_code=$?
+            compose_error="$(<"$compose_stderr_file")"
+            rm -f "$compose_stderr_file"
+            log_err "cannot find the running container for $service before recreate (exit $compose_exit_code): $compose_error"
             return 1
         fi
         [[ -n "$containers" ]] || continue
 
         service_image=""
         while IFS= read -r container; do
-            [[ -n "$container" ]] || continue
+            if ! [[ "$container" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                log_err "Compose container ID '$container' for $service contains unsupported characters"
+                return 1
+            fi
             if ! current_image="$(docker inspect --format '{{.Image}}' "$container" 2>&1)"; then
                 log_err "cannot inspect the running image for $service before recreate: $current_image"
                 return 1
@@ -270,11 +316,11 @@ preserve_running_images() {
             service_image="$current_image"
         done <<<"$containers"
 
-        if ! docker tag "$service_image" "songmaker-${service}:${PREVIOUS_IMAGE_TAG}"; then
+        if ! docker tag "$service_image" "${project_name}-${service}:${PREVIOUS_IMAGE_TAG}"; then
             log_err "cannot preserve the running image for $service before recreate"
             return 1
         fi
-    done <<<"$services"
+    done <<<"$build_services"
 }
 
 prune_docker_resources() {
@@ -286,7 +332,7 @@ prune_docker_resources() {
         :
     else
         prune_exit_code=$?
-        log_err "docker image prune failed after deploy (exit $prune_exit_code); deploy remains successful"
+        log_err "docker image prune --force --filter $prune_filter failed after deploy (exit $prune_exit_code); deploy remains successful"
         prune_failed=true
     fi
 
@@ -294,15 +340,13 @@ prune_docker_resources() {
         :
     else
         prune_exit_code=$?
-        log_err "docker builder prune failed after deploy (exit $prune_exit_code); deploy remains successful"
+        log_err "docker builder prune --all --force --filter $prune_filter failed after deploy (exit $prune_exit_code); deploy remains successful"
         prune_failed=true
     fi
 
     if [[ "$prune_failed" == false ]]; then
         log_info "pruned unreferenced Docker images and build cache older than ${PRUNE_RETENTION_HOURS}h"
         reset_counters
-    else
-        record_failure "docker prune failed" || true
     fi
 
     return 0
