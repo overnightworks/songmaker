@@ -487,25 +487,52 @@ def test_a_lock_error_that_is_not_contention_is_a_failure(
 # ── a field its CLI needs is not optional ──────────────────────────
 
 
-def _required_field_cases() -> list[tuple[str, str, str]]:
-    """Every field each provider declares as required, not a sample of them.
+# The contract, written out here rather than read from the code it guards.
+# Deriving the cases from the production sets meant a mutation that shrank one
+# of them also removed the case that would have caught it: the test collection
+# quietly got smaller and stayed green.
+MEASURED_REQUIRED_FIELDS = {
+    "claude": {"accessToken", "scopes"},
+    "grok": {
+        "key", "auth_mode", "create_time", "expires_at", "user_id", "team_id",
+        "principal_type", "principal_id", "oidc_issuer", "oidc_client_id",
+        "coding_data_retention_opt_out", "refresh_token",
+    },
+    "codex": {"auth_mode", "tokens"},
+    "codex-tokens": {"id_token", "access_token", "account_id", "refresh_token"},
+}
 
-    Sampling left `key`, `auth_mode`, `id_token` and `access_token` removable
-    from the required sets without a single red test.
+SOURCE_OF = {
+    "claude": ".claude/.credentials.json",
+    "grok": ".grok/auth.json",
+    "codex": ".codex/auth.json",
+    "codex-tokens": ".codex/auth.json",
+}
+
+
+def test_the_required_field_sets_are_the_ones_that_were_measured() -> None:
+    """Both directions: a set may not shrink, and may not grow unnoticed.
+
+    Shrinking publishes a document its CLI cannot use; growing refuses a login
+    that would have worked. Either is a change to what the mirror promises,
+    and neither should be possible without editing this list.
     """
-    cases = [(".claude/.credentials.json", f, "claude") for f in sorted(
-        mirror.CLAUDE_REQUIRED_FIELDS,
-    )]
-    cases += [(".grok/auth.json", f, "grok") for f in sorted(
-        mirror.GROK_REQUIRED_FIELDS,
-    )]
-    cases += [(".codex/auth.json", f, "codex") for f in sorted(
-        mirror.CODEX_REQUIRED_FIELDS - {"tokens"},
-    )]
-    cases += [(".codex/auth.json", f, "codex") for f in sorted(
-        mirror.CODEX_TOKEN_REQUIRED_FIELDS,
-    )]
-    return cases
+    assert mirror.CLAUDE_REQUIRED_FIELDS == MEASURED_REQUIRED_FIELDS["claude"]
+    assert mirror.GROK_REQUIRED_FIELDS == MEASURED_REQUIRED_FIELDS["grok"]
+    assert mirror.CODEX_REQUIRED_FIELDS == MEASURED_REQUIRED_FIELDS["codex"]
+    assert (
+        mirror.CODEX_TOKEN_REQUIRED_FIELDS == MEASURED_REQUIRED_FIELDS["codex-tokens"]
+    )
+
+
+def _required_field_cases() -> list[tuple[str, str, str]]:
+    """One case per measured field, from the contract above — not from the code."""
+    return [
+        (SOURCE_OF[provider], field, provider.split("-")[0])
+        for provider, fields in MEASURED_REQUIRED_FIELDS.items()
+        for field in sorted(fields)
+        if field != "tokens"
+    ]
 
 
 @pytest.mark.parametrize(
