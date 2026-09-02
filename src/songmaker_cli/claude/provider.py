@@ -722,64 +722,6 @@ def _unlink_quiet(path: str) -> None:
         return
 
 
-async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
-    """Terminate ``proc``'s whole process group and wait for it to exit.
-
-    SIGKILL cannot be ignored, so the final wait below is bounded on the
-    assumption it will return almost immediately — but "almost immediately"
-    is not "immediately", and this function runs inside a single-flight
-    probe's lock (``_verify_tool_surface_async``): an unbounded wait here
-    would hold that lock forever if the process ever got stuck in an
-    uninterruptible kernel sleep, locking out every later caller for the
-    same key rather than just the one hung probe. On that (pathological,
-    not normal-exit) timeout, the wait is handed to a background task
-    instead of abandoned outright, so the process is still reaped — never
-    left a zombie — once it does exit; the caller here gets its answer back
-    within budget either way.
-    """
-    if proc.returncode is not None:
-        await proc.wait()
-        return
-    if proc.pid is None:
-        await proc.wait()
-        return
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        await proc.wait()
-        return
-    try:
-        await asyncio.wait_for(proc.wait(), timeout=1)
-        return
-    except asyncio.TimeoutError:
-        pass
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    try:
-        await asyncio.wait_for(proc.wait(), timeout=CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError:
-        log.error(
-            "Claude CLI process group %d did not exit within %ds of SIGKILL; "
-            "continuing to reap it in the background instead of blocking on it",
-            proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
-        )
-        asyncio.create_task(_reap_in_background(proc))
-
-
-async def _reap_in_background(proc: asyncio.subprocess.Process) -> None:
-    """Finish waiting for a process ``_reap_process_group`` gave up waiting
-    on, off any caller's critical path, so it is reaped once it does exit
-    rather than left a zombie for the rest of the container's life."""
-    try:
-        await proc.wait()
-    except Exception:
-        log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
-    else:
-        log.info("Claude CLI process group %s reaped in the background", proc.pid)
-
-
 def _build_mcp_cli_cmd(
     binary: str, model: str, config_path: str,
     *,
@@ -995,27 +937,27 @@ async def verify_cli_tool_surface() -> str:
     "clean" means the CLI is actually still connecting our MCP server and
     reporting exactly its tools — not merely reporting no built-ins with
     nothing attached to compare against. A connection that fails to
-    establish is a probe *failure* (short-lived, retried on the next call),
-    never a "the CLI offers zero of our eleven tools" verdict (permanent,
-    per build) — the two look identical in the raw ``tools`` list alone, so
-    ``mcp_connected`` is what tells them apart.
+    establish, with nothing *else* wrong, is a probe *failure*
+    (short-lived, retried on the next call), never a "the CLI offers zero
+    of our eleven tools" verdict (permanent, per build) — the two look
+    identical in the raw ``tools`` list alone, so ``mcp_connected`` is what
+    tells them apart. But an unexpected tool or a slash command is a
+    permanent mismatch regardless of ``mcp_connected`` — a CLI reporting
+    ``tools=["Bash"]`` while its MCP connection also happens to be down is
+    not "unverifiable", it is dangerous, and caching that for only ten
+    seconds would let it look clean again far too soon. See
+    ``_evaluate_tool_surface`` for where that split actually happens.
     """
     build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
 
     async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
-            surface = await _probe_cli_surface_async(
+            return await _probe_cli_surface_async(
                 build.path, mcp_config_path=config_path, deadline=deadline,
             )
         finally:
             _unlink_quiet(config_path)
-        if surface.mcp_connected is False:
-            raise UnavailableError(
-                f"Claude CLI at {build.path} could not connect the songmaker "
-                "MCP server — cannot verify its tool surface",
-            )
-        return surface
 
     return await _verify_tool_surface_async(
         build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
@@ -1085,14 +1027,14 @@ async def _verify_tool_surface_async(
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     try:
         surface = await probe(deadline)
+        mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
         _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
         _resolve_inflight_async(key, future, exception=exc)
         raise
     except BaseException as exc:
-        _resolve_inflight_async(key, future, exception=exc)
+        _resolve_inflight_async(key, future, exception=_follower_safe_exception(build, exc))
         raise
-    mismatch = _evaluate_tool_surface(key, surface)
     _resolve_inflight_async(key, future, result=mismatch)
     return _finish_tool_surface_check(build, mismatch)
 
@@ -1174,14 +1116,14 @@ def _verify_tool_surface_sync(
     deadline = time.monotonic() + timeout_seconds
     try:
         surface = probe(deadline)
+        mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
         _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
         _resolve_inflight_sync(key, future, exception=exc)
         raise
     except BaseException as exc:
-        _resolve_inflight_sync(key, future, exception=exc)
+        _resolve_inflight_sync(key, future, exception=_follower_safe_exception(build, exc))
         raise
-    mismatch = _evaluate_tool_surface(key, surface)
     _resolve_inflight_sync(key, future, result=mismatch)
     return _finish_tool_surface_check(build, mismatch)
 
@@ -1210,6 +1152,26 @@ def _resolve_inflight_sync(
         future.set_exception(exception)
     else:
         future.set_result(result)
+
+
+def _follower_safe_exception(build: BinaryBuild, exc: BaseException) -> BaseException:
+    """What a *follower* sees when the leader's own probe ends in
+    something other than ``UnavailableError`` — a cancelled leader task,
+    an unexpected bug, anything.
+
+    The leader's own ``raise`` still carries the real exception, unfiltered
+    — that is what shows up in its own logs/stack trace. But a follower is
+    an unrelated caller that never asked to be cancelled or to inherit a
+    stranger's bug: handing it the leader's literal ``CancelledError``
+    would make its own task look cancelled too, confusing whatever is
+    awaiting *it* (a request handler, a test). A follower always gets a
+    normal, catchable ``UnavailableError`` instead.
+    """
+    if isinstance(exc, UnavailableError):
+        return exc
+    return UnavailableError(
+        f"Claude CLI probe for {build.path} was aborted before it could answer: {exc}",
+    )
 
 
 def _follower_wait_budget_seconds(probe_timeout_seconds: float) -> float:
@@ -1263,13 +1225,35 @@ def _evaluate_tool_surface(
 ) -> _ToolSurfaceMismatch:
     """Remembered per (binary build, expectation), not per process: the CLI
     is a bind-mounted install that updates itself under a running container,
-    and an update is exactly the event this check exists for."""
+    and an update is exactly the event this check exists for.
+
+    Raises ``UnavailableError`` instead of returning, for a probe *failure*
+    the caller must cache only briefly (see ``_verify_tool_surface_async``/
+    ``_sync``), in exactly one case: the MCP connection never established
+    and that is the *only* thing wrong — nothing unexpected was announced,
+    no missing tool can be blamed on anything but the connection itself.
+    An unexpected tool or a still-reachable slash command is always a
+    permanent mismatch, MCP connected or not: a CLI that offers ``Bash``
+    while its MCP connection also happens to be down is not "we could not
+    verify it", it is a confirmed problem with this exact build, and must
+    stay refused until the build changes, not for a mere ten seconds.
+    """
     advertised = frozenset(surface.tools)
     expected_tools = key[1]
+    unexpected_tools = tuple(sorted(advertised - expected_tools))
+    missing_tools = tuple(sorted(expected_tools - advertised))
+    slash_commands = surface.slash_commands
+
+    if surface.mcp_connected is False and not unexpected_tools and not slash_commands:
+        raise UnavailableError(
+            "Claude CLI could not connect the songmaker MCP server — "
+            "cannot verify its tool surface",
+        )
+
     mismatch = _ToolSurfaceMismatch(
-        unexpected_tools=tuple(sorted(advertised - expected_tools)),
-        missing_tools=tuple(sorted(expected_tools - advertised)),
-        slash_commands=surface.slash_commands,
+        unexpected_tools=unexpected_tools,
+        missing_tools=missing_tools,
+        slash_commands=slash_commands,
     )
     with _tool_surface_lock:
         _tool_surface_verdicts[key] = mismatch
@@ -1315,12 +1299,19 @@ async def _probe_cli_surface_async(
 ) -> _AnnouncedSurface:
     """What a session built like ``cmd`` announces it can reach.
 
-    Every step that produces the answer — spawn, stdin write, stdout read —
-    shares ``deadline``, one overall budget, rather than each getting its
-    own fresh allowance that could add up to an unknown total. Only cleanup
-    (SIGTERM grace, then the post-SIGKILL wait) has its own separate, small
-    bound: cleanup must always be attempted no matter how much of the
-    answer budget is already spent.
+    Delegates to ``_probe_cli_surface_sync``, run on a worker thread via
+    ``asyncio.to_thread``, rather than spawning through
+    ``asyncio.create_subprocess_exec`` directly. ``create_subprocess_exec``
+    still does the underlying ``fork()``/``exec()`` synchronously on
+    whichever thread calls it — including the event loop's own thread — so
+    calling it straight from here could keep the loop from ever running the
+    timer that is supposed to enforce ``deadline``, exactly when a stuck
+    spawn is the thing that budget exists to catch. A worker thread lets
+    ``asyncio.wait_for`` give up on schedule regardless of what that thread
+    is doing; a spawn that never returns simply keeps running there,
+    self-cleaning the same way an unreaped zombie does. Both clocks are the
+    same one (``loop.time()`` and ``time.monotonic()``), so ``deadline`` is
+    valid input to the sync twin unchanged.
 
     Reading the ``system`` init event and then killing the session bounds
     but does not eliminate the API call's cost: the full probe prompt is
@@ -1329,52 +1320,9 @@ async def _probe_cli_surface_async(
     checked live and only aborts a session *after* a call completes, not
     before one starts, so it does not close that gap either.
     """
-    cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
-    try:
-        proc = await _await_with_deadline(
-            asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-                env=_scrub_env(),
-                start_new_session=True,
-            ),
-            deadline,
-        )
-    except FileNotFoundError:
-        raise UnavailableError("Claude CLI binary not found")
-    except TimeoutError:
-        raise UnavailableError("Claude CLI probe did not start within its budget")
-
-    answer_error: UnavailableError | None = None
-    first_line = b""
-    try:
-        if proc.stdin is None or proc.stdout is None:
-            raise UnavailableError("Claude CLI probe could not open its pipes")
-        proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
-        await _await_with_deadline(proc.stdin.drain(), deadline)
-        proc.stdin.close()
-        first_line = await _await_with_deadline(proc.stdout.readline(), deadline)
-    except TimeoutError:
-        answer_error = UnavailableError("Claude CLI did not answer within its probe budget")
-    except UnavailableError as exc:
-        answer_error = exc
-
-    became_zombie = await _reap_process_group(proc)
-
-    if answer_error is not None:
-        if became_zombie:
-            raise _ZombieProbeError(str(answer_error)) from answer_error
-        raise answer_error
-    return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
-
-
-async def _await_with_deadline(awaitable, deadline: float):
-    remaining = deadline - asyncio.get_running_loop().time()
-    if remaining <= 0:
-        raise TimeoutError
-    return await asyncio.wait_for(awaitable, timeout=remaining)
+    return await asyncio.to_thread(
+        _probe_cli_surface_sync, binary, mcp_config_path=mcp_config_path, deadline=deadline,
+    )
 
 
 # ── the probe itself: one overall deadline, sync ────────────────────
@@ -1383,8 +1331,8 @@ async def _await_with_deadline(awaitable, deadline: float):
 def _probe_cli_surface_sync(
     binary: str, *, mcp_config_path: str | None, deadline: float,
 ) -> _AnnouncedSurface:
-    """Sync twin of ``_probe_cli_surface_async`` — same one-deadline shape,
-    same cost caveat.
+    """Twin of ``_probe_cli_surface_async``, which delegates to this one on
+    a worker thread — this is the one real implementation for both.
 
     ``subprocess.Popen`` and a pipe write have no native timeout parameter,
     so spawn, write, and read all run on one background thread; the calling
@@ -1395,7 +1343,20 @@ def _probe_cli_surface_sync(
     whole budget in an earlier round) can block without one shared limit.
     The process handle is reported back as soon as it exists, so even a
     timed-out read still has something to reap.
+
+    Refuses to even start a new probe while the zombie-reaper pool is
+    already saturated: a fresh probe that itself outlives SIGKILL would
+    have nowhere to register a reaper, and the OS does not reap an
+    abandoned child of a still-live parent on its own — better to refuse
+    the probe (a normal, catchable failure) than to spawn a process this
+    module could permanently lose track of.
     """
+    if _zombie_reap_pool_is_saturated():
+        raise UnavailableError(
+            "Claude CLI probe pool is saturated with unreaped processes; "
+            "refusing to start another",
+        )
+
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     env = _scrub_env()
     spawned: list[subprocess.Popen] = []
@@ -1452,9 +1413,18 @@ def _probe_cli_surface_sync(
     proc = spawned[0]
     became_zombie = _reap_process_group_sync(proc)
 
+    # A zombie always wins, before its answer is ever trusted: a process
+    # that outlived even SIGKILL is not "clean, with an unrelated cleanup
+    # problem" — its own resource state is now suspect regardless of what
+    # it printed before that, and it must get the zombie's own much longer
+    # failure TTL, not a permanent clean verdict or a merely ten-second one.
+    if became_zombie:
+        message = (
+            str(answer_error) if answer_error is not None
+            else f"Claude CLI process group {proc.pid} outlived SIGKILL"
+        )
+        raise _ZombieProbeError(message) from answer_error
     if answer_error is not None:
-        if became_zombie:
-            raise _ZombieProbeError(str(answer_error)) from answer_error
         raise answer_error
     return _parse_announced_surface(first_line, mcp_attached=mcp_config_path is not None)
 
@@ -1619,6 +1589,16 @@ def _claim_zombie_reap_slot(pid: int) -> bool:
 def _release_zombie_reap_slot(pid: int) -> None:
     with _zombie_registry_lock:
         _zombie_tracked_pids.discard(pid)
+
+
+def _zombie_reap_pool_is_saturated() -> bool:
+    """Whether the reaper pool is already full — checked *before* spawning
+    a new probe process, not just after one becomes a zombie: a ninth
+    zombie past the cap would otherwise have its ``Popen`` handle simply
+    dropped, with no reaper and no other guaranteed way to collect it
+    while this process stays alive."""
+    with _zombie_registry_lock:
+        return len(_zombie_tracked_pids) >= CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS
 
 
 def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _AnnouncedSurface:
