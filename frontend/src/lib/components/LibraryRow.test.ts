@@ -90,6 +90,18 @@ function firePointer(
 	target.dispatchEvent(event);
 }
 
+// A user (or assistive tech) finds a tile by the name it shows, never by an
+// internal hook -- data-tile-id exists only for kineticScroll's own click
+// handler, the same way TakeStrip's data-generation-id does.
+function findTileByTitle(root: ParentNode, title: string): HTMLButtonElement {
+	const heading = Array.from(root.querySelectorAll<HTMLElement>('.tile-title')).find(
+		(el) => el.textContent === title
+	);
+	const button = heading?.closest<HTMLButtonElement>('.row-tile');
+	if (!button) throw new Error(`Expected a tile titled "${title}"`);
+	return button;
+}
+
 beforeEach(() => {
 	fetchSongs
 		.mockReset()
@@ -130,26 +142,50 @@ async function render(collection: {
 }
 
 describe('LibraryRow', () => {
-	it('renders one tile per sibling album and marks the open one', async () => {
+	it('renders one tile per sibling album, naming the open one for assistive tech', async () => {
 		const root = await render({ kind: 'album', id: 'a-1' });
-		const titles = Array.from(root.querySelectorAll('.row-tile-title')).map((el) => el.textContent);
+		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);
 		expect(titles).toEqual(['Anfield', 'Sommerluft']);
-		const active = root.querySelector('.row-tile.active');
-		expect(active?.getAttribute('data-tile-id')).toBe('a-1');
-		expect(active?.getAttribute('aria-current')).toBe('true');
+
+		const openMarkers = root.querySelectorAll('[aria-current="true"]');
+		expect(openMarkers).toHaveLength(1);
+		expect(findTileByTitle(root, 'Anfield').getAttribute('aria-current')).toBe('true');
 	});
 
 	it('renders one tile per sibling playlist when a playlist is open', async () => {
 		const root = await render({ kind: 'playlist', id: 'p-1' });
-		const titles = Array.from(root.querySelectorAll('.row-tile-title')).map((el) => el.textContent);
+		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);
 		expect(titles).toEqual(['Sommer 2026', 'Für Thomas']);
 	});
 
-	it('opens a neighbour album directly on click', async () => {
+	it('shows an album the store adds after mount', async () => {
 		const root = await render({ kind: 'album', id: 'a-1' });
-		const neighbour = root.querySelector<HTMLButtonElement>('[data-tile-id="a-2"]');
-		neighbour?.click();
+		albumList.update((list) => [...list, album({ id: 'a-3', title: 'Vernissage' })]);
 		await tick();
+		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);
+		expect(titles).toContain('Vernissage');
+	});
+
+	it("does not drag the browser's own image ghost from a covered tile", async () => {
+		albumList.set([
+			album({
+				id: 'a-1',
+				title: 'Anfield',
+				cover: { card: 'https://x/a.jpg', detail: 'https://x/a-full.jpg' }
+			})
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		const img = findTileByTitle(root, 'Anfield').querySelector('img');
+		expect(img?.getAttribute('draggable')).toBe('false');
+	});
+
+	it('opens a neighbour album directly on click, changing the address', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		findTileByTitle(root, 'Sommerluft').click();
+
+		await vi.waitFor(() => {
+			expect(window.location.pathname).toBe('/album/a-2');
+		});
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-2' });
 	});
 
@@ -164,10 +200,67 @@ describe('LibraryRow', () => {
 		firePointer(row, 'pointerdown', 100, 1000);
 		firePointer(row, 'pointerup', 100, 1000);
 
-		const neighbour = root.querySelector<HTMLButtonElement>('[data-tile-id="a-2"]');
-		neighbour?.click();
+		findTileByTitle(root, 'Sommerluft').click();
 		await tick();
 
+		expect(window.location.pathname).toBe('/');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-1' });
+	});
+
+	it('shows no overflow scrim for a short list that already fits', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		expect(root.querySelector('.library-row-scrim')?.classList.contains('has-overflow')).toBe(
+			false
+		);
+	});
+
+	it('shows the overflow scrim once the row genuinely has more to scroll to', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		const row = root.querySelector<HTMLElement>('.library-row');
+		if (!row) throw new Error('Expected .library-row to be rendered');
+		Object.defineProperty(row, 'clientWidth', { value: 100, configurable: true });
+		Object.defineProperty(row, 'scrollWidth', { value: 400, configurable: true });
+		row.dispatchEvent(new Event('scroll'));
+		await tick();
+
+		expect(root.querySelector('.library-row-scrim')?.classList.contains('has-overflow')).toBe(true);
+	});
+
+	it('moves focus between tiles with the arrow keys', async () => {
+		const root = await render({ kind: 'album', id: 'a-1' });
+		const row = root.querySelector<HTMLElement>('.library-row');
+		if (!row) throw new Error('Expected .library-row to be rendered');
+
+		findTileByTitle(root, 'Anfield').focus();
+		row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+		expect(document.activeElement).toBe(findTileByTitle(root, 'Sommerluft'));
+	});
+
+	it('centres the open tile, including right after mounting on a distant one', async () => {
+		const scrollIntoView = vi.fn();
+		HTMLElement.prototype.scrollIntoView = scrollIntoView;
+		try {
+			const many = Array.from({ length: 12 }, (_, i) =>
+				album({ id: `a-${i}`, title: `Album ${i}` })
+			);
+			albumList.set(many);
+
+			await render({ kind: 'album', id: 'a-9' });
+			expect(scrollIntoView).toHaveBeenCalledWith(
+				expect.objectContaining({ inline: 'center', block: 'nearest' })
+			);
+
+			scrollIntoView.mockClear();
+			await render({ kind: 'album', id: 'a-1' });
+			expect(scrollIntoView).toHaveBeenCalledWith(
+				expect.objectContaining({ inline: 'center', block: 'nearest' })
+			);
+		} finally {
+			// jsdom never had this method to begin with (see kineticScroll's own
+			// guard) -- restoring "absent" keeps every other test's environment
+			// exactly as it found it, not merely undoing this assignment.
+			delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+		}
 	});
 });

@@ -8,8 +8,9 @@
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { albumSummaryLabel, playlistSummaryLabel, titleInitials } from '$lib/utils/format';
+	import { albumSummaryLabel, playlistSummaryLabel } from '$lib/utils/format';
 	import { ALBUM_COVER_ALT_TYPE, LIBRARY_FILTER_LABELS } from '$lib/constants';
+	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	interface Props {
 		collection: OpenCollection;
@@ -68,12 +69,77 @@
 		if (collection.kind === 'album') void openAlbum(id);
 		else void openPlaylist(id);
 	}
+
+	function prefersReducedMotion(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			typeof window.matchMedia === 'function' &&
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+		);
+	}
+
+	let rowEl = $state<HTMLElement | null>(null);
+
+	// A click on a still-visible neighbour already leaves it in view, but a
+	// mount on a deep link, a keyboard jump, or switching collection kind
+	// (album <-> playlist, which swaps the whole tile set) can land on a tile
+	// that isn't. kineticScroll's own snap only runs after a drag/wheel
+	// gesture settles, so centring "whichever one is open" is this
+	// component's own job, on every mount and every change of what's open.
+	$effect(() => {
+		const row = rowEl;
+		const openId = collection.id;
+		void tiles;
+		if (!row) return;
+		const active = row.querySelector<HTMLElement>('.row-tile.active');
+		if (!active || typeof active.scrollIntoView !== 'function') return;
+		active.scrollIntoView({
+			inline: 'center',
+			block: 'nearest',
+			behavior: prefersReducedMotion() ? 'auto' : 'smooth'
+		});
+		void openId;
+	});
+
+	const OVERFLOW_TOLERANCE_PX = 1;
+
+	function hasOverflowToTheRight(row: HTMLElement): boolean {
+		return row.scrollWidth - row.clientWidth - row.scrollLeft > OVERFLOW_TOLERANCE_PX;
+	}
+
+	// The right-edge fade is a claim that there is more to scroll to -- true
+	// only while the row actually overflows. A short list (or one that has
+	// been scrolled all the way to its end) must not keep showing it just
+	// because the CSS is unconditional. Three things can change the answer:
+	// scrolling, the box resizing, and the tile list itself changing length.
+	let hasMoreToTheRight = $state(false);
+
+	$effect(() => {
+		const row = rowEl;
+		if (!row) {
+			hasMoreToTheRight = false;
+			return;
+		}
+		void tiles.length;
+		const measure = () => {
+			hasMoreToTheRight = hasOverflowToTheRight(row);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(row);
+		row.addEventListener('scroll', measure, { passive: true });
+		return () => {
+			observer.disconnect();
+			row.removeEventListener('scroll', measure);
+		};
+	});
 </script>
 
-<div class="library-row-scrim">
+<div class="library-row-scrim" class:has-overflow={hasMoreToTheRight}>
 	<div
 		class="library-row"
 		aria-label={rowLabel}
+		bind:this={rowEl}
 		use:kineticScroll={{ itemSelector: '.row-tile', onOpen: openTile }}
 	>
 		{#each tiles as tile (tile.id)}
@@ -85,22 +151,13 @@
 				aria-current={tile.id === collection.id}
 				title={tile.title}
 			>
-				<span class="row-tile-cover">
-					{#if tile.coverUrl}
-						<img src={tile.coverUrl} alt={`${ALBUM_COVER_ALT_TYPE} ${tile.title}`} />
-					{:else if tile.fill}
-						<span class="row-tile-cover-fill" style:background={tile.fill} aria-hidden="true"
-						></span>
-					{:else}
-						<span class="row-tile-cover-fill row-tile-cover-initials" aria-hidden="true"
-							>{titleInitials(tile.title)}</span
-						>
-					{/if}
-				</span>
-				<span class="row-tile-meta">
-					<span class="row-tile-title">{tile.title}</span>
-					<span class="row-tile-subtitle">{tile.subtitle}</span>
-				</span>
+				<LibraryTileContent
+					title={tile.title}
+					subtitle={tile.subtitle}
+					coverAlt={`${ALBUM_COVER_ALT_TYPE} ${tile.title}`}
+					coverUrl={tile.coverUrl}
+					fill={tile.fill}
+				/>
 			</button>
 		{/each}
 	</div>
@@ -108,10 +165,12 @@
 
 <style>
 	.library-row-scrim {
+		--row-tile-width: 84px;
+
 		position: relative;
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);
-		background: var(--surface);
+		background: var(--surface-hover);
 	}
 
 	.library-row-scrim::after {
@@ -121,14 +180,24 @@
 		right: 0;
 		bottom: 0;
 		width: 40px;
-		background: linear-gradient(to right, transparent, var(--surface));
+		background: linear-gradient(to right, transparent, var(--surface-hover));
 		pointer-events: none;
+		opacity: 0;
+	}
+
+	.library-row-scrim.has-overflow::after {
+		opacity: 1;
 	}
 
 	.library-row {
 		display: flex;
 		gap: 0.5rem;
-		padding: 0.6rem 0.9rem;
+		padding-block: 0.6rem;
+		/* Symmetric end insets, roughly half the row's own width minus half a
+		   tile, so the first and last tile can each reach the container's
+		   centre too -- without them, scrollIntoView({inline:'center'}) clamps
+		   an edge tile's scroll position and it can never actually centre. */
+		padding-inline: max(0.9rem, calc(50% - (var(--row-tile-width) / 2)));
 		overflow-x: auto;
 		cursor: grab;
 		user-select: none;
@@ -141,12 +210,17 @@
 	}
 
 	.row-tile {
+		--tile-initials-size: 0.82rem;
+		--tile-meta-padding: 0.25rem 0.3rem;
+		--tile-title-size: 0.6rem;
+		--tile-subtitle-size: 0.55rem;
+
 		display: flex;
 		flex-direction: column;
 		flex-shrink: 0;
-		width: 84px;
+		width: var(--row-tile-width);
 		padding: 0;
-		background: var(--bg);
+		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: inherit;
@@ -161,62 +235,11 @@
 	.row-tile.active {
 		opacity: 1;
 		transform: scale(1);
-		box-shadow: 0 0 0 2px var(--accent);
+		box-shadow: 0 0 0 2px var(--primary);
 	}
 
 	.row-tile:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
-	}
-
-	.row-tile-cover {
-		display: block;
-		width: 100%;
-		aspect-ratio: 1;
-		background: var(--surface-hover);
-	}
-
-	.row-tile-cover img,
-	.row-tile-cover-fill {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.row-tile-cover-initials {
-		font-family: var(--font-display);
-		font-size: 0.82rem;
-		letter-spacing: 0.06em;
-		color: var(--text);
-		user-select: none;
-	}
-
-	.row-tile-meta {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		gap: 1px;
-		padding: 0.25rem 0.3rem;
-	}
-
-	.row-tile-title {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-family: var(--font-display);
-		font-size: 0.6rem;
-		letter-spacing: 0.2px;
-		color: var(--text);
-	}
-
-	.row-tile-subtitle {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: 0.55rem;
-		color: var(--text-subtle);
 	}
 </style>
