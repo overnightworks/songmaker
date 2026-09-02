@@ -1,9 +1,9 @@
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '$lib/constants';
 import { currentUser } from '$lib/stores/auth';
-import { requireElement } from './rail-test-fixtures';
+import { createComponentMount, requireElement } from './rail-test-fixtures';
 
 // A genuine `$state` proxy, not a plain object: Rail.svelte (and the real
 // root layout) never remounts across a route change, so the fix this file
@@ -27,15 +27,7 @@ const pageState = page as unknown as { url: URL };
 const ADMIN = { id: 'u1', username: 'felix', role: 'admin' as const };
 const USER = { id: 'u2', username: 'jane', role: 'user' as const };
 
-let mounted: ReturnType<typeof mount> | undefined;
-
-async function render(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(RailSettings, { target, props: {} });
-	await tick();
-	return target;
-}
+const { render, cleanup } = createComponentMount(RailSettings);
 
 /** Flushes a `page.url` mutation through to the component, the same way
  * layout.test.ts flushes a state change that a mocked effect reacts to. */
@@ -58,9 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	if (mounted) await unmount(mounted);
-	mounted = undefined;
-	document.body.replaceChildren();
+	await cleanup();
 	currentUser.set(null);
 });
 
