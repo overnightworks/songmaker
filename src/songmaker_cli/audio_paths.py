@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from functools import cache
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -11,7 +10,6 @@ from fastapi import HTTPException
 log = logging.getLogger(__name__)
 
 
-@cache
 def _resolved_audio_root(audio_dir: Path) -> Path:
     return audio_dir.resolve()
 
@@ -52,11 +50,11 @@ def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
 def canonical_audio_path(audio_dir: Path, filename: str) -> Path:
     """Return a canonical audio path constrained to ``audio_dir``."""
     audio_path = _resolved_within_root(audio_dir, filename)
-    if (
-        audio_path is None
-        or audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix() != filename
-    ):
+    if audio_path is None:
         log.warning("Audio path traversal denied: %r", filename)
+        raise HTTPException(404, "Not Found")
+    if audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix() != filename:
+        log.warning("stored audio path is not canonical: %r", filename)
         raise HTTPException(404, "Not Found")
     return audio_path
 
@@ -66,8 +64,3 @@ def require_existing_audio_path(audio_path: Path) -> Path:
     if not audio_path.exists():
         raise HTTPException(404, "Not Found")
     return audio_path
-
-
-def resolve_canonical_audio_path(audio_dir: Path, filename: str) -> Path:
-    """Return an existing canonical audio filename constrained to ``audio_dir``."""
-    return require_existing_audio_path(canonical_audio_path(audio_dir, filename))

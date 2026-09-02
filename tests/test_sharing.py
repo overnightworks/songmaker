@@ -939,6 +939,35 @@ def test_shared_generation_hides_a_noncanonical_stored_audio_path(
     assert unauthed.get(f"/shared/gen/{slug}/audio/admin_user/g1.mp3").status_code == 404
 
 
+def test_shared_generation_audio_authorizes_canonical_missing_names_before_file_checks(
+    sharing_app: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "select")
+    checked_paths: list[Path] = []
+    original_exists = Path.exists
+
+    def record_exists(path: Path) -> bool:
+        checked_paths.append(path)
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", record_exists)
+    try:
+        unauthed = TestClient(sharing_app.app, cookies={})
+        response = unauthed.get(f"/shared/gen/{slug}/audio/admin_user/missing.mp3")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert response.status_code == 404
+    assert len(queries) == 1
+    assert checked_paths == []
+
+
 def test_shared_generation_reports_the_takes_measured_duration(
     sharing_app: TestClient,
 ) -> None:
