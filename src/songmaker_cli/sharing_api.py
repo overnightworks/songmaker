@@ -28,8 +28,8 @@ from songmaker_cli.api_models.songs import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
     canonical_audio_filename,
-    canonical_audio_filename_lexically,
     canonical_audio_path,
+    require_canonical_audio_filename,
     require_existing_audio_path,
     resolve_audio_path,
 )
@@ -466,7 +466,7 @@ async def get_shared_gen_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    filename = canonical_audio_filename_lexically(filename)
+    require_canonical_audio_filename(filename)
     gen = get_generation_by_slug(db, slug)
     if not gen:
         raise HTTPException(404, "Not found")

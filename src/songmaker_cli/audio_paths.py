@@ -23,8 +23,8 @@ def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:
     return audio_path
 
 
-def canonical_audio_filename_lexically(filename: str) -> str:
-    """Return a canonical relative filename without inspecting the filesystem."""
+def require_canonical_audio_filename(filename: str) -> None:
+    """Require a canonical relative filename without inspecting the filesystem."""
     audio_path = PurePosixPath(filename)
     canonical_filename = audio_path.as_posix()
     if (
@@ -32,9 +32,8 @@ def canonical_audio_filename_lexically(filename: str) -> str:
         or ".." in audio_path.parts
         or canonical_filename != filename
     ):
-        log.warning("Audio path traversal denied: %r", filename)
+        log.warning("non-canonical audio path rejected: %r", filename)
         raise HTTPException(404, "Not Found")
-    return canonical_filename
 
 
 def audio_filename_is_contained(audio_dir: Path, filename: str) -> bool:
@@ -68,7 +67,7 @@ def canonical_audio_path(audio_dir: Path, filename: str) -> Path:
         log.warning("Audio path traversal denied: %r", filename)
         raise HTTPException(404, "Not Found")
     if audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix() != filename:
-        log.warning("stored audio path is not canonical: %r", filename)
+        log.warning("non-canonical audio path rejected: %r", filename)
         raise HTTPException(404, "Not Found")
     return audio_path
 
