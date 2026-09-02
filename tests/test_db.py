@@ -102,7 +102,11 @@ def seeded_session(db_session: Session) -> Session:
     db_session.add(album)
 
     song = Song(
-        id="s1", title="Song One", album_id="test", track_number=1, slug="song-one",
+        id="s1",
+        title="Song One",
+        album_id="test",
+        track_number=1,
+        slug="song-one",
     )
     db_session.add(song)
 
@@ -230,7 +234,12 @@ def test_save_rating_update(seeded_session: Session) -> None:
 
 def test_create_song(seeded_session: Session) -> None:
     song = create_song(
-        seeded_session, "Song Two", "test", slug="song-two", lyrics="hello", bpm=140,
+        seeded_session,
+        "Song Two",
+        "test",
+        slug="song-two",
+        lyrics="hello",
+        bpm=140,
     )
     seeded_session.commit()
     assert song.track_number == 2
@@ -741,7 +750,9 @@ def test_create_generation_with_wav_path(seeded_session: Session) -> None:
 
 
 def test_create_generation_measures_duration_even_when_requested_zero(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The take's own length is measured, not copied from the "auto" (0)
     request parameter it was generated with (#258)."""
@@ -788,7 +799,9 @@ def test_create_generation_without_audio_dir_leaves_duration_unmeasured(
 
 
 def test_measure_generation_audio_duration_backfills_a_generation(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import songmaker_cli.queue_streams as qs
 
@@ -811,7 +824,9 @@ def test_measure_generation_audio_duration_backfills_a_generation(
 
 
 def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generation(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import songmaker_cli.queue_streams as qs
 
@@ -830,7 +845,9 @@ def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generatio
 
 
 def test_measure_generation_audio_duration_stores_none_when_file_unreadable(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """read_audio_duration returning None (unreadable file) must resolve to
     "unknown" on the generation, not raise or leave a stale value."""
@@ -846,7 +863,9 @@ def test_measure_generation_audio_duration_stores_none_when_file_unreadable(
 
 
 def test_measure_generation_audio_duration_retries_after_a_failed_probe(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Not idempotent across a failure: a None result isn't cached forever,
     so a later call (e.g. a second GET) gets another chance to measure it."""
@@ -903,7 +922,9 @@ def test_available_models_seed_idempotent(tmp_path: Path) -> None:
 
 def test_save_scores_create(seeded_session: Session) -> None:
     save_scores(
-        seeded_session, "g2", {"dynamics": 77.0, "enjoyment": 8.5},
+        seeded_session,
+        "g2",
+        {"dynamics": 77.0, "enjoyment": 8.5},
         refreshed_keys={"dynamics", "enjoyment"},
     )
     seeded_session.commit()
@@ -1442,8 +1463,7 @@ def test_prune_overflow_sessions_ignores_expired(db_session: Session) -> None:
     now = datetime.now(timezone.utc)
     expired = create_session(db_session, user.id, now - timedelta(days=1))
     active_ids = [
-        create_session(db_session, user.id, now + timedelta(days=30)).id
-        for _ in range(10)
+        create_session(db_session, user.id, now + timedelta(days=30)).id for _ in range(10)
     ]
     db_session.flush()
 
@@ -1785,7 +1805,8 @@ def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
     update_job_status(db_session, j_running.id, "running", progress=0.5)
     db_session.commit()
 
-    old = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    old = now - timedelta(seconds=3600)
     for job in (j_queued, j_running, j_other):
         job.started_at = old
         job.heartbeat_at = old
@@ -1795,12 +1816,14 @@ def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
         db_session,
         "generate",
         threshold_seconds=1800,
+        now=now,
     )
     db_session.commit()
 
     assert count == 2
     assert get_job(db_session, j_queued.id).error_type == "no_worker_available"
-    assert get_job(db_session, j_running.id).error_type == "stale_timeout"
+    assert get_job(db_session, j_running.id).error_type == "heartbeat_lost"
+    assert "Heartbeat abgerissen" in get_job(db_session, j_running.id).error
     assert get_job(db_session, j_other.id).status == "queued"
 
 
@@ -2518,16 +2541,18 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
     engine = create_engine(url)
     factory = sessionmaker(bind=engine)
     with factory() as session:
-        session.add_all([
-            Album(id="a1", title="A", artist="X"),
-            Album(id="a2", title="B", artist="X"),
-            Song(id="s1", title="Intro", album_id="a1", track_number=1),
-            Song(id="s2", title="Intro", album_id="a1", track_number=2),
-            Song(id="s3", title="Intro", album_id="a2", track_number=1),
-            Song(id="s4", title="!!!", album_id="a2", track_number=2),
-            Song(id="s5", title="音" * 200, album_id="a2", track_number=3),
-            Song(id="s6", title="???", album_id="a2", track_number=4),
-        ])
+        session.add_all(
+            [
+                Album(id="a1", title="A", artist="X"),
+                Album(id="a2", title="B", artist="X"),
+                Song(id="s1", title="Intro", album_id="a1", track_number=1),
+                Song(id="s2", title="Intro", album_id="a1", track_number=2),
+                Song(id="s3", title="Intro", album_id="a2", track_number=1),
+                Song(id="s4", title="!!!", album_id="a2", track_number=2),
+                Song(id="s5", title="音" * 200, album_id="a2", track_number=3),
+                Song(id="s6", title="???", album_id="a2", track_number=4),
+            ]
+        )
         session.commit()
 
     with engine.begin() as conn:
@@ -2575,12 +2600,14 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -
     engine = create_engine(url)
     factory = sessionmaker(bind=engine)
     with factory() as session:
-        session.add_all([
-            Album(id="a1", title="A", artist="X"),
-            Song(id="s1", title="Intro", album_id="a1", track_number=1, slug="intro"),
-            # Straggler: created via the co-writer MCP path before #270.
-            Song(id="s2", title="Reprise", album_id="a1", track_number=2, slug=""),
-        ])
+        session.add_all(
+            [
+                Album(id="a1", title="A", artist="X"),
+                Song(id="s1", title="Intro", album_id="a1", track_number=1, slug="intro"),
+                # Straggler: created via the co-writer MCP path before #270.
+                Song(id="s2", title="Reprise", album_id="a1", track_number=2, slug=""),
+            ]
+        )
         session.commit()
     engine.dispose()
 

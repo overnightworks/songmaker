@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -28,6 +30,7 @@ from songmaker_cli.claude.provider import (
     is_available,
 )
 from songmaker_cli.constants import (
+    CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS,
     JobStatus,
     JobType,
 )
@@ -41,6 +44,7 @@ from songmaker_cli.db.queries import (
     get_version,
     list_chat_messages,
     songs_with_chat,
+    update_job_heartbeat,
     update_job_status,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -59,6 +63,7 @@ def api_capabilities(
     session: Session = Depends(get_db_session),
 ) -> CapabilitiesResponse:
     from songmaker_cli.settings import get_settings
+
     settings = get_settings()
     api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
     return CapabilitiesResponse(
@@ -107,6 +112,28 @@ STRUCTURAL_PROMPT = (
 )
 
 SYSTEM_PROMPT = f"{CHAT_ROLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL_PROMPT}"
+
+
+async def _keep_chat_job_heartbeat(db_factory, job_id: str) -> None:
+    while True:
+        await asyncio.sleep(CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS)
+        with db_factory() as heartbeat_session:
+            update_job_heartbeat(heartbeat_session, job_id)
+            heartbeat_session.commit()
+
+
+def _fail_chat_job(
+    session: Session, job_id: str, error: str, error_type: str,
+) -> None:
+    session.rollback()
+    update_job_status(
+        session,
+        job_id,
+        JobStatus.FAILED,
+        error=error,
+        error_type=error_type,
+    )
+    session.commit()
 
 
 def _format_song_context(song) -> str:
@@ -195,64 +222,82 @@ async def api_song_chat(
 
     job = create_job_with_rate_limit(session, user, JobType.CHAT)
     job_id = job.id
+    update_job_status(session, job_id, JobStatus.RUNNING)
     session.commit()
 
-    context = _build_song_context(
-        session, song_id, req.mentioned_song_ids, req.mentioned_version_ids, user,
+    heartbeat_task = asyncio.create_task(
+        _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
     )
 
-    history = list_chat_messages(session, song_id)
-    api_messages: list[dict[str, str]] = []
-    for msg in history:
-        api_messages.append({"role": msg.role, "content": msg.content})
-
-    user_content = req.message
-    if context:
-        user_content = (
-            f"<{CONTEXT_TAG}>\n{context}\n</{CONTEXT_TAG}>\n\n{req.message}"
-        )
-    api_messages.append({"role": "user", "content": user_content})
-
-    system = SYSTEM_PROMPT
-    from songmaker_cli.settings import get_settings
-    settings = get_settings()
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    chat_model = get_claude_chat_model(session)
-
     try:
+        context = _build_song_context(
+            session,
+            song_id,
+            req.mentioned_song_ids,
+            req.mentioned_version_ids,
+            user,
+        )
+        history = list_chat_messages(session, song_id)
+        api_messages = [{"role": msg.role, "content": msg.content} for msg in history]
+        user_content = req.message
+        if context:
+            user_content = f"<{CONTEXT_TAG}>\n{context}\n</{CONTEXT_TAG}>\n\n{req.message}"
+        api_messages.append({"role": "user", "content": user_content})
+
+        from songmaker_cli.settings import get_settings
+
+        settings = get_settings()
+        api_key = (
+            settings.anthropic_api_key.get_secret_value()
+            if settings.anthropic_api_key else None
+        )
+        chat_model = get_claude_chat_model(session)
         response = await acall_claude(
             prompt="",
             api_key=api_key,
-            system=system,
+            system=SYSTEM_PROMPT,
             model=chat_model,
             messages=api_messages,
         )
+        conversation = get_or_create_active_conversation(session, user.id)
+        user_msg = create_chat_message(
+            session,
+            song_id,
+            "user",
+            req.message,
+            conversation_id=conversation.id,
+        )
+        assistant_msg = create_chat_message(
+            session,
+            song_id,
+            "assistant",
+            response.text,
+            conversation_id=conversation.id,
+        )
+        update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
+        session.commit()
+        return ChatTurnResponse(
+            user_message=ChatMessageResponse.from_orm(user_msg),
+            assistant_message=ChatMessageResponse.from_orm(assistant_msg),
+        )
+    except asyncio.CancelledError:
+        _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+        raise
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
-        update_job_status(session, job_id, JobStatus.FAILED, error="Claude unavailable")
-        session.commit()
+        _fail_chat_job(session, job_id, "Claude unavailable", "unavailable")
         raise HTTPException(503, "Claude is currently unavailable")
-    except Exception:
-        update_job_status(session, job_id, JobStatus.FAILED, error="Chat request failed")
-        session.commit()
+    except HTTPException:
+        _fail_chat_job(session, job_id, "Chat setup rejected", "setup_error")
         raise
-
-    conversation = get_or_create_active_conversation(session, user.id)
-    user_msg = create_chat_message(
-        session, song_id, "user", req.message,
-        conversation_id=conversation.id,
-    )
-    assistant_msg = create_chat_message(
-        session, song_id, "assistant", response.text,
-        conversation_id=conversation.id,
-    )
-    update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
-    session.commit()
-
-    return ChatTurnResponse(
-        user_message=ChatMessageResponse.from_orm(user_msg),
-        assistant_message=ChatMessageResponse.from_orm(assistant_msg),
-    )
+    except Exception:
+        log.exception("Legacy chat request failed")
+        _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
+        raise
+    finally:
+        heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await heartbeat_task
 
 
 @router.get("/songs/{song_id}/chat")

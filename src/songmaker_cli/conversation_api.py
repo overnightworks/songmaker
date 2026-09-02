@@ -13,6 +13,7 @@ This module owns the Phase 3 conversation-scoped chat API:
 The legacy per-song endpoints in ``chat_api.py`` remain for backwards
 compatibility during rollout.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,6 +52,7 @@ from songmaker_cli.claude.provider import (
     StreamEvent,
 )
 from songmaker_cli.constants import (
+    CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
     MEMORY_SCOPE_USER,
@@ -89,6 +91,7 @@ from songmaker_cli.db.queries import (
     list_messages,
     list_songs,
     recent_conversations,
+    update_job_heartbeat,
     update_job_status,
     upsert_album_memory,
     upsert_song_memory,
@@ -101,6 +104,20 @@ from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _fail_chat_job(
+    session: Session, job_id: str, error: str, error_type: str,
+) -> None:
+    session.rollback()
+    update_job_status(
+        session,
+        job_id,
+        JobStatus.FAILED,
+        error=error,
+        error_type=error_type,
+    )
+    session.commit()
 
 
 COWRITER_ROLE = (
@@ -125,7 +142,7 @@ COWRITER_MEMORY_INSTRUCTIONS = (
     "this song's concept, locked versus open decisions, names, and open "
     "questions; album_notes holds optional album-level notes. Do not copy "
     "full lyrics into memory. To propose a memory change, emit exactly:\n"
-    "<memory_proposal scope=\"user|song|album\" target_id=\"id-if-not-user\">\n"
+    '<memory_proposal scope="user|song|album" target_id="id-if-not-user">\n'
     "<current>\nexisting text\n</current>\n"
     "<proposed>\nnew text\n</proposed>\n"
     "</memory_proposal>\n"
@@ -134,8 +151,7 @@ COWRITER_MEMORY_INSTRUCTIONS = (
 )
 
 COWRITER_SYSTEM_PROMPT = (
-    f"{COWRITER_ROLE}\n\n{COWRITER_UNTRUSTED_NOTICE}\n\n"
-    f"{COWRITER_MEMORY_INSTRUCTIONS}"
+    f"{COWRITER_ROLE}\n\n{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}"
 )
 
 
@@ -203,18 +219,27 @@ def compose_turn_context(
     """
     blocks: list[TurnContextBlock] = []
     if current_song is not None:
-        blocks.append(TurnContextBlock(
-            TURN_BLOCK_CURRENT_SONG, _format_current_song(current_song),
-        ))
+        blocks.append(
+            TurnContextBlock(
+                TURN_BLOCK_CURRENT_SONG,
+                _format_current_song(current_song),
+            )
+        )
     blocks.append(TurnContextBlock(TURN_BLOCK_USER_MEMORY, user_memory_body))
     if current_song is not None:
-        blocks.append(TurnContextBlock(
-            TURN_BLOCK_SONG_MEMORY, song_memory_body or "",
-        ))
+        blocks.append(
+            TurnContextBlock(
+                TURN_BLOCK_SONG_MEMORY,
+                song_memory_body or "",
+            )
+        )
         if album_notes_body:
-            blocks.append(TurnContextBlock(
-                TURN_BLOCK_ALBUM_NOTES, album_notes_body,
-            ))
+            blocks.append(
+                TurnContextBlock(
+                    TURN_BLOCK_ALBUM_NOTES,
+                    album_notes_body,
+                )
+            )
     blocks.extend(extra_blocks)
     names = [block.name for block in blocks]
     if len(names) != len(set(names)):
@@ -223,7 +248,9 @@ def compose_turn_context(
 
 
 def load_memory_for_turn(
-    session: Session, user_id: str, current_song: Song | None,
+    session: Session,
+    user_id: str,
+    current_song: Song | None,
 ) -> tuple[str, str | None, str | None]:
     user_row = get_user_memory(session, user_id)
     user_body = user_row.body if user_row else ""
@@ -297,15 +324,13 @@ def resolve_mention_blocks(
         album = get_album(session, mentioned_album_id)
         check_album_access(album, user)
         tracks = list_songs(
-            session, album_id=album.id, user_id=owner_filter(user), light=True,
+            session,
+            album_id=album.id,
+            user_id=owner_filter(user),
+            light=True,
         )
         track_blocks = [_format_current_song(song) for song in tracks]
-        album_body = (
-            f"id: {album.id}\n"
-            f"title: {album.title}\n"
-            "tracks:\n"
-            + "\n\n".join(track_blocks)
-        )
+        album_body = f"id: {album.id}\ntitle: {album.title}\ntracks:\n" + "\n\n".join(track_blocks)
         blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_ALBUM, album_body))
 
     version_ids = _unique_ids(mentioned_version_ids)
@@ -318,9 +343,7 @@ def resolve_mention_blocks(
             if version is None:
                 raise HTTPException(404, "Version not found")
             versions.append(version)
-        body = "\n\n".join(
-            _format_version(version, current_song) for version in versions
-        )
+        body = "\n\n".join(_format_version(version, current_song) for version in versions)
         blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body))
     return blocks
 
@@ -365,7 +388,8 @@ def resolve_take_block(
         generation = check_generation_access(session, current_generation_id, user)
         if current_song is None or generation.song_id != current_song.id:
             raise HTTPException(
-                422, "Generation does not belong to the current song",
+                422,
+                "Generation does not belong to the current song",
             )
         if not _generation_is_playable(generation):
             raise HTTPException(422, "Generation is not playable")
@@ -415,13 +439,18 @@ async def api_chat_turn(
         req.mentioned_album_id,
     )
     take_block = resolve_take_block(
-        session, user, current_song, req.current_generation_id,
+        session,
+        user,
+        current_song,
+        req.current_generation_id,
     )
     extra_blocks = list(mention_blocks)
     if take_block is not None:
         extra_blocks.append(take_block)
     user_memory_body, song_memory_body, album_notes_body = load_memory_for_turn(
-        session, user.id, current_song,
+        session,
+        user.id,
+        current_song,
     )
     envelope = compose_turn_context(
         current_song=current_song,
@@ -438,48 +467,57 @@ async def api_chat_turn(
         raise HTTPException(422, str(exc)) from exc
     if not cowriter_model:
         raise HTTPException(
-            422, f"No co-writer model configured for {provider}",
+            422,
+            f"No co-writer model configured for {provider}",
         )
 
     job = create_job_with_rate_limit(session, user, JobType.CHAT)
     job_id = job.id
+    update_job_status(session, job_id, JobStatus.RUNNING)
     session.commit()
 
-    active = get_active_conversation(session, user.id)
-    history = list_messages(session, active.id) if active else []
-    tail_budget = get_cowriter_tail_token_budget(session)
-    compacted = compact_conversation(
-        history,
-        budget=tail_budget,
-        existing=active.summary if active is not None else None,
-        summarize=fold_summary,
-    )
-    if (
-        active is not None
-        and compacted.windowed
-        and compacted.summary_text is not None
-    ):
-        upsert_summary(
-            session,
-            active.id,
-            compacted.summary_text,
-            compacted.last_summarized_message_id,
-            message_count=len(history),
-            token_count=(
-                count_tokens(compacted.summary_text)
-                + sum(count_tokens(msg.content) for msg in compacted.tail)
-            ),
+    try:
+        active = get_active_conversation(session, user.id)
+        history = list_messages(session, active.id) if active else []
+        tail_budget = get_cowriter_tail_token_budget(session)
+        compacted = compact_conversation(
+            history,
+            budget=tail_budget,
+            existing=active.summary if active is not None else None,
+            summarize=fold_summary,
         )
-        session.commit()
-    api_messages = compacted.to_api_messages()
-    api_messages.append({
-        "role": "user",
-        "content": envelope.wrap_user_message(req.message),
-    })
+        if active is not None and compacted.windowed and compacted.summary_text is not None:
+            upsert_summary(
+                session,
+                active.id,
+                compacted.summary_text,
+                compacted.last_summarized_message_id,
+                message_count=len(history),
+                token_count=(
+                    count_tokens(compacted.summary_text)
+                    + sum(count_tokens(msg.content) for msg in compacted.tail)
+                ),
+            )
+            session.commit()
+        api_messages = compacted.to_api_messages()
+        api_messages.append(
+            {
+                "role": "user",
+                "content": envelope.wrap_user_message(req.message),
+            }
+        )
+    except asyncio.CancelledError:
+        _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+        raise
+    except Exception:
+        log.exception("Co-writer chat setup failed")
+        _fail_chat_job(session, job_id, "Chat setup failed", "setup_error")
+        raise
 
     async def event_generator() -> AsyncIterator[str]:
         assistant_text = ""
         started = time.monotonic()
+        last_heartbeat = started
         try:
             async for event in stream_cowriter_turn(
                 provider=provider,
@@ -490,6 +528,11 @@ async def api_chat_turn(
                 session=session,
                 user=user,
             ):
+                now = time.monotonic()
+                if now - last_heartbeat >= CHAT_JOB_HEARTBEAT_INTERVAL_SECONDS:
+                    update_job_heartbeat(session, job_id)
+                    session.commit()
+                    last_heartbeat = now
                 if isinstance(event, FinalEvent):
                     assistant_text = event.text
                     break
@@ -502,60 +545,79 @@ async def api_chat_turn(
                 tail_budget,
             )
         except asyncio.CancelledError:
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED, error="Chat request cancelled",
-            )
-            session.commit()
+            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
             raise
         except ProviderUnavailableError as e:
             log.warning("Co-writer %s unavailable: %s", e.provider, e)
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED,
-                error=f"{e.provider} unavailable",
+            _fail_chat_job(
+                session,
+                job_id,
+                f"{e.provider} unavailable",
+                "unavailable",
             )
-            session.commit()
-            yield _sse_format({
-                "type": "error",
-                "status": 503,
-                "message": f"{e.provider} is currently unavailable",
-            })
+            yield _sse_format(
+                {
+                    "type": "error",
+                    "status": 503,
+                    "message": f"{e.provider} is currently unavailable",
+                }
+            )
             return
         except Exception as exc:
             log.error("Co-writer chat failed (%s)", type(exc).__name__)
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED, error="Chat request failed",
+            _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
+            yield _sse_format(
+                {
+                    "type": "error",
+                    "status": 500,
+                    "message": "Chat request failed",
+                }
             )
-            session.commit()
-            yield _sse_format({
-                "type": "error",
-                "status": 500,
-                "message": "Chat request failed",
-            })
             return
 
-        conversation = get_or_create_active_conversation(session, user.id)
-        user_msg = append_message(
-            session, conversation.id, "user", req.message,
-            song_id=req.current_song_id,
-        )
-        assistant_msg = append_message(
-            session, conversation.id, "assistant", assistant_text,
-            song_id=req.current_song_id,
-        )
-        update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
-        session.commit()
+        try:
+            conversation = get_or_create_active_conversation(session, user.id)
+            user_msg = append_message(
+                session,
+                conversation.id,
+                "user",
+                req.message,
+                song_id=req.current_song_id,
+            )
+            assistant_msg = append_message(
+                session,
+                conversation.id,
+                "assistant",
+                assistant_text,
+                song_id=req.current_song_id,
+            )
+            update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
+            session.commit()
+        except asyncio.CancelledError:
+            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+            raise
+        except Exception:
+            log.exception("Co-writer chat completion failed")
+            _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
+            yield _sse_format(
+                {
+                    "type": "error",
+                    "status": 500,
+                    "message": "Chat completion failed",
+                }
+            )
+            return
 
-        yield _sse_format({
-            "type": "final",
-            "conversation_id": conversation.id,
-            "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
-            "assistant_message": ChatMessageResponse.from_orm(
-                assistant_msg,
-            ).model_dump(),
-        })
+        yield _sse_format(
+            {
+                "type": "final",
+                "conversation_id": conversation.id,
+                "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
+                "assistant_message": ChatMessageResponse.from_orm(
+                    assistant_msg,
+                ).model_dump(),
+            }
+        )
 
     return StreamingResponse(
         event_generator(),
@@ -568,7 +630,9 @@ async def api_chat_turn(
 
 
 def _verify_owns_conversation(
-    session: Session, conversation_id: str, user: AuthenticatedUser,
+    session: Session,
+    conversation_id: str,
+    user: AuthenticatedUser,
 ):
     conv = get_conversation(session, conversation_id)
     if conv is None or conv.user_id != user.id:
@@ -650,7 +714,9 @@ def api_get_memory(
         user=bundle.user,
         song=MemoryScopeResponse.from_orm(MEMORY_SCOPE_SONG, song.id, song_row),
         album=MemoryScopeResponse.from_orm(
-            MEMORY_SCOPE_ALBUM, song.album_id, album_row,
+            MEMORY_SCOPE_ALBUM,
+            song.album_id,
+            album_row,
         ),
     )
 
