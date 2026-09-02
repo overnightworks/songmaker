@@ -38,7 +38,7 @@ PROMETHEUS_RULES_RESPONSE = """\
 {"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
 """
 PROMETHEUS_METRICS_RESPONSE = """\
-# HELP prometheus_config_last_reload_successful Whether the last configuration reload attempt was successful.
+# HELP prometheus_config_last_reload_successful Whether the last reload succeeded.
 # TYPE prometheus_config_last_reload_successful gauge
 prometheus_config_last_reload_successful 1
 """
@@ -909,10 +909,11 @@ def test_a_missing_prometheus_container_keeps_a_successful_deploy_successful(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert (
-        "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
-        in checkout.journal
+    missing_container_error = (
+        "cannot find the Prometheus container to reload rules after deploy; "
+        "deploy remains successful"
     )
+    assert missing_container_error in checkout.journal
     assert "kill -s HUP" not in checkout.docker_calls
     assert checkout.failure_count_file.read_text() == "0"
 
@@ -968,7 +969,9 @@ def test_a_failed_prometheus_config_reload_is_logged_without_failing_the_tick(
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "Prometheus reload did not apply; deploy remains successful" in checkout.journal
+    assert "-t songmaker-autodeploy -p user.err -- Prometheus reload did not apply" in (
+        checkout.journal.splitlines()
+    )
     assert checkout.failure_count_file.read_text() == "0"
     assert "failure count now" not in checkout.journal
     assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls

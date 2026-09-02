@@ -422,7 +422,7 @@ reload_prometheus_rules() {
         return 0
     fi
     if ! grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+1([.]0+)?([[:space:]]|$)' <<<"$metrics_response"; then
-        log_err "Prometheus reload did not apply; deploy remains successful"
+        log_err "Prometheus reload did not apply"
         return 0
     fi
     if ! rules_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_RULES_URL")"; then
