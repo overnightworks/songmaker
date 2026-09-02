@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import queue
 import shutil
 import signal
 import subprocess
@@ -30,6 +31,8 @@ from pydantic import BaseModel, Field
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS,
+    CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
@@ -61,14 +64,41 @@ _NO_SETTING_SOURCES: Final = ""
 # be called even though nobody here has heard of it; `--setting-sources ""`
 # drops the mounted settings file, whose `permissions.allow` and `defaultMode`
 # would otherwise decide what a co-writer session may do; `--strict-mcp-config`
-# ignores MCP servers configured anywhere but in our own `--mcp-config`.
+# ignores MCP servers configured anywhere but in our own `--mcp-config`;
+# `--disable-slash-commands` closes the one channel `--tools ""` does not
+# touch — the CLI still resolves its own slash commands and skills from a
+# prompt that begins with `/`, so this flag removes that surface rather than
+# relying on our own prompt always starting with trusted system text.
 _TOOL_ISOLATION_FLAGS: Final = (
     "--tools", _NO_BUILTIN_TOOLS,
     "--setting-sources", _NO_SETTING_SOURCES,
     "--strict-mcp-config",
+    "--disable-slash-commands",
 )
 
+# The exact tool names `mcp_server/server.py` registers. Kept as a literal
+# tuple rather than imported from that module: importing it would pull in
+# `mcp` and `sqlalchemy`, and this module must stay importable in the
+# scoring-worker container, which does not install the `mcp` extra (see
+# CLAUDE.md's packaging-boundary note). `tests/test_mcp_server.py` pins the
+# server's own registration; a dedicated drift test compares the two sets so
+# this list cannot go stale without a test failing.
+_EXPECTED_MCP_TOOL_NAMES: Final[frozenset[str]] = frozenset(
+    f"{COWRITER_TOOL_PREFIX}{name}" for name in (
+        "list_albums", "list_songs", "search_songs", "get_song",
+        "get_version", "get_generation", "create_song",
+        "update_song_lyrics", "update_song_prompt", "update_song_style",
+        "rename_song",
+    )
+)
+_NO_TOOLS_EXPECTED: Final[frozenset[str]] = frozenset()
+
+# Never a real user: the probe only lists the MCP server's advertised tools,
+# it never invokes one, so no request in its name ever touches a user's data.
+_TOOL_SURFACE_PROBE_USER_ID: Final = "tool-surface-probe"
+
 _CLI_INIT_EVENT_TYPE: Final = "system"
+_CLI_INIT_EVENT_SUBTYPE: Final = "init"
 _TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
@@ -82,7 +112,8 @@ def clear_client_cache() -> None:
 
 def clear_cli_tool_surface_cache() -> None:
     with _tool_surface_lock:
-        _unexpected_tools_by_binary.clear()
+        _tool_surface_verdicts.clear()
+        _tool_surface_failures.clear()
 
 
 def clear_cli_login_status_cache() -> None:
@@ -97,7 +128,10 @@ class UnavailableError(Exception):
 
 
 class CliToolSurfaceError(UnavailableError):
-    """Raised when the mounted CLI offers tools outside the co-writer allowlist.
+    """Raised when the mounted CLI's announced tool surface does not match
+    what a given call line expects — extra tools, missing ones, or a
+    still-reachable slash command (see ``verify_cli_tool_surface()`` and
+    ``verify_no_builtin_cli_tools()``).
 
     Deliberately an ``UnavailableError``: a CLI whose tool surface we cannot
     vouch for is not a CLI we run untrusted song content through, so every
@@ -203,8 +237,7 @@ async def acall_claude_with_mcp(
     """
     if model is None:
         model = get_settings().claude_chat_model
-    await verify_cli_tool_surface()
-    binary = _require_claude_binary()
+    binary = await verify_cli_tool_surface()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     config_path = _write_mcp_config(user_id)
@@ -274,8 +307,7 @@ async def acall_claude_with_mcp_stream(
     """
     if model is None:
         model = get_settings().claude_chat_model
-    await verify_cli_tool_surface()
-    binary = _require_claude_binary()
+    binary = await verify_cli_tool_surface()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     config_path = _write_mcp_config(user_id)
@@ -732,6 +764,31 @@ def _build_mcp_cli_cmd(
 
 
 # ── Tool-surface verification ──────────────────────────────────────
+#
+# Two gates share the machinery below, one per invocation shape:
+#
+# - ``verify_cli_tool_surface()`` guards the co-writer's MCP-attached turn
+#   (``acall_claude_with_mcp*``): the CLI must announce exactly the eleven
+#   ``mcp__songmaker__*`` tools, nothing more and nothing less.
+# - ``verify_no_builtin_cli_tools()`` / ``averify_no_builtin_cli_tools()``
+#   guard every tool-free turn (``_call_cli`` / ``_acall_cli`` — the legacy
+#   chat endpoint and the lyrical-coherence judge both funnel through these):
+#   the CLI must announce no tools at all.
+#
+# Deliberately two checks, not one reused check: the MCP-attached probe
+# spawns the songmaker MCP server subprocess, which needs the ``mcp`` extra
+# and a reachable database — neither is installed on songmaker-scoring-worker
+# (see CLAUDE.md's packaging-boundary note; verified live against the real
+# CLI that a failed MCP connection reports zero tools, not the eleven
+# expected — see docs/security.md). The no-MCP probe needs neither, so it is
+# the one safe to run from every container.
+#
+# The no-MCP check does not need the MCP-attached one's stronger guarantee:
+# the command line ``_build_cli_cmd`` actually runs has no ``--mcp-config``
+# and no ``--allowedTools`` at all, a strict subset of what the MCP-attached
+# probe puts on its own command line. So "no tool announced" is the correct,
+# and cheapest, thing to verify for that shape — there is nothing beyond the
+# built-ins for a wider check to find.
 
 
 @dataclass(frozen=True)
@@ -743,41 +800,171 @@ class BinaryBuild:
     size: int
 
 
+@dataclass(frozen=True)
+class _AnnouncedSurface:
+    """What the CLI's own ``system`` init event says it can reach."""
+
+    tools: tuple[str, ...]
+    slash_commands: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _ToolSurfaceMismatch:
+    """Everything the announced surface offers beyond, or fails to offer
+    from, what was expected."""
+
+    unexpected_tools: tuple[str, ...]
+    missing_tools: tuple[str, ...]
+    slash_commands: tuple[str, ...]
+
+    def __bool__(self) -> bool:
+        return bool(self.unexpected_tools or self.missing_tools or self.slash_commands)
+
+    def describe(self) -> str:
+        parts = []
+        if self.unexpected_tools:
+            parts.append(f"unexpected tools: {', '.join(self.unexpected_tools)}")
+        if self.missing_tools:
+            parts.append(f"missing tools: {', '.join(self.missing_tools)}")
+        if self.slash_commands:
+            parts.append(f"slash commands: {', '.join(self.slash_commands)}")
+        return "; ".join(parts)
+
+
+_ToolSurfaceKey = tuple[BinaryBuild, frozenset[str]]
+
 _tool_surface_lock = threading.Lock()
-_unexpected_tools_by_binary: dict[BinaryBuild, tuple[str, ...]] = {}
+_tool_surface_verdicts: dict[_ToolSurfaceKey, _ToolSurfaceMismatch] = {}
+_tool_surface_failures: dict[_ToolSurfaceKey, tuple[float, str]] = {}
 
 
-async def verify_cli_tool_surface() -> None:
-    """Raise unless the mounted CLI reaches nothing but our own MCP tools.
+async def verify_cli_tool_surface() -> str:
+    """Raise unless the mounted CLI reaches nothing but our eleven MCP
+    tools; return the resolved binary path to run the real turn with.
 
-    ``--tools ""`` is what actually keeps built-in tools out of a co-writer
-    session; this asks the binary in front of us whether it still honours
-    that, so a version that changes the rules is caught by its own answer
-    instead of by a hand-kept list of tool names going stale.
-
-    The verdict is remembered per binary build, not per process: the CLI is a
-    bind-mounted install that updates itself under a running container, and an
-    update is exactly the event this check exists for.
+    Probes with the same ``--mcp-config`` a real co-writer turn attaches, so
+    "clean" means the CLI is actually still connecting our MCP server and
+    reporting exactly its tools — not merely reporting no built-ins with
+    nothing attached to compare against.
     """
+    build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
+    mismatch = _cached_tool_surface_verdict(key)
+    if mismatch is None:
+        config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
+        try:
+            surface = await _probe_cli_surface_async(
+                build.path, mcp_config_path=config_path,
+                timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+            )
+        except UnavailableError as exc:
+            _record_tool_surface_failure(key, str(exc))
+            raise
+        finally:
+            _unlink_quiet(config_path)
+        mismatch = _evaluate_tool_surface(key, surface)
+    return _finish_tool_surface_check(build, mismatch)
+
+
+async def averify_no_builtin_cli_tools() -> str:
+    """Async twin of ``verify_no_builtin_cli_tools`` for ``_acall_cli``."""
+    build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
+    mismatch = _cached_tool_surface_verdict(key)
+    if mismatch is None:
+        try:
+            surface = await _probe_cli_surface_async(
+                build.path, mcp_config_path=None,
+                timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+            )
+        except UnavailableError as exc:
+            _record_tool_surface_failure(key, str(exc))
+            raise
+        mismatch = _evaluate_tool_surface(key, surface)
+    return _finish_tool_surface_check(build, mismatch)
+
+
+def verify_no_builtin_cli_tools() -> str:
+    """Raise unless the mounted CLI reaches no tool at all under
+    ``_TOOL_ISOLATION_FLAGS``; return the resolved binary path to run the
+    real turn with. Sync twin for ``_call_cli``, which has no event loop to
+    await one in — the scoring worker calls it from a plain synchronous
+    child, not an async context.
+    """
+    build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
+    mismatch = _cached_tool_surface_verdict(key)
+    if mismatch is None:
+        try:
+            surface = _probe_cli_surface_sync(
+                build.path, mcp_config_path=None,
+                timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+            )
+        except UnavailableError as exc:
+            _record_tool_surface_failure(key, str(exc))
+            raise
+        mismatch = _evaluate_tool_surface(key, surface)
+    return _finish_tool_surface_check(build, mismatch)
+
+
+def _tool_surface_key(expected_tools: frozenset[str]) -> tuple[BinaryBuild, _ToolSurfaceKey]:
     binary = _require_claude_binary()
     build = _binary_build(binary)
+    return build, (build, expected_tools)
+
+
+def _cached_tool_surface_verdict(key: _ToolSurfaceKey) -> _ToolSurfaceMismatch | None:
+    """The remembered verdict for this exact (binary build, expectation)
+    pair, or ``None`` when it still needs a fresh probe.
+
+    Raises the cached message directly when a probe already failed for this
+    pair within ``CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS`` — short on
+    purpose, so every concurrent caller does not each pay the probe's own
+    timeout while a struggling CLI or database recovers, but short enough
+    that a real repair is picked up on the very next request rather than
+    staying failed for the lifetime of the (unbounded) success cache below.
+    """
     with _tool_surface_lock:
-        unexpected = _unexpected_tools_by_binary.get(build)
-    if unexpected is None:
-        advertised = await _announced_tools(binary)
-        unexpected = tuple(
-            sorted(
-                name for name in advertised
-                if not name.startswith(COWRITER_TOOL_PREFIX)
-            ),
-        )
-        with _tool_surface_lock:
-            _unexpected_tools_by_binary[build] = unexpected
-    if unexpected:
+        verdict = _tool_surface_verdicts.get(key)
+        if verdict is not None:
+            return verdict
+        failure = _tool_surface_failures.get(key)
+    if failure is None:
+        return None
+    recorded_at, message = failure
+    if time.monotonic() - recorded_at >= CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS:
+        return None
+    raise UnavailableError(message)
+
+
+def _record_tool_surface_failure(key: _ToolSurfaceKey, message: str) -> None:
+    with _tool_surface_lock:
+        _tool_surface_failures[key] = (time.monotonic(), message)
+
+
+def _evaluate_tool_surface(
+    key: _ToolSurfaceKey, surface: _AnnouncedSurface,
+) -> _ToolSurfaceMismatch:
+    """Remembered per (binary build, expectation), not per process: the CLI
+    is a bind-mounted install that updates itself under a running container,
+    and an update is exactly the event this check exists for."""
+    advertised = frozenset(surface.tools)
+    expected_tools = key[1]
+    mismatch = _ToolSurfaceMismatch(
+        unexpected_tools=tuple(sorted(advertised - expected_tools)),
+        missing_tools=tuple(sorted(expected_tools - advertised)),
+        slash_commands=surface.slash_commands,
+    )
+    with _tool_surface_lock:
+        _tool_surface_verdicts[key] = mismatch
+        _tool_surface_failures.pop(key, None)
+    return mismatch
+
+
+def _finish_tool_surface_check(build: BinaryBuild, mismatch: _ToolSurfaceMismatch) -> str:
+    if mismatch:
         raise CliToolSurfaceError(
-            f"Claude CLI at {build.path} offers tools outside the co-writer "
-            f"allowlist: {', '.join(unexpected)}",
+            f"Claude CLI at {build.path} does not match its expected tool "
+            f"surface — {mismatch.describe()}",
         )
+    return build.path
 
 
 def _binary_build(binary: str) -> BinaryBuild:
@@ -789,20 +976,33 @@ def _binary_build(binary: str) -> BinaryBuild:
     return BinaryBuild(str(resolved), stat.st_mtime_ns, stat.st_size)
 
 
-async def _announced_tools(binary: str) -> list[str]:
-    """Tool names the CLI announces for a session built like a co-writer turn.
-
-    The CLI emits its ``system`` init event, tool list included, before it
-    contacts the model, so the probe reads that one line and kills the
-    session rather than paying for a turn.
-    """
+def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list[str]:
     cmd = [
         binary, "-p",
         "--output-format", "stream-json", "--verbose",
         "--no-session-persistence",
         *_TOOL_ISOLATION_FLAGS,
-        "--allowedTools", MCP_ALLOWED_TOOLS,
     ]
+    if mcp_config_path is not None:
+        cmd += ["--allowedTools", MCP_ALLOWED_TOOLS, "--mcp-config", mcp_config_path]
+    return cmd
+
+
+async def _probe_cli_surface_async(
+    binary: str, *, mcp_config_path: str | None, timeout_seconds: int,
+) -> _AnnouncedSurface:
+    """What a session built like ``cmd`` announces it can reach.
+
+    The CLI emits its ``system`` init event, tool list included, before it
+    contacts the model, so the probe reads that one line and kills the
+    session rather than paying for a turn. This bounds but does not
+    eliminate the API call's cost: the full probe prompt is already on the
+    wire by the time we read that line, so a request already in flight is
+    not excluded — the CLI's own ``--max-budget-usd`` was checked live and
+    only aborts a session *after* a call completes, not before one starts,
+    so it does not close that gap either.
+    """
+    cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -823,28 +1023,116 @@ async def _announced_tools(binary: str) -> list[str]:
         proc.stdin.close()
         first_line = await asyncio.wait_for(
             proc.stdout.readline(),
-            timeout=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
         )
     except asyncio.TimeoutError:
         raise UnavailableError(
-            "Claude CLI did not announce its tools within "
-            f"{CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS}s",
+            f"Claude CLI did not announce its tools within {timeout_seconds}s",
         )
     finally:
         await _reap_process_group(proc)
-    return _parse_announced_tools(first_line)
+    return _parse_announced_surface(first_line)
 
 
-def _parse_announced_tools(raw_line: bytes) -> list[str]:
+def _probe_cli_surface_sync(
+    binary: str, *, mcp_config_path: str | None, timeout_seconds: int,
+) -> _AnnouncedSurface:
+    """Sync twin of ``_probe_cli_surface_async`` for callers with no event
+    loop — same cost caveat applies.
+
+    Cannot use ``subprocess.run``: it blocks until the child's stdout hits
+    EOF, i.e. until the whole turn finishes, not until the one init line we
+    actually want has arrived — confirmed the hard way against the real CLI,
+    where that turned a 5s budget into a guaranteed timeout. Reads the first
+    line off a background thread instead, exactly so the *read* is what is
+    bounded by ``timeout_seconds``, not the child's total lifetime; the
+    child is then killed in ``finally`` the same way the async probe kills
+    its session rather than paying for a full turn.
+    """
+    cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=_scrub_env(),
+            start_new_session=True,
+        )
+    except OSError:
+        raise UnavailableError("Claude CLI binary not found")
+    try:
+        assert proc.stdin is not None and proc.stdout is not None
+        proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
+        proc.stdin.close()
+        first_line = _read_line_with_timeout(proc.stdout, timeout_seconds)
+    finally:
+        _reap_process_group_sync(proc)
+    return _parse_announced_surface(first_line)
+
+
+def _read_line_with_timeout(stream, timeout_seconds: float) -> bytes:
+    """Read one line off a blocking stream, bounded by ``timeout_seconds``.
+
+    A plain file object has no read-with-timeout of its own, so the actual
+    read runs on a daemon thread; a timed-out read is abandoned rather than
+    cancelled (Python cannot interrupt a blocking read), but the caller
+    kills the child process right after this raises, which unblocks it via
+    EOF and lets the thread exit on its own.
+    """
+    result: queue.Queue[bytes] = queue.Queue(maxsize=1)
+
+    def _read() -> None:
+        try:
+            result.put(stream.readline())
+        except OSError:
+            result.put(b"")
+
+    threading.Thread(target=_read, daemon=True).start()
+    try:
+        return result.get(timeout=timeout_seconds)
+    except queue.Empty:
+        raise UnavailableError(
+            f"Claude CLI did not announce its tools within {timeout_seconds}s",
+        )
+
+
+def _reap_process_group_sync(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=1)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
+def _parse_announced_surface(raw_line: bytes) -> _AnnouncedSurface:
     payload = _safe_json_loads(raw_line)
-    if payload is None or payload.get("type") != _CLI_INIT_EVENT_TYPE:
+    if (
+        payload is None
+        or payload.get("type") != _CLI_INIT_EVENT_TYPE
+        or payload.get("subtype") != _CLI_INIT_EVENT_SUBTYPE
+    ):
         raise UnavailableError(
             "Claude CLI did not open with the expected session init event",
         )
     tools = payload.get("tools")
     if not isinstance(tools, list) or not all(isinstance(t, str) for t in tools):
         raise UnavailableError("Claude CLI announced an unreadable tool list")
-    return tools
+    commands = payload.get("slash_commands")
+    if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+        raise UnavailableError("Claude CLI announced an unreadable slash-command list")
+    return _AnnouncedSurface(tools=tuple(tools), slash_commands=tuple(commands))
 
 
 def _scrub_env() -> dict[str, str]:
@@ -927,9 +1215,18 @@ def _call_cli(
     prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    """The tool-free CLI backend behind both ``call_claude()`` and the
+    lyrical-coherence judge (``claude_adapter.call_claude_once``).
+
+    Every caller of this function carries content we did not write —
+    lyrics, chat history, a Whisper transcript — into the CLI, so the
+    verified-tool-surface gate lives here rather than in each caller: a
+    future caller of ``call_claude()`` inherits it automatically instead of
+    having to remember it.
+    """
     if model is None:
         model = get_settings().claude_chat_model
-    binary = _require_claude_binary()
+    binary = verify_no_builtin_cli_tools()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)
@@ -959,9 +1256,16 @@ async def _acall_cli(
     prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    """Async twin of ``_call_cli`` — the tool-free CLI backend behind
+    ``acall_claude()``, whose only current caller is the legacy
+    ``POST /songs/{id}/chat`` endpoint (``chat_api.py``).
+
+    Gated the same way and for the same reason as ``_call_cli``: the gate
+    sits in the call path both share, not in ``chat_api.py`` itself.
+    """
     if model is None:
         model = get_settings().claude_chat_model
-    binary = _require_claude_binary()
+    binary = await averify_no_builtin_cli_tools()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)

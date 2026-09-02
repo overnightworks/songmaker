@@ -141,7 +141,16 @@ COWRITER_CLI_TIMEOUT_SECONDS = 600
 COWRITER_MAX_TOOL_ROUNDS = 8
 COWRITER_MODELS_TIMEOUT_SECONDS = 15
 CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS = 30
-CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS = 30
+# The real init event measured 0.34s (see docs/security.md); these budgets
+# keep a wide margin over that without letting a stuck probe block a request
+# for anywhere near as long as the old 30s did.
+CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS = 10
+CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS = 5
+# Short on purpose: long enough to shield a struggling probe from being
+# re-run by every concurrent caller, short enough that a real repair (binary
+# reinstalled, DB reachable again) is picked up on the next request rather
+# than staying failed for the lifetime of the success cache.
+CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS = 10
 COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
 COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
