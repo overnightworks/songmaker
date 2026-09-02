@@ -112,6 +112,31 @@ function requiredEnv(name: string): string {
 }
 
 /**
+ * Like `execFileAsync`, but pipes `input` to the child's stdin before
+ * waiting on it. `child_process.execFile`'s callback form returns the
+ * `ChildProcess` synchronously, which is what makes writing to `.stdin`
+ * possible at all — the promisified form (`execFileAsync`) discards that
+ * return value along with any chance to reach stdin.
+ */
+function execWithStdin(
+	command: string,
+	args: string[],
+	options: { cwd: string },
+	input: Buffer
+): Promise<{ stdout: string; stderr: string }> {
+	return new Promise((resolve, reject) => {
+		const child = execFile(command, args, options, (error, stdout, stderr) => {
+			if (error) {
+				reject(new Error(`${error.message}\n${stderr}`));
+				return;
+			}
+			resolve({ stdout, stderr });
+		});
+		child.stdin?.end(input);
+	});
+}
+
+/**
  * Seeds `RAIL_FILLER_ALBUM_COUNT` songless albums titled
  * `${titlePrefix}-0`, `${titlePrefix}-1`, ... directly against the database,
  * inside the web container, in one process -- not through
@@ -261,6 +286,57 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
 	const id = takes.get(songTitle);
 	if (!id) throw new Error(`No take seeded for "${songTitle}"`);
 	return id;
+}
+
+/**
+ * A song of its own, seeded with `takeCount` takes directly against the
+ * database (`scripts/seed_e2e_song_takes.py`) rather than through
+ * `takeCount` individual `POST /api/songs/{id}/reimport` calls — the exact
+ * mistake issue #344 already found and fixed for the rail's filler albums
+ * (see `seedFillerAlbums` above): the server's IP rate limiter counts every
+ * request it receives regardless of which Playwright context sent it, and
+ * those calls exercise no API semantics worth spending that budget on. Its
+ * own song rather than piling extra generations onto one of the base
+ * seed's `SONG_TITLES`: those are shared across every flow in the run, and
+ * more than one of them (`library.spec.ts`'s own `takeLabel`, `takeId`
+ * above) depends on the base seed's one-take-per-song count staying exactly
+ * one. Used by a flow that needs a strip of many takes to genuinely
+ * overflow its container (`kinetic-strip.spec.ts`, issue #358).
+ */
+export async function seedTakeStripSong(
+	albumId: string,
+	title: string,
+	takeCount: number
+): Promise<string> {
+	try {
+		const { stdout } = await execWithStdin(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_song_takes.py',
+				'--album-id',
+				albumId,
+				'--title',
+				title,
+				'--take-count',
+				String(takeCount),
+				'--owner-username',
+				requiredEnv('ADMIN_USERNAME')
+			],
+			{ cwd: REPO_ROOT },
+			readFileSync(TAKE_FIXTURE)
+		);
+		const songId = stdout.trim();
+		if (!songId) throw new Error('seed_e2e_song_takes.py printed no song id on stdout');
+		return songId;
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Seeding the kinetic-strip song's takes failed: ${detail}`, { cause: err });
+	}
 }
 
 /**

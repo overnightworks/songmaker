@@ -32,7 +32,7 @@
 	<div
 		class="take-strip"
 		aria-label="Takes"
-		use:kineticScroll={{ axis: 'x', itemSelector: '.take-chip', onOpen: openTakeChip }}
+		use:kineticScroll={{ itemSelector: '.take-chip', onOpen: openTakeChip }}
 	>
 		{#each sorted as gen (gen.id)}
 			{@const label = nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
@@ -64,6 +64,10 @@
 		cursor: grab;
 		user-select: none;
 		-webkit-user-select: none;
+		/* Native touch panning is scoped to the axis the strip actually
+		   scrolls on — the vertical layout below overrides this to pan-y, or a
+		   touchscreen laptop wide enough for that layout would have vertical
+		   touch scrolling disabled by a rule written for the row layout. */
 		touch-action: pan-x;
 	}
 

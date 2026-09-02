@@ -64,6 +64,7 @@ function buildStrip(axis: KineticScrollAxis, itemCount = 4) {
 		items.push(item);
 	}
 	document.body.appendChild(container);
+	setStripAxis(container, axis);
 	if (axis === 'x') {
 		Object.defineProperty(container, 'clientWidth', { value: 100, configurable: true });
 		Object.defineProperty(container, 'scrollWidth', { value: 400, configurable: true });
@@ -72,6 +73,19 @@ function buildStrip(axis: KineticScrollAxis, itemCount = 4) {
 		Object.defineProperty(container, 'scrollHeight', { value: 400, configurable: true });
 	}
 	return { container, items };
+}
+
+// The action reads its axis from computed flex-direction, never from a
+// caller option (issue #358) — jsdom resolves this property from a plain
+// inline style without needing real layout, which is the one part of
+// "computed style" jsdom can honestly stand in for. overflow-x/overflow-y
+// cannot stand in for it here: a real browser (not jsdom) showed that a
+// `visible` overflow paired with a scrolling sibling axis is itself computed
+// as `auto`, so those two properties can't tell the axes apart for this
+// row/column toggle — see the reasoning on `readAxis` in kineticScroll.ts.
+function setStripAxis(container: HTMLElement, axis: KineticScrollAxis) {
+	container.style.display = 'flex';
+	container.style.flexDirection = axis === 'y' ? 'column' : 'row';
 }
 
 function firePointer(
@@ -122,7 +136,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		fireClick(items[1]);
 
@@ -136,7 +150,7 @@ describe('kineticScroll', () => {
 			const { container } = buildStrip(axis);
 			if (axis === 'x') container.scrollLeft = 100;
 			else container.scrollTop = 100;
-			kineticScroll(container, { axis, itemSelector: '.item', onOpen: vi.fn() });
+			kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 			firePointer(container, 'pointerdown', { pos: 200, axis, t: 1000 });
 			firePointer(container, 'pointermove', { pos: 200 - (DRAG_THRESHOLD_PX + 4), axis, t: 1010 });
@@ -154,7 +168,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', {
@@ -173,7 +187,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1010 });
@@ -187,7 +201,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container } = buildStrip('x');
 		container.scrollLeft = 100;
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', { pos: 190, axis: 'x', t: 1010 });
@@ -204,7 +218,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1040 });
@@ -230,14 +244,14 @@ describe('kineticScroll', () => {
 	it('accelerates on repeated wheel ticks instead of restarting the swing', () => {
 		stubBrowserTiming();
 		const { container: single } = buildStrip('x');
-		kineticScroll(single, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(single, { itemSelector: '.item', onOpen: vi.fn() });
 		fireWheel(single, 0, 100);
 		runFrame(16);
 		const singleTickScroll = single.scrollLeft;
 
 		stubBrowserTiming();
 		const { container: doubled } = buildStrip('x');
-		kineticScroll(doubled, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(doubled, { itemSelector: '.item', onOpen: vi.fn() });
 		fireWheel(doubled, 0, 100);
 		fireWheel(doubled, 0, 100);
 		runFrame(16);
@@ -245,21 +259,62 @@ describe('kineticScroll', () => {
 		expect(doubled.scrollLeft).toBeGreaterThan(singleTickScroll);
 	});
 
-	it('leaves vertical containers to native wheel scrolling', () => {
+	it('leaves vertical containers to native wheel scrolling without blocking the event', () => {
 		stubBrowserTiming();
 		const { container } = buildStrip('y');
-		kineticScroll(container, { axis: 'y', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
-		fireWheel(container, 0, 100);
+		const event = fireWheel(container, 0, 100);
 
+		expect(event.defaultPrevented).toBe(false);
 		expect(container.scrollTop).toBe(0);
 		expect(pendingFrame).toBeNull();
+	});
+
+	it('re-reads the axis on the next gesture after the layout changes underneath it', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x', 3);
+		for (const item of items) item.scrollIntoView = vi.fn();
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+		items[0].focus();
+		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		expect(document.activeElement).toBe(items[1]);
+
+		// A container query or a window resize can flip the strip's own layout
+		// between two interactions without the action ever being re-mounted —
+		// nothing here re-creates the action, only the CSS the node resolves to.
+		setStripAxis(container, 'y');
+
+		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		expect(document.activeElement).toBe(items[2]);
+
+		// The stale x-axis key no longer does anything once the layout is vertical.
+		items[0].focus();
+		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		expect(document.activeElement).toBe(items[0]);
+	});
+
+	it('moves focus to the first or last item on Home and End', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x', 3);
+		for (const item of items) item.scrollIntoView = vi.fn();
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+		items[1].focus();
+		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		expect(document.activeElement).toBe(items[2]);
+		expect(items[2].scrollIntoView).toHaveBeenCalledOnce();
+
+		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+		expect(document.activeElement).toBe(items[0]);
+		expect(items[0].scrollIntoView).toHaveBeenCalledOnce();
 	});
 
 	it('leaves a trackpad wheel tick (deltaX set) untouched', () => {
 		stubBrowserTiming();
 		const { container } = buildStrip('x');
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		const event = fireWheel(container, 5, 5);
 
@@ -271,7 +326,7 @@ describe('kineticScroll', () => {
 	it('leaves touch pointers to native handling', () => {
 		stubBrowserTiming();
 		const { container } = buildStrip('x');
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000, pointerType: 'touch' });
 		firePointer(container, 'pointermove', { pos: 100, axis: 'x', t: 1010, pointerType: 'touch' });
@@ -285,7 +340,7 @@ describe('kineticScroll', () => {
 		stubReducedMotion(true);
 		const { container } = buildStrip('x');
 		container.scrollLeft = 100;
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1040 });
@@ -301,7 +356,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		stubReducedMotion(true);
 		const { container } = buildStrip('x');
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		fireWheel(container, 0, 50);
 
@@ -313,7 +368,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x', 3);
 		for (const item of items) item.scrollIntoView = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: vi.fn() });
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 		items[0].focus();
 		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
@@ -340,7 +395,7 @@ describe('kineticScroll', () => {
 		buttonItem.className = 'item';
 		container.append(customItem, buttonItem);
 		const onOpen = vi.fn();
-		kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		customItem.focus();
 		customItem.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -359,7 +414,7 @@ describe('kineticScroll', () => {
 		stubBrowserTiming();
 		const { container, items } = buildStrip('x');
 		const onOpen = vi.fn();
-		const handle = kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen });
+		const handle = kineticScroll(container, { itemSelector: '.item', onOpen });
 
 		handle?.destroy?.();
 		fireClick(items[0]);
@@ -372,9 +427,9 @@ describe('kineticScroll', () => {
 		const { container, items } = buildStrip('x');
 		const onOpenA = vi.fn();
 		const onOpenB = vi.fn();
-		const handle = kineticScroll(container, { axis: 'x', itemSelector: '.item', onOpen: onOpenA });
+		const handle = kineticScroll(container, { itemSelector: '.item', onOpen: onOpenA });
 
-		handle?.update?.({ axis: 'x', itemSelector: '.item', onOpen: onOpenB });
+		handle?.update?.({ itemSelector: '.item', onOpen: onOpenB });
 		fireClick(items[0]);
 
 		expect(onOpenA).not.toHaveBeenCalled();

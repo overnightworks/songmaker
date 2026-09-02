@@ -281,15 +281,27 @@
 			flex: 1;
 		}
 
+		/* A grid item's default min-height is `auto`, not `0` — without
+		   overriding it, `.cowriter-takes` refuses to shrink below its own
+		   content and never actually stretches to the row's height, so
+		   `overflow-y: auto` below never gets anything to clip: the column just
+		   keeps growing with every take instead of scrolling internally (found
+		   only against a real render with enough takes to expose it, issue
+		   #358 — jsdom cannot compute this). `.cowriter-chat` and
+		   `.cowriter-lyrics` already carry the same declaration for the same
+		   reason. */
 		.cowriter-takes {
 			width: 7rem;
 			align-items: center;
+			min-height: 0;
 		}
 
 		.cowriter-takes :global(.take-strip) {
 			flex-direction: column;
 			overflow-x: visible;
 			overflow-y: auto;
+			touch-action: pan-y;
+			min-height: 0;
 		}
 	}
 

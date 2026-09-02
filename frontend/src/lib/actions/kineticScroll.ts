@@ -3,7 +3,6 @@ import type { Action } from 'svelte/action';
 export type KineticScrollAxis = 'x' | 'y';
 
 export interface KineticScrollOptions {
-	axis: KineticScrollAxis;
 	itemSelector: string;
 	onOpen: (item: HTMLElement) => void;
 }
@@ -44,39 +43,70 @@ function readReducedMotion(): { matches: boolean } & Pick<
 }
 
 /**
- * Kinetic scrolling for a horizontal or vertical strip of items: 1:1 drag,
- * release-velocity momentum with friction, self-driven snap-to-centre, a
- * click that catches a still-rolling strip instead of opening an item, and
- * wheel-to-scroll on the x axis. Touch and trackpad are left to the OS —
- * only mouse pointer events and the wheel are intercepted.
+ * Kinetic scrolling for a strip of items: 1:1 drag, release-velocity
+ * momentum with friction, self-driven snap-to-centre, a click that catches a
+ * still-rolling strip instead of opening an item, and wheel-to-scroll on
+ * whichever axis the strip actually scrolls on. Touch and trackpad are left
+ * to the OS — only mouse pointer events and the wheel are intercepted.
+ *
+ * The axis is never a caller-supplied option: a strip that lays out
+ * horizontally today can be switched to a vertical list by a container
+ * query or a viewport resize, so the only source of truth is the computed
+ * style the node actually has at the moment of each gesture. Re-reading it
+ * per gesture (rather than caching it once, or only at mount) means a resize
+ * between interactions can never leave the action pointing at a stale axis.
+ *
+ * `flex-direction` is the signal, not `overflow-x`/`overflow-y` — measured
+ * against a real container query in a real browser, not assumed: per the CSS
+ * Overflow spec, a `visible` overflow paired with a scrolling sibling axis is
+ * itself *computed* as `auto` (so the axis that isn't meant to scroll still
+ * reports `auto`), which makes the overflow properties unable to tell the two
+ * axes apart for exactly the row/column toggle this action exists for.
+ * `flex-direction` carries no such ambiguity and is what both orientations
+ * this action drives (TakeStrip's row and column layouts) already declare.
  */
 export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, initial) => {
 	let options = initial;
 	const reducedMotion = readReducedMotion();
+	let axis: KineticScrollAxis = readAxis();
+
+	function readAxis(): KineticScrollAxis {
+		return getComputedStyle(node).flexDirection.startsWith('column') ? 'y' : 'x';
+	}
 
 	function clientSize() {
-		return options.axis === 'x' ? node.clientWidth : node.clientHeight;
+		return axis === 'x' ? node.clientWidth : node.clientHeight;
 	}
 	function scrollSize() {
-		return options.axis === 'x' ? node.scrollWidth : node.scrollHeight;
+		return axis === 'x' ? node.scrollWidth : node.scrollHeight;
 	}
 	function getScroll() {
-		return options.axis === 'x' ? node.scrollLeft : node.scrollTop;
+		return axis === 'x' ? node.scrollLeft : node.scrollTop;
 	}
 	function setScroll(value: number): number {
 		const max = Math.max(0, scrollSize() - clientSize());
 		const clamped = Math.max(0, Math.min(max, value));
-		if (options.axis === 'x') node.scrollLeft = clamped;
+		if (axis === 'x') node.scrollLeft = clamped;
 		else node.scrollTop = clamped;
 		return clamped;
 	}
 	function pointerPos(event: PointerEvent) {
-		return options.axis === 'x' ? event.clientX : event.clientY;
+		return axis === 'x' ? event.clientX : event.clientY;
 	}
 	function visibleItems(): HTMLElement[] {
 		return Array.from(node.querySelectorAll<HTMLElement>(options.itemSelector)).filter(
 			(el) => !el.hidden
 		);
+	}
+	function focusAndReveal(item: HTMLElement) {
+		item.focus();
+		if (typeof item.scrollIntoView === 'function') {
+			item.scrollIntoView({
+				inline: axis === 'x' ? 'center' : 'nearest',
+				block: axis === 'y' ? 'center' : 'nearest',
+				behavior: reducedMotion.matches ? 'auto' : 'smooth'
+			});
+		}
 	}
 
 	let velocity = 0;
@@ -97,14 +127,14 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (items.length === 0) return;
 		const containerRect = node.getBoundingClientRect();
 		const containerCenter =
-			options.axis === 'x'
+			axis === 'x'
 				? containerRect.left + containerRect.width / 2
 				: containerRect.top + containerRect.height / 2;
 		let nearest: HTMLElement | null = null;
 		let nearestDist = Infinity;
 		for (const item of items) {
 			const r = item.getBoundingClientRect();
-			const itemCenter = options.axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2;
+			const itemCenter = axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2;
 			const dist = Math.abs(itemCenter - containerCenter);
 			if (dist < nearestDist) {
 				nearestDist = dist;
@@ -113,8 +143,8 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		}
 		if (nearest && typeof nearest.scrollIntoView === 'function') {
 			nearest.scrollIntoView({
-				inline: options.axis === 'x' ? 'center' : 'nearest',
-				block: options.axis === 'y' ? 'center' : 'nearest',
+				inline: axis === 'x' ? 'center' : 'nearest',
+				block: axis === 'y' ? 'center' : 'nearest',
 				behavior: 'smooth'
 			});
 		}
@@ -162,7 +192,12 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	}
 
 	function onWheel(event: WheelEvent) {
-		if (options.axis !== 'x') return;
+		axis = readAxis();
+		// A vertical strip already scrolls natively on a plain wheel's deltaY —
+		// converting it would fight the browser instead of helping it, and the
+		// bug this guards against is exactly that: preventDefault() on an axis
+		// the action doesn't itself move blocks native scrolling for nothing.
+		if (axis !== 'x') return;
 		if (event.deltaX !== 0) return; // trackpad already sends its own horizontal delta — leave it to the OS
 		event.preventDefault();
 		if (reducedMotion.matches) {
@@ -186,6 +221,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 
 	function onPointerDown(event: PointerEvent) {
 		if (event.pointerType !== 'mouse' || event.button !== 0) return; // touch/trackpad keep native handling
+		axis = readAxis();
 		caughtMomentumOnDown = isAnimating;
 		stopMomentum(caughtMomentumOnDown); // catch it where it is, then settle on the nearest item
 		dragState = {
@@ -257,8 +293,17 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
-		const forwardKey = options.axis === 'x' ? 'ArrowRight' : 'ArrowDown';
-		const backwardKey = options.axis === 'x' ? 'ArrowLeft' : 'ArrowUp';
+		axis = readAxis();
+		if (event.key === 'Home' || event.key === 'End') {
+			const items = visibleItems();
+			if (items.length === 0) return;
+			event.preventDefault();
+			stopMomentum();
+			focusAndReveal(event.key === 'Home' ? items[0] : items[items.length - 1]);
+			return;
+		}
+		const forwardKey = axis === 'x' ? 'ArrowRight' : 'ArrowDown';
+		const backwardKey = axis === 'x' ? 'ArrowLeft' : 'ArrowUp';
 		if (event.key !== forwardKey && event.key !== backwardKey) {
 			const target = event.target;
 			// Real buttons/links already turn Enter/Space into a native click that
@@ -288,14 +333,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		);
 		const next = items[nextIndex];
 		if (!next) return;
-		next.focus();
-		if (typeof next.scrollIntoView === 'function') {
-			next.scrollIntoView({
-				inline: options.axis === 'x' ? 'center' : 'nearest',
-				block: options.axis === 'y' ? 'center' : 'nearest',
-				behavior: reducedMotion.matches ? 'auto' : 'smooth'
-			});
-		}
+		focusAndReveal(next);
 	}
 
 	function onReducedMotionChange() {
