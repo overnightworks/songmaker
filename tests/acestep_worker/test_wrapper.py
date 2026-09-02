@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -312,6 +313,63 @@ def test_generate_returns_task_id(tmp_path: Path) -> None:
         )
     assert resp.status_code == 200
     assert resp.json()["task_id"].startswith("gen-")
+
+
+def _full_ace_step_config_payload() -> dict[str, Any]:
+    """A generation request shaped like the real scheduler payload — every
+    AceStepConfig field present, several set away from their defaults."""
+    return asdict(AceStepConfig(
+        prompt="synthwave anthem",
+        lyrics="verse one\nchorus",
+        bpm=128,
+        audio_duration=90,
+        seed=42,
+        inference_steps=12,
+        guidance_scale=1.5,
+        batch_size=2,
+    ))
+
+
+def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> None:
+    """Issue #383 finding 1: an unrecognized config field must not silently
+    fall back to a default — prove the honest path first: every field of a
+    full, valid payload survives the HTTP boundary as a typed AceStepConfig."""
+    deps, _ = _make_deps(tmp_path)
+    received: list[AceStepConfig] = []
+
+    async def capturing_runner(
+        store: TaskStore, task_id: str, *,
+        mode: str, config: AceStepConfig, port: int, audio_output_dir: Path,
+    ) -> None:
+        received.append(config)
+        await store.mark_running(task_id)
+        await store.complete(
+            task_id, GenerationTaskResult(mode=mode, audio_path="/x", seed=0),
+        )
+
+    deps.generate_runner = capturing_runner
+    app = create_app(deps)
+    payload = _full_ace_step_config_payload()
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+
+    assert resp.status_code == 200
+    assert len(received) == 1
+    assert isinstance(received[0], AceStepConfig)
+    assert asdict(received[0]) == payload
+
+
+def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
+    """A typo'd or renamed field (audio_duraton vs audio_duration) must 422,
+    not silently vanish behind AceStepConfig's default for the real field."""
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    payload = {**_full_ace_step_config_payload(), "audio_duraton": 91}
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
+    assert resp.status_code == 422
 
 
 def test_download_model_returns_task_id(tmp_path: Path) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from acestep_engine.models import AceStepConfig
 
@@ -55,6 +55,12 @@ class EvictModelResponse(BaseModel):
 
 
 class GenerateRequest(BaseModel):
+    """Extra rejected: an unrecognized config field (a typo, a renamed
+    ACE-Step param) must 422 here, not silently fall back to
+    AceStepConfig's default for that field."""
+
+    model_config = ConfigDict(extra="forbid")
+
     mode: str
     config: AceStepConfig
 
