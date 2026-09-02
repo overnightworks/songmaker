@@ -281,6 +281,22 @@ export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
 	shared: 'Shared'
 };
 export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
+
+// The compressed row's own instant filter (#402) — deliberately not the
+// grid's LIBRARY_SEARCH_* copy above: that one names what the server-side
+// search across the whole library covers, this one narrows siblings already
+// loaded into the open row. collectionLabel is LIBRARY_FILTER_LABELS'
+// 'Albums'/'Playlists'.
+export function libraryRowFilterPlaceholder(collectionLabel: string): string {
+	return `Filter ${collectionLabel.toLowerCase()}…`;
+}
+export function libraryRowFilterAriaLabel(collectionLabel: string): string {
+	return `Filter ${collectionLabel.toLowerCase()} by name`;
+}
+export const LIBRARY_ROW_FILTER_CLEAR_LABEL = 'Clear filter';
+export const LIBRARY_ROW_FILTER_CLEAR_GLYPH = '×';
+export const LIBRARY_ROW_FILTER_EMPTY = 'Nothing matches';
+
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
