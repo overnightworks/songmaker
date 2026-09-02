@@ -46,6 +46,33 @@ def _reset_settings_cache():
 
 
 @pytest.fixture(autouse=True)
+def _no_claude_cli_tool_surface_probe():
+    """Never let a test spawn the real Claude CLI to read its tool surface.
+
+    Server startup, every co-writer turn, the legacy per-song chat endpoint,
+    and the lyrical-coherence judge each ask the mounted binary which tools
+    it offers before running it (#351); on a developer machine that binary
+    exists, so without this a lifespan, co-writer, chat, or scoring test
+    would start a real CLI session. Each probe's own behaviour is pinned in
+    ``test_claude_provider.py``.
+    """
+    from unittest.mock import AsyncMock
+
+    with (
+        patch(
+            "songmaker_cli.claude.provider.verify_cli_tool_surface", AsyncMock(),
+        ),
+        patch(
+            "songmaker_cli.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
+        ),
+        patch(
+            "songmaker_cli.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
+        ),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_worker_singletons():
     yield
     from songmaker_cli import music_worker as mw_mod

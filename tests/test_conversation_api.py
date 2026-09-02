@@ -151,8 +151,6 @@ def test_mcp_cli_cmd_includes_required_flags():
     assert "--strict-mcp-config" in cmd
     assert "--allowedTools" in cmd
     assert MCP_ALLOWED_TOOLS in cmd
-    assert "--permission-mode" in cmd
-    assert "bypassPermissions" in cmd
     assert "hi" not in cmd
     assert "sysprompt" not in cmd
     joined = " ".join(cmd)

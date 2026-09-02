@@ -141,6 +141,36 @@ COWRITER_CLI_TIMEOUT_SECONDS = 600
 COWRITER_MAX_TOOL_ROUNDS = 8
 COWRITER_MODELS_TIMEOUT_SECONDS = 15
 CLAUDE_CLI_LOGIN_STATUS_CACHE_SECONDS = 30
+# The real init event measured 0.34s (see docs/security.md); these budgets
+# keep a wide margin over that without letting a stuck probe block a request
+# for anywhere near as long as the old 30s did.
+CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS = 10
+CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS = 5
+# Short on purpose: long enough to shield a struggling probe from being
+# re-run by every concurrent caller, short enough that a real repair (binary
+# reinstalled, DB reachable again) is picked up on the next request rather
+# than staying failed for the lifetime of the success cache.
+CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS = 10
+# How long a probe waits for SIGTERM to take effect before escalating to
+# SIGKILL. Named rather than a literal so the reap budget below is legible
+# as spelled-out arithmetic, not a mystery "+1".
+CLAUDE_CLI_SIGTERM_GRACE_SECONDS = 1
+# After SIGKILL a process cannot ignore the signal, so this bounds only the
+# pathological case (an uninterruptible kernel sleep, a stuck watcher) —
+# not a normal exit, which is immediate. Chosen well above that normal case
+# so it never fires in practice, and well below any caller's own timeout so
+# a stuck reap cannot block whoever is waiting on its outcome past it.
+CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS = 5
+# A process that outlives SIGKILL is not a transient hiccup — ten more
+# seconds will not make it healthy, and probing again on that schedule only
+# spawns another zombie. Cached failures of that specific kind get this much
+# longer TTL instead of CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS.
+CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS = 300
+# A hard ceiling on background reapers tracked at once (across every key and
+# every process the tool-surface probe has ever spawned) — small on purpose:
+# beyond it, a new zombie is logged and left for the OS/asyncio's own child
+# reaping rather than growing an unbounded pool of waiting tasks/threads.
+CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS = 8
 COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
 COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"

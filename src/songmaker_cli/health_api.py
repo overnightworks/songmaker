@@ -276,6 +276,7 @@ async def health_check(request: Request) -> JSONResponse:
         is_music_worker_healthy,
         is_scoring_worker_healthy,
     )
+    from songmaker_cli.claude.provider import claude_cli_tool_surface_health
     from songmaker_cli.db.queries import count_total_queued_jobs, list_worker_identities
     from songmaker_cli.settings import get_settings
 
@@ -332,4 +333,17 @@ async def health_check(request: Request) -> JSONResponse:
         "acestep_workers_online": workers_online,
         "queue_depth_cap_reached": queue_depth_cap_reached,
         "uptime_seconds": uptime,
+        # "ok" / "drift" / "unverified" (#351): whether the mounted Claude
+        # CLI's tool surface still matches the co-writer's allowlist. A
+        # drifted binary never takes the whole server down — the co-writer
+        # path refuses it on its own — but the operator and monitoring
+        # should see the state without reading the boot log. This is the
+        # gate's *live* answer (round 7), not a value frozen at boot: it
+        # reads provider.claude_cli_tool_surface_health(), which every
+        # verify_cli_tool_surface() call updates, cache hit or fresh probe
+        # alike — a later successful co-writer turn clears an earlier
+        # "unverified", and a later drifted build replaces an earlier
+        # "ok". Defaults to "unverified" (never a silent "ok") for the
+        # narrow window before the boot-time check has run at all.
+        "claude_cli_tool_surface": claude_cli_tool_surface_health(),
     })

@@ -35,7 +35,7 @@ This is a critical attack surface unique to LLM-integrated applications. Do NOT 
 - **User content in prompts**: Trace every path where user-controlled text (lyrics, song context, chat messages, song titles) reaches a Claude API call or CLI invocation. Can a user craft input that overrides or escapes the system prompt?
 - **Data exfiltration via prompt**: Could a malicious prompt trick Claude into revealing the system prompt, API key (from environment), or server-side context in its response?
 - **Indirect prompt injection**: If Claude's response is ever parsed or applied to data (e.g., the `songmaker` JSON block is parsed and applied to song fields), can a crafted response cause unintended mutations?
-- **CLI backend escalation**: The Claude CLI denylist blocks known tools. Could a prompt trick the CLI into using a tool not on the denylist? What happens when Claude Code ships new tools that aren't on the list yet?
+- **CLI backend escalation**: The Claude CLI session is built with an empty built-in tool set and only `mcp__songmaker__*` allowed. Could a prompt reach anything else — a skill, a slash command, an MCP server from somewhere other than our own config?
 - **Token/cost abuse**: Can a user craft prompts that maximize token consumption? Is `max_tokens` enforced on all backends (API and CLI)?
 
 ## 5. Resource Exhaustion (DoS)
@@ -87,7 +87,7 @@ These have been reviewed and accepted. Skip them unless the implementation has r
 - **CORS allows specific localhost ports**: Default `allow_origin_regex` matches `localhost` on ports 8080 and 5173 only. Acceptable for local-only dev mode. Production deployments must set `CORS_ORIGIN`.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged but not blocked to avoid breaking mobile users. Accepted tradeoff.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
-- **Claude CLI tool denylist**: Uses `--disallowedTools` (not an allowlist) because `--tools ""` doesn't reliably block tools. The list in `provider.py` must be kept up to date manually. Accepted limitation — but Section 4 should still assess prompt-based tool invocation bypasses.
+- **Claude CLI tool allowlist**: `provider.py` builds the session with `--tools ""`, `--setting-sources ""`, `--strict-mcp-config` and `--allowedTools mcp__songmaker__*`, and `verify_cli_tool_surface()` refuses a binary that announces anything outside the expected set. The expected eleven tool names ARE a hand-maintained literal tuple (`_EXPECTED_MCP_TOOL_NAMES` in `provider.py`) — not eliminated, but kept honest by a dedicated test that diffs it against `mcp_server/server.py`'s real registration, so drift there fails a test instead of silently going stale. Every non-MCP call (legacy chat, lyrical-coherence judge) goes through a second gate expecting zero tools, in the same shared call path (`_call_cli`/`_acall_cli`), not per-caller. Section 4 should still assess prompt-based tool invocation bypasses.
 - **Login rate limit allows distributed attacks**: IP and username rate limits are independent by design. A distributed attacker with many IPs gets `LOGIN_RATE_LIMIT` per IP. This is expected — bcrypt's 12-round cost is the primary defense.
 - **`force_logout` iterates all sessions**: O(n) session scan is acceptable given the expected scale (< 100 concurrent sessions).
 - **Session secret in output directory**: Stored with 0600 permissions. Production deployments can use `SESSION_SECRET` env var instead.
