@@ -22,6 +22,7 @@
 	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 	import LibraryWall from './LibraryWall.svelte';
+	import LibraryRow from './LibraryRow.svelte';
 	import CreateForm from './CreateForm.svelte';
 	import SongDetailView from './SongDetailView.svelte';
 	import AlbumDetailView from './AlbumDetailView.svelte';
@@ -80,8 +81,10 @@
 			{:else if surface === 'create'}
 				<CreateForm albums={$albumList} />
 			{:else if surface === 'detail' && collection?.kind === 'album'}
+				<LibraryRow {collection} />
 				<AlbumDetailView albumId={collection.id} />
 			{:else if surface === 'detail' && collection?.kind === 'playlist'}
+				<LibraryRow {collection} />
 				<PlaylistDetailView />
 			{:else}
 				<LibraryWall oncreate={openLibraryCreate} />

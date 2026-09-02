@@ -74,10 +74,11 @@
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import Icon from './Icon.svelte';
+	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { albumSummaryLabel, playlistSummaryLabel, titleInitials } from '$lib/utils/format';
+	import { albumSummaryLabel, playlistSummaryLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
@@ -599,24 +600,12 @@
 				{#each archivedAlbums as archived (archived.id)}
 					<div class="wall-tile">
 						<div class="wall-tile-body">
-							<span class="wall-tile-cover">
-								{#if archived.cover?.card}
-									<img
-										src={archived.cover.card}
-										alt={`${ALBUM_COVER_ALT_TYPE} ${archived.title}`}
-									/>
-								{:else}
-									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
-										>{titleInitials(archived.title)}</span
-									>
-								{/if}
-							</span>
-							<span class="wall-tile-meta">
-								<span class="wall-tile-title">{archived.title}</span>
-								<span class="wall-tile-subtitle"
-									>{albumSummaryLabel(archived.song_count, archived.picked_count)}</span
-								>
-							</span>
+							<LibraryTileContent
+								title={archived.title}
+								subtitle={albumSummaryLabel(archived.song_count, archived.picked_count)}
+								coverAlt={`${ALBUM_COVER_ALT_TYPE} ${archived.title}`}
+								coverUrl={archived.cover?.card ?? null}
+							/>
 						</div>
 						<button
 							type="button"
@@ -665,24 +654,13 @@
 							class="wall-tile-body"
 							onclick={() => hydrateAndOpenAlbum(group.album)}
 						>
-							<span class="wall-tile-cover">
-								{#if coverUrl}
-									<img src={coverUrl} alt={`${ALBUM_COVER_ALT_TYPE} ${group.album.title}`} />
-								{:else if fill}
-									<span class="wall-tile-cover-fill" style:background={fill} aria-hidden="true"
-									></span>
-								{:else}
-									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
-										>{titleInitials(group.album.title)}</span
-									>
-								{/if}
-							</span>
-							<span class="wall-tile-meta">
-								<span class="wall-tile-title">{group.album.title}</span>
-								<span class="wall-tile-subtitle"
-									>{albumSummaryLabel(group.album.song_count, group.album.picked_count)}</span
-								>
-							</span>
+							<LibraryTileContent
+								title={group.album.title}
+								subtitle={albumSummaryLabel(group.album.song_count, group.album.picked_count)}
+								coverAlt={`${ALBUM_COVER_ALT_TYPE} ${group.album.title}`}
+								{coverUrl}
+								{fill}
+							/>
 						</button>
 						<button
 							type="button"
@@ -742,17 +720,11 @@
 								class="wall-tile-body"
 								onclick={() => openPlaylist(playlist.id)}
 							>
-								<span class="wall-tile-cover">
-									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
-										>{titleInitials(playlist.title)}</span
-									>
-								</span>
-								<span class="wall-tile-meta">
-									<span class="wall-tile-title">{playlist.title}</span>
-									<span class="wall-tile-subtitle"
-										>{playlistSummaryLabel(playlist.entry_count)}</span
-									>
-								</span>
+								<LibraryTileContent
+									title={playlist.title}
+									subtitle={playlistSummaryLabel(playlist.entry_count)}
+									coverAlt={playlist.title}
+								/>
 							</button>
 							<button
 								type="button"
@@ -940,59 +912,6 @@
 
 	.wall-tile-body:hover {
 		background: var(--surface-hover);
-	}
-
-	.wall-tile-cover {
-		display: block;
-		width: 100%;
-		aspect-ratio: 1;
-		background: var(--surface-hover);
-		overflow: hidden;
-	}
-
-	.wall-tile-cover img,
-	.wall-tile-cover-fill {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.wall-tile-cover-initials {
-		font-family: var(--font-display);
-		font-size: 1.4rem;
-		letter-spacing: 0.06em;
-		color: var(--text);
-		user-select: none;
-	}
-
-	.wall-tile-meta {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		gap: 1px;
-		padding: 8px 40px 8px 8px;
-	}
-
-	.wall-tile-title {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-family: var(--font-display);
-		font-size: 0.85rem;
-		letter-spacing: 0.3px;
-	}
-
-	.wall-tile-subtitle {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: 0.68rem;
-		color: var(--text-subtle);
 	}
 
 	.wall-tile-play {

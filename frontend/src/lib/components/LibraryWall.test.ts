@@ -253,7 +253,7 @@ describe('LibraryWall selection', () => {
 		songList.set([song({ id: 's1', album_id: 'a-local', generations: [] })]);
 		albumList.set([album({ song_count: 2, picked_count: 1 })]);
 		const root = await render();
-		expect(root.querySelector('.wall-tile-subtitle')?.textContent).toBe('2 songs · 1 pick');
+		expect(root.querySelector('.tile-subtitle')?.textContent).toBe('2 songs · 1 pick');
 	});
 
 	it('plays the album from the tile play control without opening it', async () => {
