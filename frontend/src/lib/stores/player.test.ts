@@ -34,6 +34,10 @@ import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn()
 }));
+vi.mock('$lib/api/fetch', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
+	return { ...actual, handleSessionLost: vi.fn() };
+});
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
@@ -110,7 +114,7 @@ import {
 } from './player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, handleSessionLost } from '$lib/api/fetch';
 import {
 	DEFAULT_DESKTOP_NOW_PLAYING_SURFACE,
 	libraryTakePool,
@@ -2807,5 +2811,16 @@ describe('Now Playing surface', () => {
 
 		expect(get(nowPlayingSurface)).toBe('docked');
 		expect(localStorage.getItem('nowPlayingDesktopSurface')).toBe('docked');
+	});
+});
+
+describe('audioPlayer onAuthLost wiring', () => {
+	it('hands a lost stream/media session to the one shared session-lost reaction', async () => {
+		const onAuthLost = audioPlayer.currentCallbacks.onAuthLost;
+		if (!onAuthLost) throw new Error('onAuthLost is not assigned');
+
+		await onAuthLost();
+
+		expect(handleSessionLost).toHaveBeenCalledOnce();
 	});
 });

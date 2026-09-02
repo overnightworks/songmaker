@@ -1,6 +1,10 @@
 import { get } from 'svelte/store';
 import type { JobItem } from './types';
-import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
+import {
+	API_ERROR_GENERIC_MESSAGE,
+	RATE_LIMITED_TOAST_MESSAGE,
+	SESSION_LOST_REDIRECT_PARAM
+} from '$lib/constants';
 import { addToast, toasts } from '$lib/stores/toast';
 
 export const API_TIMEOUT_MS = 30_000;
@@ -75,6 +79,54 @@ function notifyIfRateLimited(status: number, path: string): void {
 	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
 }
 
+function isSessionLostResponse(status: number, path: string): boolean {
+	return status === 401 && !AUTH_ENDPOINTS.includes(path);
+}
+
+// The one reaction to "the session is gone", for the whole app (issue #385).
+// apiFetch and sseFetch below call this directly on their own 401 (every
+// other response reads its own status, but what a 401 *means* and what to do
+// about it is decided here, once). Two callers outside this module reach it
+// too, because they detect a lost session a way apiFetch never sees: an
+// audio element's stream/media probe (`stores/player.ts`'s `onAuthLost`
+// callback, wired from `audioPlayer.svelte.ts`) and a dropped SSE
+// connection's auth probe (`stores/resourceSync.ts`'s `onUnauthorized`,
+// which also treats a 403 on `/api/auth/me` as a lost session -- a disabled
+// account -- something a plain 401 check can't tell apart from an ordinary
+// ownership 403 elsewhere in the app). All three funnel into this one
+// function instead of each clearing auth and navigating on their own.
+//
+// A visitor who was never signed in (first load with no cookie, or a second
+// caller losing the race after the first already cleared it) has no session
+// to lose: `currentUser` is already null, and the app's own unauthenticated
+// routing (`+layout.svelte`'s `initAuth`) already knows whether that sends
+// them to /login or /setup, so this leaves it alone rather than forcing a
+// redirect that can race that more informed choice.
+//
+// A concurrent second caller -- e.g. resourceSync's own auth probe racing an
+// ordinary apiFetch call that both fail with 401 at once -- joins the same
+// in-flight run instead of repeating the redirect, so the listener is told
+// exactly once no matter how many places noticed at the same time.
+let sessionLostRun: Promise<void> | null = null;
+
+export function handleSessionLost(): Promise<void> {
+	if (!sessionLostRun) {
+		sessionLostRun = reactToSessionLost().finally(() => {
+			sessionLostRun = null;
+		});
+	}
+	return sessionLostRun;
+}
+
+async function reactToSessionLost(): Promise<void> {
+	const { currentUser, clearAuth } = await import('$lib/stores/auth');
+	if (get(currentUser) === null) return;
+	clearAuth();
+	const { goto } = await import('$app/navigation');
+	const returnTo = window.location.pathname + window.location.search;
+	await goto(`/login?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(returnTo)}`);
+}
+
 function abortOnCallerOrTimeout(
 	callerSignal: AbortSignal | null | undefined,
 	timeoutSignal: AbortSignal
@@ -115,12 +167,7 @@ export async function apiFetch<T>(
 				// response body not JSON — use empty detail
 			}
 			notifyIfRateLimited(resp.status, path);
-			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
-				const { clearAuth } = await import('$lib/stores/auth');
-				const { goto } = await import('$app/navigation');
-				clearAuth();
-				await goto('/login');
-			}
+			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
 			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		return resp.json() as Promise<T>;
@@ -168,12 +215,7 @@ export async function* sseFetch<T = unknown>(
 				// non-JSON body on error
 			}
 			notifyIfRateLimited(resp.status, path);
-			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
-				const { clearAuth } = await import('$lib/stores/auth');
-				const { goto } = await import('$app/navigation');
-				clearAuth();
-				await goto('/login');
-			}
+			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
 			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp));
 		}
 		if (!resp.body) {

@@ -2,6 +2,13 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
+// The query param the one session-lost handler (see `handleSessionLost` in
+// `lib/api/fetch.ts`) appends to its redirect to /login, carrying the page
+// the listener was on so a future sign-in can return them there. Named here
+// because it is a cross-file contract, not a one-off string: whichever
+// route reads it back after a successful login must use the same name.
+export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
+
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
 // share failure, since the link exists and only the copy step didn't.

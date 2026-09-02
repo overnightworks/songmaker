@@ -4,12 +4,19 @@ import { get } from 'svelte/store';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
+vi.mock('$lib/stores/auth', async () => {
+	const { writable } = await import('svelte/store');
+	const currentUser = writable<{ id: string } | null>(null);
+	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+});
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError, isRateLimited } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
+import { clearAuth, currentUser } from '$lib/stores/auth';
+import { goto } from '$app/navigation';
+import type { AuthUser } from '$lib/api/types';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -272,5 +279,89 @@ describe('apiFetch abort signal', () => {
 		vi.advanceTimersByTime(1);
 		expect(signalPassedToFetch().aborted).toBe(true);
 		expect(caller.signal.aborted).toBe(false);
+	});
+});
+
+describe('session lost (401)', () => {
+	function unauthorizedResponse() {
+		return {
+			ok: false,
+			status: 401,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: 'Not authenticated' })
+		};
+	}
+
+	beforeEach(() => {
+		vi.mocked(clearAuth).mockClear();
+		vi.mocked(goto).mockClear();
+		currentUser.set(null);
+		history.replaceState(null, '', '/');
+	});
+
+	it('clears auth and redirects to /login, carrying the current page, when a session existed', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		history.replaceState(null, '', '/album/a1/song-1');
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent('/album/a1/song-1')}`);
+	});
+
+	it('reacts the same way through sseFetch as through apiFetch', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
+		await gen.next().catch((e: unknown) => e);
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+	});
+
+	it('still rejects with an ApiError so the caller can show its own message', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		const err = await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect((err as ApiError).status).toBe(401);
+	});
+
+	it('does not react for a visitor who was never signed in, leaving app routing to decide', async () => {
+		currentUser.set(null);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
+
+		expect(clearAuth).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('does not react to a 401 from the login form itself (wrong credentials, not a lost session)', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+
+		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
+
+		expect(clearAuth).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('folds concurrent 401s from separate requests into a single reaction', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		mockFetch.mockResolvedValue(unauthorizedResponse());
+
+		await Promise.all([
+			apiFetch('/api/songs/s1').catch((e: unknown) => e),
+			apiFetch('/api/songs/s2').catch((e: unknown) => e)
+		]);
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
 	});
 });

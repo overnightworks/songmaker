@@ -1,5 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, handleSessionLost } from '$lib/api/fetch';
 import { fetchMe } from '$lib/api/auth';
 import {
 	compareDecimalId,
@@ -29,7 +29,6 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
-import { clearAuth } from '$lib/stores/auth';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
 export type ResourceSyncStatus =
@@ -687,12 +686,6 @@ export async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 	}
 }
 
-async function redirectToLogin(): Promise<void> {
-	clearAuth();
-	const { goto } = await import('$app/navigation');
-	await goto('/login');
-}
-
 function cancelLibrarySnapshot(): void {
 	cancelLibraryHistoryApply();
 	cancelLibraryDataLoads();
@@ -714,7 +707,7 @@ function librarySyncDeps(): ResourceSyncDeps {
 		loadSnapshot: hydrateLibraryFromHistory,
 		cancelSnapshot: cancelLibrarySnapshot,
 		probeAuth: probeResourceAuth,
-		onUnauthorized: redirectToLogin
+		onUnauthorized: handleSessionLost
 	};
 }
 

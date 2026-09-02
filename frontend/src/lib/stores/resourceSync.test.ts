@@ -1,8 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
+vi.mock('$lib/stores/auth', async () => {
+	const { writable } = await import('svelte/store');
+	const currentUser = writable<{ id: string } | null>(null);
+	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+});
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
 import { ApiError } from '$lib/api/fetch';
-import type { GenerationCreatedResourceEvent, GenerationItem, SongItem } from '$lib/api/types';
+import { clearAuth, currentUser } from '$lib/stores/auth';
+import { goto } from '$app/navigation';
+import type {
+	AuthUser,
+	GenerationCreatedResourceEvent,
+	GenerationItem,
+	SongItem
+} from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
@@ -783,5 +797,31 @@ describe('library resource sync wiring', () => {
 		expect(MockEventSource.instances[0].withCredentials).toBe(true);
 		stopLibraryResourceSync();
 		expect(MockEventSource.instances[0].closed).toBe(true);
+	});
+
+	it('routes a 401 on its auth probe through the one shared session-lost reaction', async () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 401,
+				headers: { get: () => null },
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			})
+		);
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+
+		startLibraryResourceSync();
+		MockEventSource.instances[0].error();
+		// The reaction chain here is deeper than elsewhere in this file --
+		// a real apiFetch round trip plus two dynamic imports -- so one
+		// `flush()` is not always enough ticks to drain it.
+		await flush();
+		await flush();
+
+		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
+		expect(vi.mocked(goto).mock.calls[0][0]).toMatch(/^\/login\?redirect=/);
 	});
 });
