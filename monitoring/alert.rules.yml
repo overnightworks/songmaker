@@ -7,7 +7,7 @@
 # alertmanager.yml.template), not duplicated as a second set of native
 # Grafana alert rules: that would mean maintaining the same three
 # thresholds in two schemas, which is exactly the kind of side-by-side
-# duplication this design avoids. All three notify the same address
+# duplication this design avoids. All four notify the same address
 # configured in .env (ALERT_EMAIL_TO) — see alertmanager.yml.template.
 groups:
   - name: songmaker

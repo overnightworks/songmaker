@@ -162,10 +162,18 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
 
     assert health.status_code == 200
     assert health.json()["background_loops"] == {
-        "session_sync": {"state": "dead", "consecutive_failures": 0},
-        "resource_event_cleanup": {"state": "ok", "consecutive_failures": 0},
-        "score_backfill": {"state": "failing", "consecutive_failures": 3},
-        "stale_job_reaper": {"state": "ok", "consecutive_failures": 0},
+        "session_sync": {
+            "state": "dead", "consecutive_failures": 0, "last_error": "task ended",
+        },
+        "resource_event_cleanup": {
+            "state": "ok", "consecutive_failures": 0, "last_error": None,
+        },
+        "score_backfill": {
+            "state": "failing", "consecutive_failures": 3, "last_error": "RuntimeError",
+        },
+        "stale_job_reaper": {
+            "state": "ok", "consecutive_failures": 0, "last_error": None,
+        },
     }
     assert metrics.status_code == 200
     assert 'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3' in metrics.text

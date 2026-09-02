@@ -14,6 +14,7 @@ import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db
+from songmaker_cli.lifecycle import BackgroundLoopRegistry
 
 
 @pytest.fixture()
@@ -46,7 +47,9 @@ def test_periodic_loop_runs_resource_event_cleanup_every_tick(ctx, monkeypatch) 
     calls: list[AppContext] = []
     monkeypatch.setattr(lifecycle, "cleanup_expired_resource_events", calls.append)
     monkeypatch.setattr(queue_streams, "cleanup_expired_queue_streams", lambda _ctx: None)
-    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx))
+    app = SimpleNamespace(
+        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+    )
 
     _run_loop_for_n_ticks(monkeypatch, app, n=3)
 
@@ -63,7 +66,9 @@ def test_periodic_loop_runs_queue_stream_cleanup_on_its_own_slower_interval(
     monkeypatch.setattr(
         queue_streams, "cleanup_expired_queue_streams", queue_stream_calls.append,
     )
-    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx))
+    app = SimpleNamespace(
+        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+    )
     every_n_ticks = lifecycle._QUEUE_STREAM_CLEANUP_EVERY_N_TICKS
     assert every_n_ticks > 1, "test assumes the queue-stream interval is a slower multiple"
 
@@ -85,7 +90,9 @@ def test_periodic_loop_survives_a_failing_queue_stream_cleanup(ctx, monkeypatch)
         raise RuntimeError("disk full")
 
     monkeypatch.setattr(queue_streams, "cleanup_expired_queue_streams", _broken_cleanup)
-    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx))
+    app = SimpleNamespace(
+        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+    )
 
     _run_loop_for_n_ticks(
         monkeypatch, app, n=lifecycle._QUEUE_STREAM_CLEANUP_EVERY_N_TICKS + 1,

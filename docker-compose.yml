@@ -225,7 +225,7 @@ services:
     cap_drop:
       - ALL
 
-  # Delivers the three alert.rules.yml conditions by email via Alertmanager's
+  # Delivers the four alert.rules.yml conditions by email via Alertmanager's
   # own SMTP client (issue #333) — see monitoring/alertmanager.yml.template
   # for why this owns delivery instead of scripts/alert.sh or Grafana's
   # native alerting. Internal-only, same as prometheus above (no published

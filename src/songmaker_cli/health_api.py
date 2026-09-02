@@ -36,6 +36,7 @@ router = APIRouter()
 class BackgroundLoopResponse(BaseModel):
     state: BackgroundLoopStatus
     consecutive_failures: int
+    last_error: str | None
 
 
 class BackgroundLoopsResponse(BaseModel):
@@ -353,6 +354,7 @@ async def health_check(request: Request) -> JSONResponse:
         name: {
             "state": health.status,
             "consecutive_failures": health.consecutive_failures,
+            "last_error": health.last_error,
         }
         for name, health in background_loop_health.items()
     })

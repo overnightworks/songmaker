@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    BACKGROUND_LOOP_LAST_ERROR_MAX_LENGTH,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -75,6 +77,10 @@ class BackgroundLoopHealth:
         return BackgroundLoopStatus.OK
 
 
+def _safe_background_loop_error(error: BaseException) -> str:
+    return type(error).__name__[:BACKGROUND_LOOP_LAST_ERROR_MAX_LENGTH]
+
+
 class BackgroundLoopRegistry:
     def __init__(self) -> None:
         self._loops = {
@@ -97,13 +103,13 @@ class BackgroundLoopRegistry:
     def record_failure(self, name: BackgroundLoopName, error: Exception) -> int:
         health = self._loops[name]
         health.consecutive_failures += 1
-        health.last_error = str(error)
+        health.last_error = _safe_background_loop_error(error)
         return health.consecutive_failures
 
     def mark_dead(self, name: BackgroundLoopName, error: BaseException | None) -> None:
         health = self._loops[name]
         health.is_alive = False
-        health.last_error = "task ended" if error is None else f"{type(error).__name__}: {error}"
+        health.last_error = "task ended" if error is None else _safe_background_loop_error(error)
 
     def metrics_snapshot(self) -> dict[str, BackgroundLoopHealth]:
         return {name.value: health for name, health in self._loops.items()}
@@ -264,7 +270,11 @@ async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: ArqRedis) ->
         await redis.srem(SCORE_BACKFILL_TRACKED_SET_KEY, gen_id)
 
 
-async def backfill_unscored_generations(ctx: AppContext, redis: ArqRedis) -> int:
+async def backfill_unscored_generations(
+    ctx: AppContext,
+    redis: ArqRedis,
+    on_failure: Callable[[Exception], None] | None = None,
+) -> int:
     """Auto-score one throttled batch of generations that still have no score.
 
     Covers both a generation that predates auto-scoring and one an earlier
@@ -297,8 +307,10 @@ async def backfill_unscored_generations(ctx: AppContext, redis: ArqRedis) -> int
             await _record_backfill_attempt(redis, gen_id)
             await _auto_score_generation(redis, ctx.db, gen_id, song_id)
             scored += 1
-        except Exception:
+        except Exception as exc:
             log.exception("Score backfill failed for generation %s — continuing", gen_id)
+            if on_failure is not None:
+                on_failure(exc)
     return scored
 
 
@@ -328,7 +340,19 @@ async def score_backfill_loop(app: FastAPI) -> None:
             if not acquired:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
                 continue
-            scored = await backfill_unscored_generations(ctx, get_arq_pool())
+            tick_error: Exception | None = None
+
+            def record_tick_error(error: Exception) -> None:
+                nonlocal tick_error
+                tick_error = error
+
+            scored = await backfill_unscored_generations(
+                ctx,
+                get_arq_pool(),
+                on_failure=record_tick_error,
+            )
+            if tick_error is not None:
+                raise tick_error
             if scored:
                 log.info("Score backfill: dispatched %d generation(s)", scored)
         except Exception as exc:

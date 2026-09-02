@@ -69,3 +69,41 @@ tests:
       - eval_time: 30m
         alertname: SongmakerJobFailure
         exp_alerts: []
+
+  - interval: 1m
+    name: a dead background loop alerts after its hold period
+    input_series:
+      - series: 'songmaker_background_loop_alive{loop="score_backfill"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              loop: score_backfill
+            exp_annotations:
+              summary: A Songmaker background loop is unhealthy
+              description: A background loop has stopped or failed three consecutive ticks.
+
+  - interval: 1m
+    name: a failing background loop alerts after its hold period
+    input_series:
+      - series: 'songmaker_background_loop_consecutive_failures{loop="session_sync"}'
+        values: "3x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: SongmakerBackgroundLoopUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              loop: session_sync
+            exp_annotations:
+              summary: A Songmaker background loop is unhealthy
+              description: A background loop has stopped or failed three consecutive ticks.

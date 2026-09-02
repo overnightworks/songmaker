@@ -1440,6 +1440,8 @@ def test_metrics_format_prometheus_all_sections() -> None:
         acestep_worker_queue_depths={},
         acestep_worker_vram_used_gb={"acestep-worker-0": 12.5},
         acestep_worker_vram_total_gb={"acestep-worker-0": 24.0},
+        background_loop_consecutive_failures={},
+        background_loop_alive={},
     )
     assert '# TYPE songmaker_http_requests_total counter' in body
     assert 'songmaker_http_requests_total{method="GET",status="200"} 10' in body
@@ -1486,6 +1488,8 @@ def test_metrics_format_prometheus_no_duration() -> None:
         acestep_worker_queue_depths={},
         acestep_worker_vram_used_gb={},
         acestep_worker_vram_total_gb={},
+        background_loop_consecutive_failures={},
+        background_loop_alive={},
     )
     assert "songmaker_job_duration_seconds{" not in body
     # Exported even with nothing to report: an alert that reads "how long
@@ -1529,6 +1533,8 @@ def test_metrics_format_prometheus_acestep_worker_gauges() -> None:
         },
         acestep_worker_vram_used_gb={},
         acestep_worker_vram_total_gb={},
+        background_loop_consecutive_failures={},
+        background_loop_alive={},
     )
     assert '# TYPE songmaker_acestep_workers_total gauge' in body
     assert 'songmaker_acestep_workers_total{status="online"} 2' in body
@@ -1566,6 +1572,8 @@ def test_metrics_format_prometheus_acestep_no_workers() -> None:
         acestep_worker_queue_depths={},
         acestep_worker_vram_used_gb={},
         acestep_worker_vram_total_gb={},
+        background_loop_consecutive_failures={},
+        background_loop_alive={},
     )
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body
     assert 'songmaker_acestep_workers_total{status="loading"} 0' in body
