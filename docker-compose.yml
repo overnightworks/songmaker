@@ -91,9 +91,46 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - queuestreams:/app/data/queue-streams
-      - ~/.local/bin/claude:/usr/local/bin/claude:ro
-      - ~/.claude:/home/songmaker/.claude
-      - ~/.claude.json:/home/songmaker/.claude.json
+      # Agent-CLI mounts: the container owns the writable profiles; it only
+      # receives read-only CLI binaries and redacted login mirrors. The
+      # preflight checks the mirror and the default or environment-selected
+      # CLI paths before deploy.
+      - type: bind
+        source: ${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}
+        target: /usr/local/bin/claude
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}
+        target: /usr/local/bin/grok
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CODEX_CLI:-~/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex}
+        target: /usr/local/bin/codex
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
+        target: /home/songmaker/.claude/.credentials.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/grok.json
+        target: /home/songmaker/.grok/auth.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/codex.json
+        target: /home/songmaker/.codex/auth.json
+        read_only: true
+        bind:
+          create_host_path: false
     cap_drop:
       - ALL
 
@@ -206,9 +243,20 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - hfcache:/app/.cache/huggingface/hub
-      - ~/.local/bin/claude:/usr/local/bin/claude:ro
-      - ~/.claude:/home/songmaker/.claude
-      - ~/.claude.json:/home/songmaker/.claude.json
+      # Claude only: the judge uses Grok and Codex through their HTTP APIs,
+      # so their subscription credentials do not belong in this container.
+      - type: bind
+        source: ${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}
+        target: /usr/local/bin/claude
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
+        target: /home/songmaker/.claude/.credentials.json
+        read_only: true
+        bind:
+          create_host_path: false
 
   prometheus:
     image: prom/prometheus:latest

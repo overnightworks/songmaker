@@ -29,7 +29,7 @@ CONTAINERS = {
     "web": ContainerSpec(
         "songmaker-web",
         Path("Dockerfile"),
-        frozenset({"server", "mcp"}),
+        frozenset({"server", "mcp", "claude"}),
         "songmaker_cli.main",
         ("songmaker_cli.main", "songmaker_cli.server"),
         None,
@@ -37,7 +37,7 @@ CONTAINERS = {
     "scoring-worker": ContainerSpec(
         "songmaker-scoring-worker",
         Path("docker/scoring-worker.Dockerfile"),
-        frozenset({"server", "scoring", "whisper"}),
+        frozenset({"server", "scoring", "whisper", "claude"}),
         "songmaker_cli.scoring_worker",
         ("songmaker_cli.scoring_worker",),
         ("songmaker_cli.scoring_worker.ScoringWorkerSettings",),
@@ -266,7 +266,6 @@ def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() ->
         assert roots == metadata_roots
 
     assert extras_by_distribution["anthropic"] == frozenset({"claude"})
-    assert all("claude" not in spec.extras for spec in CONTAINERS.values())
     assert "hiredis" not in _root_owning_extras()
     assert "lupa" not in _root_owning_extras()
 
@@ -284,39 +283,10 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
 
 
-def test_claude_api_key_without_sdk_is_honestly_unavailable_in_web_container() -> None:
-    spec = CONTAINERS["web"]
-    script = """
-from songmaker_cli.cowriter.catalog import (
-    DependencyUnavailableProvider,
-    get_provider_configuration,
-    list_provider_models,
-)
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
+    """The documented ANTHROPIC_API_KEY path is installed in both images."""
+    owns_the_sdk = _optional_extras_by_distribution()["anthropic"]
 
-configuration = get_provider_configuration("claude")
-assert configuration == DependencyUnavailableProvider(
-    "claude", "anthropic", "ANTHROPIC_API_KEY",
-)
-try:
-    list_provider_models("claude")
-except ProviderUnavailableError as error:
-    assert "required dependency 'anthropic'" in str(error)
-else:
-    raise AssertionError("missing Claude SDK was accepted")
-"""
-    blocked_roots = frozenset(
-        root for root, owners in _root_owning_extras().items()
-        if not owners & spec.extras
-    )
-    assert "anthropic" in blocked_roots
-    completed = _run_with_blocked_optional_imports(
-        spec,
-        blocked_roots,
-        script,
-        {"ANTHROPIC_API_KEY": "packaging-boundary-test"},
-    )
-    assert completed.returncode == 0, (
-        f"web ({spec.entrypoint}) did not report the omitted Claude SDK.\n"
-        f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-    )
+    for container in ("web", "scoring-worker"):
+        assert CONTAINERS[container].extras & owns_the_sdk, container
+    assert not CONTAINERS["music-worker"].extras & owns_the_sdk

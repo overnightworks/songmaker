@@ -24,7 +24,7 @@ WORKDIR /app
 # Install dependencies first (cached unless pyproject.toml/uv.lock change)
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
-    uv sync --frozen --no-dev --extra server --extra mcp && \
+    uv sync --frozen --no-dev --extra server --extra mcp --extra claude && \
     rm -rf src/songmaker_cli/__init__.py
 
 # Copy source code (only this layer rebuilds on code changes)
@@ -37,7 +37,7 @@ COPY alembic.ini ./
 # context, and a hand-picked list would silently miss the next operational
 # script someone adds.
 COPY scripts/ scripts/
-RUN uv sync --frozen --no-dev --extra server --extra mcp
+RUN uv sync --frozen --no-dev --extra server --extra mcp --extra claude
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 
@@ -45,6 +45,10 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
+# Agent CLIs own their profiles inside this image. Compose mounts only their
+# read-only binaries and mirrored credential files into these directories.
+RUN install -d -o songmaker -g songmaker \
+    /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
 # Both are volume mount points. Docker seeds an empty named volume from
 # whichever image mounts it first — as root when that image lacks the
 # directory, which the app can never chown back under cap_drop: ALL.
