@@ -13,7 +13,7 @@
 # Alertmanager straight at that file — so it stays out of process
 # arguments, out of `docker inspect`, and out of the generated config.
 #
-# Delivery for Prometheus-sourced alerts (monitoring/alert.rules.yml) goes
+# Delivery for Prometheus-sourced alerts (monitoring/rules/alert.rules.yml) goes
 # through Alertmanager's built-in email_configs, not through
 # scripts/alert.sh and not through Grafana's own alerting engine — see
 # that file's header comment for the full "one decision, one reason".

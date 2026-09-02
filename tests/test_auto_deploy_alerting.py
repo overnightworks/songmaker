@@ -34,7 +34,7 @@ CHECK_RUN_LOOKUP_TIMEOUT_SECONDS = 60
 CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
 PRUNE_TIMEOUT_SECONDS = 1
 PROMETHEUS_RULES_RESPONSE = """\
-{"status":"success","data":{"groups":[{"rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
+{"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
 """
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
@@ -87,6 +87,7 @@ class Checkout:
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
         self._compose_project_name = "songmaker"
+        self._prometheus_ready_exit_code = 0
         self._prometheus_reload_exit_code = 0
         self._prometheus_rules_exit_code = 0
         self._prometheus_rules_response = PROMETHEUS_RULES_RESPONSE
@@ -106,9 +107,9 @@ class Checkout:
             copy.write_text(source.read_text())
             copy.chmod(source.stat().st_mode)
         self.deploy_script = self.root / "scripts" / DEPLOY_SCRIPT.name
-        (self.root / "monitoring").mkdir()
-        (self.root / "monitoring" / "alert.rules.yml").write_text(
-            (REPO_ROOT / "monitoring" / "alert.rules.yml").read_text(),
+        (self.root / "monitoring" / "rules").mkdir(parents=True)
+        (self.root / "monitoring" / "rules" / "alert.rules.yml").write_text(
+            (REPO_ROOT / "monitoring" / "rules" / "alert.rules.yml").read_text(),
         )
 
         (self.root / "README.md").write_text("initial\n")
@@ -157,6 +158,18 @@ class Checkout:
         self._compose_project_name = project_name
         self._write_docker_stub()
 
+    def set_prometheus_ready_exit_code(self, exit_code: int) -> None:
+        self._prometheus_ready_exit_code = exit_code
+        self._write_curl_stub()
+
+    def set_prometheus_reload_exit_code(self, exit_code: int) -> None:
+        self._prometheus_reload_exit_code = exit_code
+        self._write_docker_stub()
+
+    def set_prometheus_rules_exit_code(self, exit_code: int) -> None:
+        self._prometheus_rules_exit_code = exit_code
+        self._write_curl_stub()
+
     def set_prometheus_rules_response(self, response: str) -> None:
         self._prometheus_rules_response = response
         self._write_curl_stub()
@@ -166,9 +179,9 @@ class Checkout:
             self._bin / "curl",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$CURL_CALLS_FILE"\n'
-            'if [[ "$*" == "--fail --silent --show-error --max-time 30 -X POST '
-            'http://127.0.0.1:9090/-/reload" ]]; then\n'
-            f"    exit {self._prometheus_reload_exit_code}\n"
+            'if [[ "$*" == "--fail --silent --show-error --max-time 30 --retry 5 '
+            '--retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready" ]]; then\n'
+            f"    exit {self._prometheus_ready_exit_code}\n"
             "fi\n"
             'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
             'http://127.0.0.1:9090/api/v1/rules" ]]; then\n'
@@ -198,12 +211,20 @@ class Checkout:
             '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
             '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
             "    fi\n"
+            '    if [[ "$3" == "-q" && "$4" == "prometheus" ]]; then\n'
+            '        echo container-prometheus\n'
+            "        exit 0\n"
+            "    fi\n"
             '    echo container-songmaker-web\n'
             "    exit 0\n"
             "fi\n"
             'if [[ "$1" == "inspect" ]]; then\n'
             '    echo sha256:previous-songmaker-web\n'
             "    exit 0\n"
+            "fi\n"
+            'if [[ "$1" == "kill" && "$2" == "-s" && "$3" == "HUP" '
+            '&& "$4" == "container-prometheus" ]]; then\n'
+            f"    exit {self._prometheus_reload_exit_code}\n"
             "fi\n"
             'if [[ "$1" == "image" || "$1" == "builder" ]]; then\n'
             '    sleep "$DOCKER_PRUNE_SLEEP_SECONDS"\n'
@@ -292,9 +313,9 @@ class Checkout:
             _git(clone, "config", "user.email", "test@example.com")
             _git(clone, "config", "user.name", "Test")
         _git(clone, "pull", "--ff-only", "origin", "main")
-        rules = clone / "monitoring" / "alert.rules.yml"
+        rules = clone / "monitoring" / "rules" / "alert.rules.yml"
         rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
-        _git(clone, "add", "monitoring/alert.rules.yml")
+        _git(clone, "add", "monitoring/rules/alert.rules.yml")
         _git(clone, "commit", "-m", "change alert rules")
         _git(clone, "push", "origin", "main")
 
@@ -768,9 +789,11 @@ def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
 
     assert result.returncode == 0
     assert checkout.curl_calls.splitlines() == [
-        "--fail --silent --show-error --max-time 30 -X POST http://127.0.0.1:9090/-/reload",
+        "--fail --silent --show-error --max-time 30 --retry 5 --retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready",
         "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
     ]
+    assert "compose ps -q prometheus" in checkout.docker_calls
+    assert "kill -s HUP container-prometheus" in checkout.docker_calls
     assert "deploy remains successful" not in checkout.journal
 
 
@@ -781,7 +804,7 @@ def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.set_prometheus_rules_response(
-        '{"status":"success","data":{"groups":[{"rules":['
+        '{"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":['
         '{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}] }]}}',
     )
     checkout.move_main_forward_with_changed_alert_rules()
@@ -794,6 +817,98 @@ def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
         "deploy remains successful"
     ) in checkout.journal
     assert checkout.failure_count_file.read_text() == "0"
+
+
+def test_a_failed_prometheus_hup_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_reload_exit_code(1)
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "Prometheus rule reload failed after deploy; deploy remains successful" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    assert "Prometheus alert rule count mismatch" not in checkout.journal
+
+
+def test_a_prometheus_readiness_failure_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_ready_exit_code(1)
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "Prometheus did not become ready after rule reload; deploy remains successful" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+    assert "Prometheus alert rule count mismatch" not in checkout.journal
+
+
+def test_an_unavailable_prometheus_rule_api_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_rules_exit_code(1)
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "cannot read Prometheus rules after reload; deploy remains successful" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    assert "Prometheus alert rule count mismatch" not in checkout.journal
+
+
+def test_an_empty_previous_deployed_sha_reloads_changed_prometheus_rules(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.deployed_sha_file.write_text("")
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "kill -s HUP container-prometheus" in checkout.docker_calls
+
+
+def test_an_invalid_prometheus_rule_api_response_keeps_a_successful_deploy_successful(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.set_prometheus_rules_response("not JSON")
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "cannot count loaded Prometheus alert rules after reload; deploy remains successful" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "0"
+    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    assert "Prometheus alert rule count mismatch" not in checkout.journal
 
 
 def test_an_unchanged_alert_rule_file_does_not_reload_prometheus(tmp_path: Path) -> None:

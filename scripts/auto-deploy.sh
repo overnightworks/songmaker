@@ -129,9 +129,10 @@ DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
-PROMETHEUS_RULE_FILE="monitoring/alert.rules.yml"
+PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
+PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
 PROMETHEUS_URL="http://127.0.0.1:9090"
-PROMETHEUS_RELOAD_URL="${PROMETHEUS_URL}/-/reload"
+PROMETHEUS_READY_URL="${PROMETHEUS_URL}/-/ready"
 PROMETHEUS_RULES_URL="${PROMETHEUS_URL}/api/v1/rules"
 PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
 
@@ -368,26 +369,37 @@ reload_prometheus_rules() {
     local configured_rule_count
     local loaded_rule_count
     local rules_response
+    local prometheus_container
 
-    if ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_RULE_FILE" 2>&1)"; then
+    if [[ -z "$previous_deployed_sha" ]]; then
+        changed_files="$PROMETHEUS_RULE_FILE"
+    elif ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_RULE_FILE" 2>&1)"; then
         log_err "cannot determine whether $PROMETHEUS_RULE_FILE changed after deploy: $changed_files; deploy remains successful"
         return 0
     fi
-    [[ "$changed_files" == "$PROMETHEUS_RULE_FILE" ]] || return 0
+    grep -Fxq "$PROMETHEUS_RULE_FILE" <<<"$changed_files" || return 0
 
-    if ! curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" -X POST "$PROMETHEUS_RELOAD_URL"; then
+    if ! prometheus_container="$(compose ps -q prometheus 2>&1)" || [[ -z "$prometheus_container" ]]; then
+        log_err "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! docker kill -s HUP "$prometheus_container" >/dev/null; then
         log_err "Prometheus rule reload failed after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" --retry 5 --retry-connrefused --retry-delay 2 "$PROMETHEUS_READY_URL"; then
+        log_err "Prometheus did not become ready after rule reload; deploy remains successful"
         return 0
     fi
     if ! rules_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_RULES_URL")"; then
         log_err "cannot read Prometheus rules after reload; deploy remains successful"
         return 0
     fi
-    if ! loaded_rule_count="$(jq -er '[.data.groups[]?.rules[]? | select(.type == "alerting")] | length' <<<"$rules_response")"; then
+    if ! loaded_rule_count="$(jq -er --arg rule_file "$PROMETHEUS_LOADED_RULE_FILE" '[.data.groups[]? | select(.file == $rule_file) | .rules[]? | select(.type == "alerting")] | length' <<<"$rules_response")"; then
         log_err "cannot count loaded Prometheus alert rules after reload; deploy remains successful"
         return 0
     fi
-    if ! configured_rule_count="$(grep -c 'alert:' "$REPO_ROOT/$PROMETHEUS_RULE_FILE" || true)" || ! [[ "$configured_rule_count" =~ ^[0-9]+$ ]]; then
+    if ! configured_rule_count="$(grep -cE '^[[:space:]]*-[[:space:]]*alert:' "$REPO_ROOT/$PROMETHEUS_RULE_FILE" || true)" || ! [[ "$configured_rule_count" =~ ^[0-9]+$ ]]; then
         log_err "cannot count configured Prometheus alert rules after reload; deploy remains successful"
         return 0
     fi

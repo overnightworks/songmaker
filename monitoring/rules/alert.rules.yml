@@ -1,7 +1,7 @@
 # Prometheus alert rules for Songmaker (issue #333).
 #
 # These are the source of truth for the four conditions — checkable with
-# `promtool check rules monitoring/alert.rules.yml` independent of any UI —
+# `promtool check rules monitoring/rules/alert.rules.yml` independent of any UI —
 # evaluated by Prometheus itself (see rule_files: in prometheus.yml) and
 # delivered by Alertmanager's own SMTP client (monitoring/
 # alertmanager.yml.template), not duplicated as a second set of native

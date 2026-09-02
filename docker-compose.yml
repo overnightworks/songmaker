@@ -240,13 +240,17 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-lifecycle"
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring:/etc/prometheus/rules:ro
+      - ./monitoring:/etc/prometheus:ro
       - promdata:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     depends_on:
       songmaker-web:
         condition: service_healthy
@@ -255,7 +259,7 @@ services:
     cap_drop:
       - ALL
 
-  # Delivers the four alert.rules.yml conditions by email via Alertmanager's
+  # Delivers the four rules/alert.rules.yml conditions by email via Alertmanager's
   # own SMTP client (issue #333) — see monitoring/alertmanager.yml.template
   # for why this owns delivery instead of scripts/alert.sh or Grafana's
   # native alerting. Internal-only, same as prometheus above (no published
