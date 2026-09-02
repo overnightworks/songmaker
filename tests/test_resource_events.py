@@ -32,6 +32,7 @@ from songmaker_cli.db.queries import (
     list_resource_events_after,
 )
 from songmaker_cli.lifecycle import (
+    BackgroundLoopRegistry,
     cleanup_expired_resource_events,
     resource_event_cleanup_loop,
 )
@@ -191,7 +192,12 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
 
 
 def test_resource_event_cleanup_loop_runs_named_cleanup() -> None:
-    app = SimpleNamespace(state=SimpleNamespace(ctx=MagicMock()))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            ctx=MagicMock(),
+            background_loop_registry=BackgroundLoopRegistry(),
+        ),
+    )
 
     async def _run() -> None:
         with (
