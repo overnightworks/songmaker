@@ -6,3 +6,10 @@ text = "After a musician selects a second take as a Pick for the same song, the 
 requirements = ["REQ-CURATION-02"]
 proof_kind = "integration"
 critical = true
+
+[[acceptance]]
+id = "ACC-SHARE-18"
+text = "A public share audio request for an unknown share returns the same silent not-found response as a missing file."
+requirements = ["REQ-SHARE-18"]
+proof_kind = "integration"
+critical = true

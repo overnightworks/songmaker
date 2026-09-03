@@ -756,6 +756,7 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
     assert str(sharing_app.app.state.ctx.audio_dir) not in traversal_log
 
 
+@pytest.mark.acceptance("ACC-SHARE-18")
 def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
     unauthed = TestClient(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/bad-slug/audio/admin_user/g1.mp3")
