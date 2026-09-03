@@ -200,6 +200,7 @@ def cleanup_failed_lora(
     audio_dir: Path,
     db_factory: sessionmaker[Session],
     error_message: str,
+    session: Session | None = None,
 ) -> None:
     """Mark the LoRA FAILED, remove its working dirs, emit audit failure.
 
@@ -208,18 +209,25 @@ def cleanup_failed_lora(
     own path outside the dataset dir.
     """
     _cleanup_failed_lora_paths(audio_dir, user_id, lora_id)
+
+    def update_failure(active_session: Session) -> None:
+        update_user_lora(
+            active_session, lora_id,
+            status=LoraStatus.FAILED, error=error_message,
+            completed_at=datetime.now(timezone.utc),
+        )
+        record_audit(
+            active_session, user_id, AuditAction.TRAIN_LORA,
+            ResourceType.LORA, lora_id, f"failed: {error_message}",
+        )
+
+    if session is not None:
+        update_failure(session)
+        return
     try:
-        with db_factory() as session:
-            update_user_lora(
-                session, lora_id,
-                status=LoraStatus.FAILED, error=error_message,
-                completed_at=datetime.now(timezone.utc),
-            )
-            record_audit(
-                session, user_id, AuditAction.TRAIN_LORA,
-                ResourceType.LORA, lora_id, f"failed: {error_message}",
-            )
-            session.commit()
+        with db_factory() as active_session:
+            update_failure(active_session)
+            active_session.commit()
     except Exception:
         log.exception("Failed to mark LoRA %s as FAILED", lora_id)
 

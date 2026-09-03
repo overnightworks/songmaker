@@ -39,6 +39,21 @@ class MusicWorker(WorkerBase):
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
 
+    @property
+    def job_types(self) -> tuple[str, ...]:
+        return (JobType.GENERATE, JobType.LORA_TRAINING)
+
+    async def _reconcile_recovered_jobs(self, recovered: int) -> None:
+        if not recovered:
+            return
+        from songmaker_cli.lifecycle import reconcile_crashed_loras_for_database
+
+        await asyncio.to_thread(
+            reconcile_crashed_loras_for_database,
+            self.get_db_factory(),
+            self.audio_dir(),
+        )
+
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):
         if not self.check_job_still_valid(job_id):

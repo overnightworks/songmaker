@@ -65,6 +65,11 @@ class WorkerBase:
     def drain_timeout(self) -> int:
         return self._settings.arq_drain_timeout
 
+    @property
+    def job_types(self) -> tuple[str, ...]:
+        """Job types this worker executes and recovers."""
+        return (self.job_type,)
+
     def get_db_factory(self):
         with self._db_lock:
             if self._db_factory is None:
@@ -103,13 +108,14 @@ class WorkerBase:
         ):
             try:
                 with self.get_db_factory()() as session:
-                    recovered = recover_stale_jobs_by_type(session, self.job_type)
+                    recovered = recover_stale_jobs_by_type(session, self.job_types)
                     if recovered:
                         log.warning(
                             "Shutdown: marked %d in-progress %s jobs as failed",
-                            recovered, self.job_type,
+                            recovered, ", ".join(self.job_types),
                         )
                     session.commit()
+                await self._reconcile_recovered_jobs(recovered)
             finally:
                 await redis.delete(self.recovery_lock_key)
         else:
@@ -132,10 +138,11 @@ class WorkerBase:
         recovered = 0
         try:
             with self.get_db_factory()() as session:
-                recovered = recover_stale_jobs_by_type(session, self.job_type)
+                recovered = recover_stale_jobs_by_type(session, self.job_types)
                 if recovered:
-                    log.info("Recovered %d stale %s jobs", recovered, self.job_type)
+                    log.info("Recovered %d stale %s jobs", recovered, ", ".join(self.job_types))
                 session.commit()
+            await self._reconcile_recovered_jobs(recovered)
         finally:
             await redis.delete(self.recovery_lock_key)
         return recovered
@@ -149,10 +156,14 @@ class WorkerBase:
         from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
         with self.get_db_factory()() as session:
-            count = recover_stale_jobs_by_age_and_type(session, self.job_type)
+            count = recover_stale_jobs_by_age_and_type(session, self.job_types)
             if count:
                 session.commit()
+        await self._reconcile_recovered_jobs(count)
         return count
+
+    async def _reconcile_recovered_jobs(self, recovered: int) -> None:
+        """Run worker-specific cleanup after stale jobs become terminal."""
 
     def audit_orphaned_files(self) -> None:
         """Log audio files on disk that have no matching DB record."""

@@ -112,7 +112,7 @@ def test_on_shutdown_recovers_jobs() -> None:
     ) as mock_recover:
         _run(worker.on_shutdown({"redis": redis}))
 
-    mock_recover.assert_called_once_with(mock_session, "dummy")
+    mock_recover.assert_called_once_with(mock_session, ("dummy",))
     mock_session.commit.assert_called_once()
 
 
@@ -145,7 +145,7 @@ def test_recover_on_startup_acquires_lock_and_recovers() -> None:
         result = _run(worker._recover_on_startup(ctx))
 
     assert result == 3
-    mock_recover.assert_called_once_with(mock_session, "dummy")
+    mock_recover.assert_called_once_with(mock_session, ("dummy",))
     mock_session.commit.assert_called_once()
     ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
 
@@ -200,7 +200,7 @@ def test_cleanup_stale_cron_commits_on_recovery() -> None:
         result = _run(worker.cleanup_stale_cron({"redis": AsyncMock()}))
 
     assert result == 2
-    mock_recover.assert_called_once_with(mock_session, "dummy")
+    mock_recover.assert_called_once_with(mock_session, ("dummy",))
     mock_session.commit.assert_called_once()
 
 
@@ -224,3 +224,7 @@ def test_cleanup_stale_cron_no_commit_when_zero() -> None:
 def test_build_redis_settings() -> None:
     settings = wb_mod.build_redis_settings()
     assert settings is not None
+
+
+def test_worker_defaults_to_its_single_job_type() -> None:
+    assert _DummyWorker().job_types == ("dummy",)

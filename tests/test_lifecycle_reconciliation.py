@@ -17,7 +17,7 @@ from songmaker_cli.constants import (
     LoraStatus,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Job, User, UserLora
+from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries import get_user_lora
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.settings import get_settings
@@ -69,6 +69,20 @@ def test_reconciles_when_job_terminal(ctx) -> None:
     with ctx.db() as s:
         lora = get_user_lora(s, "L1", include_deleted_rows=True)
         assert lora.status == LoraStatus.FAILED
+
+
+def test_reconciliation_is_idempotent_and_records_one_audit(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L-lock", status=LoraStatus.TRAINING,
+        job_status=JobStatus.FAILED,
+    )
+
+    assert reconcile_crashed_loras(ctx) == 1
+    assert reconcile_crashed_loras(ctx) == 0
+
+    with ctx.db() as session:
+        audits = session.query(AuditLog).filter_by(resource_id="L-lock").all()
+    assert len(audits) == 1
 
 
 def test_reconciles_when_job_missing(ctx) -> None:

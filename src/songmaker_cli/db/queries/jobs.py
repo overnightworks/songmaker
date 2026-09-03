@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -286,14 +287,21 @@ def recover_stale_jobs_by_age(
     return recovered
 
 
-def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
-    """Mark all running/queued jobs of a given type as failed. Returns count recovered."""
+def _job_type_collection(job_types: str | Collection[str]) -> tuple[str, ...]:
+    if isinstance(job_types, str):
+        return (job_types,)
+    return tuple(job_types)
+
+
+def recover_stale_jobs_by_type(session: Session, job_types: str | Collection[str]) -> int:
+    """Mark all running/queued jobs of the given types as failed."""
+    recovered_types = _job_type_collection(job_types)
     now = datetime.now(timezone.utc)
     stale = (
         session.query(Job)
         .filter(
             Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.type == job_type,
+            Job.type.in_(recovered_types),
         )
         .all()
     )
@@ -304,18 +312,19 @@ def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
         job.completed_at = now
     session.flush()
     if stale:
-        log.info("Recovered %d stale %s jobs", len(stale), job_type)
+        log.info("Recovered %d stale %s jobs", len(stale), ", ".join(recovered_types))
     return len(stale)
 
 
 def recover_stale_jobs_by_age_and_type(
-    session: Session, job_type: str,
+    session: Session, job_types: str | Collection[str],
     threshold_seconds: int | None = None,
     *,
     stale_thresholds: StaleThresholds | None = None,
     now: datetime | None = None,
 ) -> int:
     """Recover jobs with baseline defaults or explicit chat liveness thresholds."""
+    recovered_types = _job_type_collection(job_types)
     if now is None:
         now = datetime.now(timezone.utc)
     elif now.tzinfo is None:
@@ -330,7 +339,7 @@ def recover_stale_jobs_by_age_and_type(
             session.query(Job)
             .filter(
                 Job.status.in_(JOB_ACTIVE_STATUSES),
-                Job.type == job_type,
+                Job.type.in_(recovered_types),
                 Job.started_at < cutoff,
             )
             .all()
@@ -354,7 +363,7 @@ def recover_stale_jobs_by_age_and_type(
         if recovered:
             log.info(
                 "Recovered %d stale %s jobs (threshold=%ds)",
-                recovered, job_type, threshold_seconds,
+                recovered, ", ".join(recovered_types), threshold_seconds,
             )
         return recovered
 
@@ -364,7 +373,7 @@ def recover_stale_jobs_by_age_and_type(
         session.query(Job)
         .filter(
             Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.type == job_type,
+            Job.type.in_(recovered_types),
         )
         .all()
     )
@@ -382,7 +391,7 @@ def recover_stale_jobs_by_age_and_type(
         if was_queued:
             job.error = "No worker available — please retry."
             job.error_type = "no_worker_available"
-        elif job_type == JobType.CHAT:
+        elif len(recovered_types) == 1 and recovered_types[0] == JobType.CHAT:
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
         else:
@@ -395,7 +404,7 @@ def recover_stale_jobs_by_age_and_type(
         log.info(
             "Recovered %d stale %s jobs (queued=%ds, heartbeat=%ds)",
             recovered,
-            job_type,
+            ", ".join(recovered_types),
             stale_thresholds.queued_seconds,
             stale_thresholds.heartbeat_seconds,
         )
