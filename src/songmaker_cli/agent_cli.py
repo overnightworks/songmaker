@@ -370,7 +370,7 @@ def _run_cli_bounded(
     finally:
         if process is not None:
             became_zombie = _reap_process_group(process)
-            if became_zombie:
+            if became_zombie and on_reaped is not None:
                 threading.Thread(
                     target=_reap_in_background,
                     args=(process, on_reaped),
@@ -576,8 +576,8 @@ def _reap_in_background(
             time.sleep(_BACKGROUND_REAP_POLL_SECONDS)
     except OSError:
         log.exception("background reap of agent CLI process group %s failed", process.pid)
-        return
-    _notify_reaped(on_reaped, process.pid, became_zombie=True)
+    finally:
+        _notify_reaped(on_reaped, process.pid, became_zombie=True)
 
 
 def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:

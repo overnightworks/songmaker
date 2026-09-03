@@ -111,6 +111,8 @@ _CLI_INIT_EVENT_SUBTYPE: Final = "init"
 _TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
+
+
 def clear_client_cache() -> None:
     with _client_lock:
         _sync_clients.clear()
@@ -1439,7 +1441,8 @@ def _probe_cli_surface_sync(
             on_reaped=on_reaped,
         )
     except BaseException:
-        _release_zombie_reservation(reservation)
+        if not released:
+            _release_zombie_reservation(reservation)
         raise
     if outcome.reason is agent_cli.CliRunReason.SPAWN_FAILED:
         if not released:

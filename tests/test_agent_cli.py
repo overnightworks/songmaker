@@ -736,6 +736,63 @@ def test_bounded_runner_marks_an_unconfirmed_sigkill_as_a_zombie(monkeypatch) ->
     started[0].wait(timeout=1)
 
 
+def test_run_cli_logs_a_sigkill_survivor_without_starting_a_background_reaper(
+    monkeypatch, caplog,
+) -> None:
+    reaper_may_finish = threading.Event()
+    threads_before = {thread.ident for thread in threading.enumerate()}
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        lambda _process, _timeout: False,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli._process_group_exists",
+        lambda _process_id: not reaper_may_finish.is_set(),
+    )
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    caplog.set_level("WARNING")
+
+    try:
+        run = run_cli("/bin/sh", ("-c", "printf ready"))
+        threads_after = {thread.ident for thread in threading.enumerate()}
+    finally:
+        reaper_may_finish.set()
+
+    assert run == CliRun(returncode=0, stdout="ready", stderr="", complete=True)
+    assert threads_after == threads_before
+    assert any("survived its SIGKILL grace period" in record.message for record in caplog.records)
+
+
+def test_background_reap_notifies_when_process_group_check_fails(
+    monkeypatch, caplog,
+) -> None:
+    process = subprocess.Popen(
+        ("/bin/sh", "-c", "printf ready"),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    callbacks: list[tuple[int, bool]] = []
+    error = OSError("cannot check process group")
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli._process_group_exists",
+        lambda _process_id: (_ for _ in ()).throw(error),
+    )
+    caplog.set_level("ERROR")
+
+    agent_cli._reap_in_background(
+        process,
+        lambda process_id, became_zombie: callbacks.append((process_id, became_zombie)),
+    )
+    process.communicate()
+
+    assert callbacks == [(process.pid, True)]
+    assert any(
+        "background reap of agent CLI process group" in record.message
+        for record in caplog.records
+    )
+
+
 def test_bounded_runner_stops_collecting_at_the_byte_limit(monkeypatch) -> None:
     monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 32)
 
