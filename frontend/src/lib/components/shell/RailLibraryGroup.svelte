@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteMap } from 'svelte/reactivity';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		albumList,
@@ -35,6 +36,15 @@
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
+	const songsByAlbum = $derived.by(() => {
+		const index = new SvelteMap<string, SongItem[]>();
+		for (const song of songs) {
+			const albumSongs = index.get(song.album_id);
+			if (albumSongs) albumSongs.push(song);
+			else index.set(song.album_id, [song]);
+		}
+		return index;
+	});
 	const collection = $derived($openCollection);
 	const currentSongId = $derived($selectedSongId);
 	const current = $derived(audioPlayer.current);
@@ -73,10 +83,6 @@
 		previousOpenAlbumId = openAlbumId;
 		if (enteredAlbum) expandAlbum(openAlbumId as string);
 	});
-
-	function albumTracks(albumId: string): SongItem[] {
-		return songs.filter((song) => song.album_id === albumId).sort(compareAlbumTracks);
-	}
 
 	function isAlbumExpanded(albumId: string): boolean {
 		return expandedAlbumId === albumId;
@@ -189,7 +195,7 @@
 							type="button"
 							class="album-disclose"
 							aria-expanded={expanded}
-							aria-controls={`rail-library-album-${album.id}`}
+							aria-controls={expanded ? `rail-library-album-${album.id}` : undefined}
 							aria-label={RAIL_ALBUM_DISCLOSE_LABEL}
 							onclick={() => toggleAlbum(album.id)}
 						>
@@ -219,35 +225,32 @@
 							<span class="row-meta">{album.song_count}</span>
 						</button>
 					</div>
-					<div
-						class="album-songs"
-						data-open={expanded}
-						id={`rail-library-album-${album.id}`}
-						inert={!expanded}
-					>
-						<div class="album-songs-content">
-							<ul>
-								{#each albumTracks(album.id) as song (song.id)}
-									<li>
-										<button
-											type="button"
-											class="row row-sub2"
-											class:row-active={song.id === currentSongId}
-											onclick={() => onTrackClick(song)}
-										>
-											{#if isSongPlaying(song)}
-												<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
-													<span></span><span></span><span></span>
-												</span>
-											{/if}
-											<span class="row-title">{song.title}</span>
-											<span class="row-meta">{trackMeta(song)}</span>
-										</button>
-									</li>
-								{/each}
-							</ul>
+					{#if expanded}
+						<div class="album-songs" data-open={expanded} id={`rail-library-album-${album.id}`}>
+							<div class="album-songs-content">
+								<ul>
+									{#each [...(songsByAlbum.get(album.id) ?? [])].sort(compareAlbumTracks) as song (song.id)}
+										<li>
+											<button
+												type="button"
+												class="row row-sub2"
+												class:row-active={song.id === currentSongId}
+												onclick={() => onTrackClick(song)}
+											>
+												{#if isSongPlaying(song)}
+													<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
+														<span></span><span></span><span></span>
+													</span>
+												{/if}
+												<span class="row-title">{song.title}</span>
+												<span class="row-meta">{trackMeta(song)}</span>
+											</button>
+										</li>
+									{/each}
+								</ul>
+							</div>
 						</div>
-					</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>
