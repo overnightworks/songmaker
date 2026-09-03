@@ -10,7 +10,7 @@ import {
 	NOW_PLAYING_NO_LYRICS,
 	NOW_PLAYING_TAKE_PREFIX
 } from '$lib/constants';
-import { NOW_PLAYING_CURATE_DONE_LABEL } from '$lib/constants/now-playing';
+import { NOW_PLAYING_CURATE_DONE_LABEL, NOW_PLAYING_TAKE_TAB } from '$lib/constants/now-playing';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
 	curationActive,
@@ -428,12 +428,15 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.np-take')).not.toBeNull();
 	});
 
-	it('opens straight to the judging panel when a take row requested it', async () => {
+	it('keeps the This take tab present and selected when a take is playing', async () => {
 		songList.set([song()]);
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
-		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-		expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
+		const takeTab = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
+			(tab) => tab.textContent?.trim() === NOW_PLAYING_TAKE_TAB
+		);
+		expect(takeTab).toBeDefined();
+		expect(takeTab?.getAttribute('aria-selected')).toBe('true');
 		expect(target.querySelector('.np-take')).not.toBeNull();
 		expect(target.querySelector('.np-queue')).toBeNull();
 	});

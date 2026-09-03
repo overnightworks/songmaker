@@ -345,7 +345,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
-	it.each(['.badge-btn', '.pin-seed', '.use-as-reference', '.rescore-hint', '.rescore'])(
+	it.each(['.badge-btn', '.pin-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
 		'opts %s into the frequent hitbox',
 		async (selector) => {
 			// Sizing itself is pinned once for the shared mechanism in
@@ -411,19 +411,27 @@ describe('NowPlayingTake', () => {
 		expect(target.querySelector('.pin-seed')).toBeNull();
 	});
 
-	it('use as reference sets the recipe source, closes Now Playing, and navigates to the song', async () => {
-		nowPlayingSurface.set('full');
-		const gen = generation();
-		const withSong = song();
-		await render({ generation: gen, song: withSong });
+	it.each([
+		['Repaint', 'repaint'],
+		['Cover', 'cover']
+	] as const)(
+		'%s sets the recipe source, closes Now Playing, and navigates to the song',
+		async (label, mode) => {
+			nowPlayingSurface.set('full');
+			const gen = generation();
+			const withSong = song();
+			await render({ generation: gen, song: withSong });
 
-		target.querySelector<HTMLButtonElement>('.use-as-reference')?.click();
-		await tick();
+			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action'))
+				.find((button) => button.textContent?.trim() === label)
+				?.click();
+			await tick();
 
-		expect(get(pendingSource)).toEqual({ generation: gen, mode: 'repaint' });
-		expect(get(nowPlayingOpen)).toBe(false);
-		expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
-	});
+			expect(get(pendingSource)).toEqual({ generation: gen, mode });
+			expect(get(nowPlayingOpen)).toBe(false);
+			expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
+		}
+	);
 });
 
 describe('NowPlayingTake recipe section', () => {

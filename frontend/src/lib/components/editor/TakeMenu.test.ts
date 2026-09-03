@@ -69,7 +69,6 @@ function defaultProps() {
 		gen: gen(),
 		rescoring: false,
 		onagain: vi.fn(),
-		onuseasreference: vi.fn(),
 		onshare: vi.fn(),
 		onunshare: vi.fn(),
 		oncopylink: vi.fn(),
@@ -127,15 +126,11 @@ describe('TakeMenu', () => {
 		expect(sharedItems).toContain('Unshare');
 	});
 
-	it('runs the action and closes on click', async () => {
-		const { target, props } = await render();
-		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
-			(el) => el.textContent?.trim() === 'Use as reference'
-		);
-		item?.click();
-		await tick();
-		expect(props.onuseasreference).toHaveBeenCalledTimes(1);
-		expect(target.querySelector('.overflow-menu')).toBeNull();
+	it('does not expose the generic source action', async () => {
+		const { target } = await render();
+		const menu = target.querySelector('.overflow-menu');
+		if (!menu) throw new Error('Expected the overflow menu to be open');
+		expect(menu.textContent).not.toContain('Use as reference');
 	});
 
 	it('offers Re-score and runs it once', async () => {

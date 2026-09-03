@@ -904,7 +904,7 @@ describe('a dirty draft guards song switch / leave', () => {
 	// Issue #265's S7 (review of #264): revealPlayingSong used to navigate to
 	// the library workspace via ensureLibraryWorkspaceRoute *before*
 	// guardDirtyNavigation ran, so Cancel on the confirm still left the person
-	// pushed off whatever route they were on -- e.g. "Use as reference" from
+	// pushed off whatever route they were on -- e.g. Repaint/Cover from
 	// Now Playing while Settings is open (the draft and the playing take are
 	// independent of the current route). The guard must run first, so parking
 	// leaves the route untouched.

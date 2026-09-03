@@ -1,5 +1,5 @@
 import { setContext, getContext } from 'svelte';
-import type { GenerationItem, ShareResult, SongItem } from '$lib/api/types';
+import type { ShareResult, SongItem } from '$lib/api/types';
 import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 
 export interface GenerationActions {
@@ -12,7 +12,6 @@ export interface GenerationActions {
 	addToPlaylist: (playlistId: string, genId: string) => Promise<void>;
 	pinSeed: (seed: number) => void;
 	clickVersion: (versionId: string) => void;
-	useAsSource: (gen: GenerationItem) => void;
 }
 
 export const GENERATION_ACTIONS_KEY = Symbol('generation-actions');

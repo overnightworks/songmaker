@@ -83,7 +83,10 @@ export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 
 export const TAKE_AGAIN_LABEL = 'Generate again';
-export const TAKE_USE_AS_REFERENCE_LABEL = 'Use as reference';
+export const TAKE_REPAINT_LABEL = 'Repaint';
+export const TAKE_COVER_LABEL = 'Cover';
+export const TAKE_ARCHIVED_SOURCE_TITLE =
+	"Archived takes are scheduled for deletion and can't be used as a source";
 export const TAKE_PICK_LABEL = 'Pick';
 export const TAKE_KEEP_LABEL = 'Keep';
 export const TAKE_OVERFLOW_LABEL = 'More';

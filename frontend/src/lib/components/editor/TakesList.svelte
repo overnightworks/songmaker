@@ -1,12 +1,16 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem, JobItem } from '$lib/api/types';
+	import type { SourceMode } from '$lib/stores/recipe';
 	import {
 		COARSE_POINTER_MEDIA,
 		EXPIRY_WARN_DAYS,
 		LIBRARY_RETRY_LABEL,
+		TAKE_ARCHIVED_SOURCE_TITLE,
 		TAKE_ARCHIVED_TITLE,
+		TAKE_COVER_LABEL,
 		TAKE_KEEP_LABEL,
 		TAKE_PICK_LABEL,
+		TAKE_REPAINT_LABEL,
 		TAKE_RESCORING_LABEL,
 		TAKES_DELETE_VERSION_LABEL,
 		TAKES_DRAFT_BANNER_TEMPLATE,
@@ -65,7 +69,7 @@
 		latestVersionNumber: number;
 		generateJob?: JobItem | null;
 		onagain: (gen: GenerationItem) => void;
-		onuseasreference: (gen: GenerationItem) => void;
+		onsource: (gen: GenerationItem, mode: SourceMode) => void;
 		onretry?: () => void;
 	}
 
@@ -78,7 +82,7 @@
 		latestVersionNumber,
 		generateJob = null,
 		onagain,
-		onuseasreference,
+		onsource,
 		onretry
 	}: Props = $props();
 
@@ -214,6 +218,12 @@
 		}
 		if (gen.is_archived) return;
 		void playTakeAndShowNowPlaying(gen, song);
+	}
+
+	function useSource(gen: GenerationItem, mode: SourceMode, event: MouseEvent): void {
+		event.stopPropagation();
+		if (gen.is_archived) return;
+		onsource(gen, mode);
 	}
 
 	async function handleBulkDelete(): Promise<void> {
@@ -411,13 +421,20 @@
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
 						class:archived={gen.is_archived}
-						onclick={(e) => handleRowClick(gen, e)}
-						onkeydown={(e) => handleRowKeydown(gen, e)}
-						role={rowIsActionable(gen) ? 'button' : undefined}
-						tabindex={rowIsActionable(gen) ? 0 : undefined}
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
-						<span class="take-body">
+						<!-- The play target is deliberately a sibling of the take actions.
+							     Making the row itself a button put source controls inside a
+							     second interactive target, so its centre could land on an
+							     action after the compact layout wrapped. -->
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<span
+							class="take-body"
+							onclick={(e) => handleRowClick(gen, e)}
+							onkeydown={(e) => handleRowKeydown(gen, e)}
+							role={rowIsActionable(gen) ? 'button' : undefined}
+							tabindex={rowIsActionable(gen) ? 0 : undefined}
+						>
 							{#if $selectionMode}
 								<span class="selection-checkbox">
 									<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
@@ -515,10 +532,29 @@
 								<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
 							</button>
 							{#if !$selectionMode}
+								<button
+									type="button"
+									class="take-action-btn repaint"
+									data-hitbox="text"
+									disabled={gen.is_archived}
+									title={gen.is_archived ? TAKE_ARCHIVED_SOURCE_TITLE : undefined}
+									onclick={(event) => useSource(gen, 'repaint', event)}
+								>
+									{TAKE_REPAINT_LABEL}
+								</button>
+								<button
+									type="button"
+									class="take-action-btn cover"
+									data-hitbox="text"
+									disabled={gen.is_archived}
+									title={gen.is_archived ? TAKE_ARCHIVED_SOURCE_TITLE : undefined}
+									onclick={(event) => useSource(gen, 'cover', event)}
+								>
+									{TAKE_COVER_LABEL}
+								</button>
 								<TakeMenu
 									{gen}
 									onagain={() => onagain(gen)}
-									onuseasreference={() => onuseasreference(gen)}
 									onshare={() => void onShare(gen)}
 									onunshare={() => void onUnshare(gen)}
 									oncopylink={() => void copyShareUrl(gen)}
@@ -932,7 +968,8 @@
 	}
 
 	.pick-btn,
-	.keep-btn {
+	.keep-btn,
+	.take-action-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -943,6 +980,16 @@
 		padding: 0.15rem;
 	}
 
+	.take-action-btn {
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		font-family: var(--font-display);
+		font-size: 0.66rem;
+		letter-spacing: 0.4px;
+		padding: 0.28rem 0.55rem;
+		text-transform: uppercase;
+	}
+
 	.pick-btn:hover,
 	.pick-btn.picked {
 		color: var(--accent);
@@ -951,6 +998,21 @@
 	.keep-btn:hover,
 	.keep-btn.kept {
 		color: var(--keep);
+	}
+
+	.take-action-btn.repaint:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.take-action-btn.cover:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.take-action-btn:disabled {
+		color: var(--text-disabled);
+		cursor: default;
 	}
 
 	.selection-checkbox {

@@ -393,8 +393,7 @@
 		// Plain mutation: the take row that asked for it owns the outcome the
 		// listener sees, success and failure alike (#163/3).
 		addToPlaylist: addGenerationToPlaylist,
-		clickVersion: onVersionClick,
-		useAsSource: (gen) => setSourceFromGeneration(gen, 'repaint')
+		clickVersion: onVersionClick
 	});
 
 	async function refreshTakes(songId: string): Promise<void> {
@@ -792,7 +791,7 @@
 						{latestVersionNumber}
 						{generateJob}
 						onagain={applyAgain}
-						onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
+						onsource={setSourceFromGeneration}
 						onretry={() => {
 							if (song) void refreshTakes(song.id);
 						}}
@@ -814,7 +813,7 @@
 							{latestVersionNumber}
 							{generateJob}
 							onagain={applyAgain}
-							onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
+							onsource={setSourceFromGeneration}
 							onretry={() => {
 								if (song) void refreshTakes(song.id);
 							}}

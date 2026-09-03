@@ -3,9 +3,10 @@
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
 		RECIPE_PANEL_LABEL,
+		TAKE_COVER_LABEL,
+		TAKE_REPAINT_LABEL,
 		TAKE_RESCORE_LABEL,
-		TAKE_RESCORING_LABEL,
-		TAKE_USE_AS_REFERENCE_LABEL
+		TAKE_RESCORING_LABEL
 	} from '$lib/constants';
 	import {
 		NOW_PLAYING_DEVIATIONS_EMPTY,
@@ -218,15 +219,8 @@
 		pinSeed(generation.seed);
 	}
 
-	// Hands the take off to the editor's repaint/cover source (stores/recipe.ts
-	// pendingSource) and navigates to its song. Now Playing closes first so
-	// the editor underneath is visible. SongDetailView only applies
-	// pendingSource once that target song is the one actually mounted — if a
-	// dirty-draft guard defers the navigation and the user then cancels it,
-	// SongDetailView clears pendingSource instead of applying it to the song
-	// the user stayed on.
-	function onUseAsReference(): void {
-		pendingSource.set({ generation, mode: 'repaint' });
+	function useSource(mode: 'repaint' | 'cover'): void {
+		pendingSource.set({ generation, mode });
 		closeNowPlaying();
 		void revealPlayingSong(song, generation.id);
 	}
@@ -394,11 +388,19 @@
 		{/if}
 		<button
 			type="button"
-			class="use-as-reference"
+			class="take-source-action repaint"
 			data-hitbox="frequent"
-			onclick={onUseAsReference}
+			onclick={() => useSource('repaint')}
 		>
-			{TAKE_USE_AS_REFERENCE_LABEL}
+			{TAKE_REPAINT_LABEL}
+		</button>
+		<button
+			type="button"
+			class="take-source-action cover"
+			data-hitbox="frequent"
+			onclick={() => useSource('cover')}
+		>
+			{TAKE_COVER_LABEL}
 		</button>
 		<button
 			type="button"
@@ -669,7 +671,7 @@
 		gap: 0.5rem;
 	}
 	.pin-seed,
-	.use-as-reference,
+	.take-source-action,
 	.rescore {
 		align-self: flex-start;
 		padding: 0.3rem 0.7rem;
@@ -684,7 +686,7 @@
 		cursor: pointer;
 	}
 	.pin-seed:hover,
-	.use-as-reference:hover,
+	.take-source-action:hover,
 	.rescore:hover:not(:disabled) {
 		border-color: var(--primary);
 		color: var(--text);

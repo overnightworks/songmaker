@@ -840,7 +840,7 @@ nowPlayingDockable.subscribe((dockable) => {
 
 // The element to return focus to when Now Playing closes. PlayerBar
 // registers its own "Now Playing" button here once on mount — every opener
-// (PlayerBar's button, a TakesList row, NowPlayingTake's "Use as reference")
+// (PlayerBar's button, a TakesList row, NowPlayingTake's Repaint/Cover action)
 // shares that single restore target instead of each tracking its own.
 let nowPlayingFocusTrigger: HTMLElement | null = null;
 let restoreFocusOnRegister = false;
@@ -866,7 +866,7 @@ function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
 
 // The single open/close owner for Now Playing: every surface that opens or
 // closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
-// NowPlayingTake's "Use as reference") routes through these two functions
+// NowPlayingTake's Repaint/Cover action) routes through these two functions
 // instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so closing
 // the mobile rail drawer on open and restoring focus on close happen exactly
 // once, the same way, regardless of entry point.

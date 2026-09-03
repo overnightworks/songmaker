@@ -13,8 +13,7 @@
 		TAKE_RESCORING_LABEL,
 		TAKE_RESTORE_LABEL,
 		TAKE_SHARE_LABEL,
-		TAKE_UNSHARE_LABEL,
-		TAKE_USE_AS_REFERENCE_LABEL
+		TAKE_UNSHARE_LABEL
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
 
@@ -22,7 +21,6 @@
 		gen: GenerationItem;
 		rescoring: boolean;
 		onagain: () => void;
-		onuseasreference: () => void;
 		onshare: () => void;
 		onunshare: () => void;
 		oncopylink: () => void;
@@ -38,7 +36,6 @@
 		gen,
 		rescoring,
 		onagain,
-		onuseasreference,
 		onshare,
 		onunshare,
 		oncopylink,
@@ -152,14 +149,6 @@
 				onclick={() => runAndClose(onpinseed)}
 			>
 				{TAKE_PIN_SEED_LABEL}
-			</button>
-			<button
-				type="button"
-				role="menuitem"
-				class="overflow-item"
-				onclick={() => runAndClose(onuseasreference)}
-			>
-				{TAKE_USE_AS_REFERENCE_LABEL}
 			</button>
 			<button
 				type="button"
