@@ -243,6 +243,21 @@ def test_getattr_literal_default_is_reported(
     assert "songmaker_cli/m.py:1" in out
 
 
+def test_getattr_container_literal_default_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": 'value = getattr(obj, "status", ())\n',
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert checker.GETATTR_LITERAL_DEFAULT in out
+    assert "tuple literal" in out
+    assert "songmaker_cli/m.py:1" in out
+
+
 def test_getattr_signed_numeric_literal_default_is_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
