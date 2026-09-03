@@ -853,7 +853,7 @@ def test_tool_surface_probe_stops_the_session_it_started(
 #
 # _bounded_wait / _bounded_wait_sync are the one seam where these tests
 # genuinely need real (tiny) timing — that is their actual job. Everything
-# built on top of them (zombie tracking, the registry cap, dedup) is
+# built on top of them (zombie tracking and the reservation cap) is
 # tested by stubbing that seam instead: deterministic, no clock involved.
 
 
@@ -954,84 +954,96 @@ def test_reap_process_group_confirms_a_normal_exit_without_signaling_a_zombie(
     signals: list[int] = []
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
     monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=True))
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
     tracked: list[int] = []
     monkeypatch.setattr(provider, "_track_zombie_reap_async", lambda proc: tracked.append(proc.pid))
 
     proc = MagicMock()
     proc.pid = 4321
     proc.returncode = None
+    _reserve_zombie_process(proc.pid)
 
     became_zombie = asyncio.run(provider._reap_process_group(proc))
 
     assert became_zombie is False
     assert tracked == []
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
+
+
+def _reserve_zombie_process(pid: int) -> object:
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._bind_zombie_reservation(reservation, pid)
+    return reservation
 
 
 def test_track_zombie_reap_logs_and_starts_a_background_reaper(monkeypatch, caplog) -> None:
     caplog.set_level("ERROR")
-    scheduled: list[int] = []
-    monkeypatch.setattr(
-        provider, "_claim_zombie_reap_slot", lambda pid: scheduled.append(pid) or True,
-    )
     monkeypatch.setattr(provider, "_reap_in_background", AsyncMock())
 
     async def _run() -> bool:
         proc = MagicMock()
         proc.pid = 5150
+        _reserve_zombie_process(proc.pid)
         return provider._track_zombie_reap_async(proc)
 
     became_zombie = asyncio.run(_run())
 
     assert became_zombie is True
-    assert scheduled == [5150]
     assert any("did not exit" in r.message for r in caplog.records)
 
 
-def test_track_zombie_reap_does_not_start_a_reaper_when_the_slot_is_denied(monkeypatch) -> None:
-    """Dedup and the pool cap both express themselves the same way to the
-    caller: the process is still reported a zombie (it is one), but no
-    reaper is started for it."""
-    monkeypatch.setattr(provider, "_claim_zombie_reap_slot", lambda pid: False)
-    created: list[object] = []
-    monkeypatch.setattr("asyncio.create_task", lambda coro: created.append(coro))
+def test_track_zombie_reap_starts_the_reaper_held_by_its_reservation() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
 
-    proc = MagicMock()
-    proc.pid = 5150
-    became_zombie = provider._track_zombie_reap_async(proc)
+    async def wait() -> int:
+        started.set()
+        await release.wait()
+        return 0
 
-    assert became_zombie is True
-    assert created == []
+    async def _run() -> bool:
+        proc = MagicMock()
+        proc.pid = 5150
+        proc.wait = AsyncMock(side_effect=wait)
+        _reserve_zombie_process(proc.pid)
+        became_zombie = provider._track_zombie_reap_async(proc)
+        await started.wait()
+        release.set()
+        with provider._zombie_registry_lock:
+            tasks = list(provider._zombie_reap_tasks)
+        await asyncio.gather(*tasks)
+        return became_zombie
+
+    assert asyncio.run(_run()) is True
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
 
 
-def test_zombie_reap_slot_is_deduplicated_by_pid() -> None:
-    assert provider._claim_zombie_reap_slot(101) is True
-    assert provider._claim_zombie_reap_slot(101) is False
-
-    provider._release_zombie_reap_slot(101)
-    assert provider._claim_zombie_reap_slot(101) is True
-    provider._release_zombie_reap_slot(101)
-
-
-def test_zombie_reap_slot_pool_has_a_hard_cap(monkeypatch, caplog) -> None:
+def test_zombie_reap_reservations_have_a_hard_cap(monkeypatch, caplog) -> None:
     caplog.set_level("ERROR")
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 2)
 
-    assert provider._claim_zombie_reap_slot(1) is True
-    assert provider._claim_zombie_reap_slot(2) is True
-    assert provider._claim_zombie_reap_slot(3) is False
+    first = _reserve_zombie_process(1)
+    second = _reserve_zombie_process(2)
+    assert provider._reserve_zombie_admission() is None
     assert any("at its cap" in r.message for r in caplog.records)
 
-    provider._release_zombie_reap_slot(1)
-    provider._release_zombie_reap_slot(2)
+    provider._release_zombie_reservation(1)
+    provider._release_zombie_reservation(2)
+    assert first is not second
 
 
-def test_reap_in_background_eventually_reaps_logs_and_releases_its_slot(caplog) -> None:
+def test_reap_in_background_eventually_reaps_logs_and_releases_its_reservation(caplog) -> None:
     """The zombie case is not silent: once the process this function was
-    handed to actually does exit, that is logged too, and its registry
-    slot is freed for a later zombie to use — this is where a stuck
+    handed to actually does exit, that is logged too, and its reservation
+    is freed for a later probe — this is where a stuck
     reap's process ultimately gets cleaned up."""
     caplog.set_level("INFO")
-    provider._claim_zombie_reap_slot(8888)
+    _reserve_zombie_process(8888)
     proc = MagicMock()
     proc.pid = 8888
     proc.wait = AsyncMock(return_value=0)
@@ -1039,13 +1051,14 @@ def test_reap_in_background_eventually_reaps_logs_and_releases_its_slot(caplog) 
     asyncio.run(provider._reap_in_background(proc))
 
     assert any("reaped in the background" in r.message for r in caplog.records)
-    assert provider._claim_zombie_reap_slot(8888) is True  # released, so claimable again
-    provider._release_zombie_reap_slot(8888)
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
 
 
-def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_slot(caplog) -> None:
+def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_reservation(caplog) -> None:
     caplog.set_level("INFO")
-    provider._claim_zombie_reap_slot(6666)
+    _reserve_zombie_process(6666)
     proc = MagicMock()
     proc.pid = 6666
     proc.wait.return_value = 0
@@ -1053,8 +1066,9 @@ def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_slot(cap
     provider._reap_in_background_sync(proc)
 
     assert any("reaped in the background" in r.message for r in caplog.records)
-    assert provider._claim_zombie_reap_slot(6666) is True
-    provider._release_zombie_reap_slot(6666)
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
 
 
 def test_shutdown_tool_surface_background_tasks_cancels_every_tracked_task() -> None:
@@ -1884,6 +1898,7 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
 
     def fake_reap(_proc: object) -> bool:
         reaped.set()
+        provider._release_zombie_reservation(_proc.pid)
         return False
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
@@ -1898,8 +1913,9 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
         assert time.monotonic() - started < 1
         assert spawned.is_set()
         assert reaped.wait(timeout=1)
-        assert provider._reserve_zombie_admission() is True
-        provider._release_zombie_admission()
+        reservation = provider._reserve_zombie_admission()
+        assert reservation is not None
+        provider._release_zombie_reservation(reservation)
     finally:
         for proc in processes:
             proc.stdout.close()
@@ -2167,26 +2183,63 @@ def test_exhausted_judge_deadline_never_spawns_or_caches_a_preflight_failure(
 def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
     claude_binary, monkeypatch,
 ) -> None:
-    """A ninth zombie past the reaper cap used to have its Popen handle
-    simply dropped, with no reaper at all — the OS does not reap an
-    abandoned child of a still-live parent on its own. Refusing to spawn a
-    new probe once the pool is already full is simpler and safer than
-    hoping a tracking slot appears later."""
-    monkeypatch.setattr(provider, "_reserve_zombie_admission", lambda: False)
-    spawned: list[int] = []
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 2)
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
+    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+    spawned: list[object] = []
     monkeypatch.setattr(
         provider.subprocess, "Popen",
         lambda *_a, **_kw: spawned.append(1) or MagicMock(),
     )
+    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
 
-    with pytest.raises(UnavailableError) as exc:
-        verify_no_builtin_cli_tools()
+    async def _run() -> None:
+        reapers_started = [asyncio.Event(), asyncio.Event()]
+        release_reapers = asyncio.Event()
+        processes: list[MagicMock] = []
 
-    assert "saturated" in str(exc.value)
-    assert spawned == []
+        for pid, started in enumerate(reapers_started, start=1):
+            proc = fake_cli_process(None, still_running=True)
+            proc.pid = pid
+            proc.returncode = None
+            proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
+
+            async def wait(started: asyncio.Event = started) -> int:
+                started.set()
+                await release_reapers.wait()
+                return 0
+
+            proc.wait = AsyncMock(side_effect=wait)
+            processes.append(proc)
+
+        async def fake_exec(*_args: object, **_kwargs: object) -> MagicMock:
+            return processes.pop(0)
+
+        monkeypatch.setattr(provider.asyncio, "create_subprocess_exec", fake_exec)
+
+        for _ in reapers_started:
+            with pytest.raises(UnavailableError, match="timed out"):
+                await provider.acall_claude_with_mcp(prompt="hi", user_id="u-1")
+
+        await asyncio.gather(*(started.wait() for started in reapers_started))
+        with pytest.raises(UnavailableError) as exc:
+            verify_no_builtin_cli_tools()
+        assert "saturated" in str(exc.value)
+        assert spawned == []
+        with provider._tool_surface_lock:
+            assert key not in provider._tool_surface_failures
+            assert key not in provider._tool_surface_verdicts
+        release_reapers.set()
+        with provider._zombie_registry_lock:
+            tasks = list(provider._zombie_reap_tasks)
+        await asyncio.gather(*tasks)
+
+    asyncio.run(_run())
 
 
-def test_zombie_reap_admission_is_reserved_atomically_not_just_counted(monkeypatch) -> None:
+def test_zombie_reap_reservation_is_reserved_atomically_not_just_counted(monkeypatch) -> None:
     """#351 round 7, Finding 3: the old check-then-claim-later version let
     two concurrent probes both see room at cap-minus-one and both
     proceed. A real reservation closes that: the second concurrent
@@ -2194,21 +2247,24 @@ def test_zombie_reap_admission_is_reserved_atomically_not_just_counted(monkeypat
     discover the gap only later when it happens to become a zombie."""
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
 
-    assert provider._reserve_zombie_admission() is True
-    assert provider._reserve_zombie_admission() is False  # the pool is full
-    provider._release_zombie_admission()
-    assert provider._reserve_zombie_admission() is True  # released, so claimable again
-    provider._release_zombie_admission()
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._bind_zombie_reservation(reservation, 1)
+    assert provider._reserve_zombie_admission() is None
+    provider._release_zombie_reservation(1)
+    next_reservation = provider._reserve_zombie_admission()
+    assert next_reservation is not None
+    provider._release_zombie_reservation(next_reservation)
 
 
-def test_zombie_reap_admission_reservation_has_no_toctou_window_under_real_concurrency(
+def test_zombie_reap_reservation_has_no_toctou_window_under_real_concurrency(
     monkeypatch,
 ) -> None:
     """The same property, proven with two genuinely concurrent threads
     racing the same 1-slot pool rather than two sequential calls."""
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
     both_may_proceed = threading.Barrier(2)
-    results: list[bool] = []
+    results: list[object | None] = []
     results_lock = threading.Lock()
 
     def _attempt() -> None:
@@ -2224,10 +2280,29 @@ def test_zombie_reap_admission_reservation_has_no_toctou_window_under_real_concu
         thread.join(timeout=5)
 
     try:
-        assert sorted(results) == [False, True]
+        assert sum(reservation is not None for reservation in results) == 1
     finally:
-        if True in results:
-            provider._release_zombie_admission()
+        for reservation in results:
+            if reservation is not None:
+                provider._release_zombie_reservation(reservation)
+
+
+def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch) -> None:
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+
+    def fail_start(_runner: threading.Thread) -> None:
+        raise RuntimeError("thread start failed")
+
+    monkeypatch.setattr(provider.threading.Thread, "start", fail_start)
+
+    with pytest.raises(RuntimeError, match="thread start failed"):
+        provider._probe_cli_surface_sync(
+            "claude", mcp_config_path=None, deadline=time.monotonic() + 1,
+        )
+
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
 
 
 # ── #351 round 6, Finding 8: the non-streaming MCP entry point ───────
@@ -2281,6 +2356,67 @@ def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
     with pytest.raises(CliToolSurfaceError):
         asyncio.run(_turn())
     assert spawned == []
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_error", "message"),
+    [
+        (asyncio.TimeoutError(), UnavailableError, "timed out"),
+        (RuntimeError("stream read failed"), RuntimeError, "stream read failed"),
+    ],
+    ids=["timeout", "error"],
+)
+def test_stream_failure_starts_one_background_reaper(
+    monkeypatch, failure: BaseException, expected_error: type[BaseException], message: str,
+) -> None:
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
+    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+
+    async def _run() -> None:
+        reaper_started = asyncio.Event()
+        release_reaper = asyncio.Event()
+        proc = MagicMock()
+        proc.pid = 5150
+        proc.returncode = None
+        proc.stdin = None
+        proc.stderr = None
+
+        async def wait() -> int:
+            reaper_started.set()
+            await release_reaper.wait()
+            return 0
+
+        async def failing_lines(*_args: object):
+            if failure is not None:
+                raise failure
+            yield b""
+
+        proc.wait = AsyncMock(side_effect=wait)
+        monkeypatch.setattr(
+            provider.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc),
+        )
+        monkeypatch.setattr(provider, "_iter_lines", failing_lines)
+
+        async def stream() -> None:
+            async for _ in provider.acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"):
+                pass
+
+        with pytest.raises(expected_error, match=message):
+            await stream()
+        await reaper_started.wait()
+        with provider._zombie_registry_lock:
+            tasks = list(provider._zombie_reap_tasks)
+        assert len(tasks) == 1
+        proc.wait.assert_awaited_once_with()
+        assert provider._reserve_zombie_admission() is None
+
+        release_reaper.set()
+        await asyncio.gather(*tasks)
+
+    asyncio.run(_run())
 
 
 # ── no-builtin-tools gate (_call_cli / _acall_cli) ────────────────────
