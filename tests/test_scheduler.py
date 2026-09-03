@@ -13,9 +13,11 @@ import pytest
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_state import queue_depth_key, worker_state_key
+from songmaker_cli.constants import ACESTEP_SSE_READ_TIMEOUT_SECONDS
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
+    WORKER_STREAM_WENT_SILENT,
     DispatchOptions,
     DownloadTaskResultDTO,
     GenerationTaskResultDTO,
@@ -372,6 +374,24 @@ def test_consume_task_stream_gives_up_after_max_reconnects() -> None:
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
         with pytest.raises(httpx.ConnectError):
             _run(consume_task_stream(worker, "gen-1", options=options))
+
+
+def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
+    worker = _make_picked()
+    client = _make_stream_client(httpx.ReadTimeout("stream went silent"))
+
+    with patch(
+        "songmaker_cli.scheduler.httpx.AsyncClient", return_value=client,
+    ) as async_client:
+        with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
+            _run(consume_task_stream(worker, "gen-1"))
+
+    timeout = async_client.call_args.kwargs["timeout"]
+    assert timeout.read == ACESTEP_SSE_READ_TIMEOUT_SECONDS
+    assert async_client.call_count == 1
+    assert client.stream.call_count == 1
+    client.__aexit__.assert_awaited_once()
+    client.stream.return_value.__aexit__.assert_awaited_once()
 
 
 # ── dispatch_generation ────────────────────────────────────────────

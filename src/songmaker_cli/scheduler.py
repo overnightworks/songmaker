@@ -41,6 +41,7 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
+from songmaker_cli.constants import ACESTEP_SSE_READ_TIMEOUT_SECONDS
 from songmaker_cli.db.queries import list_worker_identities
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -49,6 +50,7 @@ log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[float], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
+WORKER_STREAM_WENT_SILENT = "Worker stream went silent"
 
 
 class NoCapacityError(RuntimeError):
@@ -115,7 +117,7 @@ class DispatchOptions:
     load_model_timeout_seconds: float = 600.0
     generate_submit_timeout_seconds: float = 30.0
     sse_connect_timeout_seconds: float = 10.0
-    sse_read_timeout_seconds: float | None = None
+    sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
 
@@ -288,6 +290,8 @@ async def _iterate_task_events(
                             if event_type in ("done", "error"):
                                 return
             return
+        except httpx.ReadTimeout:
+            raise
         except (httpx.TransportError, httpx.RemoteProtocolError) as exc:
             reconnects += 1
             if reconnects > options.max_sse_reconnects:
@@ -330,34 +334,37 @@ async def _consume_task_stream(
     missing ``error``, or an ``error`` event whose ``error`` field is empty
     (the worker is required to always attach a cause).
     """
-    async for event_type, data in _iterate_task_events(worker, task_id, options=options):
-        await _maybe_invoke(on_heartbeat)
-        if event_type == "progress":
-            fraction = float(data.get("progress", 0.0))
-            await _maybe_invoke(on_progress, fraction)
-        elif event_type == "done":
-            if "result" not in data:
-                raise WorkerProtocolError(
-                    "Worker done event missing 'result' field",
-                )
-            try:
-                return result_type.model_validate(data["result"])
-            except ValidationError as exc:
-                raise WorkerTaskFailed(
-                    f"Worker returned {invalid_result_label}: {exc}",
-                ) from exc
-        elif event_type == "error":
-            if "error" not in data:
-                raise WorkerProtocolError(
-                    "Worker error event missing 'error' field",
-                )
-            message = data["error"]
-            if not message:
-                log.warning("Worker error event has empty 'error' field")
-                raise WorkerProtocolError(
-                    "Worker error event has an empty 'error' field",
-                )
-            raise error_exception_type(message)
+    try:
+        async for event_type, data in _iterate_task_events(worker, task_id, options=options):
+            await _maybe_invoke(on_heartbeat)
+            if event_type == "progress":
+                fraction = float(data.get("progress", 0.0))
+                await _maybe_invoke(on_progress, fraction)
+            elif event_type == "done":
+                if "result" not in data:
+                    raise WorkerProtocolError(
+                        "Worker done event missing 'result' field",
+                    )
+                try:
+                    return result_type.model_validate(data["result"])
+                except ValidationError as exc:
+                    raise WorkerTaskFailed(
+                        f"Worker returned {invalid_result_label}: {exc}",
+                    ) from exc
+            elif event_type == "error":
+                if "error" not in data:
+                    raise WorkerProtocolError(
+                        "Worker error event missing 'error' field",
+                    )
+                message = data["error"]
+                if not message:
+                    log.warning("Worker error event has empty 'error' field")
+                    raise WorkerProtocolError(
+                        "Worker error event has an empty 'error' field",
+                    )
+                raise error_exception_type(message)
+    except httpx.ReadTimeout as exc:
+        raise error_exception_type(WORKER_STREAM_WENT_SILENT) from exc
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 

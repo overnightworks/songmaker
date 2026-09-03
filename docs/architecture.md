@@ -70,7 +70,9 @@ own GPU. Workers self-register with the web container at startup
 Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
 arq `generate` job calls the scheduler (`scheduler.py`), which picks an
 online worker, INCRs queue depth atomically, dispatches via HTTP, and
-consumes the worker's task SSE stream until `done`. The music-worker then
+consumes the worker's task SSE stream until `done`. A stream that stays silent
+for 630 seconds fails the generation with `Worker stream went silent`; transport
+drops still use the scheduler's bounded reconnect policy. The music-worker then
 post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
@@ -874,13 +876,19 @@ active job type without a policy-table row is a loop failure and is exposed by
   | `chat` | 900 s | 180 s | 15-s chat timer, twelve missed intervals |
   | `lora_training` | 1100 s | 300 s | measured ≤60-s training heartbeat with margin |
   | `score` | 1100 s | 600 s | 300-s scorer + 120-s judge with margin |
-  | `generate` | 1100 s | 1300 s | two ≈600-s SSE-read windows with margin |
+  | `generate` | 1100 s | 750 s | 630-s SSE read timeout + 120-s reaper tick reserve |
   | `load_model_on_worker` | 1100 s | 1300 s | 960-s worker request timeout plus margin; no progress signal |
   | `download_model_on_worker` | 1100 s | 180 s | worker polls download progress every 2 s; 180 s tolerates 90 missed polls |
 
   Queued bounds are chosen, not measured. A job waiting in a deep queue can
   exceed them; #331 F27 moves queued reaping to worker liveness rather than
   age.
+
+  Generation uses three ordered clocks: ACE-Step's 600-second poll window,
+  the scheduler's 630-second SSE read timeout (poll window plus 30-second
+  margin), and arq's 1000-second job timeout as the final safeguard. The
+  750-second generate reaper threshold is the SSE timeout plus its 120-second
+  tick reserve, not a second timeout mechanism.
 
   `download_model_on_worker()` refreshes its job heartbeat through both
   `_on_progress` and `_on_heartbeat` for every consumed SSE event. The worker

@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Final
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
+from acestep_engine.settings import get_engine_settings
 
 APP_NAME = "Hallucinai"
 
@@ -398,6 +399,11 @@ GZIP_COMPRESS_LEVEL: Final[int] = 6
 SSE_POLL_INTERVAL_SECONDS = 1
 SSE_HEARTBEAT_SECONDS: Final[int] = 15
 SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
+ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS: Final[int] = 30
+ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = (
+    int(get_engine_settings().acestep_poll_timeout)
+    + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+)
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
@@ -406,7 +412,11 @@ JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 # measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
 SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 600
-GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
+GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS: Final[int] = 120
+GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = (
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS
+    + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+)
 LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
 DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
@@ -546,6 +556,10 @@ class JobStaleThresholds:
     Queued thresholds are chosen, not measured. A job waiting in a deep queue
     can exceed them; see #331 F27, which moves queued reaping to worker
     liveness rather than age.
+
+    The generate heartbeat threshold is
+    ``ACESTEP_SSE_READ_TIMEOUT_SECONDS + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS``,
+    so a silent worker fails at the scheduler before reaping.
     """
 
     queued_seconds: int
@@ -570,7 +584,7 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # two ~=600 s SSE-read windows plus safety margin (#331 F23)
+    ),
     JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,

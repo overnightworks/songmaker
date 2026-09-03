@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 
 from songmaker_cli.constants import (
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS,
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
     MODEL_AVAILABLE_MODES,
@@ -16,6 +18,7 @@ from songmaker_cli.constants import (
     JobType,
     ResourceType,
 )
+from songmaker_cli.settings import Settings
 
 
 def test_default_model_mode_is_in_available() -> None:
@@ -82,6 +85,21 @@ def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
     reachable_types = set(JobType) | {JobType(job_function) for job_function in JobFunction}
 
     assert set(STALE_JOB_THRESHOLDS) == reachable_types
+
+
+def test_generate_sse_timeout_precedes_arq_and_sets_reaper_threshold() -> None:
+    settings = Settings(
+        database_url="postgresql://example",
+        redis_url="redis://example",
+        session_secret="session-secret",
+        songmaker_internal_token="internal-token",
+    )
+
+    assert ACESTEP_SSE_READ_TIMEOUT_SECONDS < settings.arq_job_timeout
+    assert STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds == (
+        ACESTEP_SSE_READ_TIMEOUT_SECONDS
+        + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+    )
 
 
 def test_resource_type_values():
