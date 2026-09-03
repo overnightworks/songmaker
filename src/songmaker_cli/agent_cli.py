@@ -14,7 +14,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
@@ -72,12 +72,23 @@ class CliRun:
     complete: bool
 
 
+@dataclass(frozen=True)
+class CliRunOutcome:
+    """The result of a bounded CLI invocation and its cleanup."""
+
+    returncode: int | None
+    stdout: str
+    stderr: str
+    complete: bool
+    became_zombie: bool
+
+
 @dataclass
-class _SpawnState:
+class _BoundedRunState:
+    spawned_before_deadline: threading.Event = field(default_factory=threading.Event)
     completed: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
-    process: subprocess.Popen[bytes] | None = None
-    abandoned: bool = False
+    outcome: CliRunOutcome | None = None
 
 
 LOGGED_OUT = CliLogin(logged_in=False, auth_method=None)
@@ -189,62 +200,44 @@ class CachedProbe[T]:
 def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
     """Run one CLI with one answer budget and separate bounded cleanup."""
     deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
-    process = _spawn_cli(binary, args, deadline)
-    if process is None:
+    outcome = run_cli_bounded(
+        binary,
+        args,
+        stdin_payload=None,
+        read="all",
+        deadline=deadline,
+    )
+    if outcome is None:
         return None
-    output: _CliOutput | None = None
-    try:
-        output = _read_bounded(process, deadline)
-    finally:
-        _reap_process_group(process)
-    if output is None:
-        return CliRun(returncode=process.returncode, stdout="", stderr="", complete=False)
     return CliRun(
-        returncode=process.returncode,
-        stdout=_decode(output.stdout),
-        stderr=_decode(output.stderr),
-        complete=output.complete,
+        returncode=outcome.returncode,
+        stdout=outcome.stdout,
+        stderr=outcome.stderr,
+        complete=outcome.complete,
     )
 
 
-def _spawn_cli(
-    binary: str, args: tuple[str, ...], deadline: float,
-) -> subprocess.Popen[bytes] | None:
-    state = _SpawnState()
-
-    def spawn() -> None:
-        try:
-            process = subprocess.Popen(  # noqa: S603 - argv comes from named probe constants
-                [binary, *args],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=scrubbed_env(),
-                start_new_session=True,
-            )
-        except OSError:
-            state.completed.set()
-        else:
-            reap_late_process = False
-            with state.lock:
-                if state.abandoned:
-                    reap_late_process = True
-                else:
-                    state.process = process
-            if reap_late_process:
-                _reap_process_group(process)
-            state.completed.set()
-
-    threading.Thread(target=spawn, daemon=True).start()
-    remaining = max(deadline - time.monotonic(), 0)
-    if state.completed.wait(timeout=remaining):
-        with state.lock:
-            return state.process
+def run_cli_bounded(
+    binary: str,
+    args: tuple[str, ...],
+    *,
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+) -> CliRunOutcome | None:
+    """Run a CLI without allowing its spawn, input, or output to outwait a caller."""
+    state = _BoundedRunState()
+    threading.Thread(
+        target=_run_cli_bounded,
+        args=(state, binary, args, stdin_payload, read, deadline),
+        daemon=True,
+    ).start()
+    if not state.completed.wait(timeout=max(deadline - time.monotonic(), 0)):
+        if not state.spawned_before_deadline.is_set():
+            return None
+        state.completed.wait()
     with state.lock:
-        state.abandoned = True
-        process = state.process
-    if process is not None:
-        _reap_process_group(process)
-    return None
+        return state.outcome
 
 
 @dataclass(frozen=True)
@@ -252,6 +245,47 @@ class _CliOutput:
     stdout: bytearray
     stderr: bytearray
     complete: bool
+    deadline_expired: bool = False
+
+
+def _run_cli_bounded(
+    state: _BoundedRunState,
+    binary: str,
+    args: tuple[str, ...],
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+) -> None:
+    process: subprocess.Popen[bytes] | None = None
+    output = _CliOutput(bytearray(), bytearray(), complete=False)
+    try:
+        process = subprocess.Popen(
+            [binary, *args],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=scrubbed_env(),
+            start_new_session=True,
+        )
+        if time.monotonic() < deadline:
+            state.spawned_before_deadline.set()
+        output = _exchange_bounded(process, stdin_payload, read, deadline)
+    except OSError:
+        pass
+    finally:
+        became_zombie = False
+        if process is not None:
+            became_zombie = _reap_process_group(process)
+        outcome = None if process is None else CliRunOutcome(
+            returncode=process.returncode,
+            stdout="" if output.deadline_expired else _decode(output.stdout),
+            stderr="" if output.deadline_expired else _decode(output.stderr),
+            complete=output.complete,
+            became_zombie=became_zombie,
+        )
+        with state.lock:
+            state.outcome = outcome
+        state.completed.set()
 
 
 def _cli_output(binary_name: str, args: tuple[str, ...]) -> str | None:
@@ -280,24 +314,64 @@ def _successful_cli_run(binary: str | None, args: tuple[str, ...]) -> CliRun | N
     return run
 
 
-def _read_bounded(process: subprocess.Popen[bytes], deadline: float) -> _CliOutput | None:
+def _exchange_bounded(
+    process: subprocess.Popen[bytes],
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+) -> _CliOutput:
     stdout = bytearray()
     stderr = bytearray()
     with selectors.DefaultSelector() as selector:
-        for stream, collected in ((process.stdout, stdout), (process.stderr, stderr)):
+        for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
             if stream is not None:
-                selector.register(stream, selectors.EVENT_READ, collected)
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, selectors.EVENT_READ, name)
+        stdin = process.stdin
+        pending_stdin = memoryview(stdin_payload) if stdin_payload else memoryview(b"")
+        if stdin is not None and pending_stdin:
+            os.set_blocking(stdin.fileno(), False)
+            selector.register(stdin, selectors.EVENT_WRITE, "stdin")
+        elif stdin is not None:
+            stdin.close()
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return None
-            for key, _ in selector.select(timeout=remaining):
-                collected = key.data
+                return _CliOutput(stdout, stderr, complete=False, deadline_expired=True)
+            events = selector.select(timeout=remaining)
+            if not events:
+                return _CliOutput(stdout, stderr, complete=False, deadline_expired=True)
+            for key, _ in events:
+                if key.data == "stdin":
+                    try:
+                        written = os.write(key.fileobj.fileno(), pending_stdin)
+                    except OSError:
+                        return _CliOutput(stdout, stderr, complete=False)
+                    if written <= 0:
+                        return _CliOutput(stdout, stderr, complete=False)
+                    pending_stdin = pending_stdin[written:]
+                    if not pending_stdin:
+                        selector.unregister(key.fileobj)
+                        key.fileobj.close()
+                    continue
+                collected = stdout if key.data == "stdout" else stderr
                 room = CLI_OUTPUT_READ_LIMIT_BYTES - len(stdout) - len(stderr)
-                chunk = key.fileobj.read1(room)
+                if room <= 0:
+                    return _CliOutput(stdout, stderr, complete=False)
+                try:
+                    chunk = os.read(key.fileobj.fileno(), room)
+                except OSError:
+                    return _CliOutput(stdout, stderr, complete=False)
                 if not chunk:
                     selector.unregister(key.fileobj)
+                    if read == "first_line" and key.data == "stdout":
+                        return _CliOutput(stdout, stderr, complete=True)
                     continue
+                if read == "first_line" and key.data == "stdout":
+                    newline = chunk.find(b"\n")
+                    if newline >= 0:
+                        stdout.extend(chunk[:newline + 1])
+                        return _CliOutput(stdout, stderr, complete=True)
                 collected.extend(chunk)
                 if len(stdout) + len(stderr) >= CLI_OUTPUT_READ_LIMIT_BYTES:
                     return _CliOutput(stdout, stderr, complete=False)
@@ -308,8 +382,8 @@ def _decode(collected: bytearray) -> str:
     return collected.decode(errors="replace")
 
 
-def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
-    for stream in (process.stdout, process.stderr):
+def _reap_process_group(process: subprocess.Popen[bytes]) -> bool:
+    for stream in (process.stdin, process.stdout, process.stderr):
         if stream is not None:
             stream.close()
     _signal_process_group(process.pid, signal.SIGTERM)
@@ -318,6 +392,8 @@ def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
         _signal_process_group(process.pid, signal.SIGKILL)
         if not _wait_for_process_group_exit(process, CLI_TERMINATION_GRACE_SECONDS):
             log.warning("agent CLI process group %s survived its SIGKILL grace period", process.pid)
+            return True
+    return False
 
 
 def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:

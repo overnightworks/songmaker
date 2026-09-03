@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+from songmaker_cli import agent_cli
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     CachedProbe,
@@ -22,6 +23,7 @@ from songmaker_cli.agent_cli import (
     codex_cli_login,
     grok_cli_status,
     run_cli,
+    run_cli_bounded,
     scrubbed_env,
 )
 from songmaker_cli.constants import (
@@ -415,8 +417,10 @@ def test_a_sigterm_ignoring_cli_and_child_are_reaped_after_sigkill() -> None:
 def test_a_spawn_that_returns_after_its_deadline_is_reaped() -> None:
     release_spawn = threading.Event()
     spawned = threading.Event()
+    reaped = threading.Event()
     started: list[subprocess.Popen[bytes]] = []
     real_popen = subprocess.Popen
+    real_reap = agent_cli._reap_process_group
 
     def late_process(*args, **kwargs):
         release_spawn.wait()
@@ -425,17 +429,243 @@ def test_a_spawn_that_returns_after_its_deadline_is_reaped() -> None:
         spawned.set()
         return process
 
+    def capture_reap(process: subprocess.Popen[bytes]) -> bool:
+        try:
+            return real_reap(process)
+        finally:
+            reaped.set()
+
     with (
         patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.1),
         patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=late_process),
+        patch("songmaker_cli.agent_cli._reap_process_group", side_effect=capture_reap),
     ):
         assert run_cli("/bin/sh", ("-c", "while :; do :; done")) is None
         release_spawn.set()
         assert spawned.wait(timeout=1)
-        started[0].wait(timeout=1)
+        assert reaped.wait(timeout=1)
 
     with pytest.raises(ProcessLookupError):
         os.killpg(started[0].pid, 0)
+
+
+def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() -> None:
+    release_spawn = threading.Event()
+    spawned = threading.Event()
+    reaped = threading.Event()
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+    real_reap = agent_cli._reap_process_group
+
+    def late_process(*args, **kwargs):
+        release_spawn.wait()
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        spawned.set()
+        return process
+
+    def capture_reap(process: subprocess.Popen[bytes]) -> bool:
+        try:
+            return real_reap(process)
+        finally:
+            reaped.set()
+
+    with (
+        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=late_process),
+        patch("songmaker_cli.agent_cli._reap_process_group", side_effect=capture_reap),
+    ):
+        deadline = time.monotonic() + 0.05
+        assert run_cli_bounded(
+            "/bin/sh",
+            ("-c", "while :; do :; done"),
+            stdin_payload=None,
+            read="all",
+            deadline=deadline,
+        ) is None
+        release_spawn.set()
+        assert spawned.wait(timeout=1)
+        assert reaped.wait(timeout=1)
+
+    with pytest.raises(ProcessLookupError):
+        os.killpg(started[0].pid, 0)
+
+
+def test_bounded_runner_stops_a_cli_that_never_reads_its_full_stdin_pipe() -> None:
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        return process
+
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+        outcome = run_cli_bounded(
+            "/bin/sh",
+            ("-c", "exec sleep 10"),
+            stdin_payload=b"x" * (1024 * 1024),
+            read="all",
+            deadline=time.monotonic() + 0.05,
+        )
+
+    assert outcome is not None
+    assert outcome.complete is False
+    assert started[0].poll() is not None
+
+
+def test_bounded_runner_stops_a_cli_that_never_writes_output() -> None:
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        return process
+
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+        outcome = run_cli_bounded(
+            "/bin/sh",
+            ("-c", "exec sleep 10"),
+            stdin_payload=None,
+            read="all",
+            deadline=time.monotonic() + 0.05,
+        )
+
+    assert outcome is not None
+    assert outcome.complete is False
+    assert started[0].poll() is not None
+
+
+def test_bounded_runner_marks_an_unconfirmed_sigkill_as_a_zombie(monkeypatch) -> None:
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        return process
+
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        lambda _process, _timeout: False,
+    )
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+        outcome = run_cli_bounded(
+            "/bin/sh",
+            ("-c", "trap '' TERM; while :; do :; done"),
+            stdin_payload=None,
+            read="all",
+            deadline=time.monotonic() + 0.02,
+        )
+
+    assert outcome is not None
+    assert outcome.became_zombie is True
+    started[0].wait(timeout=1)
+
+
+def test_bounded_runner_stops_collecting_at_the_byte_limit(monkeypatch) -> None:
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 32)
+
+    outcome = run_cli_bounded(
+        "/bin/sh",
+        ("-c", "while :; do printf x; done"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome is not None
+    assert outcome.complete is False
+    assert len(outcome.stdout) + len(outcome.stderr) == 32
+
+
+def test_run_cli_discards_partial_output_when_its_read_deadline_expires(monkeypatch) -> None:
+    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+
+    run = run_cli("/bin/sh", ("-c", "printf partial; exec sleep 10"))
+
+    assert run == CliRun(returncode=-15, stdout="", stderr="", complete=False)
+
+
+def test_run_cli_keeps_a_started_cli_result_when_cleanup_reports_a_zombie(monkeypatch) -> None:
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        started.append(process)
+        return process
+
+    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        lambda _process, _timeout: False,
+    )
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+        run = run_cli("/bin/sh", ("-c", "trap '' TERM; while :; do :; done"))
+
+    assert run is not None
+    assert run.complete is False
+    started[0].wait(timeout=1)
+
+
+def test_bounded_runner_delivers_stdin_without_a_blocking_write() -> None:
+    outcome = run_cli_bounded(
+        "/bin/sh",
+        ("-c", "IFS= read -r line; printf '<%s>' \"$line\""),
+        stdin_payload=b"delivered\n",
+        read="all",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome is not None
+    assert outcome.complete is True
+    assert outcome.stdout == "<delivered>"
+
+
+def test_bounded_runner_returns_only_the_first_stdout_line() -> None:
+    outcome = run_cli_bounded(
+        "/bin/sh",
+        ("-c", "printf 'first\\nsecond\\n'; exec sleep 10"),
+        stdin_payload=None,
+        read="first_line",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome is not None
+    assert outcome.complete is True
+    assert outcome.stdout == "first\n"
+
+
+def test_bounded_runner_returns_the_last_stdout_bytes_at_eof_in_first_line_mode() -> None:
+    outcome = run_cli_bounded(
+        "/bin/sh",
+        ("-c", "printf final"),
+        stdin_payload=None,
+        read="first_line",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome is not None
+    assert outcome.complete is True
+    assert outcome.stdout == "final"
+
+
+def test_bounded_runner_drains_both_output_streams_in_all_mode() -> None:
+    outcome = run_cli_bounded(
+        "/bin/sh",
+        ("-c", "printf stdout; printf stderr >&2"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome is not None
+    assert outcome.complete is True
+    assert outcome.stdout == "stdout"
+    assert outcome.stderr == "stderr"
 
 
 @pytest.mark.parametrize(
