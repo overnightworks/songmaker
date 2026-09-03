@@ -19,6 +19,7 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.models import Job
+from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
@@ -175,6 +176,44 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     return hb < cutoff
 
 
+@dataclass(frozen=True)
+class QueuedJobVerdict:
+    error: str
+    error_type: str
+
+
+def _queued_verdict(
+    job: Job,
+    thresholds: JobStaleThresholds,
+    liveness: WorkerLiveness,
+    now: datetime,
+) -> QueuedJobVerdict | None:
+    if thresholds.liveness_signal is None:
+        liveness = WorkerLiveness.UNKNOWN
+    if liveness is WorkerLiveness.DEAD:
+        return QueuedJobVerdict(
+            error="No worker alive for this job type — please retry.",
+            error_type="no_worker_alive",
+        )
+    if liveness is WorkerLiveness.ALIVE:
+        full_queue_cutoff = now - timedelta(
+            seconds=thresholds.full_queue_bound_seconds(get_settings().max_queue_depth),
+        )
+        if _is_started_stale(job, full_queue_cutoff):
+            return QueuedJobVerdict(
+                error="Queued longer than a full queue could take — please retry.",
+                error_type="queued_full_queue_bound",
+            )
+        return None
+    age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
+    if _is_started_stale(job, age_cutoff):
+        return QueuedJobVerdict(
+            error="Queued too long — please retry.",
+            error_type="queued_too_long",
+        )
+    return None
+
+
 def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     started_at = job.started_at
     if started_at.tzinfo is None:
@@ -222,10 +261,11 @@ def recover_stale_jobs_by_age_and_type(
 ) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
-    Queued jobs fail when their execution worker is known dead, or as a final
-    age guard. Running jobs fail only when their heartbeat is old. ``user_id``
-    lets the submission path apply that exact policy before enforcing an
-    active-job limit, without defining a second freshness threshold.
+    Queued jobs fail immediately when their execution worker is known dead.
+    Unknown signals use the #446 age guard; alive signals allow one full queue
+    before failing. Running jobs fail only when their heartbeat is old.
+    ``user_id`` lets the submission path apply that exact policy before
+    enforcing an active-job limit, without defining a second freshness bound.
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -251,17 +291,11 @@ def recover_stale_jobs_by_age_and_type(
     recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
+        queued_verdict: QueuedJobVerdict | None = None
         if job.status == JobStatus.QUEUED:
-            cutoff = now - timedelta(seconds=thresholds.queued_seconds)
             liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
-            grace_seconds = thresholds.queued_liveness_grace_seconds
-            no_worker_alive = False
-            if liveness is WorkerLiveness.DEAD and grace_seconds is not None:
-                no_worker_alive = _is_started_stale(
-                    job, now - timedelta(seconds=grace_seconds),
-                )
-            queued_too_long = _is_started_stale(job, cutoff)
-            is_stale = no_worker_alive or queued_too_long
+            queued_verdict = _queued_verdict(job, thresholds, liveness, now)
+            is_stale = queued_verdict is not None
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
             is_stale = _is_heartbeat_stale(job, cutoff)
@@ -270,12 +304,9 @@ def recover_stale_jobs_by_age_and_type(
         was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
         if was_queued:
-            if no_worker_alive:
-                job.error = "No worker alive for this job type — please retry."
-                job.error_type = "no_worker_alive"
-            else:
-                job.error = "Queued too long — please retry."
-                job.error_type = "queued_too_long"
+            assert queued_verdict is not None
+            job.error = queued_verdict.error
+            job.error_type = queued_verdict.error_type
         else:
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"

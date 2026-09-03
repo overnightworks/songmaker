@@ -34,7 +34,7 @@ def download_key(mode: str) -> str:
     return f"{DOWNLOAD_KEY_PREFIX}:{mode}"
 
 
-def _decode(raw: Any) -> str | None:
+def decode_redis_text(raw: Any) -> str | None:
     if raw is None:
         return None
     if isinstance(raw, bytes):
@@ -44,7 +44,7 @@ def _decode(raw: Any) -> str | None:
 
 async def read_worker_state(pool: ArqRedis, worker_id: str) -> dict[str, Any] | None:
     raw = await pool.get(worker_state_key(worker_id))
-    text = _decode(raw)
+    text = decode_redis_text(raw)
     if text is None:
         return None
     return json.loads(text)
@@ -75,7 +75,7 @@ def worker_is_online(state: Mapping[str, Any] | None) -> bool:
 
 async def read_queue_depth(pool: ArqRedis, worker_id: str) -> int:
     raw = await pool.get(queue_depth_key(worker_id))
-    text = _decode(raw)
+    text = decode_redis_text(raw)
     return int(text) if text is not None else 0
 
 
@@ -106,4 +106,4 @@ async def clear_download_in_progress(pool: ArqRedis, mode: str) -> None:
 
 async def read_download_in_progress(pool: ArqRedis, mode: str) -> str | None:
     raw = await pool.get(download_key(mode))
-    return _decode(raw)
+    return decode_redis_text(raw)

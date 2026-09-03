@@ -26,6 +26,7 @@ from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
 
+
 def build_redis_settings(settings: Settings | None = None) -> RedisSettings:
     """Build arq RedisSettings from validated Settings."""
     return RedisSettings.from_dsn((settings or get_settings()).redis_url)

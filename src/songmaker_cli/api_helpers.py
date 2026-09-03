@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -56,12 +56,14 @@ from songmaker_cli.db.queries import (
     get_album,
     get_generation,
     get_song,
+    list_worker_identities,
     recover_stale_jobs_by_age_and_type,
     resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.redis_client import RedisRateLimiter
 from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import read_worker_liveness
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
@@ -199,7 +201,11 @@ _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
 
 
 def create_job_with_rate_limit(
-    session: Session, user: AuthenticatedUser, job_type: JobType, song_id: str | None = None,
+    session: Session,
+    user: AuthenticatedUser,
+    job_type: JobType,
+    song_id: str | None = None,
+    redis: Any | None = None,
 ) -> Job:
     """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
 
@@ -224,7 +230,13 @@ def create_job_with_rate_limit(
     _begin_exclusive(session)
 
     is_admin = user.role == ROLE_ADMIN
-    recover_stale_jobs_by_age_and_type(session, user_id=user.id)
+    worker_liveness = None
+    if redis is not None:
+        worker_ids = [worker.id for worker in list_worker_identities(session)]
+        worker_liveness = read_worker_liveness(redis, worker_ids)
+    recover_stale_jobs_by_age_and_type(
+        session, user_id=user.id, worker_liveness=worker_liveness,
+    )
 
     settings = get_settings()
     if job_type in _QUEUEABLE_JOB_TYPES:

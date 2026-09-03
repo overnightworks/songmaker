@@ -18,11 +18,14 @@ from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
     STALE_JOB_THRESHOLDS,
+    WORKER_RESTART_GRACE_SECONDS,
     AuditAction,
     JobFunction,
     JobStatus,
     JobType,
     ResourceType,
+    WorkerLivenessSignal,
+    worker_restart_grace_seconds,
 )
 from songmaker_cli.settings import Settings
 
@@ -91,6 +94,45 @@ def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
     reachable_types = set(JobType) | {JobType(job_function) for job_function in JobFunction}
 
     assert set(STALE_JOB_THRESHOLDS) == reachable_types
+
+
+def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
+    expected_signals = {
+        JobType.CHAT: None,
+        JobType.GENERATE: WorkerLivenessSignal.MODEL_EXECUTION,
+        JobType.LOAD_MODEL_ON_WORKER: WorkerLivenessSignal.MODEL_EXECUTION,
+        JobType.DOWNLOAD_MODEL_ON_WORKER: WorkerLivenessSignal.MODEL_EXECUTION,
+        JobType.LORA_TRAINING: WorkerLivenessSignal.MUSIC,
+        JobType.SCORE: WorkerLivenessSignal.SCORING,
+    }
+
+    actual_signals = {
+        job_type: policy.liveness_signal for job_type, policy in STALE_JOB_THRESHOLDS.items()
+    }
+    assert actual_signals == expected_signals
+    assert all(
+        (policy.liveness_signal is None) == (policy.restart_grace_seconds is None)
+        for policy in STALE_JOB_THRESHOLDS.values()
+    )
+    assert {
+        policy.restart_grace_seconds
+        for policy in STALE_JOB_THRESHOLDS.values()
+        if policy.liveness_signal is not None
+    } == {WORKER_RESTART_GRACE_SECONDS}
+    assert {
+        job_type: policy.full_queue_bound_seconds(100)
+        for job_type, policy in STALE_JOB_THRESHOLDS.items()
+        if policy.liveness_signal is not None
+    } == {
+        JobType.GENERATE: 76_000,
+        JobType.LOAD_MODEL_ON_WORKER: 130_000,
+        JobType.DOWNLOAD_MODEL_ON_WORKER: 18_000,
+        JobType.LORA_TRAINING: 30_000,
+        JobType.SCORE: 60_000,
+    }
+    assert {
+        worker_restart_grace_seconds(signal) for signal in WorkerLivenessSignal
+    } == {WORKER_RESTART_GRACE_SECONDS}
 
 
 def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:

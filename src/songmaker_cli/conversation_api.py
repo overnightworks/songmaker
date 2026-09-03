@@ -466,7 +466,9 @@ async def api_chat_turn(
             422, f"No co-writer model configured for {provider}",
         )
 
-    job = create_job_with_rate_limit(session, user, JobType.CHAT)
+    job = create_job_with_rate_limit(
+        session, user, JobType.CHAT, redis=request.app.state.ctx.redis,
+    )
     job_id = job.id
     update_job_status(session, job_id, JobStatus.RUNNING)
     session.commit()

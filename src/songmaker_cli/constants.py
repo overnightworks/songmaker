@@ -296,8 +296,9 @@ ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
 ARQ_MUSIC_HEALTH_KEY = f"{ARQ_MUSIC_QUEUE_NAME}:health-check"
 ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
 ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
-ARQ_WORKER_LIVENESS_GRACE_SECONDS: Final[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS + 1
-ACESTEP_WORKER_LIVENESS_GRACE_SECONDS: Final[int] = 15
+WORKER_RESTART_GRACE_SECONDS: Final[int] = 300
+"""Container restart, including the 30-second healthcheck start period, plus reserve."""
+WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
 RECOVERY_LOCK_MUSIC_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:music"
 RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
 SESSION_SYNC_LOCK_KEY = f"{REDIS_KEY_PREFIX}:session_sync_lock"
@@ -567,6 +568,13 @@ class JobType(StrEnum):
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
 
 
+class WorkerLivenessSignal(StrEnum):
+    ACESTEP = "acestep"
+    MUSIC = "music"
+    SCORING = "scoring"
+    MODEL_EXECUTION = "music_and_acestep"
+
+
 class JobFunction(StrEnum):
     GENERATE = "generate"
     SCORE = "score"
@@ -579,14 +587,23 @@ class JobFunction(StrEnum):
 class JobStaleThresholds:
     """Maximum inactive time for a queued or running job type.
 
-    Queued jobs first use the execution worker's liveness signal. Their age
-    remains a terminal guard when that signal is unavailable or a queue never
-    drains.
+    A queued job uses its execution worker's signal. Unknown signals use the
+    queued-age guard; an alive signal instead permits one whole queue's worth
+    of running-heartbeat windows.
     """
 
     queued_seconds: int
     heartbeat_seconds: int
-    queued_liveness_grace_seconds: int | None
+    liveness_signal: WorkerLivenessSignal | None
+    restart_grace_seconds: int | None
+
+    def full_queue_bound_seconds(self, max_queue_depth: int) -> int:
+        """Return the longest queue wait: depth times this type's running bound.
+
+        At most ``max_queue_depth`` jobs can precede a queued job, and each can
+        consume one running-heartbeat threshold before the reaper intervenes.
+        """
+        return max_queue_depth * self.heartbeat_seconds
 
 
 # The one stale-job policy. Each heartbeat threshold is derived from the
@@ -595,34 +612,54 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.CHAT: JobStaleThresholds(
         queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=None,
+        liveness_signal=None,
+        restart_grace_seconds=None,
     ),  # chat timer: 15 s; twelve missed intervals
     JobType.LORA_TRAINING: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=ARQ_WORKER_LIVENESS_GRACE_SECONDS,
+        liveness_signal=WorkerLivenessSignal.MUSIC,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # measured train_lora heartbeat: <= 60 s, with five intervals' margin
     JobType.SCORE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=ARQ_WORKER_LIVENESS_GRACE_SECONDS,
+        liveness_signal=WorkerLivenessSignal.SCORING,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
+        liveness_signal=WorkerLivenessSignal.MODEL_EXECUTION,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # max(load + submit + connect, SSE read) plus one reaper tick
     JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
+        liveness_signal=WorkerLivenessSignal.MODEL_EXECUTION,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # 960 s worker request timeout plus margin; no progress signal exists
     JobType.DOWNLOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
+        liveness_signal=WorkerLivenessSignal.MODEL_EXECUTION,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # worker polls download progress every 2 s; 180 s tolerates 90 misses
 }
+
+
+def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:
+    """Return the one restart grace declared for an execution signal."""
+    if signal is WorkerLivenessSignal.ACESTEP:
+        signal = WorkerLivenessSignal.MODEL_EXECUTION
+    grace_seconds = {
+        threshold.restart_grace_seconds
+        for threshold in STALE_JOB_THRESHOLDS.values()
+        if threshold.liveness_signal is signal
+    }
+    if len(grace_seconds) != 1 or None in grace_seconds:
+        raise RuntimeError(f"No single restart grace configured for {signal}")
+    return grace_seconds.pop()
 
 
 class ResourceType(StrEnum):

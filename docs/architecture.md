@@ -851,8 +851,9 @@ parent's coherence budget, which is spent after the child returns.
 - Path helpers (`_audio_dir`, `_data_dir`)
 - Timeout constants, terminal status set
 - Common startup, shutdown, and restart recovery for every named worker job
-  type. MusicWorker owns `generate`, `lora_training`, `load_model_on_worker`,
-  and `download_model_on_worker`; the scoring worker owns `score`.
+  type. MusicWorker executes the model jobs `generate`, `lora_training`,
+  `load_model_on_worker`, and `download_model_on_worker`; the ACE-Step worker
+  performs their HTTP model-serving portion. The scoring worker owns `score`.
 - A worker restart terminalizes only `RUNNING` jobs for every type. Queued
   work remains in arq for a replacement worker to claim after a deploy.
 - Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
@@ -865,37 +866,56 @@ reads ephemeral worker signals and passes their `alive`, `dead`, or `unknown`
 value into the single generic `recover_stale_jobs_by_age_and_type()` DB rule;
 the query layer never reads Redis. A queued job with a known-dead execution
 worker fails as `No worker alive for this job type` after its signal's grace.
-The queued-age guard independently fails a job as `Queued too long`, including
-when the signal is unknown. Running jobs still use `heartbeat_at`. Worker
+The queued-age guard fails a job as `Queued too long` only when the signal is
+unknown. Running jobs still use `heartbeat_at`. Worker
 startup/shutdown recovery is separate: it records that a worker process
 restarted, rather than deciding whether a still-running job is stale. An
 active job type without a policy-table row is a loop failure and is exposed by
 `/health`; it is never silently skipped.
+The request path supplies the same Redis-derived liveness map before it
+reclaims a submitting user's stale jobs, so admission and lifecycle recovery
+apply the same queued-job rule.
 
-The liveness owner maps each type to the signal that can execute it:
+The liveness owner maps each type to the signal that can execute it. It writes
+the last observed `alive` state for each signal to Redis with a seven-day TTL.
+When the ephemeral signal disappears, a signal seen within the 300-second
+restart grace is `unknown`; only a longer absence is `dead`. The grace covers a
+container restart: ACE-Step's 30-second healthcheck start period and the
+Music/Scoring workers' 120-second Docker Compose healthcheck period, plus image
+start and reserve. No previous observation, including an empty ACE-Step
+registry, is `unknown`.
 
 - `generate`, `load_model_on_worker`, and `download_model_on_worker` use the
-  registered ACE-Step worker's Redis heartbeat state. Its 15-second key TTL is
-  the liveness grace.
+  MusicWorker and registered ACE-Step worker together: MusicWorker executes the
+  job and ACE-Step performs its HTTP model-serving portion. They are `alive`
+  only when both signals are alive. A dead ACE-Step signal remains `dead`; a
+  missing, dead, or unknown MusicWorker signal makes the combined signal
+  `unknown`, so it uses the #446 age guard. ACE-Step's 15-second heartbeat TTL
+  makes its current state disappear; it is not the restart grace.
 - `lora_training` uses the music arq worker health key, and `score` uses the
-  scoring arq worker health key. Their grace is the 30-second health interval
-  plus one second.
+  scoring arq worker health key. A live ACE-Step signal does not prove the
+  MusicWorker is live; that case remains `unknown` and uses the appropriate
+  age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no
   worker liveness signal and queued chat can only use the age guard.
 
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 
-  | Type | queued age guard | running heartbeat | limiting signal |
-  | --- | ---: | ---: | --- |
-  | `chat` | 900 s | 180 s | 15-s chat timer, twelve missed intervals |
-  | `lora_training` | 1100 s | 300 s | measured ≤60-s training heartbeat with margin |
-  | `score` | 1100 s | 600 s | 300-s scorer + 120-s judge with margin |
-  | `generate` | 1100 s | 760 s | max(640-s before first event, 630-s SSE read) + 120-s reaper tick |
-  | `load_model_on_worker` | 1100 s | 1300 s | 960-s worker request timeout plus margin; no progress signal |
-  | `download_model_on_worker` | 1100 s | 180 s | worker polls download progress every 2 s; 180 s tolerates 90 missed polls |
+  | Type | signal | restart grace | unknown queued age | alive queued bound | running heartbeat |
+  | --- | --- | ---: | ---: | ---: | ---: |
+  | `chat` | none | none | 900 s | n/a | 180 s |
+  | `lora_training` | music | 300 s | 1100 s | max queue depth × 300 s | 300 s |
+  | `score` | scoring | 300 s | 1100 s | max queue depth × 600 s | 600 s |
+  | `generate` | music + ACE-Step | 300 s | 1100 s | max queue depth × 760 s | 760 s |
+  | `load_model_on_worker` | music + ACE-Step | 300 s | 1100 s | max queue depth × 1300 s | 1300 s |
+  | `download_model_on_worker` | music + ACE-Step | 300 s | 1100 s | max queue depth × 180 s | 180 s |
 
-  Queued bounds are an independent terminal guard. The worker-liveness grace
-  detects a missing execution worker earlier when its signal is available.
+  A `dead` signal fails queued work immediately after the grace already
+  applied by the reader. An `unknown` signal uses the #446 queued-age guard.
+  An `alive` signal ignores that age guard and only fails after a complete
+  queue could have consumed one running-heartbeat window per allowed queue
+  position. At the default depth 100, generate's bound is 76,000 seconds
+  (about 21 hours). Running jobs still use `heartbeat_at`.
 
   Generation uses three ordered clocks: ACE-Step's 600-second poll window,
   the scheduler's 630-second SSE read timeout (poll window plus 30-second

@@ -12,8 +12,6 @@ from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
-    ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
-    ARQ_WORKER_LIVENESS_GRACE_SECONDS,
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
@@ -33,6 +31,7 @@ from songmaker_cli.lifecycle import (
     reap_stale_jobs,
     stale_job_reaper_loop,
 )
+from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 
@@ -133,42 +132,17 @@ class TestLifecycleReaper:
         assert recovered == 1
         assert _job_status(ctx, "gen-1") == JobStatus.FAILED
 
-    @pytest.mark.parametrize(
-        ("job_type", "grace_seconds", "expected_error_type"),
-        (
-            (JobType.GENERATE, ACESTEP_WORKER_LIVENESS_GRACE_SECONDS, "no_worker_alive"),
-            (
-                JobType.LOAD_MODEL_ON_WORKER,
-                ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
-                "no_worker_alive",
-            ),
-            (
-                JobType.DOWNLOAD_MODEL_ON_WORKER,
-                ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
-                "no_worker_alive",
-            ),
-            (JobType.LORA_TRAINING, ARQ_WORKER_LIVENESS_GRACE_SECONDS, "no_worker_alive"),
-            (JobType.SCORE, ARQ_WORKER_LIVENESS_GRACE_SECONDS, "no_worker_alive"),
-            (JobType.CHAT, None, "queued_too_long"),
-        ),
-    )
-    def test_reaps_queued_jobs_by_their_liveness_policy(
-        self,
-        ctx,
-        job_type: JobType,
-        grace_seconds: int | None,
-        expected_error_type: str,
+    @pytest.mark.parametrize("job_type", (
+        JobType.GENERATE, JobType.LOAD_MODEL_ON_WORKER,
+        JobType.DOWNLOAD_MODEL_ON_WORKER, JobType.LORA_TRAINING, JobType.SCORE,
+    ))
+    def test_known_dead_worker_reaps_a_queued_job_without_using_job_age(
+        self, ctx, job_type: JobType,
     ) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-        thresholds = STALE_JOB_THRESHOLDS[job_type]
-        elapsed_seconds = (
-            thresholds.queued_seconds + 1
-            if grace_seconds is None else grace_seconds + 1
-        )
         _add_job(
             ctx, job_id=f"{job_type}-queued-dead", job_type=job_type,
-            status=JobStatus.QUEUED,
-            started_at=now - timedelta(seconds=elapsed_seconds), heartbeat_at=now,
+            status=JobStatus.QUEUED, started_at=now, heartbeat_at=now,
         )
 
         recovered = reap_stale_jobs(
@@ -180,28 +154,12 @@ class TestLifecycleReaper:
         assert recovered == 1
         with ctx.db() as session:
             job = session.query(Job).filter_by(id=f"{job_type}-queued-dead").one()
-            assert job.error_type == expected_error_type
-            expected_error = (
-                "Queued too long — please retry."
-                if grace_seconds is None
-                else "No worker alive for this job type — please retry."
-            )
-            assert job.error == expected_error
-        assert thresholds.queued_liveness_grace_seconds == grace_seconds
+            assert job.error_type == "no_worker_alive"
+            assert job.error == "No worker alive for this job type — please retry."
 
-    @pytest.mark.parametrize(
-        ("job_type", "liveness"),
-        (
-            (JobType.GENERATE, WorkerLiveness.ALIVE),
-            (JobType.LOAD_MODEL_ON_WORKER, WorkerLiveness.ALIVE),
-            (JobType.DOWNLOAD_MODEL_ON_WORKER, WorkerLiveness.ALIVE),
-            (JobType.LORA_TRAINING, WorkerLiveness.ALIVE),
-            (JobType.SCORE, WorkerLiveness.ALIVE),
-            (JobType.CHAT, WorkerLiveness.UNKNOWN),
-        ),
-    )
-    def test_queued_age_guard_applies_for_every_job_type(
-        self, ctx, job_type: JobType, liveness: WorkerLiveness,
+    @pytest.mark.parametrize("job_type", tuple(JobType))
+    def test_unknown_queued_age_guard_applies_for_every_job_type(
+        self, ctx, job_type: JobType,
     ) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
         thresholds = STALE_JOB_THRESHOLDS[job_type]
@@ -217,7 +175,7 @@ class TestLifecycleReaper:
         recovered = reap_stale_jobs(
             ctx,
             now=now,
-            worker_liveness={job_type: liveness},
+            worker_liveness={job_type: WorkerLiveness.UNKNOWN},
         )
 
         assert recovered == 1
@@ -236,23 +194,39 @@ class TestLifecycleReaper:
             JobType.SCORE,
         ),
     )
-    def test_waits_for_each_worker_liveness_grace(self, ctx, job_type: JobType) -> None:
+    def test_alive_queued_job_ignores_the_unknown_age_guard_until_a_full_queue(
+        self, ctx, job_type: JobType,
+    ) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-        grace_seconds = STALE_JOB_THRESHOLDS[job_type].queued_liveness_grace_seconds
+        thresholds = STALE_JOB_THRESHOLDS[job_type]
+        full_queue_bound = thresholds.full_queue_bound_seconds(get_settings().max_queue_depth)
         _add_job(
-            ctx, job_id=f"{job_type}-queued-grace", job_type=job_type,
+            ctx, job_id=f"{job_type}-queued-alive", job_type=job_type,
             status=JobStatus.QUEUED,
-            started_at=now - timedelta(seconds=grace_seconds), heartbeat_at=now,
+            started_at=now - timedelta(seconds=thresholds.queued_seconds + 1), heartbeat_at=now,
         )
 
         recovered = reap_stale_jobs(
             ctx,
             now=now,
-            worker_liveness={job_type: WorkerLiveness.DEAD},
+            worker_liveness={job_type: WorkerLiveness.ALIVE},
         )
 
         assert recovered == 0
-        assert _job_status(ctx, f"{job_type}-queued-grace") == JobStatus.QUEUED
+        assert _job_status(ctx, f"{job_type}-queued-alive") == JobStatus.QUEUED
+
+        with ctx.db() as session:
+            job = session.query(Job).filter_by(id=f"{job_type}-queued-alive").one()
+            job.started_at = now - timedelta(seconds=full_queue_bound + 1)
+            session.commit()
+
+        assert reap_stale_jobs(
+            ctx, now=now, worker_liveness={job_type: WorkerLiveness.ALIVE},
+        ) == 1
+        with ctx.db() as session:
+            job = session.query(Job).filter_by(id=f"{job_type}-queued-alive").one()
+            assert job.error == "Queued longer than a full queue could take — please retry."
+            assert job.error_type == "queued_full_queue_bound"
 
     def test_queued_chat_ignores_an_injected_dead_worker_before_its_age_guard(self, ctx) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
@@ -278,7 +252,11 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
         state=SimpleNamespace(
             ctx=SimpleNamespace(
                 db=ctx.db,
-                redis=SimpleNamespace(set=lambda *_args, **_kwargs: True),
+                redis=SimpleNamespace(
+                    exists=lambda *_args, **_kwargs: False,
+                    get=lambda *_args, **_kwargs: None,
+                    set=lambda *_args, **_kwargs: True,
+                ),
             ),
             background_loop_registry=registry,
         ),
