@@ -878,20 +878,23 @@ apply the same queued-job rule.
 
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.
-When the ephemeral signal disappears, a signal seen within the 300-second
-restart grace is `unknown`; only a longer absence is `dead`. The grace covers a
+When the ephemeral signal disappears, a missing signal within the 300-second
+restart grace after the last observation is `alive`; only a longer absence can
+be `dead`. The grace covers a
 container restart: ACE-Step's 30-second healthcheck start period and the
 Music/Scoring workers' 120-second Docker Compose healthcheck period, plus image
-start and reserve. No previous observation, including an empty ACE-Step
-registry, is `unknown`.
+start and reserve. An empty ACE-Step registry is `unknown` only when it has
+never been observed; with a newer observation, it is `alive`.
 
 - `generate`, `load_model_on_worker`, and `download_model_on_worker` use the
   MusicWorker and registered ACE-Step worker together: MusicWorker executes the
   job and ACE-Step performs its HTTP model-serving portion. They are `alive`
-  only when both signals are alive. A dead ACE-Step signal remains `dead`; a
-  missing, dead, or unknown MusicWorker signal makes the combined signal
+  only when both signals are alive. A dead MusicWorker signal makes the
+  combined signal `dead`; a missing or unknown MusicWorker signal leaves it
   `unknown`, so it uses the #446 age guard. ACE-Step's 15-second heartbeat TTL
-  makes its current state disappear; it is not the restart grace.
+  makes its current state disappear; it is not the restart grace. `dead` is
+  only declared after the observing web process itself has run longer than the
+  grace, measured from the observer process start time.
 - `lora_training` uses the music arq worker health key, and `score` uses the
   scoring arq worker health key. A live ACE-Step signal does not prove the
   MusicWorker is live; that case remains `unknown` and uses the appropriate
