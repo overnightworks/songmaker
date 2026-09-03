@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SvelteMap } from 'svelte/reactivity';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		albumList,
@@ -37,7 +36,8 @@
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
 	const songsByAlbum = $derived.by(() => {
-		const index = new SvelteMap<string, SongItem[]>();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per derivation, never mutated reactively
+		const index = new Map<string, SongItem[]>();
 		for (const song of songs) {
 			const albumSongs = index.get(song.album_id);
 			if (albumSongs) albumSongs.push(song);
@@ -195,7 +195,7 @@
 							type="button"
 							class="album-disclose"
 							aria-expanded={expanded}
-							aria-controls={expanded ? `rail-library-album-${album.id}` : undefined}
+							aria-controls={`rail-library-album-${album.id}`}
 							aria-label={RAIL_ALBUM_DISCLOSE_LABEL}
 							onclick={() => toggleAlbum(album.id)}
 						>
@@ -225,9 +225,14 @@
 							<span class="row-meta">{album.song_count}</span>
 						</button>
 					</div>
-					{#if expanded}
-						<div class="album-songs" data-open={expanded} id={`rail-library-album-${album.id}`}>
-							<div class="album-songs-content">
+					<div
+						class="album-songs"
+						data-open={expanded}
+						inert={!expanded}
+						id={`rail-library-album-${album.id}`}
+					>
+						<div class="album-songs-content">
+							{#if expanded}
 								<ul>
 									{#each [...(songsByAlbum.get(album.id) ?? [])].sort(compareAlbumTracks) as song (song.id)}
 										<li>
@@ -248,9 +253,9 @@
 										</li>
 									{/each}
 								</ul>
-							</div>
+							{/if}
 						</div>
-					{/if}
+					</div>
 				</li>
 			{/each}
 		</ul>

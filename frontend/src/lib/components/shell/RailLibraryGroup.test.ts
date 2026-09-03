@@ -118,6 +118,16 @@ describe('RailLibraryGroup', () => {
 		expect(target.querySelectorAll('.row-sub2')).toHaveLength(0);
 	});
 
+	it('keeps each collapsed album disclosure connected to its empty track container', async () => {
+		const target = await render();
+		const disclosure = requireElement<HTMLButtonElement>(target, '.album-disclose');
+		const controlledId = disclosure.getAttribute('aria-controls');
+
+		expect(controlledId).toBe('rail-library-album-a1');
+		expect(target.querySelector(`#${controlledId}`)?.getAttribute('data-open')).toBe('false');
+		expect((target.querySelector(`#${controlledId}`) as HTMLElement).inert).toBe(true);
+	});
+
 	it('renders a newly opened album tracks in track order', async () => {
 		songList.set([
 			song({ id: 's1', title: 'Ebb', track_number: 2 }),
