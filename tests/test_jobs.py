@@ -377,6 +377,29 @@ def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path)
         assert job.error == cause
 
 
+def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import WORKER_STREAM_WENT_SILENT, WorkerGenerationFailed
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert job.error_type == "generation_error"
+        assert job.error == WORKER_STREAM_WENT_SILENT
+
+
 def test_generation_job_keeps_worker_protocol_failures_generic(
     seeded_db, tmp_path: Path,
 ) -> None:

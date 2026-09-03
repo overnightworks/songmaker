@@ -12,11 +12,13 @@ only a load counter for the next picker, not a lock.
 The scheduler does not commit DB or own any persistent state — it's a
 pure dispatch layer between ``run_generation_job`` and the worker pool.
 
-If the SSE connection drops mid-generation, the scheduler reconnects to
-the same task_id (the worker's task store survives across reconnects)
-with exponential backoff up to ``MAX_SSE_RECONNECTS``. The worker keeps
-generating regardless of whether the scheduler is currently subscribed,
-so a transient network blip never wastes a 10-minute generation.
+If an SSE transport connection drops mid-generation, the scheduler reconnects
+to the same task_id (the worker's task store survives across reconnects) with
+exponential backoff up to ``MAX_SSE_RECONNECTS``. An SSE read timeout is not
+retried: it means the worker stream went silent and must fail the job promptly.
+The worker keeps generating through a transient transport drop regardless of
+whether the scheduler is currently subscribed, so reconnecting does not waste
+a 10-minute generation.
 """
 
 from __future__ import annotations
@@ -41,6 +43,12 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
+from songmaker_cli.constants import (
+    ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
+    GENERATE_SUBMIT_TIMEOUT_SECONDS,
+)
 from songmaker_cli.db.queries import list_worker_identities
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -49,6 +57,7 @@ log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[float], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
+WORKER_STREAM_WENT_SILENT = "Worker stream went silent"
 
 
 class NoCapacityError(RuntimeError):
@@ -60,11 +69,12 @@ class WorkerTaskFailed(RuntimeError):
 
 
 class WorkerGenerationFailed(WorkerTaskFailed):
-    """Raised when a worker reports that its generate task failed.
+    """Raised for a worker ``error`` event or scheduler-detected stream silence.
 
-    Its message is ACE-Step's own cause for the failure and is written
-    for the operator: the job layer stores it and the UI shows it
-    verbatim, so nothing generic may be raised as this type.
+    Its message is ACE-Step's own cause from an ``error`` event, or the
+    scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
+    The job layer stores it and the UI shows it verbatim, so every message must
+    be useful to an operator.
     """
 
 
@@ -112,10 +122,10 @@ class _PickedWorker:
 @dataclass
 class DispatchOptions:
     max_sse_reconnects: int = 5
-    load_model_timeout_seconds: float = 600.0
-    generate_submit_timeout_seconds: float = 30.0
-    sse_connect_timeout_seconds: float = 10.0
-    sse_read_timeout_seconds: float | None = None
+    load_model_timeout_seconds: float = GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+    generate_submit_timeout_seconds: float = GENERATE_SUBMIT_TIMEOUT_SECONDS
+    sse_connect_timeout_seconds: float = ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
+    sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
 
@@ -253,11 +263,13 @@ async def _iterate_task_events(
 ) -> AsyncIterator[tuple[str, dict]]:
     """Yield (event_type, data) tuples from a worker's /tasks/{id}/stream.
 
-    Reconnects on transport drop with exponential backoff up to
-    ``options.max_sse_reconnects``. Stops yielding after a ``done`` or
-    ``error`` event (both ARE yielded so the caller can validate or
-    surface them). Raises the underlying httpx error after exhausting
-    the reconnect budget.
+    Reconnects on transport drops with exponential backoff up to
+    ``options.max_sse_reconnects``. ``httpx.ReadTimeout`` is deliberately
+    raised without retrying before the broader ``httpx.TransportError`` catch:
+    it is a transport-error subclass, but for this stream it means the worker
+    went silent. Stops yielding after a ``done`` or ``error`` event (both ARE
+    yielded so the caller can validate or surface them). Raises the underlying
+    httpx error after exhausting the reconnect budget.
     """
     reconnects = 0
     timeout = httpx.Timeout(
@@ -288,6 +300,8 @@ async def _iterate_task_events(
                             if event_type in ("done", "error"):
                                 return
             return
+        except httpx.ReadTimeout:
+            raise
         except (httpx.TransportError, httpx.RemoteProtocolError) as exc:
             reconnects += 1
             if reconnects > options.max_sse_reconnects:
@@ -330,34 +344,37 @@ async def _consume_task_stream(
     missing ``error``, or an ``error`` event whose ``error`` field is empty
     (the worker is required to always attach a cause).
     """
-    async for event_type, data in _iterate_task_events(worker, task_id, options=options):
-        await _maybe_invoke(on_heartbeat)
-        if event_type == "progress":
-            fraction = float(data.get("progress", 0.0))
-            await _maybe_invoke(on_progress, fraction)
-        elif event_type == "done":
-            if "result" not in data:
-                raise WorkerProtocolError(
-                    "Worker done event missing 'result' field",
-                )
-            try:
-                return result_type.model_validate(data["result"])
-            except ValidationError as exc:
-                raise WorkerTaskFailed(
-                    f"Worker returned {invalid_result_label}: {exc}",
-                ) from exc
-        elif event_type == "error":
-            if "error" not in data:
-                raise WorkerProtocolError(
-                    "Worker error event missing 'error' field",
-                )
-            message = data["error"]
-            if not message:
-                log.warning("Worker error event has empty 'error' field")
-                raise WorkerProtocolError(
-                    "Worker error event has an empty 'error' field",
-                )
-            raise error_exception_type(message)
+    try:
+        async for event_type, data in _iterate_task_events(worker, task_id, options=options):
+            await _maybe_invoke(on_heartbeat)
+            if event_type == "progress":
+                fraction = float(data.get("progress", 0.0))
+                await _maybe_invoke(on_progress, fraction)
+            elif event_type == "done":
+                if "result" not in data:
+                    raise WorkerProtocolError(
+                        "Worker done event missing 'result' field",
+                    )
+                try:
+                    return result_type.model_validate(data["result"])
+                except ValidationError as exc:
+                    raise WorkerTaskFailed(
+                        f"Worker returned {invalid_result_label}: {exc}",
+                    ) from exc
+            elif event_type == "error":
+                if "error" not in data:
+                    raise WorkerProtocolError(
+                        "Worker error event missing 'error' field",
+                    )
+                message = data["error"]
+                if not message:
+                    log.warning("Worker error event has empty 'error' field")
+                    raise WorkerProtocolError(
+                        "Worker error event has an empty 'error' field",
+                    )
+                raise error_exception_type(message)
+    except httpx.ReadTimeout as exc:
+        raise error_exception_type(WORKER_STREAM_WENT_SILENT) from exc
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
