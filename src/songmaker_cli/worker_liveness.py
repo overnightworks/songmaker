@@ -24,6 +24,8 @@ from songmaker_cli.constants import (
 
 log = logging.getLogger(__name__)
 
+_PROCESS_STARTED_AT = datetime.now(timezone.utc)
+
 
 class WorkerLiveness(StrEnum):
     ALIVE = "alive"
@@ -44,13 +46,11 @@ def _as_utc(now: datetime) -> datetime:
     return now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
 
 
-def _record_alive(redis: Any, key: str, now: datetime) -> bool:
+def _record_alive(redis: Any, key: str, now: datetime) -> None:
     try:
         redis.set(key, now.isoformat(), ex=WORKER_LAST_ALIVE_TTL_SECONDS)
     except RedisError:
         log.warning("Could not persist worker liveness", exc_info=True)
-        return False
-    return True
 
 
 def _missing_signal_liveness(
@@ -59,6 +59,7 @@ def _missing_signal_liveness(
     signal: WorkerLivenessSignal,
     now: datetime,
 ) -> WorkerLiveness:
+    """Classify a missing signal from its durable observation and observer age."""
     try:
         raw_seen_at = redis.get(last_alive_key)
         seen_at = decode_redis_text(raw_seen_at)
@@ -68,11 +69,13 @@ def _missing_signal_liveness(
     except (RedisError, UnicodeDecodeError, TypeError, ValueError):
         log.warning("Could not read worker liveness", exc_info=True)
         return WorkerLiveness.UNKNOWN
-    if _as_utc(now) - _as_utc(last_alive_at) > timedelta(
-        seconds=worker_restart_grace_seconds(signal),
-    ):
+    grace = timedelta(seconds=worker_restart_grace_seconds(signal))
+    now = _as_utc(now)
+    if now - _as_utc(last_alive_at) <= grace:
+        return WorkerLiveness.ALIVE
+    if now - _PROCESS_STARTED_AT > grace:
         return WorkerLiveness.DEAD
-    return WorkerLiveness.UNKNOWN
+    return WorkerLiveness.ALIVE
 
 
 def acestep_worker_liveness(
@@ -81,10 +84,8 @@ def acestep_worker_liveness(
     *,
     now: datetime,
 ) -> WorkerLiveness:
-    """Read registered ACE-Step workers, treating an empty registry as unknown."""
+    """Read ACE-Step workers and fall back to their durable observation."""
     worker_ids = tuple(worker_ids)
-    if not worker_ids:
-        return WorkerLiveness.UNKNOWN
     malformed_state = False
     for worker_id in worker_ids:
         try:
@@ -106,15 +107,12 @@ def acestep_worker_liveness(
             malformed_state = True
             continue
         if worker_is_online(parsed_state):
-            return (
-                WorkerLiveness.ALIVE
-                if _record_alive(redis, ACESTEP_LAST_ALIVE_KEY, _as_utc(now))
-                else WorkerLiveness.UNKNOWN
-            )
+            _record_alive(redis, ACESTEP_LAST_ALIVE_KEY, _as_utc(now))
+            return WorkerLiveness.ALIVE
     if malformed_state:
         return WorkerLiveness.UNKNOWN
     return _missing_signal_liveness(
-        redis, ACESTEP_LAST_ALIVE_KEY, WorkerLivenessSignal.ACESTEP, _as_utc(now),
+        redis, ACESTEP_LAST_ALIVE_KEY, WorkerLivenessSignal.MODEL_EXECUTION, _as_utc(now),
     )
 
 
@@ -133,11 +131,8 @@ def arq_worker_liveness(
         log.warning("Could not read arq worker liveness", exc_info=True)
         return WorkerLiveness.UNKNOWN
     if signal_is_alive:
-        return (
-            WorkerLiveness.ALIVE
-            if _record_alive(redis, last_alive_key, _as_utc(now))
-            else WorkerLiveness.UNKNOWN
-        )
+        _record_alive(redis, last_alive_key, _as_utc(now))
+        return WorkerLiveness.ALIVE
     return _missing_signal_liveness(redis, last_alive_key, signal, _as_utc(now))
 
 
@@ -170,7 +165,7 @@ def worker_liveness_by_job_type(
     music: WorkerLiveness,
     scoring: WorkerLiveness,
 ) -> dict[JobType, WorkerLiveness]:
-    """Return the real execution-worker signal for every job type."""
+    """Return each job's execution signal; either dead model worker is decisive."""
     model_execution = _model_execution_liveness(acestep, music)
     return {
         JobType.GENERATE: model_execution,
@@ -186,7 +181,7 @@ def _model_execution_liveness(
     acestep: WorkerLiveness,
     music: WorkerLiveness,
 ) -> WorkerLiveness:
-    if acestep is WorkerLiveness.DEAD:
+    if acestep is WorkerLiveness.DEAD or music is WorkerLiveness.DEAD:
         return WorkerLiveness.DEAD
     if acestep is WorkerLiveness.ALIVE and music is WorkerLiveness.ALIVE:
         return WorkerLiveness.ALIVE

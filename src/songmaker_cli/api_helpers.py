@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -64,6 +64,9 @@ from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.redis_client import RedisRateLimiter
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
+
+if TYPE_CHECKING:
+    from redis import Redis
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
@@ -205,14 +208,17 @@ def create_job_with_rate_limit(
     user: AuthenticatedUser,
     job_type: JobType,
     song_id: str | None = None,
-    redis: Any | None = None,
+    *,
+    redis: Redis,
 ) -> Job:
     """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
 
     Prevents TOCTOU races where two concurrent requests both pass the rate
     limit check before either creates a job.
 
-    The initial commit() closes the implicit transaction opened by the auth
+    Liveness is observed before the initial commit and exclusive write lock so
+    Redis round trips do not extend the serialized section. The initial commit
+    closes the implicit transaction opened by the auth
     dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
     can acquire an exclusive write lock.  This means auth-layer mutations are
     committed even when the rate limit rejects the request — that is correct
@@ -226,24 +232,25 @@ def create_job_with_rate_limit(
         "create_job_with_rate_limit: session has uncommitted mutations — "
         "the commit() below would persist them unconditionally"
     )
+    worker_ids = [worker.id for worker in list_worker_identities(session)]
+    worker_liveness = read_worker_liveness(redis, worker_ids)
     session.commit()
     _begin_exclusive(session)
 
     is_admin = user.role == ROLE_ADMIN
-    worker_liveness = None
-    if redis is not None:
-        worker_ids = [worker.id for worker in list_worker_identities(session)]
-        worker_liveness = read_worker_liveness(redis, worker_ids)
+    settings = get_settings()
+    max_queue_depth = resolve_rate_limit(
+        session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
+    )
     recover_stale_jobs_by_age_and_type(
-        session, user_id=user.id, worker_liveness=worker_liveness,
+        session,
+        user_id=user.id,
+        worker_liveness=worker_liveness,
+        max_queue_depth=max_queue_depth,
     )
 
-    settings = get_settings()
     if job_type in _QUEUEABLE_JOB_TYPES:
-        max_queue = resolve_rate_limit(
-            session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
-        )
-        if count_total_queued_jobs(session) >= max_queue:
+        if count_total_queued_jobs(session) >= max_queue_depth:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
         if not is_admin:

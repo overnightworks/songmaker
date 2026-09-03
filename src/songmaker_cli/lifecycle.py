@@ -24,12 +24,8 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_liveness import (
-    WorkerLiveness,
-)
-from songmaker_cli.worker_liveness import (
-    read_worker_liveness as read_liveness_signals,
-)
+from songmaker_cli.worker_liveness import WorkerLiveness
+from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
 

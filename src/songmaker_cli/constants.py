@@ -569,7 +569,6 @@ class JobType(StrEnum):
 
 
 class WorkerLivenessSignal(StrEnum):
-    ACESTEP = "acestep"
     MUSIC = "music"
     SCORING = "scoring"
     MODEL_EXECUTION = "music_and_acestep"
@@ -650,8 +649,6 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
 
 def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:
     """Return the one restart grace declared for an execution signal."""
-    if signal is WorkerLivenessSignal.ACESTEP:
-        signal = WorkerLivenessSignal.MODEL_EXECUTION
     grace_seconds = {
         threshold.restart_grace_seconds
         for threshold in STALE_JOB_THRESHOLDS.values()

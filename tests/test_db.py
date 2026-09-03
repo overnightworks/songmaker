@@ -86,6 +86,7 @@ from songmaker_cli.db.queries import (
     update_user,
     user_count,
 )
+from songmaker_cli.worker_liveness import WorkerLiveness
 
 
 @pytest.fixture()
@@ -1727,6 +1728,25 @@ def test_reaper_marks_an_unknown_workers_old_queued_job_as_too_old(db_session: S
     assert after.status == "failed"
     assert after.error_type == "queued_too_long"
     assert "Queued too long" in after.error
+
+
+def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
+    db_session: Session,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job = create_job(db_session, JobType.GENERATE)
+    job.started_at = now - timedelta(
+        seconds=STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds + 1,
+    )
+    db_session.commit()
+
+    assert recover_stale_jobs_by_age_and_type(
+        db_session,
+        now=now,
+        worker_liveness={JobType.GENERATE: WorkerLiveness.ALIVE},
+        max_queue_depth=1,
+    ) == 1
+    assert get_job(db_session, job.id).error_type == "queued_full_queue_bound"
 
 
 @pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))

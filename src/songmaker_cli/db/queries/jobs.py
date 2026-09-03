@@ -187,6 +187,7 @@ def _queued_verdict(
     thresholds: JobStaleThresholds,
     liveness: WorkerLiveness,
     now: datetime,
+    max_queue_depth: int | None,
 ) -> QueuedJobVerdict | None:
     if thresholds.liveness_signal is None:
         liveness = WorkerLiveness.UNKNOWN
@@ -196,8 +197,10 @@ def _queued_verdict(
             error_type="no_worker_alive",
         )
     if liveness is WorkerLiveness.ALIVE:
+        if max_queue_depth is None:
+            max_queue_depth = get_settings().max_queue_depth
         full_queue_cutoff = now - timedelta(
-            seconds=thresholds.full_queue_bound_seconds(get_settings().max_queue_depth),
+            seconds=thresholds.full_queue_bound_seconds(max_queue_depth),
         )
         if _is_started_stale(job, full_queue_cutoff):
             return QueuedJobVerdict(
@@ -258,12 +261,15 @@ def recover_stale_jobs_by_age_and_type(
     user_id: str | None = None,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+    max_queue_depth: int | None = None,
 ) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
     Queued jobs fail immediately when their execution worker is known dead.
     Unknown signals use the #446 age guard; alive signals allow one full queue
-    before failing. Running jobs fail only when their heartbeat is old.
+    before failing. The lifecycle reaper uses the configured global queue
+    depth; a submission supplies its resolved per-user queue depth. Running
+    jobs fail only when their heartbeat is old.
     ``user_id`` lets the submission path apply that exact policy before
     enforcing an active-job limit, without defining a second freshness bound.
     """
@@ -291,23 +297,21 @@ def recover_stale_jobs_by_age_and_type(
     recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
-        queued_verdict: QueuedJobVerdict | None = None
         if job.status == JobStatus.QUEUED:
             liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
-            queued_verdict = _queued_verdict(job, thresholds, liveness, now)
-            is_stale = queued_verdict is not None
+            verdict = _queued_verdict(
+                job, thresholds, liveness, now, max_queue_depth,
+            )
+            if verdict is None:
+                continue
+            job.status = JobStatus.FAILED
+            job.error = verdict.error
+            job.error_type = verdict.error_type
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
-            is_stale = _is_heartbeat_stale(job, cutoff)
-        if not is_stale:
-            continue
-        was_queued = job.status == JobStatus.QUEUED
-        job.status = JobStatus.FAILED
-        if was_queued:
-            assert queued_verdict is not None
-            job.error = queued_verdict.error
-            job.error_type = queued_verdict.error_type
-        else:
+            if not _is_heartbeat_stale(job, cutoff):
+                continue
+            job.status = JobStatus.FAILED
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
         job.completed_at = now
