@@ -14,10 +14,8 @@ from arq import cron, func
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
-    JOB_ACTIVE_STATUSES,
     RECOVERY_LOCK_MUSIC_KEY,
     JobFunction,
-    JobStatus,
     JobType,
 )
 from songmaker_cli.jobs import (
@@ -38,16 +36,14 @@ log = logging.getLogger(__name__)
 
 
 class MusicWorker(WorkerBase):
-    job_types = (JobType.GENERATE, JobType.LORA_TRAINING)
+    job_types = (
+        JobType.GENERATE,
+        JobType.LORA_TRAINING,
+        JobType.LOAD_MODEL_ON_WORKER,
+        JobType.DOWNLOAD_MODEL_ON_WORKER,
+    )
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
-
-    def recovery_statuses_by_type(self) -> dict[str, frozenset[str]]:
-        """Keep queued LoRA work available to a freshly started worker."""
-        return {
-            JobType.GENERATE: JOB_ACTIVE_STATUSES,
-            JobType.LORA_TRAINING: frozenset({JobStatus.RUNNING}),
-        }
 
     async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
         if not recovered.get(JobType.LORA_TRAINING):

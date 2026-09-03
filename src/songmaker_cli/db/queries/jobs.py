@@ -19,6 +19,8 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.models import Job
+from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
 
@@ -174,6 +176,47 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     return hb < cutoff
 
 
+@dataclass(frozen=True)
+class QueuedJobVerdict:
+    error: str
+    error_type: str
+
+
+def _queued_verdict(
+    job: Job,
+    thresholds: JobStaleThresholds,
+    liveness: WorkerLiveness,
+    now: datetime,
+    max_queue_depth: int | None,
+) -> QueuedJobVerdict | None:
+    if thresholds.liveness_signal is None:
+        liveness = WorkerLiveness.UNKNOWN
+    if liveness is WorkerLiveness.DEAD:
+        return QueuedJobVerdict(
+            error="No worker alive for this job type — please retry.",
+            error_type="no_worker_alive",
+        )
+    if liveness is WorkerLiveness.ALIVE:
+        if max_queue_depth is None:
+            max_queue_depth = get_settings().max_queue_depth
+        full_queue_cutoff = now - timedelta(
+            seconds=thresholds.full_queue_bound_seconds(max_queue_depth),
+        )
+        if _is_started_stale(job, full_queue_cutoff):
+            return QueuedJobVerdict(
+                error="Queued longer than a full queue could take — please retry.",
+                error_type="queued_full_queue_bound",
+            )
+        return None
+    age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
+    if _is_started_stale(job, age_cutoff):
+        return QueuedJobVerdict(
+            error="Queued too long — please retry.",
+            error_type="queued_too_long",
+        )
+    return None
+
+
 def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     started_at = job.started_at
     if started_at.tzinfo is None:
@@ -217,13 +260,18 @@ def recover_stale_jobs_by_age_and_type(
     *,
     user_id: str | None = None,
     now: datetime | None = None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+    max_queue_depth: int | None = None,
 ) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
-    Queued jobs age out by ``started_at``; running jobs age out only when
-    their heartbeat is old.  ``user_id`` lets the submission path apply that
-    exact policy before enforcing an active-job limit, without defining a
-    second freshness threshold.
+    Queued jobs fail immediately when their execution worker is known dead.
+    Unknown signals use the #446 age guard; alive signals allow one full queue
+    before failing. The lifecycle reaper uses the configured global queue
+    depth; a submission supplies its resolved per-user queue depth. Running
+    jobs fail only when their heartbeat is old.
+    ``user_id`` lets the submission path apply that exact policy before
+    enforcing an active-job limit, without defining a second freshness bound.
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -250,19 +298,20 @@ def recover_stale_jobs_by_age_and_type(
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
         if job.status == JobStatus.QUEUED:
-            cutoff = now - timedelta(seconds=thresholds.queued_seconds)
-            is_stale = _is_started_stale(job, cutoff)
+            liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
+            verdict = _queued_verdict(
+                job, thresholds, liveness, now, max_queue_depth,
+            )
+            if verdict is None:
+                continue
+            job.status = JobStatus.FAILED
+            job.error = verdict.error
+            job.error_type = verdict.error_type
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
-            is_stale = _is_heartbeat_stale(job, cutoff)
-        if not is_stale:
-            continue
-        was_queued = job.status == JobStatus.QUEUED
-        job.status = JobStatus.FAILED
-        if was_queued:
-            job.error = "No worker available — please retry."
-            job.error_type = "no_worker_available"
-        else:
+            if not _is_heartbeat_stale(job, cutoff):
+                continue
+            job.status = JobStatus.FAILED
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
         job.completed_at = now

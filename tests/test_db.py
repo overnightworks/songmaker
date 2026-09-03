@@ -86,6 +86,7 @@ from songmaker_cli.db.queries import (
     update_user,
     user_count,
 )
+from songmaker_cli.worker_liveness import WorkerLiveness
 
 
 @pytest.fixture()
@@ -1708,7 +1709,7 @@ def test_reaper_leaves_a_recent_job_alone(db_session: Session) -> None:
     assert recover_stale_jobs_by_age_and_type(db_session) == 0
 
 
-def test_reaper_marks_a_stale_queued_job_as_unavailable(db_session: Session) -> None:
+def test_reaper_marks_an_unknown_workers_old_queued_job_as_too_old(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     j_queued = create_job(db_session, "generate")
@@ -1725,8 +1726,27 @@ def test_reaper_marks_a_stale_queued_job_as_unavailable(db_session: Session) -> 
     assert count == 1
     after = get_job(db_session, j_queued.id)
     assert after.status == "failed"
-    assert after.error_type == "no_worker_available"
-    assert "No worker available" in after.error
+    assert after.error_type == "queued_too_long"
+    assert "Queued too long" in after.error
+
+
+def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
+    db_session: Session,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job = create_job(db_session, JobType.GENERATE)
+    job.started_at = now - timedelta(
+        seconds=STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds + 1,
+    )
+    db_session.commit()
+
+    assert recover_stale_jobs_by_age_and_type(
+        db_session,
+        now=now,
+        worker_liveness={JobType.GENERATE: WorkerLiveness.ALIVE},
+        max_queue_depth=1,
+    ) == 1
+    assert get_job(db_session, job.id).error_type == "queued_full_queue_bound"
 
 
 @pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))
@@ -1749,7 +1769,7 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     db_session.commit()
 
     assert recover_stale_jobs_by_age_and_type(db_session, now=now) == 2
-    assert get_job(db_session, queued.id).error_type == "no_worker_available"
+    assert get_job(db_session, queued.id).error_type == "queued_too_long"
     assert get_job(db_session, running.id).error_type == "heartbeat_lost"
     assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
@@ -1847,9 +1867,9 @@ def test_reaper_distinguishes_queued_vs_running(
     assert count == 2
     queued_after = get_job(db_session, j_queued.id)
     running_after = get_job(db_session, j_running.id)
-    assert queued_after.error_type == "no_worker_available"
+    assert queued_after.error_type == "queued_too_long"
     assert running_after.error_type == "heartbeat_lost"
-    assert "No worker available" in queued_after.error
+    assert "Queued too long" in queued_after.error
     assert "Heartbeat lost" in running_after.error
 
 

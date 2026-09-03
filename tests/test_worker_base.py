@@ -112,7 +112,9 @@ def test_on_shutdown_recovers_jobs() -> None:
     ) as mock_recover:
         _run(worker.on_shutdown({"redis": redis}))
 
-    mock_recover.assert_called_once_with(mock_session, {"dummy": wb_mod.JOB_ACTIVE_STATUSES})
+    mock_recover.assert_called_once_with(
+        mock_session, {"dummy": frozenset({wb_mod.JobStatus.RUNNING})},
+    )
     mock_session.commit.assert_called_once()
 
 
@@ -145,7 +147,9 @@ def test_recover_on_startup_acquires_lock_and_recovers() -> None:
         result = _run(worker._recover_on_startup(ctx))
 
     assert result == 3
-    mock_recover.assert_called_once_with(mock_session, {"dummy": wb_mod.JOB_ACTIVE_STATUSES})
+    mock_recover.assert_called_once_with(
+        mock_session, {"dummy": frozenset({wb_mod.JobStatus.RUNNING})},
+    )
     mock_session.commit.assert_called_once()
     ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
 

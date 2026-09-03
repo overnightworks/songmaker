@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -20,8 +21,11 @@ from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
+    JobType,
 )
 from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import WorkerLiveness
+from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
 
@@ -342,12 +346,30 @@ async def score_backfill_loop(app: FastAPI) -> None:
             log.exception("Score backfill tick failed")
 
 
-def reap_stale_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
+def read_worker_liveness(ctx: AppContext) -> dict[JobType, WorkerLiveness]:
+    """Read lifecycle liveness after the database owner supplies the registry."""
+    from songmaker_cli.db.queries import list_worker_identities
+
+    with ctx.db() as session:
+        worker_ids = [worker.id for worker in list_worker_identities(session)]
+    return read_liveness_signals(ctx.redis, worker_ids)
+
+
+def reap_stale_jobs(
+    ctx: AppContext,
+    *,
+    now: datetime | None = None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+) -> int:
     """Terminalize every stale job according to the shared type table."""
     from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
+    if worker_liveness is None:
+        worker_liveness = read_worker_liveness(ctx)
     with ctx.db() as session:
-        recovered = recover_stale_jobs_by_age_and_type(session, now=now)
+        recovered = recover_stale_jobs_by_age_and_type(
+            session, now=now, worker_liveness=worker_liveness,
+        )
         session.commit()
     if recovered:
         log.warning("Recovered %d stale job(s)", recovered)
