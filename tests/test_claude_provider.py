@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import queue
 import subprocess
 import threading
@@ -14,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from conftest import fake_cli_process
 
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import (
@@ -47,8 +47,6 @@ from songmaker_cli.constants import (
     SECRET_ENV_KEYS,
 )
 
-_fake_cli_processes: list[MagicMock] = []
-
 
 @pytest.fixture(autouse=True)
 def _clear_claude_clients():
@@ -59,16 +57,6 @@ def _clear_claude_clients():
     clear_client_cache()
     clear_cli_login_status_cache()
     clear_cli_tool_surface_cache()
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _close_fake_cli_pipes():
-    yield
-    for proc in _fake_cli_processes:
-        for stream_name in ("stdin", "stdout", "_stdin_reader", "_stdout_writer"):
-            stream = getattr(proc, stream_name)
-            if not stream.closed:
-                stream.close()
 
 
 def _run_with_clock(coroutine, clock: dict[str, float]):
@@ -745,41 +733,6 @@ def _init_line(
     }).encode() + b"\n"
 
 
-def _fake_cli(
-    first_line: bytes | None, *, still_running: bool = False, stdin_blocked: bool = False,
-) -> MagicMock:
-    """A stand-in for the ``subprocess.Popen`` handle the probe spawns.
-
-    Both gates go through ``subprocess.Popen`` now (round 6: the async gate
-    delegates to the sync probe body via ``asyncio.to_thread``, since
-    ``asyncio.create_subprocess_exec`` still runs the underlying
-    fork+exec synchronously on whichever thread calls it — including the
-    event loop's own — so mocking it no longer reflects how either gate
-    actually spawns anything)."""
-    proc = MagicMock()
-    proc.pid = 4343
-    proc.poll.return_value = None if still_running else 0
-    stdin_reader, stdin_writer = os.pipe()
-    stdout_reader, stdout_writer = os.pipe()
-    proc.stdin = os.fdopen(stdin_writer, "wb", buffering=0)
-    proc.stdout = os.fdopen(stdout_reader, "rb", buffering=0)
-    proc._stdin_reader = os.fdopen(stdin_reader, "rb", buffering=0)
-    proc._stdout_writer = os.fdopen(stdout_writer, "wb", buffering=0)
-    if stdin_blocked:
-        os.set_blocking(proc.stdin.fileno(), False)
-        try:
-            while True:
-                os.write(proc.stdin.fileno(), b"x" * 65536)
-        except BlockingIOError:
-            pass
-    if first_line is not None:
-        proc._stdout_writer.write(first_line)
-        proc._stdout_writer.close()
-    proc.wait.return_value = None
-    _fake_cli_processes.append(proc)
-    return proc
-
-
 @pytest.fixture
 def claude_binary(tmp_path: Path):
     """A stand-in binary file, so its build identity can be stat()ed."""
@@ -799,7 +752,7 @@ def _answer_with(monkeypatch, *lines: bytes) -> list[tuple[str, ...]]:
 
     def fake_popen(cmd, **_kw):
         commands.append(tuple(cmd))
-        return _fake_cli(queued.pop(0))
+        return fake_cli_process(queued.pop(0))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     return commands
@@ -877,7 +830,7 @@ def test_tool_surface_probe_stops_the_session_it_started(
     killed: list[int] = []
 
     def fake_popen(*_cmd, **_kw):
-        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS), still_running=True)
+        return fake_cli_process(_init_line(_ALL_SONGMAKER_TOOLS), still_running=True)
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
@@ -1173,7 +1126,7 @@ def test_tool_surface_single_flight_shares_one_successful_probe(
         calls += 1
         probe_started.set()
         release_probe.wait()
-        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
+        return fake_cli_process(_init_line(_ALL_SONGMAKER_TOOLS))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
@@ -1219,7 +1172,7 @@ def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
         calls += 1
         probe_started.set()
         release_probe.wait()
-        return _fake_cli(b"not valid json\n")
+        return fake_cli_process(b"not valid json\n")
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
@@ -1672,7 +1625,7 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
         return False
 
     def fake_popen(*_cmd, **_kw):
-        proc = _fake_cli(b"")
+        proc = fake_cli_process(b"")
         proc.pid = 9090
         proc.poll.return_value = 0
         proc._stdin_reader.close()
@@ -1698,7 +1651,7 @@ def test_tool_surface_probe_rejects_a_newline_free_stream_at_its_read_limit(
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
 
     def fake_popen(*_args, **_kwargs) -> MagicMock:
-        proc = _fake_cli(None)
+        proc = fake_cli_process(None)
 
         def write_stream() -> None:
             proc._stdout_writer.write(b"x" * (provider.CLI_OUTPUT_READ_LIMIT_BYTES + 1))
@@ -1734,7 +1687,7 @@ def test_probe_runner_task_cancellation_gives_waiters_a_normal_error(
     def fake_popen(*_cmd, **_kw):
         probe_started.set()
         threading.Event().wait(999)  # never returns on its own
-        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
+        return fake_cli_process(_init_line(_ALL_SONGMAKER_TOOLS))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
@@ -1776,7 +1729,7 @@ def test_tool_surface_a_cancelled_leader_does_not_reopen_single_flight(
         calls += 1
         probe_started.set()
         release_probe.wait()
-        return _fake_cli(_init_line(_ALL_SONGMAKER_TOOLS))
+        return fake_cli_process(_init_line(_ALL_SONGMAKER_TOOLS))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
@@ -1845,7 +1798,7 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
 
     def fake_popen(*_cmd, **_kw):
         popen_may_return.wait()
-        proc = _fake_cli(_init_line([]))
+        proc = fake_cli_process(_init_line([]))
         popen_returned.set()
         return proc
 
@@ -1924,7 +1877,7 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
     processes: list[MagicMock] = []
 
     def fake_popen(*_cmd, **_kw) -> MagicMock:
-        proc = _fake_cli(None, stdin_blocked=stdin_blocked)
+        proc = fake_cli_process(None, stdin_blocked=stdin_blocked)
         processes.append(proc)
         spawned.set()
         return proc
@@ -1976,7 +1929,7 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
             return super().get(timeout=timeout)
 
     def fake_popen(*_cmd, **_kw) -> MagicMock:
-        proc = _fake_cli(None)
+        proc = fake_cli_process(None)
         processes.append(proc)
         process_spawned.set()
         return proc
@@ -2037,7 +1990,7 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
 
     def fake_popen(*_cmd, **_kw):
         popen_may_return.wait(5)
-        return _fake_cli(_init_line([]))
+        return fake_cli_process(_init_line([]))
 
     def fake_reap(proc) -> bool:
         reaped_pids.append(proc.pid)
@@ -2106,7 +2059,7 @@ def test_judge_preflight_deadline_abort_never_becomes_a_clean_verdict(
 
     def fake_popen(*_args: object, **_kwargs: object) -> MagicMock:
         spawned.append(1)
-        return _fake_cli(_init_line([]))
+        return fake_cli_process(_init_line([]))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
@@ -2156,7 +2109,7 @@ def test_judge_deadline_timeout_from_the_sync_probe_is_not_cached(
 
     def fake_popen(*_args: object, **_kwargs: object) -> MagicMock:
         popen_may_return.wait()
-        return _fake_cli(_init_line([]))
+        return fake_cli_process(_init_line([]))
 
     def fake_reap(_proc: object) -> bool:
         reaped.set()
@@ -2407,7 +2360,7 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
     killed: list[int] = []
 
     def fake_popen(_cmd, **_kw):
-        return _fake_cli(_init_line([]), still_running=True)
+        return fake_cli_process(_init_line([]), still_running=True)
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
@@ -2444,7 +2397,7 @@ def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_plac
         calls += 1
         probe_started.set()
         release_probe.wait()
-        return _fake_cli(b"not valid json\n")
+        return fake_cli_process(b"not valid json\n")
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
@@ -2497,7 +2450,7 @@ def test_judge_deadline_does_not_wait_for_an_inflight_preflight_grace_period(
     def fake_popen(_cmd, **_kw):
         probe_started.set()
         release_probe.wait()
-        return _fake_cli(_init_line([]))
+        return fake_cli_process(_init_line([]))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 
