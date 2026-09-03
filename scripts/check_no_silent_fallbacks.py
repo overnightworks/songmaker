@@ -37,7 +37,8 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
   on domain variables hide config drift.
 * W4 — ``Optional`` on timestamp fields lies about non-null DB columns.
 * getattr with a literal default invents a value the code cannot know.
-  No default, a named constant, or ``None`` is honest.
+  No default, a named constant, or ``None`` is honest. Calls such as
+  ``set()`` and ``frozenset()`` are intentionally not literals.
 * Engine isolation — ``acestep_engine`` / ``audio_engine`` /
   ``acestep_worker`` must never import from ``songmaker_cli`` (the
   dependency flows one way; violating this crashed the worker container
@@ -73,7 +74,10 @@ DICT_TYPE_NAMES: Final = frozenset({"dict", "Dict"})
 STR_TYPE_NAME: Final = "str"
 ANY_TYPE_NAME: Final = "Any"
 
-InspectTree = Callable[[ast.AST, Sequence[str]], tuple[list[tuple[int, str]], int]]
+InspectTree = Callable[
+    [ast.AST, Sequence[str]],
+    tuple[list[tuple[int, str, str | None]], int],
+]
 
 
 @dataclass
@@ -162,8 +166,8 @@ def _iter_parameters(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> Iterable[ast
 
 def _inspect_dict_any_in_signature(
     tree: ast.AST, lines: Sequence[str],
-) -> tuple[list[tuple[int, str]], int]:
-    hits: list[tuple[int, str]] = []
+) -> tuple[list[tuple[int, str, str | None]], int]:
+    hits: list[tuple[int, str, str | None]] = []
     functions = 0
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -172,7 +176,7 @@ def _inspect_dict_any_in_signature(
         for param in _iter_parameters(node):
             if _annotation_flags_dict_str_any(param.annotation):
                 lineno = param.lineno
-                hits.append((lineno, _source_line(lines, lineno)))
+                hits.append((lineno, _source_line(lines, lineno), None))
     return hits, functions
 
 
@@ -208,19 +212,37 @@ def _is_non_none_constant(node: ast.expr) -> bool:
     return _is_signed_numeric_constant(node)
 
 
+def _literal_default_type(node: ast.expr) -> str | None:
+    if _is_non_none_constant(node):
+        return "constant"
+    literal_types = (
+        (ast.Tuple, "tuple"),
+        (ast.List, "list"),
+        (ast.Dict, "dict"),
+        (ast.Set, "set"),
+    )
+    for literal_type, name in literal_types:
+        if isinstance(node, literal_type):
+            return name
+    return None
+
+
 def _inspect_getattr_literal_default(
     tree: ast.AST, lines: Sequence[str],
-) -> tuple[list[tuple[int, str]], int]:
-    hits: list[tuple[int, str]] = []
+) -> tuple[list[tuple[int, str, str | None]], int]:
+    hits: list[tuple[int, str, str | None]] = []
     calls = 0
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not _is_getattr_func(node.func):
             continue
         calls += 1
         default = _getattr_default(node)
-        if default is not None and _is_non_none_constant(default):
+        literal_type = (
+            _literal_default_type(default) if default is not None else None
+        )
+        if literal_type is not None:
             lineno = node.lineno
-            hits.append((lineno, _source_line(lines, lineno)))
+            hits.append((lineno, _source_line(lines, lineno), literal_type))
     return hits, calls
 
 
@@ -321,6 +343,7 @@ class _Hit:
     rel_path: str
     lineno: int
     line: str
+    detail: str | None = None
 
 
 def _try_parse(text: str, filename: str) -> ast.AST | None:
@@ -356,8 +379,16 @@ def _scan_file(
                 continue
             ast_hits, n_sites = rule.inspect_tree(tree, lines)
             counts[rule.name] = n_sites
-            for lineno, line in ast_hits:
-                hits.append(_Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line))
+            for lineno, line, detail in ast_hits:
+                hits.append(
+                    _Hit(
+                        rule=rule,
+                        rel_path=rel_path,
+                        lineno=lineno,
+                        line=line,
+                        detail=detail,
+                    ),
+                )
     return hits, counts
 
 
@@ -418,7 +449,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n[{name}] {len(hits)} violation(s)")
         print(f"  {rule.description}")
         for hit in hits:
-            print(f"    {hit.rel_path}:{hit.lineno}: {hit.line.strip()}")
+            detail = f" ({hit.detail} literal)" if hit.detail is not None else ""
+            print(f"    {hit.rel_path}:{hit.lineno}{detail}: {hit.line.strip()}")
 
     print(f"\n{len(all_hits)} total violation(s) across {len(by_rule)} rule(s).")
     print(summary)
