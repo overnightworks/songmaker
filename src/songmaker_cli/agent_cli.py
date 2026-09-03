@@ -14,7 +14,8 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from enum import Enum
+from typing import Any, Final, Literal, Sequence
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
@@ -72,12 +73,40 @@ class CliRun:
     complete: bool
 
 
+class CliRunReason(str, Enum):
+    """Why a bounded CLI invocation did or did not complete."""
+
+    SPAWN_FAILED = "spawn_failed"
+    DEADLINE_BEFORE_SPAWN = "deadline_before_spawn"
+    DEADLINE_WHILE_WRITING = "deadline_while_writing"
+    DEADLINE_WHILE_READING = "deadline_while_reading"
+    IO_ERROR = "io_error"
+    OUTPUT_LIMIT_REACHED = "output_limit_reached"
+    CLEANUP_OVERRAN = "cleanup_overran"
+    COMPLETE = "complete"
+
+
+@dataclass(frozen=True)
+class CliRunOutcome:
+    """The result of a bounded CLI invocation and its cleanup."""
+
+    started: bool
+    spawn_error: BaseException | None
+    returncode: int | None
+    stdout: str
+    stderr: str
+    complete: bool
+    became_zombie: bool
+    reason: CliRunReason
+    io_error: OSError | None = None
+
+
 @dataclass
-class _SpawnState:
+class _BoundedRunState:
+    started: threading.Event = field(default_factory=threading.Event)
     completed: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
-    process: subprocess.Popen[bytes] | None = None
-    abandoned: bool = False
+    outcome: CliRunOutcome | None = None
 
 
 LOGGED_OUT = CliLogin(logged_in=False, auth_method=None)
@@ -90,6 +119,7 @@ CLI_PROBE_CALLER_TIMEOUT_SECONDS = (
     + (2 * CLI_TERMINATION_GRACE_SECONDS)
     + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
 )
+_BACKGROUND_REAP_POLL_SECONDS: Final = 0.1
 
 log = logging.getLogger(__name__)
 
@@ -189,62 +219,94 @@ class CachedProbe[T]:
 def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
     """Run one CLI with one answer budget and separate bounded cleanup."""
     deadline = time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS
-    process = _spawn_cli(binary, args, deadline)
-    if process is None:
+    outcome = run_cli_bounded(
+        (binary, *args),
+        stdin_payload=None,
+        read="all",
+        deadline=deadline,
+        output_read_limit_bytes=CLI_OUTPUT_READ_LIMIT_BYTES,
+    )
+    if outcome.reason in {
+        CliRunReason.SPAWN_FAILED,
+        CliRunReason.DEADLINE_BEFORE_SPAWN,
+    }:
         return None
-    output: _CliOutput | None = None
-    try:
-        output = _read_bounded(process, deadline)
-    finally:
-        _reap_process_group(process)
-    if output is None:
-        return CliRun(returncode=process.returncode, stdout="", stderr="", complete=False)
     return CliRun(
-        returncode=process.returncode,
-        stdout=_decode(output.stdout),
-        stderr=_decode(output.stderr),
-        complete=output.complete,
+        returncode=outcome.returncode,
+        stdout=outcome.stdout,
+        stderr=outcome.stderr,
+        complete=outcome.complete,
     )
 
 
-def _spawn_cli(
-    binary: str, args: tuple[str, ...], deadline: float,
-) -> subprocess.Popen[bytes] | None:
-    state = _SpawnState()
+def run_cli_bounded(
+    argv: Sequence[str],
+    *,
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+    stderr: Literal["capture", "devnull"] = "capture",
+    output_read_limit_bytes: int | None = None,
+    cleanup_margin_seconds: float | None = None,
+    on_spawned: Callable[[int], None] | None = None,
+    on_reaped: Callable[[int, bool], None] | None = None,
+) -> CliRunOutcome:
+    """Run a CLI with bounded input, output, and caller cleanup waits.
 
-    def spawn() -> None:
-        try:
-            process = subprocess.Popen(  # noqa: S603 - argv comes from named probe constants
-                [binary, *args],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=scrubbed_env(),
-                start_new_session=True,
+    The child deliberately receives no terminal stdin: its pipe is closed
+    immediately when no input payload is supplied.
+    """
+    if output_read_limit_bytes is None:
+        output_read_limit_bytes = CLI_OUTPUT_READ_LIMIT_BYTES
+    state = _BoundedRunState()
+    threading.Thread(
+        target=_run_cli_bounded,
+        args=(
+            state,
+            tuple(argv),
+            stdin_payload,
+            read,
+            deadline,
+            stderr,
+            output_read_limit_bytes,
+            on_spawned,
+            on_reaped,
+        ),
+        daemon=True,
+    ).start()
+    if not state.completed.wait(timeout=max(deadline - time.monotonic(), 0)):
+        if not state.started.is_set():
+            return CliRunOutcome(
+                started=False,
+                spawn_error=None,
+                returncode=None,
+                stdout="",
+                stderr="",
+                complete=False,
+                became_zombie=False,
+                reason=CliRunReason.DEADLINE_BEFORE_SPAWN,
             )
-        except OSError:
-            state.completed.set()
-        else:
-            reap_late_process = False
-            with state.lock:
-                if state.abandoned:
-                    reap_late_process = True
-                else:
-                    state.process = process
-            if reap_late_process:
-                _reap_process_group(process)
-            state.completed.set()
-
-    threading.Thread(target=spawn, daemon=True).start()
-    remaining = max(deadline - time.monotonic(), 0)
-    if state.completed.wait(timeout=remaining):
-        with state.lock:
-            return state.process
+        cleanup_margin = cleanup_margin_seconds
+        if cleanup_margin is None:
+            cleanup_margin = (
+                (2 * CLI_TERMINATION_GRACE_SECONDS)
+                + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
+            )
+        if not state.completed.wait(timeout=cleanup_margin):
+            return CliRunOutcome(
+                started=True,
+                spawn_error=None,
+                returncode=None,
+                stdout="",
+                stderr="",
+                complete=False,
+                became_zombie=False,
+                reason=CliRunReason.CLEANUP_OVERRAN,
+            )
     with state.lock:
-        state.abandoned = True
-        process = state.process
-    if process is not None:
-        _reap_process_group(process)
-    return None
+        if state.outcome is None:
+            raise RuntimeError("bounded CLI runner completed without an outcome")
+        return state.outcome
 
 
 @dataclass(frozen=True)
@@ -252,6 +314,212 @@ class _CliOutput:
     stdout: bytearray
     stderr: bytearray
     complete: bool
+    reason: CliRunReason
+    io_error: OSError | None = None
+
+
+def _run_cli_bounded(
+    state: _BoundedRunState,
+    argv: tuple[str, ...],
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+    stderr: Literal["capture", "devnull"],
+    output_read_limit_bytes: int,
+    on_spawned: Callable[[int], None] | None,
+    on_reaped: Callable[[int, bool], None] | None,
+) -> None:
+    process: subprocess.Popen[bytes] | None = None
+    output = _CliOutput(
+        bytearray(), bytearray(), complete=False, reason=CliRunReason.IO_ERROR,
+    )
+    try:
+        try:
+            process = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
+                env=scrubbed_env(),
+                start_new_session=True,
+            )
+        except BaseException as error:
+            _publish_bounded_outcome(
+                state,
+                CliRunOutcome(
+                    started=False,
+                    spawn_error=error,
+                    returncode=None,
+                    stdout="",
+                    stderr="",
+                    complete=False,
+                    became_zombie=False,
+                    reason=CliRunReason.SPAWN_FAILED,
+                ),
+            )
+            return
+        state.started.set()
+        _notify_spawned(on_spawned, process.pid)
+        output = _exchange_bounded(
+            process,
+            stdin_payload,
+            read,
+            deadline,
+            output_read_limit_bytes,
+        )
+    finally:
+        if process is not None:
+            became_zombie = _reap_process_group(process)
+            if became_zombie and on_reaped is not None:
+                threading.Thread(
+                    target=_reap_in_background,
+                    args=(process, on_reaped),
+                    daemon=True,
+                ).start()
+            else:
+                _notify_reaped(on_reaped, process.pid, became_zombie=False)
+            _publish_bounded_outcome(
+                state,
+                CliRunOutcome(
+                    started=True,
+                    spawn_error=None,
+                    returncode=process.returncode,
+                    stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
+                    stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
+                    complete=output.complete,
+                    became_zombie=became_zombie,
+                    reason=output.reason,
+                    io_error=output.io_error,
+                ),
+            )
+
+
+_DEADLINE_REASONS = frozenset({
+    CliRunReason.DEADLINE_WHILE_WRITING,
+    CliRunReason.DEADLINE_WHILE_READING,
+})
+
+
+def _publish_bounded_outcome(state: _BoundedRunState, outcome: CliRunOutcome) -> None:
+    with state.lock:
+        state.outcome = outcome
+    state.completed.set()
+
+
+def _notify_spawned(callback: Callable[[int], None] | None, process_id: int) -> None:
+    if callback is not None:
+        callback(process_id)
+
+
+def _notify_reaped(
+    callback: Callable[[int, bool], None] | None,
+    process_id: int,
+    became_zombie: bool,
+) -> None:
+    if callback is not None:
+        callback(process_id, became_zombie)
+
+
+def _exchange_bounded(
+    process: subprocess.Popen[bytes],
+    stdin_payload: bytes | None,
+    read: Literal["all", "first_line"],
+    deadline: float,
+    output_read_limit_bytes: int,
+) -> _CliOutput:
+    stdout = bytearray()
+    stderr = bytearray()
+    stdin = process.stdin
+    pending_stdin = memoryview(stdin_payload) if stdin_payload else memoryview(b"")
+    try:
+        if stdin is not None and not pending_stdin:
+            _close_stdin(process)
+        with selectors.DefaultSelector() as selector:
+            for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
+                if stream is not None:
+                    os.set_blocking(stream.fileno(), False)
+                    selector.register(stream, selectors.EVENT_READ, name)
+            if stdin is not None and pending_stdin:
+                os.set_blocking(stdin.fileno(), False)
+                selector.register(stdin, selectors.EVENT_WRITE, "stdin")
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return _deadline_output(stdout, stderr, pending_stdin)
+                events = selector.select(timeout=remaining)
+                if not events:
+                    return _deadline_output(stdout, stderr, pending_stdin)
+                for key, _ in events:
+                    if key.data == "stdin":
+                        written = os.write(key.fileobj.fileno(), pending_stdin)
+                        if written <= 0:
+                            return _CliOutput(
+                                stdout, stderr, complete=False, reason=CliRunReason.IO_ERROR,
+                            )
+                        pending_stdin = pending_stdin[written:]
+                        if not pending_stdin:
+                            selector.unregister(key.fileobj)
+                            key.fileobj.close()
+                        continue
+                    collected = stdout if key.data == "stdout" else stderr
+                    room = output_read_limit_bytes - len(stdout) - len(stderr)
+                    if room <= 0:
+                        return _CliOutput(
+                            stdout,
+                            stderr,
+                            complete=False,
+                            reason=CliRunReason.OUTPUT_LIMIT_REACHED,
+                        )
+                    chunk = os.read(key.fileobj.fileno(), room)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        if read == "first_line" and key.data == "stdout":
+                            return _CliOutput(
+                                stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
+                            )
+                        continue
+                    if read == "first_line" and key.data == "stdout":
+                        newline = chunk.find(b"\n")
+                        if newline >= 0:
+                            stdout.extend(chunk[:newline + 1])
+                            return _CliOutput(
+                                stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
+                            )
+                    collected.extend(chunk)
+                    if len(stdout) + len(stderr) >= output_read_limit_bytes:
+                        return _CliOutput(
+                            stdout,
+                            stderr,
+                            complete=False,
+                            reason=CliRunReason.OUTPUT_LIMIT_REACHED,
+                        )
+    except OSError as error:
+        return _CliOutput(
+            stdout,
+            stderr,
+            complete=False,
+            reason=CliRunReason.IO_ERROR,
+            io_error=error,
+        )
+    return _CliOutput(stdout, stderr, complete=True, reason=CliRunReason.COMPLETE)
+
+
+def _close_stdin(process: subprocess.Popen[bytes]) -> None:
+    if process.stdin is not None:
+        process.stdin.close()
+
+
+def _deadline_output(
+    stdout: bytearray,
+    stderr: bytearray,
+    pending_stdin: memoryview,
+) -> _CliOutput:
+    reason = (
+        CliRunReason.DEADLINE_WHILE_WRITING
+        if pending_stdin
+        else CliRunReason.DEADLINE_WHILE_READING
+    )
+    return _CliOutput(stdout, stderr, complete=False, reason=reason)
 
 
 def _cli_output(binary_name: str, args: tuple[str, ...]) -> str | None:
@@ -280,36 +548,12 @@ def _successful_cli_run(binary: str | None, args: tuple[str, ...]) -> CliRun | N
     return run
 
 
-def _read_bounded(process: subprocess.Popen[bytes], deadline: float) -> _CliOutput | None:
-    stdout = bytearray()
-    stderr = bytearray()
-    with selectors.DefaultSelector() as selector:
-        for stream, collected in ((process.stdout, stdout), (process.stderr, stderr)):
-            if stream is not None:
-                selector.register(stream, selectors.EVENT_READ, collected)
-        while selector.get_map():
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return None
-            for key, _ in selector.select(timeout=remaining):
-                collected = key.data
-                room = CLI_OUTPUT_READ_LIMIT_BYTES - len(stdout) - len(stderr)
-                chunk = key.fileobj.read1(room)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    continue
-                collected.extend(chunk)
-                if len(stdout) + len(stderr) >= CLI_OUTPUT_READ_LIMIT_BYTES:
-                    return _CliOutput(stdout, stderr, complete=False)
-    return _CliOutput(stdout, stderr, complete=True)
-
-
 def _decode(collected: bytearray) -> str:
     return collected.decode(errors="replace")
 
 
-def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
-    for stream in (process.stdout, process.stderr):
+def _reap_process_group(process: subprocess.Popen[bytes]) -> bool:
+    for stream in (process.stdin, process.stdout, process.stderr):
         if stream is not None:
             stream.close()
     _signal_process_group(process.pid, signal.SIGTERM)
@@ -318,6 +562,22 @@ def _reap_process_group(process: subprocess.Popen[bytes]) -> None:
         _signal_process_group(process.pid, signal.SIGKILL)
         if not _wait_for_process_group_exit(process, CLI_TERMINATION_GRACE_SECONDS):
             log.warning("agent CLI process group %s survived its SIGKILL grace period", process.pid)
+            return True
+    return False
+
+
+def _reap_in_background(
+    process: subprocess.Popen[bytes],
+    on_reaped: Callable[[int, bool], None] | None,
+) -> None:
+    try:
+        while _process_group_exists(process.pid):
+            process.poll()
+            time.sleep(_BACKGROUND_REAP_POLL_SECONDS)
+    except OSError:
+        log.exception("background reap of agent CLI process group %s failed", process.pid)
+    finally:
+        _notify_reaped(on_reaped, process.pid, became_zombie=True)
 
 
 def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
