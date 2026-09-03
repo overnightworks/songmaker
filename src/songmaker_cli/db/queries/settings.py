@@ -35,6 +35,14 @@ class RawStoredCowriterSettings:
     model: str | None
 
 
+@dataclass(frozen=True)
+class RawStoredJudgeSettings:
+    """The judge provider and model exactly as stored, without defaults."""
+
+    provider: str | None
+    model: str | None
+
+
 def list_active_models(session: Session) -> list[AvailableModel]:
     return (
         session.query(AvailableModel)
@@ -240,6 +248,27 @@ def get_raw_stored_cowriter_settings(session: Session) -> RawStoredCowriterSetti
     return RawStoredCowriterSettings(
         provider=stored_values.get(SETTING_COWRITER_PROVIDER),
         model=stored_values.get(SETTING_COWRITER_MODEL),
+    )
+
+
+def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
+    """Return judge provider and model values without resolving defaults."""
+    stored_values = {
+        str(setting_key): value_text
+        for setting_key, value_text in (
+            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
+            .filter(
+                RateLimitSetting.setting_key.in_(
+                    (SETTING_JUDGE_PROVIDER, SETTING_JUDGE_MODEL),
+                ),
+                RateLimitSetting.user_id.is_(None),
+            )
+            .all()
+        )
+    }
+    return RawStoredJudgeSettings(
+        provider=stored_values.get(SETTING_JUDGE_PROVIDER),
+        model=stored_values.get(SETTING_JUDGE_MODEL),
     )
 
 

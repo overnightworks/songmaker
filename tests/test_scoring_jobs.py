@@ -175,7 +175,9 @@ def test_unknown_judge_provider_rejected_at_the_settings_boundary(admin_client) 
     assert resp.status_code == 422
 
 
-def test_judge_model_must_be_in_the_live_catalog(admin_client) -> None:
+def test_judge_model_must_be_in_the_live_catalog(
+    admin_client, every_provider_is_configured,
+) -> None:
     client, _ = admin_client
     rejected = client.put("/api/settings/judge", json={"provider": "grok", "model": "grok-4"})
     assert rejected.status_code == 422
@@ -191,7 +193,9 @@ def test_judge_model_must_be_in_the_live_catalog(admin_client) -> None:
     assert fetched["model"] == "grok-4.6"
 
 
-def test_judge_and_cowriter_settings_are_independent_through_the_api(admin_client) -> None:
+def test_judge_and_cowriter_settings_are_independent_through_the_api(
+    admin_client, every_provider_is_configured,
+) -> None:
     client, _ = admin_client
     client.put("/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"})
     client.put("/api/settings/judge", json={"provider": "grok", "model": "grok-4.6"})

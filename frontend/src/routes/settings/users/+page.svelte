@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import {
 		fetchUsers,
+		ApiError,
 		createUser,
 		updateUser,
 		hardDeleteUser,
@@ -38,6 +39,7 @@
 	import type {
 		CowriterSettings,
 		JudgeSettings,
+		ProviderNotConfiguredDetail,
 		ProviderStatus,
 		ProviderSurfaceStatus
 	} from '$lib/api/types';
@@ -313,6 +315,43 @@
 		}
 	}
 
+	function isNonEmptyString(value: unknown): value is string {
+		return typeof value === 'string' && value.length > 0;
+	}
+
+	function isProviderSurfaceStatus(detail: unknown): detail is ProviderSurfaceStatus {
+		if (typeof detail !== 'object' || detail === null) return false;
+		const status = detail as Partial<ProviderSurfaceStatus>;
+		return (
+			status.state === 'configured' ||
+			status.state === 'cli_login_needs_api_key' ||
+			status.state === 'api_key_needs_cli_login' ||
+			status.state === 'missing_dependency' ||
+			status.state === 'unconfigured'
+		);
+	}
+
+	function isProviderNotConfiguredDetail(detail: unknown): detail is ProviderNotConfiguredDetail {
+		if (typeof detail !== 'object' || detail === null) return false;
+		const candidate = detail as Partial<ProviderNotConfiguredDetail>;
+		return (
+			isNonEmptyString(candidate.provider) &&
+			(candidate.surface === 'cowriter' || candidate.surface === 'judge') &&
+			isProviderSurfaceStatus(candidate.status)
+		);
+	}
+
+	function providerNotConfiguredMessage(error: unknown): string | null {
+		if (!(error instanceof ApiError) || !isProviderNotConfiguredDetail(error.responseDetail)) {
+			return null;
+		}
+		const surfacePrefix =
+			error.responseDetail.surface === 'cowriter'
+				? PROVIDER_COWRITER_SURFACE_PREFIX
+				: PROVIDER_JUDGE_SURFACE_PREFIX;
+		return `${providerLabel(error.responseDetail.provider)} ${surfacePrefix} ${surfaceDetail(error.responseDetail.status)}`;
+	}
+
 	function providerDetail(status: ProviderStatus): string[] {
 		const cowriter = surfaceDetail(status.cowriter);
 		const judge = surfaceDetail(status.judge);
@@ -439,7 +478,9 @@
 			cowriterModel = cowriterSettings.model;
 			cowriterBudget = cowriterSettings.tail_token_budget;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save co-writer settings';
+			error =
+				providerNotConfiguredMessage(e) ??
+				(e instanceof Error ? e.message : 'Failed to save co-writer settings');
 		} finally {
 			savingCowriter = false;
 		}
@@ -453,7 +494,9 @@
 			judgeProvider = judgeSettings.provider;
 			judgeModel = judgeSettings.model;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save scoring settings';
+			error =
+				providerNotConfiguredMessage(e) ??
+				(e instanceof Error ? e.message : 'Failed to save scoring settings');
 		} finally {
 			savingJudge = false;
 		}

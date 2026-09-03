@@ -30,6 +30,7 @@ from songmaker_cli.api_models.settings import (
     DefaultConfigResponse,
     JudgeSettingsRequest,
     JudgeSettingsResponse,
+    ProviderNotConfiguredDetail,
     ProviderStatusResponse,
     ProviderSurfaceState,
     ProviderSurfaceStatus,
@@ -465,6 +466,35 @@ def api_get_cowriter_settings(
         raise HTTPException(422, str(exc)) from exc
 
 
+def _require_provider_can_answer(provider: str, surface: "ProviderSurface") -> None:
+    status = _surface_status(provider, surface)
+    if status.state is ProviderSurfaceState.CONFIGURED:
+        return
+    raise HTTPException(
+        422,
+        ProviderNotConfiguredDetail(
+            provider=provider,
+            surface=surface.value,
+            status=status,
+        ).model_dump(mode="json", exclude_none=True),
+    )
+
+
+def _matches_complete_stored_provider_and_model(
+    stored_provider: str | None,
+    stored_model: str | None,
+    provider: str,
+    model: str,
+) -> bool:
+    """Only a complete persisted pair can make a co-writer save unchanged."""
+    return (
+        stored_provider not in (None, "")
+        and stored_model not in (None, "")
+        and provider == stored_provider
+        and model == stored_model
+    )
+
+
 @router.put("/settings/cowriter")
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
@@ -476,10 +506,16 @@ def api_set_cowriter_settings(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
-    provider_or_model_changed = (
-        req.provider != stored_settings.provider or req.model != stored_settings.model
+    provider_or_model_changed = not _matches_complete_stored_provider_and_model(
+        stored_settings.provider,
+        stored_settings.model,
+        req.provider,
+        req.model,
     )
     if provider_or_model_changed:
+        from songmaker_cli.cowriter.catalog import ProviderSurface
+
+        _require_provider_can_answer(req.provider, ProviderSurface.CO_WRITER)
         allowed, catalog_error = _models_for_provider(req.provider)
         if catalog_error:
             raise HTTPException(503, catalog_error)
@@ -545,6 +581,9 @@ def api_set_judge_settings(
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
+    from songmaker_cli.cowriter.catalog import ProviderSurface
+
+    _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
     allowed, catalog_error = _models_for_provider(req.provider)
     if catalog_error:
         raise HTTPException(503, catalog_error)

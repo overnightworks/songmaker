@@ -568,6 +568,12 @@ export interface PresetUpdateRequest {
 	is_default?: boolean | null;
 }
 
+export interface ProviderNotConfiguredDetail {
+	provider: string;
+	surface: 'cowriter' | 'judge';
+	status: ProviderSurfaceStatus;
+}
+
 export interface ProviderStatus {
 	provider: string;
 	cowriter: ProviderSurfaceStatus;

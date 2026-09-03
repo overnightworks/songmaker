@@ -157,6 +157,26 @@ describe('apiFetch error detail', () => {
 
 		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
 	});
+
+	it('keeps a structured detail payload while preserving the legacy string detail', async () => {
+		const responseDetail = {
+			provider: 'grok',
+			surface: 'cowriter',
+			status: { state: 'unconfigured', needs: 'api_key', environment_key: 'XAI_API_KEY' }
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 422,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: responseDetail })
+		});
+
+		const err = await apiFetch('/api/settings/cowriter').catch((e: unknown) => e);
+
+		expect((err as ApiError).detail).toBe('');
+		expect((err as ApiError).responseDetail).toEqual(responseDetail);
+		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
+	});
 });
 
 describe('apiFetch 429 classification', () => {
