@@ -33,6 +33,18 @@ class _TrackingStream(AsyncIterator[StreamEvent]):
         self.aclose_calls += 1
 
 
+async def _collect_codex_turn() -> list[StreamEvent]:
+    return [event async for event in dispatch.stream_cowriter_turn(
+        provider="codex",
+        model="codex-test",
+        user_id="user-1",
+        system="system",
+        messages=[],
+        session=MagicMock(),
+        user=MagicMock(),
+    )]
+
+
 def test_closing_claude_dispatch_stream_closes_provider_stream(monkeypatch) -> None:
     provider_stream = _TrackingStream()
     monkeypatch.setattr(
@@ -216,3 +228,150 @@ def test_grok_cli_token_discriminator_accepts_only_a_nonempty_string_key(
 
     auth_file.write_text(json.dumps({"realm": {}}))
     assert dispatch._grok_cli_token_is_present() is False
+
+
+@pytest.mark.acceptance("ACC-COWRITER-12")
+def test_codex_dispatch_prefers_a_mirrored_cli_access_token_over_an_api_key(
+    monkeypatch,
+) -> None:
+    provider_stream = _TrackingStream()
+    monkeypatch.setattr(dispatch, "_codex_cli_access_token_is_present", lambda: True)
+    monkeypatch.setattr(dispatch, "stream_codex_cli_turn", lambda **_kwargs: provider_stream)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+    )
+
+    async def collect() -> list[StreamEvent]:
+        stream = dispatch.stream_cowriter_turn(
+            provider="codex",
+            model="codex-test",
+            user_id="user-1",
+            system="system",
+            messages=[],
+            session=MagicMock(),
+            user=MagicMock(),
+        )
+        event = await anext(stream)
+        await stream.aclose()
+        return [event]
+
+    assert asyncio.run(collect()) == [AssistantTextEvent(text="partial")]
+    assert provider_stream.aclose_calls == 1
+
+
+@pytest.mark.parametrize(
+    "mirror_document",
+    (None, {}, {"tokens": {}}, {"tokens": {"access_token": ""}}),
+)
+def test_codex_dispatch_uses_the_api_for_a_missing_or_tokenless_mirror(
+    monkeypatch,
+    tmp_path: Path,
+    mirror_document,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    if mirror_document is not None:
+        auth_file.write_text(json.dumps(mirror_document))
+    monkeypatch.setenv("OPENAI_API_KEY", "api-key")
+    dispatched = []
+
+    async def api_stream(**kwargs):
+        dispatched.append(kwargs)
+        yield AssistantTextEvent(text="API")
+
+    monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", api_stream)
+
+    assert asyncio.run(_collect_codex_turn()) == [AssistantTextEvent(text="API")]
+    assert dispatched[0]["api_key"] == "api-key"
+
+
+@pytest.mark.parametrize(
+    "mirror_document",
+    (
+        [],
+        {"tokens": None},
+        {"tokens": []},
+        {"tokens": {"access_token": None}},
+        {"tokens": {"access_token": 1}},
+    ),
+)
+def test_codex_dispatch_rejects_invalid_mirror_without_http_fallback(
+    monkeypatch,
+    tmp_path: Path,
+    mirror_document,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(mirror_document))
+    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
+        asyncio.run(_collect_codex_turn())
+
+
+def test_codex_dispatch_rejects_invalid_json_without_http_fallback(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text("{")
+    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
+        asyncio.run(_collect_codex_turn())
+
+
+def test_codex_cli_access_token_discriminator_reports_an_unreadable_mirror(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        dispatch.Path,
+        "read_text",
+        lambda _path: (_ for _ in ()).throw(OSError("unreadable")),
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
+        dispatch._codex_cli_access_token_is_present()
+
+
+@pytest.mark.acceptance("ACC-COWRITER-13")
+def test_codex_dispatch_does_not_fall_back_to_http_after_a_cli_error(monkeypatch) -> None:
+    monkeypatch.setattr(dispatch, "_codex_cli_access_token_is_present", lambda: True)
+
+    async def cli_stream(**_kwargs):
+        raise ProviderUnavailableError("codex", "cli_login_expired")
+        yield AssistantTextEvent(text="unreachable")
+
+    monkeypatch.setattr(dispatch, "stream_codex_cli_turn", cli_stream)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="cli_login_expired"):
+        asyncio.run(_collect_codex_turn())
+
+
+def test_codex_cli_access_token_discriminator_accepts_only_a_nonempty_string(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+
+    auth_file.write_text(json.dumps({"tokens": {"access_token": "subscription-token"}}))
+    assert dispatch._codex_cli_access_token_is_present() is True
+
+    auth_file.write_text(json.dumps({"tokens": {"access_token": ""}}))
+    assert dispatch._codex_cli_access_token_is_present() is False

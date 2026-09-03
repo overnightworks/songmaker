@@ -586,10 +586,12 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 
 The Co-Writer dispatcher owns provider transport choice. Claude turns use its
 MCP-enabled CLI; Grok chooses its subscription CLI when the mounted
-`auth.json` carries a token and otherwise uses `XAI_API_KEY`; Codex uses its
-API key. A Grok CLI failure remains on that selected path for the turn. The
-Grok adapter converts its bounded `streaming-json` process output to chat
-events.
+`auth.json` carries a token and otherwise uses `XAI_API_KEY`; Codex chooses
+its subscription CLI when the mounted `.codex/auth.json` contains a nonempty
+`tokens.access_token`, otherwise `OPENAI_API_KEY`. A selected Grok or Codex
+CLI failure remains on that path for the turn. Their adapters convert bounded
+CLI streams to chat events; the Codex transport's security and stream-gate
+contract is documented in `docs/security.md`.
 
 ### Engine packages (`src/`)
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.claude.provider import StreamEvent
 from songmaker_cli.constants import (
+    CODEX_CLI_AUTH_FILE,
     COWRITER_GROK_CHAT_URL,
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
@@ -20,6 +21,7 @@ from songmaker_cli.cowriter.catalog import (
     XAI_API_KEY_ENVIRONMENT,
 )
 from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
+from songmaker_cli.cowriter.codex_cli_adapter import stream_codex_cli_turn
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.cowriter.grok_cli_adapter import stream_grok_cli_turn
 from songmaker_cli.cowriter.openai_adapter import (
@@ -75,7 +77,19 @@ async def stream_cowriter_turn(
             "grok", get_settings().xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_GROK_CHAT_URL
-    else:
+    if provider == "codex" and _codex_cli_access_token_is_present():
+        stream = stream_codex_cli_turn(
+            system=system,
+            model=model,
+            messages=messages,
+        )
+        try:
+            async for event in stream:
+                yield event
+        finally:
+            await stream.aclose()
+        return
+    if provider == "codex":
         api_key = _require_secret(
             "codex", get_settings().openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
@@ -172,3 +186,29 @@ def _grok_cli_token_is_present() -> bool:
         if key:
             return True
     return False
+
+
+def _codex_cli_access_token_is_present() -> bool:
+    try:
+        raw_auth = Path(CODEX_CLI_AUTH_FILE).read_text()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise ProviderUnavailableError("codex", "codex_cli_error") from exc
+    try:
+        document = json.loads(raw_auth)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailableError("codex", "codex_cli_error") from exc
+    if not isinstance(document, dict):
+        raise ProviderUnavailableError("codex", "codex_cli_error")
+    if "tokens" not in document:
+        return False
+    tokens = document["tokens"]
+    if not isinstance(tokens, dict):
+        raise ProviderUnavailableError("codex", "codex_cli_error")
+    if "access_token" not in tokens:
+        return False
+    access_token = tokens["access_token"]
+    if not isinstance(access_token, str):
+        raise ProviderUnavailableError("codex", "codex_cli_error")
+    return bool(access_token)

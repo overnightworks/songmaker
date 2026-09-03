@@ -1139,6 +1139,83 @@ def test_bounded_runner_uses_and_removes_a_private_prompt_file() -> None:
     assert not os.path.exists(observed[0][0])
 
 
+def test_bounded_runner_treats_a_missing_prompt_file_as_already_removed(monkeypatch) -> None:
+    prompt_paths: list[str] = []
+    real_popen = subprocess.Popen
+    real_unlink = os.unlink
+
+    def capture_process(command, **kwargs):
+        prompt_paths.append(command[4])
+        return real_popen(command, **kwargs)
+
+    def report_missing_file(_path: str) -> None:
+        raise FileNotFoundError
+
+    try:
+        with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+            monkeypatch.setattr(agent_cli.os, "unlink", report_missing_file)
+            outcome = run_cli_bounded(
+                ("/bin/sh", "-c", ":", "unused", "placeholder"),
+                stdin_payload=None,
+                read="all",
+                deadline=time.monotonic() + 1,
+                prompt_file_bytes=b"private prompt",
+                prompt_file_arg_index=4,
+            )
+    finally:
+        for prompt_path in prompt_paths:
+            real_unlink(prompt_path)
+
+    assert outcome.complete is True
+    assert outcome.reason is CliRunReason.COMPLETE
+
+
+def test_bounded_runner_publishes_prompt_unlink_errors_to_waiting_consumers(monkeypatch) -> None:
+    channel = CliLineChannel(maximum_lines=1)
+    prompt_paths: list[str] = []
+    received: list[CliRunOutcome] = []
+    ready_to_receive = threading.Event()
+    real_popen = subprocess.Popen
+    real_unlink = os.unlink
+
+    def capture_process(command, **kwargs):
+        prompt_paths.append(command[4])
+        return real_popen(command, **kwargs)
+
+    def wait_for_outcome() -> None:
+        ready_to_receive.set()
+        received.append(channel.receive(timeout=1))
+
+    def fail_to_unlink(_path: str) -> None:
+        raise OSError("prompt cleanup failed")
+
+    consumer = threading.Thread(target=wait_for_outcome)
+    consumer.start()
+    assert ready_to_receive.wait(timeout=1)
+    try:
+        with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+            monkeypatch.setattr(agent_cli.os, "unlink", fail_to_unlink)
+            outcome = run_cli_bounded(
+                ("/bin/sh", "-c", ":", "unused", "placeholder"),
+                stdin_payload=None,
+                read="all",
+                deadline=time.monotonic() + 1,
+                stdout_line_channel=channel,
+                prompt_file_bytes=b"private prompt",
+                prompt_file_arg_index=4,
+            )
+    finally:
+        for prompt_path in prompt_paths:
+            real_unlink(prompt_path)
+    consumer.join(timeout=1)
+
+    assert not consumer.is_alive()
+    assert outcome.reason is CliRunReason.IO_ERROR
+    assert outcome.complete is False
+    assert isinstance(outcome.io_error, OSError)
+    assert received == [outcome]
+
+
 def test_bounded_runner_creates_no_prompt_file_without_prompt_bytes() -> None:
     with patch("songmaker_cli.agent_cli.tempfile.mkstemp") as create_prompt_file:
         outcome = run_cli_bounded(

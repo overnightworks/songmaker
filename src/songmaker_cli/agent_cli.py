@@ -469,7 +469,22 @@ def _run_cli_bounded(
                 io_error=output.io_error,
             )
         if prompt_file_path is not None:
-            _unlink_prompt_file(prompt_file_path)
+            try:
+                _unlink_prompt_file(prompt_file_path)
+            except OSError as error:
+                if outcome is None:
+                    raise RuntimeError("bounded CLI runner exited without an outcome")
+                outcome = CliRunOutcome(
+                    started=outcome.started,
+                    spawn_error=outcome.spawn_error,
+                    returncode=outcome.returncode,
+                    stdout=outcome.stdout,
+                    stderr=outcome.stderr,
+                    complete=False,
+                    became_zombie=outcome.became_zombie,
+                    reason=CliRunReason.IO_ERROR,
+                    io_error=error,
+                )
         if outcome is None:
             raise RuntimeError("bounded CLI runner exited without an outcome")
         _publish_bounded_outcome(state, outcome)

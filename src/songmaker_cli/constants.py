@@ -233,6 +233,7 @@ GROK_CLI_LOGGED_OUT_MARKER: Final[str] = "You are not authenticated."
 GROK_CLI_MODEL_LIST_MARKER: Final[str] = "Available models:"
 GROK_CLI_MODEL_BULLETS: Final[tuple[str, ...]] = ("* ", "- ")
 CODEX_CLI_BINARY: Final[str] = "codex"
+CODEX_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.codex/auth.json"
 CODEX_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("login", "status")
 CODEX_CLI_LOGGED_IN_MARKER: Final[str] = "Logged in using "
 CODEX_CLI_LOGGED_OUT_MARKER: Final[str] = "Not logged in"

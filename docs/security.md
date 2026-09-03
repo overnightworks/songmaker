@@ -422,6 +422,31 @@ still emitted `available_commands` events with built-in tools and no
 does not add `--disallowed-tools` as a substitute for that reported-event
 gate.
 
+Codex uses its mirrored `tokens.access_token` only when it is a nonempty
+string; an absent or tokenless mirror selects the existing `OPENAI_API_KEY`
+path, while an unreadable or malformed mirror fails as `codex_cli_error`.
+The host remains the only refresh owner: the mounted Codex document keeps
+`tokens.refresh_token` empty. A selected Codex CLI route never changes to HTTP
+within that turn; an expired login is `cli_login_expired` and other CLI
+failures retain the named Codex error.
+
+The one-turn Codex command is `codex exec --json --sandbox read-only` with
+`--skip-git-repo-check`, `--ignore-user-config`, `--ignore-rules`,
+`--ephemeral`, `approval_policy="never"`, and `mcp_servers={}`. It receives a
+private temporary working directory (which is deliberately not a Git
+repository), a stdin prompt rather than a prompt file, and the runner's
+secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited. Its JSONL
+gate permits only lifecycle observations, completed assistant text, and a
+completed turn with usage; it discards reasoning, aborts and refuses every
+reported command, MCP, web-search, or file-change item, and treats unknown or
+malformed items as `codex_cli_stream_protocol_error`. Event payloads, prompts,
+and stderr are not logged; failure logging contains only the return code and
+stderr length.
+`approval_policy="never"` means auto-approval within the sandbox, not that
+tools cannot run: the JSONL gate refuses a tool only after Codex reports the
+item, so these flags do not rule out execution or a web-search request before
+that event is observed.
+
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
 reads a copy can spend what it holds until it expires but cannot mint a new

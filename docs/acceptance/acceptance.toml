@@ -22,6 +22,20 @@ proof_kind = "integration"
 critical = true
 
 [[acceptance]]
+id = "ACC-COWRITER-12"
+text = "A Codex Co-Writer turn with a mirrored subscription access token uses the Codex CLI route only."
+requirements = ["REQ-COWRITER-09"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
+id = "ACC-COWRITER-13"
+text = "A Codex CLI failure ends the turn with its named error and does not switch to HTTP."
+requirements = ["REQ-COWRITER-11"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
 id = "ACC-SHARE-18"
 text = "A public share audio request for an unknown share returns the same silent not-found response as a missing file."
 requirements = ["REQ-SHARE-18"]
