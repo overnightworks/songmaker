@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -1842,6 +1843,62 @@ def test_song_chat_send(client: TestClient) -> None:
     assert data["assistant_message"]["content"] == "Hello from Claude"
 
 
+def test_chat_heartbeat_writer_updates_an_active_job(client: TestClient) -> None:
+    from songmaker_cli.constants import JobStatus
+    from songmaker_cli.jobs._runtime import _write_chat_job_heartbeat
+
+    factory = client.app.state.ctx.db
+    old = datetime.now(timezone.utc) - timedelta(minutes=10)
+    with factory() as session:
+        session.add(
+            Job(
+                id="chat-heartbeat",
+                type="chat",
+                status=JobStatus.RUNNING,
+                started_at=old,
+                heartbeat_at=old,
+            ),
+        )
+        session.commit()
+
+    _write_chat_job_heartbeat(factory, "chat-heartbeat")
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id="chat-heartbeat").one()
+        assert job.heartbeat_at.replace(tzinfo=timezone.utc) > old
+
+
+def test_chat_heartbeat_timer_continues_after_a_write_failure() -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.jobs import _runtime
+
+    sleeps = 0
+
+    async def _next_tick(_interval: float) -> None:
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 2:
+            raise asyncio.CancelledError
+
+    with patch.object(_runtime.asyncio, "sleep", _next_tick), patch.object(
+        _runtime,
+        "_write_chat_job_heartbeat",
+        side_effect=RuntimeError("database unavailable"),
+    ) as write:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(
+                _runtime._keep_chat_job_heartbeat(
+                    lambda: None,
+                    "chat-heartbeat",
+                    interval_seconds=0,
+                ),
+            )
+
+    assert write.call_count == 1
+    assert sleeps == 2
+
+
 def test_song_chat_multi_turn(client: TestClient) -> None:
     patcher, mock_fn = _mock_acall()
     with patcher:
@@ -1939,6 +1996,28 @@ def test_song_chat_unavailable(client: TestClient) -> None:
         resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
+
+
+def test_song_chat_http_error_marks_job_failed_without_exception_log(
+    client: TestClient,
+) -> None:
+    from unittest.mock import patch
+
+    from fastapi import HTTPException
+
+    with patch(
+        "songmaker_cli.chat_api._build_song_context",
+        side_effect=HTTPException(404, "Song not found"),
+    ), patch("songmaker_cli.chat_api.log.exception") as log_exception:
+        response = client.post("/api/songs/s1/chat", json={"message": "hi"})
+
+    assert response.status_code == 404
+    log_exception.assert_not_called()
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "failed"
+        assert job.error_type == "chat_error"
 
 
 def test_song_chat_builds_context(client: TestClient) -> None:

@@ -859,10 +859,12 @@ generate/score:
   minutes, matching the arq-worker cron cadence), behind the same
   single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
   so only one web replica reaps a given tick.
-- `reap_stale_chat_jobs()` uses `CHAT_STALE_JOB_THRESHOLD_SECONDS` (900s) —
-  chat has no `arq_job_timeout` envelope; the in-process Claude call already
-  times out at `COWRITER_CLI_TIMEOUT_SECONDS` (600s), so this threshold only
-  needs a margin above that to catch a web process that died mid-request.
+- `reap_stale_chat_jobs()` makes a queued chat job eligible for `No worker
+  available — please retry.` after 900 seconds; the next 120-second reaper tick
+  detects it no later than 1,020 seconds after creation. A running turn sends a
+  heartbeat every 15 seconds; twelve missed intervals (180 seconds), plus the
+  120-second reaper tick, detects a dead web process no later than 300 seconds
+  after its last heartbeat and reports `Heartbeat lost — please retry.`
 - `reap_stale_lora_training_jobs()` uses the same default
   `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
   MusicWorker's `arq_job_timeout` envelope.

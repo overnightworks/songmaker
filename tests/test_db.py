@@ -1804,6 +1804,77 @@ def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
     assert get_job(db_session, j_other.id).status == "queued"
 
 
+def test_default_type_recovery_keeps_an_old_queued_generate_with_a_heartbeat(
+    db_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+
+    queued = create_job(db_session, "generate")
+    running = create_job(db_session, "generate")
+    db_session.commit()
+    update_job_status(db_session, running.id, "running", progress=0.5)
+    db_session.commit()
+
+    old = datetime.now(timezone.utc) - timedelta(days=1)
+    queued.started_at = old
+    queued.heartbeat_at = datetime.now(timezone.utc)
+    running.started_at = old
+    running.heartbeat_at = old
+    db_session.commit()
+
+    recovered = recover_stale_jobs_by_age_and_type(db_session, "generate")
+    db_session.commit()
+
+    assert recovered == 1
+    assert get_job(db_session, queued.id).status == "queued"
+    assert get_job(db_session, running.id).error_type == "stale_timeout"
+
+
+def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    import songmaker_cli.settings as settings
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.db.queries import (
+        StaleThresholds,
+        recover_stale_jobs_by_age_and_type,
+    )
+
+    job = create_job(db_session, JobType.CHAT)
+    db_session.commit()
+    update_job_status(db_session, job.id, JobStatus.RUNNING, progress=0.5)
+    db_session.commit()
+
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.started_at = now
+    job.heartbeat_at = now - timedelta(seconds=181)
+    db_session.commit()
+
+    def _unexpected_settings_read():
+        raise AssertionError("fully injected chat thresholds must not read settings")
+
+    monkeypatch.setattr(settings, "get_settings", _unexpected_settings_read)
+
+    recovered = recover_stale_jobs_by_age_and_type(
+        db_session,
+        JobType.CHAT,
+        stale_thresholds=StaleThresholds(
+            queued_seconds=900,
+            heartbeat_seconds=180,
+        ),
+        now=now,
+    )
+    db_session.commit()
+
+    assert recovered == 1
+    assert get_job(db_session, job.id).error_type == "heartbeat_lost"
+
+
 def test_recover_stale_jobs_by_age_distinguishes_queued_vs_running(
     db_session: Session,
 ) -> None:

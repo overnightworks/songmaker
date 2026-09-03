@@ -103,6 +103,25 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class _ChatStreamingResponse(StreamingResponse):
+    """Stop an inline chat heartbeat even when ASGI sending disconnects."""
+
+    def __init__(
+        self, content, *, heartbeat_task: asyncio.Task[None], job_id: str,
+        stop_heartbeat, **kwargs,
+    ):
+        super().__init__(content, **kwargs)
+        self._heartbeat_task = heartbeat_task
+        self._job_id = job_id
+        self._stop_heartbeat = stop_heartbeat
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self._stop_heartbeat(self._heartbeat_task, self._job_id)
+
+
 COWRITER_ROLE = (
     "You are the user's creative songwriting partner inside the songmaker "
     "app. You can call the mcp__songmaker__* tools to read and edit songs "
@@ -400,6 +419,12 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
+    from songmaker_cli.jobs._runtime import (
+        _fail_chat_job,
+        _keep_chat_job_heartbeat,
+        _stop_chat_job_heartbeat,
+    )
+
     check_redis_health(request)
 
     current_song = None
@@ -443,39 +468,48 @@ async def api_chat_turn(
 
     job = create_job_with_rate_limit(session, user, JobType.CHAT)
     job_id = job.id
+    update_job_status(session, job_id, JobStatus.RUNNING)
     session.commit()
 
-    active = get_active_conversation(session, user.id)
-    history = list_messages(session, active.id) if active else []
-    tail_budget = get_cowriter_tail_token_budget(session)
-    compacted = compact_conversation(
-        history,
-        budget=tail_budget,
-        existing=active.summary if active is not None else None,
-        summarize=fold_summary,
-    )
-    if (
-        active is not None
-        and compacted.windowed
-        and compacted.summary_text is not None
-    ):
-        upsert_summary(
-            session,
-            active.id,
-            compacted.summary_text,
-            compacted.last_summarized_message_id,
-            message_count=len(history),
-            token_count=(
-                count_tokens(compacted.summary_text)
-                + sum(count_tokens(msg.content) for msg in compacted.tail)
-            ),
+    try:
+        active = get_active_conversation(session, user.id)
+        history = list_messages(session, active.id) if active else []
+        tail_budget = get_cowriter_tail_token_budget(session)
+        compacted = compact_conversation(
+            history,
+            budget=tail_budget,
+            existing=active.summary if active is not None else None,
+            summarize=fold_summary,
         )
-        session.commit()
-    api_messages = compacted.to_api_messages()
-    api_messages.append({
-        "role": "user",
-        "content": envelope.wrap_user_message(req.message),
-    })
+        if (
+            active is not None
+            and compacted.windowed
+            and compacted.summary_text is not None
+        ):
+            upsert_summary(
+                session,
+                active.id,
+                compacted.summary_text,
+                compacted.last_summarized_message_id,
+                message_count=len(history),
+                token_count=(
+                    count_tokens(compacted.summary_text)
+                    + sum(count_tokens(msg.content) for msg in compacted.tail)
+                ),
+            )
+            session.commit()
+        api_messages = compacted.to_api_messages()
+        api_messages.append({
+            "role": "user",
+            "content": envelope.wrap_user_message(req.message),
+        })
+    except asyncio.CancelledError:
+        _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+        raise
+    except Exception:
+        log.exception("Co-writer chat setup failed")
+        _fail_chat_job(session, job_id, "Chat setup failed", "setup_error")
+        raise
 
     async def event_generator() -> AsyncIterator[str]:
         assistant_text = ""
@@ -502,20 +536,11 @@ async def api_chat_turn(
                 tail_budget,
             )
         except asyncio.CancelledError:
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED, error="Chat request cancelled",
-            )
-            session.commit()
+            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
             raise
         except ProviderUnavailableError as e:
             log.warning("Co-writer %s unavailable: %s", e.provider, e)
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED,
-                error=f"{e.provider} unavailable",
-            )
-            session.commit()
+            _fail_chat_job(session, job_id, f"{e.provider} unavailable", "unavailable")
             yield _sse_format({
                 "type": "error",
                 "status": 503,
@@ -524,11 +549,7 @@ async def api_chat_turn(
             return
         except Exception as exc:
             log.error("Co-writer chat failed (%s)", type(exc).__name__)
-            session.rollback()
-            update_job_status(
-                session, job_id, JobStatus.FAILED, error="Chat request failed",
-            )
-            session.commit()
+            _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
             yield _sse_format({
                 "type": "error",
                 "status": 500,
@@ -536,17 +557,31 @@ async def api_chat_turn(
             })
             return
 
-        conversation = get_or_create_active_conversation(session, user.id)
-        user_msg = append_message(
-            session, conversation.id, "user", req.message,
-            song_id=req.current_song_id,
-        )
-        assistant_msg = append_message(
-            session, conversation.id, "assistant", assistant_text,
-            song_id=req.current_song_id,
-        )
-        update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
-        session.commit()
+        try:
+            conversation = get_or_create_active_conversation(session, user.id)
+            user_msg = append_message(
+                session, conversation.id, "user", req.message,
+                song_id=req.current_song_id,
+            )
+            assistant_msg = append_message(
+                session, conversation.id, "assistant", assistant_text,
+                song_id=req.current_song_id,
+            )
+            if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
+                log.warning("Chat job %s was already terminal at completion", job_id)
+            session.commit()
+        except asyncio.CancelledError:
+            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+            raise
+        except Exception:
+            log.exception("Co-writer chat completion failed")
+            _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
+            yield _sse_format({
+                "type": "error",
+                "status": 500,
+                "message": "Chat completion failed",
+            })
+            return
 
         yield _sse_format({
             "type": "final",
@@ -557,8 +592,15 @@ async def api_chat_turn(
             ).model_dump(),
         })
 
-    return StreamingResponse(
+    heartbeat_task = asyncio.create_task(
+        _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
+    )
+
+    return _ChatStreamingResponse(
         event_generator(),
+        heartbeat_task=heartbeat_task,
+        job_id=job_id,
+        stop_heartbeat=_stop_chat_job_heartbeat,
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

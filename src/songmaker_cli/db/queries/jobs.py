@@ -20,6 +20,12 @@ from songmaker_cli.db.models import Job
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class StaleThresholds:
+    queued_seconds: int
+    heartbeat_seconds: int
+
+
 def has_active_job_of_type(session: Session, job_type: str) -> bool:
     return (
         session.query(Job)
@@ -232,6 +238,13 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     return hb < cutoff
 
 
+def _is_started_stale(job: Job, cutoff: datetime) -> bool:
+    started_at = job.started_at
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    return started_at < cutoff
+
+
 def recover_stale_jobs_by_age(
     session: Session, threshold_seconds: int | None = None,
 ) -> int:
@@ -298,35 +311,80 @@ def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
 def recover_stale_jobs_by_age_and_type(
     session: Session, job_type: str,
     threshold_seconds: int | None = None,
+    *,
+    stale_thresholds: StaleThresholds | None = None,
+    now: datetime | None = None,
 ) -> int:
-    """Mark running/queued jobs of a given type older than threshold as failed.
+    """Recover jobs with baseline defaults or explicit chat liveness thresholds."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
 
-    Uses heartbeat_at to detect hung workers.
-    """
-    if threshold_seconds is None:
-        from songmaker_cli.settings import get_settings
-        threshold_seconds = get_settings().stale_job_threshold_seconds
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=threshold_seconds)
+    if stale_thresholds is None:
+        if threshold_seconds is None:
+            from songmaker_cli.settings import get_settings
+            threshold_seconds = get_settings().stale_job_threshold_seconds
+        cutoff = now - timedelta(seconds=threshold_seconds)
+        candidates = (
+            session.query(Job)
+            .filter(
+                Job.status.in_(JOB_ACTIVE_STATUSES),
+                Job.type == job_type,
+                Job.started_at < cutoff,
+            )
+            .all()
+        )
+        recovered = 0
+        for job in candidates:
+            if not _is_heartbeat_stale(job, cutoff):
+                log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
+                continue
+            was_queued = job.status == JobStatus.QUEUED
+            job.status = JobStatus.FAILED
+            if was_queued:
+                job.error = "No worker available — please retry."
+                job.error_type = "no_worker_available"
+            else:
+                job.error = "Job timed out (exceeded maximum run time)"
+                job.error_type = "stale_timeout"
+            job.completed_at = now
+            recovered += 1
+        session.flush()
+        if recovered:
+            log.info(
+                "Recovered %d stale %s jobs (threshold=%ds)",
+                recovered, job_type, threshold_seconds,
+            )
+        return recovered
+
+    queued_cutoff = now - timedelta(seconds=stale_thresholds.queued_seconds)
+    heartbeat_cutoff = now - timedelta(seconds=stale_thresholds.heartbeat_seconds)
     candidates = (
         session.query(Job)
         .filter(
             Job.status.in_(JOB_ACTIVE_STATUSES),
             Job.type == job_type,
-            Job.started_at < cutoff,
         )
         .all()
     )
     recovered = 0
     for job in candidates:
-        if not _is_heartbeat_stale(job, cutoff):
-            log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
+        if job.status == JobStatus.QUEUED:
+            is_stale = _is_started_stale(job, queued_cutoff)
+        else:
+            is_stale = _is_heartbeat_stale(job, heartbeat_cutoff)
+        if not is_stale:
+            log.info("Skipping stale job %s — it is still making progress", job.id)
             continue
         was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
         if was_queued:
             job.error = "No worker available — please retry."
             job.error_type = "no_worker_available"
+        elif job_type == JobType.CHAT:
+            job.error = "Heartbeat lost — please retry."
+            job.error_type = "heartbeat_lost"
         else:
             job.error = "Job timed out (exceeded maximum run time)"
             job.error_type = "stale_timeout"
@@ -335,8 +393,11 @@ def recover_stale_jobs_by_age_and_type(
     session.flush()
     if recovered:
         log.info(
-            "Recovered %d stale %s jobs (threshold=%ds)",
-            recovered, job_type, threshold_seconds,
+            "Recovered %d stale %s jobs (queued=%ds, heartbeat=%ds)",
+            recovered,
+            job_type,
+            stale_thresholds.queued_seconds,
+            stale_thresholds.heartbeat_seconds,
         )
     return recovered
 

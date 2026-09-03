@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     AvailableModel,
     ChatMessage,
     Conversation,
+    Job,
     Song,
     User,
     Version,
@@ -305,6 +306,97 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         msgs = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
         assert [m.role for m in msgs] == ["user", "assistant"]
         assert all(m.conversation_id == conv_id for m in msgs)
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "completed"
+
+
+def test_chat_turn_completes_when_its_heartbeat_task_fails(client):
+    c, factory = client
+
+    async def _failed_heartbeat(*_args, **_kwargs) -> None:
+        raise RuntimeError("database unavailable")
+
+    with patch(
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
+        _mock_claude("ok"),
+    ), patch(
+        "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
+        _failed_heartbeat,
+    ):
+        response = c.post("/api/chat/turn", json={"message": "hey"})
+
+    assert response.status_code == 200
+    assert _final_event(_stream_events(response))["assistant_message"]["content"] == "ok"
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "completed"
+
+
+def test_chat_turn_stops_heartbeat_when_asgi_send_fails(client):
+    import asyncio
+
+    from fastapi import Request
+    from starlette.requests import ClientDisconnect
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
+    c, factory = client
+
+    async def _exercise() -> None:
+        heartbeat_started = asyncio.Event()
+        heartbeat_stopped = asyncio.Event()
+
+        async def _keep_heartbeat(*_args, **_kwargs) -> None:
+            heartbeat_started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                heartbeat_stopped.set()
+
+        async def _stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+            await heartbeat_started.wait()
+            yield AssistantTextEvent(text="partial")
+            await asyncio.Future()
+
+        request = Request({"type": "http", "app": c.app})
+        user = AuthenticatedUser(
+            id="u-test",
+            username="u-u-test",
+            role="user",
+            is_active=True,
+        )
+        with factory() as session:
+            with patch(
+                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
+                _keep_heartbeat,
+            ), patch(
+                "songmaker_cli.conversation_api.stream_cowriter_turn",
+                _stream,
+            ):
+                response = await api_chat_turn(
+                    ChatTurnV2Request(message="hey"),
+                    request,
+                    user,
+                    session,
+                )
+                async def _receive():
+                    await asyncio.Future()
+
+                async def _send(message) -> None:
+                    if message["type"] == "http.response.body":
+                        raise OSError("client disconnected")
+
+                with pytest.raises(ClientDisconnect):
+                    await response(
+                        {"type": "http", "asgi": {"spec_version": "2.4"}},
+                        _receive,
+                        _send,
+                    )
+
+        assert heartbeat_stopped.is_set()
+
+    asyncio.run(_exercise())
 
 
 def test_chat_turn_reuses_active_conversation_across_turns(client):

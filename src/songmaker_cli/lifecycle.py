@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -35,16 +37,6 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
 JOB_REAPER_INTERVAL_SECONDS: Final = 120
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
-
-# Chat jobs run inline in a web request (chat_api.py, conversation_api.py),
-# not inside an arq worker, so they share none of generate/score/lora_training's
-# arq_job_timeout envelope. The in-process Claude call already enforces its own
-# ceiling at COWRITER_CLI_TIMEOUT_SECONDS (600s); this threshold only needs to
-# catch a *web process* that died before that in-process timeout could fire, so
-# it sits with a comfortable margin above it without leaving a hung chat turn
-# on screen for long.
-CHAT_STALE_JOB_THRESHOLD_SECONDS: Final = 900
-
 
 class BackgroundLoopName(StrEnum):
     SESSION_SYNC = "session_sync"
@@ -379,25 +371,32 @@ def reap_stale_lora_training_jobs(ctx: AppContext) -> int:
     return recovered
 
 
-def reap_stale_chat_jobs(ctx: AppContext) -> int:
+def reap_stale_chat_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
     """Terminal-ize CHAT jobs whose web-process request handler died.
 
     Chat jobs run inline in a FastAPI request (chat_api.py,
     conversation_api.py) rather than in an arq worker, so they have no
     cron of their own; a web-process crash mid-request leaves the job
-    QUEUED/RUNNING forever. Reuses the same age+heartbeat rule
-    generate/score/lora_training use, with :data:`CHAT_STALE_JOB_THRESHOLD_SECONDS`
-    in place of the shared arq-worker default -- chat turns are short-lived
-    and don't share generate/score's much longer arq_job_timeout envelope.
+    QUEUED/RUNNING forever. Queued jobs age out after 15 minutes, while a
+    running job without a heartbeat fails after three minutes.
 
     Returns the number of jobs recovered.
     """
     from songmaker_cli.constants import JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.db.queries import (
+        StaleThresholds,
+        recover_stale_jobs_by_age_and_type,
+    )
 
     with ctx.db() as session:
         recovered = recover_stale_jobs_by_age_and_type(
-            session, JobType.CHAT, CHAT_STALE_JOB_THRESHOLD_SECONDS,
+            session,
+            JobType.CHAT,
+            stale_thresholds=StaleThresholds(
+                queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+                heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+            ),
+            now=now,
         )
         session.commit()
     if recovered:
@@ -449,12 +448,14 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
     return reconciled
 
 
-def _run_stale_job_reaper_tick(ctx: AppContext) -> tuple[int, int]:
+def _run_stale_job_reaper_tick(
+    ctx: AppContext, *, now: datetime | None = None,
+) -> tuple[int, int]:
     """Reap stale chat jobs and reconcile crashed LoRAs for one tick.
 
     Returns ``(chat_jobs_recovered, loras_reconciled)``.
     """
-    recovered_chat = reap_stale_chat_jobs(ctx)
+    recovered_chat = reap_stale_chat_jobs(ctx, now=now)
     reconciled_loras = reconcile_crashed_loras(ctx)
     return recovered_chat, reconciled_loras
 
