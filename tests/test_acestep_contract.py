@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from acestep_engine.client import _build_submit_payload
+
 _VENDORED_ACESTEP_PATH = (
     Path(__file__).resolve().parent.parent / "vendor" / "acestep"
 )
@@ -109,3 +111,26 @@ def test_acestep_config_has_no_unknown_fields() -> None:
     assert not extra, (
         f"AceStepConfig fields missing from vendored GenerateMusicRequest: {extra}"
     )
+
+
+def test_repaint_submit_payload_matches_vendored_request_schema() -> None:
+    config = _base_config(
+        task_type="repaint",
+        src_audio_path="/tmp/source.wav",
+        repainting_start=10.0,
+        repainting_end=20.0,
+        repaint_mode="conservative",
+        repaint_strength=0.25,
+    )
+    payload = _build_submit_payload(config)
+    fork_fields = set(GenerateMusicRequest.model_fields)
+
+    assert set(payload) <= fork_fields
+    assert {
+        "task_type",
+        "src_audio_path",
+        "repainting_start",
+        "repainting_end",
+        "repaint_mode",
+        "repaint_strength",
+    } <= fork_fields

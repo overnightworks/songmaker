@@ -372,7 +372,7 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 | Cover | `cover` | Cover button on generation | Re-interpret with different style/lyrics, keep melody |
 | Reference | `text2music` + `reference_audio_path` | Upload in generation settings | Guide timbre/style from an external audio track |
 
-**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `thinking` is auto-disabled. The result is a new generation — non-destructive. ACE-Step 1.5 adds server-side crossfade controls:
+**Repaint** uploads the original WAV as multipart `ctx_audio`, with `repainting_start` and `repainting_end` (0.0-1.0 fractions). `thinking` is auto-disabled. The result is a new generation — non-destructive. ACE-Step 1.5 adds server-side crossfade controls:
 - `repaint_mode`: `conservative` / `balanced` / `aggressive` — how much source audio is preserved
 - `repaint_strength`: 0-1, intensity for balanced mode
 - `repaint_latent_crossfade_frames`: latent-level boundary blend width
@@ -380,9 +380,11 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 
 When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles crossfading and the client-side splice (`_splice_repaint_raw`) is skipped.
 
-**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `thinking` is auto-disabled. ACE-Step 1.5 adds `cover_noise_strength` (0-1) for noise blending control.
+**Cover** uploads its source WAV as multipart `ctx_audio` and sends `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `thinking` is auto-disabled. ACE-Step 1.5 adds `cover_noise_strength` (0-1) for noise blending control.
 
-**Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio_path` and resolved to an absolute path before sending to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
+**Audio hand-off to the ACE-Step fork.** Songmaker keeps the source and reference files as local paths until submission, then uploads them in the `/release_task` multipart body: `src_audio_path` becomes `ctx_audio`, and `reference_audio_path` becomes `ref_audio`. It never sends either local absolute path as a request field. The fork rejects such paths (`release_task_audio_paths.py:40-41`) and persists multipart uploads to its temporary directory (`release_task_request_parser.py:104-132`); the latter is therefore the supported Repaint, Cover, and reference-audio contract.
+
+**Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio_path`; Songmaker uploads that file as multipart `ref_audio` when it submits to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
 
 ## CoT Response Data
 

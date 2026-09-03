@@ -16,10 +16,12 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Final
 from urllib.error import URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -60,6 +62,10 @@ DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
 _DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
 _NO_FAILURE_DETAIL: Final[str] = "generation failed (no detail from ACE-Step)"
 _MAX_CAUSE_CHARS: Final[int] = 300
+_AUDIO_UPLOAD_FIELDS: Final[tuple[tuple[str, str], ...]] = (
+    ("src_audio_path", "ctx_audio"),
+    ("reference_audio_path", "ref_audio"),
+)
 
 
 def _failure_cause(entry: TaskQueryEntry) -> str:
@@ -193,6 +199,50 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
     if config.model:
         payload["model"] = config.model
     return payload
+
+
+def _encode_multipart_submit_payload(payload: dict) -> tuple[bytes, str] | None:
+    audio_files = [
+        (payload_name, form_name, Path(path))
+        for payload_name, form_name in _AUDIO_UPLOAD_FIELDS
+        if isinstance(path := payload.get(payload_name), str) and path
+    ]
+    if not audio_files:
+        return None
+
+    for _, _, audio_path in audio_files:
+        if not audio_path.is_file():
+            raise TaskSubmissionError(
+                f"ACE-Step audio input is not a file: {audio_path}",
+            )
+
+    boundary = f"----songmaker-{uuid4().hex}"
+    chunks: list[bytes] = []
+    audio_payload_names = {payload_name for payload_name, _, _ in audio_files}
+
+    for name, value in payload.items():
+        if name in audio_payload_names or value is None:
+            continue
+        chunks.extend((
+            f"--{boundary}\r\n".encode(),
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+            f"{str(value).lower() if isinstance(value, bool) else value}\r\n".encode(),
+        ))
+
+    for _, form_name, audio_path in audio_files:
+        chunks.extend((
+            f"--{boundary}\r\n".encode(),
+            (
+                "Content-Disposition: form-data; "
+                f'name="{form_name}"; filename="{audio_path.name}"\r\n'
+            ).encode(),
+            b"Content-Type: audio/wav\r\n\r\n",
+            audio_path.read_bytes(),
+            b"\r\n",
+        ))
+
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 
 class AceStepClient:
@@ -355,11 +405,16 @@ class AceStepClient:
             json.JSONDecodeError/PydanticValidationError: On bad response (not retryable).
             TaskSubmissionError: If the server returns no task_id.
         """
-        data = json.dumps(payload).encode()
+        multipart = _encode_multipart_submit_payload(payload)
+        if multipart is None:
+            data = json.dumps(payload).encode()
+            content_type = "application/json"
+        else:
+            data, content_type = multipart
         req = Request(
             f"{self.base_url}/release_task",
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": content_type},
             method="POST",
         )
         with urlopen(req, timeout=30) as resp:

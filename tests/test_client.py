@@ -512,11 +512,13 @@ def test_submit_task_with_lm_negative_prompt() -> None:
 # ── repaint/cover payload keys ────────────────────────────────────
 
 
-def test_submit_task_repaint_sends_src_audio_path() -> None:
+def test_submit_task_repaint_uploads_source_audio(tmp_path) -> None:
     client = AceStepClient()
+    source_audio = tmp_path / "source.wav"
+    source_audio.write_bytes(b"source audio")
     config = AceStepConfig(
         prompt="test", lyrics="la la",
-        task_type="repaint", src_audio_path="/audio/src.wav",
+        task_type="repaint", src_audio_path=str(source_audio),
         repainting_start=10.0, repainting_end=20.0,
     )
 
@@ -529,18 +531,24 @@ def test_submit_task_repaint_sends_src_audio_path() -> None:
         mock_urlopen.return_value = _mock_response(response_data)
         client._submit_task(config)
 
-    payload = json.loads(mock_urlopen.call_args[0][0].data)
-    assert payload["src_audio_path"] == "/audio/src.wav"
-    assert "src_audio" not in payload
-    assert payload["repainting_start"] == 10.0
-    assert payload["repainting_end"] == 20.0
+    request = mock_urlopen.call_args.args[0]
+    body = request.data.decode()
+    assert request.headers["Content-type"].startswith("multipart/form-data; boundary=")
+    assert 'name="ctx_audio"; filename="source.wav"' in body
+    assert 'name="src_audio_path"' not in body
+    assert 'name="task_type"\r\n\r\nrepaint\r\n' in body
+    assert 'name="repainting_start"\r\n\r\n10.0\r\n' in body
+    assert 'name="repainting_end"\r\n\r\n20.0\r\n' in body
+    assert "source audio" in body
 
 
-def test_submit_task_sends_reference_audio_path() -> None:
+def test_submit_task_uploads_reference_audio(tmp_path) -> None:
     client = AceStepClient()
+    reference_audio = tmp_path / "reference.wav"
+    reference_audio.write_bytes(b"reference audio")
     config = AceStepConfig(
         prompt="test", lyrics="la la",
-        reference_audio_path="/audio/ref.wav",
+        reference_audio_path=str(reference_audio),
     )
 
     response_data = json.dumps({
@@ -552,9 +560,12 @@ def test_submit_task_sends_reference_audio_path() -> None:
         mock_urlopen.return_value = _mock_response(response_data)
         client._submit_task(config)
 
-    payload = json.loads(mock_urlopen.call_args[0][0].data)
-    assert payload["reference_audio_path"] == "/audio/ref.wav"
-    assert "reference_audio" not in payload
+    request = mock_urlopen.call_args.args[0]
+    body = request.data.decode()
+    assert request.headers["Content-type"].startswith("multipart/form-data; boundary=")
+    assert 'name="ref_audio"; filename="reference.wav"' in body
+    assert 'name="reference_audio_path"' not in body
+    assert "reference audio" in body
 
 
 # ── submit json/pydantic decode error (non-retryable) ─────────────
