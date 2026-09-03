@@ -656,8 +656,11 @@ def test_no_capacity_marks_failed(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
+        assert lora.error == "No ACE-Step workers available"
+        assert "no workers" not in lora.error
         job = get_job(session, "job-1")
         assert job.status == JobStatus.FAILED
+        assert job.error == "No ACE-Step workers available"
 
 
 def test_run_without_factory_raises(db_factory, tmp_path) -> None:

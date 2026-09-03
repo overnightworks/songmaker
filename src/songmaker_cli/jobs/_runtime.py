@@ -10,53 +10,72 @@ from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
+    JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
+    JOB_ERROR_GENERATION_TIMED_OUT,
+    JOB_ERROR_INTERNAL,
+    JOB_ERROR_JUDGE_FAILED,
+    JOB_ERROR_NO_WORKERS,
+    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
+    JOB_ERROR_SERVER_UNREACHABLE,
+    JOB_ERROR_SONG_NOT_FOUND,
+    JOB_ERROR_UNEXPECTED,
+    JOB_ERROR_VERSION_NOT_FOUND,
+    JOB_ERROR_WORKER_GENERATION_FAILED,
+    JOB_ERROR_WORKER_STREAM_SILENT,
     JOB_HEARTBEAT_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
+    JUDGE_FAILURE_TIMEOUT,
     JobStatus,
 )
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
     NoCapacityError,
-    WorkerGenerationFailed,
     WorkerTaskFailed,
 )
 
 log = logging.getLogger(__name__)
 
 _USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
-    (AudioDownloadError, "Failed to download generated audio"),
-    (ConnectionError, "ACE-Step server not reachable"),
-    (TimeoutError, "Generation timed out"),
-    (NoCapacityError, "No ACE-Step workers available"),
-    (WorkerTaskFailed, "Worker generation failed"),
-    (RuntimeError, "Internal error during processing"),
+    (AudioDownloadError, JOB_ERROR_AUDIO_DOWNLOAD_FAILED),
+    (ConnectionError, JOB_ERROR_SERVER_UNREACHABLE),
+    (TimeoutError, JOB_ERROR_GENERATION_TIMED_OUT),
+    (NoCapacityError, JOB_ERROR_NO_WORKERS),
+    (WorkerTaskFailed, JOB_ERROR_WORKER_GENERATION_FAILED),
+    (RuntimeError, JOB_ERROR_INTERNAL),
 )
+
+_GENERATION_SETUP_MESSAGES: frozenset[str] = frozenset({
+    JOB_ERROR_SONG_NOT_FOUND,
+    JOB_ERROR_VERSION_NOT_FOUND,
+    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
+})
 
 
 class GenerationSetupError(Exception):
     pass
 
 
-_PASSTHROUGH_ERRORS: tuple[type[Exception], ...] = (
-    GenerationSetupError,
-    WorkerGenerationFailed,
-)
+class JudgeFailureError(Exception):
+    pass
 
 
-def _sanitize_error(exc: Exception) -> str:
-    """Return a user-safe error message, logging the full exception.
-
-    A passthrough error's message is already written for the user — our
-    own setup validation, or ACE-Step's cause for a failed generation —
-    and is the only thing that makes the failure diagnosable, so it is
-    kept verbatim.
-    """
-    if isinstance(exc, _PASSTHROUGH_ERRORS):
-        return str(exc)
+def _sanitize_error(exc: Exception, job_id: str) -> str:
+    """Return the fixed musician-facing message and log the raw failure."""
+    log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
+    if isinstance(exc, GenerationSetupError):
+        if str(exc) in _GENERATION_SETUP_MESSAGES:
+            return str(exc)
+        return JOB_ERROR_UNEXPECTED
+    if isinstance(exc, JudgeFailureError):
+        if str(exc) == JUDGE_FAILURE_TIMEOUT:
+            return str(exc)
+        return JOB_ERROR_JUDGE_FAILED
+    if isinstance(exc, WorkerTaskFailed) and str(exc) == JOB_ERROR_WORKER_STREAM_SILENT:
+        return JOB_ERROR_WORKER_STREAM_SILENT
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return message
-    return "An unexpected error occurred"
+    return JOB_ERROR_UNEXPECTED
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:

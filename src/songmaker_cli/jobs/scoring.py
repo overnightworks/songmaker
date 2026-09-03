@@ -27,7 +27,7 @@ from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.scoring.registry import CHILD_SCORER_NAMES, LYRICAL_COHERENCE_SCORER
 from songmaker_cli.settings import get_settings
 
-from ._runtime import _job_is_terminal, _sanitize_error, _update_job
+from ._runtime import JudgeFailureError, _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -194,7 +194,7 @@ def run_scoring_job(
         if judge_failure is not None:
             _update_job(
                 db_factory, job_id, JobStatus.PARTIAL, progress=1.0,
-                error=f"Lyrical coherence judge failed: {judge_failure}",
+                error=_sanitize_error(JudgeFailureError(judge_failure), job_id),
                 error_type="judge_error",
             )
         else:
@@ -204,11 +204,11 @@ def run_scoring_job(
         log.error("Scoring job timed out: %s", exc)
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="timeout",
+            error=_sanitize_error(exc, job_id), error_type="timeout",
         )
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="scoring_error",
+            error=_sanitize_error(exc, job_id), error_type="scoring_error",
         )

@@ -504,13 +504,14 @@ async def run_lora_training_job(
                 on_heartbeat=_on_heartbeat,
             )
         except NoCapacityError as exc:
+            sanitized_error = _sanitize_error(exc, job_id)
             cleanup_failed_lora_with_factory(
                 lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
-                db_factory=db_factory, error_message=str(exc),
+                db_factory=db_factory, error_message=sanitized_error,
             )
             _update_job(
                 db_factory, job_id, JobStatus.FAILED,
-                error=_sanitize_error(exc), error_type="no_workers",
+                error=sanitized_error, error_type="no_workers",
             )
             return
 
@@ -616,15 +617,16 @@ async def run_lora_training_job(
             session.commit()
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="lora_training_error",
+            error=_sanitize_error(exc, job_id), error_type="lora_training_error",
         )
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
+        sanitized_error = _sanitize_error(exc, job_id)
         cleanup_failed_lora_with_factory(
             lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
-            db_factory=db_factory, error_message=_sanitize_error(exc),
+            db_factory=db_factory, error_message=sanitized_error,
         )
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="lora_training_error",
+            error=sanitized_error, error_type="lora_training_error",
         )

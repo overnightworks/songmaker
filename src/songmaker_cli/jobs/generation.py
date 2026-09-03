@@ -31,6 +31,10 @@ from songmaker_cli.config import (
 )
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    JOB_ERROR_GENERATION_CANCELLED,
+    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
+    JOB_ERROR_SONG_NOT_FOUND,
+    JOB_ERROR_VERSION_NOT_FOUND,
     WORKER_SHARED_TMP_DIRNAME,
     JobFunction,
     JobStatus,
@@ -95,11 +99,11 @@ def _load_song_meta(
     with db_factory() as session:
         song = get_song(session, song_id)
         if not song:
-            raise GenerationSetupError("Song not found")
+            raise GenerationSetupError(JOB_ERROR_SONG_NOT_FOUND)
 
         version = get_version(session, version_id, song_id)
         if not version:
-            raise GenerationSetupError("Version not found")
+            raise GenerationSetupError(JOB_ERROR_VERSION_NOT_FOUND)
 
         album = song.album
         album_name = album.title.lower().replace(" ", "_") if album else "unknown"
@@ -225,7 +229,7 @@ def _build_generation_context(
                 audio_dir, user_id, ace_config.reference_audio_path,
             )
         except ReferenceAudioRejected as exc:
-            raise GenerationSetupError("Reference audio not found") from exc
+            raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
         ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
 
     ace_config = _apply_user_lora_path(
@@ -470,13 +474,13 @@ def _finalize_generation_job(
         _update_job(
             db_factory, job_id, JobStatus.PARTIAL, progress=completed / count,
             error=f"{completed}/{count} completed, {count - completed} failed: "
-                  f"{_sanitize_error(last_error)}",
+                  f"{_sanitize_error(last_error, job_id)}",
             error_type="generation_error",
         )
     else:
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(last_error),
+            error=_sanitize_error(last_error, job_id),
             error_type="generation_error",
         )
 
@@ -716,7 +720,7 @@ async def run_generation_job(
         except GenerationSetupError as exc:
             _update_job(
                 db_factory, job_id, JobStatus.FAILED,
-                error=str(exc), error_type="setup_error",
+                error=_sanitize_error(exc, job_id), error_type="setup_error",
             )
             return
 
@@ -774,10 +778,14 @@ async def run_generation_job(
                             redis, db_factory, persisted_gen_id, song_id,
                         )
                 except (NoCapacityError, WorkerTaskFailed) as exc:
-                    log.warning("Generation %d/%d failed: %s", i + 1, count, exc)
+                    log.warning(
+                        "Generation job %s %d/%d failed: %s", job_id, i + 1, count, exc,
+                    )
                     last_error = exc
                 except Exception as exc:
-                    log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
+                    log.exception(
+                        "Generation job %s %d/%d failed: %s", job_id, i + 1, count, exc,
+                    )
                     last_error = exc
 
             _finalize_generation_job(db_factory, job_id, count, completed, last_error)
@@ -792,7 +800,7 @@ async def run_generation_job(
         log.warning("Generation job %s cancelled (arq timeout or worker shutdown)", job_id)
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error="Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+            error=JOB_ERROR_GENERATION_CANCELLED,
             error_type="timeout",
         )
         raise
@@ -800,7 +808,7 @@ async def run_generation_job(
         log.exception("Generation job failed: %s", exc)
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="generation_error",
+            error=_sanitize_error(exc, job_id), error_type="generation_error",
         )
 
 

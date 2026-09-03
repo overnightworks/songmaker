@@ -354,10 +354,10 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
         assert job.error == "No ACE-Step workers available"
 
 
-def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path) -> None:
+def test_generation_job_hides_worker_internal_details(seeded_db, tmp_path: Path) -> None:
     from songmaker_cli.scheduler import WorkerGenerationFailed
 
-    cause = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
+    cause = "/opt/acestep/worker.py: insufficient VRAM for the configured model"
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(
         WorkerGenerationFailed(cause),
     )
@@ -374,7 +374,8 @@ def test_generation_job_records_the_workers_own_cause(seeded_db, tmp_path: Path)
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == cause
+        assert job.error == "Worker generation failed"
+        assert cause not in job.error
 
 
 def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -363,7 +364,45 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
         job = session.query(Job).filter_by(id="j-score").one()
         assert job.status == "partial"
         assert job.error_type == "judge_error"
-        assert "grok" in job.error
+        assert job.error == "Lyrical coherence judge failed"
+
+
+def test_run_scoring_job_hides_judge_cli_details(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir = _seeded_generation(tmp_path)
+    judged_scores = replace(
+        _scoring_result_with_transcript(),
+        runs=(
+            ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK),
+            ScorerRun(
+                scorer="lyrical_coherence",
+                outcome=ScorerOutcome.FAILED,
+                detail="/usr/local/bin/claude exited with stderr from the judge",
+            ),
+        ),
+    )
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(
+                return_value=_scoring_result_with_transcript(),
+            )),
+        ),
+        patch(
+            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
+            return_value=judged_scores,
+        ),
+    ):
+        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id="j-score").one()
+        assert job.status == "partial"
+        assert job.error_type == "judge_error"
+        assert job.error == "Lyrical coherence judge failed"
+        assert "/usr/local/bin/claude" not in job.error
 
 
 def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
