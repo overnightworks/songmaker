@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Validate and optionally repair every stored ``generation_params`` JSON column.
 
 Walks ``Version.generation_params``, ``Generation.generation_params`` and
@@ -32,8 +33,11 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from _repo_path import prepend_own_checkout_src
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
+
+prepend_own_checkout_src(__file__)
 
 from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,

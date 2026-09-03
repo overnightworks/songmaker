@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """One-time backfill of ``Generation.audio_duration_sec`` for existing takes.
 
 Since #258, every newly generated take stores its measured audio length in
@@ -50,7 +51,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from _repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
+
+prepend_own_checkout_src(__file__)
 
 from songmaker_cli import queue_streams
 from songmaker_cli.config import find_project_root

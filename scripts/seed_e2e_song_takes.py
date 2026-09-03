@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Bulk-seed a song with many reimported-style takes directly against the database.
 
 ``frontend/e2e/kinetic-strip.spec.ts`` (issue #358) needs a song with dozens
@@ -41,7 +42,10 @@ import sys
 import uuid
 from pathlib import Path
 
+from _repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
+
+prepend_own_checkout_src(__file__)
 
 from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root

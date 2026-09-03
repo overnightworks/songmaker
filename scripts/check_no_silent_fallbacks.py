@@ -55,6 +55,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from _repo_path import prepend_own_checkout_src
+
+prepend_own_checkout_src(__file__)
+
 PACKAGE_SETTINGS_MODULE = r"^src/[^/]+/settings\.py$"
 ALEMBIC_ENV_MODULE = r"^src/[^/]+/db/migrations/env\.py$"
 ENV_OVERRIDE_MODULE = r"^src/[^/]+/env_override\.py$"

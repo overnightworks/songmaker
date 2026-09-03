@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Bulk-seed the e2e rail test's filler albums directly against the database.
 
 ``frontend/e2e/seed.ts`` needs enough closed rail rows to overflow the rail's
@@ -31,7 +32,10 @@ from __future__ import annotations
 import argparse
 import sys
 
+from _repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
+
+prepend_own_checkout_src(__file__)
 
 from songmaker_cli.api_helpers import unique_album_id
 from songmaker_cli.db.engine import connect_db, resolve_database_url
