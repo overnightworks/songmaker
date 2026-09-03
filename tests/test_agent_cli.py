@@ -17,6 +17,7 @@ from songmaker_cli.agent_cli import (
     CachedProbe,
     CliProbeBudgetExceeded,
     CliRun,
+    CliRunReason,
     _cli_output,
     claude_cli_login,
     clear_agent_cli_caches,
@@ -453,7 +454,10 @@ def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() 
     release_spawn = threading.Event()
     spawned = threading.Event()
     reaped = threading.Event()
+    callbacks_reaped = threading.Event()
     started: list[subprocess.Popen[bytes]] = []
+    spawned_process_ids: list[int] = []
+    reaped_processes: list[tuple[int, bool]] = []
     real_popen = subprocess.Popen
     real_reap = agent_cli._reap_process_group
 
@@ -470,24 +474,120 @@ def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() 
         finally:
             reaped.set()
 
+    def record_reaped(process_id: int, became_zombie: bool) -> None:
+        reaped_processes.append((process_id, became_zombie))
+        callbacks_reaped.set()
+
     with (
         patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=late_process),
         patch("songmaker_cli.agent_cli._reap_process_group", side_effect=capture_reap),
     ):
         deadline = time.monotonic() + 0.05
         assert run_cli_bounded(
-            "/bin/sh",
-            ("-c", "while :; do :; done"),
+            ("/bin/sh", "-c", "while :; do :; done"),
             stdin_payload=None,
             read="all",
             deadline=deadline,
-        ) is None
+            on_spawned=spawned_process_ids.append,
+            on_reaped=record_reaped,
+        ).reason is CliRunReason.DEADLINE_BEFORE_SPAWN
         release_spawn.set()
         assert spawned.wait(timeout=1)
         assert reaped.wait(timeout=1)
+        assert callbacks_reaped.wait(timeout=1)
 
+    assert spawned_process_ids == [started[0].pid]
+    assert reaped_processes == [(started[0].pid, False)]
     with pytest.raises(ProcessLookupError):
         os.killpg(started[0].pid, 0)
+
+
+def test_bounded_runner_reports_a_spawn_error() -> None:
+    error = OSError("cannot start")
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=error):
+        outcome = run_cli_bounded(
+            ("missing-cli",),
+            stdin_payload=None,
+            read="all",
+            deadline=time.monotonic() + 1,
+        )
+
+    assert outcome.started is False
+    assert outcome.spawn_error is error
+    assert outcome.returncode is None
+    assert outcome.reason is CliRunReason.SPAWN_FAILED
+
+
+def test_bounded_runner_carries_an_output_io_error(monkeypatch) -> None:
+    error = OSError("cannot switch stream mode")
+
+    def fail_to_set_blocking(_fd: int, _value: bool) -> None:
+        raise error
+
+    monkeypatch.setattr("songmaker_cli.agent_cli.os.set_blocking", fail_to_set_blocking)
+
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "printf output"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome.reason is CliRunReason.IO_ERROR
+    assert outcome.io_error is error
+
+
+def test_bounded_runner_reports_a_stdin_close_error_after_spawning(monkeypatch) -> None:
+    error = OSError("cannot close stdin")
+    spawned_process_ids: list[int] = []
+    reaped_processes: list[tuple[int, bool]] = []
+
+    def fail_to_close_stdin(_process: subprocess.Popen[bytes]) -> None:
+        raise error
+
+    def record_reaped(process_id: int, became_zombie: bool) -> None:
+        reaped_processes.append((process_id, became_zombie))
+
+    monkeypatch.setattr("songmaker_cli.agent_cli._close_stdin", fail_to_close_stdin)
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "exec sleep 10"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        on_spawned=spawned_process_ids.append,
+        on_reaped=record_reaped,
+    )
+
+    assert outcome.reason is CliRunReason.IO_ERROR
+    assert outcome.io_error is error
+    assert len(spawned_process_ids) == 1
+    assert reaped_processes == [(spawned_process_ids[0], False)]
+
+
+def test_bounded_runner_returns_when_its_cleanup_margin_expires(monkeypatch) -> None:
+    release_cleanup = threading.Event()
+    reaped = threading.Event()
+    real_reap = agent_cli._reap_process_group
+
+    def delayed_reap(process: subprocess.Popen[bytes]) -> bool:
+        release_cleanup.wait(timeout=1)
+        try:
+            return real_reap(process)
+        finally:
+            reaped.set()
+
+    monkeypatch.setattr("songmaker_cli.agent_cli._reap_process_group", delayed_reap)
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "exec sleep 10"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 0.02,
+        cleanup_margin_seconds=0.01,
+    )
+
+    assert outcome.reason is CliRunReason.CLEANUP_OVERRAN
+    release_cleanup.set()
+    assert reaped.wait(timeout=1)
 
 
 def test_bounded_runner_stops_a_cli_that_never_reads_its_full_stdin_pipe() -> None:
@@ -501,8 +601,7 @@ def test_bounded_runner_stops_a_cli_that_never_reads_its_full_stdin_pipe() -> No
 
     with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
-            "/bin/sh",
-            ("-c", "exec sleep 10"),
+            ("/bin/sh", "-c", "exec sleep 10"),
             stdin_payload=b"x" * (1024 * 1024),
             read="all",
             deadline=time.monotonic() + 0.05,
@@ -524,8 +623,7 @@ def test_bounded_runner_stops_a_cli_that_never_writes_output() -> None:
 
     with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
-            "/bin/sh",
-            ("-c", "exec sleep 10"),
+            ("/bin/sh", "-c", "exec sleep 10"),
             stdin_payload=None,
             read="all",
             deadline=time.monotonic() + 0.05,
@@ -549,10 +647,10 @@ def test_bounded_runner_marks_an_unconfirmed_sigkill_as_a_zombie(monkeypatch) ->
         "songmaker_cli.agent_cli._wait_for_process_group_exit",
         lambda _process, _timeout: False,
     )
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
     with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
-            "/bin/sh",
-            ("-c", "trap '' TERM; while :; do :; done"),
+            ("/bin/sh", "-c", "trap '' TERM; while :; do :; done"),
             stdin_payload=None,
             read="all",
             deadline=time.monotonic() + 0.02,
@@ -567,8 +665,7 @@ def test_bounded_runner_stops_collecting_at_the_byte_limit(monkeypatch) -> None:
     monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 32)
 
     outcome = run_cli_bounded(
-        "/bin/sh",
-        ("-c", "while :; do printf x; done"),
+        ("/bin/sh", "-c", "while :; do printf x; done"),
         stdin_payload=None,
         read="all",
         deadline=time.monotonic() + 1,
@@ -613,8 +710,7 @@ def test_run_cli_keeps_a_started_cli_result_when_cleanup_reports_a_zombie(monkey
 
 def test_bounded_runner_delivers_stdin_without_a_blocking_write() -> None:
     outcome = run_cli_bounded(
-        "/bin/sh",
-        ("-c", "IFS= read -r line; printf '<%s>' \"$line\""),
+        ("/bin/sh", "-c", "IFS= read -r line; printf '<%s>' \"$line\""),
         stdin_payload=b"delivered\n",
         read="all",
         deadline=time.monotonic() + 1,
@@ -625,10 +721,18 @@ def test_bounded_runner_delivers_stdin_without_a_blocking_write() -> None:
     assert outcome.stdout == "<delivered>"
 
 
+def test_run_cli_closes_stdin_so_the_child_observes_eof() -> None:
+    run = run_cli(
+        "/bin/sh",
+        ("-c", "if IFS= read -r line; then printf data; else printf eof; fi"),
+    )
+
+    assert run == CliRun(returncode=0, stdout="eof", stderr="", complete=True)
+
+
 def test_bounded_runner_returns_only_the_first_stdout_line() -> None:
     outcome = run_cli_bounded(
-        "/bin/sh",
-        ("-c", "printf 'first\\nsecond\\n'; exec sleep 10"),
+        ("/bin/sh", "-c", "printf 'first\\nsecond\\n'; exec sleep 10"),
         stdin_payload=None,
         read="first_line",
         deadline=time.monotonic() + 1,
@@ -641,8 +745,7 @@ def test_bounded_runner_returns_only_the_first_stdout_line() -> None:
 
 def test_bounded_runner_returns_the_last_stdout_bytes_at_eof_in_first_line_mode() -> None:
     outcome = run_cli_bounded(
-        "/bin/sh",
-        ("-c", "printf final"),
+        ("/bin/sh", "-c", "printf final"),
         stdin_payload=None,
         read="first_line",
         deadline=time.monotonic() + 1,
@@ -655,8 +758,7 @@ def test_bounded_runner_returns_the_last_stdout_bytes_at_eof_in_first_line_mode(
 
 def test_bounded_runner_drains_both_output_streams_in_all_mode() -> None:
     outcome = run_cli_bounded(
-        "/bin/sh",
-        ("-c", "printf stdout; printf stderr >&2"),
+        ("/bin/sh", "-c", "printf stdout; printf stderr >&2"),
         stdin_payload=None,
         read="all",
         deadline=time.monotonic() + 1,
@@ -666,6 +768,35 @@ def test_bounded_runner_drains_both_output_streams_in_all_mode() -> None:
     assert outcome.complete is True
     assert outcome.stdout == "stdout"
     assert outcome.stderr == "stderr"
+
+
+def test_bounded_runner_applies_its_byte_limit_to_each_stream(monkeypatch) -> None:
+    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 4)
+
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "printf 123; printf abc >&2"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+    )
+
+    assert outcome.complete is True
+    assert outcome.stdout == "123"
+    assert outcome.stderr == "abc"
+
+
+def test_bounded_runner_can_discard_stderr() -> None:
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "printf stdout; printf stderr >&2"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        stderr="devnull",
+    )
+
+    assert outcome.complete is True
+    assert outcome.stdout == "stdout"
+    assert outcome.stderr == ""
 
 
 @pytest.mark.parametrize(
