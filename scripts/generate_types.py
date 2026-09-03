@@ -246,15 +246,19 @@ def _closed_models(roots: Iterable[type[BaseModel]]) -> set[type[BaseModel]]:
     return models
 
 
-def _api_models(routers: Iterable[APIRouter] | None = None) -> DiscoveredModels:
-    if routers is not None:
-        annotations, exempted_routes = _route_annotations(routers)
-        roots = set().union(*(_models_in_annotation(annotation) for annotation in annotations))
-        route_models = _closed_models(roots)
-        return DiscoveredModels(frozenset(route_models), frozenset(), exempted_routes, 0)
-    annotations, exempted_routes = _route_annotations(_route_routers())
+def _api_models(
+    routers: Iterable[APIRouter] | None = None,
+    *,
+    include_exported_models: bool = False,
+) -> DiscoveredModels:
+    if routers is None:
+        routers = _route_routers()
+        include_exported_models = True
+    annotations, exempted_routes = _route_annotations(routers)
     roots = set().union(*(_models_in_annotation(annotation) for annotation in annotations))
     route_models = _closed_models(roots)
+    if not include_exported_models:
+        return DiscoveredModels(frozenset(route_models), frozenset(), exempted_routes, 0)
     exported_roots, exempted_models = _exported_models()
     exported_models = _closed_models(exported_roots) - route_models
     return DiscoveredModels(
@@ -343,8 +347,12 @@ def _build_track_scores_interface() -> str:
     return "\n".join(lines)
 
 
-def generate(routers: Iterable[APIRouter] | None = None) -> GenerationResult:
-    discovered_models = _api_models(routers)
+def generate(
+    routers: Iterable[APIRouter] | None = None,
+    *,
+    include_exported_models: bool = False,
+) -> GenerationResult:
+    discovered_models = _api_models(routers, include_exported_models=include_exported_models)
     route_models = tuple(
         model for model in discovered_models.route_models if not _is_generic_model(model)
     )
@@ -398,10 +406,11 @@ def check_generated_types(result: GenerationResult, output_path: Path = OUTPUT_P
 
 def main() -> None:
     try:
-        result = generate()
+        routers = _route_routers()
     except ImportError as error:
         print(f"FAIL: route introspection unavailable: {error}")
         sys.exit(1)
+    result = generate(routers, include_exported_models=True)
     if CHECKED_MODE in sys.argv:
         sys.exit(0 if check_generated_types(result) else 1)
     OUTPUT_PATH.write_text(result.content)

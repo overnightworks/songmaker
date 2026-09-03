@@ -106,13 +106,13 @@ def test_route_routers_cover_every_api_route_in_the_real_app(tmp_path: Path) -> 
     app_route_paths = {
         route.path
         for route in client.app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/")
+        if isinstance(route, APIRoute) and route.include_in_schema
     }
     discovered_route_paths = {
         route.path
         for router in generate_types._route_routers()
         for route in router.routes
-        if isinstance(route, APIRoute)
+        if isinstance(route, APIRoute) and route.include_in_schema
     }
 
     assert app_route_paths <= discovered_route_paths
@@ -142,3 +142,25 @@ def test_route_introspection_failure_exits_without_writing_types(
     assert output_path.read_text() == "existing types"
     error_output = capsys.readouterr().out
     assert "FAIL: route introspection unavailable: router module is unavailable" in error_output
+
+
+def test_non_route_import_errors_keep_their_original_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_path = tmp_path / "types.ts"
+    output_path.write_text("existing types")
+
+    def unavailable_exports() -> tuple[set[type[BaseModel]], int]:
+        raise ImportError("api model exports are unavailable")
+
+    monkeypatch.setattr(generate_types, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(generate_types, "_route_routers", lambda: ())
+    monkeypatch.setattr(generate_types, "_exported_models", unavailable_exports)
+
+    with pytest.raises(ImportError, match="api model exports are unavailable"):
+        generate_types.main()
+
+    assert output_path.read_text() == "existing types"
+    assert "route introspection unavailable" not in capsys.readouterr().out
