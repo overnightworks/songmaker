@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
+
+from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
-from songmaker_cli.constants import JOB_TERMINAL_STATUSES
+from songmaker_cli.constants import (
+    JOB_HEARTBEAT_INTERVAL_SECONDS,
+    JOB_TERMINAL_STATUSES,
+    JobStatus,
+)
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
     NoCapacityError,
@@ -86,3 +94,47 @@ def _touch_heartbeat(factory, job_id: str) -> None:
             "worker may be falsely declared stale if DB stays unreachable",
             job_id, exc_info=True,
         )
+
+
+def _write_chat_job_heartbeat(db_factory, job_id: str) -> None:
+    with db_factory() as session:
+        update_job_heartbeat(session, job_id)
+        session.commit()
+
+
+async def _keep_chat_job_heartbeat(
+    db_factory,
+    job_id: str,
+    *,
+    interval_seconds: float = JOB_HEARTBEAT_INTERVAL_SECONDS,
+) -> None:
+    """Keep an inline chat request alive without using its request session."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            _write_chat_job_heartbeat(db_factory, job_id)
+        except Exception:
+            log.warning("Chat heartbeat update failed for job %s", job_id, exc_info=True)
+
+
+async def _stop_chat_job_heartbeat(task: asyncio.Task[None], job_id: str) -> None:
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        try:
+            await task
+        except Exception:
+            log.warning("Chat heartbeat task failed for job %s", job_id, exc_info=True)
+
+
+def _fail_chat_job(
+    session: Session, job_id: str, error: str, error_type: str,
+) -> None:
+    session.rollback()
+    update_job_status(
+        session,
+        job_id,
+        JobStatus.FAILED,
+        error=error,
+        error_type=error_type,
+    )
+    session.commit()

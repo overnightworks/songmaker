@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     AvailableModel,
     ChatMessage,
     Conversation,
+    Job,
     Song,
     User,
     Version,
@@ -37,38 +38,22 @@ from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 def _fake_user(user_id: str, role: str = "user"):
     user = AuthenticatedUser(
-        id=user_id,
-        username=f"u-{user_id}",
-        role=role,
-        is_active=True,
+        id=user_id, username=f"u-{user_id}", role=role, is_active=True,
     )
     return lambda: user
 
 
 def _seed_owned(session, user_id: str) -> None:
-    session.add(
-        User(
-            id=user_id,
-            username=f"user-{user_id}",
-            password_hash="x",
-            role="user",
-        )
-    )
+    session.add(User(
+        id=user_id, username=f"user-{user_id}", password_hash="x", role="user",
+    ))
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
     session.add(Song(id="s1", title="Thunder", album_id="alb1", track_number=1))
-    session.add(
-        Version(
-            id="v1",
-            song_id="s1",
-            version_number=1,
-            lyrics="verse",
-            prompt="rock",
-            bpm=120,
-            key_scale="Am",
-            audio_duration=180,
-        )
-    )
+    session.add(Version(
+        id="v1", song_id="s1", version_number=1,
+        lyrics="verse", prompt="rock", bpm=120, key_scale="Am", audio_duration=180,
+    ))
     session.query(AvailableModel).filter(
         AvailableModel.id.in_(["turbo", "sft"]),
     ).update({"is_active": True}, synchronize_session=False)
@@ -89,7 +74,6 @@ def client(tmp_path: Path) -> TestClient:
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
-
     app = FastAPI()
     app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user("u-test")
@@ -102,14 +86,9 @@ def stranger_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "conv_api2.db")
     with factory() as session:
         _seed_owned(session, "u-owner")
-        session.add(
-            User(
-                id="u-spy",
-                username="spy",
-                password_hash="x",
-                role="user",
-            )
-        )
+        session.add(User(
+            id="u-spy", username="spy", password_hash="x", role="user",
+        ))
         session.commit()
 
     ctx = AppContext(
@@ -120,7 +99,6 @@ def stranger_client(tmp_path: Path) -> TestClient:
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
-
     app = FastAPI()
     app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user("u-spy")
@@ -133,7 +111,6 @@ def _mock_claude(text: str = "hello from claude"):
 
     Yields a single assistant_text event then the terminal FinalEvent.
     """
-
     async def _gen(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
         yield AssistantTextEvent(text=text)
         yield FinalEvent(text=text)
@@ -147,7 +124,7 @@ def _stream_events(response) -> list[dict]:
         if not line:
             continue
         if line.startswith("data: "):
-            events.append(json.loads(line[len("data: ") :]))
+            events.append(json.loads(line[len("data: "):]))
     return events
 
 
@@ -168,9 +145,7 @@ def test_mcp_cli_cmd_includes_required_flags():
     )
 
     cmd = _build_mcp_cli_cmd(
-        "claude",
-        "claude-opus-4-6",
-        "/tmp/mcp.json",
+        "claude", "claude-opus-4-6", "/tmp/mcp.json",
     )
     assert "--mcp-config" in cmd
     assert cmd[cmd.index("--mcp-config") + 1] == "/tmp/mcp.json"
@@ -218,13 +193,9 @@ def test_acall_claude_with_mcp_dispatches_to_cli(monkeypatch):
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
     monkeypatch.setattr(provider.os, "killpg", MagicMock())
 
-    result = asyncio.run(
-        provider.acall_claude_with_mcp(
-            prompt="hi secret-prompt",
-            user_id="u-1",
-            model="claude-opus-4-6",
-        )
-    )
+    result = asyncio.run(provider.acall_claude_with_mcp(
+        prompt="hi secret-prompt", user_id="u-1", model="claude-opus-4-6",
+    ))
     assert result.text == "ok"
     assert "--mcp-config" in captured["cmd"]
     config_arg = captured["cmd"][captured["cmd"].index("--mcp-config") + 1]
@@ -251,12 +222,9 @@ def test_acall_claude_with_mcp_returns_unavailable_on_failure(monkeypatch):
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(
-            provider.acall_claude_with_mcp(
-                prompt="hi",
-                user_id="u-1",
-            )
-        )
+        asyncio.run(provider.acall_claude_with_mcp(
+            prompt="hi", user_id="u-1",
+        ))
 
 
 def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
@@ -272,12 +240,9 @@ def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(
-            provider.acall_claude_with_mcp(
-                prompt="hi",
-                user_id="u-1",
-            )
-        )
+        asyncio.run(provider.acall_claude_with_mcp(
+            prompt="hi", user_id="u-1",
+        ))
 
 
 def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
@@ -304,13 +269,9 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
     monkeypatch.setattr(provider.os, "killpg", _killpg)
 
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(
-            provider.acall_claude_with_mcp(
-                prompt="hi",
-                user_id="u-1",
-                timeout_seconds=1,
-            )
-        )
+        asyncio.run(provider.acall_claude_with_mcp(
+            prompt="hi", user_id="u-1", timeout_seconds=1,
+        ))
     assert killed["value"] is True
 
 
@@ -345,46 +306,97 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         msgs = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
         assert [m.role for m in msgs] == ["user", "assistant"]
         assert all(m.conversation_id == conv_id for m in msgs)
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "completed"
 
 
-def test_chat_turn_marks_its_job_running_before_the_stream_starts(client):
-    from songmaker_cli.constants import JobStatus
-    from songmaker_cli.db.models import Job
-
+def test_chat_turn_completes_when_its_heartbeat_task_fails(client):
     c, factory = client
-    observed_statuses: list[str] = []
 
-    async def _stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
-        with factory() as session:
-            job = session.query(Job).filter_by(type="chat").one()
-            observed_statuses.append(job.status)
-        yield AssistantTextEvent(text="ok")
-        yield FinalEvent(text="ok")
+    async def _failed_heartbeat(*_args, **_kwargs) -> None:
+        raise RuntimeError("database unavailable")
 
-    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _stream):
+    with patch(
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
+        _mock_claude("ok"),
+    ), patch(
+        "songmaker_cli.conversation_api._keep_chat_job_heartbeat",
+        _failed_heartbeat,
+    ):
         response = c.post("/api/chat/turn", json={"message": "hey"})
 
     assert response.status_code == 200
-    assert observed_statuses == [JobStatus.RUNNING]
+    assert _final_event(_stream_events(response))["assistant_message"]["content"] == "ok"
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "completed"
 
 
-def test_chat_turn_marks_a_setup_failure_as_failed(client):
+def test_chat_turn_stops_heartbeat_when_asgi_send_fails(client):
+    import asyncio
+
+    from fastapi import Request
+    from starlette.requests import ClientDisconnect
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
     c, factory = client
 
-    with patch(
-        "songmaker_cli.conversation_api.compact_conversation",
-        side_effect=RuntimeError("setup failed"),
-    ):
-        with pytest.raises(RuntimeError, match="setup failed"):
-            c.post("/api/chat/turn", json={"message": "hey"})
+    async def _exercise() -> None:
+        heartbeat_started = asyncio.Event()
+        heartbeat_stopped = asyncio.Event()
 
-    with factory() as session:
-        from songmaker_cli.db.models import Job
+        async def _keep_heartbeat(*_args, **_kwargs) -> None:
+            heartbeat_started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                heartbeat_stopped.set()
 
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error == "Chat setup failed"
-        assert job.error_type == "setup_error"
+        async def _stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+            await heartbeat_started.wait()
+            yield AssistantTextEvent(text="partial")
+            await asyncio.Future()
+
+        request = Request({"type": "http", "app": c.app})
+        user = AuthenticatedUser(
+            id="u-test",
+            username="u-u-test",
+            role="user",
+            is_active=True,
+        )
+        with factory() as session:
+            with patch(
+                "songmaker_cli.conversation_api._keep_chat_job_heartbeat",
+                _keep_heartbeat,
+            ), patch(
+                "songmaker_cli.conversation_api.stream_cowriter_turn",
+                _stream,
+            ):
+                response = await api_chat_turn(
+                    ChatTurnV2Request(message="hey"),
+                    request,
+                    user,
+                    session,
+                )
+                async def _receive():
+                    await asyncio.Future()
+
+                async def _send(message) -> None:
+                    if message["type"] == "http.response.body":
+                        raise OSError("client disconnected")
+
+                with pytest.raises(ClientDisconnect):
+                    await response(
+                        {"type": "http", "asgi": {"spec_version": "2.4"}},
+                        _receive,
+                        _send,
+                    )
+
+        assert heartbeat_stopped.is_set()
+
+    asyncio.run(_exercise())
 
 
 def test_chat_turn_reuses_active_conversation_across_turns(client):
@@ -445,8 +457,7 @@ def test_chat_turn_forwards_tool_call_events(client):
         yield FinalEvent(text="here")
 
     with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _gen,
+        "songmaker_cli.conversation_api.stream_cowriter_turn", _gen,
     ):
         resp = c.post("/api/chat/turn", json={"message": "call a tool"})
 
@@ -466,8 +477,7 @@ def test_chat_turn_rejects_other_users_song(stranger_client):
         yield FinalEvent(text="")
 
     with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _gen,
+        "songmaker_cli.conversation_api.stream_cowriter_turn", _gen,
     ):
         resp = c.post(
             "/api/chat/turn",
@@ -494,7 +504,9 @@ def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
 
     assert resp.status_code == 200
     events = _stream_events(resp)
-    assert any(e.get("type") == "error" and e.get("status") == 500 for e in events)
+    assert any(
+        e.get("type") == "error" and e.get("status") == 500 for e in events
+    )
 
     with factory() as session:
         from songmaker_cli.db.models import Job
@@ -534,14 +546,9 @@ def test_list_conversations_scoped_to_user(client):
     c, factory = client
     with factory() as session:
         session.add(Conversation(id="mine-1", user_id="u-test", title="mine"))
-        session.add(
-            User(
-                id="u-other",
-                username="other",
-                password_hash="x",
-                role="user",
-            )
-        )
+        session.add(User(
+            id="u-other", username="other", password_hash="x", role="user",
+        ))
         session.flush()
         session.add(Conversation(id="not-mine", user_id="u-other", title="no"))
         session.commit()
@@ -589,14 +596,9 @@ def test_get_conversation_returns_messages(client):
 def test_get_conversation_rejects_other_user(client):
     c, factory = client
     with factory() as session:
-        session.add(
-            User(
-                id="u-owner2",
-                username="o",
-                password_hash="x",
-                role="user",
-            )
-        )
+        session.add(User(
+            id="u-owner2", username="o", password_hash="x", role="user",
+        ))
         session.flush()
         session.add(Conversation(id="not-mine", user_id="u-owner2", title="x"))
         session.commit()
@@ -661,22 +663,13 @@ def test_delete_conversation_removes_messages(client):
 def test_delete_conversation_rejects_other_user(client):
     c, factory = client
     with factory() as session:
-        session.add(
-            User(
-                id="u-owner3",
-                username="o",
-                password_hash="x",
-                role="user",
-            )
-        )
+        session.add(User(
+            id="u-owner3", username="o", password_hash="x", role="user",
+        ))
         session.flush()
-        session.add(
-            Conversation(
-                id="not-mine-2",
-                user_id="u-owner3",
-                title="x",
-            )
-        )
+        session.add(Conversation(
+            id="not-mine-2", user_id="u-owner3", title="x",
+        ))
         session.commit()
     resp = c.delete("/api/conversations/not-mine-2")
     assert resp.status_code == 404

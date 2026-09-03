@@ -17,7 +17,6 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    JOB_TYPES_WITH_PERIODIC_HEARTBEATS,
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
@@ -38,7 +37,6 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
 JOB_REAPER_INTERVAL_SECONDS: Final = 120
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
-
 
 class BackgroundLoopName(StrEnum):
     SESSION_SYNC = "session_sync"
@@ -71,7 +69,9 @@ class BackgroundLoopHealth:
 
 class BackgroundLoopRegistry:
     def __init__(self) -> None:
-        self._loops = {name: BackgroundLoopHealth(name=name) for name in BackgroundLoopName}
+        self._loops = {
+            name: BackgroundLoopHealth(name=name) for name in BackgroundLoopName
+        }
         self._shutting_down = False
 
     @property
@@ -246,8 +246,8 @@ async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: ArqRedis) ->
 
     with ctx.db() as session:
         resolved = {
-            gen_id
-            for (gen_id,) in session.query(Score.generation_id)
+            gen_id for (gen_id,) in
+            session.query(Score.generation_id)
             .filter(Score.generation_id.in_(tracked_ids))
             .distinct()
             .all()
@@ -290,9 +290,9 @@ async def backfill_unscored_generations(
         candidates = _pick_unscored_generations(session, SCORE_BACKFILL_CANDIDATE_POOL_SIZE)
 
     exhausted = await _exhausted_backfill_ids(redis, [gen_id for gen_id, _song_id in candidates])
-    eligible = [(gen_id, song_id) for gen_id, song_id in candidates if gen_id not in exhausted][
-        :SCORE_BACKFILL_BATCH_SIZE
-    ]
+    eligible = [
+        (gen_id, song_id) for gen_id, song_id in candidates if gen_id not in exhausted
+    ][:SCORE_BACKFILL_BATCH_SIZE]
 
     dispatched = 0
     first_error: Exception | None = None
@@ -328,10 +328,8 @@ async def score_backfill_loop(app: FastAPI) -> None:
         try:
             acquired = await asyncio.to_thread(
                 ctx.redis.set,
-                SCORE_BACKFILL_LOCK_KEY,
-                "1",
-                ex=SCORE_BACKFILL_LOCK_TTL_SECONDS,
-                nx=True,
+                SCORE_BACKFILL_LOCK_KEY, "1",
+                ex=SCORE_BACKFILL_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
@@ -348,38 +346,69 @@ async def score_backfill_loop(app: FastAPI) -> None:
             log.exception("Score backfill tick failed")
 
 
-def reap_stale_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
-    """Terminal-ize active jobs through the shared liveness owner."""
-    from songmaker_cli.db.queries import recover_stale_jobs_by_liveness
+def reap_stale_lora_training_jobs(ctx: AppContext) -> int:
+    """Terminal-ize LORA_TRAINING jobs whose worker process died.
+
+    ``train_lora`` runs inside the same MusicWorker arq process as
+    ``generate``, but ``WorkerBase``'s on_startup/on_shutdown/cleanup_stale_cron
+    recovery (worker_base.py) is scoped to ``self.job_type``, which
+    MusicWorker fixes to ``JobType.GENERATE`` -- so a dead worker never
+    terminal-izes the LORA_TRAINING job it was mid-training. This reuses
+    the exact same age+heartbeat rule (``recover_stale_jobs_by_age_and_type``,
+    default ``stale_job_threshold_seconds``) that generate/score already get
+    from their arq-worker cron, just invoked from the web process instead.
+
+    Returns the number of jobs recovered.
+    """
+    from songmaker_cli.constants import JobType
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
     with ctx.db() as session:
-        recovered = recover_stale_jobs_by_liveness(
+        recovered = recover_stale_jobs_by_age_and_type(session, JobType.LORA_TRAINING)
+        session.commit()
+    if recovered:
+        log.warning("Recovered %d stale lora_training job(s)", recovered)
+    return recovered
+
+
+def reap_stale_chat_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
+    """Terminal-ize CHAT jobs whose web-process request handler died.
+
+    Chat jobs run inline in a FastAPI request (chat_api.py,
+    conversation_api.py) rather than in an arq worker, so they have no
+    cron of their own; a web-process crash mid-request leaves the job
+    QUEUED/RUNNING forever. Queued jobs age out after 15 minutes, while a
+    running job without a heartbeat fails after three minutes.
+
+    Returns the number of jobs recovered.
+    """
+    from songmaker_cli.constants import JobType
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+
+    with ctx.db() as session:
+        recovered = recover_stale_jobs_by_age_and_type(
             session,
-            periodic_heartbeat_job_types=JOB_TYPES_WITH_PERIODIC_HEARTBEATS,
+            JobType.CHAT,
             queued_threshold_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
             heartbeat_threshold_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
             now=now,
         )
         session.commit()
     if recovered:
-        log.warning("Recovered %d stale job(s)", recovered)
+        log.warning("Recovered %d stale chat job(s)", recovered)
     return recovered
 
 
-def reconcile_crashed_loras(
-    ctx: AppContext,
-    *,
-    now: datetime | None = None,
-    reap_jobs: bool = True,
-) -> int:
+def reconcile_crashed_loras(ctx: AppContext) -> int:
     """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
     tick. If the ARQ worker crashed mid-training, the LoRA row stays in
     PREPROCESSING / TRAINING / EXPORTING even though no job is running --
     and, left alone, its ``training_job_id`` would too, since nothing else
-    terminal-izes a LORA_TRAINING job. This first reaps active jobs, then
-    detects that the associated ``training_job_id`` is either missing or in a terminal state, and
+    terminal-izes a LORA_TRAINING job (see :func:`reap_stale_lora_training_jobs`).
+    This first reaps that job, then detects that the associated
+    ``training_job_id`` is either missing or in a terminal state, and
     reuses the job runner's ``cleanup_failed_lora`` helper to release disk
     space and mark the row FAILED.
 
@@ -389,8 +418,7 @@ def reconcile_crashed_loras(
     from songmaker_cli.db.queries import get_job, list_active_user_loras
     from songmaker_cli.jobs.lora_training import cleanup_failed_lora
 
-    if reap_jobs:
-        reap_stale_jobs(ctx, now=now)
+    reap_stale_lora_training_jobs(ctx)
 
     reconciled = 0
     with ctx.db() as session:
@@ -406,11 +434,8 @@ def reconcile_crashed_loras(
 
     for lora_id, user_id in victims:
         cleanup_failed_lora(
-            lora_id=lora_id,
-            user_id=user_id,
-            audio_dir=ctx.audio_dir,
-            db_factory=ctx.db,
-            error_message="Training crashed or was interrupted",
+            lora_id=lora_id, user_id=user_id, audio_dir=ctx.audio_dir,
+            db_factory=ctx.db, error_message="Training crashed or was interrupted",
         )
         reconciled += 1
     if reconciled:
@@ -419,21 +444,28 @@ def reconcile_crashed_loras(
 
 
 def _run_stale_job_reaper_tick(
-    ctx: AppContext,
-    *,
-    now: datetime | None = None,
+    ctx: AppContext, *, now: datetime | None = None,
 ) -> tuple[int, int]:
-    """Reap stale jobs and reconcile crashed LoRAs for one tick.
+    """Reap stale chat jobs and reconcile crashed LoRAs for one tick.
 
-    Returns ``(jobs_recovered, loras_reconciled)``.
+    Returns ``(chat_jobs_recovered, loras_reconciled)``.
     """
-    recovered_jobs = reap_stale_jobs(ctx, now=now)
-    reconciled_loras = reconcile_crashed_loras(ctx, now=now, reap_jobs=False)
-    return recovered_jobs, reconciled_loras
+    recovered_chat = reap_stale_chat_jobs(ctx, now=now)
+    reconciled_loras = reconcile_crashed_loras(ctx)
+    return recovered_chat, reconciled_loras
 
 
 async def stale_job_reaper_loop(app: FastAPI) -> None:
-    """Run shared stale-job recovery for the server lifetime."""
+    """Run the chat/lora_training stale-job reap for the server lifetime.
+
+    generate and score get this from ``WorkerBase.cleanup_stale_cron``
+    inside their arq workers (every 2 minutes -- see music_worker.py /
+    scoring_worker.py ``cron_jobs``); chat isn't an arq job at all, and
+    lora_training's job type isn't covered by MusicWorker's GENERATE-only
+    recovery, so the web process runs their equivalent here instead. Uses
+    the same single-flight Redis lock idiom as ``session_sync_loop`` /
+    ``score_backfill_loop`` so only one web replica reaps a given tick.
+    """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
     while True:
@@ -441,10 +473,8 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
         try:
             acquired = await asyncio.to_thread(
                 ctx.redis.set,
-                JOB_REAPER_LOCK_KEY,
-                "1",
-                ex=JOB_REAPER_LOCK_TTL_SECONDS,
-                nx=True,
+                JOB_REAPER_LOCK_KEY, "1",
+                ex=JOB_REAPER_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
                 registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
@@ -460,7 +490,9 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 def auto_setup_admin(ctx: AppContext) -> None:
     settings = get_settings()
     admin_user = settings.admin_username
-    admin_pass = settings.admin_password.get_secret_value() if settings.admin_password else None
+    admin_pass = (
+        settings.admin_password.get_secret_value() if settings.admin_password else None
+    )
     if not admin_user or not admin_pass:
         return
 
@@ -558,7 +590,11 @@ def _sync_sessions(ctx: AppContext, session_cache) -> int:
         ttl_by_id = {sid: ttl for sid, ttl in active}
         synced = 0
 
-        db_sessions = db.query(UserSession).filter(UserSession.id.in_(session_ids)).all()
+        db_sessions = (
+            db.query(UserSession)
+            .filter(UserSession.id.in_(session_ids))
+            .all()
+        )
         db_session_by_id = {s.id: s for s in db_sessions}
         found_user_ids = {s.user_id for s in db_sessions}
 
@@ -609,10 +645,8 @@ async def session_sync_loop(app: FastAPI) -> None:
         try:
             acquired = await asyncio.to_thread(
                 ctx.redis.set,
-                SESSION_SYNC_LOCK_KEY,
-                "1",
-                ex=SESSION_SYNC_LOCK_TTL_SECONDS,
-                nx=True,
+                SESSION_SYNC_LOCK_KEY, "1",
+                ex=SESSION_SYNC_LOCK_TTL_SECONDS, nx=True,
             )
             if not acquired:
                 registry.record_success(BackgroundLoopName.SESSION_SYNC)
@@ -628,8 +662,7 @@ async def session_sync_loop(app: FastAPI) -> None:
             if consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
                 log.error(
                     "Session sync failed %d consecutive times",
-                    consecutive_failures,
-                    exc_info=True,
+                    consecutive_failures, exc_info=True,
                 )
             else:
                 log.warning("Session sync failed", exc_info=True)

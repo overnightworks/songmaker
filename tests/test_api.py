@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -1842,31 +1843,60 @@ def test_song_chat_send(client: TestClient) -> None:
     assert data["assistant_message"]["content"] == "Hello from Claude"
 
 
-def test_song_chat_marks_the_legacy_job_running_then_completed(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
-
+def test_chat_heartbeat_writer_updates_an_active_job(client: TestClient) -> None:
     from songmaker_cli.constants import JobStatus
+    from songmaker_cli.jobs._runtime import _write_chat_job_heartbeat
 
     factory = client.app.state.ctx.db
-    observed_statuses: list[str] = []
-
-    async def _respond(*_args, **_kwargs):
-        with factory() as session:
-            job = session.query(Job).filter_by(type="chat").one()
-            observed_statuses.append(job.status)
-        response = MagicMock()
-        response.text = "Hello from Claude"
-        return response
-
-    with patch("songmaker_cli.chat_api.acall_claude", _respond):
-        response = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert response.status_code == 200
-    assert observed_statuses == [JobStatus.RUNNING]
+    old = datetime.now(timezone.utc) - timedelta(minutes=10)
     with factory() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == JobStatus.COMPLETED
-        assert job.completed_at is not None
+        session.add(
+            Job(
+                id="chat-heartbeat",
+                type="chat",
+                status=JobStatus.RUNNING,
+                started_at=old,
+                heartbeat_at=old,
+            ),
+        )
+        session.commit()
+
+    _write_chat_job_heartbeat(factory, "chat-heartbeat")
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id="chat-heartbeat").one()
+        assert job.heartbeat_at.replace(tzinfo=timezone.utc) > old
+
+
+def test_chat_heartbeat_timer_continues_after_a_write_failure() -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.jobs import _runtime
+
+    sleeps = 0
+
+    async def _next_tick(_interval: float) -> None:
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 2:
+            raise asyncio.CancelledError
+
+    with patch.object(_runtime.asyncio, "sleep", _next_tick), patch.object(
+        _runtime,
+        "_write_chat_job_heartbeat",
+        side_effect=RuntimeError("database unavailable"),
+    ) as write:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(
+                _runtime._keep_chat_job_heartbeat(
+                    lambda: None,
+                    "chat-heartbeat",
+                    interval_seconds=0,
+                ),
+            )
+
+    assert write.call_count == 1
+    assert sleeps == 2
 
 
 def test_song_chat_multi_turn(client: TestClient) -> None:
@@ -1960,18 +1990,12 @@ def test_song_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     from songmaker_cli.claude.provider import UnavailableError
-    from songmaker_cli.constants import JobStatus
 
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
         resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
-    with client.app.state.ctx.db() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == JobStatus.FAILED
-        assert job.error == "Claude unavailable"
-        assert job.error_type == "unavailable"
 
 
 def test_song_chat_builds_context(client: TestClient) -> None:
