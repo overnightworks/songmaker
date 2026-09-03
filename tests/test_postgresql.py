@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import JobStatus, JobType, LoraStatus
@@ -47,6 +48,9 @@ from songmaker_cli.db.queries import (
     job_duration_stats,
     list_resource_events_after,
     prune_overflow_sessions,
+    recover_stale_jobs_by_age_and_type,
+    update_job_heartbeat,
+    update_job_status,
 )
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.settings import get_settings
@@ -146,6 +150,67 @@ def test_concurrent_job_creation(pg_factory) -> None:
     assert not errors, f"Errors during concurrent job creation: {errors}"
     assert len(results) == 10
     assert len(set(results)) == 10
+
+
+@SKIP_NO_PG
+def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    with pg_factory() as session:
+        job = create_job(session, JobType.GENERATE)
+        update_job_status(session, job.id, JobStatus.RUNNING)
+        job.heartbeat_at = now - timedelta(hours=1)
+        session.commit()
+        job_id = job.id
+
+    reaper_read = threading.Event()
+    heartbeat_written = threading.Event()
+    errors: list[Exception] = []
+    results: list[int] = []
+
+    def pause_before_update(candidate: Job) -> None:
+        if candidate.id != job_id:
+            return
+        reaper_read.set()
+        assert heartbeat_written.wait(timeout=10), "heartbeat did not finish"
+
+    monkeypatch.setattr(job_queries, "_before_stale_job_recovery_update", pause_before_update)
+
+    def reap() -> None:
+        try:
+            with pg_factory() as session:
+                results.append(recover_stale_jobs_by_age_and_type(session, now=now))
+                session.commit()
+        except Exception as exc:
+            errors.append(exc)
+
+    def heartbeat() -> None:
+        try:
+            assert reaper_read.wait(timeout=10), "reaper did not read the job"
+            with pg_factory() as session:
+                update_job_heartbeat(session, job_id)
+                session.commit()
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            heartbeat_written.set()
+
+    reaper = threading.Thread(target=reap)
+    heartbeater = threading.Thread(target=heartbeat)
+    reaper.start()
+    heartbeater.start()
+    reaper.join(timeout=10)
+    heartbeater.join(timeout=10)
+
+    assert not reaper.is_alive()
+    assert not heartbeater.is_alive()
+    assert not errors, f"Errors during stale-job reaping: {errors}"
+    assert results == [0]
+    with pg_factory() as session:
+        job = session.get(Job, job_id)
+        assert job is not None
+        assert job.status == JobStatus.RUNNING
+        assert job.heartbeat_at is not None
+        assert job.heartbeat_at > now - timedelta(minutes=1)
 
 
 @SKIP_NO_PG

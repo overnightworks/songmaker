@@ -967,6 +967,8 @@ never been observed; with a newer observation, it is `alive`.
   The request path applies that same rule only to the submitting user's jobs just before
   active-job limits, so a job that crosses a threshold between lifecycle ticks cannot cause a
   spurious 429.
+- The reaper terminalizes each stale candidate with a conditional update on its read status and
+  heartbeat, so a concurrent heartbeat or terminal completion wins instead of being overwritten.
 - `reconcile_crashed_loras()` runs once at web startup and after the web
   reaper; MusicWorker calls the same job-owned reconciliation after it
   terminalizes a `lora_training` job. The path locks one active LoRA candidate

@@ -7,7 +7,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
@@ -224,6 +224,42 @@ def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     return started_at < cutoff
 
 
+def _before_stale_job_recovery_update(_job: Job) -> None:
+    """Provide a deterministic seam between stale-candidate read and update."""
+
+
+def _recover_stale_job_if_unchanged(
+    session: Session,
+    job: Job,
+    *,
+    status: str,
+    heartbeat_at: datetime | None,
+    error: str,
+    error_type: str,
+    completed_at: datetime,
+) -> bool:
+    result = session.execute(
+        update(Job)
+        .where(
+            Job.id == job.id,
+            Job.status == status,
+            Job.heartbeat_at.is_not_distinct_from(heartbeat_at),
+        )
+        .values(
+            status=JobStatus.FAILED,
+            error=error,
+            error_type=error_type,
+            completed_at=completed_at,
+        )
+        .execution_options(synchronize_session=False),
+    )
+    session.expire(job)
+    if result.rowcount != 1:
+        log.debug("Skipped stale-job recovery because job %s changed", job.id)
+        return False
+    return True
+
+
 def recover_stale_jobs_by_type(
     session: Session,
     recoverable_statuses: Mapping[str, Collection[str]],
@@ -297,6 +333,8 @@ def recover_stale_jobs_by_age_and_type(
     recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
+        status = job.status
+        heartbeat_at = job.heartbeat_at
         if job.status == JobStatus.QUEUED:
             liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
             verdict = _queued_verdict(
@@ -304,17 +342,25 @@ def recover_stale_jobs_by_age_and_type(
             )
             if verdict is None:
                 continue
-            job.status = JobStatus.FAILED
-            job.error = verdict.error
-            job.error_type = verdict.error_type
+            error = verdict.error
+            error_type = verdict.error_type
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
             if not _is_heartbeat_stale(job, cutoff):
                 continue
-            job.status = JobStatus.FAILED
-            job.error = "Heartbeat lost — please retry."
-            job.error_type = "heartbeat_lost"
-        job.completed_at = now
+            error = "Heartbeat lost — please retry."
+            error_type = "heartbeat_lost"
+        _before_stale_job_recovery_update(job)
+        if not _recover_stale_job_if_unchanged(
+            session,
+            job,
+            status=status,
+            heartbeat_at=heartbeat_at,
+            error=error,
+            error_type=error_type,
+            completed_at=now,
+        ):
+            continue
         recovered += 1
         recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()

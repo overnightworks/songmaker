@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
+import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_models import (
     AlbumResponse,
     GenerationResponse,
@@ -1697,6 +1698,31 @@ def test_reaper_marks_a_stale_running_job_as_heartbeat_lost(db_session: Session)
 
     completed_after = get_job(db_session, j_completed.id)
     assert completed_after.status == "completed"
+
+
+def test_reaper_does_not_overwrite_job_completed_between_read_and_update(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job = create_job(db_session, JobType.GENERATE)
+    update_job_status(db_session, job.id, JobStatus.RUNNING)
+    job.heartbeat_at = now - timedelta(hours=1)
+    db_session.commit()
+
+    def complete_candidate(candidate) -> None:
+        assert candidate.id == job.id
+        candidate.status = JobStatus.COMPLETED
+        candidate.completed_at = now
+        db_session.flush()
+
+    monkeypatch.setattr(job_queries, "_before_stale_job_recovery_update", complete_candidate)
+
+    assert recover_stale_jobs_by_age_and_type(db_session, now=now) == 0
+    assert job.status == JobStatus.COMPLETED
+    assert job.error is None
+    assert job.completed_at is not None
+    assert job.completed_at.replace(tzinfo=timezone.utc) == now
 
 
 def test_reaper_leaves_a_recent_job_alone(db_session: Session) -> None:
