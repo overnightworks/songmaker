@@ -190,6 +190,7 @@ LOCK_FILE="${SONGMAKER_AUTODEPLOY_LOCK_FILE:-$STATE_DIR_FALLBACK/songmaker-autod
 FAILURE_COUNT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failcount}"
 BUSY_COUNT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busycount}"
 DEPLOYED_SHA_FILE="${SONGMAKER_AUTODEPLOY_DEPLOYED_SHA_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.deployed-sha}"
+FIRST_SEEN_COMMIT_FILE="${SONGMAKER_AUTODEPLOY_FIRST_SEEN_COMMIT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.first-seen-commit}"
 FAILURE_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failure-escalated-at}"
 BUSY_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busy-escalated-at}"
 GUARD_REASON_FILE="${SONGMAKER_AUTODEPLOY_GUARD_REASON_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.guard-reason}"
@@ -209,6 +210,9 @@ if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS:-60}"
+# Once TERM has had this long to be honoured, kill a wedged gh child so it
+# cannot keep the deploy lock forever.
+CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS:-5}"
 if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
     exit 1
@@ -219,6 +223,10 @@ fi
 CHECK_RUN_APPEARANCE_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS:-1800}"
 if ! [[ "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS'"
     exit 1
 fi
 if ! [[ "$CHECK_RUN_APPEARANCE_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
@@ -549,6 +557,33 @@ now_seconds() {
     date +%s
 }
 
+first_seen_commit_timestamp() {
+    local commit_sha="$1"
+    local now recorded_sha recorded_timestamp
+    if ! now="$(now_seconds)" || ! [[ "$now" =~ ^[0-9]+$ ]]; then
+        printf '%s' 'cannot determine current time for check-run grace period'
+        return 1
+    fi
+    if [[ -e "$FIRST_SEEN_COMMIT_FILE" ]]; then
+        if ! read -r recorded_sha recorded_timestamp <"$FIRST_SEEN_COMMIT_FILE" \
+            || ! [[ "$recorded_timestamp" =~ ^[0-9]+$ ]]; then
+            printf 'invalid first-seen commit state in %s' "$FIRST_SEEN_COMMIT_FILE"
+            return 1
+        fi
+        if [[ "$recorded_sha" != "$commit_sha" ]]; then
+            recorded_timestamp="$now"
+            printf '%s %s\n' "$commit_sha" "$recorded_timestamp" >"$FIRST_SEEN_COMMIT_FILE"
+        fi
+    else
+        recorded_timestamp="$now"
+        printf '%s %s\n' "$commit_sha" "$recorded_timestamp" >"$FIRST_SEEN_COMMIT_FILE"
+    fi
+    # The commit timestamp is supplied by the repository and may be forged
+    # into the future.  The grace period must therefore always start at the
+    # first local observation, which is measured by the host clock above.
+    printf '%s' "$recorded_timestamp"
+}
+
 # The escalation rule both counters below share: escalate on the tick that
 # CROSSES the threshold, then at most once per ALERT_REPEAT_SECONDS for as
 # long as the streak lasts, recording in $timestamp_file when it did.
@@ -681,7 +716,7 @@ remote_check_status() {
         printf '%s' 'cannot create temporary file for check-run lookup stderr'
         return 1
     fi
-    if check_runs="$(timeout "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
+    if check_runs="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
         "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
         --jq 'if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\t\(.total_count)", (.check_runs[] | "check\t\(.status // "")\t\(.conclusion // "")") else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
         rm -f "$gh_stderr_file"
@@ -940,7 +975,11 @@ if ! [[ "$REMOTE_COMMIT_TIMESTAMP" =~ ^[0-9]+$ ]]; then
     fail_tick "invalid verified commit time"
 fi
 
-if ! REMOTE_CHECK_STATUS="$(remote_check_status "$REMOTE_HEAD" "$REMOTE_COMMIT_TIMESTAMP")"; then
+if ! CHECK_RUN_AGE_START="$(first_seen_commit_timestamp "$REMOTE_HEAD")"; then
+    log_err "cannot determine when origin/$DEPLOY_BRANCH commit $REMOTE_HEAD was first seen — refusing to deploy: $CHECK_RUN_AGE_START"
+    fail_tick "cannot determine commit first-seen time"
+fi
+if ! REMOTE_CHECK_STATUS="$(remote_check_status "$REMOTE_HEAD" "$CHECK_RUN_AGE_START")"; then
     log_err "cannot determine GitHub check status for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — refusing to deploy: $REMOTE_CHECK_STATUS"
     if [[ "$REMOTE_CHECK_STATUS" == "check-run lookup timed out" ]]; then
         fail_tick "check-run lookup timed out"

@@ -433,6 +433,11 @@ def write_in_place(path: Path, payload: bytes) -> None:
     mount. See this module's docstring for what that does and does not
     guarantee a concurrent reader.
     """
+    if len(payload) > SOURCE_READ_LIMIT_BYTES:
+        raise MirrorError(
+            f"{path} payload is {len(payload)} bytes, more than the "
+            f"{SOURCE_READ_LIMIT_BYTES} a login document may be",
+        )
     # O_RDWR, not O_WRONLY: the write is read back through this same
     # descriptor, so no second open can be pointed somewhere else.
     descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, MIRROR_FILE_MODE)

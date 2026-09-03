@@ -190,6 +190,23 @@ def test_it_will_not_pad_a_target_that_has_somehow_grown(
         mirror.write_in_place(target, b"{}")
 
 
+def test_serialized_unicode_expansion_is_rejected_before_writing(
+    monkeypatch: pytest.MonkeyPatch, mirror_dir: Path, tmp_path: Path,
+) -> None:
+    mirror.prepare_mirror_directory(mirror_dir)
+    source = tmp_path / "credentials.json"
+    source.write_text('{"signed_in": true}')
+    credential = mirror.MirroredCredential(
+        "unicode", source, "unicode.json", lambda _document: {"value": "é" * 40},
+    )
+    monkeypatch.setattr(mirror, "SOURCE_READ_LIMIT_BYTES", 128)
+
+    with pytest.raises(mirror.MirrorError, match="payload is .* bytes"):
+        mirror.mirror_one(credential, mirror_dir)
+
+    assert not (mirror_dir / "unicode.json").exists()
+
+
 def test_a_write_that_does_not_land_completely_is_reported(
     monkeypatch: pytest.MonkeyPatch, mirror_dir: Path,
 ) -> None:
