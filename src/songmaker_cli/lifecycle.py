@@ -31,9 +31,9 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
     1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
 )
 
-# Same 2-minute cadence WorkerBase.cleanup_stale_cron uses to reap GENERATE
-# and SCORE jobs inside the arq workers (music_worker.py / scoring_worker.py
-# cron_jobs) -- chat and lora_training get their equivalent from this loop.
+# Same 2-minute cadence WorkerBase.cleanup_stale_cron uses inside the arq
+# workers: MusicWorker reaps generate and lora_training, ScoringWorker reaps
+# score. This loop reaps chat and provides LoRA reconciliation fallback.
 JOB_REAPER_INTERVAL_SECONDS: Final = 120
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
@@ -347,16 +347,12 @@ async def score_backfill_loop(app: FastAPI) -> None:
 
 
 def reap_stale_lora_training_jobs(ctx: AppContext) -> int:
-    """Terminal-ize LORA_TRAINING jobs whose worker process died.
+    """Terminal-ize stale LORA_TRAINING jobs when no MusicWorker returns.
 
-    ``train_lora`` runs inside the same MusicWorker arq process as
-    ``generate``, but ``WorkerBase``'s on_startup/on_shutdown/cleanup_stale_cron
-    recovery (worker_base.py) is scoped to ``self.job_type``, which
-    MusicWorker fixes to ``JobType.GENERATE`` -- so a dead worker never
-    terminal-izes the LORA_TRAINING job it was mid-training. This reuses
-    the exact same age+heartbeat rule (``recover_stale_jobs_by_age_and_type``,
-    default ``stale_job_threshold_seconds``) that generate/score already get
-    from their arq-worker cron, just invoked from the web process instead.
+    MusicWorker owns immediate startup/shutdown recovery and periodic recovery
+    for both ``generate`` and ``lora_training``. The web loop retains this
+    age-and-heartbeat fallback for a worker that does not restart, using the
+    same ``recover_stale_jobs_by_age_and_type`` threshold as the worker cron.
 
     Returns the number of jobs recovered.
     """
@@ -409,40 +405,17 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
     tick. If the ARQ worker crashed mid-training, the LoRA row stays in
-    PREPROCESSING / TRAINING / EXPORTING even though no job is running --
-    and, left alone, its ``training_job_id`` would too, since nothing else
-    terminal-izes a LORA_TRAINING job (see :func:`reap_stale_lora_training_jobs`).
-    This first reaps that job, then detects that the associated
-    ``training_job_id`` is either missing or in a terminal state, and
-    reuses the job runner's ``cleanup_failed_lora`` helper to release disk
-    space and mark the row FAILED.
+    PREPROCESSING / TRAINING / EXPORTING even though no job is running. This
+    first reaps stale jobs as a web-process fallback, then delegates the
+    locked, per-LoRA database reconciliation and post-commit filesystem cleanup
+    to the LoRA job owner.
 
     Returns the number of rows reconciled.
     """
-    from songmaker_cli.constants import JOB_TERMINAL_STATUSES
-    from songmaker_cli.db.queries import get_job, list_active_user_loras
-    from songmaker_cli.jobs.lora_training import cleanup_failed_lora
+    from songmaker_cli.jobs.lora_training import reconcile_crashed_loras as reconcile
 
     reap_stale_lora_training_jobs(ctx)
-
-    reconciled = 0
-    with ctx.db() as session:
-        active = list_active_user_loras(session)
-        victims: list[tuple[str, str]] = []
-        for lora in active:
-            if lora.training_job_id is None:
-                victims.append((lora.id, lora.user_id))
-                continue
-            job = get_job(session, lora.training_job_id)
-            if job is None or job.status in JOB_TERMINAL_STATUSES:
-                victims.append((lora.id, lora.user_id))
-
-    for lora_id, user_id in victims:
-        cleanup_failed_lora(
-            lora_id=lora_id, user_id=user_id, audio_dir=ctx.audio_dir,
-            db_factory=ctx.db, error_message="Training crashed or was interrupted",
-        )
-        reconciled += 1
+    reconciled = reconcile(ctx.db, ctx.audio_dir)
     if reconciled:
         log.info("Reconciled %d crashed LoRA(s)", reconciled)
     return reconciled
@@ -461,15 +434,14 @@ def _run_stale_job_reaper_tick(
 
 
 async def stale_job_reaper_loop(app: FastAPI) -> None:
-    """Run the chat/lora_training stale-job reap for the server lifetime.
+    """Run chat reaping and LoRA reconciliation fallback for the server lifetime.
 
-    generate and score get this from ``WorkerBase.cleanup_stale_cron``
-    inside their arq workers (every 2 minutes -- see music_worker.py /
-    scoring_worker.py ``cron_jobs``); chat isn't an arq job at all, and
-    lora_training's job type isn't covered by MusicWorker's GENERATE-only
-    recovery, so the web process runs their equivalent here instead. Uses
-    the same single-flight Redis lock idiom as ``session_sync_loop`` /
-    ``score_backfill_loop`` so only one web replica reaps a given tick.
+    Chat has no arq worker. MusicWorker reaps generate and lora_training on
+    startup, shutdown, and its cron; this loop still terminal-izes stale LoRA
+    jobs if no worker returns, then reconciles terminal or missing training
+    jobs to their LoRA rows. It uses the same single-flight Redis lock idiom as
+    ``session_sync_loop`` / ``score_backfill_loop`` so one web replica handles
+    each tick.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)

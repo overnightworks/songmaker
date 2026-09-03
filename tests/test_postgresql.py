@@ -19,18 +19,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
+from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import JobStatus, JobType, LoraStatus
 from songmaker_cli.db.engine import (
     init_test_db,
     resolve_database_url,
 )
 from songmaker_cli.db.models import (
     Album,
+    AuditLog,
     Base,
     Generation,
     Job,
     ResourceEventCursor,
     Song,
     User,
+    UserLora,
     UserSession,
 )
 from songmaker_cli.db.queries import (
@@ -44,6 +48,7 @@ from songmaker_cli.db.queries import (
     list_resource_events_after,
     prune_overflow_sessions,
 )
+from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.settings import get_settings
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
@@ -141,6 +146,90 @@ def test_concurrent_job_creation(pg_factory) -> None:
     assert not errors, f"Errors during concurrent job creation: {errors}"
     assert len(results) == 10
     assert len(set(results)) == 10
+
+
+@SKIP_NO_PG
+def test_concurrent_lora_reconciliation_claims_one_locked_row(
+    pg_factory, tmp_path, monkeypatch,
+) -> None:
+    """PostgreSQL SKIP LOCKED permits exactly one failure audit per LoRA."""
+    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    with pg_factory() as session:
+        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.add(Job(
+            id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING,
+            started_at=stale, heartbeat_at=stale,
+        ))
+        session.add(UserLora(
+            id="lora-1", user_id="lora-user", name="Lora", slug="lora",
+            status=LoraStatus.TRAINING, training_job_id="lora-job",
+        ))
+        session.commit()
+
+    ctx = AppContext(
+        db=pg_factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=b"test",
+        redis=None,  # type: ignore[arg-type]
+    )
+    ctx.audio_dir.mkdir()
+    from songmaker_cli.jobs import lora_training
+
+    original_cleanup = lora_training.cleanup_failed_lora
+    lock_held = threading.Event()
+    release_lock = threading.Event()
+    first_call = True
+
+    def hold_first_lora_lock(**kwargs) -> None:
+        nonlocal first_call
+        if first_call:
+            first_call = False
+            lock_held.set()
+            assert release_lock.wait(timeout=10), "test did not release held LoRA lock"
+        original_cleanup(**kwargs)
+
+    monkeypatch.setattr(lora_training, "cleanup_failed_lora", hold_first_lora_lock)
+
+    results: list[int] = []
+    errors: list[Exception] = []
+
+    def _reconcile() -> None:
+        try:
+            results.append(reconcile_crashed_loras(ctx))
+        except Exception as exc:
+            errors.append(exc)
+
+    first = threading.Thread(target=_reconcile)
+    first.start()
+    assert lock_held.wait(timeout=10), "first reconciliation did not acquire LoRA lock"
+
+    second_done = threading.Event()
+
+    def _reconcile_second() -> None:
+        _reconcile()
+        second_done.set()
+
+    second = threading.Thread(target=_reconcile_second)
+    second.start()
+    try:
+        assert second_done.wait(timeout=10), "second reconciliation waited on the locked LoRA"
+        assert results == [0]
+    finally:
+        release_lock.set()
+
+    first.join(timeout=10)
+    second.join(timeout=10)
+
+    assert not errors, f"Errors during concurrent LoRA reconciliation: {errors}"
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert sum(results) == 1
+    with pg_factory() as session:
+        lora = session.query(UserLora).filter_by(id="lora-1").one()
+        audits = session.query(AuditLog).filter_by(resource_id="lora-1").all()
+    assert lora.status == LoraStatus.FAILED
+    assert len(audits) == 1
 
 
 @SKIP_NO_PG

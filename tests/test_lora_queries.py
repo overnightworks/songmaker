@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import LoraStatus
+from songmaker_cli.constants import JobStatus, JobType, LoraStatus
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User
 from songmaker_cli.db.queries import (
@@ -158,6 +158,31 @@ def test_list_active_user_loras(session: Session) -> None:
 
     ids = {row.id for row in list_active_user_loras(session)}
     assert ids == {queued.id, training.id}
+
+
+def test_list_active_user_loras_locks_only_reconcilable_candidates(session: Session) -> None:
+    running = create_user_lora(session, _USER_A, "Running", "running")
+    failed = create_user_lora(session, _USER_A, "Failed", "failed")
+    missing = create_user_lora(session, _USER_A, "Missing", "missing")
+    session.add_all([
+        Job(id="running-job", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING),
+        Job(id="failed-job", type=JobType.LORA_TRAINING, status=JobStatus.FAILED),
+    ])
+    session.flush()
+    update_user_lora(
+        session, running.id, status=LoraStatus.TRAINING, training_job_id="running-job",
+    )
+    update_user_lora(
+        session, failed.id, status=LoraStatus.TRAINING, training_job_id="failed-job",
+    )
+    update_user_lora(session, missing.id, status=LoraStatus.TRAINING)
+    session.commit()
+
+    candidates = list_active_user_loras(
+        session, reconcilable_only=True, excluded_ids={failed.id}, limit=1,
+    )
+
+    assert [lora.id for lora in candidates] == [missing.id]
 
 
 def test_add_sample_auto_positions(session: Session) -> None:
