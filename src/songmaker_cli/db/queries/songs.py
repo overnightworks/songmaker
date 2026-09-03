@@ -175,7 +175,9 @@ def get_song(
         selectinload(Song.versions),
         selectinload(Song.generations).selectinload(Generation.scores),
         selectinload(Song.generations).joinedload(Generation.rating),
-        selectinload(Song.generations).joinedload(Generation.src_generation),
+        selectinload(Song.generations)
+        .joinedload(Generation.src_generation)
+        .joinedload(Generation.version),
         selectinload(Song.generations).joinedload(Generation.version),
         joinedload(Song.album),
     )

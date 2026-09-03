@@ -9,6 +9,8 @@
 		TAKE_ARCHIVED_TITLE,
 		TAKE_COVER_LABEL,
 		TAKE_KEEP_LABEL,
+		TAKE_PROVENANCE_COVER_PREFIX,
+		TAKE_PROVENANCE_REPAINT_PREFIX,
 		TAKE_PICK_LABEL,
 		TAKE_REPAINT_LABEL,
 		TAKE_RESCORING_LABEL,
@@ -226,6 +228,24 @@
 		onsource(gen, mode);
 	}
 
+	interface TakeProvenance {
+		label: string;
+		sourceId: string | null;
+	}
+
+	function takeProvenance(gen: GenerationItem): TakeProvenance | null {
+		const taskType = gen.generation_params?.task_type;
+		if ((taskType !== 'repaint' && taskType !== 'cover') || gen.src_generation_number == null) {
+			return null;
+		}
+		const source = song.generations.find((candidate) => candidate.id === gen.src_generation_id);
+		const sourceVersionNumber = source?.version_number ?? gen.src_generation_version_number ?? null;
+		return {
+			label: `${taskType === 'repaint' ? TAKE_PROVENANCE_REPAINT_PREFIX : TAKE_PROVENANCE_COVER_PREFIX} ${nowPlayingTakeLabel(sourceVersionNumber, gen.src_generation_number)}`,
+			sourceId: source?.id ?? null
+		};
+	}
+
 	async function handleBulkDelete(): Promise<void> {
 		const ids = [...$selectedIds];
 		if (ids.length === 0) return;
@@ -408,6 +428,7 @@
 				</div>
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
+					{@const provenance = takeProvenance(gen)}
 					{@const headline = headlineScore(gen)}
 					{@const flag = qualityFlag(gen.scores)}
 					{@const modelMode = takeModelModeLabel(gen.model_mode)}
@@ -416,6 +437,7 @@
 					     a11y check cannot narrow through a dynamic role. -->
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<div
+						id={`take-${gen.id}`}
 						class="take-row"
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
@@ -427,76 +449,94 @@
 							     Making the row itself a button put source controls inside a
 							     second interactive target, so its centre could land on an
 							     action after the compact layout wrapped. -->
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<span
-							class="take-body"
-							onclick={(e) => handleRowClick(gen, e)}
-							onkeydown={(e) => handleRowKeydown(gen, e)}
-							role={rowIsActionable(gen) ? 'button' : undefined}
-							tabindex={rowIsActionable(gen) ? 0 : undefined}
-						>
-							{#if $selectionMode}
-								<span class="selection-checkbox">
-									<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
-								</span>
-							{:else if !gen.is_archived}
-								<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
-							{/if}
+						<span class="take-main">
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+							<span
+								class="take-summary"
+								onclick={(e) => handleRowClick(gen, e)}
+								onkeydown={(e) => handleRowKeydown(gen, e)}
+								role={rowIsActionable(gen) ? 'button' : undefined}
+								tabindex={rowIsActionable(gen) ? 0 : undefined}
+							>
+								{#if $selectionMode}
+									<span class="selection-checkbox">
+										<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+									</span>
+								{:else if !gen.is_archived}
+									<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
+								{/if}
 
-							<span class="take-label">
-								{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
+								<span class="take-label">
+									{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
+								</span>
+
+								{#if duration}
+									<span class="take-duration">{duration}</span>
+								{/if}
+
+								{#if modelMode}
+									<span class="model-badge" title="Model: {modelMode}">{modelMode}</span>
+								{/if}
+
+								{#if batchNotice}
+									<span
+										class="batch-badge"
+										title="Batch size reduced by ACE-Step due to available VRAM: delivered {batchNotice}"
+									>
+										⚠ {batchNotice}
+									</span>
+								{/if}
+
+								{#if headline}
+									<span
+										class="score-badge {headline.color}"
+										title={`${headline.label} ${headline.text}`}
+									>
+										{headline.text}
+									</span>
+								{/if}
+
+								{#if flag}
+									<span class="quality-flag-badge" title={flag.title}>
+										⚠ {flag.label}
+									</span>
+								{/if}
+
+								{#if $rescoringTakeIds.has(gen.id)}
+									<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
+								{/if}
+
+								{#if gen.is_archived}
+									<span class="expiry-badge archived" title="Archived — will be hard-deleted">
+										archived
+									</span>
+								{:else}
+									{@const daysLeft = daysUntilExpiry(gen)}
+									{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
+										<span
+											class="expiry-badge warn"
+											title="Expires in {daysLeft} day{daysLeft === 1
+												? ''
+												: 's'} — pick or keep to preserve"
+										>
+											⏳ {daysLeft}d
+										</span>
+									{/if}
+								{/if}
 							</span>
 
-							{#if duration}
-								<span class="take-duration">{duration}</span>
-							{/if}
-
-							{#if modelMode}
-								<span class="model-badge" title="Model: {modelMode}">{modelMode}</span>
-							{/if}
-
-							{#if batchNotice}
-								<span
-									class="batch-badge"
-									title="Batch size reduced by ACE-Step due to available VRAM: delivered {batchNotice}"
-								>
-									⚠ {batchNotice}
-								</span>
-							{/if}
-
-							{#if headline}
-								<span
-									class="score-badge {headline.color}"
-									title={`${headline.label} ${headline.text}`}
-								>
-									{headline.text}
-								</span>
-							{/if}
-
-							{#if flag}
-								<span class="quality-flag-badge" title={flag.title}>
-									⚠ {flag.label}
-								</span>
-							{/if}
-
-							{#if $rescoringTakeIds.has(gen.id)}
-								<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
-							{/if}
-
-							{#if gen.is_archived}
-								<span class="expiry-badge archived" title="Archived — will be hard-deleted">
-									archived
-								</span>
-							{:else}
-								{@const daysLeft = daysUntilExpiry(gen)}
-								{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
-									<span
-										class="expiry-badge warn"
-										title="Expires in {daysLeft} day{daysLeft === 1
-											? ''
-											: 's'} — pick or keep to preserve"
-									>
-										⏳ {daysLeft}d
+							{#if provenance}
+								{#if $selectionMode}
+									<button type="button" class="take-origin" onclick={() => toggleSelection(gen.id)}>
+										{provenance.label}
+									</button>
+								{:else}
+									<span class="take-origin">
+										{#if provenance.sourceId}
+											<a href={`#take-${provenance.sourceId}`}>{provenance.label}</a>
+										{:else}
+											{provenance.label}
+										{/if}
 									</span>
 								{/if}
 							{/if}
@@ -818,13 +858,43 @@
 	   too narrow to hold both wraps its actions onto their own line instead of
 	   letting three 44px touch targets take the row's centre — on 320px that
 	   turned a tap meant for the row into a Pick or Keep (#163/2). */
-	.take-body {
+	.take-main {
 		--take-body-min: 11rem;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		flex: 1 1 var(--take-body-min);
+		min-width: var(--take-body-min);
+	}
+
+	.take-summary {
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		flex: 1 1 var(--take-body-min);
-		min-width: var(--take-body-min);
+		flex: 1;
+		min-width: 0;
+	}
+
+	.take-origin {
+		background: none;
+		border: 0;
+		color: var(--accent);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.68rem;
+		margin: 0.2rem 0 0 1.25rem;
+		padding: 0;
+		text-align: left;
+	}
+
+	.take-origin:not(button) {
+		cursor: default;
+	}
+
+	.take-origin a {
+		color: inherit;
+		text-decoration: underline;
+		text-underline-offset: 0.15em;
 	}
 
 	.take-label {
@@ -954,6 +1024,7 @@
 	}
 
 	.take-row.archived .take-label,
+	.take-row.archived .take-origin,
 	.take-row.archived .take-duration,
 	.take-row.archived .score-badge,
 	.take-row.archived .model-badge,

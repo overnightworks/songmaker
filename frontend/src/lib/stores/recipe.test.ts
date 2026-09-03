@@ -147,8 +147,8 @@ describe('recipeChips', () => {
 		).toBe('Default');
 	});
 
-	it('shows the repaint mode when a source is picked, and Cover in cover mode', () => {
-		const gen = generation();
+	it('shows the mode and source take when a source is picked', () => {
+		const gen = generation({ version_number: 2, generation_number: 3 });
 		const base = {
 			model: 'turbo',
 			takes: 1,
@@ -164,11 +164,16 @@ describe('recipeChips', () => {
 			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'repaint' }).find(
 				(c) => c.key === 'repaint'
 			)?.value
-		).toBe('Balanced');
+		).toBe('v2 · take 3');
+		expect(
+			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'repaint' }).find(
+				(c) => c.key === 'repaint'
+			)?.label
+		).toBe('Repaint');
 		expect(
 			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'cover' }).find(
 				(c) => c.key === 'repaint'
-			)?.value
+			)?.label
 		).toBe('Cover');
 	});
 

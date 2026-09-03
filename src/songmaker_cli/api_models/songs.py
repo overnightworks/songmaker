@@ -284,6 +284,7 @@ class GenerationResponse(BaseModel):
     model_mode: str
     src_generation_id: str | None = None
     src_generation_number: int | None = None
+    src_generation_version_number: int | None = None
     whisper_text: str | None
     whisper_cues: list[WhisperCue] | None
     version_lyrics: str | None
@@ -342,6 +343,10 @@ class GenerationResponse(BaseModel):
             src_generation_number=(
                 gen.src_generation.generation_number
                 if gen.src_generation else None
+            ),
+            src_generation_version_number=(
+                gen.src_generation.version.version_number
+                if gen.src_generation and gen.src_generation.version else None
             ),
             whisper_text=gen.whisper_text,
             whisper_cues=generation_whisper_cues(gen.whisper_cues),

@@ -71,6 +71,7 @@ import {
 	recipeModel,
 	recipeOpen,
 	coWriterOpen,
+	setSourceFromGeneration,
 	sourceGeneration,
 	sourceMode
 } from '$lib/stores/recipe';
@@ -628,6 +629,22 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		await tick();
 
 		expect(generateBtn()?.disabled).toBe(false);
+	});
+
+	it.each([
+		['repaint', 'Generate Repaint'],
+		['cover', 'Generate Cover']
+	] as const)('names Generate after the active %s mode', async (mode, label) => {
+		const target = await renderView();
+		setSourceFromGeneration(generation(), mode);
+		await tick();
+
+		expect(target.querySelector('.generate-btn')?.textContent?.trim()).toBe(label);
+	});
+
+	it('keeps Text2Music named Generate', async () => {
+		const target = await renderView();
+		expect(target.querySelector('.generate-btn')?.textContent?.trim()).toBe(EDITOR_GENERATE_LABEL);
 	});
 });
 

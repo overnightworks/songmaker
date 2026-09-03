@@ -28,6 +28,7 @@ import {
 	setSourceFromGeneration,
 	sourceGeneration
 } from '$lib/stores/recipe';
+import { RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import RecipePanel from './RecipePanel.svelte';
 import recipePanelSource from './RecipePanel.svelte?raw';
@@ -150,6 +151,17 @@ describe('RecipePanel', () => {
 		expect(target.querySelector('.source-bar')?.textContent).toContain('v3');
 		expect(get(sourceGeneration)?.id).toBe('g1');
 	});
+
+	it.each(['repaint', 'cover'] as const)(
+		'says that %s uses the lyrics and style currently in the editor',
+		async (mode) => {
+			const target = await render();
+			setSourceFromGeneration(makeGeneration(), mode);
+			await tick();
+
+			expect(target.querySelector('.source-mode-hint')?.textContent).toBe(RECIPE_SOURCE_MODE_HINT);
+		}
+	);
 
 	it('calls onclose from the Collapse button', async () => {
 		const target = document.createElement('div');

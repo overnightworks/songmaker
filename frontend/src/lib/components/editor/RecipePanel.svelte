@@ -58,6 +58,7 @@
 		RECIPE_SEED_PINNED_LABEL,
 		RECIPE_SEED_RANDOM_LABEL,
 		RECIPE_SOURCE_LABEL,
+		RECIPE_SOURCE_MODE_HINT,
 		RECIPE_USES_LABEL
 	} from '$lib/constants';
 	import ParamControls from '../ParamControls.svelte';
@@ -390,6 +391,7 @@
 						>×</button
 					>
 				</div>
+				<p class="source-mode-hint">{RECIPE_SOURCE_MODE_HINT}</p>
 
 				{#if $sourceMode === 'repaint'}
 					{@const duration = gen.generation_params?.audio_duration ?? 180}
@@ -693,6 +695,13 @@
 		background: var(--bg);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
+	}
+
+	.source-mode-hint {
+		margin: -0.35rem 0 0;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-style: italic;
 	}
 
 	.source-label {

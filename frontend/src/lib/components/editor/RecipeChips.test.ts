@@ -50,6 +50,23 @@ describe('RecipeChips', () => {
 		expect(target.querySelector('.chip-changed-dot')).not.toBeNull();
 	});
 
+	it.each([
+		['Repaint', 'Off'],
+		['Repaint', 'v2 · take 3'],
+		['Cover', 'v2 · take 3']
+	])('renders the %s mode chip with %s', async (label, value) => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		const chips: RecipeChip[] = [
+			{ key: 'repaint', label, value, title: 'Generation mode', changed: false }
+		];
+		mounted.push(mount(RecipeChips, { target, props: { chips, open: false, onclick: vi.fn() } }));
+		await tick();
+
+		expect(target.querySelector('.chip-label')?.textContent).toBe(label);
+		expect(target.querySelector('.chip-value')?.textContent).toBe(value);
+	});
+
 	it('expands the panel on click and reflects the open state', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);

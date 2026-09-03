@@ -302,6 +302,7 @@ export interface GenerationItem {
 	model_mode: string;
 	src_generation_id?: string | null;
 	src_generation_number?: number | null;
+	src_generation_version_number?: number | null;
 	whisper_text: string | null;
 	whisper_cues: WhisperCue[] | null;
 	version_lyrics: string | null;

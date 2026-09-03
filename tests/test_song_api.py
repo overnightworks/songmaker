@@ -170,6 +170,17 @@ def _seed_worked_through_song(session) -> None:
         username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
     ))
     session.add(Album(id="alb", title="Album", artist="A"))
+    session.add(Album(id="source-alb", title="Source album", artist="A"))
+    session.add(Song(
+        id="source-song", title="source", album_id="source-alb", track_number=1, slug="source",
+    ))
+    session.add(Version(
+        id="source-v", song_id="source-song", version_number=1, lyrics="source lyrics",
+    ))
+    session.add(Generation(
+        id="source-g", song_id="source-song", version_id="source-v",
+        generation_number=1, mp3_path=f"{_ADMIN_USER}/source-g.mp3", seed=1,
+    ))
     session.add(Song(id="s1", title="s1", album_id="alb", track_number=1, slug="s1"))
     for i in range(_DETAIL_VERSION_COUNT):
         session.add(Version(
@@ -180,6 +191,7 @@ def _seed_worked_through_song(session) -> None:
         session.add(Generation(
             id=gen_id, song_id="s1", version_id="v0",
             generation_number=i + 1, mp3_path=f"{_ADMIN_USER}/{gen_id}.mp3", seed=1,
+            src_generation_id="source-g" if i else None,
         ))
         for j in range(_DETAIL_SCORES_PER_GENERATION):
             session.add(Score(
@@ -219,7 +231,10 @@ def test_get_song_issues_one_flat_query_per_collection_not_a_cross_join(
     apply here: gen.version is read, but it's the forward relation loaded
     directly per-row, not a Generation.song back-populate off a parent list
     that has gone out of scope, and nothing on this path reads that
-    direction at all)."""
+    direction at all). The fixture gives every result take an external source
+    take that is not preloaded through the result song's generations, so
+    serializing source-version provenance must stay inside that same
+    generations query rather than issuing a lazy query for the source version."""
     client, factory = worked_through_song_client
     with factory() as probe_session:
         engine = probe_session.get_bind()

@@ -279,7 +279,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await openTakes(page, shell);
 
 	const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
-	await takeRow.locator('.take-body').click();
+	await takeRow.locator('.take-summary').click();
 	await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
 	// A row body never stops the music: the take that was already playing when
 	// the row was clicked is still playing after it.

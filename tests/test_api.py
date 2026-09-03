@@ -263,6 +263,23 @@ def test_get_song(client: TestClient) -> None:
     assert len(d["generations"]) == 2
 
 
+def test_get_song_includes_source_take_version_for_provenance(client: TestClient) -> None:
+    with client.app.state.ctx.db() as session:
+        session.add(Generation(
+            id="g3", song_id="s1", version_id="v1", generation_number=3,
+            mp3_path="u-test/g3.mp3", src_generation_id="g1",
+        ))
+        session.commit()
+
+    response = client.get("/api/songs/s1")
+
+    assert response.status_code == 200
+    generation = next(item for item in response.json()["generations"] if item["id"] == "g3")
+    assert generation["src_generation_id"] == "g1"
+    assert generation["src_generation_number"] == 1
+    assert generation["src_generation_version_number"] == 1
+
+
 def test_create_song(client: TestClient) -> None:
     resp = client.post("/api/songs", json={
         "title": "Lightning", "album_id": "rock", "lyrics": "flash", "bpm": 160,

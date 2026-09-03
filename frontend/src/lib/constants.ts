@@ -85,6 +85,8 @@ export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 export const TAKE_AGAIN_LABEL = 'Generate again';
 export const TAKE_REPAINT_LABEL = 'Repaint';
 export const TAKE_COVER_LABEL = 'Cover';
+export const TAKE_PROVENANCE_REPAINT_PREFIX = 'Repaint from';
+export const TAKE_PROVENANCE_COVER_PREFIX = 'Cover from';
 export const TAKE_ARCHIVED_SOURCE_TITLE =
 	"Archived takes are scheduled for deletion and can't be used as a source";
 export const TAKE_PICK_LABEL = 'Pick';
@@ -168,6 +170,8 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 	'This proposal applies to a different song than the one you have open';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
+export const EDITOR_GENERATE_REPAINT_LABEL = 'Generate Repaint';
+export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
@@ -209,6 +213,8 @@ export const RECIPE_SEED_RANDOM_LABEL = 'Random';
 export const RECIPE_SEED_PINNED_LABEL = 'Pinned';
 export const RECIPE_REPAINT_OFF_LABEL = 'Off';
 export const RECIPE_SOURCE_LABEL = 'Source';
+export const RECIPE_SOURCE_MODE_HINT =
+	"Paints using the lyrics and style currently in the editor — not the source take's own.";
 export const RECIPE_USES_LABEL = 'Generate uses this recipe';
 // A freshly pinned seed with no prior value starts at 0 rather than a random
 // number, so pinning is deterministic and immediately editable.
