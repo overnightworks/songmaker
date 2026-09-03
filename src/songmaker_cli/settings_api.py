@@ -67,7 +67,6 @@ from songmaker_cli.db.queries.settings import (
     get_judge_model,
     get_judge_provider,
     get_preset,
-    get_raw_stored_judge_settings,
     list_active_models,
     list_all_models,
     list_presets,
@@ -582,10 +581,6 @@ def api_set_judge_settings(
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
-    # Read the raw pair so a retired stored provider never prevents an admin
-    # from replacing it. Judge settings have no independent field, so every
-    # save still validates the requested provider and model below.
-    get_raw_stored_judge_settings(session)
     from songmaker_cli.cowriter.catalog import ProviderSurface
 
     _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)

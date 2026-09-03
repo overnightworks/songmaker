@@ -141,18 +141,18 @@ export function providerMissingRequirementDetail(requirement: string | null | un
 	return `Missing ${requirement ?? 'required API key'}`;
 }
 
-export function providerCliLoginNeedsApiKeyDetail(cliLogin: string | undefined): string {
-	return `${cliLogin} found — but answering needs its API key`;
+export function providerCliLoginNeedsApiKeyDetail(cliLogin: string | null | undefined): string {
+	return `${cliLogin ?? 'required CLI login'} found — but answering needs its API key`;
 }
 
 export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL =
 	'Key is set, but answering needs the Claude Code CLI login';
 
 export function providerConfiguredDetail(
-	cliLogin: string | undefined,
+	cliLogin: string | null | undefined,
 	environmentKey: string | null | undefined
 ): string {
-	return `${PROVIDER_CONFIGURED_LABEL} — ${cliLogin ?? `${environmentKey} set`}`;
+	return `${PROVIDER_CONFIGURED_LABEL} — ${cliLogin ?? `${environmentKey ?? 'provider credentials'} set`}`;
 }
 
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal

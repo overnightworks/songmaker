@@ -319,58 +319,16 @@
 		return typeof value === 'string' && value.length > 0;
 	}
 
-	function isOptionalString(value: unknown): value is string | null | undefined {
-		return value === undefined || value === null || typeof value === 'string';
-	}
-
-	function isProviderSetupMethod(value: unknown): boolean {
-		return (
-			value === undefined ||
-			value === null ||
-			value === 'api_key' ||
-			value === 'claude_cli' ||
-			value === 'grok_cli' ||
-			value === 'codex_cli'
-		);
-	}
-
-	function isCliSetupMethod(value: unknown): boolean {
-		return value === 'claude_cli' || value === 'grok_cli' || value === 'codex_cli';
-	}
-
 	function isProviderSurfaceStatus(detail: unknown): detail is ProviderSurfaceStatus {
 		if (typeof detail !== 'object' || detail === null) return false;
 		const status = detail as Partial<ProviderSurfaceStatus>;
-		if (
-			!isOptionalString(status.environment_key) ||
-			!isOptionalString(status.missing_dependency) ||
-			!isProviderSetupMethod(status.setup_method)
-		) {
-			return false;
-		}
-		switch (status.state) {
-			case 'configured':
-				return (
-					(status.needs === undefined || status.needs === null) &&
-					(isCliSetupMethod(status.setup_method) || isNonEmptyString(status.environment_key))
-				);
-			case 'missing_dependency':
-				return (
-					(status.needs === undefined || status.needs === null) &&
-					isNonEmptyString(status.missing_dependency)
-				);
-			case 'unconfigured':
-				return (
-					(status.needs === 'api_key' && isNonEmptyString(status.environment_key)) ||
-					status.needs === 'cli_login'
-				);
-			case 'cli_login_needs_api_key':
-				return status.needs === 'api_key' && isCliSetupMethod(status.setup_method);
-			case 'api_key_needs_cli_login':
-				return status.needs === 'cli_login' && status.setup_method === 'api_key';
-			default:
-				return false;
-		}
+		return (
+			status.state === 'configured' ||
+			status.state === 'cli_login_needs_api_key' ||
+			status.state === 'api_key_needs_cli_login' ||
+			status.state === 'missing_dependency' ||
+			status.state === 'unconfigured'
+		);
 	}
 
 	function isProviderNotConfiguredDetail(detail: unknown): detail is ProviderNotConfiguredDetail {

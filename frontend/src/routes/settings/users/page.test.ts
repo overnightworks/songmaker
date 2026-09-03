@@ -670,7 +670,7 @@ describe('admin models tab', () => {
 			new ApiError(422, 'Could not save co-writer settings', '/api/settings/cowriter', null, {
 				provider: 'grok',
 				surface: 'cowriter',
-				status: { state: 'unconfigured', needs: 'api_key' }
+				status: { state: 'unknown' }
 			})
 		);
 		const target = await renderPage(true);
@@ -684,6 +684,29 @@ describe('admin models tab', () => {
 		await flush();
 
 		expect(target.querySelector('.error')?.textContent).toBe('Could not save co-writer settings');
+	});
+
+	it('names a missing CLI setup method in a structured provider detail', async () => {
+		api.updateCowriterSettings.mockRejectedValueOnce(
+			new ApiError(422, '', '/api/settings/cowriter', null, {
+				provider: 'grok',
+				surface: 'cowriter',
+				status: { state: 'cli_login_needs_api_key', needs: 'api_key' }
+			})
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
+		budgetInput.value = '30000';
+		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		buttonNamed(cowriter, 'Save Co-Writer').click();
+		await flush();
+
+		expect(target.querySelector('.error')?.textContent).toBe(
+			'Grok co-writer: required CLI login found — but answering needs its API key'
+		);
 	});
 
 	it('loads and saves the scoring block against /api/settings/judge', async () => {
