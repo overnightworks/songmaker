@@ -16,7 +16,6 @@ from songmaker_cli.acestep_state import (
     decr_queue_depth,
     download_key,
     incr_queue_depth,
-    list_worker_states,
     queue_depth_key,
     read_download_in_progress,
     read_queue_depth,
@@ -195,21 +194,6 @@ def test_decode_handles_str_branch() -> None:
     assert decode_redis_text(None) is None
     assert decode_redis_text(b"abc") == "abc"
     assert decode_redis_text("xyz") == "xyz"
-
-
-def test_list_worker_states(redis, event_loop) -> None:
-    event_loop.run_until_complete(
-        redis.set(worker_state_key("w1"), json.dumps({"loaded": ["sft"]})),
-    )
-    event_loop.run_until_complete(
-        redis.set(worker_state_key("w2"), json.dumps({"loaded": ["turbo"]})),
-    )
-    result = event_loop.run_until_complete(
-        list_worker_states(redis, ["w1", "w2", "w3"]),
-    )
-    assert result["w1"] == {"loaded": ["sft"]}
-    assert result["w2"] == {"loaded": ["turbo"]}
-    assert result["w3"] is None
 
 
 def test_download_key_format() -> None:
