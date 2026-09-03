@@ -399,6 +399,9 @@ GZIP_COMPRESS_LEVEL: Final[int] = 6
 SSE_POLL_INTERVAL_SECONDS = 1
 SSE_HEARTBEAT_SECONDS: Final[int] = 15
 SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
+GENERATE_LOAD_MODEL_TIMEOUT_SECONDS: Final[int] = 600
+GENERATE_SUBMIT_TIMEOUT_SECONDS: Final[int] = 30
+ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS: Final[int] = 30
 ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = (
     int(get_engine_settings().acestep_poll_timeout)
@@ -412,10 +415,25 @@ JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 # measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
 SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 600
-GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS: Final[int] = 120
+JOB_REAPER_INTERVAL_SECONDS: Final[int] = 120
+GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS: Final[int] = JOB_REAPER_INTERVAL_SECONDS
+GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS: Final[int] = (
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+    + GENERATE_SUBMIT_TIMEOUT_SECONDS
+    + ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
+)
+
+
+def generate_job_heartbeat_stale_threshold_seconds(sse_read_timeout_seconds: int) -> int:
+    """Return the generate heartbeat bound for one configured SSE read window."""
+    return (
+        max(GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS, sse_read_timeout_seconds)
+        + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+    )
+
+
 GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = (
-    ACESTEP_SSE_READ_TIMEOUT_SECONDS
-    + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+    generate_job_heartbeat_stale_threshold_seconds(ACESTEP_SSE_READ_TIMEOUT_SECONDS)
 )
 LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
 DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
@@ -556,10 +574,6 @@ class JobStaleThresholds:
     Queued thresholds are chosen, not measured. A job waiting in a deep queue
     can exceed them; see #331 F27, which moves queued reaping to worker
     liveness rather than age.
-
-    The generate heartbeat threshold is
-    ``ACESTEP_SSE_READ_TIMEOUT_SECONDS + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS``,
-    so a silent worker fails at the scheduler before reaping.
     """
 
     queued_seconds: int
@@ -584,7 +598,7 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),
+    ),  # max(load + submit + connect, SSE read) plus one reaper tick
     JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,

@@ -17,10 +17,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
+    ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     CLAUDE_SCORING_MODEL_DEFAULT,
     COVER_UPLOAD_BODY_MAX_BYTES,
@@ -28,6 +30,7 @@ from songmaker_cli.constants import (
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
+    generate_job_heartbeat_stale_threshold_seconds,
 )
 
 
@@ -72,6 +75,24 @@ class Settings(BaseSettings):
     redis_url: str
     session_secret: SecretStr
     songmaker_internal_token: SecretStr
+
+    @model_validator(mode="after")
+    def validate_generation_timeout_order(self) -> Settings:
+        """Keep scheduler, reaper, and arq's silent-worker bounds ordered."""
+        sse_read_timeout = (
+            int(EngineSettings().acestep_poll_timeout)
+            + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+        )
+        generate_reaper_threshold = generate_job_heartbeat_stale_threshold_seconds(
+            sse_read_timeout,
+        )
+        if not sse_read_timeout < generate_reaper_threshold < self.arq_job_timeout:
+            raise ValueError(
+                "Generation timeout order must be SSE read < reaper < arq "
+                f"({sse_read_timeout} < {generate_reaper_threshold} < "
+                f"{self.arq_job_timeout})",
+            )
+        return self
 
     # ── HTTP server ───────────────────────────────────────────────────
     host: str = "127.0.0.1"

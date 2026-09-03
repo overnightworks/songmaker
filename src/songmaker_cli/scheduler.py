@@ -12,11 +12,13 @@ only a load counter for the next picker, not a lock.
 The scheduler does not commit DB or own any persistent state — it's a
 pure dispatch layer between ``run_generation_job`` and the worker pool.
 
-If the SSE connection drops mid-generation, the scheduler reconnects to
-the same task_id (the worker's task store survives across reconnects)
-with exponential backoff up to ``MAX_SSE_RECONNECTS``. The worker keeps
-generating regardless of whether the scheduler is currently subscribed,
-so a transient network blip never wastes a 10-minute generation.
+If an SSE transport connection drops mid-generation, the scheduler reconnects
+to the same task_id (the worker's task store survives across reconnects) with
+exponential backoff up to ``MAX_SSE_RECONNECTS``. An SSE read timeout is not
+retried: it means the worker stream went silent and must fail the job promptly.
+The worker keeps generating through a transient transport drop regardless of
+whether the scheduler is currently subscribed, so reconnecting does not waste
+a 10-minute generation.
 """
 
 from __future__ import annotations
@@ -41,7 +43,12 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
-from songmaker_cli.constants import ACESTEP_SSE_READ_TIMEOUT_SECONDS
+from songmaker_cli.constants import (
+    ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
+    GENERATE_SUBMIT_TIMEOUT_SECONDS,
+)
 from songmaker_cli.db.queries import list_worker_identities
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -62,11 +69,12 @@ class WorkerTaskFailed(RuntimeError):
 
 
 class WorkerGenerationFailed(WorkerTaskFailed):
-    """Raised when a worker reports that its generate task failed.
+    """Raised for a worker ``error`` event or scheduler-detected stream silence.
 
-    Its message is ACE-Step's own cause for the failure and is written
-    for the operator: the job layer stores it and the UI shows it
-    verbatim, so nothing generic may be raised as this type.
+    Its message is ACE-Step's own cause from an ``error`` event, or the
+    scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
+    The job layer stores it and the UI shows it verbatim, so every message must
+    be useful to an operator.
     """
 
 
@@ -114,9 +122,9 @@ class _PickedWorker:
 @dataclass
 class DispatchOptions:
     max_sse_reconnects: int = 5
-    load_model_timeout_seconds: float = 600.0
-    generate_submit_timeout_seconds: float = 30.0
-    sse_connect_timeout_seconds: float = 10.0
+    load_model_timeout_seconds: float = GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+    generate_submit_timeout_seconds: float = GENERATE_SUBMIT_TIMEOUT_SECONDS
+    sse_connect_timeout_seconds: float = ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
     sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
@@ -255,11 +263,13 @@ async def _iterate_task_events(
 ) -> AsyncIterator[tuple[str, dict]]:
     """Yield (event_type, data) tuples from a worker's /tasks/{id}/stream.
 
-    Reconnects on transport drop with exponential backoff up to
-    ``options.max_sse_reconnects``. Stops yielding after a ``done`` or
-    ``error`` event (both ARE yielded so the caller can validate or
-    surface them). Raises the underlying httpx error after exhausting
-    the reconnect budget.
+    Reconnects on transport drops with exponential backoff up to
+    ``options.max_sse_reconnects``. ``httpx.ReadTimeout`` is deliberately
+    raised without retrying before the broader ``httpx.TransportError`` catch:
+    it is a transport-error subclass, but for this stream it means the worker
+    went silent. Stops yielding after a ``done`` or ``error`` event (both ARE
+    yielded so the caller can validate or surface them). Raises the underlying
+    httpx error after exhausting the reconnect budget.
     """
     reconnects = 0
     timeout = httpx.Timeout(
