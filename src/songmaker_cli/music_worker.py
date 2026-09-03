@@ -14,8 +14,10 @@ from arq import cron, func
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
+    JOB_ACTIVE_STATUSES,
     RECOVERY_LOCK_MUSIC_KEY,
     JobFunction,
+    JobStatus,
     JobType,
 )
 from songmaker_cli.jobs import (
@@ -28,6 +30,7 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_lora_training_job,
 )
+from songmaker_cli.jobs.lora_training import reconcile_crashed_loras
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_base import WorkerBase, build_redis_settings
 
@@ -35,9 +38,26 @@ log = logging.getLogger(__name__)
 
 
 class MusicWorker(WorkerBase):
-    job_type = JobType.GENERATE
+    job_types = (JobType.GENERATE, JobType.LORA_TRAINING)
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
+
+    def recovery_statuses_by_type(self) -> dict[str, frozenset[str]]:
+        """Keep queued LoRA work available to a freshly started worker."""
+        return {
+            JobType.GENERATE: JOB_ACTIVE_STATUSES,
+            JobType.LORA_TRAINING: frozenset({JobStatus.RUNNING}),
+        }
+
+    async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
+        if not recovered.get(JobType.LORA_TRAINING):
+            return
+
+        await asyncio.to_thread(
+            reconcile_crashed_loras,
+            self.get_db_factory(),
+            self.audio_dir(),
+        )
 
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):

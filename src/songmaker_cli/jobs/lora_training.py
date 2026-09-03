@@ -19,6 +19,7 @@ from songmaker_cli.constants import (
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
+    USER_LORA_TRAINING_TMP_DIRNAME,
     USER_LORAS_DIRNAME,
     AuditAction,
     JobStatus,
@@ -27,6 +28,7 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.queries import (
+    list_active_user_loras,
     record_audit,
     update_user_lora,
 )
@@ -78,7 +80,7 @@ def _output_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
 
 
 def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / "training_tmp"
+    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
 
 
 def _materialize_dataset(
@@ -180,7 +182,9 @@ def _validate_export_path(
 
 def _cleanup_failed_lora_paths(
     audio_dir: Path, user_id: str, lora_id: str,
-) -> None:
+) -> bool:
+    """Remove disposable training paths and report whether all removals worked."""
+    removed_cleanly = True
     for path in (
         _dataset_dir(audio_dir, user_id, lora_id),
         _output_dir(audio_dir, user_id, lora_id),
@@ -190,10 +194,36 @@ def _cleanup_failed_lora_paths(
             if path.exists():
                 shutil.rmtree(path)
         except OSError:
-            log.warning("Failed to remove %s during LoRA cleanup", path, exc_info=True)
+            removed_cleanly = False
+            log.exception("Failed to remove %s during LoRA cleanup", path)
+    return removed_cleanly
 
 
 def cleanup_failed_lora(
+    *,
+    session: Session,
+    lora_id: str,
+    user_id: str,
+    error_message: str,
+) -> None:
+    """Mark one LoRA FAILED and write its audit record in ``session``.
+
+    The caller owns the transaction and decides when to commit.  This core
+    deliberately does not touch disk, so its failed status and audit become
+    durable before any slow or fallible filesystem cleanup begins.
+    """
+    update_user_lora(
+        session, lora_id,
+        status=LoraStatus.FAILED, error=error_message,
+        completed_at=datetime.now(timezone.utc),
+    )
+    record_audit(
+        session, user_id, AuditAction.TRAIN_LORA,
+        ResourceType.LORA, lora_id, f"failed: {error_message}",
+    )
+
+
+def cleanup_failed_lora_with_factory(
     *,
     lora_id: str,
     user_id: str,
@@ -201,27 +231,110 @@ def cleanup_failed_lora(
     db_factory: sessionmaker[Session],
     error_message: str,
 ) -> None:
-    """Mark the LoRA FAILED, remove its working dirs, emit audit failure.
+    """Persist a LoRA failure, then remove its disposable working paths.
 
-    Idempotent: safe to call from crash recovery and from the runner
-    itself. Does not touch sample audio files — samples live at their
-    own path outside the dataset dir.
+    Database failures propagate to the caller.  Filesystem failures are
+    logged with their traceback and followed by an orphan-work-dir audit;
+    sample audio is never removed.
     """
-    _cleanup_failed_lora_paths(audio_dir, user_id, lora_id)
+    with db_factory() as session:
+        cleanup_failed_lora(
+            session=session,
+            lora_id=lora_id,
+            user_id=user_id,
+            error_message=error_message,
+        )
+        session.commit()
+
+    if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
+        _audit_failed_lora_cleanup(db_factory, audio_dir)
+
+
+def audit_orphaned_lora_work_dirs(
+    db_factory: sessionmaker[Session], audio_dir: Path,
+) -> None:
+    """Log disposable LoRA work dirs whose LoRA is missing or no longer active."""
+    loras_root = audio_dir / USER_LORAS_DIRNAME
+    if not loras_root.exists():
+        return
+
+    with db_factory() as session:
+        active_ids = {lora.id for lora in list_active_user_loras(session)}
+
+    orphaned: list[Path] = []
+    for user_dir in loras_root.iterdir():
+        if not user_dir.is_dir():
+            continue
+        for lora_dir in user_dir.iterdir():
+            if not lora_dir.is_dir() or lora_dir.name in active_ids:
+                continue
+            for work_dirname in (
+                USER_LORA_DATASET_DIRNAME,
+                USER_LORA_TRAINING_TMP_DIRNAME,
+            ):
+                work_dir = lora_dir / work_dirname
+                if work_dir.exists():
+                    orphaned.append(work_dir)
+
+    if orphaned:
+        log.warning(
+            "Found %d orphaned LoRA work dir(s): %s",
+            len(orphaned), ", ".join(str(path) for path in orphaned[:10]),
+        )
+
+
+def _audit_failed_lora_cleanup(
+    db_factory: sessionmaker[Session], audio_dir: Path,
+) -> None:
+    """Log an audit failure without blocking later LoRA reconciliation rows."""
     try:
-        with db_factory() as session:
-            update_user_lora(
-                session, lora_id,
-                status=LoraStatus.FAILED, error=error_message,
-                completed_at=datetime.now(timezone.utc),
-            )
-            record_audit(
-                session, user_id, AuditAction.TRAIN_LORA,
-                ResourceType.LORA, lora_id, f"failed: {error_message}",
-            )
-            session.commit()
+        audit_orphaned_lora_work_dirs(db_factory, audio_dir)
     except Exception:
-        log.exception("Failed to mark LoRA %s as FAILED", lora_id)
+        log.exception("Failed to audit orphaned LoRA work dirs after cleanup error")
+
+
+def reconcile_crashed_loras(
+    db_factory: sessionmaker[Session], audio_dir: Path,
+) -> int:
+    """Fail terminal-job LoRAs one locked row and transaction at a time."""
+    reconciled = 0
+    excluded_ids: set[str] = set()
+    error_message = "Training crashed or was interrupted"
+
+    while True:
+        lora_id: str | None = None
+        user_id: str | None = None
+        try:
+            with db_factory() as session:
+                candidates = list_active_user_loras(
+                    session,
+                    reconcilable_only=True,
+                    excluded_ids=excluded_ids,
+                    limit=1,
+                )
+                if not candidates:
+                    return reconciled
+                lora = candidates[0]
+                lora_id = lora.id
+                user_id = lora.user_id
+                cleanup_failed_lora(
+                    session=session,
+                    lora_id=lora_id,
+                    user_id=user_id,
+                    error_message=error_message,
+                )
+                session.commit()
+        except Exception:
+            if lora_id is None:
+                log.exception("Failed to select a crashed LoRA for reconciliation")
+                return reconciled
+            log.exception("Failed to reconcile crashed LoRA %s", lora_id)
+            excluded_ids.add(lora_id)
+            continue
+
+        reconciled += 1
+        if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
+            _audit_failed_lora_cleanup(db_factory, audio_dir)
 
 
 async def run_lora_training_job(
@@ -333,7 +446,7 @@ async def run_lora_training_job(
                 on_heartbeat=_on_heartbeat,
             )
         except NoCapacityError as exc:
-            cleanup_failed_lora(
+            cleanup_failed_lora_with_factory(
                 lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
                 db_factory=db_factory, error_message=str(exc),
             )
@@ -389,7 +502,7 @@ async def run_lora_training_job(
 
     except asyncio.CancelledError:
         log.warning("LoRA training job %s cancelled", job_id)
-        cleanup_failed_lora(
+        cleanup_failed_lora_with_factory(
             lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
             db_factory=db_factory,
             error_message="Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
@@ -402,7 +515,7 @@ async def run_lora_training_job(
         raise
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
-        cleanup_failed_lora(
+        cleanup_failed_lora_with_factory(
             lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
             db_factory=db_factory, error_message=_sanitize_error(exc),
         )

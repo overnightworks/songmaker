@@ -830,12 +830,9 @@ parent's coherence budget, which is spent after the child returns.
   `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: recovers stale **generate** jobs every 2 minutes, audits orphaned audio
-  files. `train_lora` runs in this same process but is a different `job_type`
-  (`JobType.LORA_TRAINING`) — `WorkerBase`'s recovery is scoped to one
-  `job_type` per worker class (`MusicWorker.job_type = JobType.GENERATE`), so
-  this cron does not reach it. See "Chat and LoRA-training job recovery" below
-  for how a dead worker's `train_lora` job still gets terminal-ized.
+- Cron: recovers stale `generate` and `lora_training` jobs every 2 minutes,
+  reconciles any terminalized LoRAs, then audits orphaned audio files. The
+  same two job types are recovered on MusicWorker startup and shutdown.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -850,18 +847,22 @@ parent's coherence budget, which is spent after the child returns.
 - DB singleton with thread-safe initialization
 - Path helpers (`_audio_dir`, `_data_dir`)
 - Timeout constants, terminal status set
-- Common startup (logging configuration, stale-job recovery)
-- Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
+- Common startup, shutdown, and stale recovery for every named worker job
+  type. MusicWorker owns `generate` and `lora_training`; the scoring worker
+  owns `score`.
+- A worker restart terminalizes only `RUNNING` `lora_training` jobs, so a
+  queued training survives a deploy; `generate` jobs still terminalize both
+  `QUEUED` and `RUNNING` jobs.
+- Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Chat and LoRA-training job recovery** (`lifecycle.py`, web process — #371):
+**Chat and LoRA-training job recovery** (`jobs/lora_training.py`, web process — #371):
 `chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
 never inside an arq worker, so they have no worker-scoped cron at all.
-`lora_training` jobs run inside the music worker but, as noted above, fall
-outside its `job_type`-scoped recovery. Both therefore need a web-process-side
-equivalent of `WorkerBase.cleanup_stale_cron`, reusing the same generic
-`recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that backs
-generate/score:
+`lora_training` jobs run inside MusicWorker and are recovered by that worker;
+the web process also reaps them when no worker returns. Both paths reuse the
+generic `recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that
+backs generate/score:
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
   minutes, matching the arq-worker cron cadence), behind the same
   single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
@@ -875,11 +876,12 @@ generate/score:
 - `reap_stale_lora_training_jobs()` uses the same default
   `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
   MusicWorker's `arq_job_timeout` envelope.
-- `reconcile_crashed_loras()` (also run once at web startup) now reaps stale
-  `lora_training` jobs itself before checking for a terminal/missing
-  `training_job_id` — previously it only *waited* for something else to
-  terminal-ize that job, which nothing did, so a LoRA row could stay stuck in
-  `TRAINING`/`PREPROCESSING`/`EXPORTING` forever.
+- `reconcile_crashed_loras()` runs once at web startup and after the web
+  reaper; MusicWorker calls the same job-owned reconciliation after it
+  terminalizes a `lora_training` job. The path locks one active LoRA candidate
+  with `skip_locked`, commits its FAILED status and one audit entry in that
+  transaction, then removes its working files. A second process finds no
+  unlocked candidate to clean up.
 
 **Backwards-compatible shim** (`worker.py`):
 - Imports tasks from music_worker and scoring_worker

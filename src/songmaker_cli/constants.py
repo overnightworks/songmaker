@@ -487,6 +487,7 @@ COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
 USER_LORAS_DIRNAME: Final[str] = "user_loras"
 USER_LORA_SAMPLES_DIRNAME: Final[str] = "samples"
 USER_LORA_DATASET_DIRNAME: Final[str] = "dataset"
+USER_LORA_TRAINING_TMP_DIRNAME: Final[str] = "training_tmp"
 USER_LORA_OUTPUT_DIRNAME: Final[str] = "lora"
 USER_LORA_SAMPLE_MAX_BYTES: Final[int] = 50 * 1024 * 1024
 USER_LORA_MAX_SAMPLES: Final[int] = 20

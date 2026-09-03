@@ -28,7 +28,7 @@ from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSampl
 from songmaker_cli.db.queries import get_job, get_user_lora
 from songmaker_cli.jobs.lora_training import (
     _validate_export_path,
-    cleanup_failed_lora,
+    cleanup_failed_lora_with_factory,
     run_lora_training_job,
 )
 
@@ -330,7 +330,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
     (lora_root / "training_tmp").mkdir(parents=True, exist_ok=True)
     (lora_root / USER_LORA_DATASET_DIRNAME / "stub.txt").write_text("x")
 
-    cleanup_failed_lora(
+    cleanup_failed_lora_with_factory(
         lora_id=seeded["lora_id"], user_id=seeded["user_id"],
         audio_dir=audio_dir, db_factory=db_factory,
         error_message="testing",
