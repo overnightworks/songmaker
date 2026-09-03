@@ -91,7 +91,7 @@ class CliRunOutcome:
     """The result of a bounded CLI invocation and its cleanup."""
 
     started: bool
-    spawn_error: OSError | None
+    spawn_error: BaseException | None
     returncode: int | None
     stdout: str
     stderr: str
@@ -223,6 +223,7 @@ def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
         stdin_payload=None,
         read="all",
         deadline=deadline,
+        output_read_limit_bytes=CLI_OUTPUT_READ_LIMIT_BYTES,
     )
     if outcome.reason in {
         CliRunReason.SPAWN_FAILED,
@@ -244,6 +245,7 @@ def run_cli_bounded(
     read: Literal["all", "first_line"],
     deadline: float,
     stderr: Literal["capture", "devnull"] = "capture",
+    output_read_limit_bytes: int | None = None,
     cleanup_margin_seconds: float | None = None,
     on_spawned: Callable[[int], None] | None = None,
     on_reaped: Callable[[int, bool], None] | None = None,
@@ -253,10 +255,22 @@ def run_cli_bounded(
     The child deliberately receives no terminal stdin: its pipe is closed
     immediately when no input payload is supplied.
     """
+    if output_read_limit_bytes is None:
+        output_read_limit_bytes = CLI_OUTPUT_READ_LIMIT_BYTES
     state = _BoundedRunState()
     threading.Thread(
         target=_run_cli_bounded,
-        args=(state, tuple(argv), stdin_payload, read, deadline, stderr, on_spawned, on_reaped),
+        args=(
+            state,
+            tuple(argv),
+            stdin_payload,
+            read,
+            deadline,
+            stderr,
+            output_read_limit_bytes,
+            on_spawned,
+            on_reaped,
+        ),
         daemon=True,
     ).start()
     if not state.completed.wait(timeout=max(deadline - time.monotonic(), 0)):
@@ -310,6 +324,7 @@ def _run_cli_bounded(
     read: Literal["all", "first_line"],
     deadline: float,
     stderr: Literal["capture", "devnull"],
+    output_read_limit_bytes: int,
     on_spawned: Callable[[int], None] | None,
     on_reaped: Callable[[int, bool], None] | None,
 ) -> None:
@@ -327,7 +342,7 @@ def _run_cli_bounded(
                 env=scrubbed_env(),
                 start_new_session=True,
             )
-        except OSError as error:
+        except BaseException as error:
             _publish_bounded_outcome(
                 state,
                 CliRunOutcome(
@@ -344,26 +359,31 @@ def _run_cli_bounded(
             return
         state.started.set()
         _notify_spawned(on_spawned, process.pid)
-        output = _exchange_bounded(process, stdin_payload, read, deadline)
-    finally:
-        if process is None:
-            return
-        became_zombie = _reap_process_group(process)
-        _notify_reaped(on_reaped, process.pid, became_zombie)
-        _publish_bounded_outcome(
-            state,
-            CliRunOutcome(
-                started=True,
-                spawn_error=None,
-                returncode=process.returncode,
-                stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
-                stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
-                complete=output.complete,
-                became_zombie=became_zombie,
-                reason=output.reason,
-                io_error=output.io_error,
-            ),
+        output = _exchange_bounded(
+            process,
+            stdin_payload,
+            read,
+            deadline,
+            output_read_limit_bytes,
         )
+    finally:
+        if process is not None:
+            became_zombie = _reap_process_group(process)
+            _notify_reaped(on_reaped, process.pid, became_zombie)
+            _publish_bounded_outcome(
+                state,
+                CliRunOutcome(
+                    started=True,
+                    spawn_error=None,
+                    returncode=process.returncode,
+                    stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
+                    stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
+                    complete=output.complete,
+                    became_zombie=became_zombie,
+                    reason=output.reason,
+                    io_error=output.io_error,
+                ),
+            )
 
 
 _DEADLINE_REASONS = frozenset({
@@ -397,6 +417,7 @@ def _exchange_bounded(
     stdin_payload: bytes | None,
     read: Literal["all", "first_line"],
     deadline: float,
+    output_read_limit_bytes: int,
 ) -> _CliOutput:
     stdout = bytearray()
     stderr = bytearray()
@@ -433,7 +454,7 @@ def _exchange_bounded(
                             key.fileobj.close()
                         continue
                     collected = stdout if key.data == "stdout" else stderr
-                    room = CLI_OUTPUT_READ_LIMIT_BYTES - len(collected)
+                    room = output_read_limit_bytes - len(stdout) - len(stderr)
                     if room <= 0:
                         return _CliOutput(
                             stdout,
@@ -457,7 +478,7 @@ def _exchange_bounded(
                                 stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
                             )
                     collected.extend(chunk)
-                    if len(collected) >= CLI_OUTPUT_READ_LIMIT_BYTES:
+                    if len(stdout) + len(stderr) >= output_read_limit_bytes:
                         return _CliOutput(
                             stdout,
                             stderr,

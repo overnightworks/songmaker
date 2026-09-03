@@ -353,7 +353,7 @@ def test_clearing_a_probe_does_not_restore_its_pre_clear_result() -> None:
 
 
 def test_a_cli_that_floods_us_is_read_only_up_to_the_limit() -> None:
-    flood = "while :; do printf x; done"
+    flood = "while :; do printf stdout; printf stderr >&2; done"
     with _a_shell_pretending_to_be_a_cli():
         run = run_cli("/bin/sh", ("-c", flood))
 
@@ -504,18 +504,51 @@ def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() 
 
 def test_bounded_runner_reports_a_spawn_error() -> None:
     error = OSError("cannot start")
+    spawned_process_ids: list[int] = []
+    reaped_processes: list[tuple[int, bool]] = []
     with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=error):
         outcome = run_cli_bounded(
             ("missing-cli",),
             stdin_payload=None,
             read="all",
             deadline=time.monotonic() + 1,
+            on_spawned=spawned_process_ids.append,
+            on_reaped=lambda process_id, became_zombie: reaped_processes.append(
+                (process_id, became_zombie),
+            ),
         )
 
     assert outcome.started is False
     assert outcome.spawn_error is error
     assert outcome.returncode is None
     assert outcome.reason is CliRunReason.SPAWN_FAILED
+    assert spawned_process_ids == []
+    assert reaped_processes == []
+
+
+def test_bounded_runner_reports_a_non_os_spawn_error_immediately() -> None:
+    error = ValueError("empty argv")
+    spawned_process_ids: list[int] = []
+    reaped_processes: list[tuple[int, bool]] = []
+    deadline = time.monotonic() + 1
+
+    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=error):
+        outcome = run_cli_bounded(
+            (),
+            stdin_payload=None,
+            read="all",
+            deadline=deadline,
+            on_spawned=spawned_process_ids.append,
+            on_reaped=lambda process_id, became_zombie: reaped_processes.append(
+                (process_id, became_zombie),
+            ),
+        )
+
+    assert outcome.reason is CliRunReason.SPAWN_FAILED
+    assert outcome.spawn_error is error
+    assert time.monotonic() < deadline - 0.5
+    assert spawned_process_ids == []
+    assert reaped_processes == []
 
 
 def test_bounded_runner_carries_an_output_io_error(monkeypatch) -> None:
@@ -770,7 +803,7 @@ def test_bounded_runner_drains_both_output_streams_in_all_mode() -> None:
     assert outcome.stderr == "stderr"
 
 
-def test_bounded_runner_applies_its_byte_limit_to_each_stream(monkeypatch) -> None:
+def test_bounded_runner_applies_its_byte_limit_to_both_streams(monkeypatch) -> None:
     monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 4)
 
     outcome = run_cli_bounded(
@@ -780,9 +813,9 @@ def test_bounded_runner_applies_its_byte_limit_to_each_stream(monkeypatch) -> No
         deadline=time.monotonic() + 1,
     )
 
-    assert outcome.complete is True
-    assert outcome.stdout == "123"
-    assert outcome.stderr == "abc"
+    assert outcome.complete is False
+    assert outcome.reason is CliRunReason.OUTPUT_LIMIT_REACHED
+    assert len(outcome.stdout) + len(outcome.stderr) == 4
 
 
 def test_bounded_runner_can_discard_stderr() -> None:
