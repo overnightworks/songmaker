@@ -14,6 +14,7 @@ librosa = pytest.importorskip("librosa")
 
 from conftest import read_wav, write_wav
 from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
+from songmaker_cli.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     AudioBoxScore,
@@ -715,6 +716,13 @@ def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     assert "lyrical_coherence" not in judged.refreshed_output_keys()
 
 
+def test_judge_config_is_the_only_owner_of_positive_timeout_validation() -> None:
+    from songmaker_cli.scoring.lyrical_coherence import CoherenceJudgeConfig
+
+    with pytest.raises(ValueError, match="Judge timeout must be positive"):
+        CoherenceJudgeConfig(provider="claude", model="claude-test", timeout=0)
+
+
 def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budget() -> None:
     provider_release = threading.Event()
     provider_stopped = threading.Event()
@@ -743,6 +751,7 @@ def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budge
         provider_release.set()
 
     assert judged.runs[-1].outcome is ScorerOutcome.TIMED_OUT
+    assert judged.runs[-1].detail == JUDGE_FAILURE_TIMEOUT
     assert judged.lyrical_coherence is None
     assert provider_stopped.wait(timeout=1)
 

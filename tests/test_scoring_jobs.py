@@ -23,6 +23,7 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     JUDGE_DEFAULT_PROVIDER,
+    JUDGE_FAILURE_TIMEOUT,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
 )
@@ -372,5 +373,28 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
         stored = session.query(Score).filter_by(generation_id="g1").one()
         assert job.status == "partial"
         assert job.error_type == "judge_error"
-        assert "timeout" in job.error
+        assert JUDGE_FAILURE_TIMEOUT in job.error
         assert "lyrical_coherence" not in stored.value
+
+
+def test_child_scorer_timeout_leaves_the_job_completed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A child scorer timing out remains isolated; only the parent judge
+    turns an otherwise useful scoring run into a partial job."""
+    factory, audio_dir = _seeded_generation(tmp_path)
+    child_timeout = SongScores(runs=(ScorerRun(
+        scorer="silence",
+        outcome=ScorerOutcome.TIMED_OUT,
+        detail="scorer_timeout",
+    ),))
+    scorer = MagicMock(score=MagicMock(return_value=child_timeout))
+
+    with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
+        run_scoring_job(
+            "j-score", "g1", ["silence"], db_factory=factory, audio_dir=audio_dir,
+        )
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id="j-score").one()
+        assert job.status == "completed"

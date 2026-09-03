@@ -221,9 +221,11 @@ class ScorerDependencyUnavailable(Exception):
 
 
 def judge_watchdog_timeout(timeout: int) -> int:
-    """Give the outer scorer watchdog room for the Judge to stop itself."""
-    if timeout <= 0:
-        raise ValueError("Judge timeout must be positive")
+    """Give the outer scorer watchdog room for the Judge to stop itself.
+
+    The provider SDK's httpx timeout applies to individual phases rather than
+    one whole request, so the watchdog is only a final safety boundary.
+    """
     return timeout + JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS
 
 
