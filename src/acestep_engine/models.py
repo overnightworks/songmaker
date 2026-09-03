@@ -12,9 +12,8 @@ from pydantic import BaseModel, Field
 class AceStepConfig:
     """Configuration for an ACE-Step music generation request.
 
-    Field names match the canonical names on ACE-Step's
-    GenerateMusicRequest Pydantic model so the wire payload is the
-    dataclass dump with no translation step.
+    Field names match ACE-Step's canonical GenerateMusicRequest model. Local
+    audio paths are translated to multipart upload fields during submission.
     """
 
     prompt: str
