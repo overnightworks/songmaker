@@ -14,12 +14,12 @@ import {
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
+import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
 	applySyncedSong,
@@ -341,7 +341,7 @@ export class ResourceSyncController {
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
 		if (result === 'disabled') {
 			this.teardown({ resetStore: false });
-			this.setVisibleError(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+			this.setVisibleError(AUTH_ACCOUNT_DISABLED_MESSAGE);
 			this.resolveReady(false);
 			return;
 		}

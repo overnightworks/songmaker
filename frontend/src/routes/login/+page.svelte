@@ -1,11 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
-	import {
-		APP_NAME,
-		AUTH_ACCOUNT_DISABLED_MESSAGE,
-		AUTH_SESSION_EXPIRED_MESSAGE
-	} from '$lib/constants';
+	import { APP_NAME } from '$lib/constants';
+	import { AUTH_ACCOUNT_DISABLED_MESSAGE, AUTH_SESSION_EXPIRED_MESSAGE } from '$lib/constants/auth';
 	import { login, authError, authNotice } from '$lib/stores/auth';
 
 	let username = $state('');

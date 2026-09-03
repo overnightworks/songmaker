@@ -36,7 +36,6 @@ import type {
 } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
@@ -44,6 +43,7 @@ import {
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
+import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
@@ -553,7 +553,7 @@ describe('resource sync owner', () => {
 		await flush();
 		expect(source.closed).toBe(true);
 		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+		expect(get(store).error).toBe(AUTH_ACCOUNT_DISABLED_MESSAGE);
 		expect(onUnauthorized).not.toHaveBeenCalled();
 	});
 
