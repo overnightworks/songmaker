@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,7 @@ from songmaker_cli.constants import (
     COWRITER_GROK_CHAT_URL,
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
+    GROK_CLI_AUTH_FILE,
 )
 from songmaker_cli.cowriter.catalog import (
     OPENAI_API_KEY_ENVIRONMENT,
@@ -18,6 +21,7 @@ from songmaker_cli.cowriter.catalog import (
 )
 from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.grok_cli_adapter import stream_grok_cli_turn
 from songmaker_cli.cowriter.openai_adapter import (
     call_openai_compatible_once,
     stream_openai_compatible_turn,
@@ -55,6 +59,18 @@ async def stream_cowriter_turn(
             await stream.aclose()
         return
     if provider == "grok":
+        if _grok_cli_token_is_present():
+            stream = stream_grok_cli_turn(
+                system=system,
+                model=model,
+                messages=messages,
+            )
+            try:
+                async for event in stream:
+                    yield event
+            finally:
+                await stream.aclose()
+            return
         api_key = _require_secret(
             "grok", get_settings().xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
@@ -130,3 +146,29 @@ def _require_secret(provider: str, secret, environment_key: str) -> str:
             provider, f"{provider} turns go over the {provider} API and need {environment_key}",
         )
     return value
+
+
+def _grok_cli_token_is_present() -> bool:
+    try:
+        raw_auth = Path(GROK_CLI_AUTH_FILE).read_text()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise ProviderUnavailableError("grok", "grok_cli_error") from exc
+    try:
+        document = json.loads(raw_auth)
+    except json.JSONDecodeError as exc:
+        raise ProviderUnavailableError("grok", "grok_cli_error") from exc
+    if not isinstance(document, dict):
+        raise ProviderUnavailableError("grok", "grok_cli_error")
+    for realm in document.values():
+        if not isinstance(realm, dict):
+            raise ProviderUnavailableError("grok", "grok_cli_error")
+        key = realm.get("key")
+        if key is None:
+            continue
+        if not isinstance(key, str):
+            raise ProviderUnavailableError("grok", "grok_cli_error")
+        if key:
+            return True
+    return False

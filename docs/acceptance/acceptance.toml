@@ -8,6 +8,20 @@ proof_kind = "integration"
 critical = true
 
 [[acceptance]]
+id = "ACC-COWRITER-09"
+text = "A Grok Co-Writer turn with a subscription token uses the Grok CLI route only."
+requirements = ["REQ-COWRITER-09"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
+id = "ACC-COWRITER-11"
+text = "A Grok CLI failure ends the turn with its named error and does not switch to HTTP."
+requirements = ["REQ-COWRITER-11"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
 id = "ACC-SHARE-18"
 text = "A public share audio request for an unknown share returns the same silent not-found response as a missing file."
 requirements = ["REQ-SHARE-18"]

@@ -407,6 +407,21 @@ login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
 `scripts/install-cli-credentials-mirror.sh`.
 
+Grok access tokens expire after six hours. Issue #350's host-side mirror
+service, path watcher, and ten-minute timer are the sole refresh path: each
+host refresh replaces the mounted access token in place while keeping
+`refresh_token` empty. A Grok CLI turn with an expired or OIDC-rejected mirror
+returns `cli_login_expired`; it never changes to the API-key path mid-turn.
+Its single-turn command passes `--deny '*'`, a permission rule, plus
+`--max-turns 1`; neither proves that the CLI exposes no built-in tools. The
+streaming parser loudly rejects every reported `tool_call` or
+`tool_call_update`, so Songmaker refuses that turn after the CLI reports a
+tool call. The 2026-09-03 `Antworte nur OK` experiment without `XAI_API_KEY`
+still emitted `available_commands` events with built-in tools and no
+`tool_call`; it does not exclude a tool execution before such an event. R1
+does not add `--disallowed-tools` as a substitute for that reported-event
+gate.
+
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
 reads a copy can spend what it holds until it expires but cannot mint a new
@@ -578,8 +593,8 @@ A Claude API key answers the judge and lists models, but the co-writer still
 needs the Claude Code CLI login because its tool-enabled turns run through that
 CLI. `/api/settings/providers` reports reachability separately for `cowriter`
 and `judge`; only `configured` means a turn can run and is offered by the
-settings page. A Grok or Codex CLI login is visible there, but both turn
-surfaces still need their respective API keys.
+settings page. A mirrored Grok token selects its subscription CLI for a
+co-writer turn; Codex still needs `OPENAI_API_KEY` for its turn surface.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
 request. `provider_status_refresh` owns those probes; an empty snapshot is reported

@@ -10,8 +10,10 @@ import selectors
 import shutil
 import signal
 import subprocess
+import tempfile
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -82,6 +84,8 @@ class CliRunReason(str, Enum):
     DEADLINE_WHILE_READING = "deadline_while_reading"
     IO_ERROR = "io_error"
     OUTPUT_LIMIT_REACHED = "output_limit_reached"
+    OUTPUT_CHANNEL_FULL = "output_channel_full"
+    CANCELLED = "cancelled"
     CLEANUP_OVERRAN = "cleanup_overran"
     COMPLETE = "complete"
 
@@ -99,6 +103,56 @@ class CliRunOutcome:
     became_zombie: bool
     reason: CliRunReason
     io_error: OSError | None = None
+
+
+class CliLineChannel:
+    """A bounded stream of complete stdout lines from one CLI run."""
+
+    def __init__(self, maximum_lines: int) -> None:
+        if maximum_lines < 1:
+            raise ValueError("CLI line channel must hold at least one line")
+        self._maximum_lines = maximum_lines
+        self._lines: deque[bytes] = deque()
+        self._outcome: CliRunOutcome | None = None
+        self._abort_requested = threading.Event()
+        self._condition = threading.Condition()
+
+    def request_abort(self) -> None:
+        self._abort_requested.set()
+        with self._condition:
+            self._lines.clear()
+            self._condition.notify_all()
+
+    def abort_requested(self) -> bool:
+        return self._abort_requested.is_set()
+
+    def receive(self, timeout: float | None = None) -> bytes | CliRunOutcome:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        with self._condition:
+            while True:
+                if self._lines:
+                    return self._lines.popleft()
+                if self._outcome is not None:
+                    return self._outcome
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    raise TimeoutError("CLI line channel did not produce an item in time")
+                self._condition.wait(timeout=remaining)
+
+    def _send(self, line: bytes) -> bool:
+        with self._condition:
+            if self._abort_requested.is_set() or len(self._lines) >= self._maximum_lines:
+                return False
+            self._lines.append(line)
+            self._condition.notify_all()
+            return True
+
+    def _close(self, outcome: CliRunOutcome) -> None:
+        with self._condition:
+            if not outcome.complete:
+                self._lines.clear()
+            self._outcome = outcome
+            self._condition.notify_all()
 
 
 @dataclass
@@ -257,6 +311,10 @@ def run_cli_bounded(
     cleanup_margin_seconds: float | None = None,
     on_spawned: Callable[[int], None] | None = None,
     on_reaped: Callable[[int, bool], None] | None = None,
+    stdout_line_channel: CliLineChannel | None = None,
+    prompt_file_bytes: bytes | None = None,
+    prompt_file_arg_index: int | None = None,
+    cwd: str | None = None,
 ) -> CliRunOutcome:
     """Run a CLI with bounded input, output, and caller cleanup waits.
 
@@ -278,6 +336,10 @@ def run_cli_bounded(
             output_read_limit_bytes,
             on_spawned,
             on_reaped,
+            stdout_line_channel,
+            prompt_file_bytes,
+            prompt_file_arg_index,
+            cwd,
         ),
         daemon=True,
     ).start()
@@ -335,45 +397,55 @@ def _run_cli_bounded(
     output_read_limit_bytes: int,
     on_spawned: Callable[[int], None] | None,
     on_reaped: Callable[[int, bool], None] | None,
+    stdout_line_channel: CliLineChannel | None,
+    prompt_file_bytes: bytes | None,
+    prompt_file_arg_index: int | None,
+    cwd: str | None,
 ) -> None:
     process: subprocess.Popen[bytes] | None = None
+    prompt_file_path: str | None = None
+    outcome: CliRunOutcome | None = None
     output = _CliOutput(
         bytearray(), bytearray(), complete=False, reason=CliRunReason.IO_ERROR,
     )
     try:
         try:
-            process = subprocess.Popen(
+            command, prompt_file_path = _with_private_prompt_file(
                 argv,
+                prompt_file_bytes,
+                prompt_file_arg_index,
+            )
+            process = subprocess.Popen(
+                command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
                 env=scrubbed_env(),
                 start_new_session=True,
+                cwd=cwd,
             )
         except BaseException as error:
-            _publish_bounded_outcome(
-                state,
-                CliRunOutcome(
-                    started=False,
-                    spawn_error=error,
-                    returncode=None,
-                    stdout="",
-                    stderr="",
-                    complete=False,
-                    became_zombie=False,
-                    reason=CliRunReason.SPAWN_FAILED,
-                ),
+            outcome = CliRunOutcome(
+                started=False,
+                spawn_error=error,
+                returncode=None,
+                stdout="",
+                stderr="",
+                complete=False,
+                became_zombie=False,
+                reason=CliRunReason.SPAWN_FAILED,
             )
-            return
-        state.started.set()
-        _notify_spawned(on_spawned, process.pid)
-        output = _exchange_bounded(
-            process,
-            stdin_payload,
-            read,
-            deadline,
-            output_read_limit_bytes,
-        )
+        else:
+            state.started.set()
+            _notify_spawned(on_spawned, process.pid)
+            output = _exchange_bounded(
+                process,
+                stdin_payload,
+                read,
+                deadline,
+                output_read_limit_bytes,
+                stdout_line_channel,
+            )
     finally:
         if process is not None:
             became_zombie = _reap_process_group(process)
@@ -385,20 +457,57 @@ def _run_cli_bounded(
                 ).start()
             else:
                 _notify_reaped(on_reaped, process.pid, became_zombie=False)
-            _publish_bounded_outcome(
-                state,
-                CliRunOutcome(
-                    started=True,
-                    spawn_error=None,
-                    returncode=process.returncode,
-                    stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
-                    stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
-                    complete=output.complete,
-                    became_zombie=became_zombie,
-                    reason=output.reason,
-                    io_error=output.io_error,
-                ),
+            outcome = CliRunOutcome(
+                started=True,
+                spawn_error=None,
+                returncode=process.returncode,
+                stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
+                stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
+                complete=output.complete,
+                became_zombie=became_zombie,
+                reason=output.reason,
+                io_error=output.io_error,
             )
+        if prompt_file_path is not None:
+            _unlink_prompt_file(prompt_file_path)
+        if outcome is None:
+            raise RuntimeError("bounded CLI runner exited without an outcome")
+        _publish_bounded_outcome(state, outcome)
+        if stdout_line_channel is not None:
+            stdout_line_channel._close(outcome)
+
+
+def _with_private_prompt_file(
+    argv: tuple[str, ...],
+    prompt_file_bytes: bytes | None,
+    prompt_file_arg_index: int | None,
+) -> tuple[tuple[str, ...], str | None]:
+    if prompt_file_bytes is None:
+        if prompt_file_arg_index is not None:
+            raise ValueError("A prompt file index requires prompt bytes")
+        return argv, None
+    if prompt_file_arg_index is None:
+        raise ValueError("Prompt bytes require a prompt file index")
+    if prompt_file_arg_index < 0 or prompt_file_arg_index >= len(argv):
+        raise ValueError("Prompt file index is outside the CLI command")
+    descriptor, path = tempfile.mkstemp(prefix="songmaker-cli-prompt-")
+    try:
+        with os.fdopen(descriptor, "wb") as prompt_file:
+            prompt_file.write(prompt_file_bytes)
+        os.chmod(path, 0o600)
+    except BaseException:
+        _unlink_prompt_file(path)
+        raise
+    command = list(argv)
+    command[prompt_file_arg_index] = path
+    return tuple(command), path
+
+
+def _unlink_prompt_file(path: str) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        return
 
 
 _DEADLINE_REASONS = frozenset({
@@ -433,11 +542,13 @@ def _exchange_bounded(
     read: Literal["all", "first_line"],
     deadline: float,
     output_read_limit_bytes: int,
+    stdout_line_channel: CliLineChannel | None,
 ) -> _CliOutput:
     stdout = bytearray()
     stderr = bytearray()
     stdin = process.stdin
     pending_stdin = memoryview(stdin_payload) if stdin_payload else memoryview(b"")
+    stdout_line_remainder = bytearray()
     try:
         if stdin is not None and not pending_stdin:
             _close_stdin(process)
@@ -450,12 +561,18 @@ def _exchange_bounded(
                 os.set_blocking(stdin.fileno(), False)
                 selector.register(stdin, selectors.EVENT_WRITE, "stdin")
             while selector.get_map():
+                if stdout_line_channel is not None and stdout_line_channel.abort_requested():
+                    return _CliOutput(
+                        stdout, stderr, complete=False, reason=CliRunReason.CANCELLED,
+                    )
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return _deadline_output(stdout, stderr, pending_stdin)
-                events = selector.select(timeout=remaining)
+                events = selector.select(timeout=min(remaining, 0.05))
                 if not events:
-                    return _deadline_output(stdout, stderr, pending_stdin)
+                    if time.monotonic() >= deadline:
+                        return _deadline_output(stdout, stderr, pending_stdin)
+                    continue
                 for key, _ in events:
                     if key.data == "stdin":
                         written = os.write(key.fileobj.fileno(), pending_stdin)
@@ -480,6 +597,19 @@ def _exchange_bounded(
                     chunk = os.read(key.fileobj.fileno(), room)
                     if not chunk:
                         selector.unregister(key.fileobj)
+                        if key.data == "stdout" and stdout_line_channel is not None:
+                            if stdout_line_remainder:
+                                line = bytes(stdout_line_remainder)
+                                stdout_line_remainder.clear()
+                                if not stdout_line_channel._send(line):
+                                    reason = (
+                                        CliRunReason.CANCELLED
+                                        if stdout_line_channel.abort_requested()
+                                        else CliRunReason.OUTPUT_CHANNEL_FULL
+                                    )
+                                    return _CliOutput(
+                                        stdout, stderr, complete=False, reason=reason,
+                                    )
                         if read == "first_line" and key.data == "stdout":
                             return _CliOutput(
                                 stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
@@ -493,6 +623,21 @@ def _exchange_bounded(
                                 stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
                             )
                     collected.extend(chunk)
+                    if key.data == "stdout" and stdout_line_channel is not None:
+                        stdout_line_remainder.extend(chunk)
+                        while b"\n" in stdout_line_remainder:
+                            newline = stdout_line_remainder.index(b"\n") + 1
+                            line = bytes(stdout_line_remainder[:newline])
+                            del stdout_line_remainder[:newline]
+                            if not stdout_line_channel._send(line):
+                                reason = (
+                                    CliRunReason.CANCELLED
+                                    if stdout_line_channel.abort_requested()
+                                    else CliRunReason.OUTPUT_CHANNEL_FULL
+                                )
+                                return _CliOutput(
+                                    stdout, stderr, complete=False, reason=reason,
+                                )
                     if len(stdout) + len(stderr) >= output_read_limit_bytes:
                         return _CliOutput(
                             stdout,
