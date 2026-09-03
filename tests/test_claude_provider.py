@@ -306,6 +306,53 @@ def test_call_api_no_anthropic_package() -> None:
             _call_api("hello", "sk-test", None, "claude-sonnet-4-20250514", 1024)
 
 
+def test_judge_api_uses_its_remaining_budget_without_retries() -> None:
+    mock_client = MagicMock()
+    mock_client.with_options.return_value = mock_client
+    mock_content = MagicMock(text="judge verdict")
+    mock_client.messages.create.return_value = MagicMock(content=[mock_content])
+    mock_anthropic = MagicMock()
+    mock_anthropic.Anthropic.return_value = mock_client
+
+    with (
+        patch.dict("sys.modules", {"anthropic": mock_anthropic}),
+        patch("songmaker_cli.claude.provider.time.monotonic", side_effect=(100.0, 100.5)),
+    ):
+        result = call_claude(
+            "hello",
+            api_key="sk-test",
+            model="claude-sonnet-4-6",
+            timeout_seconds=10,
+        )
+
+    assert result.text == "judge verdict"
+    assert mock_client.with_options.call_args.kwargs == {
+        "timeout": 9.5,
+        "max_retries": 0,
+    }
+
+
+def test_judge_cli_gives_preflight_and_request_the_remaining_budget() -> None:
+    gate = MagicMock(return_value="/usr/bin/claude")
+    completed = MagicMock(returncode=0, stdout='{"result": "judge verdict"}', stderr="")
+
+    with (
+        patch("songmaker_cli.claude.provider.verify_no_builtin_cli_tools", gate),
+        patch("subprocess.run", return_value=completed) as run,
+        patch(
+            "songmaker_cli.claude.provider.time.monotonic",
+            side_effect=(100.0, 102.5),
+        ),
+    ):
+        result = call_claude(
+            "hello", model="claude-sonnet-4-6", timeout_seconds=10,
+        )
+
+    assert result.text == "judge verdict"
+    assert gate.call_args.kwargs["deadline"] == 110.0
+    assert run.call_args.kwargs["timeout"] == 7.5
+
+
 # ── _call_cli / _acall_cli ──────────────────────────────────────────
 #
 # Both are gated by verify_no_builtin_cli_tools() / averify_no_builtin_
@@ -1962,6 +2009,46 @@ def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_plac
     assert calls == 1, "a follower must not start its own second probe on failure"
     assert all(isinstance(r, UnavailableError) for r in results)
     assert not any(isinstance(r, CliToolSurfaceError) for r in results)
+
+
+def test_judge_deadline_does_not_wait_for_an_inflight_preflight_grace_period(
+    claude_binary, monkeypatch,
+) -> None:
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+    follower_finished = threading.Event()
+    follower_result: list[BaseException] = []
+
+    def fake_popen(_cmd, **_kw):
+        probe_started.set()
+        release_probe.wait()
+        return _fake_cli(_init_line([]))
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+
+    def leader() -> None:
+        verify_no_builtin_cli_tools(timeout_seconds=5)
+
+    def expired_follower() -> None:
+        try:
+            verify_no_builtin_cli_tools(deadline=provider.time.monotonic())
+        except UnavailableError as exc:
+            follower_result.append(exc)
+        finally:
+            follower_finished.set()
+
+    first = threading.Thread(target=leader)
+    second = threading.Thread(target=expired_follower)
+    first.start()
+    assert probe_started.wait(timeout=5), "leader never reached the preflight"
+    second.start()
+    assert follower_finished.wait(timeout=1), "follower waited past its judge deadline"
+    release_probe.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert len(follower_result) == 1
+    assert "timeout exhausted" in str(follower_result[0])
 
 
 

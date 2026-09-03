@@ -198,9 +198,19 @@ def call_claude(
     model: str | None = None,
     max_tokens: int = 1024,
     messages: list[dict[str, str]] | None = None,
+    timeout_seconds: float | None = None,
 ) -> ClaudeResponse:
     if model is None:
         model = get_settings().claude_chat_model
+    if timeout_seconds is not None:
+        deadline = time.monotonic() + timeout_seconds
+        if api_key:
+            log.info("Claude Judge: using API backend (model=%s)", model)
+            return _call_api(
+                prompt, api_key, system, model, max_tokens, messages, deadline=deadline,
+            )
+        log.info("Claude Judge: using CLI backend (model=%s)", model)
+        return _call_cli(prompt, system, model, messages, deadline=deadline)
     if api_key:
         log.info("Claude: using API backend (model=%s)", model)
         return _call_api(prompt, api_key, system, model, max_tokens, messages)
@@ -974,7 +984,10 @@ async def averify_no_builtin_cli_tools() -> str:
     )
 
 
-def verify_no_builtin_cli_tools() -> str:
+def verify_no_builtin_cli_tools(
+    *, timeout_seconds: float = CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    deadline: float | None = None,
+) -> str:
     """Raise unless the mounted CLI reaches no tool at all under
     ``_TOOL_ISOLATION_FLAGS``; return the resolved binary path to run the
     real turn with. Sync twin for ``_call_cli``, which has no event loop to
@@ -989,7 +1002,7 @@ def verify_no_builtin_cli_tools() -> str:
         )
 
     return _verify_tool_surface_sync(
-        build, key, probe, timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+        build, key, probe, timeout_seconds=timeout_seconds, deadline=deadline,
     )
 
 
@@ -1121,7 +1134,7 @@ def _resolve_inflight_async(
 
 def _verify_tool_surface_sync(
     build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[float], _AnnouncedSurface],
-    *, timeout_seconds: float,
+    *, timeout_seconds: float, deadline: float | None = None,
 ) -> str:
     """Sync twin of ``_verify_tool_surface_async`` — a
     ``concurrent.futures.Future`` instead of an ``asyncio.Future``, since
@@ -1132,7 +1145,11 @@ def _verify_tool_surface_sync(
 
     future, is_leader = _claim_or_join_inflight_sync(key)
     if not is_leader:
-        follower_budget = _follower_wait_budget_seconds(timeout_seconds)
+        follower_budget = (
+            _remaining_judge_timeout(deadline)
+            if deadline is not None
+            else _follower_wait_budget_seconds(timeout_seconds)
+        )
         try:
             mismatch = future.result(timeout=follower_budget)
         except concurrent.futures.TimeoutError:
@@ -1142,9 +1159,9 @@ def _verify_tool_surface_sync(
             )
         return _finish_tool_surface_check(build, mismatch)
 
-    deadline = time.monotonic() + timeout_seconds
+    probe_deadline = deadline if deadline is not None else time.monotonic() + timeout_seconds
     try:
-        surface = probe(deadline)
+        surface = probe(probe_deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
         _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
@@ -1759,6 +1776,7 @@ def _call_api(
     prompt: str, api_key: str, system: str | None,
     model: str, max_tokens: int,
     messages: list[dict[str, str]] | None = None,
+    *, deadline: float | None = None,
 ) -> ClaudeResponse:
     anthropic = _require_anthropic()
     with _client_lock:
@@ -1767,10 +1785,24 @@ def _call_api(
         client = _sync_clients[api_key]
 
     kwargs = _build_api_kwargs(prompt, system, model, max_tokens, messages)
-    response = client.messages.create(**kwargs)
+    request_client = (
+        client.with_options(
+            timeout=_remaining_judge_timeout(deadline), max_retries=0,
+        )
+        if deadline is not None
+        else client
+    )
+    response = request_client.messages.create(**kwargs)
     text = response.content[0].text if response.content else ""
     log.debug("Claude API response: %d chars", len(text))
     return ClaudeResponse(text=text)
+
+
+def _remaining_judge_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise UnavailableError("Claude judge timeout exhausted before the provider call")
+    return remaining
 
 
 async def _acall_api(
@@ -1797,6 +1829,7 @@ async def _acall_api(
 def _call_cli(
     prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
+    *, deadline: float | None = None,
 ) -> ClaudeResponse:
     """The tool-free CLI backend behind both ``call_claude()`` and the
     lyrical-coherence judge (``claude_adapter.call_claude_once``).
@@ -1809,7 +1842,11 @@ def _call_cli(
     """
     if model is None:
         model = get_settings().claude_chat_model
-    binary = verify_no_builtin_cli_tools()
+    binary = (
+        verify_no_builtin_cli_tools(deadline=deadline)
+        if deadline is not None
+        else verify_no_builtin_cli_tools()
+    )
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)
@@ -1817,10 +1854,17 @@ def _call_cli(
 
     try:
         proc = subprocess.run(
-            cmd, input=stdin_body, capture_output=True, text=True, timeout=120, env=env,
+            cmd,
+            input=stdin_body,
+            capture_output=True,
+            text=True,
+            timeout=_remaining_judge_timeout(deadline) if deadline is not None else 120,
+            env=env,
         )
-    except subprocess.TimeoutExpired:
-        raise UnavailableError("Claude CLI timed out after 120s")
+    except subprocess.TimeoutExpired as exc:
+        if deadline is not None:
+            raise UnavailableError("Claude judge timeout while waiting for the CLI") from exc
+        raise UnavailableError("Claude CLI timed out after 120s") from exc
 
     if proc.returncode != 0:
         log.warning(

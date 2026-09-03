@@ -22,7 +22,11 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-from songmaker_cli.scoring.pipeline import ScorerDependencyUnavailable, run_scorer
+from songmaker_cli.scoring.pipeline import (
+    ScorerDependencyUnavailable,
+    judge_watchdog_timeout,
+    run_scorer,
+)
 from songmaker_cli.scoring.registry import LYRICAL_COHERENCE_SCORER
 
 log = logging.getLogger(__name__)
@@ -38,6 +42,10 @@ class CoherenceJudgeConfig:
     provider: str
     model: str
     timeout: int
+
+    def __post_init__(self) -> None:
+        if self.timeout <= 0:
+            raise ValueError("Judge timeout must be positive")
 
 
 JUDGE_PROMPT = (  # noqa: E501
@@ -94,7 +102,7 @@ def judge_lyrical_coherence(
     return scores.including(run_scorer(
         LYRICAL_COHERENCE_SCORER,
         lambda: _judge(meta, scores.text_accuracy, config),
-        config.timeout,
+        judge_watchdog_timeout(config.timeout),
     ))
 
 

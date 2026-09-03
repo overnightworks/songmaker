@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -325,3 +326,51 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
         assert job.status == "partial"
         assert job.error_type == "judge_error"
         assert "grok" in job.error
+
+
+def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir = _seeded_generation(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+    preflight_completed = threading.Event()
+    cli_stopped = threading.Event()
+
+    def verified_binary(*_args: object, **_kwargs: object) -> str:
+        preflight_completed.set()
+        return "/usr/bin/claude"
+
+    def timed_out_cli(*args: object, **kwargs: object) -> None:
+        cli_stopped.set()
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(
+                return_value=_scoring_result_with_transcript(),
+            )),
+        ),
+        patch(
+            "songmaker_cli.claude.provider.verify_no_builtin_cli_tools",
+            side_effect=verified_binary,
+        ),
+        patch(
+            "songmaker_cli.claude.provider.subprocess.run",
+            side_effect=timed_out_cli,
+        ),
+    ):
+        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+
+    assert preflight_completed.is_set()
+    assert cli_stopped.is_set()
+    from songmaker_cli.db.models import Score
+    with factory() as session:
+        job = session.query(Job).filter_by(id="j-score").one()
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert job.status == "partial"
+        assert job.error_type == "judge_error"
+        assert "timeout" in job.error
+        assert "lyrical_coherence" not in stored.value

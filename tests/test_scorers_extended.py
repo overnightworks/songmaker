@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -714,26 +715,36 @@ def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     assert "lyrical_coherence" not in judged.refreshed_output_keys()
 
 
-def test_judge_gives_up_when_its_time_budget_runs_out() -> None:
-    """The budget is a ceiling: the job moves on when it expires instead of
-    waiting for the call that blew it."""
-    import time
+def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budget() -> None:
+    provider_release = threading.Event()
+    provider_stopped = threading.Event()
 
-    def _hang(*_args: object, **_kwargs: object) -> None:
-        time.sleep(2)
+    def ignores_timeout(*_args: object, **_kwargs: object) -> None:
+        try:
+            provider_release.wait()
+        finally:
+            provider_stopped.set()
 
-    started = time.monotonic()
-    with patch("songmaker_cli.cowriter.claude_adapter.call_claude", side_effect=_hang):
+    with (
+        patch(
+            "songmaker_cli.cowriter.claude_adapter.call_claude",
+            side_effect=ignores_timeout,
+        ),
+        patch(
+            "songmaker_cli.scoring.lyrical_coherence.judge_watchdog_timeout",
+            return_value=0.01,
+        ),
+    ):
         judged = _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
             timeout=1,
         )
-    elapsed = time.monotonic() - started
+        provider_release.set()
 
     assert judged.runs[-1].outcome is ScorerOutcome.TIMED_OUT
     assert judged.lyrical_coherence is None
-    assert elapsed < 2, f"waited {elapsed:.2f}s for a call it had given up on"
+    assert provider_stopped.wait(timeout=1)
 
 
 def test_judge_uses_the_model_from_its_config_not_a_hardcoded_default() -> None:
