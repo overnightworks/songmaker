@@ -12,10 +12,14 @@ third-party model weights holds no credential (see docs/security.md).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from songmaker_cli.claude.provider import parse_json_response
-from songmaker_cli.constants import JUDGE_FAILURE_TIMEOUT
+from songmaker_cli.constants import (
+    CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    JUDGE_FAILURE_TIMEOUT,
+)
 from songmaker_cli.cowriter.dispatch import call_provider_once
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
@@ -36,20 +40,28 @@ from songmaker_cli.scoring.registry import LYRICAL_COHERENCE_SCORER
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class CoherenceJudgeConfig:
+class CoherenceJudgeConfig(BaseModel):
     """Which provider and model judge a song, resolved from the DB by the
     caller — the judge itself reads neither, and defaults none of it: this
     is a configured decision, not a fallback. An unconfigured provider fails
     with a named ``ProviderUnavailableError``, never silently on Claude."""
 
+    model_config = ConfigDict(frozen=True)
+
     provider: str
     model: str
     timeout: int
 
-    def __post_init__(self) -> None:
-        if self.timeout <= 0:
-            raise ValueError("Judge timeout must be positive")
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, timeout: int) -> int:
+        if timeout < CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS:
+            raise ValueError(
+                "Judge timeout must be at least "
+                f"{CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS} seconds "
+                "to allow the Claude CLI preflight",
+            )
+        return timeout
 
 
 JUDGE_PROMPT = (  # noqa: E501

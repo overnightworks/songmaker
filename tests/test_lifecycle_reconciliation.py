@@ -145,14 +145,14 @@ def test_reconciliation_commits_before_disk_cleanup_failure_and_continues(
             raise OSError("disk unavailable")
         original_rmtree(path, *args, **kwargs)
 
-    original_audit = lora_training.audit_orphaned_lora_work_dirs
+    original_log = lora_training.log_orphaned_lora_work_dirs
 
-    def record_orphan_audit(db_factory, audio_dir: Path) -> None:
+    def record_orphan_log(db_factory, audio_dir: Path) -> None:
         audit_calls.append((db_factory, audio_dir))
-        original_audit(db_factory, audio_dir)
+        original_log(db_factory, audio_dir)
 
     monkeypatch.setattr(lora_training.shutil, "rmtree", fail_first_dataset)
-    monkeypatch.setattr(lora_training, "audit_orphaned_lora_work_dirs", record_orphan_audit)
+    monkeypatch.setattr(lora_training, "log_orphaned_lora_work_dirs", record_orphan_log)
 
     assert reconcile_crashed_loras(ctx) == 2
     assert committed_before_cleanup == [(LoraStatus.FAILED, 1)]

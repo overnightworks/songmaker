@@ -298,7 +298,7 @@ def recover_stale_jobs_by_age_and_type(
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
     max_queue_depth: int | None = None,
-) -> int:
+) -> dict[str, int]:
     """Recover stale jobs using the one per-type liveness policy.
 
     Queued jobs fail immediately when their execution worker is known dead.
@@ -330,7 +330,6 @@ def recover_stale_jobs_by_age_and_type(
             ) from exc
         candidates_with_thresholds.append((job, thresholds))
 
-    recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
         status = job.status
@@ -361,16 +360,15 @@ def recover_stale_jobs_by_age_and_type(
             completed_at=now,
         ):
             continue
-        recovered += 1
         recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()
-    if recovered:
+    if recovered_by_type:
         log.info(
             "Recovered %d stale job(s) by liveness policy: %s",
-            recovered,
+            sum(recovered_by_type.values()),
             recovered_by_type,
         )
-    return recovered
+    return recovered_by_type
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

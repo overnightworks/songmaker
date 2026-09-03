@@ -80,6 +80,24 @@ def _run_with_clock(coroutine, clock: dict[str, float]):
         loop.close()
 
 
+class _IncrementingMonotonicClock:
+    def __init__(self, start: float, step: float) -> None:
+        self.now = start
+        self.step = step
+
+    def __call__(self) -> float:
+        current = self.now
+        self.now += self.step
+        return current
+
+
+@pytest.fixture()
+def incrementing_monotonic_clock(monkeypatch: pytest.MonkeyPatch) -> _IncrementingMonotonicClock:
+    clock = _IncrementingMonotonicClock(start=100.0, step=0.01)
+    monkeypatch.setattr(provider.time, "monotonic", clock)
+    return clock
+
+
 def _leaked_secret_env_values() -> dict[str, str]:
     """A value per SECRET_ENV_KEYS entry, shaped so DSN-parsing settings
     modules imported by other fixtures during teardown don't choke on it."""
@@ -335,7 +353,9 @@ def test_call_api_no_anthropic_package() -> None:
             _call_api("hello", "sk-test", None, "claude-sonnet-4-20250514", 1024)
 
 
-def test_judge_api_uses_its_remaining_budget_without_retries() -> None:
+def test_judge_api_uses_its_remaining_budget_without_retries(
+    incrementing_monotonic_clock,
+) -> None:
     mock_client = MagicMock()
     mock_client.with_options.return_value = mock_client
     mock_content = MagicMock(text="judge verdict")
@@ -343,10 +363,8 @@ def test_judge_api_uses_its_remaining_budget_without_retries() -> None:
     mock_anthropic = MagicMock(APITimeoutError=Exception)
     mock_anthropic.Anthropic.return_value = mock_client
 
-    with (
-        patch.dict("sys.modules", {"anthropic": mock_anthropic}),
-        patch("songmaker_cli.claude.provider.time.monotonic", side_effect=(100.0, 100.5)),
-    ):
+    incrementing_monotonic_clock.step = 0.5
+    with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
         result = call_claude(
             "hello",
             api_key="sk-test",
@@ -395,24 +413,23 @@ def test_nonjudge_api_timeout_keeps_the_provider_exception() -> None:
             _call_api("hello", "sk-test", None, "claude-sonnet-4-6", 1024)
 
 
-def test_judge_cli_gives_preflight_and_request_the_remaining_budget() -> None:
+def test_judge_cli_gives_the_provider_request_the_remaining_budget(
+    incrementing_monotonic_clock,
+) -> None:
     gate = MagicMock(return_value="/usr/bin/claude")
     completed = MagicMock(returncode=0, stdout='{"result": "judge verdict"}', stderr="")
 
+    incrementing_monotonic_clock.step = 2.5
     with (
         patch("songmaker_cli.claude.provider.verify_no_builtin_cli_tools", gate),
         patch("subprocess.run", return_value=completed) as run,
-        patch(
-            "songmaker_cli.claude.provider.time.monotonic",
-            side_effect=(100.0, 102.5),
-        ),
     ):
         result = call_claude(
             "hello", model="claude-sonnet-4-6", timeout_seconds=10,
         )
 
     assert result.text == "judge verdict"
-    assert gate.call_args.kwargs["deadline"] == 110.0
+    gate.assert_called_once_with()
     assert run.call_args.kwargs["timeout"] == 7.5
 
 
@@ -2175,14 +2192,9 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
     assert reaped_pids == [4343]
 
 
-def test_judge_preflight_uses_its_own_bound_before_the_later_judge_deadline(
-    claude_binary, monkeypatch,
+def test_tool_surface_preflight_uses_its_configured_bound(
+    claude_binary, monkeypatch, incrementing_monotonic_clock,
 ) -> None:
-    """A 120-second judge must still give its CLI preflight only five seconds.
-
-    The clock is fake: the assertion pins the deadline passed to the probe
-    without waiting for either budget in wall-clock time.
-    """
     observed_deadlines: list[float] = []
 
     def probe(*_args: object, deadline: float, **_kwargs: object) -> object:
@@ -2190,123 +2202,28 @@ def test_judge_preflight_uses_its_own_bound_before_the_later_judge_deadline(
         raise UnavailableError("probe stopped")
 
     monkeypatch.setattr(provider, "_probe_cli_surface_sync", probe)
-    monkeypatch.setattr(provider.time, "monotonic", lambda: 100.0)
 
     with pytest.raises(UnavailableError, match="probe stopped"):
-        verify_no_builtin_cli_tools(deadline=220.0)
+        verify_no_builtin_cli_tools()
 
     assert observed_deadlines == [105.0]
 
 
-def test_judge_preflight_deadline_abort_never_becomes_a_clean_verdict(
-    claude_binary, monkeypatch,
-) -> None:
-    """A leader's deadline expiry resolves its followers with a failure, never
-    a clean verdict or cache entry that could affect a later judge."""
-    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
-    spawned: list[object] = []
-
-    def fake_popen(*_args: object, **_kwargs: object) -> MagicMock:
-        spawned.append(1)
-        return fake_cli_process(_init_line([]))
-
-    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
-    monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.03))
-
-    with pytest.raises(UnavailableError) as exc:
-        verify_no_builtin_cli_tools(deadline=100.02)
-
-    assert str(exc.value) == JUDGE_FAILURE_TIMEOUT
-    assert spawned == [1]
-    with provider._tool_surface_lock:
-        assert key not in provider._tool_surface_failures
-        assert key not in provider._tool_surface_verdicts
-
-
 def test_judge_deadline_keeps_and_caches_a_zombie_probe_failure(
-    claude_binary, monkeypatch,
+    claude_binary, incrementing_monotonic_clock,
 ) -> None:
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
-    clock = iter((100.0, 100.0, 100.01))
-    monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.01))
 
     def zombie_probe(_deadline: float) -> provider._AnnouncedSurface:
         raise provider._ZombieProbeError("probe process outlived SIGKILL")
 
     with pytest.raises(provider._ZombieProbeError, match="outlived SIGKILL"):
-        provider._verify_tool_surface_sync(
-            _build, key, zombie_probe, deadline=100.005,
-        )
+        provider._verify_tool_surface_sync(_build, key, zombie_probe)
 
     with provider._tool_surface_lock:
         failure = provider._tool_surface_failures[key]
     assert failure.is_zombie is True
     assert failure.ttl_seconds() == provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS
-
-
-def test_judge_deadline_timeout_from_the_sync_probe_is_not_cached(
-    claude_binary, monkeypatch,
-) -> None:
-    """A runner deadline owned by the judge is not cached as a probe failure."""
-    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
-    popen_may_return = threading.Event()
-    reaped = threading.Event()
-    real_thread = threading.Thread
-    probe_threads: list[threading.Thread] = []
-
-    def fake_popen(*_args: object, **_kwargs: object) -> MagicMock:
-        popen_may_return.wait()
-        return fake_cli_process(_init_line([]))
-
-    def fake_reap(_proc: object) -> bool:
-        reaped.set()
-        return False
-
-    def tracked_thread(*args, **kwargs) -> threading.Thread:
-        thread = real_thread(*args, **kwargs)
-        probe_threads.append(thread)
-        return thread
-
-    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
-    monkeypatch.setattr(provider.agent_cli.threading, "Thread", tracked_thread)
-    clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
-    monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.03))
-
-    with pytest.raises(UnavailableError) as exc:
-        verify_no_builtin_cli_tools(deadline=100.02)
-
-    assert str(exc.value) == JUDGE_FAILURE_TIMEOUT
-    with provider._tool_surface_lock:
-        assert key not in provider._tool_surface_failures
-        assert key not in provider._tool_surface_verdicts
-
-    popen_may_return.set()
-    assert reaped.wait(timeout=1)
-    probe_threads[0].join(timeout=1)
-    assert not probe_threads[0].is_alive()
-
-
-def test_exhausted_judge_deadline_never_spawns_or_caches_a_preflight_failure(
-    claude_binary, monkeypatch,
-) -> None:
-    """A spent budget says nothing about this CLI, so it must neither spawn
-    a process nor poison the normal short-lived failure cache."""
-    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
-    spawned: list[object] = []
-    monkeypatch.setattr(
-        provider.subprocess, "Popen", lambda *_args, **_kwargs: spawned.append(1),
-    )
-
-    with pytest.raises(UnavailableError) as exc:
-        verify_no_builtin_cli_tools(deadline=time.monotonic())
-
-    assert str(exc.value) == JUDGE_FAILURE_TIMEOUT
-    assert spawned == []
-    with provider._tool_surface_lock:
-        assert key not in provider._tool_surface_failures
-        assert key not in provider._tool_surface_verdicts
 
 
 # ── #351 round 6, Finding 6: the reaper pool caps new probes too ─────
@@ -2838,48 +2755,6 @@ def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_plac
     assert calls == 1, "a follower must not start its own second probe on failure"
     assert all(isinstance(r, UnavailableError) for r in results)
     assert not any(isinstance(r, CliToolSurfaceError) for r in results)
-
-
-def test_judge_deadline_does_not_wait_for_an_inflight_preflight_grace_period(
-    claude_binary, monkeypatch,
-) -> None:
-    probe_started = threading.Event()
-    release_probe = threading.Event()
-    follower_finished = threading.Event()
-    follower_result: list[BaseException] = []
-
-    def fake_popen(_cmd, **_kw):
-        probe_started.set()
-        release_probe.wait()
-        return fake_cli_process(_init_line([]))
-
-    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-
-    def leader() -> None:
-        verify_no_builtin_cli_tools()
-
-    def expired_follower() -> None:
-        try:
-            verify_no_builtin_cli_tools(deadline=provider.time.monotonic())
-        except UnavailableError as exc:
-            follower_result.append(exc)
-        finally:
-            follower_finished.set()
-
-    first = threading.Thread(target=leader)
-    second = threading.Thread(target=expired_follower)
-    first.start()
-    assert probe_started.wait(timeout=5), "leader never reached the preflight"
-    second.start()
-    assert follower_finished.wait(timeout=1), "follower waited past its judge deadline"
-    release_probe.set()
-    first.join(timeout=5)
-    second.join(timeout=5)
-
-    assert len(follower_result) == 1
-    assert str(follower_result[0]) == JUDGE_FAILURE_TIMEOUT
-
-
 
 
 def test_no_builtin_gate_sync_and_async_share_one_cache(

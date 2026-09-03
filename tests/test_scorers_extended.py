@@ -716,11 +716,11 @@ def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     assert "lyrical_coherence" not in judged.refreshed_output_keys()
 
 
-def test_judge_config_is_the_only_owner_of_positive_timeout_validation() -> None:
+def test_judge_config_rejects_a_timeout_shorter_than_the_cli_preflight() -> None:
     from songmaker_cli.scoring.lyrical_coherence import CoherenceJudgeConfig
 
-    with pytest.raises(ValueError, match="Judge timeout must be positive"):
-        CoherenceJudgeConfig(provider="claude", model="claude-test", timeout=0)
+    with pytest.raises(ValueError, match="at least 5 seconds"):
+        CoherenceJudgeConfig(provider="claude", model="claude-test", timeout=4)
 
 
 def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budget() -> None:
@@ -746,7 +746,7 @@ def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budge
         judged = _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
-            timeout=1,
+            timeout=5,
         )
         provider_release.set()
 

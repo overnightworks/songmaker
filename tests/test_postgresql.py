@@ -165,7 +165,7 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
     reaper_read = threading.Event()
     heartbeat_written = threading.Event()
     errors: list[Exception] = []
-    results: list[int] = []
+    results: list[dict[str, int]] = []
 
     def pause_before_update(candidate: Job) -> None:
         if candidate.id != job_id:
@@ -204,7 +204,7 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
     assert not reaper.is_alive()
     assert not heartbeater.is_alive()
     assert not errors, f"Errors during stale-job reaping: {errors}"
-    assert results == [0]
+    assert results == [{}]
     with pg_factory() as session:
         job = session.get(Job, job_id)
         assert job is not None

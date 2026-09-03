@@ -992,7 +992,7 @@ async def averify_no_builtin_cli_tools() -> str:
     )
 
 
-def verify_no_builtin_cli_tools(*, deadline: float | None = None) -> str:
+def verify_no_builtin_cli_tools() -> str:
     """Raise unless the mounted CLI reaches no tool at all under
     ``_TOOL_ISOLATION_FLAGS``; return the resolved binary path to run the
     real turn with. Sync twin for ``_call_cli``, which has no event loop to
@@ -1001,13 +1001,13 @@ def verify_no_builtin_cli_tools(*, deadline: float | None = None) -> str:
     """
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
 
-    def probe(deadline: float) -> _AnnouncedSurface:
+    def probe(probe_deadline: float) -> _AnnouncedSurface:
         return _probe_cli_surface_sync(
-            build.path, mcp_config_path=None, deadline=deadline,
+            build.path, mcp_config_path=None, deadline=probe_deadline,
         )
 
     return _verify_tool_surface_sync(
-        build, key, probe, deadline=deadline,
+        build, key, probe,
     )
 
 
@@ -1142,7 +1142,6 @@ def _resolve_inflight_async(
 
 def _verify_tool_surface_sync(
     build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[float], _AnnouncedSurface],
-    *, deadline: float | None = None,
 ) -> str:
     """Sync twin of ``_verify_tool_surface_async`` — a
     ``concurrent.futures.Future`` instead of an ``asyncio.Future``, since
@@ -1153,10 +1152,8 @@ def _verify_tool_surface_sync(
 
     future, is_leader = _claim_or_join_inflight_sync(key)
     if not is_leader:
-        follower_budget = (
-            _remaining_judge_timeout(deadline)
-            if deadline is not None
-            else _follower_wait_budget_seconds(CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS)
+        follower_budget = _follower_wait_budget_seconds(
+            CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
         )
         try:
             mismatch = future.result(timeout=follower_budget)
@@ -1167,37 +1164,15 @@ def _verify_tool_surface_sync(
             )
         return _finish_tool_surface_check(build, mismatch)
 
-    now = time.monotonic()
-    if deadline is not None:
-        try:
-            _remaining_judge_timeout(deadline)
-        except UnavailableError as exc:
-            _resolve_inflight_sync(key, future, exception=exc)
-            raise
-    probe_deadline = now + CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS
-    caller_deadline_bounds_probe = False
-    if deadline is not None:
-        caller_deadline_bounds_probe = deadline < probe_deadline
-        probe_deadline = min(deadline, probe_deadline)
+    probe_deadline = time.monotonic() + CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS
     try:
         surface = probe(probe_deadline)
-        if caller_deadline_bounds_probe:
-            _remaining_judge_timeout(deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
         is_zombie = isinstance(exc, _ZombieProbeError)
         if is_zombie:
             _record_tool_surface_failure(key, str(exc), is_zombie=True)
-        if (
-            caller_deadline_bounds_probe
-            and not is_zombie
-            and not isinstance(exc, _JudgeTimeoutExhausted)
-            and time.monotonic() >= deadline
-        ):
-            exc = _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
-        if not is_zombie and not isinstance(
-            exc, (_JudgeTimeoutExhausted, _ClaudeCliProcessPoolSaturated),
-        ):
+        if not is_zombie and not isinstance(exc, _ClaudeCliProcessPoolSaturated):
             _record_tool_surface_failure(
                 key, str(exc), is_zombie=False,
             )
@@ -1802,7 +1777,7 @@ def _call_cli(
     """
     if model is None:
         model = get_settings().claude_chat_model
-    binary = verify_no_builtin_cli_tools(deadline=deadline)
+    binary = verify_no_builtin_cli_tools()
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)

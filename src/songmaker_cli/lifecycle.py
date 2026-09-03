@@ -394,9 +394,10 @@ def reap_stale_jobs(
             session, now=now, worker_liveness=worker_liveness,
         )
         session.commit()
-    if recovered:
-        log.warning("Recovered %d stale job(s)", recovered)
-    return recovered
+    recovered_count = sum(recovered.values())
+    if recovered_count:
+        log.warning("Recovered %d stale job(s)", recovered_count)
+    return recovered_count
 
 
 def reconcile_crashed_loras(ctx: AppContext) -> int:

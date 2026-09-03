@@ -752,13 +752,14 @@ In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ## Scoring Flow
 
 The parent-hosted lyrical-coherence judge owns one provider budget. It carries
-that budget through the selected provider call, including the Claude SDK or
-CLI preflight and request. The CLI preflight has its own five-second answer
-bound, but never exceeds the remaining judge budget; after that answer budget,
-the caller may wait through the bounded cleanup margin (SIGTERM grace plus
-post-SIGKILL wait). The scorer watchdog has only a small final-safety
-headroom. A provider timeout is a judge failure: child scores are retained,
-but the scoring job ends `partial` with `judge_error`, never `completed`.
+that budget through the selected provider call. The judge configuration rejects
+a timeout shorter than the CLI preflight's five-second answer bound, so the
+tool-surface probe uses its neutral five-second budget before the configured
+provider request begins. After that answer budget, the caller may wait through
+the bounded cleanup margin (SIGTERM grace plus post-SIGKILL wait). The scorer
+watchdog has only a small final-safety headroom. A provider timeout is a judge
+failure: child scores are retained, but the scoring job ends `partial` with
+`judge_error`, never `completed`.
 
 ```
 POST /api/generations/{id}/score
