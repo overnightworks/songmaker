@@ -46,6 +46,7 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+    CLI_OUTPUT_READ_LIMIT_BYTES,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
@@ -111,6 +112,7 @@ _CLI_INIT_EVENT_SUBTYPE: Final = "init"
 _TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
+_CLI_PROBE_READ_CHUNK_BYTES: Final = 4096
 
 
 def clear_client_cache() -> None:
@@ -1172,15 +1174,19 @@ def _verify_tool_surface_sync(
             _remaining_judge_timeout(deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
+        is_zombie = isinstance(exc, _ZombieProbeError)
+        if is_zombie:
+            _record_tool_surface_failure(key, str(exc), is_zombie=True)
         if (
             caller_deadline_bounds_probe
+            and not is_zombie
             and not isinstance(exc, _JudgeTimeoutExhausted)
             and time.monotonic() >= deadline
         ):
             exc = _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
-        if not isinstance(exc, _JudgeTimeoutExhausted):
+        if not is_zombie and not isinstance(exc, _JudgeTimeoutExhausted):
             _record_tool_surface_failure(
-                key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError),
+                key, str(exc), is_zombie=False,
             )
         _resolve_inflight_sync(key, future, exception=exc)
         raise exc
@@ -1238,9 +1244,12 @@ def _follower_safe_exception(build: BinaryBuild, exc: BaseException) -> BaseExce
 
 
 def _follower_wait_budget_seconds(probe_timeout_seconds: float) -> float:
+    return probe_timeout_seconds + _cleanup_margin_seconds()
+
+
+def _cleanup_margin_seconds() -> float:
     return (
-        probe_timeout_seconds
-        + CLAUDE_CLI_SIGTERM_GRACE_SECONDS
+        CLAUDE_CLI_SIGTERM_GRACE_SECONDS
         + CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS
         + _FOLLOWER_WAIT_MARGIN_SECONDS
     )
@@ -1398,14 +1407,14 @@ async def _probe_cli_surface_async(
             asyncio.to_thread(
                 _probe_cli_surface_sync, binary, mcp_config_path=mcp_config_path, deadline=deadline,
             ),
-            timeout=_follower_wait_budget_seconds(remaining),
+            timeout=remaining + _cleanup_margin_seconds(),
         )
     except asyncio.TimeoutError:
         # The thread this submitted to the executor — if it ever gets to
         # run at all — still reaps whatever it spawns on its own; see
         # _probe_cli_surface_sync's own finally. Giving up here only means
         # this caller no longer waits for that outcome.
-        raise UnavailableError("Claude CLI probe did not start within its budget")
+        raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
 
 
 # ── the probe itself: one overall deadline, sync ────────────────────
@@ -1438,7 +1447,7 @@ def _probe_cli_surface_sync(
     its own.
     """
     if deadline <= time.monotonic():
-        raise UnavailableError("Claude CLI probe did not start within its budget")
+        raise UnavailableError("Claude CLI probe preflight budget was already exhausted")
     if not _reserve_zombie_admission():
         raise UnavailableError(
             "Claude CLI probe pool is saturated with unreaped processes; "
@@ -1489,14 +1498,18 @@ def _probe_cli_surface_sync(
                         if remaining <= 0:
                             raise TimeoutError("Claude CLI probe did not answer within its budget")
                         for key, _ in selector.select(timeout=remaining):
-                            chunk = os.read(key.fd, 4096)
+                            chunk = os.read(key.fd, _CLI_PROBE_READ_CHUNK_BYTES)
                             line.extend(chunk)
+                            if len(line) > CLI_OUTPUT_READ_LIMIT_BYTES:
+                                raise OSError(
+                                    "Claude CLI probe output exceeded its read limit",
+                                )
                             line_end = line.find(b"\n")
                             if line_end >= 0 or not chunk:
                                 payload = bytes(line[:line_end + 1] if line_end >= 0 else line)
                                 ok = True
                                 return
-            except (OSError, TimeoutError) as exc:
+            except OSError as exc:
                 payload = exc
         finally:
             # Always — whether or not the caller that started this thread
@@ -1520,13 +1533,13 @@ def _probe_cli_surface_sync(
         ok, payload, became_zombie = result.get(timeout=remaining)
     except queue.Empty:
         if not process_spawned.is_set():
-            raise UnavailableError("Claude CLI probe did not answer within its budget")
+            raise UnavailableError("Claude CLI probe did not start within its budget")
         try:
             ok, payload, became_zombie = result.get(
-                timeout=_follower_wait_budget_seconds(0),
+                timeout=_cleanup_margin_seconds(),
             )
         except queue.Empty:
-            raise UnavailableError("Claude CLI probe did not answer within its budget")
+            raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
 
     # A zombie always wins, before its answer is ever trusted: a process
     # that outlived even SIGKILL is not "clean, with an unrelated cleanup
