@@ -16,6 +16,11 @@ from fastapi import APIRouter
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+try:
+    from fastapi.routing import iter_route_contexts
+except ImportError:  # FastAPI < 0.141 eagerly flattens included routers.
+    iter_route_contexts = None
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = PROJECT_ROOT / "frontend" / "src" / "lib" / "api" / "types.ts"
 CHECKED_MODE = "--check"
@@ -117,8 +122,8 @@ class RouteExemption:
     prefix: str
     reason: str
 
-    def applies_to(self, route: APIRoute) -> bool:
-        return route.path.startswith(self.prefix)
+    def applies_to(self, path: str) -> bool:
+        return path.startswith(self.prefix)
 
 
 EXEMPT_ROUTE_ROLES = (
@@ -164,7 +169,19 @@ class DiscoveredModels:
     exempted_models: int
 
 
+@dataclass(frozen=True)
+class DiscoveredRoute:
+    path: str
+    response_model: Any
+    body_params: Iterable[Any]
+    include_in_schema: bool
+
+
 class TypeScriptTypeError(ValueError):
+    pass
+
+
+class RouteIntrospectionError(RuntimeError):
     pass
 
 
@@ -189,19 +206,151 @@ def _models_in_annotation(annotation: Any) -> set[type[BaseModel]]:
     return models
 
 
+def _router_label(router: APIRouter) -> str:
+    return getattr(router, "prefix", "") or "<root>"
+
+
+def _discover_router_routes(
+    router: APIRouter,
+    *,
+    inherited_prefix: str = "",
+    ancestors: frozenset[int] = frozenset(),
+) -> tuple[DiscoveredRoute, ...]:
+    """Return HTTP routes, including FastAPI's deferred router inclusions.
+
+    FastAPI 0.141 represents ``include_router()`` with private
+    ``_IncludedRouter`` instances until application startup. Earlier versions
+    eagerly flatten those routes. The type contract needs the same endpoints
+    in either representation.
+    """
+    if iter_route_contexts is not None:
+        discovered = tuple(
+            DiscoveredRoute(
+                path=context.path,
+                response_model=context.response_model,
+                body_params=context.dependant.body_params,
+                include_in_schema=context.include_in_schema,
+            )
+            for context in iter_route_contexts(router.routes)
+            if isinstance(context.route, APIRoute)
+        )
+        if discovered:
+            return discovered
+        raise RouteIntrospectionError(
+            f"router {_router_label(router)!r} has no HTTP API routes; "
+            "its module may not have been imported or registered",
+        )
+
+    router_id = id(router)
+    if router_id in ancestors:
+        raise RouteIntrospectionError(
+            f"router {_router_label(router)!r} includes itself recursively",
+        )
+
+    discovered: list[DiscoveredRoute] = []
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            discovered.append(
+                DiscoveredRoute(
+                    path=f"{inherited_prefix}{route.path}",
+                    response_model=route.response_model,
+                    body_params=route.dependant.body_params,
+                    include_in_schema=route.include_in_schema,
+                ),
+            )
+            continue
+
+        included_router = getattr(route, "original_router", None)
+        if included_router is None:
+            continue
+        if not isinstance(included_router, APIRouter):
+            raise RouteIntrospectionError(
+                f"router {_router_label(router)!r} has an invalid included router",
+            )
+
+        include_context = getattr(route, "include_context", None)
+        included_prefix = getattr(include_context, "prefix", None)
+        if not isinstance(included_prefix, str):
+            raise RouteIntrospectionError(
+                f"router {_router_label(router)!r} has an included router without a prefix",
+            )
+        discovered.extend(
+            _discover_router_routes(
+                included_router,
+                inherited_prefix=f"{inherited_prefix}{included_prefix}",
+                ancestors=ancestors | {router_id},
+            ),
+        )
+
+    if not discovered:
+        raise RouteIntrospectionError(
+            f"router {_router_label(router)!r} has no HTTP API routes; "
+            "its module may not have been imported or registered",
+        )
+    return tuple(discovered)
+
+
+def _registered_child_routers(router: APIRouter) -> tuple[APIRouter, ...]:
+    children: list[APIRouter] = []
+    for route in router.routes:
+        child_router = getattr(route, "original_router", None)
+        if child_router is None:
+            continue
+        if not isinstance(child_router, APIRouter):
+            raise RouteIntrospectionError(
+                f"router {_router_label(router)!r} has an invalid included router",
+            )
+        children.append(child_router)
+    return tuple(children)
+
+
+def _complete_router_routes(
+    router: APIRouter,
+    *,
+    ancestors: frozenset[int] = frozenset(),
+) -> tuple[DiscoveredRoute, ...]:
+    router_id = id(router)
+    if router_id in ancestors:
+        raise RouteIntrospectionError(
+            f"router {_router_label(router)!r} includes itself recursively",
+        )
+
+    discovered = _discover_router_routes(router)
+    child_routers = _registered_child_routers(router)
+    if len(discovered) < len(child_routers):
+        raise RouteIntrospectionError(
+            f"router {_router_label(router)!r} exposes {len(discovered)} HTTP routes for "
+            f"{len(child_routers)} registered router modules",
+        )
+    for child_router in child_routers:
+        _complete_router_routes(child_router, ancestors=ancestors | {router_id})
+    return discovered
+
+
+def _body_parameter_annotation(parameter: Any) -> Any:
+    annotation = getattr(parameter, "type_", None)
+    if annotation is not None:
+        return annotation
+
+    annotation = getattr(getattr(parameter, "field_info", None), "annotation", None)
+    if annotation is not None:
+        return annotation
+    raise RouteIntrospectionError("a route body parameter has no type annotation")
+
+
 def _route_annotations(routers: Iterable[APIRouter]) -> tuple[list[Any], int]:
     annotations: list[Any] = []
     exempted_routes = 0
     for router in routers:
-        for route in router.routes:
-            if not isinstance(route, APIRoute):
-                continue
-            if any(role.applies_to(route) for role in EXEMPT_ROUTE_ROLES):
+        for discovered_route in _complete_router_routes(router):
+            if any(role.applies_to(discovered_route.path) for role in EXEMPT_ROUTE_ROLES):
                 exempted_routes += 1
                 continue
-            if route.response_model is not None:
-                annotations.append(route.response_model)
-            annotations.extend(parameter.type_ for parameter in route.dependant.body_params)
+            if discovered_route.response_model is not None:
+                annotations.append(discovered_route.response_model)
+            annotations.extend(
+                _body_parameter_annotation(parameter) for parameter in discovered_route.body_params
+            )
     return annotations, exempted_routes
 
 
@@ -406,7 +555,11 @@ def main() -> None:
     except ImportError as error:
         print(f"FAIL: route introspection unavailable: {error}")
         sys.exit(1)
-    result = generate(routers, include_exported_models=True)
+    try:
+        result = generate(routers, include_exported_models=True)
+    except RouteIntrospectionError as error:
+        print(f"FAIL: route introspection incomplete: {error}")
+        sys.exit(1)
     if CHECKED_MODE in sys.argv:
         sys.exit(0 if check_generated_types(result) else 1)
     OUTPUT_PATH.write_text(result.content)

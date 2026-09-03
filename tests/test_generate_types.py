@@ -8,7 +8,6 @@ from typing import Annotated, Literal
 
 import pytest
 from fastapi import APIRouter
-from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -99,22 +98,40 @@ def test_exempts_internal_routes_and_reports_their_count() -> None:
     assert "1 exempt routes" in generate_types._checked_message(result)
 
 
+def test_discovers_routes_from_included_routers() -> None:
+    nested_router = APIRouter(prefix="/nested")
+
+    @nested_router.post("/seed", response_model=SeededResponse)
+    async def seed(request: SeededRequest) -> SeededResponse:
+        return SeededResponse(child=request.children[0])
+
+    aggregate_router = APIRouter(prefix="/api")
+    aggregate_router.include_router(nested_router)
+
+    result = generate_types.generate((aggregate_router,))
+
+    assert result.route_models == 3
+    assert {SeededChild, SeededRequest, SeededResponse} <= set(result.models)
+
+
 def test_route_routers_cover_every_api_route_in_the_real_app(tmp_path: Path) -> None:
     from conftest import make_test_app
 
     client, _ = make_test_app(tmp_path)
     app_route_paths = {
         route.path
-        for route in client.app.routes
-        if isinstance(route, APIRoute) and route.include_in_schema
+        for route in generate_types._complete_router_routes(client.app)
+        if route.include_in_schema
     }
     discovered_route_paths = {
         route.path
         for router in generate_types._route_routers()
-        for route in router.routes
-        if isinstance(route, APIRoute) and route.include_in_schema
+        for route in generate_types._complete_router_routes(router)
+        if route.include_in_schema
     }
 
+    assert app_route_paths
+    assert discovered_route_paths
     assert app_route_paths <= discovered_route_paths
 
 
@@ -142,6 +159,29 @@ def test_route_introspection_failure_exits_without_writing_types(
     assert output_path.read_text() == "existing types"
     error_output = capsys.readouterr().out
     assert "FAIL: route introspection unavailable: router module is unavailable" in error_output
+
+
+def test_incomplete_router_introspection_fails_without_an_out_of_sync_message(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_path = tmp_path / "types.ts"
+    output_path.write_text("existing types")
+    empty_router = APIRouter(prefix="/api")
+
+    monkeypatch.setattr(generate_types, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(generate_types, "_route_routers", lambda: (empty_router,))
+
+    with pytest.raises(SystemExit) as error:
+        generate_types.main()
+
+    assert error.value.code == 1
+    assert output_path.read_text() == "existing types"
+    error_output = capsys.readouterr().out
+    assert "FAIL: route introspection incomplete:" in error_output
+    assert "router '/api' has no HTTP API routes" in error_output
+    assert "out of sync" not in error_output
 
 
 def test_non_route_import_errors_keep_their_original_failure(
