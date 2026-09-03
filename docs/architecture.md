@@ -5,7 +5,7 @@
 ```
                     ┌─────────────────────────────────────┐
                     │        SvelteKit Frontend            │
-                    │  Song editor, player, Claude chat,   │
+                    │  Song editor, player, co-writer chat,│
                     │  generation settings, filters        │
                     └──────────────┬──────────────────────┘
                                   │ REST API (JSON)
@@ -17,8 +17,8 @@
                     └──┬─────────┬──────────┬─────────────┘
                        │         │          │
                        ▼         ▼          ▼
-                 PostgreSQL    Redis    Claude API
-                 (all data)   (queues,  (chat, scoring)
+                 PostgreSQL    Redis    Co-writer / judge providers
+                 (all data)   (queues,  (selected provider per surface)
                               sessions,
                               rate limits)
 ```
@@ -99,7 +99,7 @@ User clicks "Generate"                    User clicks "Score"
   ├── scheduler.dispatch_generation:       ├── Whisper transcription
   │   ├── pick acestep-worker              ├── AudioBox aesthetics
   │   ├── INCR queue_depth (Redis)         ├── BPM, dynamics, silence, spectral
-  │   ├── /load_model + /generate (HTTP)   ├── lyrical coherence (Claude)
+  │   ├── /load_model + /generate (HTTP)   ├── lyrical coherence (configured judge provider)
   │   ├── consume SSE → task done          ├── save scores to DB
   │   └── DECR queue_depth (finally)       └── Job status: completed
   ├── post_process_generation (to_thread):
@@ -117,9 +117,10 @@ User clicks "Generate"                    User clicks "Score"
   User clicks "Chat"
         │
         ▼
-  POST /songs/{id}/chat
+  POST /api/chat/turn
   (multi-turn: loads history from DB,
-   sends full messages array to Claude,
+   compacts it to a rolling summary plus a token-bounded tail,
+   streams through the selected co-writer provider,
    stores user + assistant messages)
 ```
 
@@ -566,7 +567,7 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
 | Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth.py` |
-| API | REST endpoints split by domain: albums, songs, generations, playlists, library search/shares, LoRAs, chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `chat_api.py`, `settings_api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, library search/shares, LoRAs, live co-writer chat, legacy chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `chat_api.py` (legacy), `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
@@ -576,7 +577,9 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
-| Claude | API + CLI backends for chat and lyrical coherence | `claude/provider.py` |
+| Co-writer | Dispatches the selected Claude, Grok, or Codex provider; the judge is configured separately | `cowriter/dispatch.py`, `cowriter/catalog.py`, `cowriter/*_adapter.py` |
+| Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
+| MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
 
 ### Engine packages (`src/`)
@@ -760,14 +763,19 @@ In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 
 ## Scoring Flow
 
-The parent-hosted lyrical-coherence judge owns one provider budget. It carries
-that budget through the selected provider call. The judge configuration rejects
-a timeout shorter than the CLI preflight's five-second answer bound, so the
-tool-surface probe uses its neutral five-second budget before the configured
-provider request begins. After that answer budget, the caller may wait through
-the bounded cleanup margin (SIGTERM grace plus post-SIGKILL wait). The scorer
-watchdog has only a small final-safety headroom. A provider timeout is a judge
-failure: child scores are retained, but the scoring job ends `partial` with
+The parent-hosted lyrical-coherence judge owns one provider budget and carries
+it through the configured judge-provider call. Every configuration enforces a
+minimum five-second timeout because the Claude one-shot path may need that
+much for its tool-free CLI preflight; only that Claude path performs the
+tool-surface probe. Grok and Codex use the compatible API path directly.
+The five-second timeout is the provider floor; the bounded cleanup margin
+(SIGTERM grace plus post-SIGKILL wait) belongs only to the
+`agent_cli.run_cli_bounded` probe, while Grok/Codex use HTTP timeouts, the
+Claude API uses its SDK timeout, the Claude-CLI judge uses
+`subprocess.run(timeout)`, and the outer judge boundary is the Thread-Watchdog
+`timeout+1s` (`pipeline.py:223-229`). The scorer watchdog has only a small
+final-safety headroom. A provider timeout is a judge failure:
+child scores are retained, but the scoring job ends `partial` with
 `judge_error`, never `completed`.
 
 ```
@@ -811,7 +819,7 @@ child-hosted scorers and then calls `judge_lyrical_coherence()` itself on the
 of the transcribed text — the judge reads it and `Generation.whisper_text`
 stores it. The judge produces an ordinary `ScorerRun` under its own
 `SCORER_TIMEOUT_SECONDS` budget, so `ok` / `failed` / `skipped` / `timed_out`
-and the merge rules apply to it exactly as to a child scorer: a Claude outage
+and the merge rules apply to it exactly as to a child scorer: a judge-provider outage
 leaves the stored `lyrical_coherence` untouched. `PipelineConfig` therefore
 carries no secret (issue #176; see docs/security.md).
 
@@ -862,7 +870,7 @@ parent's coherence budget, which is spent after the child returns.
 
 **Scoring worker** (`scoring_worker.py`):
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); judges lyrical
-  coherence itself (Claude), so no secret enters the subprocess
+  coherence itself through the configured judge provider, so no secret enters the subprocess
 - Handles `score` tasks
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
