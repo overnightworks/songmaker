@@ -943,8 +943,6 @@ async def verify_cli_tool_surface() -> str:
     state always reflects this gate's most recent answer rather than a
     value frozen at boot.
     """
-    build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
-
     async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
@@ -955,6 +953,7 @@ async def verify_cli_tool_surface() -> str:
             _unlink_quiet(config_path)
 
     try:
+        build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
         result = await _verify_tool_surface_async(
             build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
         )
