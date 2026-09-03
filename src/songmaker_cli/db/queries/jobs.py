@@ -20,6 +20,12 @@ from songmaker_cli.db.models import Job
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class StaleThresholds:
+    queued_seconds: int
+    heartbeat_seconds: int
+
+
 def has_active_job_of_type(session: Session, job_type: str) -> bool:
     return (
         session.query(Job)
@@ -306,8 +312,7 @@ def recover_stale_jobs_by_age_and_type(
     session: Session, job_type: str,
     threshold_seconds: int | None = None,
     *,
-    queued_threshold_seconds: int | None = None,
-    heartbeat_threshold_seconds: int | None = None,
+    stale_thresholds: StaleThresholds | None = None,
     now: datetime | None = None,
 ) -> int:
     """Recover jobs with baseline defaults or explicit chat liveness thresholds."""
@@ -316,7 +321,7 @@ def recover_stale_jobs_by_age_and_type(
     elif now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
 
-    if queued_threshold_seconds is None and heartbeat_threshold_seconds is None:
+    if stale_thresholds is None:
         if threshold_seconds is None:
             from songmaker_cli.settings import get_settings
             threshold_seconds = get_settings().stale_job_threshold_seconds
@@ -353,17 +358,8 @@ def recover_stale_jobs_by_age_and_type(
             )
         return recovered
 
-    if queued_threshold_seconds is None or heartbeat_threshold_seconds is None:
-        if threshold_seconds is None:
-            from songmaker_cli.settings import get_settings
-            threshold_seconds = get_settings().stale_job_threshold_seconds
-        if queued_threshold_seconds is None:
-            queued_threshold_seconds = threshold_seconds
-        if heartbeat_threshold_seconds is None:
-            heartbeat_threshold_seconds = threshold_seconds
-
-    queued_cutoff = now - timedelta(seconds=queued_threshold_seconds)
-    heartbeat_cutoff = now - timedelta(seconds=heartbeat_threshold_seconds)
+    queued_cutoff = now - timedelta(seconds=stale_thresholds.queued_seconds)
+    heartbeat_cutoff = now - timedelta(seconds=stale_thresholds.heartbeat_seconds)
     candidates = (
         session.query(Job)
         .filter(
@@ -398,7 +394,10 @@ def recover_stale_jobs_by_age_and_type(
     if recovered:
         log.info(
             "Recovered %d stale %s jobs (queued=%ds, heartbeat=%ds)",
-            recovered, job_type, queued_threshold_seconds, heartbeat_threshold_seconds,
+            recovered,
+            job_type,
+            stale_thresholds.queued_seconds,
+            stale_thresholds.heartbeat_seconds,
         )
     return recovered
 

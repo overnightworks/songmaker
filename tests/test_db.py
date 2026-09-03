@@ -1840,7 +1840,10 @@ def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
 
     import songmaker_cli.settings as settings
     from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.db.queries import (
+        StaleThresholds,
+        recover_stale_jobs_by_age_and_type,
+    )
 
     job = create_job(db_session, JobType.CHAT)
     db_session.commit()
@@ -1860,8 +1863,10 @@ def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
     recovered = recover_stale_jobs_by_age_and_type(
         db_session,
         JobType.CHAT,
-        queued_threshold_seconds=900,
-        heartbeat_threshold_seconds=180,
+        stale_thresholds=StaleThresholds(
+            queued_seconds=900,
+            heartbeat_seconds=180,
+        ),
         now=now,
     )
     db_session.commit()

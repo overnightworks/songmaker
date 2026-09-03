@@ -96,11 +96,6 @@ from songmaker_cli.db.queries import (
     upsert_user_memory,
 )
 from songmaker_cli.db.queries.conversations import append_message
-from songmaker_cli.jobs._runtime import (
-    _fail_chat_job,
-    _keep_chat_job_heartbeat,
-    _stop_chat_job_heartbeat,
-)
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -111,16 +106,20 @@ router = APIRouter()
 class _ChatStreamingResponse(StreamingResponse):
     """Stop an inline chat heartbeat even when ASGI sending disconnects."""
 
-    def __init__(self, content, *, heartbeat_task: asyncio.Task[None], job_id: str, **kwargs):
+    def __init__(
+        self, content, *, heartbeat_task: asyncio.Task[None], job_id: str,
+        stop_heartbeat, **kwargs,
+    ):
         super().__init__(content, **kwargs)
         self._heartbeat_task = heartbeat_task
         self._job_id = job_id
+        self._stop_heartbeat = stop_heartbeat
 
     async def __call__(self, scope, receive, send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            await _stop_chat_job_heartbeat(self._heartbeat_task, self._job_id)
+            await self._stop_heartbeat(self._heartbeat_task, self._job_id)
 
 
 COWRITER_ROLE = (
@@ -420,6 +419,12 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
+    from songmaker_cli.jobs._runtime import (
+        _fail_chat_job,
+        _keep_chat_job_heartbeat,
+        _stop_chat_job_heartbeat,
+    )
+
     check_redis_health(request)
 
     current_song = None
@@ -595,6 +600,7 @@ async def api_chat_turn(
         event_generator(),
         heartbeat_task=heartbeat_task,
         job_id=job_id,
+        stop_heartbeat=_stop_chat_job_heartbeat,
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

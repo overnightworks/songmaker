@@ -1998,6 +1998,28 @@ def test_song_chat_unavailable(client: TestClient) -> None:
     assert resp.status_code == 503
 
 
+def test_song_chat_http_error_marks_job_failed_without_exception_log(
+    client: TestClient,
+) -> None:
+    from unittest.mock import patch
+
+    from fastapi import HTTPException
+
+    with patch(
+        "songmaker_cli.chat_api._build_song_context",
+        side_effect=HTTPException(404, "Song not found"),
+    ), patch("songmaker_cli.chat_api.log.exception") as log_exception:
+        response = client.post("/api/songs/s1/chat", json={"message": "hi"})
+
+    assert response.status_code == 404
+    log_exception.assert_not_called()
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "failed"
+        assert job.error_type == "chat_error"
+
+
 def test_song_chat_builds_context(client: TestClient) -> None:
     from songmaker_cli.chat_api import CHAT_ROLE
 

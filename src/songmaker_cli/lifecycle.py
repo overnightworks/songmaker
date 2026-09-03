@@ -383,14 +383,19 @@ def reap_stale_chat_jobs(ctx: AppContext, *, now: datetime | None = None) -> int
     Returns the number of jobs recovered.
     """
     from songmaker_cli.constants import JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.db.queries import (
+        StaleThresholds,
+        recover_stale_jobs_by_age_and_type,
+    )
 
     with ctx.db() as session:
         recovered = recover_stale_jobs_by_age_and_type(
             session,
             JobType.CHAT,
-            queued_threshold_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-            heartbeat_threshold_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+            stale_thresholds=StaleThresholds(
+                queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+                heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+            ),
             now=now,
         )
         session.commit()

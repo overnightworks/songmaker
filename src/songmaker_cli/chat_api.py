@@ -44,11 +44,6 @@ from songmaker_cli.db.queries import (
     songs_with_chat,
     update_job_status,
 )
-from songmaker_cli.jobs._runtime import (
-    _fail_chat_job,
-    _keep_chat_job_heartbeat,
-    _stop_chat_job_heartbeat,
-)
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -196,6 +191,12 @@ async def api_song_chat(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ChatTurnResponse:
+    from songmaker_cli.jobs._runtime import (
+        _fail_chat_job,
+        _keep_chat_job_heartbeat,
+        _stop_chat_job_heartbeat,
+    )
+
     check_redis_health(request)
     check_song_access(session, song_id, user)
 
@@ -261,6 +262,9 @@ async def api_song_chat(
         log.warning("Claude chat unavailable: %s", e)
         _fail_chat_job(session, job_id, "Claude unavailable", "unavailable")
         raise HTTPException(503, "Claude is currently unavailable")
+    except HTTPException:
+        _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
+        raise
     except Exception:
         log.exception("Legacy chat request failed")
         _fail_chat_job(session, job_id, "Chat request failed", "chat_error")

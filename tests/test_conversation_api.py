@@ -320,7 +320,7 @@ def test_chat_turn_completes_when_its_heartbeat_task_fails(client):
         "songmaker_cli.conversation_api.stream_cowriter_turn",
         _mock_claude("ok"),
     ), patch(
-        "songmaker_cli.conversation_api._keep_chat_job_heartbeat",
+        "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
         _failed_heartbeat,
     ):
         response = c.post("/api/chat/turn", json={"message": "hey"})
@@ -368,7 +368,7 @@ def test_chat_turn_stops_heartbeat_when_asgi_send_fails(client):
         )
         with factory() as session:
             with patch(
-                "songmaker_cli.conversation_api._keep_chat_job_heartbeat",
+                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
                 _keep_heartbeat,
             ), patch(
                 "songmaker_cli.conversation_api.stream_cowriter_turn",
