@@ -5,6 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  picomatch: '>=4.0.4'
+  brace-expansion: '>=5.0.5'
   cookie: '>=0.7.0'
 
 importers:
