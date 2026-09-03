@@ -171,7 +171,7 @@ def api_add_song_to_playlist(
         raise HTTPException(400, "Song has no playable take")
     try:
         resolve_audio_path(ctx.audio_dir, playable.mp3_path)
-    except HTTPException:
+    except (HTTPException, OSError):
         raise HTTPException(400, "Song has no playable take")
     try:
         add_song_to_playlist(session, playlist_id, req.song_id)
@@ -199,7 +199,7 @@ def api_add_album_to_playlist(
     def _readable(generation: Generation) -> bool:
         try:
             resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        except HTTPException:
+        except (HTTPException, OSError):
             return False
         return True
 

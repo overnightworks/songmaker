@@ -23,6 +23,8 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
+HTTP_NOT_FOUND: Final[str] = "Not Found"
+AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
     "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
 )

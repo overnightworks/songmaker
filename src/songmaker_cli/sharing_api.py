@@ -9,7 +9,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
-from songmaker_cli.api_helpers import enforce_rate_limit, get_cached_limiter
+from songmaker_cli.api_helpers import (
+    enforce_rate_limit,
+    get_cached_limiter,
+    raise_audio_file_http_error,
+)
 from songmaker_cli.api_models import (
     QueueStreamManifestResponse,
     SharedAlbumResponse,
@@ -26,6 +30,7 @@ from songmaker_cli.api_models.songs import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
+    AudioFileNotFoundError,
     canonical_audio_path,
     require_canonical_audio_filename,
     require_existing_audio_path,
@@ -33,10 +38,12 @@ from songmaker_cli.audio_paths import (
 )
 from songmaker_cli.auth import resolve_client_ip
 from songmaker_cli.constants import (
+    AUDIO_FILE_NOT_FOUND,
     AUDIO_MEDIA_TYPES,
     COVER_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
+    HTTP_NOT_FOUND,
     REDIS_RL_SHARED_PREFIX,
     REDIS_RL_SHARED_STREAM_PREFIX,
     LimiterFailurePolicy,
@@ -210,9 +217,12 @@ async def get_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     if user.role != "admin" and owner_id != user.id:
-        raise HTTPException(404, "Audio file not found")
+        raise HTTPException(404, AUDIO_FILE_NOT_FOUND)
 
-    audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")
+    try:
+        audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=False)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -316,13 +326,16 @@ def get_shared_album_stream(
     ensure_sources_detachable(sources)
     db.close()
 
-    snapshot = build_queue_stream_snapshot(
-        ctx,
-        sources,
-        scope="shared-album",
-        scope_id=slug,
-        stream_url="",
-    )
+    try:
+        snapshot = build_queue_stream_snapshot(
+            ctx,
+            sources,
+            scope="shared-album",
+            scope_id=slug,
+            stream_url="",
+        )
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
     return public_queue_stream_manifest(snapshot)
 
@@ -338,9 +351,12 @@ def get_shared_audio(
     _check_shared_rate_limit(request)
     audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_album_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, HTTP_NOT_FOUND)
 
-    audio_path = require_existing_audio_path(audio_path)
+    try:
+        audio_path = require_existing_audio_path(audio_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -417,9 +433,12 @@ def get_shared_song_audio(
     _check_shared_rate_limit(request)
     audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_song_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, HTTP_NOT_FOUND)
 
-    audio_path = require_existing_audio_path(audio_path)
+    try:
+        audio_path = require_existing_audio_path(audio_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -468,13 +487,16 @@ def get_shared_gen_audio(
     require_canonical_audio_filename(filename)
     gen = get_generation_by_slug(db, slug)
     if not gen:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, HTTP_NOT_FOUND)
 
     if filename != gen.mp3_path:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, HTTP_NOT_FOUND)
 
     audio_path = canonical_audio_path(ctx.audio_dir, filename)
-    audio_path = require_existing_audio_path(audio_path)
+    try:
+        audio_path = require_existing_audio_path(audio_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 
@@ -549,13 +571,16 @@ def get_shared_playlist_stream(
     ensure_sources_detachable(sources)
     db.close()
 
-    snapshot = build_queue_stream_snapshot(
-        ctx,
-        sources,
-        scope="shared-playlist",
-        scope_id=slug,
-        stream_url="",
-    )
+    try:
+        snapshot = build_queue_stream_snapshot(
+            ctx,
+            sources,
+            scope="shared-playlist",
+            scope_id=slug,
+            stream_url="",
+        )
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
     return public_queue_stream_manifest(snapshot)
 
@@ -571,9 +596,12 @@ def get_shared_playlist_audio(
     _check_shared_rate_limit(request)
     audio_path = canonical_audio_path(ctx.audio_dir, filename)
     if not shared_playlist_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, HTTP_NOT_FOUND)
 
-    audio_path = require_existing_audio_path(audio_path)
+    try:
+        audio_path = require_existing_audio_path(audio_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
 

@@ -28,6 +28,7 @@ from songmaker_cli.constants import (
     APP_NAME,
     GZIP_COMPRESS_LEVEL,
     GZIP_MINIMUM_SIZE_BYTES,
+    HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
 from songmaker_cli.health_api import _compute_script_hashes
@@ -354,7 +355,8 @@ def create_app(
             and sk_index.exists()
         ):
             return FileResponse(sk_index, media_type="text/html")
-        return JSONResponse({"detail": "Not Found"}, status_code=404)
+        detail = exc.detail if request.url.path.startswith("/audio/") else HTTP_NOT_FOUND
+        return JSONResponse({"detail": detail}, status_code=404)
 
     return app
 

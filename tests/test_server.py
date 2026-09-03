@@ -87,6 +87,7 @@ def test_get_audio_supports_range_requests(server_app: TestClient) -> None:
 def test_get_audio_not_found(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/nonexistent.mp3")
     assert resp.status_code == 404
+    assert resp.json()["detail"] == "Audio file not found"
 
 
 def test_api_songs(server_app: TestClient) -> None:

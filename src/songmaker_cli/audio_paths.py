@@ -10,6 +10,10 @@ from fastapi import HTTPException
 log = logging.getLogger(__name__)
 
 
+class AudioFileNotFoundError(FileNotFoundError):
+    """The stored audio file is no longer present on disk."""
+
+
 def _resolved_audio_root(audio_dir: Path) -> Path:
     return audio_dir.resolve()
 
@@ -56,7 +60,7 @@ def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
         log.warning("Audio path traversal denied: %r", relative_path)
         raise HTTPException(404, "Not Found")
     if not audio_path.exists():
-        raise HTTPException(404, "Not Found")
+        raise AudioFileNotFoundError(relative_path)
     return audio_path
 
 
@@ -75,5 +79,5 @@ def canonical_audio_path(audio_dir: Path, filename: str) -> Path:
 def require_existing_audio_path(audio_path: Path) -> Path:
     """Return ``audio_path`` when its file still exists."""
     if not audio_path.exists():
-        raise HTTPException(404, "Not Found")
+        raise AudioFileNotFoundError(str(audio_path))
     return audio_path

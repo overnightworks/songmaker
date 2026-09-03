@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, TypeVar
+from typing import TYPE_CHECKING, Annotated, NoReturn, TypeVar
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -16,11 +16,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
+from songmaker_cli.audio_paths import AudioFileNotFoundError
 from songmaker_cli.auth import (
     RATE_LIMIT_WINDOW_SECONDS,
     ROLE_ADMIN,
 )
 from songmaker_cli.constants import (
+    AUDIO_FILE_NOT_FOUND,
+    HTTP_NOT_FOUND,
     LIBRARY_QUERY_REQUIRED,
     PAGE_ADMIN_DEFAULT_LIMIT,
     PAGE_ADMIN_MAX_LIMIT,
@@ -81,6 +84,16 @@ _SONG_SLUG_BASE_MAX_LENGTH = SONG_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 _PLAYLIST_SLUG_BASE_MAX_LENGTH = PLAYLIST_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 _ALBUM_SLUG_BASE_MAX_LENGTH = ALBUM_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
 _LORA_SLUG_BASE_MAX_LENGTH = LORA_SLUG_MAX_LENGTH - _SLUG_COUNTER_SUFFIX_BUDGET
+
+
+def raise_audio_file_http_error(
+    error: AudioFileNotFoundError,
+    *,
+    public: bool,
+) -> NoReturn:
+    """Map a missing stored audio file at the caller's HTTP boundary."""
+    detail = HTTP_NOT_FOUND if public else AUDIO_FILE_NOT_FOUND
+    raise HTTPException(404, detail) from error
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:

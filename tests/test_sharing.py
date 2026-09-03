@@ -760,6 +760,7 @@ def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
     unauthed = TestClient(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/bad-slug/audio/admin_user/g1.mp3")
     assert resp.status_code == 404
+    assert resp.json()["detail"] == "Not Found"
 
 
 # ── Share payload media fields (#128) ───────────────────────────────

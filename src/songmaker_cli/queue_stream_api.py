@@ -16,6 +16,7 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     enforce_rate_limit,
     get_cached_limiter,
+    raise_audio_file_http_error,
 )
 from songmaker_cli.api_models.queue_streams import (
     LibraryTakePool,
@@ -26,6 +27,7 @@ from songmaker_cli.api_models.queue_streams import (
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.audio_paths import AudioFileNotFoundError
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     REDIS_RL_QUEUE_STREAM_PREFIX,
@@ -105,7 +107,10 @@ def api_create_queue_stream(
 
     ensure_sources_detachable(sources)
     session.close()
-    admission = prepare_queue_stream_admission(ctx, sources)
+    try:
+        admission = prepare_queue_stream_admission(ctx, sources)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=False)
 
     snapshot = build_queue_stream_snapshot(
         ctx,
@@ -359,7 +364,10 @@ def api_create_library_queue_stream(
     )
     ensure_sources_detachable(membership.sources)
     session.close()
-    admission = prepare_queue_stream_admission(ctx, membership.sources)
+    try:
+        admission = prepare_queue_stream_admission(ctx, membership.sources)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=False)
 
     snapshot = build_queue_stream_snapshot(
         ctx,
