@@ -163,10 +163,6 @@ class DiscoveredModels:
     exempted_routes: int
     exempted_models: int
 
-    @property
-    def models(self) -> frozenset[type[BaseModel]]:
-        return self.route_models | self.exported_models
-
 
 class TypeScriptTypeError(ValueError):
     pass
@@ -279,9 +275,9 @@ def _py_type_to_ts(annotation: Any) -> str:
         return _py_type_to_ts(get_args(annotation)[0])
     if origin is list:
         (inner,) = get_args(annotation)
-        inner_type = _py_type_to_ts(inner)
         while get_origin(inner) is Annotated:
             inner = get_args(inner)[0]
+        inner_type = _py_type_to_ts(inner)
         if get_origin(inner) in (UnionType, Union):
             inner_type = f"({inner_type})"
         return f"{inner_type}[]"
