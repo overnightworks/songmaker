@@ -40,7 +40,9 @@ def _close_fake_cli_pipes():
     """Close the pipe-backed fake Claude CLI streams after each test module."""
     yield
     for proc in _fake_cli_processes:
-        for stream_name in ("stdin", "stdout", "_stdin_reader", "_stdout_writer"):
+        for stream_name in (
+            "stdin", "stdout", "stderr", "_stdin_reader", "_stdout_writer", "_stderr_writer",
+        ):
             stream = getattr(proc, stream_name)
             if not stream.closed:
                 stream.close()
@@ -56,10 +58,14 @@ def fake_cli_process(
     proc.poll.return_value = None if still_running else 0
     stdin_reader, stdin_writer = os.pipe()
     stdout_reader, stdout_writer = os.pipe()
+    stderr_reader, stderr_writer = os.pipe()
     proc.stdin = os.fdopen(stdin_writer, "wb", buffering=0)
     proc.stdout = os.fdopen(stdout_reader, "rb", buffering=0)
+    proc.stderr = os.fdopen(stderr_reader, "rb", buffering=0)
     proc._stdin_reader = os.fdopen(stdin_reader, "rb", buffering=0)
     proc._stdout_writer = os.fdopen(stdout_writer, "wb", buffering=0)
+    proc._stderr_writer = os.fdopen(stderr_writer, "wb", buffering=0)
+    proc._stderr_writer.close()
     if stdin_blocked:
         os.set_blocking(proc.stdin.fileno(), False)
         try:

@@ -15,8 +15,6 @@ import concurrent.futures
 import json
 import logging
 import os
-import queue
-import selectors
 import shutil
 import signal
 import subprocess
@@ -31,6 +29,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli import agent_cli
 from songmaker_cli.agent_cli import (
     CliLogin,
     claude_cli_login,
@@ -112,9 +111,6 @@ _CLI_INIT_EVENT_SUBTYPE: Final = "init"
 _TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
-_CLI_PROBE_READ_CHUNK_BYTES: Final = 4096
-
-
 def clear_client_cache() -> None:
     with _client_lock:
         _sync_clients.clear()
@@ -1380,19 +1376,10 @@ async def _probe_cli_surface_async(
 ) -> _AnnouncedSurface:
     """What a session built like ``cmd`` announces it can reach.
 
-    Delegates to ``_probe_cli_surface_sync``, run on a worker thread via
-    ``asyncio.to_thread``, rather than spawning through
-    ``asyncio.create_subprocess_exec`` directly. ``create_subprocess_exec``
-    still does the underlying ``fork()``/``exec()`` synchronously on
-    whichever thread calls it — including the event loop's own thread — so
-    calling it straight from here could keep the loop from ever running the
-    timer that is supposed to enforce ``deadline``, exactly when a stuck
-    spawn is the thing that budget exists to catch. A worker thread lets
-    ``asyncio.wait_for`` give up on schedule regardless of what that thread
-    is doing; a spawn that never returns simply keeps running there,
-    self-cleaning the same way an unreaped zombie does. Both clocks are the
-    same one (``loop.time()`` and ``time.monotonic()``), so ``deadline`` is
-    valid input to the sync twin unchanged.
+    Delegates to the sync gate on a worker thread, rather than spawning
+    through ``asyncio.create_subprocess_exec`` directly. That keeps a stuck
+    spawn away from the event loop; the sync gate delegates process handling
+    to ``agent_cli.run_cli_bounded``.
 
     Reading the ``system`` init event and then killing the session bounds
     but does not eliminate the API call's cost: the full probe prompt is
@@ -1401,14 +1388,8 @@ async def _probe_cli_surface_async(
     checked live and only aborts a session *after* a call completes, not
     before one starts, so it does not close that gap either.
 
-    Round 7, Finding 1: wraps the ``to_thread`` call in its own
-    ``wait_for`` too. Without it, only ``_probe_cli_surface_sync``'s own
-    internal budget bounded anything — real, but invisible to *this*
-    coroutine's own await if the default executor itself were ever the
-    bottleneck (its thread pool busy with other work), since that queueing
-    time is not covered by any timer until the thread actually starts
-    running. This makes the deadline absolute from the caller's own side
-    too, not just from inside the thread.
+    The outer wait also covers executor queueing, while the runner keeps
+    responsibility for eventually reaping a late spawn.
     """
     remaining = max(deadline - asyncio.get_running_loop().time(), 0)
     try:
@@ -1419,10 +1400,6 @@ async def _probe_cli_surface_async(
             timeout=remaining + _cleanup_margin_seconds(),
         )
     except asyncio.TimeoutError:
-        # The thread this submitted to the executor — if it ever gets to
-        # run at all — still reaps whatever it spawns on its own; see
-        # _probe_cli_surface_sync's own finally. Giving up here only means
-        # this caller no longer waits for that outcome.
         raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
 
 
@@ -1432,143 +1409,62 @@ async def _probe_cli_surface_async(
 def _probe_cli_surface_sync(
     binary: str, *, mcp_config_path: str | None, deadline: float,
 ) -> _AnnouncedSurface:
-    """Twin of ``_probe_cli_surface_async``, which delegates to this one on
-    a worker thread — this is the one real implementation for both.
-
-    ``subprocess.Popen`` and a pipe write have no native timeout parameter,
-    so spawn, write, and read all run on one background thread; the calling
-    thread first waits for the answer with ``queue.get(timeout=)`` against
-    the remaining budget, then waits once more for cleanup when the process
-    already spawned. The reap — and the reservation release that goes
-    with it — happens *inside
-    that thread's own ``finally``* (round 7, Finding 1), not out here:
-    a caller that stops waiting (this budget ran out, or the whole
-    ``asyncio.to_thread`` was itself abandoned — see
-    ``_probe_cli_surface_async``) must not also mean nobody ever reaps
-    whatever the thread does eventually spawn. The thread reaps what it
-    started regardless of who is still listening.
-
-    Refuses to even start a new probe while the admission pool is already
-    saturated (round 7, Finding 3: a real reservation, not a check that
-    could race with another probe's own check-then-claim) — a fresh probe
-    that itself outlives SIGKILL would have nowhere to register a reaper,
-    and the OS does not reap an abandoned child of a still-live parent on
-    its own.
-    """
+    """Run one tool-surface probe through the shared bounded CLI runner."""
     if deadline <= time.monotonic():
         raise UnavailableError("Claude CLI probe preflight budget was already exhausted")
     reservation = _reserve_zombie_admission()
     if reservation is None:
         raise _ClaudeCliProcessPoolSaturated(_claude_cli_process_pool_limit_message())
 
-    cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
-    env = _scrub_env()
-    result: queue.Queue[tuple[bool, object, bool]] = queue.Queue(maxsize=1)
-    process_spawned = threading.Event()
+    released = False
 
-    def _run() -> None:
-        proc: subprocess.Popen | None = None
-        ok = False
-        payload: object = UnavailableError(
-            "Claude CLI probe's subprocess.Popen() did not return within its budget",
-        )
-        became_zombie = False
-        try:
-            try:
-                proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL, env=env, start_new_session=True,
-                )
-            except OSError as exc:
-                payload = exc
-                return
-            _bind_zombie_reservation(reservation, proc.pid)
-            process_spawned.set()
-            try:
-                assert proc.stdin is not None and proc.stdout is not None
-                prompt = memoryview(_TOOL_SURFACE_PROBE_PROMPT.encode())
-                with selectors.DefaultSelector() as selector:
-                    selector.register(proc.stdin, selectors.EVENT_WRITE)
-                    while prompt:
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            raise TimeoutError("Claude CLI probe did not answer within its budget")
-                        for key, _ in selector.select(timeout=remaining):
-                            written = os.write(key.fd, prompt)
-                            prompt = prompt[written:]
-                    selector.unregister(proc.stdin)
-                    proc.stdin.close()
-                    selector.register(proc.stdout, selectors.EVENT_READ)
-                    line = bytearray()
-                    while True:
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            raise TimeoutError("Claude CLI probe did not answer within its budget")
-                        for key, _ in selector.select(timeout=remaining):
-                            chunk = os.read(key.fd, _CLI_PROBE_READ_CHUNK_BYTES)
-                            line.extend(chunk)
-                            if len(line) > CLI_OUTPUT_READ_LIMIT_BYTES:
-                                raise OSError(
-                                    "Claude CLI probe output exceeded its read limit",
-                                )
-                            line_end = line.find(b"\n")
-                            if line_end >= 0 or not chunk:
-                                payload = bytes(line[:line_end + 1] if line_end >= 0 else line)
-                                ok = True
-                                return
-            except OSError as exc:
-                payload = exc
-        finally:
-            # Always — whether or not the caller that started this thread
-            # is still waiting on `result`, or ever gets to see the
-            # zombie-ness this determines. This is the "the thread reaps
-            # what it started" fix: reaping used to happen only in the
-            # caller, after successfully reading `result`, which meant a
-            # late-arriving Popen() (the caller had already given up on)
-            # was never reaped by anyone.
-            try:
-                if proc is not None:
-                    became_zombie = _reap_process_group_sync(proc)
-                else:
-                    _release_zombie_reservation(reservation)
-            finally:
-                result.put((ok, payload, became_zombie))
+    def on_spawned(process_id: int) -> None:
+        _bind_zombie_reservation(reservation, process_id)
+
+    def on_reaped(_process_id: int, _became_zombie: bool) -> None:
+        nonlocal released
+        _release_zombie_reservation(reservation)
+        released = True
 
     try:
-        runner = threading.Thread(target=_run, daemon=True)
-        runner.start()
+        outcome = agent_cli.run_cli_bounded(
+            _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path),
+            stdin_payload=_TOOL_SURFACE_PROBE_PROMPT.encode(),
+            read="first_line",
+            deadline=deadline,
+            stderr="devnull",
+            output_read_limit_bytes=CLI_OUTPUT_READ_LIMIT_BYTES,
+            cleanup_margin_seconds=_cleanup_margin_seconds(),
+            on_spawned=on_spawned,
+            on_reaped=on_reaped,
+        )
     except BaseException:
         _release_zombie_reservation(reservation)
         raise
-
-    try:
-        remaining = max(deadline - time.monotonic(), 0)
-        ok, payload, became_zombie = result.get(timeout=remaining)
-    except queue.Empty:
-        if not process_spawned.is_set():
-            raise UnavailableError("Claude CLI probe did not start within its budget")
-        try:
-            ok, payload, became_zombie = result.get(
-                timeout=_cleanup_margin_seconds(),
-            )
-        except queue.Empty:
-            raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
-
-    # A zombie always wins, before its answer is ever trusted: a process
-    # that outlived even SIGKILL is not "clean, with an unrelated cleanup
-    # problem" — its own resource state is now suspect regardless of what
-    # it printed before that, and it must get the zombie's own much longer
-    # failure TTL, not a permanent clean verdict or a merely ten-second one.
-    if became_zombie:
-        message = (
-            str(payload) if not ok
-            else "Claude CLI probe process outlived SIGKILL"
-        )
-        raise _ZombieProbeError(message)
-    if not ok:
-        raise UnavailableError(f"Claude CLI probe failed to run: {payload}")
-    return _parse_announced_surface(payload, mcp_attached=mcp_config_path is not None)
+    if outcome.reason is agent_cli.CliRunReason.SPAWN_FAILED:
+        if not released:
+            _release_zombie_reservation(reservation)
+        raise UnavailableError(f"Claude CLI probe failed to run: {outcome.spawn_error}")
+    if outcome.reason is agent_cli.CliRunReason.DEADLINE_BEFORE_SPAWN:
+        raise UnavailableError("Claude CLI probe did not start within its budget")
+    if outcome.reason is agent_cli.CliRunReason.CLEANUP_OVERRAN:
+        raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
+    if outcome.became_zombie:
+        raise _ZombieProbeError("Claude CLI probe process outlived SIGKILL")
+    if outcome.reason is agent_cli.CliRunReason.IO_ERROR:
+        raise UnavailableError(f"Claude CLI probe failed to run: {outcome.io_error}")
+    if outcome.reason in {
+        agent_cli.CliRunReason.DEADLINE_WHILE_WRITING,
+        agent_cli.CliRunReason.DEADLINE_WHILE_READING,
+    }:
+        raise UnavailableError("Claude CLI probe did not answer within its budget")
+    if outcome.reason is agent_cli.CliRunReason.OUTPUT_LIMIT_REACHED:
+        raise UnavailableError("Claude CLI probe output exceeded its read limit")
+    if outcome.reason is not agent_cli.CliRunReason.COMPLETE:
+        raise RuntimeError(f"Unexpected Claude CLI probe outcome: {outcome.reason}")
+    return _parse_announced_surface(
+        outcome.stdout.encode(), mcp_attached=mcp_config_path is not None,
+    )
 
 
 # ── reap: async ──────────────────────────────────────────────────────
@@ -1641,66 +1537,6 @@ async def _reap_in_background(proc: asyncio.subprocess.Process) -> None:
     try:
         await proc.wait()
     except Exception:
-        log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
-    else:
-        log.info("Claude CLI process group %s reaped in the background", proc.pid)
-    finally:
-        _release_zombie_reservation(proc.pid)
-
-
-# ── reap: sync ───────────────────────────────────────────────────────
-
-
-def _reap_process_group_sync(proc: subprocess.Popen) -> bool:
-    """Sync twin of ``_reap_process_group``."""
-    if proc.poll() is not None or proc.pid is None:
-        return _confirm_exit_or_track_zombie_sync(proc)
-
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return _confirm_exit_or_track_zombie_sync(proc)
-
-    if _bounded_wait_sync(proc, CLAUDE_CLI_SIGTERM_GRACE_SECONDS):
-        _release_zombie_reservation(proc.pid)
-        return False
-
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return _confirm_exit_or_track_zombie_sync(proc)
-
-    return _confirm_exit_or_track_zombie_sync(proc)
-
-
-def _bounded_wait_sync(proc: subprocess.Popen, timeout: float) -> bool:
-    try:
-        proc.wait(timeout=timeout)
-        return True
-    except subprocess.TimeoutExpired:
-        return False
-
-
-def _confirm_exit_or_track_zombie_sync(proc: subprocess.Popen) -> bool:
-    if _bounded_wait_sync(proc, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS):
-        _release_zombie_reservation(proc.pid)
-        return False
-    return _track_zombie_reap_sync(proc)
-
-
-def _track_zombie_reap_sync(proc: subprocess.Popen) -> bool:
-    log.error(
-        "Claude CLI process group %d did not exit within %ds of SIGKILL",
-        proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
-    )
-    threading.Thread(target=_reap_in_background_sync, args=(proc,), daemon=True).start()
-    return True
-
-
-def _reap_in_background_sync(proc: subprocess.Popen) -> None:
-    try:
-        proc.wait()
-    except OSError:
         log.exception("Background reap of Claude CLI process group %s failed", proc.pid)
     else:
         log.info("Claude CLI process group %s reaped in the background", proc.pid)

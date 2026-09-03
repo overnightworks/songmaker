@@ -623,6 +623,48 @@ def test_bounded_runner_returns_when_its_cleanup_margin_expires(monkeypatch) -> 
     assert reaped.wait(timeout=1)
 
 
+def test_bounded_runner_notifies_a_zombie_reap_only_after_background_confirmation(
+    monkeypatch,
+) -> None:
+    background_started = threading.Event()
+    allow_background_reap = threading.Event()
+    callback_finished = threading.Event()
+    spawned_process_ids: list[int] = []
+    callbacks: list[tuple[int, bool]] = []
+
+    def await_background_reap(process, callback) -> None:
+        background_started.set()
+        assert allow_background_reap.wait(timeout=1)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        process.wait()
+        agent_cli._notify_reaped(callback, process.pid, became_zombie=True)
+
+    def record_reaped(process_id: int, became_zombie: bool) -> None:
+        callbacks.append((process_id, became_zombie))
+        callback_finished.set()
+
+    monkeypatch.setattr("songmaker_cli.agent_cli._reap_process_group", lambda _process: True)
+    monkeypatch.setattr("songmaker_cli.agent_cli._reap_in_background", await_background_reap)
+
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", "printf ready"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        on_spawned=spawned_process_ids.append,
+        on_reaped=record_reaped,
+    )
+
+    assert outcome.became_zombie is True
+    assert background_started.wait(timeout=1)
+    assert callbacks == []
+    allow_background_reap.set()
+    assert callback_finished.wait(timeout=1)
+    assert callbacks == [(spawned_process_ids[0], True)]
+
+
 def test_bounded_runner_stops_a_cli_that_never_reads_its_full_stdin_pipe() -> None:
     started: list[subprocess.Popen[bytes]] = []
     real_popen = subprocess.Popen

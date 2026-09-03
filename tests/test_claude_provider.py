@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
-import queue
 import subprocess
 import threading
 import time
@@ -965,6 +964,7 @@ def test_tool_surface_probe_stops_the_session_it_started(
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
+    monkeypatch.setattr(provider.agent_cli, "_process_group_exists", lambda _pid: False)
 
     asyncio.run(verify_cli_tool_surface())
 
@@ -982,10 +982,8 @@ def test_tool_surface_probe_stops_the_session_it_started(
 # waiting tasks/threads (the review's own math: ~225/hour at one per
 # immediately-invalid probe).
 #
-# _bounded_wait / _bounded_wait_sync are the one seam where these tests
-# genuinely need real (tiny) timing — that is their actual job. Everything
-# built on top of them (zombie tracking and the reservation cap) is
-# tested by stubbing that seam instead: deterministic, no clock involved.
+# _bounded_wait is the seam where these tests genuinely need real (tiny)
+# timing. Everything built on top of it is tested by stubbing that seam.
 
 
 def test_bounded_wait_respects_its_timeout() -> None:
@@ -1012,23 +1010,6 @@ def test_bounded_wait_returns_true_when_the_process_exits_in_time() -> None:
     assert completed is True
 
 
-def test_bounded_wait_sync_respects_its_timeout() -> None:
-    def _timed_out(timeout=None):
-        raise subprocess.TimeoutExpired(cmd="claude", timeout=timeout)
-
-    proc = MagicMock()
-    proc.wait.side_effect = _timed_out
-
-    assert provider._bounded_wait_sync(proc, 999) is False
-
-
-def test_bounded_wait_sync_returns_true_when_the_process_exits_in_time() -> None:
-    proc = MagicMock()
-    proc.wait.return_value = 0
-
-    assert provider._bounded_wait_sync(proc, 999) is True
-
-
 def test_reap_process_group_tracks_a_zombie_when_the_wait_never_confirms_exit(
     monkeypatch, caplog,
 ) -> None:
@@ -1053,29 +1034,6 @@ def test_reap_process_group_tracks_a_zombie_when_the_wait_never_confirms_exit(
 
     assert became_zombie is True
     assert tracked == [9999]
-    assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
-
-
-def test_reap_process_group_sync_tracks_a_zombie_when_the_wait_never_confirms_exit(
-    monkeypatch,
-) -> None:
-    signals: list[int] = []
-    monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
-    monkeypatch.setattr(provider, "_bounded_wait_sync", lambda _proc, _timeout: False)
-    tracked: list[int] = []
-    monkeypatch.setattr(
-        provider, "_track_zombie_reap_sync",
-        lambda proc: tracked.append(proc.pid) or True,
-    )
-
-    proc = MagicMock()
-    proc.pid = 7777
-    proc.poll.return_value = None
-
-    became_zombie = provider._reap_process_group_sync(proc)
-
-    assert became_zombie is True
-    assert tracked == [7777]
     assert signals == [provider.signal.SIGTERM, provider.signal.SIGKILL]
 
 
@@ -1180,21 +1138,6 @@ def test_reap_in_background_eventually_reaps_logs_and_releases_its_reservation(c
     proc.wait = AsyncMock(return_value=0)
 
     asyncio.run(provider._reap_in_background(proc))
-
-    assert any("reaped in the background" in r.message for r in caplog.records)
-    reservation = provider._reserve_zombie_admission()
-    assert reservation is not None
-    provider._release_zombie_reservation(reservation)
-
-
-def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_reservation(caplog) -> None:
-    caplog.set_level("INFO")
-    _reserve_zombie_process(6666)
-    proc = MagicMock()
-    proc.pid = 6666
-    proc.wait.return_value = 0
-
-    provider._reap_in_background_sync(proc)
 
     assert any("reaped in the background" in r.message for r in caplog.records)
     reservation = provider._reserve_zombie_admission()
@@ -1695,7 +1638,7 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
     approval. A zombie always wins, regardless of what was read, and
     before parsing, the MCP check, or the verdict ever run."""
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
-    monkeypatch.setattr(provider, "_reap_process_group_sync", lambda _proc: True)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
 
     with pytest.raises(provider._ZombieProbeError):
         asyncio.run(verify_cli_tool_surface())
@@ -1704,13 +1647,48 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
         assert not provider._tool_surface_verdicts
 
 
+def test_zombie_probe_keeps_its_pool_slot_until_the_runner_confirms_reap(
+    claude_binary, monkeypatch,
+) -> None:
+    background_started = threading.Event()
+    allow_background_reap = threading.Event()
+    background_finished = threading.Event()
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
+    monkeypatch.setattr(
+        provider.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: fake_cli_process(_init_line([])),
+    )
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _process: True)
+
+    def await_background_reap(process, callback) -> None:
+        background_started.set()
+        assert allow_background_reap.wait(timeout=1)
+        process.poll()
+        provider.agent_cli._notify_reaped(callback, process.pid, became_zombie=True)
+        background_finished.set()
+
+    monkeypatch.setattr(provider.agent_cli, "_reap_in_background", await_background_reap)
+
+    with pytest.raises(provider._ZombieProbeError):
+        verify_no_builtin_cli_tools()
+
+    assert background_started.wait(timeout=1)
+    assert provider._reserve_zombie_admission() is None
+    allow_background_reap.set()
+    assert background_finished.wait(timeout=1)
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._release_zombie_reservation(reservation)
+
+
 def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
     claude_binary, monkeypatch,
 ) -> None:
     commands = _answer_with(
         monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS), _init_line(_ALL_SONGMAKER_TOOLS),
     )
-    monkeypatch.setattr(provider, "_reap_process_group_sync", lambda _proc: True)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
@@ -1728,7 +1706,7 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
 
     # Past the zombie TTL a fresh probe runs — and this time the process
     # exits cleanly, so it should actually succeed.
-    monkeypatch.setattr(provider, "_reap_process_group_sync", lambda _proc: False)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: False)
     clock["now"] += provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS + 1
     _run_with_clock(verify_cli_tool_surface(), clock)
     assert len(commands) == 2
@@ -1738,11 +1716,12 @@ def test_zombie_failure_uses_the_event_loop_clock_when_the_loop_is_offset(
     claude_binary, monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
-    monkeypatch.setattr(provider, "_reap_process_group_sync", lambda _proc: True)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
     loop = asyncio.new_event_loop()
     monotonic = time.monotonic
     monkeypatch.setattr(loop, "time", lambda: monotonic() - 43_000)
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=loop.time))
+    monkeypatch.setattr(provider.agent_cli.time, "monotonic", loop.time)
 
     try:
         with pytest.raises(provider._ZombieProbeError):
@@ -1780,14 +1759,14 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
         return False
 
     def fake_popen(*_cmd, **_kw):
-        proc = fake_cli_process(b"")
+        proc = fake_cli_process(None)
         proc.pid = 9090
         proc.poll.return_value = 0
         proc._stdin_reader.close()
         return proc
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
 
     started = time.monotonic()
@@ -2069,11 +2048,10 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
 
     def fake_reap(_proc: object) -> bool:
         reaped.set()
-        provider._release_zombie_reservation(_proc.pid)
         return False
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
 
@@ -2099,21 +2077,8 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
 ) -> None:
     process_spawned = threading.Event()
     cleanup_started = threading.Event()
-    cleanup_waiting = threading.Event()
     release_cleanup = threading.Event()
     processes: list[MagicMock] = []
-    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
-
-    class ProbeResultQueue(queue.Queue):
-        first_get = True
-
-        def get(self, timeout: float | None = None):
-            if self.first_get:
-                self.first_get = False
-                assert process_spawned.wait(timeout=1)
-                raise queue.Empty
-            cleanup_waiting.set()
-            return super().get(timeout=timeout)
 
     def fake_popen(*_cmd, **_kw) -> MagicMock:
         proc = fake_cli_process(None)
@@ -2127,15 +2092,15 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
         return True
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
-    monkeypatch.setattr(provider.queue, "Queue", ProbeResultQueue)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
 
     async def verify_after_cleanup() -> None:
-        probe = asyncio.create_task(averify_no_builtin_cli_tools())
+        loop = asyncio.get_running_loop()
+        probe = asyncio.create_task(provider._probe_cli_surface_async(
+            str(claude_binary), mcp_config_path=None, deadline=loop.time() + 0.02,
+        ))
         assert await asyncio.to_thread(process_spawned.wait, 1)
-        processes[0]._stdout_writer.close()
         assert await asyncio.to_thread(cleanup_started.wait, 1)
-        assert await asyncio.to_thread(cleanup_waiting.wait, 1)
         assert not probe.done()
         release_cleanup.set()
         with pytest.raises(provider._ZombieProbeError):
@@ -2143,10 +2108,6 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
 
     try:
         asyncio.run(verify_after_cleanup())
-        with provider._tool_surface_lock:
-            failure = provider._tool_surface_failures[key]
-        assert failure.is_zombie is True
-        assert failure.ttl_seconds() == provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS
     finally:
         release_cleanup.set()
         for proc in processes:
@@ -2190,13 +2151,10 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
         return thread
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
-    monkeypatch.setattr(
-        provider.threading,
-        "Thread",
-        tracked_thread,
-    )
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
+    monkeypatch.setattr(provider.agent_cli.threading, "Thread", tracked_thread)
 
     started = time.monotonic()
     with pytest.raises(UnavailableError, match="did not start"):
@@ -2205,6 +2163,7 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
     with provider._tool_surface_lock:
         assert key in provider._tool_surface_failures
 
+    assert provider._reserve_zombie_admission() is None
     popen_may_return.set()  # only now does the "late" spawn actually complete
 
     assert reaped.wait(5), "the late-returning process was never reaped"
@@ -2286,8 +2245,7 @@ def test_judge_deadline_keeps_and_caches_a_zombie_probe_failure(
 def test_judge_deadline_timeout_from_the_sync_probe_is_not_cached(
     claude_binary, monkeypatch,
 ) -> None:
-    """The sync probe's own queue timeout is a judge timeout when the
-    caller's deadline, rather than the five-second probe bound, ran out."""
+    """A runner deadline owned by the judge is not cached as a probe failure."""
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
     popen_may_return = threading.Event()
     reaped = threading.Event()
@@ -2308,8 +2266,8 @@ def test_judge_deadline_timeout_from_the_sync_probe_is_not_cached(
         return thread
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
-    monkeypatch.setattr(provider.threading, "Thread", tracked_thread)
+    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
+    monkeypatch.setattr(provider.agent_cli.threading, "Thread", tracked_thread)
     clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
     monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.03))
 
@@ -2490,7 +2448,7 @@ def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch
     def fail_start(_runner: threading.Thread) -> None:
         raise RuntimeError("thread start failed")
 
-    monkeypatch.setattr(provider.threading.Thread, "start", fail_start)
+    monkeypatch.setattr(provider.agent_cli.threading.Thread, "start", fail_start)
 
     with pytest.raises(RuntimeError, match="thread start failed"):
         provider._probe_cli_surface_sync(
@@ -2697,6 +2655,7 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
+    monkeypatch.setattr(provider.agent_cli, "_process_group_exists", lambda _pid: False)
 
     verify_no_builtin_cli_tools()
 
