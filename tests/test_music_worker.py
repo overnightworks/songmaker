@@ -72,6 +72,27 @@ def test_generate_passes_seed_and_target_model() -> None:
     assert kwargs["target_model"] == "xl-sft"
 
 
+def test_train_lora_passes_the_explicit_training_configuration() -> None:
+    worker = _make_worker()
+    with patch(
+        "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.train_lora(_mock_ctx(), "j1", "l1", "u1"))
+
+    assert mock_run.await_args.kwargs["training_config"] == worker._settings.lora_training_config
+
+
+def test_lora_training_uses_its_own_timeout() -> None:
+    lora_function = next(
+        function
+        for function in mw_mod.MusicWorkerSettings.functions
+        if function.name == JobType.LORA_TRAINING
+    )
+
+    assert lora_function.timeout_s == mw_mod._settings.lora_training_job_timeout
+    assert mw_mod.MusicWorkerSettings.job_timeout == mw_mod._settings.arq_job_timeout
+
+
 def test_generate_passes_repaint_params() -> None:
     from songmaker_cli.api_models import RepaintTaskParams
 

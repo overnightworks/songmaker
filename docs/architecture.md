@@ -946,6 +946,15 @@ never been observed; with a newer observation, it is `alive`.
   scheduler heartbeats on every received event, so that initial event refreshes
   the heartbeat and the first-event and read windows do not concatenate.
 
+  LoRA training uses its own `LORA_TRAINING_JOB_TIMEOUT` (3600 seconds by
+  default), while the MusicWorker's global `ARQ_JOB_TIMEOUT` remains the
+  generation limit. Its five-second worker progress poll is ordered below the
+  300-second LoRA reaper threshold, which is ordered below the LoRA arq timeout.
+  Every TaskStore progress event follows the shared SSE path and refreshes the
+  job heartbeat; the reaper therefore only terminalizes a training job after
+  progress has stopped for its threshold, not because its total age exceeds a
+  generation run.
+
   The 630-second scheduler SSE read timeout applies to generation, download,
   and LoRA task streams through their shared `DispatchOptions()`. On a cold
   generate path, the 640-second window before the initial event plus a later

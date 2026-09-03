@@ -56,15 +56,19 @@ scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
 ### LoRA training handoff
 
 A LoRA job explicitly loads its selected mode (normally `sft`) before it
-submits training. The worker then initializes the Fork with that mode's
-canonical model name before scanning the dataset. It physically stages the
-dataset inside the Fork's safe root, trains there, and exports from the final
-training output into a separate export directory. Only the exported adapter is
-copied back through the shared training handoff directory; the product job
-moves it to `user_loras/<user>/<id>/lora/` and marks the LoRA ready. The worker
-removes its workspace after success, failure, or cancellation when `rmtree`
-succeeds. A `SIGKILL` can leave `/opt/acestep/training/<id>` in the container
-layer; the product job removes the shared `training_tmp` handoff directory.
+submits the Songmaker-owned training configuration. The worker then initializes
+the Fork with that mode's canonical model name before scanning the dataset. It
+physically stages the dataset inside the Fork's safe root, trains there, and
+exports from the final training output into a separate export directory. Each
+training poll updates the existing TaskStore progress stream, which Songmaker
+consumes through SSE while the Fork reports progress; the timeout and heartbeat
+ordering is documented in [the architecture](architecture.md#worker-and-job-timeouts).
+Only the exported adapter is copied back through the shared training handoff
+directory; the product job moves it to `user_loras/<user>/<id>/lora/` and marks
+the LoRA ready. The worker removes its workspace after success, failure, or
+cancellation when `rmtree` succeeds. A `SIGKILL` can leave
+`/opt/acestep/training/<id>` in the container layer; the product job removes the
+shared `training_tmp` handoff directory.
 
 **Auto-scoring (issue #222).** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
@@ -147,7 +151,11 @@ python:3.12-slim
 
 **FFmpeg is a system dependency of the ACE-Step worker image.** `gpu-torch-base` installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
-The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The Python settings defaults are `ARQ_JOB_TIMEOUT=1000` and `ACESTEP_STARTUP_TIMEOUT_SECONDS=900`, matching `.env.docker.example`. `docker-compose.yml` currently supplies shorter 300-second fallbacks when those env vars are unset, so set the longer values in `.env` for Docker deployments that cold-load xl-turbo or vLLM on fresh containers.
+The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
+Python settings and `docker-compose.yml` both default `ARQ_JOB_TIMEOUT` to
+1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` remains a separate 900-second
+Python setting, while Compose keeps its 300-second fallback; set the longer
+value in `.env` when a Docker deployment cold-loads xl-turbo or vLLM.
 
 **Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
 

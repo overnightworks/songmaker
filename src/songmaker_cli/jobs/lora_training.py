@@ -41,6 +41,7 @@ from songmaker_cli.scheduler import (
     _iterate_task_events,
     pick_worker,
 )
+from songmaker_cli.settings import LoraTrainingJobConfig
 
 from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 
@@ -400,6 +401,7 @@ async def run_lora_training_job(
     audio_dir: Path | None = None,
     redis: Redis | None = None,
     target_mode: str = MODEL_DEFAULT_MODE,
+    training_config: LoraTrainingJobConfig | None = None,
 ) -> None:
     """ARQ job: materialize dataset, dispatch training to a worker, persist.
 
@@ -416,9 +418,9 @@ async def run_lora_training_job(
         job_id=job_id, job_type=JobType.LORA_TRAINING, lora_id=lora_id,
     )
 
-    if db_factory is None or audio_dir is None or redis is None:
+    if db_factory is None or audio_dir is None or redis is None or training_config is None:
         raise RuntimeError(
-            "run_lora_training_job requires db_factory, audio_dir, redis",
+            "run_lora_training_job requires db_factory, audio_dir, redis, training_config",
         )
 
     _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -489,6 +491,7 @@ async def run_lora_training_job(
             "mode": target_mode,
             "dataset_dir": str(dataset_dir),
             "output_dir": str(tmp_output),
+            **training_config.payload(),
         }
 
         try:
@@ -583,11 +586,11 @@ async def run_lora_training_job(
         cleanup_failed_lora_with_factory(
             lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
             db_factory=db_factory,
-            error_message="Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+            error_message="Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown",
         )
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error="Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+            error="Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown",
             error_type="timeout",
         )
         raise

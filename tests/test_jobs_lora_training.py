@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,6 +34,17 @@ from songmaker_cli.jobs.lora_training import (
     reconcile_crashed_loras,
     run_lora_training_job,
 )
+from songmaker_cli.lifecycle import reap_stale_jobs
+from songmaker_cli.settings import Settings
+from songmaker_cli.worker_liveness import WorkerLiveness
+
+TEST_SETTINGS = Settings(
+    database_url="postgresql://example",
+    redis_url="redis://example",
+    session_secret="session-secret",
+    songmaker_internal_token="internal-token",
+)
+TEST_LORA_TRAINING_CONFIG = TEST_SETTINGS.lora_training_config
 
 
 def _run(coro):
@@ -181,6 +194,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
             {}, "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory, audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
         ))
 
     with db_factory() as session:
@@ -222,8 +236,67 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
             "mode": "sft",
             "dataset_dir": str(dataset_path),
             "output_dir": str(output_dir),
+            **TEST_LORA_TRAINING_CONFIG.payload(),
         }),
     ]
+
+
+@pytest.fixture()
+def fake_clock():
+    class FakeClock:
+        now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+
+        def advance(self, seconds: int) -> None:
+            self.now += timedelta(seconds=seconds)
+
+    return FakeClock()
+
+
+def test_training_progress_keeps_a_long_running_lora_alive(
+    seeded, db_factory, fake_clock,
+) -> None:
+    generation_timeout_seconds = TEST_SETTINGS.arq_job_timeout
+    assert TEST_LORA_TRAINING_CONFIG.train_epochs == 500
+    assert TEST_SETTINGS.lora_training_job_timeout > generation_timeout_seconds
+
+    output_dir = (
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
+    )
+
+    async def progress_for_long_training(*_args, **_kwargs):
+        yield ("progress", {"progress": 0.20})
+        fake_clock.advance(generation_timeout_seconds + 1)
+        yield ("progress", {"progress": 0.80})
+        assert reap_stale_jobs(
+            SimpleNamespace(db=db_factory),
+            now=fake_clock.now,
+            worker_liveness={JobType.LORA_TRAINING: WorkerLiveness.ALIVE},
+        ) == 0
+        yield (
+            "done",
+            {"result": {"mode": "sft", "adapter_dir": "", "num_samples": 3}},
+        )
+
+    def touch_heartbeat(_db_factory, job_id: str) -> None:
+        with db_factory() as session:
+            job = get_job(session, job_id)
+            job.heartbeat_at = fake_clock.now
+            session.commit()
+
+    with (
+        _patch_worker_calls(str(output_dir), events=progress_for_long_training),
+        patch("songmaker_cli.jobs.lora_training._touch_heartbeat", touch_heartbeat),
+    ):
+        _run(run_lora_training_job(
+            {}, "job-1", seeded["lora_id"], seeded["user_id"],
+            db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
+        ))
+
+    with db_factory() as session:
+        assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.READY
+        assert get_job(session, "job-1").status == JobStatus.COMPLETED
 
 
 def test_dataset_materialization_writes_files(seeded, db_factory, tmp_path) -> None:
@@ -258,6 +331,7 @@ def test_missing_sample_audio_raises_and_marks_failed(
         {}, "job-1", seeded["lora_id"], seeded["user_id"],
         db_factory=db_factory, audio_dir=seeded["audio_dir"],
         redis=MagicMock(),
+        training_config=TEST_LORA_TRAINING_CONFIG,
     ))
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
@@ -300,6 +374,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
                 {}, "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"],
                 redis=MagicMock(),
+                training_config=TEST_LORA_TRAINING_CONFIG,
             ))
 
     with db_factory() as session:
@@ -314,6 +389,7 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
             {}, "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory, audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
         ))
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
@@ -428,6 +504,7 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
                 {}, "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"],
                 redis=MagicMock(),
+                training_config=TEST_LORA_TRAINING_CONFIG,
             ))
 
     with db_factory() as session:
@@ -474,6 +551,7 @@ def test_adoption_stays_ready_when_previous_cleanup_fails(
             {}, "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory, audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
         ))
 
     assert (final_dir / "adapter_config.json").exists()
@@ -517,6 +595,7 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
             {}, "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory, audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
         ))
 
     assert (final_dir / "adapter.txt").read_text() == "old"
@@ -541,6 +620,7 @@ def test_deleted_lora_rejected(seeded, db_factory) -> None:
         {}, "job-1", seeded["lora_id"], seeded["user_id"],
         db_factory=db_factory, audio_dir=seeded["audio_dir"],
         redis=MagicMock(),
+        training_config=TEST_LORA_TRAINING_CONFIG,
     ))
     with db_factory() as session:
         job = get_job(session, "job-1")
@@ -553,6 +633,7 @@ def test_missing_lora_fails_job(seeded, db_factory) -> None:
         {}, "job-1", "does-not-exist", seeded["user_id"],
         db_factory=db_factory, audio_dir=seeded["audio_dir"],
         redis=MagicMock(),
+        training_config=TEST_LORA_TRAINING_CONFIG,
     ))
     with db_factory() as session:
         job = get_job(session, "job-1")
@@ -570,6 +651,7 @@ def test_no_capacity_marks_failed(seeded, db_factory) -> None:
             {}, "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory, audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
         ))
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])

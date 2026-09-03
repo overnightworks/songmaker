@@ -135,22 +135,22 @@ class TrainLoraRequest(BaseModel):
     mode: str
     dataset_dir: str
     output_dir: str
-    lokr_linear_dim: int = 64
-    lokr_linear_alpha: int = 128
-    lokr_factor: int = -1
-    lokr_decompose_both: bool = False
-    lokr_use_tucker: bool = False
-    lokr_use_scalar: bool = False
-    lokr_weight_decompose: bool = True
-    learning_rate: float = 0.03
-    train_epochs: int = 500
-    train_batch_size: int = 1
-    gradient_accumulation: int = 4
-    save_every_n_epochs: int = 5
-    training_shift: float = 3.0
-    training_seed: int = 42
-    gradient_checkpointing: bool = False
-    poll_interval_seconds: float = 5.0
+    lokr_linear_dim: int
+    lokr_linear_alpha: int
+    lokr_factor: int
+    lokr_decompose_both: bool
+    lokr_use_tucker: bool
+    lokr_use_scalar: bool
+    lokr_weight_decompose: bool
+    learning_rate: float
+    train_epochs: int
+    train_batch_size: int
+    gradient_accumulation: int
+    save_every_n_epochs: int
+    training_shift: float
+    training_seed: int
+    gradient_checkpointing: bool
+    poll_interval_seconds: float
 
 
 class TrainLoraResponse(BaseModel):

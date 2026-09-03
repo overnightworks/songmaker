@@ -13,6 +13,7 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -26,12 +27,55 @@ from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
+    LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
+
+
+@dataclass(frozen=True)
+class LoraTrainingJobConfig:
+    """Explicit LoRA training payload owned by Songmaker settings."""
+
+    lokr_linear_dim: int
+    lokr_linear_alpha: int
+    lokr_factor: int
+    lokr_decompose_both: bool
+    lokr_use_tucker: bool
+    lokr_use_scalar: bool
+    lokr_weight_decompose: bool
+    learning_rate: float
+    train_epochs: int
+    train_batch_size: int
+    gradient_accumulation: int
+    save_every_n_epochs: int
+    training_shift: float
+    training_seed: int
+    gradient_checkpointing: bool
+    poll_interval_seconds: float
+
+    def payload(self) -> dict[str, int | float | bool]:
+        return {
+            "lokr_linear_dim": self.lokr_linear_dim,
+            "lokr_linear_alpha": self.lokr_linear_alpha,
+            "lokr_factor": self.lokr_factor,
+            "lokr_decompose_both": self.lokr_decompose_both,
+            "lokr_use_tucker": self.lokr_use_tucker,
+            "lokr_use_scalar": self.lokr_use_scalar,
+            "lokr_weight_decompose": self.lokr_weight_decompose,
+            "learning_rate": self.learning_rate,
+            "train_epochs": self.train_epochs,
+            "train_batch_size": self.train_batch_size,
+            "gradient_accumulation": self.gradient_accumulation,
+            "save_every_n_epochs": self.save_every_n_epochs,
+            "training_shift": self.training_shift,
+            "training_seed": self.training_seed,
+            "gradient_checkpointing": self.gradient_checkpointing,
+            "poll_interval_seconds": self.poll_interval_seconds,
+        }
 
 
 def _find_env_file() -> Path | None:
@@ -77,7 +121,7 @@ class Settings(BaseSettings):
     songmaker_internal_token: SecretStr
 
     @model_validator(mode="after")
-    def validate_generation_timeout_order(self) -> Settings:
+    def validate_job_timeout_orders(self) -> Settings:
         """Keep scheduler, reaper, and arq's silent-worker bounds ordered."""
         sse_read_timeout = acestep_sse_read_timeout_seconds(
             EngineSettings().acestep_poll_timeout,
@@ -90,6 +134,17 @@ class Settings(BaseSettings):
                 "Generation timeout order must be SSE read < reaper < arq "
                 f"({sse_read_timeout} < {generate_reaper_threshold} < "
                 f"{self.arq_job_timeout})",
+            )
+        if not (
+            self.lora_training_poll_interval_seconds
+            < LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS
+            < self.lora_training_job_timeout
+        ):
+            raise ValueError(
+                "LoRA training timeout order must be progress poll < reaper < arq "
+                f"({self.lora_training_poll_interval_seconds} < "
+                f"{LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
+                f"{self.lora_training_job_timeout})",
             )
         return self
 
@@ -206,11 +261,50 @@ class Settings(BaseSettings):
     # ── arq workers ───────────────────────────────────────────────────
     arq_job_timeout: int = 1000
     arq_drain_timeout: int = 300
+    lora_training_job_timeout: int = Field(default=3600, gt=0)
+    lora_training_lokr_linear_dim: int = Field(default=64, ge=1, le=256)
+    lora_training_lokr_linear_alpha: int = Field(default=128, ge=1, le=512)
+    lora_training_lokr_factor: int = -1
+    lora_training_lokr_decompose_both: bool = False
+    lora_training_lokr_use_tucker: bool = False
+    lora_training_lokr_use_scalar: bool = False
+    lora_training_lokr_weight_decompose: bool = True
+    lora_training_learning_rate: float = Field(default=0.03, gt=0.0)
+    lora_training_epochs: int = Field(default=500, ge=1)
+    lora_training_batch_size: int = Field(default=1, ge=1)
+    lora_training_gradient_accumulation: int = Field(default=4, ge=1)
+    lora_training_save_every_n_epochs: int = Field(default=5, ge=1)
+    lora_training_training_shift: float = Field(default=3.0, ge=0.0)
+    lora_training_training_seed: int = 42
+    lora_training_gradient_checkpointing: bool = False
+    lora_training_poll_interval_seconds: float = Field(default=5.0, gt=0.0)
     music_max_jobs: int = 2
     scoring_max_jobs: int = 1
     scoring_device: str = "cpu"
     scorer_timeout_seconds: int = SCORER_TIMEOUT_SECONDS
+
     text_accuracy_timeout_seconds: int = TEXT_ACCURACY_TIMEOUT_SECONDS
+
+    @property
+    def lora_training_config(self) -> LoraTrainingJobConfig:
+        return LoraTrainingJobConfig(
+            lokr_linear_dim=self.lora_training_lokr_linear_dim,
+            lokr_linear_alpha=self.lora_training_lokr_linear_alpha,
+            lokr_factor=self.lora_training_lokr_factor,
+            lokr_decompose_both=self.lora_training_lokr_decompose_both,
+            lokr_use_tucker=self.lora_training_lokr_use_tucker,
+            lokr_use_scalar=self.lora_training_lokr_use_scalar,
+            lokr_weight_decompose=self.lora_training_lokr_weight_decompose,
+            learning_rate=self.lora_training_learning_rate,
+            train_epochs=self.lora_training_epochs,
+            train_batch_size=self.lora_training_batch_size,
+            gradient_accumulation=self.lora_training_gradient_accumulation,
+            save_every_n_epochs=self.lora_training_save_every_n_epochs,
+            training_shift=self.lora_training_training_shift,
+            training_seed=self.lora_training_training_seed,
+            gradient_checkpointing=self.lora_training_gradient_checkpointing,
+            poll_interval_seconds=self.lora_training_poll_interval_seconds,
+        )
 
     # ── Soft delete ───────────────────────────────────────────────────
     soft_delete_retention_days: int = 30

@@ -100,6 +100,7 @@ class MusicWorker(WorkerBase):
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
             redis=ctx["redis"],
+            training_config=self._settings.lora_training_config,
         )
 
     async def load_model_on_worker(
@@ -140,7 +141,11 @@ class MusicWorkerSettings:
         func(_music_worker.generate, name=JobFunction.GENERATE),
         func(_music_worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
         func(_music_worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
-        func(_music_worker.train_lora, name=JobFunction.LORA_TRAINING),
+        func(
+            _music_worker.train_lora,
+            name=JobFunction.LORA_TRAINING,
+            timeout=_settings.lora_training_job_timeout,
+        ),
     ]
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown

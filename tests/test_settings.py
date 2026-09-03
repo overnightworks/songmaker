@@ -31,3 +31,19 @@ def test_rejects_an_invalid_generation_timeout_order(
 
     with pytest.raises(ValidationError, match="SSE read < reaper < arq"):
         Settings(**_required_settings())
+
+
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [
+        ("LORA_TRAINING_POLL_INTERVAL_SECONDS", "300"),
+        ("LORA_TRAINING_JOB_TIMEOUT", "300"),
+    ],
+)
+def test_rejects_an_invalid_lora_training_timeout_order(
+    monkeypatch: pytest.MonkeyPatch, setting: str, value: str,
+) -> None:
+    monkeypatch.setenv(setting, value)
+
+    with pytest.raises(ValidationError, match="progress poll < reaper < arq"):
+        Settings(**_required_settings())
