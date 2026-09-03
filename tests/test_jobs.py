@@ -1030,7 +1030,10 @@ def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
     seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
     stubbed_claude_judge,
 ) -> None:
-    """A judge timeout leaves the child usable and marks the job partial."""
+    """A judge timeout leaves the child usable and marks the job partial. The
+    abandoned thread is this process's problem — killing the child would
+    reclaim nothing, so it keeps running.
+    """
     from songmaker_cli.claude.provider import UnavailableError
 
     judge_timeout = threading.Event()
