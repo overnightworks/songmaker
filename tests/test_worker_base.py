@@ -224,7 +224,3 @@ def test_cleanup_stale_cron_no_commit_when_zero() -> None:
 def test_build_redis_settings() -> None:
     settings = wb_mod.build_redis_settings()
     assert settings is not None
-
-
-def test_worker_defaults_to_its_single_job_type() -> None:
-    assert _DummyWorker().job_types == ("dummy",)

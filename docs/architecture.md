@@ -843,10 +843,13 @@ parent's coherence budget, which is spent after the child returns.
 - Common startup, shutdown, and stale recovery for every named worker job
   type. MusicWorker owns `generate` and `lora_training`; the scoring worker
   owns `score`.
+- A worker restart terminalizes only `RUNNING` `lora_training` jobs, so a
+  queued training survives a deploy; `generate` jobs still terminalize both
+  `QUEUED` and `RUNNING` jobs.
 - Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Chat and LoRA-training job recovery** (`lifecycle.py`, web process — #371):
+**Chat and LoRA-training job recovery** (`jobs/lora_training.py`, web process — #371):
 `chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
 never inside an arq worker, so they have no worker-scoped cron at all.
 `lora_training` jobs run inside MusicWorker and are recovered by that worker;

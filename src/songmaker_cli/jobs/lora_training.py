@@ -19,6 +19,7 @@ from songmaker_cli.constants import (
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
+    USER_LORA_TRAINING_TMP_DIRNAME,
     USER_LORAS_DIRNAME,
     AuditAction,
     JobStatus,
@@ -79,7 +80,7 @@ def _output_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
 
 
 def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / "training_tmp"
+    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
 
 
 def _materialize_dataset(
@@ -267,7 +268,10 @@ def audit_orphaned_lora_work_dirs(
         for lora_dir in user_dir.iterdir():
             if not lora_dir.is_dir() or lora_dir.name in active_ids:
                 continue
-            for work_dirname in (USER_LORA_DATASET_DIRNAME, "training_tmp"):
+            for work_dirname in (
+                USER_LORA_DATASET_DIRNAME,
+                USER_LORA_TRAINING_TMP_DIRNAME,
+            ):
                 work_dir = lora_dir / work_dirname
                 if work_dir.exists():
                     orphaned.append(work_dir)
