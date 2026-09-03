@@ -295,6 +295,9 @@ ARQ_MUSIC_QUEUE_NAME = "arq:queue:music"
 ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
 ARQ_MUSIC_HEALTH_KEY = f"{ARQ_MUSIC_QUEUE_NAME}:health-check"
 ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
+ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
+ARQ_WORKER_LIVENESS_GRACE_SECONDS: Final[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS + 1
+ACESTEP_WORKER_LIVENESS_GRACE_SECONDS: Final[int] = 15
 RECOVERY_LOCK_MUSIC_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:music"
 RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
 SESSION_SYNC_LOCK_KEY = f"{REDIS_KEY_PREFIX}:session_sync_lock"
@@ -576,13 +579,14 @@ class JobFunction(StrEnum):
 class JobStaleThresholds:
     """Maximum inactive time for a queued or running job type.
 
-    Queued thresholds are chosen, not measured. A job waiting in a deep queue
-    can exceed them; see #331 F27, which moves queued reaping to worker
-    liveness rather than age.
+    Queued jobs first use the execution worker's liveness signal. Their age
+    remains a terminal guard when that signal is unavailable or a queue never
+    drains.
     """
 
     queued_seconds: int
     heartbeat_seconds: int
+    queued_liveness_grace_seconds: int | None
 
 
 # The one stale-job policy. Each heartbeat threshold is derived from the
@@ -591,26 +595,32 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.CHAT: JobStaleThresholds(
         queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=None,
     ),  # chat timer: 15 s; twelve missed intervals
     JobType.LORA_TRAINING: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=ARQ_WORKER_LIVENESS_GRACE_SECONDS,
     ),  # measured train_lora heartbeat: <= 60 s, with five intervals' margin
     JobType.SCORE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=ARQ_WORKER_LIVENESS_GRACE_SECONDS,
     ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
     ),  # max(load + submit + connect, SSE read) plus one reaper tick
     JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
     ),  # 960 s worker request timeout plus margin; no progress signal exists
     JobType.DOWNLOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        queued_liveness_grace_seconds=ACESTEP_WORKER_LIVENESS_GRACE_SECONDS,
     ),  # worker polls download progress every 2 s; 180 s tolerates 90 misses
 }
 

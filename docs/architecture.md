@@ -851,27 +851,41 @@ parent's coherence budget, which is spent after the child returns.
 - Path helpers (`_audio_dir`, `_data_dir`)
 - Timeout constants, terminal status set
 - Common startup, shutdown, and restart recovery for every named worker job
-  type. MusicWorker owns `generate` and `lora_training`; the scoring worker
-  owns `score`.
-- A worker restart terminalizes only `RUNNING` `lora_training` jobs, so a
-  queued training survives a deploy; `generate` jobs still terminalize both
-  `QUEUED` and `RUNNING` jobs.
+  type. MusicWorker owns `generate`, `lora_training`, `load_model_on_worker`,
+  and `download_model_on_worker`; the scoring worker owns `score`.
+- A worker restart terminalizes only `RUNNING` jobs for every type. Queued
+  work remains in arq for a replacement worker to claim after a deploy.
 - Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Stale-job recovery** (web process — #446): The lifecycle loop is the one
-periodic owner for every job type: `chat`, `generate`, `score`,
+**Stale-job recovery** (web process — #446, #456): The lifecycle loop is the
+one periodic owner for every job type: `chat`, `generate`, `score`,
 `lora_training`, `load_model_on_worker`, and `download_model_on_worker`. It
-calls the generic `recover_stale_jobs_by_age_and_type()` rule, which uses
-`started_at` for a queued job and `heartbeat_at` for a running job. Worker
-startup/shutdown recovery is separate: it records that worker process
-restarting, rather than deciding whether a still-running job is stale. An
+reads ephemeral worker signals and passes their `alive`, `dead`, or `unknown`
+value into the single generic `recover_stale_jobs_by_age_and_type()` DB rule;
+the query layer never reads Redis. A queued job with a known-dead execution
+worker fails as `No worker alive for this job type` after its signal's grace.
+The queued-age guard independently fails a job as `Queued too long`, including
+when the signal is unknown. Running jobs still use `heartbeat_at`. Worker
+startup/shutdown recovery is separate: it records that a worker process
+restarted, rather than deciding whether a still-running job is stale. An
 active job type without a policy-table row is a loop failure and is exposed by
 `/health`; it is never silently skipped.
 
+The liveness owner maps each type to the signal that can execute it:
+
+- `generate`, `load_model_on_worker`, and `download_model_on_worker` use the
+  registered ACE-Step worker's Redis heartbeat state. Its 15-second key TTL is
+  the liveness grace.
+- `lora_training` uses the music arq worker health key, and `score` uses the
+  scoring arq worker health key. Their grace is the 30-second health interval
+  plus one second.
+- `chat` runs in the web process rather than a worker queue, so it has no
+  worker liveness signal and queued chat can only use the age guard.
+
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 
-  | Type | queued | running heartbeat | limiting signal |
+  | Type | queued age guard | running heartbeat | limiting signal |
   | --- | ---: | ---: | --- |
   | `chat` | 900 s | 180 s | 15-s chat timer, twelve missed intervals |
   | `lora_training` | 1100 s | 300 s | measured ≤60-s training heartbeat with margin |
@@ -880,9 +894,8 @@ active job type without a policy-table row is a loop failure and is exposed by
   | `load_model_on_worker` | 1100 s | 1300 s | 960-s worker request timeout plus margin; no progress signal |
   | `download_model_on_worker` | 1100 s | 180 s | worker polls download progress every 2 s; 180 s tolerates 90 missed polls |
 
-  Queued bounds are chosen, not measured. A job waiting in a deep queue can
-  exceed them; #331 F27 moves queued reaping to worker liveness rather than
-  age.
+  Queued bounds are an independent terminal guard. The worker-liveness grace
+  detects a missing execution worker earlier when its signal is available.
 
   Generation uses three ordered clocks: ACE-Step's 600-second poll window,
   the scheduler's 630-second SSE read timeout (poll window plus 30-second
@@ -915,10 +928,11 @@ active job type without a policy-table row is a loop failure and is exposed by
   minutes), behind the same
   single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
   so only one web replica reaps a given tick.
-- A queued stale job reports `No worker available — please retry.`; a running
-  one reports `Heartbeat lost — please retry.` The request path applies that
-  same rule only to the submitting user's jobs just before active-job limits,
-  so a job that crosses a threshold between lifecycle ticks cannot cause a
+- A queued job reports `No worker alive for this job type — please retry.`
+  when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
+  when it exceeded the age guard. A running one reports `Heartbeat lost — please retry.`
+  The request path applies that same rule only to the submitting user's jobs just before
+  active-job limits, so a job that crosses a threshold between lifecycle ticks cannot cause a
   spurious 429.
 - `reconcile_crashed_loras()` runs once at web startup and after the web
   reaper; MusicWorker calls the same job-owned reconciliation after it

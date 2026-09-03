@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -15,13 +17,20 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
+    ARQ_MUSIC_HEALTH_KEY,
+    ARQ_SCORING_HEALTH_KEY,
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     JOB_REAPER_INTERVAL_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
+    JobType,
 )
 from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import (
+    WorkerLiveness,
+    worker_liveness_by_job_type,
+)
 
 log = logging.getLogger(__name__)
 
@@ -342,12 +351,67 @@ async def score_backfill_loop(app: FastAPI) -> None:
             log.exception("Score backfill tick failed")
 
 
-def reap_stale_jobs(ctx: AppContext, *, now: datetime | None = None) -> int:
+def _signal_liveness(signal_is_present: bool | None) -> WorkerLiveness:
+    if signal_is_present is None:
+        return WorkerLiveness.UNKNOWN
+    if signal_is_present:
+        return WorkerLiveness.ALIVE
+    return WorkerLiveness.DEAD
+
+
+def _acestep_worker_liveness(ctx: AppContext) -> WorkerLiveness:
+    from songmaker_cli.acestep_state import worker_is_online, worker_state_key
+    from songmaker_cli.db.queries import list_worker_identities
+
+    try:
+        with ctx.db() as session:
+            worker_ids = [worker.id for worker in list_worker_identities(session)]
+        for worker_id in worker_ids:
+            raw_state = ctx.redis.get(worker_state_key(worker_id))
+            if raw_state is None:
+                continue
+            if isinstance(raw_state, bytes):
+                raw_state = raw_state.decode()
+            if worker_is_online(json.loads(raw_state)):
+                return WorkerLiveness.ALIVE
+        return WorkerLiveness.DEAD
+    except Exception:
+        log.warning("Could not read ACE-Step worker liveness", exc_info=True)
+        return WorkerLiveness.UNKNOWN
+
+
+def _arq_worker_liveness(ctx: AppContext, health_key: str) -> WorkerLiveness:
+    try:
+        return _signal_liveness(bool(ctx.redis.exists(health_key)))
+    except Exception:
+        log.warning("Could not read arq worker liveness", exc_info=True)
+        return WorkerLiveness.UNKNOWN
+
+
+def read_worker_liveness(ctx: AppContext) -> dict[JobType, WorkerLiveness]:
+    """Read ephemeral worker signals for the lifecycle-owned reaper."""
+    return worker_liveness_by_job_type(
+        acestep=_acestep_worker_liveness(ctx),
+        music=_arq_worker_liveness(ctx, ARQ_MUSIC_HEALTH_KEY),
+        scoring=_arq_worker_liveness(ctx, ARQ_SCORING_HEALTH_KEY),
+    )
+
+
+def reap_stale_jobs(
+    ctx: AppContext,
+    *,
+    now: datetime | None = None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+) -> int:
     """Terminalize every stale job according to the shared type table."""
     from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
+    if worker_liveness is None:
+        worker_liveness = read_worker_liveness(ctx)
     with ctx.db() as session:
-        recovered = recover_stale_jobs_by_age_and_type(session, now=now)
+        recovered = recover_stale_jobs_by_age_and_type(
+            session, now=now, worker_liveness=worker_liveness,
+        )
         session.commit()
     if recovered:
         log.warning("Recovered %d stale job(s)", recovered)

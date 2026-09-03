@@ -19,6 +19,7 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.models import Job
+from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
 
@@ -217,13 +218,14 @@ def recover_stale_jobs_by_age_and_type(
     *,
     user_id: str | None = None,
     now: datetime | None = None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
 ) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
-    Queued jobs age out by ``started_at``; running jobs age out only when
-    their heartbeat is old.  ``user_id`` lets the submission path apply that
-    exact policy before enforcing an active-job limit, without defining a
-    second freshness threshold.
+    Queued jobs fail when their execution worker is known dead, or as a final
+    age guard. Running jobs fail only when their heartbeat is old. ``user_id``
+    lets the submission path apply that exact policy before enforcing an
+    active-job limit, without defining a second freshness threshold.
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -251,7 +253,15 @@ def recover_stale_jobs_by_age_and_type(
     for job, thresholds in candidates_with_thresholds:
         if job.status == JobStatus.QUEUED:
             cutoff = now - timedelta(seconds=thresholds.queued_seconds)
-            is_stale = _is_started_stale(job, cutoff)
+            liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
+            grace_seconds = thresholds.queued_liveness_grace_seconds
+            no_worker_alive = False
+            if liveness is WorkerLiveness.DEAD and grace_seconds is not None:
+                no_worker_alive = _is_started_stale(
+                    job, now - timedelta(seconds=grace_seconds),
+                )
+            queued_too_long = _is_started_stale(job, cutoff)
+            is_stale = no_worker_alive or queued_too_long
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
             is_stale = _is_heartbeat_stale(job, cutoff)
@@ -260,8 +270,12 @@ def recover_stale_jobs_by_age_and_type(
         was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
         if was_queued:
-            job.error = "No worker available — please retry."
-            job.error_type = "no_worker_available"
+            if no_worker_alive:
+                job.error = "No worker alive for this job type — please retry."
+                job.error_type = "no_worker_alive"
+            else:
+                job.error = "Queued too long — please retry."
+                job.error_type = "queued_too_long"
         else:
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
