@@ -709,13 +709,36 @@ describe('LibraryWall search', () => {
 		expect(root.textContent).toContain('Nachtstrom');
 	});
 
-	it('groups a song hit under its album and expands it, unlike a bare album hit', async () => {
+	it('renders a song search hit without generations under its album', async () => {
 		searchLibrary.mockResolvedValue({
 			items: [
 				{ type: 'album', album: album({ id: 'a-collapsed', title: 'Collapsed' }) },
 				{
 					type: 'song',
-					song: song({ id: 's-tide', title: 'Tide', album_id: 'a-expanded' }),
+					song: {
+						id: 's-tide',
+						slug: 'tide',
+						title: 'Tide',
+						album_id: 'a-expanded',
+						album_title: 'Expanded',
+						artist: 'Artist',
+						track_number: 1,
+						vocal_language: 'en',
+						lyrics: '',
+						prompt: '',
+						bpm: null,
+						audio_duration: null,
+						key_scale: null,
+						generation_params: null,
+						version_count: 1,
+						generation_count: 0,
+						is_shared: false,
+						share_slug: null,
+						best_scores: null,
+						best_rating: null,
+						cover: null,
+						created_at: '2026-01-01T00:00:00+00:00'
+					},
 					album_id: 'a-expanded',
 					album_title: 'Expanded'
 				}

@@ -1,9 +1,14 @@
 import { get, writable } from 'svelte/store';
 import { ApiError } from '$lib/api/fetch';
 import { fetchAlbums } from '$lib/api/albums';
-import { searchLibrary, type LibrarySearchHit, type LibrarySort } from '$lib/api/library';
+import { searchLibrary, type LibrarySort } from '$lib/api/library';
 import { fetchSongs } from '$lib/api/songs';
-import type { AlbumItem, SongItem } from '$lib/api/types';
+import type {
+	AlbumItem,
+	LibrarySearchResponse,
+	SongItem,
+	SongSummaryResponse
+} from '$lib/api/types';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_QUERY_REQUIRED,
@@ -22,6 +27,7 @@ import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { patchSharesFromSong } from '$lib/stores/shares';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
+export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 
 export interface LibrarySearchState {
 	q: string;
@@ -43,7 +49,7 @@ export interface LibraryBrowseState {
 
 export interface LibraryAlbumGroup {
 	album: AlbumItem;
-	songs: SongItem[];
+	songs: SongSummaryResponse[];
 }
 
 const EMPTY_SEARCH: LibrarySearchState = {
@@ -300,10 +306,15 @@ export function applySyncedSong(song: SongItem): void {
 	librarySearch.update((state) => ({
 		...state,
 		items: state.items.map((hit) =>
-			hit.type === 'song' && hit.song.id === song.id ? { ...hit, song } : hit
+			hit.type === 'song' && hit.song.id === song.id ? { ...hit, song: toSongSummary(song) } : hit
 		)
 	}));
 	patchSharesFromSong(song);
+}
+
+function toSongSummary(song: SongItem): SongSummaryResponse {
+	const { generations: _generations, ...summary } = song;
+	return summary as SongSummaryResponse;
 }
 
 export function listLoadedSongIds(): string[] {

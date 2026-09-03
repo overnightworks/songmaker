@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SongItem } from '$lib/api/types';
+import type { SongItem, SongSummaryResponse } from '$lib/api/types';
 
 vi.mock('$lib/stores/navigation', () => ({ selectSong: vi.fn() }));
 
@@ -44,7 +44,12 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
-async function render(item: SongItem): Promise<HTMLElement> {
+function songSummary(overrides: Partial<SongSummaryResponse> = {}): SongSummaryResponse {
+	const { generations: _generations, ...summary } = song();
+	return { ...summary, ...overrides } as SongSummaryResponse;
+}
+
+async function render(item: SongItem | SongSummaryResponse): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(SongNode, { target, props: { song: item } });
@@ -62,10 +67,12 @@ describe('SongNode', () => {
 		expect(target.querySelector('.song-meta')?.textContent?.trim()).toBe(expected);
 	});
 
-	it('opens the song it names, handing over what it already knows', async () => {
-		const item = song();
+	it.each([
+		['a browse SongItem', song()],
+		['a search SongSummaryResponse', songSummary()]
+	])('opens %s by id only', async (_, item) => {
 		const target = await render(item);
 		target.querySelector<HTMLElement>('.song-row')?.click();
-		expect(selectSong).toHaveBeenCalledWith('s1', item);
+		expect(selectSong).toHaveBeenCalledWith('s1');
 	});
 });

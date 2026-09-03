@@ -36,7 +36,7 @@ describe('searchLibrary', () => {
 		expect(mockFetch).not.toHaveBeenCalled();
 	});
 
-	it('fills missing generations on song hits', async () => {
+	it('returns song hits without generations from the API contract', async () => {
 		mockOk({
 			items: [
 				{
@@ -52,7 +52,7 @@ describe('searchLibrary', () => {
 		const resp = await searchLibrary({ q: 'tide', sort: 'newest', limit: 50 });
 		expect(resp.items[0].type).toBe('song');
 		if (resp.items[0].type === 'song') {
-			expect(resp.items[0].song.generations).toEqual([]);
+			expect(resp.items[0].song).not.toHaveProperty('generations');
 			expect(resp.items[0].album_title).toBe('Nachtstrom');
 		}
 	});

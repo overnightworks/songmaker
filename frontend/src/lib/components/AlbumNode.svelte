@@ -1,7 +1,7 @@
 <script lang="ts">
 	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
-	import type { AlbumItem, SongItem } from '$lib/api/types';
+	import type { AlbumItem, SongItem, SongSummaryResponse } from '$lib/api/types';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUMS_LOADING,
@@ -13,7 +13,7 @@
 
 	interface Props {
 		album: AlbumItem;
-		songs?: SongItem[];
+		songs?: Array<SongItem | SongSummaryResponse>;
 		expanded?: boolean;
 		selected: boolean;
 		showCreatedAge?: boolean;

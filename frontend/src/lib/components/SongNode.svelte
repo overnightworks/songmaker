@@ -3,10 +3,10 @@
 	import { selectedSongId } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { selectSong } from '$lib/stores/navigation';
-	import type { SongItem } from '$lib/api/types';
+	import type { SongItem, SongSummaryResponse } from '$lib/api/types';
 
 	interface Props {
-		song: SongItem;
+		song: SongItem | SongSummaryResponse;
 	}
 
 	let { song }: Props = $props();
@@ -22,8 +22,8 @@
 	class="song-row"
 	class:active={song.id === activeSongId}
 	class:playing={isPlaying}
-	onclick={() => selectSong(song.id, song)}
-	onkeydown={(e) => e.key === 'Enter' && selectSong(song.id, song)}
+	onclick={() => selectSong(song.id)}
+	onkeydown={(e) => e.key === 'Enter' && selectSong(song.id)}
 	role="button"
 	tabindex="0"
 >

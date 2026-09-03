@@ -44,7 +44,13 @@
 		unsharePlaylist,
 		unshareSong
 	} from '$lib/api/client';
-	import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
+	import type {
+		AlbumItem,
+		PlaylistItem,
+		ShareInventoryItem,
+		SongItem,
+		SongSummaryResponse
+	} from '$lib/api/types';
 	import { searchQuery } from '$lib/stores/filter';
 	import {
 		createNewPlaylist,
@@ -169,7 +175,7 @@
 
 	interface AlbumGroup {
 		album: AlbumItem;
-		songs: SongItem[];
+		songs: Array<SongItem | SongSummaryResponse>;
 	}
 
 	const albumGroups = $derived.by(() => {

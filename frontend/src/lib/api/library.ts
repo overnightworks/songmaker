@@ -1,9 +1,8 @@
 import type {
-	AlbumItem,
+	LibrarySearchResponse,
 	LibraryPoolQueue,
 	PaginatedResponse,
-	ShareInventoryItem,
-	SongItem
+	ShareInventoryItem
 } from './types';
 import { apiFetch } from './fetch';
 import { LIBRARY_QUERY_REQUIRED, LIBRARY_SHARES_PAGE_SIZE } from '$lib/constants';
@@ -15,25 +14,8 @@ const DEFAULT_LIBRARY_POOL: LibraryPoolQueue['pool'] = 'mix';
 
 export type LibrarySort = CreatedSort;
 
-export type LibraryAlbumHit = {
-	type: 'album';
-	album: AlbumItem;
-};
-
-export type LibrarySongHit = {
-	type: 'song';
-	song: SongItem;
-	album_id: string;
-	album_title: string;
-};
-
-export type LibrarySearchHit = LibraryAlbumHit | LibrarySongHit;
-
-export interface LibrarySearchResponse {
-	items: LibrarySearchHit[];
-	next_cursor: string | null;
-	has_more: boolean;
-}
+export type { LibraryAlbumHit, LibrarySearchResponse, LibrarySongHit } from './types';
+export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 
 export interface LibraryListOptions {
 	q?: string;
@@ -57,19 +39,7 @@ export async function searchLibrary(options: {
 		limit: String(options.limit)
 	});
 	if (options.cursor) params.set('cursor', options.cursor);
-	const resp = await apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
-	return {
-		...resp,
-		items: resp.items.map(normalizeHit)
-	};
-}
-
-function normalizeHit(hit: LibrarySearchHit): LibrarySearchHit {
-	if (hit.type === 'album') return hit;
-	return {
-		...hit,
-		song: { ...hit.song, generations: hit.song.generations ?? [] }
-	};
+	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
 }
 
 export async function fetchLibraryPoolQueue(options?: {
