@@ -8,7 +8,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Final
 
 if TYPE_CHECKING:
     import numpy as np
@@ -37,6 +37,8 @@ from songmaker_cli.scoring.registry import (
 )
 
 log = logging.getLogger(__name__)
+
+JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS: Final[int] = 1
 
 __all__ = [
     "DEVICE_CPU",
@@ -216,6 +218,15 @@ class ScorerDependencyUnavailable(Exception):
     Not a failure: the scorer is reported as skipped with this reason, and
     whatever the generation already scored for it stays untouched.
     """
+
+
+def judge_watchdog_timeout(timeout: int) -> int:
+    """Give the outer scorer watchdog room for the Judge to stop itself.
+
+    The provider SDK's httpx timeout applies to individual phases rather than
+    one whole request, so the watchdog is only a final safety boundary.
+    """
+    return timeout + JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS
 
 
 def _call_with_timeout(call: Callable[[], object], timeout: int, name: str) -> object:

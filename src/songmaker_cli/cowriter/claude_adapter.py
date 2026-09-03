@@ -36,7 +36,9 @@ async def stream_claude_turn(
         raise ProviderUnavailableError("claude", str(exc)) from exc
 
 
-def call_claude_once(*, model: str, prompt: str, system: str | None = None) -> str:
+def call_claude_once(
+    *, model: str, prompt: str, timeout: int, system: str | None = None,
+) -> str:
     """Synchronous, tool-free, single-turn completion.
 
     Used by the lyrical-coherence judge (#315), which needs one verdict, not
@@ -49,7 +51,13 @@ def call_claude_once(*, model: str, prompt: str, system: str | None = None) -> s
         if settings.anthropic_api_key else None
     )
     try:
-        response = call_claude(prompt, api_key=api_key, system=system, model=model)
+        response = call_claude(
+            prompt,
+            api_key=api_key,
+            system=system,
+            model=model,
+            timeout_seconds=timeout,
+        )
     except UnavailableError as exc:
         raise ProviderUnavailableError("claude", str(exc)) from exc
     return response.text

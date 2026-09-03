@@ -93,7 +93,12 @@ def call_provider_once(
             provider, f"No model configured for {provider}",
         )
     if provider == "claude":
-        return call_claude_once(model=model, prompt=prompt, system=system)
+        return call_claude_once(
+            model=model,
+            prompt=prompt,
+            timeout=timeout,
+            system=system,
+        )
     if provider == "grok":
         api_key = _require_secret(
             "grok", get_settings().xai_api_key, XAI_API_KEY_ENVIRONMENT,
