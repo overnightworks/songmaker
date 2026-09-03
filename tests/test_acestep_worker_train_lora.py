@@ -2,16 +2,18 @@
 
 The default_train_lora_runner is tested indirectly here; we install a
 fake runner that emits a deterministic progress/done sequence so we can
-assert event ordering and that the cache serialize-lock makes training
-incompatible with concurrent generation on the same subprocess."""
+assert event ordering."""
 
 from __future__ import annotations
 
 import asyncio
+import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
 import fakeredis.aioredis
+import pytest
 from fastapi.testclient import TestClient
 
 from acestep_worker.heartbeat import HeartbeatLoop
@@ -31,8 +33,10 @@ def _run(coro):
 
 def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
     redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    operation_events: list[str] = []
 
     async def loader(mode: str) -> LoadedModel:
+        operation_events.append(f"load_model:{mode}")
         return LoadedModel(mode=mode, handle=f"handle-{mode}", port=8101)
 
     async def unloader(_: LoadedModel) -> None:
@@ -53,8 +57,10 @@ def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
 
     async def fake_train_runner(
         store: TaskStore, task_id: str,
-        *, request: TrainLoraRequest, port: int,
+        *, request: TrainLoraRequest, port: int, checkpoint_dir: Path,
+        training_workspace_dirname: str,
     ) -> None:
+        operation_events.append(f"train_lora:{request.mode}")
         train_events.append(f"start:{port}")
         await store.mark_running(task_id)
         await store.update_progress(task_id, 0.1)
@@ -79,13 +85,16 @@ def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
         checkpoint_dir=tmp_path,
         audio_output_dir=tmp_path / "audio",
         generate_runner=fake_generate_runner,
+        shared_audio_root=tmp_path / "shared",
         train_lora_runner=fake_train_runner if with_train_runner else None,
     )
+    deps.shared_audio_root.mkdir()
     deps.heartbeat = HeartbeatLoop(
         redis=redis, worker_id="w0",
         state_provider=lambda: _state(deps),
     )
     deps._train_events = train_events  # type: ignore[attr-defined]
+    deps._operation_events = operation_events  # type: ignore[attr-defined]
     return deps
 
 
@@ -101,11 +110,17 @@ def _auth_headers() -> dict[str, str]:
 
 def test_train_lora_requires_loaded_mode(tmp_path: Path) -> None:
     deps = _make_deps(tmp_path)
+    dataset_dir = deps.shared_audio_root / "dataset"
+    dataset_dir.mkdir()
     app = create_app(deps)
     with TestClient(app) as client:
         resp = client.post(
             "/tasks/train_lora",
-            json={"mode": "sft", "dataset_dir": "/tmp/d", "output_dir": "/tmp/o"},
+            json={
+                "mode": "sft",
+                "dataset_dir": str(dataset_dir),
+                "output_dir": str(deps.shared_audio_root / "output"),
+            },
             headers=_auth_headers(),
         )
     assert resp.status_code == 409
@@ -113,19 +128,8 @@ def test_train_lora_requires_loaded_mode(tmp_path: Path) -> None:
 
 def test_train_lora_501_when_runner_missing(tmp_path: Path) -> None:
     deps = _make_deps(tmp_path, with_train_runner=False)
-    _run(deps.cache.load("sft"))
-    app = create_app(deps)
-    with TestClient(app) as client:
-        resp = client.post(
-            "/tasks/train_lora",
-            json={"mode": "sft", "dataset_dir": "/tmp/d", "output_dir": "/tmp/o"},
-            headers=_auth_headers(),
-        )
-    assert resp.status_code == 501
-
-
-def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
-    deps = _make_deps(tmp_path)
+    dataset_dir = deps.shared_audio_root / "dataset"
+    dataset_dir.mkdir()
     _run(deps.cache.load("sft"))
     app = create_app(deps)
     with TestClient(app) as client:
@@ -133,8 +137,30 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
             "/tasks/train_lora",
             json={
                 "mode": "sft",
-                "dataset_dir": str(tmp_path / "ds"),
-                "output_dir": str(tmp_path / "out"),
+                "dataset_dir": str(dataset_dir),
+                "output_dir": str(deps.shared_audio_root / "output"),
+            },
+            headers=_auth_headers(),
+        )
+    assert resp.status_code == 501
+
+
+def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
+    deps = _make_deps(tmp_path)
+    dataset_dir = deps.shared_audio_root / "dataset"
+    dataset_dir.mkdir()
+    app = create_app(deps)
+    with TestClient(app) as client:
+        loaded = client.post(
+            "/load_model", json={"mode": "sft"}, headers=_auth_headers(),
+        )
+        assert loaded.status_code == 200
+        resp = client.post(
+            "/tasks/train_lora",
+            json={
+                "mode": "sft",
+                "dataset_dir": str(dataset_dir),
+                "output_dir": str(deps.shared_audio_root / "out"),
             },
             headers=_auth_headers(),
         )
@@ -151,12 +177,14 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
     joined = "".join(events)
     assert "event: done" in joined
     assert "adapter_dir" in joined
+    assert deps._operation_events == [  # type: ignore[attr-defined]
+        "load_model:sft", "train_lora:sft",
+    ]
 
 
 def test_train_lora_pins_mode_from_eviction(tmp_path: Path) -> None:
     """A training task in flight increments the cache's in-use count so
-    the mode is protected from eviction — the same mechanism generation
-    uses to serialize GPU work on the underlying ACE-Step subprocess."""
+    the mode is protected from eviction."""
     deps = _make_deps(tmp_path)
     _run(deps.cache.load("sft"))
 
@@ -164,7 +192,8 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path) -> None:
 
     async def blocking_runner(
         store: TaskStore, task_id: str,
-        *, request: TrainLoraRequest, port: int,
+        *, request: TrainLoraRequest, port: int, checkpoint_dir: Path,
+        training_workspace_dirname: str,
     ) -> None:
         await store.mark_running(task_id)
         await release_event.wait()
@@ -187,7 +216,8 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path) -> None:
         spawn_background(
             blocking_runner(deps.task_store, task_id, request=TrainLoraRequest(
                 mode="sft", dataset_dir="/x", output_dir="/y",
-            ), port=loaded.port),
+            ), port=loaded.port, checkpoint_dir=deps.checkpoint_dir,
+            training_workspace_dirname=deps.training_workspace_dirname),
         )
         await asyncio.sleep(0)
         assert deps.cache._in_use.get("sft", 0) == 1
@@ -215,10 +245,12 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     task_store = TaskStore()
     task_id = _run(task_store.create("train_lora"))
 
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
+    output_dir = tmp_path / "shared" / "out"
     dataset_dir = tmp_path / "ds"
     dataset_dir.mkdir()
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"audio")
+    (dataset_dir / "sample.wav").symlink_to(sample)
 
     request = TrainLoraRequest(
         mode="sft", dataset_dir=str(dataset_dir), output_dir=str(output_dir),
@@ -238,10 +270,34 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
         TrainingStatus(is_training=False, current_epoch=1, current_loss=0.2),
     ])
 
+    calls: list[tuple[str, object]] = []
+
+    def initialize_model(mode: str) -> None:
+        calls.append(("initialize_model", mode))
+
+    def scan_dataset(path: str) -> ScanDatasetResult:
+        staged_sample = Path(path) / "sample.wav"
+        assert staged_sample.read_bytes() == b"audio"
+        assert not staged_sample.is_symlink()
+        calls.append(("scan_dataset", path))
+        return ScanDatasetResult(num_samples=3)
+
+    def export_training(source: str, destination: str) -> ExportResult:
+        calls.append(("export_training", (source, destination)))
+        source_dir = Path(source) / "final"
+        source_dir.mkdir(parents=True)
+        (source_dir / "lokr_weights.safetensors").write_bytes(b"weights")
+        shutil.copytree(source_dir, destination)
+        return ExportResult(export_path=destination, source=str(source_dir))
+
     with (
         patch(
+            "acestep_engine.training_client.AceStepTrainingClient.initialize_model",
+            side_effect=initialize_model,
+        ),
+        patch(
             "acestep_engine.training_client.AceStepTrainingClient.scan_dataset",
-            return_value=ScanDatasetResult(num_samples=3),
+            side_effect=scan_dataset,
         ),
         patch(
             "acestep_engine.training_client.AceStepTrainingClient.start_preprocess",
@@ -254,7 +310,7 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
         patch(
             "acestep_engine.training_client.AceStepTrainingClient.start_lokr",
             return_value=TrainingStartedHandle(
-                tensor_dir=str(output_dir / "tensors"), output_dir=str(output_dir),
+                tensor_dir="unused", output_dir="unused",
             ),
         ),
         patch(
@@ -263,15 +319,14 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
         ),
         patch(
             "acestep_engine.training_client.AceStepTrainingClient.export_training",
-            return_value=ExportResult(
-                export_path=str(output_dir / "final"),
-                source=str(output_dir / "final"),
-            ),
+            side_effect=export_training,
         ),
     ):
         _run(
             default_train_lora_runner(
                 task_store, task_id, request=request, port=8001,
+                checkpoint_dir=tmp_path / "safe-root",
+                training_workspace_dirname="training",
             ),
         )
 
@@ -279,7 +334,18 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     assert snap is not None
     assert snap.state == "done"
     assert snap.result is not None
-    assert snap.result.adapter_dir.endswith("final")
+    assert snap.result.adapter_dir == str(output_dir)
+    assert (output_dir / "lokr_weights.safetensors").read_bytes() == b"weights"
+    assert calls[0] == ("initialize_model", "sft")
+    assert calls[1] == (
+        "scan_dataset",
+        str(tmp_path / "safe-root" / "training" / task_id / "dataset"),
+    )
+    source, destination = calls[-1][1]
+    assert source == str(tmp_path / "safe-root" / "training" / task_id / "output")
+    assert destination == str(tmp_path / "safe-root" / "training" / task_id / "export")
+    assert source != destination
+    assert not (tmp_path / "safe-root" / "training" / task_id).exists()
 
 
 def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> None:
@@ -293,13 +359,17 @@ def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> 
 
     task_store = TaskStore()
     task_id = _run(task_store.create("train_lora"))
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
     request = TrainLoraRequest(
-        mode="sft", dataset_dir=str(tmp_path), output_dir=str(tmp_path / "out"),
+        mode="sft", dataset_dir=str(source_dir), output_dir=str(tmp_path / "out"),
         train_epochs=1, poll_interval_seconds=0.001,
     )
-    (tmp_path / "out").mkdir()
-
     with (
+        patch(
+            "acestep_engine.training_client.AceStepTrainingClient.initialize_model",
+            return_value=None,
+        ),
         patch(
             "acestep_engine.training_client.AceStepTrainingClient.scan_dataset",
             return_value=ScanDatasetResult(num_samples=3),
@@ -323,11 +393,14 @@ def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> 
         _run(
             default_train_lora_runner(
                 task_store, task_id, request=request, port=8001,
+                checkpoint_dir=tmp_path / "safe-root",
+                training_workspace_dirname="training",
             ),
         )
     snap = _run(task_store.get(task_id))
     assert snap.state == "error"
     assert "OOM" in (snap.error or "")
+    assert not (tmp_path / "safe-root" / "training" / task_id).exists()
 
 
 def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None:
@@ -337,13 +410,17 @@ def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None
 
     task_store = TaskStore()
     task_id = _run(task_store.create("train_lora"))
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
     request = TrainLoraRequest(
-        mode="sft", dataset_dir=str(tmp_path), output_dir=str(tmp_path / "out"),
+        mode="sft", dataset_dir=str(source_dir), output_dir=str(tmp_path / "out"),
         train_epochs=1, poll_interval_seconds=0.001,
     )
-    (tmp_path / "out").mkdir()
-
     with (
+        patch(
+            "acestep_engine.training_client.AceStepTrainingClient.initialize_model",
+            return_value=None,
+        ),
         patch(
             "acestep_engine.training_client.AceStepTrainingClient.scan_dataset",
             return_value=ScanDatasetResult(num_samples=0),
@@ -356,7 +433,121 @@ def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None
         _run(
             default_train_lora_runner(
                 task_store, task_id, request=request, port=8001,
+                checkpoint_dir=tmp_path / "safe-root",
+                training_workspace_dirname="training",
             ),
         )
     snap = _run(task_store.get(task_id))
     assert snap.state == "error"
+
+
+@pytest.mark.parametrize(
+    "invalid_path",
+    [
+        "outside_dataset",
+        "parent_escape",
+        "absolute_output",
+        "dataset_symlink",
+        "output_symlink",
+        "existing_output",
+    ],
+)
+def test_train_lora_rejects_unsafe_shared_paths_before_creating_task(
+    tmp_path: Path, invalid_path: str,
+) -> None:
+    deps = _make_deps(tmp_path)
+    dataset_dir = deps.shared_audio_root / "dataset"
+    dataset_dir.mkdir()
+    outside_dataset = tmp_path / "outside-dataset"
+    outside_dataset.mkdir()
+    dataset_symlink = deps.shared_audio_root / "dataset-link"
+    dataset_symlink.symlink_to(dataset_dir, target_is_directory=True)
+    output_symlink = deps.shared_audio_root / "output-link"
+    output_symlink.symlink_to(deps.shared_audio_root / "target")
+
+    dataset_path = dataset_dir
+    output_path = deps.shared_audio_root / "output"
+    if invalid_path == "outside_dataset":
+        dataset_path = outside_dataset
+    elif invalid_path == "parent_escape":
+        output_path = deps.shared_audio_root / "dataset" / ".." / ".." / "outside-output"
+    elif invalid_path == "absolute_output":
+        output_path = tmp_path / "outside-output"
+    elif invalid_path == "dataset_symlink":
+        dataset_path = dataset_symlink
+    elif invalid_path == "existing_output":
+        output_path.mkdir()
+    else:
+        output_path = output_symlink
+
+    _run(deps.cache.load("sft"))
+    app = create_app(deps)
+    with TestClient(app) as client:
+        response = client.post(
+            "/tasks/train_lora",
+            json={
+                "mode": "sft",
+                "dataset_dir": str(dataset_path),
+                "output_dir": str(output_path),
+            },
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 422
+    assert _run(deps.task_store.size()) == 0
+    assert getattr(deps, "_operation_events") == ["load_model:sft"]
+
+
+def test_cancellation_waits_for_staging_copy_before_workspace_cleanup(
+    tmp_path: Path,
+) -> None:
+    from unittest.mock import patch
+
+    task_store = TaskStore()
+    task_id = _run(task_store.create("train_lora"))
+    shared_root = tmp_path / "shared"
+    dataset_dir = shared_root / "dataset"
+    dataset_dir.mkdir(parents=True)
+    request = TrainLoraRequest(
+        mode="sft",
+        dataset_dir=str(dataset_dir),
+        output_dir=str(shared_root / "training_tmp"),
+        train_epochs=1,
+        poll_interval_seconds=0.001,
+    )
+    copy_started = threading.Event()
+    copy_release = threading.Event()
+    workspace = tmp_path / "safe-root" / "training" / task_id
+
+    def blocking_copytree(source, destination, *, symlinks):
+        copy_started.set()
+        copy_release.wait()
+        return destination
+
+    async def cancel_during_copy() -> None:
+        runner = asyncio.create_task(default_train_lora_runner(
+            task_store,
+            task_id,
+            request=request,
+            port=8001,
+            checkpoint_dir=tmp_path / "safe-root",
+            training_workspace_dirname="training",
+        ))
+        await asyncio.to_thread(copy_started.wait)
+        runner.cancel()
+        await asyncio.sleep(0)
+        assert workspace.exists()
+        copy_release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await runner
+
+    with patch(
+        "acestep_worker.wrapper.shutil.copytree",
+        side_effect=blocking_copytree,
+    ), patch(
+        "acestep_engine.training_client.AceStepTrainingClient.stop_training",
+        return_value=None,
+    ):
+        _run(cancel_during_copy())
+
+    assert not workspace.exists()

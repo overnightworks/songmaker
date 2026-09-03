@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -50,6 +51,10 @@ from acestep_worker.models import (
     WorkerTaskEvent,
 )
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
+from acestep_worker.settings import (
+    DEFAULT_SHARED_AUDIO_ROOT,
+    DEFAULT_TRAINING_WORKSPACE_DIRNAME,
+)
 from acestep_worker.subprocess_runner import SubprocessStartError
 from acestep_worker.task_store import TaskStore
 
@@ -71,6 +76,8 @@ class WorkerDeps:
     checkpoint_dir: Path
     audio_output_dir: Path
     generate_runner: GenerateRunner
+    shared_audio_root: Path = Path(DEFAULT_SHARED_AUDIO_ROOT)
+    training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     train_lora_runner: TrainLoraRunner | None = None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
@@ -241,6 +248,12 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post("/tasks/train_lora", response_model=TaskCreatedResponse)
     async def train_lora(req: TrainLoraRequest) -> TaskCreatedResponse:
+        try:
+            validated_request = _validate_train_lora_request(
+                req, deps.shared_audio_root,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         if deps.train_lora_runner is None:
             raise HTTPException(
                 status_code=501,
@@ -263,8 +276,10 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 await deps.train_lora_runner(
                     deps.task_store,
                     task_id,
-                    request=req,
+                    request=validated_request,
                     port=loaded.port,
+                    checkpoint_dir=deps.checkpoint_dir,
+                    training_workspace_dirname=deps.training_workspace_dirname,
                 )
             finally:
                 await deps.cache.release(req.mode)
@@ -350,6 +365,8 @@ async def default_train_lora_runner(
     *,
     request: TrainLoraRequest,
     port: int,
+    checkpoint_dir: Path,
+    training_workspace_dirname: str,
 ) -> None:
     from acestep_engine.models import LoraTrainingConfig
     from acestep_engine.training_client import (
@@ -361,17 +378,29 @@ async def default_train_lora_runner(
 
     await task_store.mark_running(task_id)
     client = AceStepTrainingClient(host="http://127.0.0.1", port=port)
-    tensor_dir = str(Path(request.output_dir) / "tensors")
-    loop = asyncio.get_running_loop()
+    workspace = checkpoint_dir / training_workspace_dirname / task_id
+    dataset_dir = workspace / "dataset"
+    output_dir = workspace / "output"
+    export_dir = workspace / "export"
 
     try:
-        scan_result = await asyncio.to_thread(client.scan_dataset, request.dataset_dir)
+        source_dataset_dir = Path(request.dataset_dir)
+        requested_output_dir = Path(request.output_dir)
+        if workspace.is_relative_to(source_dataset_dir):
+            raise ValueError(
+                f"LoRA workspace must not be nested in dataset: {source_dataset_dir}",
+            )
+        await asyncio.to_thread(shutil.rmtree, workspace, ignore_errors=True)
+        await asyncio.to_thread(workspace.mkdir, parents=True, exist_ok=True)
+        await _copytree_before_cleanup(source_dataset_dir, dataset_dir)
+        await asyncio.to_thread(client.initialize_model, request.mode)
+        scan_result = await asyncio.to_thread(client.scan_dataset, str(dataset_dir))
         await task_store.update_progress(task_id, 0.02)
         if scan_result.num_samples == 0:
-            raise RuntimeError(f"Dataset scan found 0 samples in {request.dataset_dir}")
+            raise RuntimeError(f"Dataset scan found 0 samples in {dataset_dir}")
 
         preprocess_handle = await asyncio.to_thread(
-            client.start_preprocess, tensor_dir,
+            client.start_preprocess, str(output_dir / "tensors"),
         )
         await task_store.update_progress(task_id, 0.05)
 
@@ -389,8 +418,8 @@ async def default_train_lora_runner(
                 raise RuntimeError(f"Preprocess failed: {status.error or status.progress}")
 
         lokr_config = LoraTrainingConfig(
-            tensor_dir=tensor_dir,
-            output_dir=request.output_dir,
+            tensor_dir=str(output_dir / "tensors"),
+            output_dir=str(output_dir),
             lokr_linear_dim=request.lokr_linear_dim,
             lokr_linear_alpha=request.lokr_linear_alpha,
             lokr_factor=request.lokr_factor,
@@ -425,20 +454,30 @@ async def default_train_lora_runner(
             if not training_status.is_training:
                 break
 
-        adapter_dir = str(Path(request.output_dir) / "final")
         export_result = await asyncio.to_thread(
-            client.export_training, request.output_dir, adapter_dir,
+            client.export_training, str(output_dir), str(export_dir),
         )
+        if Path(export_result.source).resolve() != (output_dir / "final").resolve():
+            raise RuntimeError(
+                f"ACE-Step exported an unexpected source: {export_result.source}",
+            )
+        if Path(export_result.export_path).resolve() != export_dir.resolve():
+            raise RuntimeError(
+                f"ACE-Step exported to an unexpected path: {export_result.export_path}",
+            )
+        if not export_dir.is_dir():
+            raise RuntimeError(f"ACE-Step export is missing: {export_dir}")
+        await asyncio.to_thread(requested_output_dir.parent.mkdir, parents=True, exist_ok=True)
+        await _copytree_before_cleanup(export_dir, requested_output_dir)
         await task_store.update_progress(task_id, 0.99)
 
         payload = TrainLoraTaskResult(
             mode=request.mode,
-            adapter_dir=export_result.export_path,
+            adapter_dir=str(requested_output_dir),
             num_samples=scan_result.num_samples,
             final_loss=final_loss,
         )
         await task_store.complete(task_id, payload)
-        del loop
     except asyncio.CancelledError:
         try:
             await asyncio.to_thread(client.stop_training)
@@ -453,6 +492,53 @@ async def default_train_lora_runner(
         except Exception:
             log.debug("Best-effort stop_training failed", exc_info=True)
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
+    finally:
+        try:
+            await asyncio.to_thread(shutil.rmtree, workspace)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            log.exception("Failed to remove LoRA training workspace %s", workspace)
+
+
+def _validate_train_lora_request(
+    request: TrainLoraRequest, shared_audio_root: Path,
+) -> TrainLoraRequest:
+    dataset_dir = _shared_audio_path(request.dataset_dir, shared_audio_root, "dataset")
+    output_dir = _shared_audio_path(request.output_dir, shared_audio_root, "output")
+    return request.model_copy(update={
+        "dataset_dir": str(dataset_dir),
+        "output_dir": str(output_dir),
+    })
+
+
+def _shared_audio_path(path: str, root: Path, kind: str) -> Path:
+    candidate = Path(path)
+    if candidate.is_symlink():
+        raise ValueError(f"LoRA {kind} path must not be a symlink: {candidate}")
+    resolved_root = root.resolve()
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(resolved_root):
+        raise ValueError(f"LoRA {kind} path is outside shared audio root: {candidate}")
+    if kind == "dataset" and not resolved.is_dir():
+        raise ValueError(f"LoRA dataset path is not a directory: {candidate}")
+    if kind == "output" and (resolved == resolved_root or resolved.exists()):
+        raise ValueError(f"LoRA output path must be a new shared directory: {candidate}")
+    return resolved
+
+
+async def _copytree_before_cleanup(source: Path, destination: Path) -> None:
+    copy_task = asyncio.create_task(
+        asyncio.to_thread(shutil.copytree, source, destination, symlinks=False),
+    )
+    try:
+        await asyncio.shield(copy_task)
+    except asyncio.CancelledError:
+        try:
+            await asyncio.shield(copy_task)
+        except Exception:
+            log.exception("LoRA copy failed while cancellation was pending")
+        raise
 
 
 async def default_generate_runner(

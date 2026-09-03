@@ -57,6 +57,10 @@ class TrainLoraTaskResultDTO(BaseModel):
     final_loss: float | None = None
 
 
+class PreviousAdapterRestoredError(RuntimeError):
+    pass
+
+
 @dataclass
 class _WorkerHandle:
     base_url: str
@@ -126,6 +130,15 @@ async def _pick_and_call_worker(
         worker = await pick_worker(session, redis, target_mode)
 
     headers = _internal_headers()
+    load_options = DispatchOptions()
+    async with httpx.AsyncClient(timeout=load_options.load_model_timeout_seconds) as client:
+        load = await client.post(
+            f"{worker.base_url}/load_model",
+            json={"mode": target_mode},
+            headers=headers,
+        )
+        load.raise_for_status()
+
     async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
         submit = await client.post(
             f"{worker.base_url}/tasks/train_lora",
@@ -173,7 +186,7 @@ def _validate_export_path(
     """Reject paths that do not live inside the user's LoRA dir."""
     user_root = (audio_dir / USER_LORAS_DIRNAME / user_id).resolve()
     resolved = Path(reported).resolve()
-    if not str(resolved).startswith(str(user_root) + os.sep) and resolved != user_root:
+    if resolved == user_root or not resolved.is_relative_to(user_root):
         raise ValueError(
             f"Worker-reported export path escapes user dir: {reported}",
         )
@@ -187,7 +200,6 @@ def _cleanup_failed_lora_paths(
     removed_cleanly = True
     for path in (
         _dataset_dir(audio_dir, user_id, lora_id),
-        _output_dir(audio_dir, user_id, lora_id),
         _tmp_training_dir(audio_dir, user_id, lora_id),
     ):
         try:
@@ -197,6 +209,22 @@ def _cleanup_failed_lora_paths(
             removed_cleanly = False
             log.exception("Failed to remove %s during LoRA cleanup", path)
     return removed_cleanly
+
+
+def _recover_complete_lora_adapter(
+    audio_dir: Path, user_id: str, lora_id: str,
+) -> bool:
+    final_dir = _output_dir(audio_dir, user_id, lora_id)
+    previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
+    if not previous_dir.exists():
+        return final_dir.is_dir()
+    if final_dir.exists():
+        if not final_dir.is_dir():
+            raise RuntimeError(f"LoRA adapter path is not a directory: {final_dir}")
+        shutil.rmtree(previous_dir)
+    else:
+        os.rename(previous_dir, final_dir)
+    return final_dir.is_dir()
 
 
 def cleanup_failed_lora(
@@ -296,7 +324,7 @@ def _audit_failed_lora_cleanup(
 def reconcile_crashed_loras(
     db_factory: sessionmaker[Session], audio_dir: Path,
 ) -> int:
-    """Fail terminal-job LoRAs one locked row and transaction at a time."""
+    """Reconcile terminal-job LoRAs one locked row and transaction at a time."""
     reconciled = 0
     excluded_ids: set[str] = set()
     error_message = "Training crashed or was interrupted"
@@ -304,6 +332,7 @@ def reconcile_crashed_loras(
     while True:
         lora_id: str | None = None
         user_id: str | None = None
+        recovered_adapter = False
         try:
             with db_factory() as session:
                 candidates = list_active_user_loras(
@@ -317,12 +346,39 @@ def reconcile_crashed_loras(
                 lora = candidates[0]
                 lora_id = lora.id
                 user_id = lora.user_id
-                cleanup_failed_lora(
-                    session=session,
-                    lora_id=lora_id,
-                    user_id=user_id,
-                    error_message=error_message,
+                recovered_adapter = _recover_complete_lora_adapter(
+                    audio_dir, user_id, lora_id,
                 )
+                if recovered_adapter:
+                    storage_rel = str(
+                        Path(USER_LORAS_DIRNAME)
+                        / user_id
+                        / lora_id
+                        / USER_LORA_OUTPUT_DIRNAME,
+                    )
+                    update_user_lora(
+                        session,
+                        lora_id,
+                        status=LoraStatus.READY,
+                        storage_path=storage_rel,
+                        completed_at=datetime.now(timezone.utc),
+                        clear_error=True,
+                    )
+                    record_audit(
+                        session,
+                        user_id,
+                        AuditAction.TRAIN_LORA,
+                        ResourceType.LORA,
+                        lora_id,
+                        "ready: recovered complete adapter after interrupted training",
+                    )
+                else:
+                    cleanup_failed_lora(
+                        session=session,
+                        lora_id=lora_id,
+                        user_id=user_id,
+                        error_message=error_message,
+                    )
                 session.commit()
         except Exception:
             if lora_id is None:
@@ -403,7 +459,6 @@ async def run_lora_training_job(
         tmp_output = _tmp_training_dir(audio_dir, user_id, lora_id)
         if tmp_output.exists():
             shutil.rmtree(tmp_output)
-        tmp_output.mkdir(parents=True, exist_ok=True)
 
         last_update = 0.0
         last_status_name: str = LoraStatus.PREPROCESSING
@@ -466,15 +521,38 @@ async def run_lora_training_job(
             )
 
         final_dir = _output_dir(audio_dir, user_id, lora_id)
-        if final_dir.exists():
-            shutil.rmtree(final_dir)
+        if adapter_src != tmp_output.resolve():
+            raise RuntimeError(
+                f"Worker reported unexpected training handoff path: {adapter_src}",
+            )
+        if not adapter_src.is_dir():
+            raise RuntimeError(
+                f"Worker reported adapter at {adapter_src} but it is not a directory",
+            )
         final_dir.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(adapter_src), str(final_dir))
-
+        previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
+        if previous_dir.exists():
+            raise RuntimeError(
+                f"Previous LoRA adapter handoff is still pending at {previous_dir}",
+            )
+        if final_dir.exists():
+            if not final_dir.is_dir():
+                raise RuntimeError(f"LoRA adapter path is not a directory: {final_dir}")
+            os.rename(final_dir, previous_dir)
         try:
-            shutil.rmtree(tmp_output)
-        except OSError:
-            log.warning("Failed to remove tmp training dir %s", tmp_output)
+            os.rename(tmp_output, final_dir)
+        except OSError as exc:
+            if not final_dir.exists() and previous_dir.is_dir():
+                os.rename(previous_dir, final_dir)
+                raise PreviousAdapterRestoredError(
+                    "Failed to replace LoRA adapter; restored the previous adapter",
+                ) from exc
+            raise
+        if previous_dir.exists():
+            try:
+                shutil.rmtree(previous_dir)
+            except OSError:
+                log.exception("Failed to remove previous LoRA adapter %s", previous_dir)
         try:
             shutil.rmtree(dataset_dir)
         except OSError:
@@ -513,6 +591,30 @@ async def run_lora_training_job(
             error_type="timeout",
         )
         raise
+    except PreviousAdapterRestoredError as exc:
+        log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
+        if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
+            _audit_failed_lora_cleanup(db_factory, audio_dir)
+        storage_rel = str(
+            Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
+        )
+        with db_factory() as session:
+            update_user_lora(
+                session, lora_id,
+                status=LoraStatus.READY,
+                storage_path=storage_rel,
+                clear_error=True,
+            )
+            record_audit(
+                session, user_id, AuditAction.TRAIN_LORA,
+                ResourceType.LORA, lora_id,
+                "ready: retained previous adapter after failed replacement",
+            )
+            session.commit()
+        _update_job(
+            db_factory, job_id, JobStatus.FAILED,
+            error=_sanitize_error(exc), error_type="lora_training_error",
+        )
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
         cleanup_failed_lora_with_factory(

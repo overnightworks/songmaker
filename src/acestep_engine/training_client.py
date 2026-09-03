@@ -26,6 +26,7 @@ from urllib.request import Request, urlopen
 from pydantic import BaseModel, Field
 from pydantic import ValidationError as PydanticValidationError
 
+from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_engine.errors import AceStepError
 from acestep_engine.models import LoraTrainingConfig
 from acestep_engine.settings import get_engine_settings
@@ -131,6 +132,11 @@ class _ExportRequestPayload(BaseModel):
     lora_output_dir: str
 
 
+class _InitializeModelRequestPayload(BaseModel):
+    model: str
+    init_llm: bool = False
+
+
 def _default_base_url() -> str:
     settings = get_engine_settings()
     return f"{settings.acestep_host}:{settings.acestep_port}"
@@ -140,6 +146,10 @@ def _unwrap_data(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise TrainingResponseError(
             f"ACE-Step training response was not a JSON object: got {type(raw).__name__}",
+        )
+    if raw.get("code", 200) != 200:
+        raise TrainingResponseError(
+            f"ACE-Step training request failed: {raw.get('error', raw)}",
         )
     if "data" in raw and isinstance(raw["data"], dict):
         return raw["data"]
@@ -211,6 +221,18 @@ class AceStepTrainingClient:
             dataset_json_path=str(data.get("dataset_json_path", "")),
             message=str(data.get("message", "")),
         )
+
+    def initialize_model(self, mode: str) -> None:
+        try:
+            model = MODEL_CONFIG_PATHS[mode]
+        except KeyError as exc:
+            raise TrainingResponseError(f"Unknown ACE-Step mode: {mode}") from exc
+        payload = _InitializeModelRequestPayload(model=model).model_dump()
+        data = self._request_json("/v1/init", payload)
+        if data.get("loaded_model") != model:
+            raise TrainingResponseError(
+                f"ACE-Step model initialization failed for {model}: {data.get('error', data)}",
+            )
 
     def start_preprocess(
         self, tensor_dir: str, *, skip_existing: bool = False,

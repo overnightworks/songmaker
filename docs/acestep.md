@@ -53,6 +53,19 @@ scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
     → BPM, silence, spectral, text accuracy, aesthetics
 ```
 
+### LoRA training handoff
+
+A LoRA job explicitly loads its selected mode (normally `sft`) before it
+submits training. The worker then initializes the Fork with that mode's
+canonical model name before scanning the dataset. It physically stages the
+dataset inside the Fork's safe root, trains there, and exports from the final
+training output into a separate export directory. Only the exported adapter is
+copied back through the shared training handoff directory; the product job
+moves it to `user_loras/<user>/<id>/lora/` and marks the LoRA ready. The worker
+removes its workspace after success, failure, or cancellation when `rmtree`
+succeeds. A `SIGKILL` can leave `/opt/acestep/training/<id>` in the container
+layer; the product job removes the shared `training_tmp` handoff directory.
+
 **Auto-scoring (issue #222).** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
 from the generation job's own success path. This job is created with

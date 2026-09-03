@@ -38,6 +38,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     worker_host = settings.worker_host or worker_id
     checkpoint_dir = Path(settings.acestep_checkpoint_dir)
     audio_dir = Path(settings.audio_output_dir)
+    shared_audio_root = Path(settings.shared_audio_root)
     log_dir = Path(settings.acestep_log_dir)
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
@@ -79,6 +80,8 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         registration=None,
         checkpoint_dir=checkpoint_dir,
         audio_output_dir=audio_dir,
+        shared_audio_root=shared_audio_root,
+        training_workspace_dirname=settings.acestep_training_workspace_dirname,
         generate_runner=default_generate_runner,
         train_lora_runner=default_train_lora_runner,
         gpu_health_checker=lambda: check_gpu_health(settings.gpu_id or 0),

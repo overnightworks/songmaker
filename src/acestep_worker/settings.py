@@ -19,6 +19,9 @@ from functools import lru_cache
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
+DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
+
 
 class WorkerSettings(BaseSettings):
     """Validated settings for the acestep-worker container."""
@@ -36,6 +39,8 @@ class WorkerSettings(BaseSettings):
     vram_budget_gb: float = 24.0
     acestep_checkpoint_dir: str = "/opt/acestep"
     audio_output_dir: str = "/app/data/audio/worker_output"
+    shared_audio_root: str = DEFAULT_SHARED_AUDIO_ROOT
+    acestep_training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     acestep_log_dir: str = "/opt/acestep/logs"
     acestep_inner_port: int = 8101
     control_plane_url: str | None = None

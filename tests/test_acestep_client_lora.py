@@ -10,6 +10,7 @@ from conftest import mock_http_response
 
 from acestep_engine.client import AceStepClient
 from acestep_engine.models import AceStepConfig, AceStepResult
+from acestep_engine.training_client import AceStepTrainingClient, TrainingResponseError
 
 
 def _config(lora_path: str = "") -> AceStepConfig:
@@ -169,6 +170,46 @@ def test_unload_lora_sends_post() -> None:
         client._unload_lora_best_effort()
     assert "/v1/lora/unload" in captured["url"]
     assert captured["method"] == "POST"
+
+
+def test_training_model_initialization_uses_canonical_mode_payload() -> None:
+    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    captured: dict = {}
+
+    def capture(req, timeout):
+        captured["url"] = req.full_url
+        captured["body"] = json.loads(req.data)
+        return mock_http_response(b'{"data":{"loaded_model":"acestep-v15-sft"}}')
+
+    with patch("acestep_engine.training_client.urlopen", side_effect=capture):
+        client.initialize_model("sft")
+
+    assert captured["url"].endswith("/v1/init")
+    assert captured["body"] == {"model": "acestep-v15-sft", "init_llm": False}
+
+
+def test_training_model_initialization_rejects_wrapped_fork_error() -> None:
+    client = AceStepTrainingClient(host="http://localhost", port=8001)
+
+    with patch(
+        "acestep_engine.training_client.urlopen",
+        return_value=mock_http_response(b'{"data":null,"code":500,"error":"boom"}'),
+    ):
+        with pytest.raises(TrainingResponseError, match="boom"):
+            client.initialize_model("sft")
+
+
+def test_training_client_preserves_fork_safe_path_rejection() -> None:
+    client = AceStepTrainingClient(host="http://localhost", port=8001)
+
+    with patch(
+        "acestep_engine.training_client.urlopen",
+        return_value=mock_http_response(
+            b'{"data":null,"code":400,"error":"Rejected unsafe directory path"}',
+        ),
+    ):
+        with pytest.raises(TrainingResponseError, match="Rejected unsafe directory path"):
+            client.scan_dataset("/outside-the-safe-root")
 
 
 def _fake_poll_result():
