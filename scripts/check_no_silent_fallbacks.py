@@ -37,7 +37,8 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
   on domain variables hide config drift.
 * W4 — ``Optional`` on timestamp fields lies about non-null DB columns.
 * getattr with a literal default invents a value the code cannot know.
-  No default, a named constant, or ``None`` is honest.
+  No default, a named constant, or ``None`` is honest. Calls such as
+  ``set()`` and ``frozenset()`` are intentionally not literals.
 * Engine isolation — ``acestep_engine`` / ``audio_engine`` /
   ``acestep_worker`` must never import from ``songmaker_cli`` (the
   dependency flows one way; violating this crashed the worker container
