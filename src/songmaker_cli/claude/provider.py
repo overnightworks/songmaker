@@ -846,10 +846,6 @@ _tool_surface_inflight_sync: dict[
     _ToolSurfaceKey, concurrent.futures.Future[_ToolSurfaceMismatch]
 ] = {}
 
-# The process-pool reservations are process-wide and shared by probes and real
-# turns — their own lock, since probes touch them from plain threads as well
-# as the event loop and must never be entangled with the tool-surface dicts'
-# lock.
 @dataclass(eq=False)
 class _ZombieReservation:
     """A pool slot before it is bound to the spawned process's PID."""
@@ -857,6 +853,10 @@ class _ZombieReservation:
     pid: int | None = None
 
 
+# The process-pool reservations are process-wide and shared by probes and real
+# turns — their own lock, since probes touch them from plain threads as well
+# as the event loop and must never be entangled with the tool-surface dicts'
+# lock.
 _zombie_registry_lock = threading.Lock()
 _zombie_reap_reservations: set[_ZombieReservation] = set()
 _zombie_reap_tasks: set[asyncio.Task] = set()
@@ -1726,8 +1726,6 @@ def _bind_zombie_reservation(reservation: _ZombieReservation, pid: int | None) -
         raise ValueError("Cannot bind a Claude CLI process reservation without a PID")
     with _zombie_registry_lock:
         reservation.pid = pid
-        # A test fixture may clear the registry while Popen is still returning.
-        # Re-adding this handle keeps that successfully spawned process reaped.
         _zombie_reap_reservations.add(reservation)
 
 
