@@ -280,7 +280,9 @@ async def api_generate_song(
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song_id)
+    job = create_job_with_rate_limit(
+        session, user, JobType.GENERATE, song_id=song_id, redis=ctx.redis,
+    )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
         song_id, f"count={req.count}",
@@ -373,7 +375,9 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song.id)
+    job = create_job_with_rate_limit(
+        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+    )
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
@@ -445,7 +449,9 @@ async def api_cover_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, JobType.GENERATE, song_id=song.id)
+    job = create_job_with_rate_limit(
+        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+    )
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",
@@ -499,7 +505,7 @@ async def api_score_generation(
     check_redis_health(request)
     check_generation_access(session, gen_id, user)
 
-    job = create_job_with_rate_limit(session, user, JobType.SCORE)
+    job = create_job_with_rate_limit(session, user, JobType.SCORE, redis=ctx.redis)
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
 
