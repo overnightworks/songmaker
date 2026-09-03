@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
+const mockClassifyAuthFailure = vi.hoisted(() => vi.fn());
+
 vi.mock('$lib/stores/auth', () => {
 	let user: { id: string } | null = null;
 	const subscribers = new Set<(value: typeof user) => void>();
@@ -15,12 +17,16 @@ vi.mock('$lib/stores/auth', () => {
 			subscribers.forEach((fn) => fn(user));
 		}
 	};
-	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+	return {
+		clearAuth: vi.fn(() => currentUser.set(null)),
+		classifyAuthFailure: mockClassifyAuthFailure,
+		currentUser
+	};
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { ApiError } from '$lib/api/fetch';
-import { clearAuth, currentUser } from '$lib/stores/auth';
+import { classifyAuthFailure, clearAuth, currentUser } from '$lib/stores/auth';
 import { goto } from '$app/navigation';
 import type {
 	AuthUser,
@@ -30,7 +36,6 @@ import type {
 } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
@@ -38,6 +43,7 @@ import {
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
+import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
@@ -272,6 +278,12 @@ function latestSource(sources: MockEventSource[]): MockEventSource {
 
 beforeEach(() => {
 	MockEventSource.instances = [];
+	mockClassifyAuthFailure.mockReset();
+	mockClassifyAuthFailure.mockImplementation((error: { status?: unknown }) => {
+		if (error.status === 401) return 'unauthorized';
+		if (error.status === 403) return 'disabled';
+		return 'retryable';
+	});
 });
 
 afterEach(() => {
@@ -541,7 +553,7 @@ describe('resource sync owner', () => {
 		await flush();
 		expect(source.closed).toBe(true);
 		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+		expect(get(store).error).toBe(AUTH_ACCOUNT_DISABLED_MESSAGE);
 		expect(onUnauthorized).not.toHaveBeenCalled();
 	});
 
@@ -857,19 +869,14 @@ function stubFetchOnce(status: number) {
 }
 
 describe('probeResourceAuth', () => {
-	it('classifies 403 as a disabled account, distinct from an expired session', async () => {
-		stubFetchOnce(403);
-		expect(await probeResourceAuth()).toBe('disabled');
-	});
-
-	it('classifies 401 as an expired session', async () => {
-		stubFetchOnce(401);
-		expect(await probeResourceAuth()).toBe('unauthorized');
-	});
-
-	it('classifies any other failure as retryable', async () => {
-		stubFetchOnce(500);
-		expect(await probeResourceAuth()).toBe('retryable');
+	it.each([
+		[403, 'disabled'],
+		[401, 'unauthorized'],
+		[500, 'retryable']
+	] as const)('uses the shared classifier for a %i auth probe', async (status, expected) => {
+		stubFetchOnce(status);
+		expect(await probeResourceAuth()).toBe(expected);
+		expect(classifyAuthFailure).toHaveBeenCalledOnce();
 	});
 });
 

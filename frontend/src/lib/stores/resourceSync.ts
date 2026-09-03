@@ -14,12 +14,12 @@ import {
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
+import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
 	applySyncedSong,
@@ -30,6 +30,7 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
+import { classifyAuthFailure } from '$lib/stores/auth';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
 export type ResourceSyncStatus =
@@ -338,12 +339,12 @@ export class ResourceSyncController {
 		const source = this.source;
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
+		// Not a session loss (issue #385 finding 2): the account exists and is still logged in,
+		// an admin disabled it, so this must not read as "sign in again" -- that would only fail
+		// the same way.
 		if (result === 'disabled') {
-			// A 403 here means the account itself was disabled, not that the
-			// session died -- signing in again would fail the same way, so this
-			// must not run the session-lost redirect (finding 2).
 			this.teardown({ resetStore: false });
-			this.setVisibleError(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
+			this.setVisibleError(AUTH_ACCOUNT_DISABLED_MESSAGE);
 			this.resolveReady(false);
 			return;
 		}
@@ -696,10 +697,8 @@ export async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 		await fetchMe();
 		return 'ok';
 	} catch (err) {
-		if (!(err instanceof ApiError)) return 'retryable';
-		if (err.status === 403) return 'disabled';
-		if (err.status === 401) return 'unauthorized';
-		return 'retryable';
+		const failure = classifyAuthFailure(err);
+		return failure === 'retryable' ? 'retryable' : failure;
 	}
 }
 

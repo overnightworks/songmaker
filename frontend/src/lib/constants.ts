@@ -397,10 +397,6 @@ export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = 'Library sync failed';
-// Not a session loss (issue #385 finding 2): the account exists and is
-// still logged in, an admin disabled it, so this must not read as "sign in
-// again" -- that would only fail the same way.
-export const RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR = 'Your account has been disabled.';
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
