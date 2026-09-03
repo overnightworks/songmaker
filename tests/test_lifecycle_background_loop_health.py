@@ -195,6 +195,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         BackgroundLoopName.RESOURCE_EVENT_CLEANUP: BackgroundLoopStatus.OK,
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,
         BackgroundLoopName.STALE_JOB_REAPER: BackgroundLoopStatus.OK,
+        BackgroundLoopName.PROVIDER_STATUS_REFRESH: BackgroundLoopStatus.OK,
     }
 
 
@@ -209,3 +210,63 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
         health.status is BackgroundLoopStatus.OK
         for health in registry.loop_health().values()
     )
+
+
+def test_provider_status_loop_fills_snapshots_and_is_healthy(
+    tmp_path, monkeypatch, mock_arq_pool,
+) -> None:
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from songmaker_cli.cowriter.catalog import (
+        ConfiguredProvider,
+        ProviderSetupMethod,
+        provider_snapshot,
+    )
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._refresh_cli_login", lambda _provider: None)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        lambda provider, _surface: ConfiguredProvider(
+            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
+        ),
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda provider: [f"{provider}-model"],
+    )
+    client, _ = make_test_app(tmp_path)
+
+    with client:
+        client.portal.call(asyncio.sleep, 0)
+        health = client.get("/health").json()["background_loops"]
+
+    assert all(provider_snapshot(provider) is not None for provider in COWRITER_PROVIDERS)
+    assert health[BackgroundLoopName.PROVIDER_STATUS_REFRESH]["state"] == BackgroundLoopStatus.OK
+
+
+def test_provider_status_loop_marks_the_sweep_failed_but_continues_refreshing(
+    monkeypatch,
+) -> None:
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+
+    registry = BackgroundLoopRegistry()
+    app = SimpleNamespace(state=SimpleNamespace(background_loop_registry=registry))
+    refreshed: list[str] = []
+
+    async def refresh(_function, provider: str) -> None:
+        refreshed.append(provider)
+        if provider == "grok":
+            raise RuntimeError("grok unavailable")
+
+    async def stop_after_sweep(_seconds: float) -> None:
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(lifecycle.asyncio, "to_thread", refresh)
+    monkeypatch.setattr(lifecycle.asyncio, "sleep", stop_after_sweep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(lifecycle.provider_status_refresh_loop(app))
+
+    health = registry.loop_health()[BackgroundLoopName.PROVIDER_STATUS_REFRESH]
+    assert refreshed == list(COWRITER_PROVIDERS)
+    assert health.consecutive_failures == 1
+    assert health.last_error == "RuntimeError"

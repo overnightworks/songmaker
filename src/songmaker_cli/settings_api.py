@@ -85,7 +85,7 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
 
 if TYPE_CHECKING:
-    from songmaker_cli.cowriter.catalog import ProviderSurface
+    from songmaker_cli.cowriter.catalog import ProviderSnapshot, ProviderSurface
 
 router = APIRouter()
 
@@ -364,35 +364,54 @@ def api_set_claude_models(
 def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[ProviderStatusResponse]:
-    from songmaker_cli.cowriter.catalog import ProviderSurface
+    from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshots
+
+    snapshots = provider_snapshots()
 
     return [
         ProviderStatusResponse(
             provider=name,
-            cowriter=_surface_status(name, ProviderSurface.CO_WRITER),
-            judge=_surface_status(name, ProviderSurface.JUDGE),
+            cowriter=_surface_status_from_snapshot(
+                name, ProviderSurface.CO_WRITER, snapshots.get(name),
+            ),
+            judge=_surface_status_from_snapshot(
+                name, ProviderSurface.JUDGE, snapshots.get(name),
+            ),
         )
         for name in sorted(COWRITER_PROVIDERS)
     ]
 
 
 def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfaceStatus:
+    from songmaker_cli.cowriter.catalog import provider_snapshot
+
+    return _surface_status_from_snapshot(provider, surface, provider_snapshot(provider))
+
+
+def _surface_status_from_snapshot(
+    provider: str,
+    surface: "ProviderSurface",
+    snapshot: "ProviderSnapshot | None",
+) -> ProviderSurfaceStatus:
     from songmaker_cli.cowriter.catalog import (
         ApiKeyNeedsCliLoginProvider,
         CliLoginNeedsApiKeyProvider,
         ConfiguredProvider,
         DependencyUnavailableProvider,
+        ProviderSurface,
         UnconfiguredProvider,
-        get_provider_configuration,
     )
 
-    configuration = get_provider_configuration(provider, surface)
+    if snapshot is None:
+        return ProviderSurfaceStatus(state=ProviderSurfaceState.UNVERIFIED)
+    configuration = snapshot.cowriter if surface is ProviderSurface.CO_WRITER else snapshot.judge
     match configuration:
         case ConfiguredProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.CONFIGURED,
                 setup_method=configuration.method.value,
                 environment_key=configuration.environment_key,
+                probed_at=snapshot.probed_at.isoformat(),
             )
         case CliLoginNeedsApiKeyProvider():
             return ProviderSurfaceStatus(
@@ -400,23 +419,27 @@ def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfac
                 needs="api_key",
                 setup_method=configuration.method.value,
                 environment_key=configuration.missing_environment_key,
+                probed_at=snapshot.probed_at.isoformat(),
             )
         case ApiKeyNeedsCliLoginProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.API_KEY_NEEDS_CLI_LOGIN,
                 needs="cli_login",
                 setup_method="api_key",
+                probed_at=snapshot.probed_at.isoformat(),
             )
         case DependencyUnavailableProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.MISSING_DEPENDENCY,
                 missing_dependency=configuration.dependency,
+                probed_at=snapshot.probed_at.isoformat(),
             )
         case UnconfiguredProvider():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.UNCONFIGURED,
                 needs=configuration.need.value,
                 environment_key=configuration.missing_environment_key,
+                probed_at=snapshot.probed_at.isoformat(),
             )
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
@@ -425,32 +448,49 @@ def _models_for_provider(
     provider: str,
     active_model: str | None,
 ) -> tuple[list[str], str | None]:
-    from songmaker_cli.cowriter.catalog import list_provider_models, models_with_active_model
-    from songmaker_cli.cowriter.errors import (
-        ProviderModelCatalogUnavailableError,
-        ProviderUnavailableError,
+    from songmaker_cli.cowriter.catalog import provider_snapshot
+
+    return _models_from_snapshot(provider, active_model, provider_snapshot(provider))
+
+
+def _models_from_snapshot(
+    provider: str,
+    active_model: str | None,
+    snapshot: "ProviderSnapshot | None",
+) -> tuple[list[str], str | None]:
+    from songmaker_cli.cowriter.catalog import models_with_active_model
+
+    if snapshot is None:
+        return [], "Provider model catalog is unverified"
+    return (
+        models_with_active_model(provider, list(snapshot.models), active_model),
+        snapshot.models_error,
     )
 
-    try:
-        return models_with_active_model(
-            provider,
-            list_provider_models(provider),
-            active_model,
-        ), None
-    except (
-        ProviderUnavailableError,
-        ProviderModelCatalogUnavailableError,
-    ) as exc:
-        return [], str(exc)
+
+def _provider_probe_times(
+    snapshots: dict[str, "ProviderSnapshot"],
+) -> dict[str, str | None]:
+    return {
+        provider: snapshots[provider].probed_at.isoformat()
+        if provider in snapshots
+        else None
+        for provider in sorted(COWRITER_PROVIDERS)
+    }
 
 
 def _cowriter_response(session) -> CowriterSettingsResponse:
+    from songmaker_cli.cowriter.catalog import provider_snapshots
+
     provider = get_cowriter_provider(session)
     model = get_cowriter_model(session, provider)
+    snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
-        models, error = _models_for_provider(name, model if name == provider else None)
+        models, error = _models_from_snapshot(
+            name, model if name == provider else None, snapshots.get(name),
+        )
         models_by_provider[name] = models
         if error:
             errors[name] = error
@@ -461,6 +501,7 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
         models_errors=errors,
+        probed_at=_provider_probe_times(snapshots),
         tail_token_budget=get_cowriter_tail_token_budget(session),
     )
 
@@ -558,12 +599,17 @@ def api_set_cowriter_settings(
 
 
 def _judge_response(session: Session) -> JudgeSettingsResponse:
+    from songmaker_cli.cowriter.catalog import provider_snapshots
+
     provider = get_judge_provider(session)
     model = get_judge_model(session, provider)
+    snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
-        models, error = _models_for_provider(name, model if name == provider else None)
+        models, error = _models_from_snapshot(
+            name, model if name == provider else None, snapshots.get(name),
+        )
         models_by_provider[name] = models
         if error:
             errors[name] = error
@@ -574,6 +620,7 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
         models_errors=errors,
+        probed_at=_provider_probe_times(snapshots),
     )
 
 

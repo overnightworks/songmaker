@@ -117,6 +117,7 @@ class CowriterSettingsResponse(BaseModel):
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
     models_errors: dict[str, str] = Field(default_factory=dict)
+    probed_at: dict[str, ComputedTimestamp]
     tail_token_budget: int
 
 
@@ -132,9 +133,11 @@ class JudgeSettingsResponse(BaseModel):
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
     models_errors: dict[str, str] = Field(default_factory=dict)
+    probed_at: dict[str, ComputedTimestamp]
 
 
 class ProviderSurfaceState(StrEnum):
+    UNVERIFIED = "unverified"
     CONFIGURED = "configured"
     CLI_LOGIN_NEEDS_API_KEY = "cli_login_needs_api_key"
     API_KEY_NEEDS_CLI_LOGIN = "api_key_needs_cli_login"
@@ -148,6 +151,7 @@ class ProviderSurfaceStatus(BaseModel):
     setup_method: Literal["api_key", "claude_cli", "grok_cli", "codex_cli"] | None = None
     environment_key: str | None = None
     missing_dependency: str | None = None
+    probed_at: ComputedTimestamp = None
 
 
 class ProviderNotConfiguredDetail(BaseModel):

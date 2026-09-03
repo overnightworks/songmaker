@@ -43,6 +43,7 @@ class BackgroundLoopName(StrEnum):
     RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
     SCORE_BACKFILL = "score_backfill"
     STALE_JOB_REAPER = "stale_job_reaper"
+    PROVIDER_STATUS_REFRESH = "provider_status_refresh"
 
 
 class BackgroundLoopStatus(StrEnum):
@@ -104,6 +105,28 @@ class BackgroundLoopRegistry:
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
     return app.state.background_loop_registry
+
+
+async def provider_status_refresh_loop(app: FastAPI) -> None:
+    """Refresh provider reachability and catalogs outside request handling."""
+    from songmaker_cli.constants import CLI_LOGIN_STATUS_CACHE_SECONDS, COWRITER_PROVIDERS
+    from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
+
+    registry = background_loop_registry(app)
+    while True:
+        error: Exception | None = None
+        for provider in COWRITER_PROVIDERS:
+            try:
+                await asyncio.to_thread(refresh_provider_snapshot, provider)
+            except Exception as exc:
+                if error is None:
+                    error = exc
+                log.exception("Provider status refresh failed for %s", provider)
+        if error is None:
+            registry.record_success(BackgroundLoopName.PROVIDER_STATUS_REFRESH)
+        else:
+            registry.record_failure(BackgroundLoopName.PROVIDER_STATUS_REFRESH, error)
+        await asyncio.sleep(CLI_LOGIN_STATUS_CACHE_SECONDS)
 
 
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
