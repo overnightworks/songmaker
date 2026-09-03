@@ -375,6 +375,7 @@ export interface JobItem {
 	progress: number;
 	error?: string | null;
 	error_type?: string | null;
+	queue_reason?: string | null;
 	queue_position?: number | null;
 	started_at?: string | null;
 	completed_at?: string | null;

@@ -46,6 +46,9 @@ MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
 })
 MODEL_DEFAULT_MODE: Final[str] = "sft"
 
+GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
+LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
+
 DEFAULT_ARTIST = "Flex0r"
 
 # Pagination defaults and limits
@@ -427,6 +430,7 @@ SSE_HEARTBEAT_SECONDS: Final[int] = 15
 SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
 GENERATE_LOAD_MODEL_TIMEOUT_SECONDS: Final[int] = 600
 GENERATE_SUBMIT_TIMEOUT_SECONDS: Final[int] = 30
+GPU_HOLD_POLL_INTERVAL_SECONDS: Final[int] = 5
 ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS: Final[int] = 30
 

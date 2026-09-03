@@ -327,6 +327,7 @@ class Job(Base):
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    queue_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

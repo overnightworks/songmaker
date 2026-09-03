@@ -15,7 +15,7 @@ def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.delenv("CONTROL_PLANE_URL", raising=False)
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "")
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
     from acestep_worker.settings import get_worker_settings
     get_worker_settings.cache_clear()
 
@@ -65,6 +65,7 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("WORKER_PORT", "8765")
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
 
     with (
         patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),

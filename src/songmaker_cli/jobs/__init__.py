@@ -21,9 +21,12 @@ from songmaker_cli.config import (
     resolve_model_mode,
 )
 from songmaker_cli.scheduler import (
+    AllWorkersHeld,
     NoCapacityError,
     WorkerTaskFailed,
+    admit_generation_worker,
     dispatch_generation,
+    dispatch_generation_on_worker,
 )
 from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
@@ -67,6 +70,9 @@ __all__ = [
     "GenerationContext",
     "GenerationSetupError",
     "NoCapacityError",
+    "AllWorkersHeld",
+    "admit_generation_worker",
+    "dispatch_generation_on_worker",
     "WorkerTaskFailed",
     "_apply_cover_overrides",
     "_apply_repaint_overrides",

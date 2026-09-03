@@ -67,10 +67,19 @@ def count_total_queued_jobs(session: Session) -> int:
     )
 
 
+def count_queued_generation_jobs(session: Session) -> int:
+    return (
+        session.query(Job)
+        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.GENERATE)
+        .count()
+    )
+
+
 def update_job_status(
     session: Session, job_id: str, status: str,
     progress: float = 0.0, error: str | None = None,
     error_type: str | None = None,
+    queue_reason: str | None = None,
     worker_pid: int | None = None,
 ) -> bool:
     job = (
@@ -86,6 +95,7 @@ def update_job_status(
     job.progress = progress
     job.error = error
     job.error_type = error_type
+    job.queue_reason = queue_reason
     if worker_pid is not None:
         job.worker_pid = worker_pid
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
@@ -250,6 +260,7 @@ def _recover_stale_job_if_unchanged(
             error=error,
             error_type=error_type,
             completed_at=completed_at,
+            queue_reason=None,
         )
         .execution_options(synchronize_session=False),
     )
@@ -283,6 +294,7 @@ def recover_stale_jobs_by_type(
             job.error = "Server restarted while job was in progress"
             job.error_type = "server_restart"
             job.completed_at = now
+            job.queue_reason = None
         if stale:
             recovered[job_type] = len(stale)
     session.flush()

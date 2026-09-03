@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
@@ -33,7 +33,7 @@ class WorkerSettings(BaseSettings):
 
     worker_id: str
     redis_url: str
-    songmaker_internal_token: SecretStr | None = None
+    songmaker_internal_token: SecretStr
     worker_host: str | None = None
     worker_port: int = 8001
     vram_budget_gb: float = 24.0
@@ -47,6 +47,13 @@ class WorkerSettings(BaseSettings):
     gpu_id: int | None = None
     hf_token: SecretStr | None = None
     log_level: str = "INFO"
+
+    @field_validator("songmaker_internal_token")
+    @classmethod
+    def require_internal_token(cls, token: SecretStr) -> SecretStr:
+        if not token.get_secret_value():
+            raise ValueError("songmaker_internal_token must not be empty")
+        return token
 
     # ACE-Step subprocess environment
     acestep_device: str = "cuda"

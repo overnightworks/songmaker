@@ -2,12 +2,10 @@
 
 Stateless picker that lives inside the music-worker arq job. Reads worker
 identity from PG and ephemeral state from Redis, picks the worker with the
-lowest queue_depth, then dispatches via HTTP/SSE to the chosen worker.
-Picking is check-then-act, not an atomic claim: ``pick_worker`` reads each
-worker's queue_depth and ``incr_queue_depth`` bumps the chosen worker's
-counter as a separate later step, so two concurrent picks can briefly land
-on the same worker before either increment is visible to the other. INCR is
-only a load counter for the next picker, not a lock.
+lowest queue_depth, then dispatches via HTTP/SSE to the chosen worker. The
+generation admission Lua script atomically rejects a LoRA hold and increments
+the selected worker's queue depth. The generation job owns that admission for
+its complete take series and releases it during final cleanup.
 
 The scheduler does not commit DB or own any persistent state — it's a
 pure dispatch layer between ``run_generation_job`` and the worker pool.
@@ -37,8 +35,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_state import (
+    admit_generation as admit_generation_occupancy,
+)
+from songmaker_cli.acestep_state import (
     decr_queue_depth,
-    incr_queue_depth,
+    gpu_hold_key,
     read_queue_depth,
     read_worker_state,
     worker_is_online,
@@ -63,6 +64,10 @@ WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
 
 class NoCapacityError(RuntimeError):
     """Raised when no online worker can serve the requested model."""
+
+
+class AllWorkersHeld(RuntimeError):
+    """Raised when online workers exist but every one has a LoRA hold."""
 
 
 class WorkerTaskFailed(RuntimeError):
@@ -132,7 +137,8 @@ class DispatchOptions:
 
 
 async def _list_online_workers(
-    db: Session, redis: Redis,
+    db: Session,
+    redis: Redis,
 ) -> list[_PickedWorker]:
     identities = list_worker_identities(db)
     online: list[_PickedWorker] = []
@@ -174,13 +180,22 @@ def _pick_from(workers: list[_PickedWorker], target_mode: str) -> _PickedWorker:
 
 
 async def pick_worker(
-    db: Session, redis: Redis, target_mode: str,
+    db: Session,
+    redis: Redis,
+    target_mode: str,
 ) -> _PickedWorker:
-    return _pick_from(await _list_online_workers(db, redis), target_mode)
+    workers = await _list_online_workers(db, redis)
+    if not workers:
+        raise NoCapacityError("No online ACE-Step workers")
+    available = [worker for worker in workers if not await redis.exists(gpu_hold_key(worker.id))]
+    if not available:
+        raise AllWorkersHeld("All online ACE-Step workers are held for LoRA training")
+    return _pick_from(available, target_mode)
 
 
 async def pick_any_online_worker(
-    db: Session, redis: Redis,
+    db: Session,
+    redis: Redis,
 ) -> _PickedWorker:
     workers = await _list_online_workers(db, redis)
     if not workers:
@@ -207,9 +222,9 @@ def _parse_sse_event(buffer: str) -> tuple[str, dict] | None:
     data_lines: list[str] = []
     for line in buffer.splitlines():
         if line.startswith("event:"):
-            event_type = line[len("event:"):].strip()
+            event_type = line[len("event:") :].strip()
         elif line.startswith("data:"):
-            data_lines.append(line[len("data:"):].strip())
+            data_lines.append(line[len("data:") :].strip())
     if event_type is None or not data_lines:
         return None
     try:
@@ -222,13 +237,16 @@ def _parse_sse_event(buffer: str) -> tuple[str, dict] | None:
 
 
 async def _ensure_loaded(
-    worker: _PickedWorker, target_mode: str, options: DispatchOptions,
+    worker: _PickedWorker,
+    target_mode: str,
+    options: DispatchOptions,
 ) -> None:
     if target_mode in worker.loaded_modes:
         return
     log.info(
         "Worker %s does not have %s loaded — issuing /load_model",
-        worker.id, target_mode,
+        worker.id,
+        target_mode,
     )
     async with httpx.AsyncClient(timeout=options.load_model_timeout_seconds) as client:
         resp = await client.post(
@@ -308,7 +326,8 @@ async def _iterate_task_events(
             if reconnects > options.max_sse_reconnects:
                 log.error(
                     "SSE reconnect budget exhausted for task %s on %s",
-                    task_id, worker.id,
+                    task_id,
+                    worker.id,
                 )
                 raise
             backoff = min(
@@ -317,7 +336,12 @@ async def _iterate_task_events(
             )
             log.warning(
                 "SSE drop on %s task %s (attempt %d/%d): %s — reconnecting in %.1fs",
-                worker.id, task_id, reconnects, options.max_sse_reconnects, exc, backoff,
+                worker.id,
+                task_id,
+                reconnects,
+                options.max_sse_reconnects,
+                exc,
+                backoff,
             )
             await asyncio.sleep(backoff)
 
@@ -392,7 +416,8 @@ async def consume_task_stream(
     Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
     """
     return await _consume_task_stream(
-        worker, task_id,
+        worker,
+        task_id,
         result_type=GenerationTaskResultDTO,
         invalid_result_label="invalid result",
         error_exception_type=WorkerGenerationFailed,
@@ -415,7 +440,8 @@ async def consume_download_task_stream(
     Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
     """
     return await _consume_task_stream(
-        worker, task_id,
+        worker,
+        task_id,
         result_type=DownloadTaskResultDTO,
         invalid_result_label="invalid download result",
         error_exception_type=WorkerTaskFailed,
@@ -435,19 +461,52 @@ async def dispatch_generation(
     db_factory: sessionmaker[Session],
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
-    with db_factory() as session:
-        worker = await pick_worker(session, redis, target_mode)
-
-    await incr_queue_depth(redis, worker.id)
+    worker = await admit_generation_worker(
+        target_mode=target_mode,
+        redis=redis,
+        db_factory=db_factory,
+    )
     try:
-        await _ensure_loaded(worker, target_mode, options)
-        task_id = await _submit_generation(worker, ace_config, target_mode, options)
-        return await consume_task_stream(
-            worker,
-            task_id,
+        return await dispatch_generation_on_worker(
+            worker=worker,
+            ace_config=ace_config,
+            target_mode=target_mode,
             on_progress=on_progress,
             on_heartbeat=on_heartbeat,
             options=options,
         )
     finally:
         await decr_queue_depth(redis, worker.id)
+
+
+async def admit_generation_worker(
+    *,
+    target_mode: str,
+    redis: Redis,
+    db_factory: sessionmaker[Session],
+) -> _PickedWorker:
+    with db_factory() as session:
+        worker = await pick_worker(session, redis, target_mode)
+    if not await admit_generation_occupancy(redis, worker.id):
+        raise AllWorkersHeld("ACE-Step worker became held before generation admission")
+    return worker
+
+
+async def dispatch_generation_on_worker(
+    *,
+    worker: _PickedWorker,
+    ace_config: AceStepConfig,
+    target_mode: str,
+    on_progress: ProgressCallback | None = None,
+    on_heartbeat: HeartbeatCallback | None = None,
+    options: DispatchOptions = DispatchOptions(),
+) -> GenerationTaskResultDTO:
+    await _ensure_loaded(worker, target_mode, options)
+    task_id = await _submit_generation(worker, ace_config, target_mode, options)
+    return await consume_task_stream(
+        worker,
+        task_id,
+        on_progress=on_progress,
+        on_heartbeat=on_heartbeat,
+        options=options,
+    )

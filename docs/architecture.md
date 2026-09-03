@@ -97,13 +97,13 @@ User clicks "Generate"                    User clicks "Score"
         │                                         │
         ▼                                         ▼
   Music Worker (orchestrator)              Scoring Worker
-  ├── apply repaint/cover overrides        ├── spawn scorer subprocess
-  ├── scheduler.dispatch_generation:       ├── Whisper transcription
-  │   ├── pick acestep-worker              ├── AudioBox aesthetics
-  │   ├── INCR queue_depth (Redis)         ├── BPM, dynamics, silence, spectral
-  │   ├── /load_model + /generate (HTTP)   ├── lyrical coherence (configured judge provider)
-  │   ├── consume SSE → task done          ├── save scores to DB
-  │   └── DECR queue_depth (finally)       └── Job status: completed
+  ├── see [Generation Flow](#generation-flow) ├── spawn scorer subprocess
+  │   for Lua admission, hold defer, config   ├── Whisper transcription
+  │   build, worker HTTP, and persistence      ├── AudioBox aesthetics
+  │                                              ├── BPM, dynamics, silence, spectral
+  │                                              ├── lyrical coherence (configured judge provider)
+  │                                              ├── save scores to DB
+  │                                              └── Job status: completed
   ├── post_process_generation (to_thread):
   │   ├── read worker WAV from volume
   │   ├── decode + splice (if repaint)
@@ -753,9 +753,9 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → create Job record + audit log entry
   → enqueue to arq (Redis-backed, music queue)
   → music worker: run_generation_job()
+    → pick then atomically Lua-admit one online acestep-worker for the full take series
+      → LoRA hold: keep the Job queued and defer a fresh ARQ envelope
     → build config (model defaults + admin defaults + preset + song params)
-    → scheduler.dispatch_generation()
-      → pick an online acestep-worker
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
     → read worker WAV from the shared audio volume

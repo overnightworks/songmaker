@@ -16,6 +16,10 @@ an LRU cache of loaded models and exposes:
 | POST | `/unpin_model` | Remove a model from the pinned set |
 | POST | `/restart` | Ask the worker process to terminate so Docker restarts it |
 | POST | `/generate` | Submit generation, returns `{task_id}` |
+| POST | `/gpu_hold/reserve` | Reserve an idle worker for token-bound LoRA training |
+| POST | `/gpu_hold/renew` | Renew a token-bound LoRA hold |
+| POST | `/gpu_hold/release` | Release a token-bound LoRA hold |
+| POST | `/gpu_hold/handover` | Confirm that the worker owns a token-bound training hold |
 | POST | `/tasks/train_lora` | Submit a LoRA training task, returns `{task_id}` |
 | POST | `/download_model` | Download a model variant, returns `{task_id}` |
 | GET | `/tasks/{id}` | Current task snapshot |
@@ -32,14 +36,10 @@ port — see `ACESTEP_INNER_PORT` below).
 
 ```
 music worker (songmaker_cli.music_worker.MusicWorkerSettings)
-  → on generate job:
-    → scheduler.dispatch_generation:
-      → pick worker (PG identities + Redis state)
-      → INCR queue_depth (Redis)
-      → POST /load_model on worker (if needed)
-      → POST /generate on worker → task_id
-      → consume SSE /tasks/{id}/stream until done
-      → DECR queue_depth in finally
+  → on generate job: scheduler dispatches the admitted worker
+    → POST /load_model on worker (if needed)
+    → POST /generate on worker → task_id
+    → consume SSE /tasks/{id}/stream until done
     → post_process_generation (in to_thread):
       → read worker WAV from shared volume
       → decode + splice (if repaint) + master + encode MP3
@@ -187,7 +187,8 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | Key pattern | Set by | Read by | TTL | Purpose |
 |---|---|---|---|---|
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, `/health`, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `last_heartbeat_at` |
-| `songmaker:acestep:queue:{worker_id}` | `scheduler.incr_queue_depth` / `decr_queue_depth` (per generation dispatch) | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
+| `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
+| `songmaker:acestep:hold:{worker_id}` | Worker `/gpu_hold/*` endpoints | Scheduler admission and worker `/generate` | 15 s | Token-bound LoRA training hold; renews every 5 s and prevents generation admission. |
 | `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job (atomic SET-NX) | admin endpoint pre-check, arq job duplicate guard | 1800 s | Download-in-progress flag; value is the job_id of the arq job that owns it |
 
 **Useful debug commands:**

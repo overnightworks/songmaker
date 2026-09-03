@@ -140,6 +140,9 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
+from songmaker_cli.db.queries.jobs import (
+    count_queued_generation_jobs as count_queued_generation_jobs,
+)
 from songmaker_cli.db.queries.jobs import count_total_queued_jobs as count_total_queued_jobs
 from songmaker_cli.db.queries.jobs import count_user_active_jobs as count_user_active_jobs
 from songmaker_cli.db.queries.jobs import (

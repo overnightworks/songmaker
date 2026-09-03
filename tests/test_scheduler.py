@@ -8,11 +8,17 @@ from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import fakeredis.aioredis
 import httpx
 import pytest
 
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.acestep_state import queue_depth_key, worker_state_key
+from songmaker_cli.acestep_state import (
+    gpu_hold_key,
+    queue_depth_key,
+    read_queue_depth,
+    worker_state_key,
+)
 from songmaker_cli.constants import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
@@ -23,6 +29,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
+    AllWorkersHeld,
     DispatchOptions,
     DownloadTaskResultDTO,
     GenerationTaskResultDTO,
@@ -33,6 +40,7 @@ from songmaker_cli.scheduler import (
     _iterate_task_events,
     _pick_from,
     _PickedWorker,
+    admit_generation_worker,
     consume_download_task_stream,
     consume_task_stream,
     dispatch_generation,
@@ -65,6 +73,17 @@ class _InMemoryRedis:
         self.store[key] = str(cur)
         return cur
 
+    async def exists(self, key):
+        return int(key in self.store)
+
+    async def eval(self, script, key_count, *args):
+        keys = args[:key_count]
+        if "INCR" in script and "EXISTS" in script:
+            if keys[1] in self.store:
+                return 0
+            return await self.incr(keys[0])
+        raise AssertionError(f"Unexpected Redis script: {script}")
+
 
 @pytest.fixture()
 def db_factory(tmp_path: Path):
@@ -91,7 +110,11 @@ def _seed(session, worker_id: str, *, host="h", port=8001):
 
 
 def _set_state(
-    redis, worker_id: str, state: dict, *, gpu_healthy: bool | None = True,
+    redis,
+    worker_id: str,
+    state: dict,
+    *,
+    gpu_healthy: bool | None = True,
 ) -> None:
     """Write a worker heartbeat. Defaults to a healthy GPU so the many tests
     unrelated to issue #367 don't need to know about it; pass
@@ -111,8 +134,11 @@ def _set_queue(redis, worker_id: str, depth: int) -> None:
 
 def _make_picked(wid="w1", host="h", port=8001, loaded=None, depth=0):
     return _PickedWorker(
-        id=wid, host=host, port=port,
-        loaded_modes=loaded or [], queue_depth=depth,
+        id=wid,
+        host=host,
+        port=port,
+        loaded_modes=loaded or [],
+        queue_depth=depth,
     )
 
 
@@ -159,6 +185,62 @@ def test_pick_worker_no_online_raises(db_session) -> None:
     redis = _InMemoryRedis()
     with pytest.raises(NoCapacityError):
         _run(pick_worker(db_session, redis, "sft"))
+
+
+def test_pick_worker_defers_when_every_online_worker_is_held(db_session) -> None:
+    from songmaker_cli.acestep_state import gpu_hold_key
+
+    _seed(db_session, "w1")
+    redis = _InMemoryRedis()
+    _set_state(redis, "w1", {"loaded": ["sft"]})
+    redis.store[gpu_hold_key("w1")] = "hold-token"
+
+    with pytest.raises(AllWorkersHeld):
+        _run(pick_worker(db_session, redis, "sft"))
+
+
+def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_session) -> None:
+    async def exercise() -> None:
+        redis = fakeredis.aioredis.FakeRedis()
+        _seed(db_session, "w1")
+        await redis.set(
+            worker_state_key("w1"),
+            json.dumps({"gpu_healthy": True, "loaded": ["sft"]}),
+        )
+
+        async def pick_then_hold(*_args, **_kwargs):
+            await redis.set(gpu_hold_key("w1"), "hold-token")
+            return _make_picked("w1")
+
+        with (
+            patch("songmaker_cli.scheduler.pick_worker", pick_then_hold),
+            pytest.raises(AllWorkersHeld),
+        ):
+            await admit_generation_worker(
+                target_mode="sft",
+                redis=redis,
+                db_factory=lambda: db_session,
+            )
+        assert await read_queue_depth(redis, "w1") == 0
+
+    _run(exercise())
+
+
+def test_pick_worker_skips_a_held_worker_for_a_free_online_worker(db_session) -> None:
+    from songmaker_cli.acestep_state import gpu_hold_key
+
+    _seed(db_session, "held", host="h1")
+    _seed(db_session, "free", host="h2")
+    redis = _InMemoryRedis()
+    _set_state(redis, "held", {"loaded": ["sft"]})
+    _set_state(redis, "free", {"loaded": []})
+    _set_queue(redis, "held", 0)
+    _set_queue(redis, "free", 9)
+    redis.store[gpu_hold_key("held")] = "hold-token"
+
+    picked = _run(pick_worker(db_session, redis, "sft"))
+
+    assert picked.id == "free"
 
 
 def test_dispatch_options_use_the_shared_generate_timeout_windows() -> None:
@@ -216,13 +298,12 @@ def _build_sse_response(*events: tuple[str, dict]) -> bytes:
 
 def _make_stream_client(events_or_exc) -> AsyncMock:
     if isinstance(events_or_exc, Exception):
+
         async def _aiter_text():  # noqa: D401
             raise events_or_exc
             yield ""  # pragma: no cover
     else:
-        body = "".join(
-            f"event: {t}\ndata: {json.dumps(d)}\n\n" for t, d in events_or_exc
-        )
+        body = "".join(f"event: {t}\ndata: {json.dumps(d)}\n\n" for t, d in events_or_exc)
 
         async def _aiter_text():
             yield body
@@ -285,10 +366,13 @@ def test_consume_task_stream_progress_calls_callback() -> None:
     events = [
         ("progress", {"progress": 0.2}),
         ("progress", {"progress": 0.5}),
-        ("done", {
-            "task_id": "g",
-            "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
-        }),
+        (
+            "done",
+            {
+                "task_id": "g",
+                "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
+            },
+        ),
     ]
     client = _make_stream_client(events)
     with _patch_async_client(client):
@@ -308,10 +392,13 @@ def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
     # TaskStore.subscribe() sends its current running snapshot first.
     events = [
         ("running", {"task_id": "gen-1"}),
-        ("done", {
-            "task_id": "gen-1",
-            "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
-        }),
+        (
+            "done",
+            {
+                "task_id": "gen-1",
+                "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
+            },
+        ),
     ]
     client = _make_stream_client(events)
     with _patch_async_client(client):
@@ -345,11 +432,13 @@ def test_consume_task_stream_error_missing_field_raises_protocol_error() -> None
 
 
 @pytest.mark.parametrize(
-    "consume", [consume_task_stream, consume_download_task_stream],
+    "consume",
+    [consume_task_stream, consume_download_task_stream],
     ids=["generation", "download"],
 )
 def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds(
-    consume, caplog: pytest.LogCaptureFixture,
+    consume,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An empty 'error' field carries no cause, so it must not be relayed
     as one, for either task kind: the worker always sends text, and the job
@@ -370,15 +459,19 @@ def test_consume_task_stream_reconnects_on_transport_drop() -> None:
 
     bad_client = _make_stream_client(httpx.ConnectError("refused"))
 
-    good_events = [(
-        "done",
-        {
-            "task_id": "g",
-            "result": {
-                "mode": "sft", "audio_path": "/x.wav", "seed": 1,
+    good_events = [
+        (
+            "done",
+            {
+                "task_id": "g",
+                "result": {
+                    "mode": "sft",
+                    "audio_path": "/x.wav",
+                    "seed": 1,
+                },
             },
-        },
-    )]
+        )
+    ]
     good_client = _make_stream_client(good_events)
 
     clients = iter([bad_client, good_client])
@@ -417,7 +510,8 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
     client = _make_stream_client(httpx.ReadTimeout("stream went silent"))
 
     with patch(
-        "songmaker_cli.scheduler.httpx.AsyncClient", return_value=client,
+        "songmaker_cli.scheduler.httpx.AsyncClient",
+        return_value=client,
     ) as async_client:
         with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
             _run(consume_task_stream(worker, "gen-1"))
@@ -442,10 +536,12 @@ def test_dispatch_increments_then_decrements_queue_depth(db_factory, db_session)
     redis = _InMemoryRedis()
     _set_state(redis, "w1", {"loaded": ["sft"]})
 
-    done = [(
-        "done",
-        {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-    )]
+    done = [
+        (
+            "done",
+            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
+        )
+    ]
     client = _make_stream_client(done)
 
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
@@ -453,12 +549,14 @@ def test_dispatch_increments_then_decrements_queue_depth(db_factory, db_session)
             "songmaker_cli.scheduler._submit_generation",
             new=AsyncMock(return_value="gen-1"),
         ):
-            _run(dispatch_generation(
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                redis=redis,
-                db_factory=db_factory,
-            ))
+            _run(
+                dispatch_generation(
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    redis=redis,
+                    db_factory=db_factory,
+                )
+            )
 
     assert int(redis.store[queue_depth_key("w1")]) == 0
 
@@ -473,12 +571,14 @@ def test_dispatch_decrements_on_failure(db_factory, db_session) -> None:
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
         with pytest.raises(RuntimeError, match="boom"):
-            _run(dispatch_generation(
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                redis=redis,
-                db_factory=db_factory,
-            ))
+            _run(
+                dispatch_generation(
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    redis=redis,
+                    db_factory=db_factory,
+                )
+            )
 
     assert int(redis.store[queue_depth_key("w1")]) == 0
 
@@ -493,10 +593,12 @@ def test_dispatch_loads_model_if_not_loaded(db_factory, db_session) -> None:
     async def _fake_ensure_loaded(worker, target_mode, options):
         load_calls.append(target_mode)
 
-    done = [(
-        "done",
-        {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-    )]
+    done = [
+        (
+            "done",
+            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
+        )
+    ]
     client = _make_stream_client(done)
 
     with (
@@ -507,12 +609,14 @@ def test_dispatch_loads_model_if_not_loaded(db_factory, db_session) -> None:
         ),
         patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
     ):
-        _run(dispatch_generation(
-            ace_config=_make_ace_config(),
-            target_mode="sft",
-            redis=redis,
-            db_factory=db_factory,
-        ))
+        _run(
+            dispatch_generation(
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                redis=redis,
+                db_factory=db_factory,
+            )
+        )
 
     assert load_calls == ["sft"]
 
@@ -529,10 +633,12 @@ def test_dispatch_skips_load_when_already_loaded(db_factory, db_session) -> None
         if target_mode not in worker.loaded_modes:
             load_called = True
 
-    done = [(
-        "done",
-        {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-    )]
+    done = [
+        (
+            "done",
+            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
+        )
+    ]
     client = _make_stream_client(done)
 
     with (
@@ -543,12 +649,14 @@ def test_dispatch_skips_load_when_already_loaded(db_factory, db_session) -> None
         ),
         patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
     ):
-        _run(dispatch_generation(
-            ace_config=_make_ace_config(),
-            target_mode="sft",
-            redis=redis,
-            db_factory=db_factory,
-        ))
+        _run(
+            dispatch_generation(
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                redis=redis,
+                db_factory=db_factory,
+            )
+        )
 
     assert load_called is False
 
@@ -584,16 +692,16 @@ def test_dispatch_session_closed_before_sse(db_factory) -> None:
     def _tracking_factory():
         return _TrackingSession()
 
-    done = [(
-        "done",
-        {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-    )]
+    done = [
+        (
+            "done",
+            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
+        )
+    ]
     client = _make_stream_client(done)
 
     async def _checked_submit(*args, **kwargs):
-        assert exit_count == enter_count, (
-            "all sessions must be closed before SSE/HTTP phase"
-        )
+        assert exit_count == enter_count, "all sessions must be closed before SSE/HTTP phase"
         assert exit_count >= 1, "pick_worker must have opened a session"
         return "gen-1"
 
@@ -601,12 +709,14 @@ def test_dispatch_session_closed_before_sse(db_factory) -> None:
         patch("songmaker_cli.scheduler._submit_generation", new=_checked_submit),
         patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
     ):
-        _run(dispatch_generation(
-            ace_config=_make_ace_config(),
-            target_mode="sft",
-            redis=redis,
-            db_factory=_tracking_factory,
-        ))
+        _run(
+            dispatch_generation(
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                redis=redis,
+                db_factory=_tracking_factory,
+            )
+        )
 
     assert enter_count == 1
 
@@ -617,10 +727,7 @@ def test_dispatch_session_closed_before_sse(db_factory) -> None:
 def test_dto_keys_match_worker_model_fields() -> None:
     from acestep_worker.models import GenerationTaskResult
 
-    assert (
-        GenerationTaskResult.model_fields.keys()
-        == GenerationTaskResultDTO.model_fields.keys()
-    )
+    assert GenerationTaskResult.model_fields.keys() == GenerationTaskResultDTO.model_fields.keys()
 
 
 # ── _ensure_loaded + _submit_generation (httpx unit tests) ─────────
@@ -630,6 +737,7 @@ def test_ensure_loaded_skips_when_already_loaded() -> None:
     worker = _make_picked(loaded=["sft"])
     with patch("songmaker_cli.scheduler.httpx.AsyncClient") as cls:
         from songmaker_cli.scheduler import _ensure_loaded
+
         _run(_ensure_loaded(worker, "sft", DispatchOptions()))
     cls.assert_not_called()
 
@@ -644,6 +752,7 @@ def test_ensure_loaded_posts_when_missing() -> None:
     client.__aexit__ = AsyncMock(return_value=False)
 
     from songmaker_cli.scheduler import _ensure_loaded
+
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
         _run(_ensure_loaded(worker, "sft", DispatchOptions()))
 
@@ -664,10 +773,16 @@ def test_submit_generation_returns_task_id() -> None:
     client.__aexit__ = AsyncMock(return_value=False)
 
     from songmaker_cli.scheduler import _submit_generation
+
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
-        task_id = _run(_submit_generation(
-            worker, _make_ace_config(), "sft", DispatchOptions(),
-        ))
+        task_id = _run(
+            _submit_generation(
+                worker,
+                _make_ace_config(),
+                "sft",
+                DispatchOptions(),
+            )
+        )
     assert task_id == "gen-1"
     args, kwargs = client.post.call_args
     assert args[0].endswith("/generate")
@@ -742,9 +857,11 @@ def test_iterate_task_events_stops_after_error() -> None:
 def test_iterate_task_events_reconnect_on_transport_drop() -> None:
     worker = _make_picked()
     bad_client = _make_stream_client(httpx.ConnectError("refused"))
-    good_client = _make_stream_client([
-        ("done", {"task_id": "t", "result": {"mode": "sft", "size_bytes": 1}}),
-    ])
+    good_client = _make_stream_client(
+        [
+            ("done", {"task_id": "t", "result": {"mode": "sft", "size_bytes": 1}}),
+        ]
+    )
     clients = iter([bad_client, good_client])
 
     def _factory(*args, **kwargs):

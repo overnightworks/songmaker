@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -8,12 +9,12 @@ import shutil
 import signal
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
@@ -24,7 +25,17 @@ from acestep_worker.downloads import (
     start_download,
 )
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
-from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
+from acestep_worker.heartbeat import (
+    DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_TTL_SECONDS,
+    HeartbeatLoop,
+    gpu_hold_key,
+    gpu_hold_matches,
+    queue_depth_key,
+    release_gpu_hold,
+    renew_gpu_hold,
+    reserve_gpu_hold,
+)
 from acestep_worker.model_cache import (
     CapacityError,
     ModelCache,
@@ -36,6 +47,9 @@ from acestep_worker.models import (
     EvictModelRequest,
     EvictModelResponse,
     GenerateRequest,
+    GpuHoldHandoverResponse,
+    GpuHoldResponse,
+    GpuHoldTokenRequest,
     HealthResponse,
     LoadedModelDetailItem,
     LoadedModelsResponse,
@@ -76,11 +90,17 @@ class WorkerDeps:
     checkpoint_dir: Path
     audio_output_dir: Path
     generate_runner: GenerateRunner
+    internal_token: str
     shared_audio_root: Path = Path(DEFAULT_SHARED_AUDIO_ROOT)
     training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     train_lora_runner: TrainLoraRunner | None = None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
+    gpu_hold_handover_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    gpu_hold_admission_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    gpu_hold_generation_tasks: set[str] = field(default_factory=set)
+    gpu_hold_handover_tokens: set[str] = field(default_factory=set)
+    gpu_hold_handover_tasks: dict[str, str] = field(default_factory=dict)
     # Injectable so tests can simulate an NVML failure without a real GPU.
     # Defaults to "always healthy" so tests exercising unrelated endpoints
     # need not know about GPU health; __main__.py wires the real
@@ -98,14 +118,59 @@ async def read_queue_depth(redis: Redis, worker_id: str) -> int:
     return int(raw) if raw is not None else 0
 
 
+async def _renew_gpu_hold_until_done(
+    redis: Redis,
+    worker_id: str,
+    token: str,
+) -> None:
+    while True:
+        await asyncio.sleep(DEFAULT_INTERVAL_SECONDS)
+        if not await renew_gpu_hold(redis, worker_id, token, DEFAULT_TTL_SECONDS):
+            raise RuntimeError("GPU hold token was lost during LoRA training")
+
+
+async def _start_gpu_hold_renewal(
+    redis: Redis,
+    worker_id: str,
+    token: str,
+) -> asyncio.Task[None]:
+    if not await renew_gpu_hold(redis, worker_id, token, DEFAULT_TTL_SECONDS):
+        raise RuntimeError("GPU hold token was lost before LoRA training started")
+    return asyncio.create_task(_renew_gpu_hold_until_done(redis, worker_id, token))
+
+
+async def _claim_gpu_hold_handover(deps: WorkerDeps, token: str) -> bool:
+    async with deps.gpu_hold_handover_lock:
+        if token in deps.gpu_hold_handover_tokens:
+            return False
+        if not await gpu_hold_matches(deps.redis, deps.worker_id, token):
+            return False
+        deps.gpu_hold_handover_tokens.add(token)
+        return True
+
+
+async def _release_gpu_hold_handover(deps: WorkerDeps, token: str) -> None:
+    async with deps.gpu_hold_handover_lock:
+        deps.gpu_hold_handover_tokens.discard(token)
+        deps.gpu_hold_handover_tasks.pop(token, None)
+
+
+async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
+    if not renew_task.done():
+        renew_task.cancel()
+    try:
+        await renew_task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        log.exception("GPU hold renewal failed while its owner cleaned up")
+
+
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
     gpu_health = deps.gpu_health_checker()
     return {
-        "loaded": [
-            {"mode": info.mode, "size_gb": info.size_gb}
-            for info in snapshot.loaded
-        ],
+        "loaded": [{"mode": info.mode, "size_gb": info.size_gb} for info in snapshot.loaded],
         "target_loading": snapshot.target_loading,
         "loading_started_at": (
             snapshot.loading_started_at.isoformat()
@@ -126,6 +191,12 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
 
 def build_router(deps: WorkerDeps) -> APIRouter:
     router = APIRouter()
+
+    def verify_internal_token(
+        x_internal_token: str = Header(..., alias="X-Internal-Token"),
+    ) -> None:
+        if not hmac.compare_digest(x_internal_token, deps.internal_token):
+            raise HTTPException(status_code=401, detail="Invalid internal token")
 
     @router.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -216,19 +287,27 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         loop.call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
         return RestartResponse(status="restarting", pid=pid)
 
-    @router.post("/generate", response_model=TaskCreatedResponse)
+    @router.post(
+        "/generate",
+        response_model=TaskCreatedResponse,
+        dependencies=[Depends(verify_internal_token)],
+    )
     async def generate(req: GenerateRequest) -> TaskCreatedResponse:
-        loaded = await deps.cache.acquire_for_use(req.mode)
-        if loaded is None:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Mode {req.mode} not loaded; call /load_model first",
-            )
-        try:
-            task_id = await deps.task_store.create("generate")
-        except Exception:
-            await deps.cache.release(req.mode)
-            raise
+        async with deps.gpu_hold_admission_lock:
+            if await deps.redis.exists(gpu_hold_key(deps.worker_id)):
+                raise HTTPException(status_code=409, detail="GPU is held for LoRA training")
+            loaded = await deps.cache.acquire_for_use(req.mode)
+            if loaded is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Mode {req.mode} not loaded; call /load_model first",
+                )
+            try:
+                task_id = await deps.task_store.create("generate")
+            except Exception:
+                await deps.cache.release(req.mode)
+                raise
+            deps.gpu_hold_generation_tasks.add(task_id)
 
         async def _runner_with_release() -> None:
             try:
@@ -241,16 +320,95 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                     audio_output_dir=deps.audio_output_dir,
                 )
             finally:
-                await deps.cache.release(req.mode)
+                try:
+                    await deps.cache.release(req.mode)
+                finally:
+                    async with deps.gpu_hold_admission_lock:
+                        deps.gpu_hold_generation_tasks.discard(task_id)
 
-        spawn_background(_runner_with_release())
+        runner_with_release = _runner_with_release()
+        try:
+            spawn_background(runner_with_release)
+        except Exception:
+            runner_with_release.close()
+            try:
+                await deps.cache.release(req.mode)
+            finally:
+                async with deps.gpu_hold_admission_lock:
+                    deps.gpu_hold_generation_tasks.discard(task_id)
+            raise
         return TaskCreatedResponse(task_id=task_id)
 
-    @router.post("/tasks/train_lora", response_model=TaskCreatedResponse)
+    @router.post(
+        "/gpu_hold/reserve",
+        response_model=GpuHoldResponse,
+        dependencies=[Depends(verify_internal_token)],
+    )
+    async def reserve_hold() -> GpuHoldResponse:
+        token = str(uuid4())
+        async with deps.gpu_hold_admission_lock:
+            if deps.gpu_hold_generation_tasks:
+                raise HTTPException(status_code=409, detail="GPU is busy or held")
+            if not await reserve_gpu_hold(
+                deps.redis,
+                deps.worker_id,
+                token,
+                DEFAULT_TTL_SECONDS,
+            ):
+                raise HTTPException(status_code=409, detail="GPU is busy or held")
+        return GpuHoldResponse(token=token)
+
+    @router.post(
+        "/gpu_hold/renew",
+        status_code=204,
+        dependencies=[Depends(verify_internal_token)],
+    )
+    async def renew_hold(req: GpuHoldTokenRequest) -> None:
+        if not await renew_gpu_hold(
+            deps.redis,
+            deps.worker_id,
+            req.token,
+            DEFAULT_TTL_SECONDS,
+        ):
+            raise HTTPException(status_code=409, detail="GPU hold token is invalid")
+
+    @router.post(
+        "/gpu_hold/release",
+        status_code=204,
+        dependencies=[Depends(verify_internal_token)],
+    )
+    async def release_hold(req: GpuHoldTokenRequest) -> None:
+        async with deps.gpu_hold_handover_lock:
+            if req.token in deps.gpu_hold_handover_tokens:
+                raise HTTPException(
+                    status_code=409,
+                    detail="GPU hold is owned by a training task",
+                )
+            if not await release_gpu_hold(deps.redis, deps.worker_id, req.token):
+                raise HTTPException(status_code=409, detail="GPU hold token is invalid")
+
+    @router.post(
+        "/gpu_hold/handover",
+        response_model=GpuHoldHandoverResponse,
+        dependencies=[Depends(verify_internal_token)],
+    )
+    async def hold_handover(req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
+        async with deps.gpu_hold_handover_lock:
+            return GpuHoldHandoverResponse(
+                claimed=req.token in deps.gpu_hold_handover_tokens,
+                task_id=deps.gpu_hold_handover_tasks.get(req.token),
+            )
+
+    @router.post(
+        "/tasks/train_lora",
+        response_model=TaskCreatedResponse,
+        dependencies=[Depends(verify_internal_token)],
+    )
     async def train_lora(req: TrainLoraRequest) -> TaskCreatedResponse:
         try:
             validated_request = _validate_train_lora_request(
-                req, deps.shared_audio_root,
+                req,
+                deps.shared_audio_root,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -259,32 +417,101 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 status_code=501,
                 detail="Worker not configured with a train_lora runner",
             )
-        loaded = await deps.cache.acquire_for_use(req.mode)
-        if loaded is None:
+        if not await _claim_gpu_hold_handover(deps, req.hold_token):
             raise HTTPException(
                 status_code=409,
-                detail=f"Mode {req.mode} not loaded; call /load_model first",
+                detail="GPU hold token is invalid or already handed over",
             )
+        loaded = None
+        renew_task = None
         try:
+            loaded = await deps.cache.acquire_for_use(req.mode)
+            if loaded is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Mode {req.mode} not loaded; call /load_model first",
+                )
+            try:
+                renew_task = await _start_gpu_hold_renewal(
+                    deps.redis,
+                    deps.worker_id,
+                    req.hold_token,
+                )
+            except RuntimeError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             task_id = await deps.task_store.create("train_lora")
-        except Exception:
-            await deps.cache.release(req.mode)
+            async with deps.gpu_hold_handover_lock:
+                deps.gpu_hold_handover_tasks[req.hold_token] = task_id
+        except BaseException:
+            try:
+                if renew_task is not None:
+                    await _cancel_gpu_hold_renewal(renew_task)
+            finally:
+                try:
+                    if loaded is not None:
+                        await deps.cache.release(req.mode)
+                finally:
+                    await _release_gpu_hold_handover(deps, req.hold_token)
             raise
 
         async def _runner_with_release() -> None:
-            try:
-                await deps.train_lora_runner(
+            training_task = asyncio.create_task(
+                deps.train_lora_runner(
                     deps.task_store,
                     task_id,
                     request=validated_request,
                     port=loaded.port,
                     checkpoint_dir=deps.checkpoint_dir,
                     training_workspace_dirname=deps.training_workspace_dirname,
+                ),
+            )
+            try:
+                done, _ = await asyncio.wait(
+                    {training_task, renew_task},
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+                if renew_task in done:
+                    training_task.cancel()
+                    try:
+                        await training_task
+                    except asyncio.CancelledError:
+                        pass
+                    await renew_task
+                await training_task
             finally:
-                await deps.cache.release(req.mode)
+                try:
+                    if not training_task.done():
+                        training_task.cancel()
+                        try:
+                            await training_task
+                        except asyncio.CancelledError:
+                            pass
+                finally:
+                    await _cancel_gpu_hold_renewal(renew_task)
+                    try:
+                        await release_gpu_hold(deps.redis, deps.worker_id, req.hold_token)
+                    finally:
+                        try:
+                            await deps.cache.release(req.mode)
+                        finally:
+                            await _release_gpu_hold_handover(deps, req.hold_token)
 
-        spawn_background(_runner_with_release())
+        runner_with_release = _runner_with_release()
+        try:
+            spawn_background(runner_with_release)
+        except Exception:
+            runner_with_release.close()
+            try:
+                await _cancel_gpu_hold_renewal(renew_task)
+            finally:
+                try:
+                    await release_gpu_hold(deps.redis, deps.worker_id, req.hold_token)
+                finally:
+                    try:
+                        await deps.cache.release(req.mode)
+                    finally:
+                        await _release_gpu_hold_handover(deps, req.hold_token)
+            raise
         return TaskCreatedResponse(task_id=task_id)
 
     @router.post("/download_model", response_model=TaskCreatedResponse)
@@ -322,13 +549,12 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deps: WorkerDeps = app.state.deps
     control_plane = (
-        deps.registry_client.control_plane_url
-        if deps.registry_client is not None
-        else "(disabled)"
+        deps.registry_client.control_plane_url if deps.registry_client is not None else "(disabled)"
     )
     log.info(
         "acestep-worker %s starting; awaiting control plane at %s",
-        deps.worker_id, control_plane,
+        deps.worker_id,
+        control_plane,
     )
 
     async def _register_and_flag() -> None:
@@ -400,14 +626,16 @@ async def default_train_lora_runner(
             raise RuntimeError(f"Dataset scan found 0 samples in {dataset_dir}")
 
         preprocess_handle = await asyncio.to_thread(
-            client.start_preprocess, str(output_dir / "tensors"),
+            client.start_preprocess,
+            str(output_dir / "tensors"),
         )
         await task_store.update_progress(task_id, 0.05)
 
         while True:
             await asyncio.sleep(request.poll_interval_seconds)
             status = await asyncio.to_thread(
-                client.poll_preprocess, preprocess_handle.task_id,
+                client.poll_preprocess,
+                preprocess_handle.task_id,
             )
             if status.total > 0:
                 fraction = 0.05 + 0.15 * min(status.current / status.total, 1.0)
@@ -455,7 +683,9 @@ async def default_train_lora_runner(
                 break
 
         export_result = await asyncio.to_thread(
-            client.export_training, str(output_dir), str(export_dir),
+            client.export_training,
+            str(output_dir),
+            str(export_dir),
         )
         if Path(export_result.source).resolve() != (output_dir / "final").resolve():
             raise RuntimeError(
@@ -502,14 +732,17 @@ async def default_train_lora_runner(
 
 
 def _validate_train_lora_request(
-    request: TrainLoraRequest, shared_audio_root: Path,
+    request: TrainLoraRequest,
+    shared_audio_root: Path,
 ) -> TrainLoraRequest:
     dataset_dir = _shared_audio_path(request.dataset_dir, shared_audio_root, "dataset")
     output_dir = _shared_audio_path(request.output_dir, shared_audio_root, "output")
-    return request.model_copy(update={
-        "dataset_dir": str(dataset_dir),
-        "output_dir": str(output_dir),
-    })
+    return request.model_copy(
+        update={
+            "dataset_dir": str(dataset_dir),
+            "output_dir": str(output_dir),
+        }
+    )
 
 
 def _shared_audio_path(path: str, root: Path, kind: str) -> Path:
@@ -566,11 +799,14 @@ async def default_generate_runner(
             if fraction is None:
                 return
             asyncio.run_coroutine_threadsafe(
-                task_store.update_progress(task_id, fraction), loop,
+                task_store.update_progress(task_id, fraction),
+                loop,
             )
 
         result = await asyncio.to_thread(
-            client.generate, config, on_progress=_on_progress,
+            client.generate,
+            config,
+            on_progress=_on_progress,
         )
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"

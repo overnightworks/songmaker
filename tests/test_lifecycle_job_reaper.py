@@ -63,6 +63,7 @@ def _dead_process_time(now: datetime, threshold_seconds: int) -> datetime:
 def _add_job(
     ctx: AppContext, *, job_id: str, job_type: str, status: str,
     started_at: datetime | None = None, heartbeat_at: datetime | None = None,
+    queue_reason: str | None = None,
 ) -> None:
     with ctx.db() as session:
         kwargs = {}
@@ -70,7 +71,9 @@ def _add_job(
             kwargs["started_at"] = started_at
         if heartbeat_at is not None:
             kwargs["heartbeat_at"] = heartbeat_at
-        session.add(Job(id=job_id, type=job_type, status=status, **kwargs))
+        session.add(
+            Job(id=job_id, type=job_type, status=status, queue_reason=queue_reason, **kwargs)
+        )
         session.commit()
 
 
@@ -85,7 +88,9 @@ class TestLifecycleReaper:
         dead = _dead_process_time(now, QUEUED_JOB_STALE_THRESHOLD_SECONDS)
         _add_job(
             ctx, job_id="chat-1", job_type=JobType.CHAT, status=JobStatus.QUEUED,
-            started_at=dead, heartbeat_at=dead,
+            started_at=dead,
+            heartbeat_at=dead,
+            queue_reason="Waiting for LoRA training on this GPU.",
         )
 
         recovered = reap_stale_jobs(ctx, now=now)
@@ -96,6 +101,7 @@ class TestLifecycleReaper:
             assert job.status == JobStatus.FAILED
             assert job.error == "Queued too long — please retry."
             assert job.error_type == "queued_too_long"
+            assert job.queue_reason is None
 
     def test_fails_a_silenced_running_chat_job_by_heartbeat(self, ctx) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)

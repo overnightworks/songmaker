@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import json
 import os
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import fakeredis.aioredis
 import pytest
 
 from acestep_engine.models import AceStepConfig
@@ -33,6 +37,7 @@ from songmaker_cli.db.queries import (
     count_user_jobs_in_window,
     get_generation,
     get_job,
+    register_worker,
     update_job_status,
 )
 from songmaker_cli.jobs import (
@@ -46,7 +51,7 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_scoring_job,
 )
-from songmaker_cli.scheduler import GenerationTaskResultDTO
+from songmaker_cli.scheduler import GenerationTaskResultDTO, WorkerTaskFailed
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     ScorerOutcome,
@@ -61,12 +66,16 @@ def _run(coro):
 
 
 def _make_dto(
-    seed: int = 42, audio_path: str = "/tmp/fake.wav",
+    seed: int = 42,
+    audio_path: str = "/tmp/fake.wav",
     delivered_batch_size: int | None = None,
 ) -> GenerationTaskResultDTO:
     return GenerationTaskResultDTO(
-        mode="turbo", audio_path=audio_path, seed=seed,
-        cot_caption="", cot_lyrics="",
+        mode="turbo",
+        audio_path=audio_path,
+        seed=seed,
+        cot_caption="",
+        cot_lyrics="",
         delivered_batch_size=delivered_batch_size,
     )
 
@@ -86,6 +95,25 @@ def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
     )
 
 
+async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None:
+    from songmaker_cli.acestep_state import worker_state_key
+
+    with db_factory() as session:
+        register_worker(
+            session,
+            worker_id=worker_id,
+            host="worker",
+            port=8001,
+            gpu_id=0,
+            vram_total_gb=24.0,
+        )
+        session.commit()
+    await redis.set(
+        worker_state_key(worker_id),
+        json.dumps({"gpu_healthy": True, "loaded": ["sft"]}),
+    )
+
+
 @pytest.fixture()
 def db_factory(tmp_path: Path):
     factory = init_db(tmp_path / "test.db")
@@ -98,15 +126,27 @@ def seeded_db(db_factory, tmp_path: Path):
         session.add(User(id="u1", username="user1", password_hash="hash", role="user"))
         session.flush()
         session.add(Album(id="rock", title="Rock", artist="Band", created_by="u1"))
-        session.add(Song(
-            id="s1", title="Song One", album_id="rock",
-            track_number=1, vocal_language="en",
-        ))
-        session.add(Version(
-            id="v1", song_id="s1", version_number=1,
-            lyrics="Hello world", prompt="rock style", bpm=120,
-            audio_duration=60, key_scale="Am",
-        ))
+        session.add(
+            Song(
+                id="s1",
+                title="Song One",
+                album_id="rock",
+                track_number=1,
+                vocal_language="en",
+            )
+        )
+        session.add(
+            Version(
+                id="v1",
+                song_id="s1",
+                version_number=1,
+                lyrics="Hello world",
+                prompt="rock style",
+                bpm=120,
+                audio_duration=60,
+                key_scale="Am",
+            )
+        )
         session.add(Job(id="j1", type="generate", status="queued", user_id="u1"))
         session.add(Job(id="j2", type="score", status="queued"))
         session.commit()
@@ -150,8 +190,21 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     else:
         dispatch = AsyncMock(return_value=dto_or_side_effect)
+
+    @contextmanager
+    def patch_dispatch():
+        with (
+            patch.multiple(
+                "songmaker_cli.jobs",
+                admit_generation_worker=AsyncMock(return_value=MagicMock(id="w1")),
+                dispatch_generation_on_worker=dispatch,
+            ),
+            patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        ):
+            yield
+
     return (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch_dispatch(),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     )
@@ -160,20 +213,27 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
 def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "completed"
-        assert job.progress == 1.0
+    assert job.status == "completed"
+    assert job.progress == 1.0
 
+    with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
         assert gens[0].seed == 42
@@ -183,8 +243,175 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert events[0].generation_id == gens[0].id
 
 
+def test_generation_hold_defers_before_building_temporary_context(
+    seeded_db,
+    tmp_path: Path,
+) -> None:
+    from songmaker_cli.music_worker import MusicWorker
+    from songmaker_cli.scheduler import AllWorkersHeld
+
+    redis = MagicMock()
+    redis.enqueue_job = AsyncMock()
+    build_context = MagicMock()
+    with (
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker",
+            AsyncMock(side_effect=AllWorkersHeld("held")),
+        ),
+        patch("songmaker_cli.jobs.generation._build_generation_context", build_context),
+    ):
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                2,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=redis,
+                target_model="sft",
+                seed=17,
+            )
+        )
+
+    build_context.assert_not_called()
+    args, kwargs = redis.enqueue_job.await_args
+    inspect.signature(MusicWorker.generate).bind(MagicMock(), MagicMock(), *args[1:])
+    assert args[1:] == ("j1", "s1", "v1", 2, "u1", 17, "sft", None, None)
+    assert kwargs["_defer_by"] == 5
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "queued"
+        assert job.queue_reason == "Waiting for LoRA training on this GPU."
+
+
+def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import AllWorkersHeld
+
+    redis = MagicMock()
+    redis.enqueue_job = AsyncMock()
+    admitted = AsyncMock(side_effect=[AllWorkersHeld("held"), MagicMock(id="w1")])
+    dispatch = AsyncMock(return_value=_make_dto())
+    with (
+        patch("songmaker_cli.jobs.admit_generation_worker", admitted),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+    ):
+        _run(
+            run_generation_job(
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+        )
+        with seeded_db() as session:
+            assert get_job(session, "j1").queue_reason == "Waiting for LoRA training on this GPU."
+        _run(
+            run_generation_job(
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+        )
+
+    dispatch.assert_awaited_once()
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "completed"
+        assert job.queue_reason is None
+
+
+def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.acestep_state import (
+        read_queue_depth,
+        release_gpu_hold,
+        reserve_gpu_hold,
+    )
+
+    async def exercise() -> None:
+        redis = fakeredis.aioredis.FakeRedis()
+        redis.enqueue_job = AsyncMock()
+        await _seed_healthy_worker(redis, seeded_db)
+        assert await reserve_gpu_hold(redis, "w1", "hold-token", 15)
+
+        dispatch = AsyncMock(return_value=_make_dto())
+        with (
+            patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+            patch(
+                "songmaker_cli.jobs.post_process_generation",
+                side_effect=_persist_via_post_process,
+            ),
+            patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        ):
+            await run_generation_job(
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+            with seeded_db() as session:
+                queued = get_job(session, "j1")
+                assert queued.status == "queued"
+                assert queued.queue_reason == "Waiting for LoRA training on this GPU."
+
+            assert await release_gpu_hold(redis, "w1", "hold-token")
+            await run_generation_job(
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+
+        dispatch.assert_awaited_once()
+        assert await read_queue_depth(redis, "w1") == 0
+
+    _run(exercise())
+
+
+def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
+    seeded_db,
+    tmp_path: Path,
+) -> None:
+    from songmaker_cli.acestep_state import reserve_gpu_hold
+    from songmaker_cli.scheduler import pick_worker
+
+    async def exercise() -> None:
+        redis = fakeredis.aioredis.FakeRedis()
+        redis.enqueue_job = AsyncMock()
+        await _seed_healthy_worker(redis, seeded_db)
+
+        async def pick_then_hold(session, pool, target_mode):
+            worker = await pick_worker(session, pool, target_mode)
+            assert await reserve_gpu_hold(pool, worker.id, "training-token", 15)
+            return worker
+
+        build_context = MagicMock()
+        with (
+            patch("songmaker_cli.scheduler.pick_worker", pick_then_hold),
+            patch("songmaker_cli.jobs.generation._build_generation_context", build_context),
+        ):
+            await run_generation_job(
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+
+        build_context.assert_not_called()
+        redis.enqueue_job.assert_awaited_once()
+        with seeded_db() as session:
+            job = get_job(session, "j1")
+            assert job.status == "queued"
+            assert job.queue_reason == "Waiting for LoRA training on this GPU."
+
+    _run(exercise())
+
+
 def test_generation_job_persists_the_takes_own_measured_duration(
-    seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_db,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A completed generation carries its measured length (#258) -- driven
     through the real job-completion path (run_generation_job), not by
@@ -201,14 +428,20 @@ def test_generation_job_persists_the_takes_own_measured_duration(
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").one()
@@ -227,14 +460,20 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
     dtos = [_make_dto(seed=100 + i) for i in range(3)]
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(dtos)
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                3,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -242,18 +481,153 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
         assert session.query(ResourceEvent).count() == 3
 
 
+def test_generation_series_keeps_its_admission_until_the_third_take(
+    seeded_db,
+    tmp_path: Path,
+) -> None:
+    admitted = AsyncMock(return_value=MagicMock(id="w1"))
+    released = AsyncMock()
+    takes = 0
+
+    async def dispatch(**kwargs):
+        nonlocal takes
+
+        takes += 1
+        assert admitted.await_count == 1
+        released.assert_not_awaited()
+        return _make_dto(seed=takes)
+
+    with (
+        patch("songmaker_cli.jobs.admit_generation_worker", admitted),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", released),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+    ):
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                3,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
+
+    assert takes == 3
+    released.assert_awaited_once()
+
+
+def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
+    seeded_db,
+    tmp_path: Path,
+) -> None:
+    from songmaker_cli.acestep_state import (
+        read_queue_depth,
+        release_gpu_hold,
+        reserve_gpu_hold,
+    )
+
+    async def exercise() -> None:
+        redis = fakeredis.aioredis.FakeRedis()
+        await _seed_healthy_worker(redis, seeded_db)
+        take_count = 0
+
+        async def dispatch(**kwargs):
+            nonlocal take_count
+
+            take_count += 1
+            assert await read_queue_depth(redis, "w1") == 1
+            assert not await reserve_gpu_hold(redis, "w1", "training-token", 15)
+            return _make_dto(seed=take_count)
+
+        with (
+            patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+            patch(
+                "songmaker_cli.jobs.post_process_generation",
+                side_effect=_persist_via_post_process,
+            ),
+            patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        ):
+            await run_generation_job(
+                "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                target_model="sft",
+            )
+
+        assert take_count == 3
+        assert await read_queue_depth(redis, "w1") == 0
+        assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
+        assert await release_gpu_hold(redis, "w1", "training-token")
+
+    _run(exercise())
+
+
+@pytest.mark.parametrize("outcome", ["cancel", "error", "timeout"])
+def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome(
+    seeded_db,
+    tmp_path: Path,
+    outcome: str,
+) -> None:
+    from songmaker_cli.acestep_state import read_queue_depth, reserve_gpu_hold
+
+    async def dispatch(**kwargs):
+        if outcome == "cancel":
+            _cancel_job(seeded_db, "j1")
+            return _make_dto()
+        if outcome == "timeout":
+            raise asyncio.CancelledError()
+        raise WorkerTaskFailed("worker failed")
+
+    async def exercise() -> None:
+        redis = fakeredis.aioredis.FakeRedis()
+        await _seed_healthy_worker(redis, seeded_db)
+        with (
+            patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+            patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        ):
+            if outcome == "timeout":
+                with pytest.raises(asyncio.CancelledError):
+                    await run_generation_job(
+                        "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
+                        audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                        target_model="sft",
+                    )
+            else:
+                await run_generation_job(
+                    "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
+                    audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
+                    target_model="sft",
+                )
+        assert await read_queue_depth(redis, "w1") == 0
+        assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
+
+    _run(exercise())
+
+
 def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
     side_effects = [_make_dto(seed=100), RuntimeError("GPU OOM"), RuntimeError("GPU OOM")]
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(side_effects)
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                3,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -267,14 +641,27 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
-    _run(run_generation_job(
-        "j1", "nonexistent", "v1", 1, "u1",
-        db_factory=seeded_db,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        redis=MagicMock(),
-        target_model="sft",
-    ))
+    with (
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker",
+            AsyncMock(return_value=MagicMock(id="w1")),
+        ),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+    ):
+        _run(
+            run_generation_job(
+                "j1",
+                "nonexistent",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -284,14 +671,27 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
-    _run(run_generation_job(
-        "j1", "s1", "nonexistent", 1, "u1",
-        db_factory=seeded_db,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        redis=MagicMock(),
-        target_model="sft",
-    ))
+    with (
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker",
+            AsyncMock(return_value=MagicMock(id="w1")),
+        ),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+    ):
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "nonexistent",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -300,7 +700,8 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_rejects_foreign_reference_before_dispatch(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     foreign_ref = tmp_path / "audio" / "u2" / "refs" / "secret.wav"
     foreign_ref.parent.mkdir(parents=True)
@@ -312,17 +713,27 @@ def test_generation_job_rejects_foreign_reference_before_dispatch(
 
     dispatch = AsyncMock()
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     dispatch.assert_not_awaited()
     with seeded_db() as session:
@@ -339,14 +750,20 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
         NoCapacityError("no workers"),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -362,14 +779,20 @@ def test_generation_job_hides_worker_internal_details(seeded_db, tmp_path: Path)
         WorkerGenerationFailed(cause),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -385,14 +808,20 @@ def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path
         WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -402,7 +831,8 @@ def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path
 
 
 def test_generation_job_keeps_worker_protocol_failures_generic(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     """Only ACE-Step's own cause reaches the user; a broken worker event
     is our bug and stays behind the generic message."""
@@ -412,14 +842,20 @@ def test_generation_job_keeps_worker_protocol_failures_generic(
         WorkerProtocolError("Worker done event missing 'result' field"),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -432,14 +868,20 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
         RuntimeError("GPU error"),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                3,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -451,7 +893,8 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_event_failure_rolls_back_generation(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     def persist_with_artifacts(*, ctx, generation_id, db_factory, **kwargs):
         for suffix in (".mp3", ".wav", ".raw.wav"):
@@ -459,12 +902,19 @@ def test_generation_event_failure_rolls_back_generation(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"audio")
         _persist_via_post_process(
-            ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
+            ctx=ctx,
+            generation_id=generation_id,
+            db_factory=db_factory,
+            **kwargs,
         )
 
     dispatch = AsyncMock(return_value=_make_dto())
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_with_artifacts),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch(
@@ -472,14 +922,20 @@ def test_generation_event_failure_rolls_back_generation(
             side_effect=RuntimeError("event write failed"),
         ),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         assert get_job(session, "j1").status == "failed"
@@ -502,14 +958,20 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
     redis = _healthy_scoring_redis()
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=redis,
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=redis,
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").one()
@@ -528,18 +990,25 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
 
 
 def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=_healthy_scoring_redis(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=_healthy_scoring_redis(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         assert session.query(Job).filter_by(type="score", song_id="s1").count() == 1
@@ -550,21 +1019,28 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
 
 
 def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
     redis = MagicMock()
     redis.exists = AsyncMock(return_value=0)
     redis.enqueue_job = AsyncMock()
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=redis,
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=redis,
+                target_model="sft",
+            )
+        )
 
     redis.enqueue_job.assert_not_awaited()
     with seeded_db() as session:
@@ -585,14 +1061,20 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -614,14 +1096,20 @@ def test_generation_job_persists_requested_batch_size(seeded_db, tmp_path: Path)
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -646,14 +1134,20 @@ def test_generation_job_persists_vram_guard_batch_reduction(seeded_db, tmp_path:
         _make_dto(delivered_batch_size=1),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -662,7 +1156,8 @@ def test_generation_job_persists_vram_guard_batch_reduction(seeded_db, tmp_path:
 
 
 def test_generation_job_omits_delivered_batch_size_when_it_matches_requested(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     """A worker report that matches the request is not persisted as noise.
 
@@ -680,14 +1175,20 @@ def test_generation_job_omits_delivered_batch_size_when_it_matches_requested(
         _make_dto(delivered_batch_size=2),
     )
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -704,14 +1205,20 @@ def test_generation_job_omits_default_batch_size(seeded_db, tmp_path: Path) -> N
     """
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
     with dispatch, post_process, defaults:
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -722,21 +1229,31 @@ def test_generation_job_omits_default_batch_size(seeded_db, tmp_path: Path) -> N
 def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> None:
     dispatch = AsyncMock(return_value=_make_dto())
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
             return_value={"sft": {"shift": 7.0}},
         ) as mock_load,
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     mock_load.assert_called_once()
 
@@ -744,18 +1261,28 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
 def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Path) -> None:
     dispatch = AsyncMock(return_value=_make_dto())
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="xl-sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="xl-sft",
+            )
+        )
 
     dispatch.assert_awaited_once()
     kwargs = dispatch.await_args.kwargs
@@ -776,14 +1303,20 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
         patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     dispatch.assert_not_awaited()
     with seeded_db() as session:
@@ -795,29 +1328,43 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
 
 
 def test_generation_job_cancel_after_first_variant_skips_rest(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     def persist_then_cancel(*, ctx, generation_id, db_factory, **kwargs):
         result = _persist_via_post_process(
-            ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
+            ctx=ctx,
+            generation_id=generation_id,
+            db_factory=db_factory,
+            **kwargs,
         )
         _cancel_job(db_factory, "j1")
         return result
 
     dispatch = AsyncMock(side_effect=[_make_dto(seed=100 + i) for i in range(3)])
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                3,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     assert dispatch.await_count == 1
     with seeded_db() as session:
@@ -831,7 +1378,8 @@ def test_generation_job_cancel_after_first_variant_skips_rest(
 
 
 def test_generation_job_cancel_after_worker_skips_persist(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     async def dispatch_then_cancel(**kwargs):
         _cancel_job(seeded_db, "j1")
@@ -839,21 +1387,31 @@ def test_generation_job_cancel_after_worker_skips_persist(
 
     dispatch = AsyncMock(side_effect=dispatch_then_cancel)
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
+        ),
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
+        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch(
             "songmaker_cli.jobs.post_process_generation",
             side_effect=_persist_via_post_process,
         ) as post_process,
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db,
-            audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data",
-            redis=MagicMock(),
-            target_model="sft",
-        ))
+        _run(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
 
     post_process.assert_not_called()
     with seeded_db() as session:
@@ -901,10 +1459,16 @@ def stubbed_claude_judge():
 
 def _seed_generation(db_factory) -> None:
     with db_factory() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
+        session.add(
+            Generation(
+                id="g1",
+                song_id="s1",
+                version_id="v1",
+                generation_number=1,
+                mp3_path="user1/g1.mp3",
+                seed=42,
+            )
+        )
         session.commit()
 
 
@@ -917,7 +1481,8 @@ def _audio_dir_with_mp3(tmp_path: Path) -> Path:
 
 
 def _scoring_result(
-    with_whisper: bool = False, timed_out: bool = False,
+    with_whisper: bool = False,
+    timed_out: bool = False,
 ) -> SongScores:
     """A finished scoring run: emotional_dynamics always, text_accuracy on
     request, and optionally a scorer that blew its budget."""
@@ -941,7 +1506,9 @@ def _scoring_result(
 
     return SongScores(
         emotional_dynamics=EmotionalDynamicsScore(
-            pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,
+            pitch_cv=0.3,
+            rms_contrast=2.0,
+            onset_rate_cv=0.2,
             overall_expressiveness=0.55,
         ),
         text_accuracy=text_accuracy,
@@ -962,7 +1529,10 @@ def live_scorer_process():
 
 
 def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
-    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+    seeded_db,
+    tmp_path: Path,
+    live_scorer_process,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A scorer over budget is abandoned, not stopped — it keeps holding the
     child's models and GPU memory. This run's values are kept; the child is
@@ -971,12 +1541,14 @@ def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
     audio_dir = _audio_dir_with_mp3(tmp_path)
     pid_before = live_scorer_process._process.pid
     monkeypatch.setattr(
-        live_scorer_process, "score",
+        live_scorer_process,
+        "score",
         lambda *_args, **_kwargs: _scoring_result(timed_out=True),
     )
 
     with patch(
-        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=live_scorer_process,
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -992,17 +1564,23 @@ def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
 
 
 def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
-    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+    seeded_db,
+    tmp_path: Path,
+    live_scorer_process,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
     pid_before = live_scorer_process._process.pid
     monkeypatch.setattr(
-        live_scorer_process, "score", lambda *_args, **_kwargs: _scoring_result(),
+        live_scorer_process,
+        "score",
+        lambda *_args, **_kwargs: _scoring_result(),
     )
 
     with patch(
-        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=live_scorer_process,
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -1011,7 +1589,9 @@ def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
 
 
 def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
-    seeded_db, tmp_path: Path, live_scorer_process,
+    seeded_db,
+    tmp_path: Path,
+    live_scorer_process,
 ) -> None:
     """A job cancelled while scoring returns before it can recycle anything.
     The child it left a scorer running in must still not serve the next
@@ -1029,10 +1609,13 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
 
     with (
         patch(
-            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=live_scorer_process,
         ),
         patch.object(
-            ScorerProcess, "_poll_response", side_effect=_cancel_and_report_a_timeout,
+            ScorerProcess,
+            "_poll_response",
+            side_effect=_cancel_and_report_a_timeout,
         ),
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
@@ -1044,14 +1627,19 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
     )
 
     live_scorer_process.score(
-        audio_dir / "user1" / "g1.mp3", scorers=[], config=PipelineConfig(device="cpu"),
+        audio_dir / "user1" / "g1.mp3",
+        scorers=[],
+        config=PipelineConfig(device="cpu"),
     )
 
     assert live_scorer_process._process.pid != pid_before
 
 
 def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
-    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+    seeded_db,
+    tmp_path: Path,
+    live_scorer_process,
+    monkeypatch: pytest.MonkeyPatch,
     stubbed_claude_judge,
 ) -> None:
     """A judge timeout leaves the child usable and marks the job partial. The
@@ -1071,12 +1659,14 @@ def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
     audio_dir = _audio_dir_with_mp3(tmp_path)
     pid_before = live_scorer_process._process.pid
     monkeypatch.setattr(
-        live_scorer_process, "score",
+        live_scorer_process,
+        "score",
         lambda *_args, **_kwargs: _scoring_result(with_whisper=True),
     )
 
     with patch(
-        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=live_scorer_process,
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -1119,7 +1709,8 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     """The scorer child is spawned with ANTHROPIC_API_KEY scrubbed and loads
     third-party model weights, so no secret must cross the pipe at all: this
@@ -1135,8 +1726,9 @@ def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
 
     captured: dict = {}
 
-    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
-                       job_id=None, on_progress=None):
+    def _capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         captured["child_config"] = config
         return _scoring_result(with_whisper=True)
 
@@ -1163,15 +1755,17 @@ def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
 
 
 def test_scoring_job_never_asks_the_child_for_the_parent_hosted_scorer(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
 
     captured: dict = {}
 
-    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
-                       job_id=None, on_progress=None):
+    def _capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         captured["scorers"] = scorers
         return _scoring_result()
 
@@ -1186,8 +1780,11 @@ def test_scoring_job_never_asks_the_child_for_the_parent_hosted_scorer(
         ) as judge,
     ):
         run_scoring_job(
-            "j2", "g1", ["silence", "lyrical_coherence"],
-            db_factory=seeded_db, audio_dir=audio_dir,
+            "j2",
+            "g1",
+            ["silence", "lyrical_coherence"],
+            db_factory=seeded_db,
+            audio_dir=audio_dir,
         )
 
     assert captured["scorers"] == ["silence"]
@@ -1195,7 +1792,8 @@ def test_scoring_job_never_asks_the_child_for_the_parent_hosted_scorer(
 
 
 def test_scoring_job_skips_the_judge_when_coherence_was_not_requested(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
@@ -1208,7 +1806,11 @@ def test_scoring_job_skips_the_judge_when_coherence_was_not_requested(
         patch("songmaker_cli.jobs.scoring.judge_lyrical_coherence") as judge,
     ):
         run_scoring_job(
-            "j2", "g1", ["silence"], db_factory=seeded_db, audio_dir=audio_dir,
+            "j2",
+            "g1",
+            ["silence"],
+            db_factory=seeded_db,
+            audio_dir=audio_dir,
         )
 
     judge.assert_not_called()
@@ -1239,7 +1841,8 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_uses_generation_version_not_latest(
-    seeded_db, tmp_path: Path,
+    seeded_db,
+    tmp_path: Path,
 ) -> None:
     """Meta must come from the version this generation was produced with,
     not from the song's latest_version (which may have been edited since).
@@ -1250,21 +1853,35 @@ def test_scoring_job_uses_generation_version_not_latest(
     mp3_file.write_bytes(b"fake-mp3")
 
     with seeded_db() as session:
-        session.add(Version(
-            id="v2", song_id="s1", version_number=2,
-            lyrics="Brand new lyrics", prompt="new prompt",
-            bpm=140, audio_duration=60, key_scale="Cm",
-        ))
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
+        session.add(
+            Version(
+                id="v2",
+                song_id="s1",
+                version_number=2,
+                lyrics="Brand new lyrics",
+                prompt="new prompt",
+                bpm=140,
+                audio_duration=60,
+                key_scale="Cm",
+            )
+        )
+        session.add(
+            Generation(
+                id="g1",
+                song_id="s1",
+                version_id="v1",
+                generation_number=1,
+                mp3_path="user1/g1.mp3",
+                seed=42,
+            )
+        )
         session.commit()
 
     captured: dict = {}
 
-    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
-                       job_id=None, on_progress=None):
+    def _capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         captured["meta"] = meta
         return _scoring_result(with_whisper=True)
 
@@ -1290,16 +1907,23 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
     mp3_file.write_bytes(b"fake-mp3")
 
     with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id=None, generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
+        session.add(
+            Generation(
+                id="g1",
+                song_id="s1",
+                version_id=None,
+                generation_number=1,
+                mp3_path="user1/g1.mp3",
+                seed=42,
+            )
+        )
         session.commit()
 
     captured: dict = {}
 
-    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
-                       job_id=None, on_progress=None):
+    def _capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         captured["meta"] = meta
         return _scoring_result(with_whisper=True)
 
@@ -1326,7 +1950,9 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_uses_configured_per_scorer_budgets(
-    seeded_db, tmp_path: Path, monkeypatch,
+    seeded_db,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "45")
     monkeypatch.setenv("TEXT_ACCURACY_TIMEOUT_SECONDS", "600")
@@ -1336,8 +1962,9 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
 
     captured: dict = {}
 
-    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
-                       job_id=None, on_progress=None):
+    def _capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         captured["config"] = config
         return _scoring_result()
 
@@ -1355,7 +1982,11 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
     run_scoring_job(
-        "j2", "nonexistent", None, db_factory=seeded_db, audio_dir=Path("/tmp/audio"),
+        "j2",
+        "nonexistent",
+        None,
+        db_factory=seeded_db,
+        audio_dir=Path("/tmp/audio"),
     )
 
     with seeded_db() as session:
@@ -1366,10 +1997,16 @@ def test_scoring_job_generation_not_found(seeded_db) -> None:
 
 def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/missing.mp3", seed=42,
-        ))
+        session.add(
+            Generation(
+                id="g1",
+                song_id="s1",
+                version_id="v1",
+                generation_number=1,
+                mp3_path="user1/missing.mp3",
+                seed=42,
+            )
+        )
         session.commit()
 
     run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=tmp_path / "audio")
@@ -1401,8 +2038,9 @@ def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path)
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
 
-    def _score_and_cancel(mp3_path, meta=None, scorers=None, config=None,
-                          job_id=None, on_progress=None):
+    def _score_and_cancel(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
+    ):
         if on_progress:
             on_progress(1, 2, "silence")
         _cancel_job(seeded_db, "j2")
@@ -1521,10 +2159,13 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
 
     config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
     ctx = GenerationContext(
-        song_id="s1", version_id="v1",
+        song_id="s1",
+        version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config, audio_dir=tmp_path, user_id="u1",
+        ace_config=config,
+        audio_dir=tmp_path,
+        user_id="u1",
         model_name="turbo",
     )
     params = RepaintTaskParams(
@@ -1552,14 +2193,22 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
     src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
 
     config = AceStepConfig(
-        prompt="test", lyrics="la la", audio_duration=120,
-        guidance_scale=5.0, inference_steps=50, shift=2.0, thinking=True,
+        prompt="test",
+        lyrics="la la",
+        audio_duration=120,
+        guidance_scale=5.0,
+        inference_steps=50,
+        shift=2.0,
+        thinking=True,
     )
     ctx = GenerationContext(
-        song_id="s1", version_id="v1",
+        song_id="s1",
+        version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config, audio_dir=tmp_path, user_id="u1",
+        ace_config=config,
+        audio_dir=tmp_path,
+        user_id="u1",
         model_name="sft",
     )
     params = RepaintTaskParams(
@@ -1585,10 +2234,13 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
 
     config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
     ctx = GenerationContext(
-        song_id="s1", version_id="v1",
+        song_id="s1",
+        version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config, audio_dir=tmp_path, user_id="u1",
+        ace_config=config,
+        audio_dir=tmp_path,
+        user_id="u1",
         model_name="turbo",
     )
     params = CoverTaskParams(
@@ -1625,6 +2277,7 @@ def _seed_worker_row(factory, worker_id: str = "w1") -> None:
 
 def _run(coro):
     import asyncio
+
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
@@ -1729,10 +2382,8 @@ def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, capl
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
-    long_tail = (
-        "ACE-Step did not become healthy within 900s\n"
-        "--- last log lines ---\n"
-        + ("vllm: loading shard 2/4\n" * 50)
+    long_tail = "ACE-Step did not become healthy within 900s\n--- last log lines ---\n" + (
+        "vllm: loading shard 2/4\n" * 50
     )
     fake_response = MagicMock(status_code=502, text=long_tail)
     fake_client = AsyncMock()

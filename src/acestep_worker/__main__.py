@@ -104,6 +104,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         registration=None,
         checkpoint_dir=checkpoint_dir,
         audio_output_dir=audio_dir,
+        internal_token=settings.songmaker_internal_token.get_secret_value(),
         shared_audio_root=shared_audio_root,
         training_workspace_dirname=settings.acestep_training_workspace_dirname,
         generate_runner=default_generate_runner,
@@ -117,7 +118,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         state_provider=lambda: build_state_payload(deps),
     )
 
-    if settings.control_plane_url and settings.songmaker_internal_token:
+    if settings.control_plane_url:
         deps.registry_client = RegistryClient(
             control_plane_url=settings.control_plane_url,
             internal_token=settings.songmaker_internal_token.get_secret_value(),

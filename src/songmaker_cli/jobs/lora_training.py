@@ -16,23 +16,31 @@ from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.constants import (
+    ARQ_MUSIC_QUEUE_NAME,
+    GPU_HOLD_POLL_INTERVAL_SECONDS,
+    LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
     MODEL_DEFAULT_MODE,
+    STALE_JOB_THRESHOLDS,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORA_TRAINING_TMP_DIRNAME,
     USER_LORAS_DIRNAME,
     AuditAction,
+    JobFunction,
     JobStatus,
     JobType,
     LoraStatus,
     ResourceType,
 )
 from songmaker_cli.db.queries import (
+    count_queued_generation_jobs,
+    get_job,
     list_active_user_loras,
     record_audit,
     update_user_lora,
 )
 from songmaker_cli.scheduler import (
+    AllWorkersHeld,
     DispatchOptions,
     NoCapacityError,
     WorkerProtocolError,
@@ -68,6 +76,17 @@ class _WorkerHandle:
     id: str
 
 
+@dataclass
+class _LoraHoldHandover:
+    complete: bool = False
+
+
+@dataclass(frozen=True)
+class _LoraHandoverProbe:
+    claimed: bool | None
+    task_id: str | None = None
+
+
 ProgressCallback = Callable[[float], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 
@@ -89,7 +108,11 @@ def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
 
 
 def _materialize_dataset(
-    *, audio_dir: Path, user_id: str, lora_id: str, samples: list,
+    *,
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
+    samples: list,
 ) -> Path:
     dataset_dir = _dataset_dir(audio_dir, user_id, lora_id)
     if dataset_dir.exists():
@@ -108,10 +131,12 @@ def _materialize_dataset(
         except (OSError, NotImplementedError):
             shutil.copy2(src, dst_audio)
         (dataset_dir / f"{base}.caption.txt").write_text(
-            sample.caption.strip() + "\n", encoding="utf-8",
+            sample.caption.strip() + "\n",
+            encoding="utf-8",
         )
         (dataset_dir / f"{base}.lyrics.txt").write_text(
-            sample.lyrics.strip() + "\n", encoding="utf-8",
+            sample.lyrics.strip() + "\n",
+            encoding="utf-8",
         )
     return dataset_dir
 
@@ -120,38 +145,71 @@ async def _pick_and_call_worker(
     *,
     target_mode: str,
     request_payload: dict,
-    redis: Redis,
-    db_factory: sessionmaker[Session],
+    worker: _WorkerHandle,
+    hold_token: str,
+    renew_task: asyncio.Task[None],
+    handover: _LoraHoldHandover | None = None,
     on_progress: ProgressCallback,
     on_heartbeat: HeartbeatCallback,
 ) -> TrainLoraTaskResultDTO:
     import httpx
 
-    with db_factory() as session:
-        worker = await pick_worker(session, redis, target_mode)
-
+    if handover is None:
+        handover = _LoraHoldHandover()
     headers = _internal_headers()
+    submit_transmission_started = False
     load_options = DispatchOptions()
-    async with httpx.AsyncClient(timeout=load_options.load_model_timeout_seconds) as client:
-        load = await client.post(
-            f"{worker.base_url}/load_model",
-            json={"mode": target_mode},
-            headers=headers,
-        )
-        load.raise_for_status()
+    task_id: str | None = None
+    try:
+        async with httpx.AsyncClient(timeout=load_options.load_model_timeout_seconds) as client:
+            load = await _race_with_renewal(
+                client.post(
+                    f"{worker.base_url}/load_model",
+                    json={"mode": target_mode},
+                    headers=headers,
+                ),
+                renew_task,
+            )
+            load.raise_for_status()
 
-    async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
-        submit = await client.post(
-            f"{worker.base_url}/tasks/train_lora",
-            json=request_payload,
-            headers=headers,
-        )
-        submit.raise_for_status()
-        task_id = submit.json()["task_id"]
+        async def submit_training(client: httpx.AsyncClient):
+            nonlocal submit_transmission_started
+
+            submit_transmission_started = True
+            return await client.post(
+                f"{worker.base_url}/tasks/train_lora",
+                json={**request_payload, "hold_token": hold_token},
+                headers=headers,
+            )
+
+        async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+            submit = await _race_with_renewal(
+                submit_training(client),
+                renew_task,
+            )
+            submit.raise_for_status()
+            task_id = submit.json()["task_id"]
+            handover.complete = True
+    except BaseException:
+        if submit_transmission_started:
+            handover.complete = True
+            probe = await _worker_claimed_lora_handover(worker, hold_token)
+            if probe.task_id is not None:
+                task_id = probe.task_id
+            elif probe.claimed is False:
+                handover.complete = False
+        if not handover.complete:
+            await _release_lora_hold(worker, hold_token, best_effort=True)
+        if task_id is None:
+            raise
+    finally:
+        await _stop_lora_renewal(renew_task, suppress_failure=handover.complete)
 
     last_result: TrainLoraTaskResultDTO | None = None
     async for event_type, data in _iterate_task_events(
-        worker, task_id, options=DispatchOptions(),
+        worker,
+        task_id,
+        options=DispatchOptions(),
     ):
         if on_heartbeat is not None:
             maybe = on_heartbeat()
@@ -181,8 +239,248 @@ async def _pick_and_call_worker(
     return last_result
 
 
+async def _race_with_renewal(awaitable, renew_task: asyncio.Task[None]):
+    operation_task = asyncio.create_task(awaitable)
+    done, _ = await asyncio.wait(
+        {operation_task, renew_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if operation_task in done:
+        return await operation_task
+    if renew_task in done:
+        operation_task.cancel()
+        try:
+            await operation_task
+        except asyncio.CancelledError:
+            pass
+        return await renew_task
+    return await operation_task
+
+
+async def _stop_lora_renewal(
+    renew_task: asyncio.Task[None],
+    *,
+    suppress_failure: bool = False,
+) -> None:
+    if not renew_task.done():
+        renew_task.cancel()
+    try:
+        await renew_task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        if not suppress_failure:
+            raise
+
+
+async def _worker_claimed_lora_handover(
+    worker: _WorkerHandle,
+    hold_token: str,
+) -> _LoraHandoverProbe:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{worker.base_url}/gpu_hold/handover",
+                json={"token": hold_token},
+                headers=_internal_headers(),
+            )
+            response.raise_for_status()
+    except httpx.HTTPError:
+        log.exception("Could not confirm LoRA hold handover for worker %s", worker.id)
+        return _LoraHandoverProbe(claimed=None)
+    try:
+        payload = response.json()
+    except ValueError:
+        log.error("Worker %s returned invalid JSON for LoRA handover status", worker.id)
+        return _LoraHandoverProbe(claimed=None)
+    if not isinstance(payload, dict) or not isinstance(payload.get("claimed"), bool):
+        log.error("Worker %s returned an invalid LoRA handover status", worker.id)
+        return _LoraHandoverProbe(claimed=None)
+    if payload["claimed"] is not True:
+        return _LoraHandoverProbe(claimed=False)
+    task_id = payload.get("task_id")
+    return _LoraHandoverProbe(
+        claimed=True,
+        task_id=task_id if isinstance(task_id, str) else None,
+    )
+
+
+async def _release_lora_hold(
+    worker: _WorkerHandle,
+    hold_token: str,
+    *,
+    best_effort: bool = False,
+) -> None:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+            release = await client.post(
+                f"{worker.base_url}/gpu_hold/release",
+                json={"token": hold_token},
+                headers=_internal_headers(),
+            )
+            release.raise_for_status()
+    except httpx.HTTPError:
+        if not best_effort:
+            raise
+        log.exception("Could not release LoRA hold for worker %s during cleanup", worker.id)
+
+
+async def _renew_lora_hold(worker: _WorkerHandle, hold_token: str) -> None:
+    import httpx
+
+    while True:
+        await asyncio.sleep(GPU_HOLD_POLL_INTERVAL_SECONDS)
+        async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{worker.base_url}/gpu_hold/renew",
+                json={"token": hold_token},
+                headers=_internal_headers(),
+            )
+            response.raise_for_status()
+
+
+async def _start_lora_hold_renewal(
+    worker: _WorkerHandle,
+    hold_token: str,
+) -> asyncio.Task[None]:
+    started = asyncio.Event()
+
+    async def renew() -> None:
+        started.set()
+        await _renew_lora_hold(worker, hold_token)
+
+    task = asyncio.create_task(renew())
+    await started.wait()
+    return task
+
+
+async def _reserve_lora_worker(
+    *,
+    target_mode: str,
+    redis: Redis,
+    db_factory: sessionmaker[Session],
+) -> tuple[_WorkerHandle, str]:
+    import httpx
+
+    with db_factory() as session:
+        picked = await pick_worker(session, redis, target_mode)
+        if count_queued_generation_jobs(session) > 0:
+            raise AllWorkersHeld("A generation is waiting before LoRA training")
+    async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            f"{picked.base_url}/gpu_hold/reserve",
+            headers=_internal_headers(),
+        )
+        if response.status_code == 409:
+            raise AllWorkersHeld("ACE-Step worker is busy or held")
+        response.raise_for_status()
+    return _WorkerHandle(base_url=picked.base_url, id=picked.id), response.json()["token"]
+
+
+async def _prepare_and_submit_lora(
+    *,
+    audio_dir: Path,
+    db_factory: sessionmaker[Session],
+    hold_token: str,
+    job_id: str,
+    lora_id: str,
+    samples: list,
+    target_mode: str,
+    user_id: str,
+    worker: _WorkerHandle,
+    training_config: LoraTrainingJobConfig,
+) -> tuple[TrainLoraTaskResultDTO, Path, Path] | None:
+    renew_task: asyncio.Task[None] | None = None
+    handover = _LoraHoldHandover()
+    try:
+        renew_task = await _start_lora_hold_renewal(worker, hold_token)
+        if not _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid()):
+            return None
+        dataset_dir = await _race_with_renewal(
+            asyncio.to_thread(
+                _materialize_dataset,
+                audio_dir=audio_dir,
+                user_id=user_id,
+                lora_id=lora_id,
+                samples=samples,
+            ),
+            renew_task,
+        )
+        with db_factory() as session:
+            update_user_lora(
+                session,
+                lora_id,
+                status=LoraStatus.PREPROCESSING,
+                clear_error=True,
+            )
+            session.commit()
+        _update_job(db_factory, job_id, JobStatus.RUNNING, progress=0.05)
+
+        output_dir = _output_dir(audio_dir, user_id, lora_id)
+        output_dir.parent.mkdir(parents=True, exist_ok=True)
+        tmp_output = _tmp_training_dir(audio_dir, user_id, lora_id)
+        if tmp_output.exists():
+            shutil.rmtree(tmp_output)
+
+        last_update = 0.0
+        last_status_name: str = LoraStatus.PREPROCESSING
+
+        def on_progress(fraction: float) -> None:
+            nonlocal last_update, last_status_name
+            import time as _t
+
+            now = _t.monotonic()
+            if now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS:
+                return
+            last_update = now
+            new_status = LoraStatus.PREPROCESSING
+            if fraction >= 0.90:
+                new_status = LoraStatus.EXPORTING
+            elif fraction >= 0.20:
+                new_status = LoraStatus.TRAINING
+            if new_status != last_status_name:
+                with db_factory() as session:
+                    update_user_lora(session, lora_id, status=new_status)
+                    session.commit()
+                last_status_name = new_status
+            _update_job(db_factory, job_id, JobStatus.RUNNING, progress=fraction)
+
+        def on_heartbeat() -> None:
+            _touch_heartbeat(db_factory, job_id)
+
+        request_payload = {
+            "mode": target_mode,
+            "dataset_dir": str(dataset_dir),
+            "output_dir": str(tmp_output),
+            **training_config.payload(),
+        }
+        worker_result = await _pick_and_call_worker(
+            target_mode=target_mode,
+            request_payload=request_payload,
+            worker=worker,
+            hold_token=hold_token,
+            renew_task=renew_task,
+            handover=handover,
+            on_progress=on_progress,
+            on_heartbeat=on_heartbeat,
+        )
+        return worker_result, dataset_dir, tmp_output
+    finally:
+        if not handover.complete:
+            await _release_lora_hold(worker, hold_token, best_effort=True)
+        if renew_task is not None:
+            await _stop_lora_renewal(renew_task, suppress_failure=True)
+
+
 def _validate_export_path(
-    *, audio_dir: Path, user_id: str, reported: str,
+    *,
+    audio_dir: Path,
+    user_id: str,
+    reported: str,
 ) -> Path:
     """Reject paths that do not live inside the user's LoRA dir."""
     user_root = (audio_dir / USER_LORAS_DIRNAME / user_id).resolve()
@@ -195,7 +493,9 @@ def _validate_export_path(
 
 
 def _cleanup_failed_lora_paths(
-    audio_dir: Path, user_id: str, lora_id: str,
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
 ) -> bool:
     """Remove disposable training paths and report whether all removals worked."""
     removed_cleanly = True
@@ -213,7 +513,9 @@ def _cleanup_failed_lora_paths(
 
 
 def _recover_complete_lora_adapter(
-    audio_dir: Path, user_id: str, lora_id: str,
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
 ) -> bool:
     final_dir = _output_dir(audio_dir, user_id, lora_id)
     previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
@@ -242,13 +544,19 @@ def cleanup_failed_lora(
     durable before any slow or fallible filesystem cleanup begins.
     """
     update_user_lora(
-        session, lora_id,
-        status=LoraStatus.FAILED, error=error_message,
+        session,
+        lora_id,
+        status=LoraStatus.FAILED,
+        error=error_message,
         completed_at=datetime.now(timezone.utc),
     )
     record_audit(
-        session, user_id, AuditAction.TRAIN_LORA,
-        ResourceType.LORA, lora_id, f"failed: {error_message}",
+        session,
+        user_id,
+        AuditAction.TRAIN_LORA,
+        ResourceType.LORA,
+        lora_id,
+        f"failed: {error_message}",
     )
 
 
@@ -280,7 +588,8 @@ def cleanup_failed_lora_with_factory(
 
 
 def log_orphaned_lora_work_dirs(
-    db_factory: sessionmaker[Session], audio_dir: Path,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
 ) -> None:
     """Log disposable LoRA work dirs whose LoRA is missing or no longer active."""
     loras_root = audio_dir / USER_LORAS_DIRNAME
@@ -308,14 +617,16 @@ def log_orphaned_lora_work_dirs(
     if orphaned:
         log.warning(
             "Found %d orphaned LoRA work dir(s): %s",
-            len(orphaned), ", ".join(str(path) for path in orphaned[:10]),
+            len(orphaned),
+            ", ".join(str(path) for path in orphaned[:10]),
         )
 
 
 def _log_failed_lora_cleanup(
-    db_factory: sessionmaker[Session], audio_dir: Path,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
 ) -> None:
-    """Log cleanup diagnostics without blocking later LoRA reconciliation rows."""
+    """Log an audit failure without blocking later LoRA reconciliation rows."""
     try:
         log_orphaned_lora_work_dirs(db_factory, audio_dir)
     except Exception:
@@ -323,7 +634,8 @@ def _log_failed_lora_cleanup(
 
 
 def reconcile_crashed_loras(
-    db_factory: sessionmaker[Session], audio_dir: Path,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
 ) -> int:
     """Reconcile terminal-job LoRAs one locked row and transaction at a time."""
     reconciled = 0
@@ -348,14 +660,13 @@ def reconcile_crashed_loras(
                 lora_id = lora.id
                 user_id = lora.user_id
                 recovered_adapter = _recover_complete_lora_adapter(
-                    audio_dir, user_id, lora_id,
+                    audio_dir,
+                    user_id,
+                    lora_id,
                 )
                 if recovered_adapter:
                     storage_rel = str(
-                        Path(USER_LORAS_DIRNAME)
-                        / user_id
-                        / lora_id
-                        / USER_LORA_OUTPUT_DIRNAME,
+                        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
                     )
                     update_user_lora(
                         session,
@@ -395,13 +706,16 @@ def reconcile_crashed_loras(
 
 
 async def run_lora_training_job(
-    ctx, job_id: str, lora_id: str, user_id: str,
+    ctx,
+    job_id: str,
+    lora_id: str,
+    user_id: str,
     *,
     db_factory: sessionmaker[Session] | None = None,
     audio_dir: Path | None = None,
     redis: Redis | None = None,
     target_mode: str = MODEL_DEFAULT_MODE,
-    training_config: LoraTrainingJobConfig | None = None,
+    training_config: LoraTrainingJobConfig,
 ) -> None:
     """ARQ job: materialize dataset, dispatch training to a worker, persist.
 
@@ -415,15 +729,15 @@ async def run_lora_training_job(
 
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
-        job_id=job_id, job_type=JobType.LORA_TRAINING, lora_id=lora_id,
+        job_id=job_id,
+        job_type=JobType.LORA_TRAINING,
+        lora_id=lora_id,
     )
 
-    if db_factory is None or audio_dir is None or redis is None or training_config is None:
+    if db_factory is None or audio_dir is None or redis is None:
         raise RuntimeError(
-            "run_lora_training_job requires db_factory, audio_dir, redis, training_config",
+            "run_lora_training_job requires db_factory, audio_dir, redis",
         )
-
-    _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
 
     from songmaker_cli.db.queries import get_user_lora
 
@@ -432,91 +746,108 @@ async def run_lora_training_job(
             lora = get_user_lora(session, lora_id, include_deleted_rows=True)
             if lora is None:
                 _update_job(
-                    db_factory, job_id, JobStatus.FAILED,
-                    error="LoRA not found", error_type="lora_missing",
+                    db_factory,
+                    job_id,
+                    JobStatus.FAILED,
+                    error="LoRA not found",
+                    error_type="lora_missing",
                 )
                 return
             if lora.deleted_at is not None:
                 _update_job(
-                    db_factory, job_id, JobStatus.FAILED,
-                    error="LoRA is deleted", error_type="lora_deleted",
+                    db_factory,
+                    job_id,
+                    JobStatus.FAILED,
+                    error="LoRA is deleted",
+                    error_type="lora_deleted",
                 )
                 return
             samples = list(lora.samples or [])
 
-        dataset_dir = await asyncio.to_thread(
-            _materialize_dataset,
-            audio_dir=audio_dir, user_id=user_id, lora_id=lora_id, samples=samples,
-        )
-
-        with db_factory() as session:
-            update_user_lora(
-                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True,
-            )
-            session.commit()
-        _update_job(db_factory, job_id, JobStatus.RUNNING, progress=0.05)
-
-        output_dir = _output_dir(audio_dir, user_id, lora_id)
-        output_dir.parent.mkdir(parents=True, exist_ok=True)
-        tmp_output = _tmp_training_dir(audio_dir, user_id, lora_id)
-        if tmp_output.exists():
-            shutil.rmtree(tmp_output)
-
-        last_update = 0.0
-        last_status_name: str = LoraStatus.PREPROCESSING
-
-        def _on_progress(fraction: float) -> None:
-            nonlocal last_update, last_status_name
-            import time as _t
-            now = _t.monotonic()
-            if now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS:
-                return
-            last_update = now
-            new_status = LoraStatus.PREPROCESSING
-            if fraction >= 0.90:
-                new_status = LoraStatus.EXPORTING
-            elif fraction >= 0.20:
-                new_status = LoraStatus.TRAINING
-            if new_status != last_status_name:
-                with db_factory() as s:
-                    update_user_lora(s, lora_id, status=new_status)
-                    s.commit()
-                last_status_name = new_status
-            _update_job(db_factory, job_id, JobStatus.RUNNING, progress=fraction)
-
-        def _on_heartbeat() -> None:
-            _touch_heartbeat(db_factory, job_id)
-
-        request_payload = {
-            "mode": target_mode,
-            "dataset_dir": str(dataset_dir),
-            "output_dir": str(tmp_output),
-            **training_config.payload(),
-        }
-
         try:
-            worker_result = await _pick_and_call_worker(
+            worker, hold_token = await _reserve_lora_worker(
                 target_mode=target_mode,
-                request_payload=request_payload,
                 redis=redis,
                 db_factory=db_factory,
-                on_progress=_on_progress,
-                on_heartbeat=_on_heartbeat,
             )
+        except AllWorkersHeld:
+            with db_factory() as session:
+                job = get_job(session, job_id)
+                if job is None:
+                    return
+                queued_at = job.started_at
+                if queued_at.tzinfo is None:
+                    queued_at = queued_at.replace(tzinfo=timezone.utc)
+                waited_seconds = (datetime.now(timezone.utc) - queued_at).total_seconds()
+            if waited_seconds >= STALE_JOB_THRESHOLDS[JobType.LORA_TRAINING].queued_seconds:
+                error_message = "Generation queue did not drain before LoRA training could start"
+                cleanup_failed_lora_with_factory(
+                    lora_id=lora_id,
+                    user_id=user_id,
+                    audio_dir=audio_dir,
+                    db_factory=db_factory,
+                    error_message=error_message,
+                )
+                _update_job(
+                    db_factory,
+                    job_id,
+                    JobStatus.FAILED,
+                    error=error_message,
+                    error_type="generation_queue_timeout",
+                )
+                return
+            _update_job(
+                db_factory,
+                job_id,
+                JobStatus.QUEUED,
+                queue_reason=LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
+            )
+            await redis.enqueue_job(
+                JobFunction.LORA_TRAINING,
+                job_id,
+                lora_id,
+                user_id,
+                _queue_name=ARQ_MUSIC_QUEUE_NAME,
+                _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
+            )
+            return
+
+        try:
+            submitted = await _prepare_and_submit_lora(
+                audio_dir=audio_dir,
+                db_factory=db_factory,
+                hold_token=hold_token,
+                job_id=job_id,
+                lora_id=lora_id,
+                samples=samples,
+                target_mode=target_mode,
+                user_id=user_id,
+                worker=worker,
+                training_config=training_config,
+            )
+            if submitted is None:
+                return
+            worker_result, dataset_dir, tmp_output = submitted
         except NoCapacityError as exc:
-            sanitized_error = _sanitize_error(exc, job_id)
             cleanup_failed_lora_with_factory(
-                lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
-                db_factory=db_factory, error_message=sanitized_error,
+                lora_id=lora_id,
+                user_id=user_id,
+                audio_dir=audio_dir,
+                db_factory=db_factory,
+                error_message=str(exc),
             )
             _update_job(
-                db_factory, job_id, JobStatus.FAILED,
-                error=sanitized_error, error_type="no_workers",
+                db_factory,
+                job_id,
+                JobStatus.FAILED,
+                error=_sanitize_error(exc, job_id),
+                error_type="no_workers",
             )
             return
 
         adapter_src = _validate_export_path(
-            audio_dir=audio_dir, user_id=user_id,
+            audio_dir=audio_dir,
+            user_id=user_id,
             reported=worker_result.adapter_dir,
         )
         if not adapter_src.exists():
@@ -567,15 +898,19 @@ async def run_lora_training_job(
         )
         with db_factory() as session:
             update_user_lora(
-                session, lora_id,
+                session,
+                lora_id,
                 status=LoraStatus.READY,
                 storage_path=storage_rel,
                 completed_at=datetime.now(timezone.utc),
                 clear_error=True,
             )
             record_audit(
-                session, user_id, AuditAction.TRAIN_LORA,
-                ResourceType.LORA, lora_id,
+                session,
+                user_id,
+                AuditAction.TRAIN_LORA,
+                ResourceType.LORA,
+                lora_id,
                 f"ready: samples={worker_result.num_samples}",
             )
             session.commit()
@@ -585,12 +920,16 @@ async def run_lora_training_job(
     except asyncio.CancelledError:
         log.warning("LoRA training job %s cancelled", job_id)
         cleanup_failed_lora_with_factory(
-            lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
+            lora_id=lora_id,
+            user_id=user_id,
+            audio_dir=audio_dir,
             db_factory=db_factory,
             error_message="Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown",
         )
         _update_job(
-            db_factory, job_id, JobStatus.FAILED,
+            db_factory,
+            job_id,
+            JobStatus.FAILED,
             error="Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown",
             error_type="timeout",
         )
@@ -604,29 +943,42 @@ async def run_lora_training_job(
         )
         with db_factory() as session:
             update_user_lora(
-                session, lora_id,
+                session,
+                lora_id,
                 status=LoraStatus.READY,
                 storage_path=storage_rel,
                 clear_error=True,
             )
             record_audit(
-                session, user_id, AuditAction.TRAIN_LORA,
-                ResourceType.LORA, lora_id,
+                session,
+                user_id,
+                AuditAction.TRAIN_LORA,
+                ResourceType.LORA,
+                lora_id,
                 "ready: retained previous adapter after failed replacement",
             )
             session.commit()
         _update_job(
-            db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id), error_type="lora_training_error",
+            db_factory,
+            job_id,
+            JobStatus.FAILED,
+            error=_sanitize_error(exc, job_id),
+            error_type="lora_training_error",
         )
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
         sanitized_error = _sanitize_error(exc, job_id)
         cleanup_failed_lora_with_factory(
-            lora_id=lora_id, user_id=user_id, audio_dir=audio_dir,
-            db_factory=db_factory, error_message=sanitized_error,
+            lora_id=lora_id,
+            user_id=user_id,
+            audio_dir=audio_dir,
+            db_factory=db_factory,
+            error_message=_sanitize_error(exc, job_id),
         )
         _update_job(
-            db_factory, job_id, JobStatus.FAILED,
-            error=sanitized_error, error_type="lora_training_error",
+            db_factory,
+            job_id,
+            JobStatus.FAILED,
+            error=sanitized_error,
+            error_type="lora_training_error",
         )

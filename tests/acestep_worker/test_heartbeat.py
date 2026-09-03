@@ -7,7 +7,9 @@ import fakeredis.aioredis
 import pytest
 
 from acestep_worker.heartbeat import (
+    DEFAULT_TTL_SECONDS,
     HeartbeatLoop,
+    gpu_hold_key,
     queue_depth_key,
     worker_state_key,
 )
@@ -53,14 +55,29 @@ def test_publish_once_writes_to_redis() -> None:
     assert 0 < ttl <= 2
 
 
+def test_publish_once_does_not_renew_a_gpu_hold() -> None:
+    async def go() -> tuple[bytes | None, int]:
+        loop, redis = _make_loop()
+        hold_key = gpu_hold_key("acestep-worker-0")
+        await redis.set(hold_key, "hold-token", ex=DEFAULT_TTL_SECONDS)
+        await loop.publish_once()
+        return await redis.get(hold_key), await redis.ttl(hold_key)
+
+    assert _run(go()) == (b"hold-token", DEFAULT_TTL_SECONDS)
+
+
 def test_clear_orphaned_queue() -> None:
     async def go():
         loop, redis = _make_loop()
         await redis.set(queue_depth_key("acestep-worker-0"), 7)
+        await redis.set(gpu_hold_key("acestep-worker-0"), "hold-token")
         await loop.clear_orphaned_queue()
-        return await redis.get(queue_depth_key("acestep-worker-0"))
+        return (
+            await redis.get(queue_depth_key("acestep-worker-0")),
+            await redis.get(gpu_hold_key("acestep-worker-0")),
+        )
 
-    assert _run(go()) is None
+    assert _run(go()) == (None, None)
 
 
 def test_start_stop_cycles() -> None:
