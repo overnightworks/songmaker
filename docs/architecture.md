@@ -688,7 +688,7 @@ stream.
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song, durable memory, server-resolved @-mentions, and the relevant take's whisper/pick/keep/scores (`current_generation_id`). Unknown mention or generation IDs 404; a take for the wrong song or a non-playable take is 422. Provider is the persisted studio setting (`claude`, `grok`, or `codex`); missing credentials fail that provider by name. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song, durable memory, server-resolved @-mentions, and the relevant take's whisper/pick/keep/scores (`current_generation_id`). Unknown mention or generation IDs 404; a take for the wrong song or a non-playable take is 422. Provider is the persisted studio setting (`claude`, `grok`, or `codex`); missing credentials fail that provider by name. If the client aborts a non-terminal turn, its job immediately becomes `FAILED` with `error_type` `cancelled` and `Turn cancelled by the client.`; its heartbeat stops. A terminal job is left unchanged. |
 | GET | `/api/settings/cowriter` | user | Co-writer provider, selected model, and live model catalogs from each provider or CLI; when the active saved or default value is a genuine model ID for that provider, it belongs to the valid set and is appended at the end without changing provider order. A `models_errors` map names why an unreachable provider's catalog came back empty (not only the saved provider's) |
 | PUT | `/api/settings/cowriter` | admin | Persist co-writer provider, model, and history-tail budget. Only an exact, complete persisted provider/model pair makes a save unchanged; a fresh, partial, empty, or retired stored pair is a change. A change requires that provider to be `configured` for the co-writer surface and validates the model against its live catalog; the active saved or default value, when a genuine model ID for that provider, belongs to the valid set and is appended at the end without changing provider order. A budget-only save against an exact persisted pair is never blocked by a temporarily unreachable provider or catalog. |
 | GET | `/api/settings/judge` | user | `lyrical_coherence` judge provider, selected model, and live model catalogs per provider; when the active saved or default value is a genuine model ID for that provider, it belongs to the valid set and is appended at the end without changing provider order. `models_errors` has the same shape as the co-writer response |
@@ -835,6 +835,7 @@ parent's coherence budget, which is spent after the child returns.
                          └─ arq:queue:scoring → Scoring Worker(s)
 
   Chat runs inline in the API process (no arq queue).
+  Client cancellation follows the `POST /api/chat/turn` contract.
 ```
 
 **Music worker** (`music_worker.py`):
@@ -911,6 +912,8 @@ never been observed; with a newer observation, it is `alive`.
   age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no
   worker liveness signal and queued chat can only use the age guard.
+  A client-aborted chat turn follows the `POST /api/chat/turn` cancellation
+  contract rather than waiting for the running-job heartbeat reaper.
 
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 

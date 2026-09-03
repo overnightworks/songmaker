@@ -45,10 +45,14 @@ async def stream_cowriter_turn(
             provider, f"No co-writer model configured for {provider}",
         )
     if provider == "claude":
-        async for event in stream_claude_turn(
+        stream = stream_claude_turn(
             user_id=user_id, system=system, model=model, messages=messages,
-        ):
-            yield event
+        )
+        try:
+            async for event in stream:
+                yield event
+        finally:
+            await stream.aclose()
         return
     if provider == "grok":
         api_key = _require_secret(
@@ -60,7 +64,7 @@ async def stream_cowriter_turn(
             "codex", get_settings().openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
         api_url = COWRITER_OPENAI_CHAT_URL
-    async for event in stream_openai_compatible_turn(
+    stream = stream_openai_compatible_turn(
         provider=provider,
         api_url=api_url,
         api_key=api_key,
@@ -69,8 +73,12 @@ async def stream_cowriter_turn(
         messages=messages,
         session=session,
         user=user,
-    ):
-        yield event
+    )
+    try:
+        async for event in stream:
+            yield event
+    finally:
+        await stream.aclose()
 
 
 def call_provider_once(

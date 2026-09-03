@@ -126,6 +126,20 @@ async def _stop_chat_job_heartbeat(task: asyncio.Task[None], job_id: str) -> Non
             log.warning("Chat heartbeat task failed for job %s", job_id, exc_info=True)
 
 
+async def _cancel_chat_job(
+    session: Session, heartbeat_task: asyncio.Task[None], job_id: str,
+) -> None:
+    try:
+        _fail_chat_job(
+            session,
+            job_id,
+            "Turn cancelled by the client.",
+            "cancelled",
+        )
+    finally:
+        await _stop_chat_job_heartbeat(heartbeat_task, job_id)
+
+
 def _fail_chat_job(
     session: Session, job_id: str, error: str, error_type: str,
 ) -> None:

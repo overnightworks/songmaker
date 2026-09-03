@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import pytest
 from conftest import fake_cli_process
 
@@ -2511,6 +2512,112 @@ def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
     with pytest.raises(CliToolSurfaceError):
         asyncio.run(_turn())
     assert spawned == []
+
+
+def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) -> None:
+    """A disconnect may cancel an ASGI 2.3 stream while it is closing.
+
+    The reaper itself has awaits for SIGTERM/SIGKILL grace and process wait,
+    so cancelling the closer must not cancel that work halfway through.
+    """
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+
+    async def _run() -> None:
+        proc = MagicMock()
+        proc.stdin = None
+        reaper_started = asyncio.Event()
+        finish_reaper = asyncio.Event()
+        reaper_finished = asyncio.Event()
+
+        async def fake_spawn(*_args, **_kwargs):
+            return proc
+
+        async def fake_consume(*_args, **_kwargs):
+            yield provider.AssistantTextEvent(text="partial")
+            await asyncio.Future()
+
+        async def fake_reap(_proc) -> bool:
+            reaper_started.set()
+            await finish_reaper.wait()
+            reaper_finished.set()
+            return False
+
+        monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", fake_spawn)
+        monkeypatch.setattr(provider, "_consume_stream", fake_consume)
+        monkeypatch.setattr(provider, "_reap_process_group", fake_reap)
+
+        stream = provider.acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
+        assert (await anext(stream)).text == "partial"
+
+        closer = asyncio.create_task(stream.aclose())
+        await reaper_started.wait()
+        closer.cancel()
+        await asyncio.sleep(0)
+        assert not closer.done()
+
+        finish_reaper.set()
+        with pytest.raises(asyncio.CancelledError):
+            await closer
+        assert reaper_finished.is_set()
+
+    asyncio.run(_run())
+
+
+def test_stream_reap_does_not_spin_under_anyio_level_cancellation(monkeypatch) -> None:
+    """An ASGI cancellation scope must let the delayed reap make progress.
+
+    The old asyncio.shield retry loop was immediately cancelled again by
+    AnyIO's level cancellation, repeatedly attempting the shielded await
+    while the reaper could not finish.  A cancellation shield waits once for
+    the child reaper, then propagates cancellation after it has completed.
+    """
+    shield_calls = 0
+    original_shield = asyncio.shield
+
+    def count_shield(awaitable):
+        nonlocal shield_calls
+        shield_calls += 1
+        return original_shield(awaitable)
+
+    monkeypatch.setattr(asyncio, "shield", count_shield)
+
+    async def _run() -> None:
+        reaper_started = anyio.Event()
+        finish_reaper = anyio.Event()
+        reaper_finished = anyio.Event()
+        close_finished = anyio.Event()
+        reap_calls = 0
+
+        async def fake_reap(_proc) -> bool:
+            nonlocal reap_calls
+            reap_calls += 1
+            reaper_started.set()
+            await finish_reaper.wait()
+            reaper_finished.set()
+            return False
+
+        monkeypatch.setattr(provider, "_reap_process_group", fake_reap)
+
+        async def close_after_cancellation() -> None:
+            with pytest.raises(asyncio.CancelledError):
+                await provider._reap_stream_process_after_cancellation(MagicMock())
+            close_finished.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(close_after_cancellation)
+            await reaper_started.wait()
+            task_group.cancel_scope.cancel()
+            with anyio.CancelScope(shield=True):
+                finish_reaper.set()
+                await reaper_finished.wait()
+                await close_finished.wait()
+
+        assert reap_calls == 1
+        assert shield_calls <= 2
+
+    anyio.run(_run)
 
 
 @pytest.mark.parametrize(

@@ -357,7 +357,7 @@ async def acall_claude_with_mcp_stream(
             async for event in _consume_stream(proc, timeout_seconds):
                 yield event
         finally:
-            await _reap_process_group(proc)
+            await _reap_stream_process_after_cancellation(proc)
     finally:
         _unlink_quiet(config_path)
 
@@ -1471,6 +1471,46 @@ def _probe_cli_surface_sync(
 
 
 # ── reap: async ──────────────────────────────────────────────────────
+
+
+async def _reap_stream_process_after_cancellation(
+    proc: asyncio.subprocess.Process,
+) -> None:
+    """Finish a streaming CLI reap even if its consumer was cancelled.
+
+    ASGI 2.3 cancels the response-stream task when it receives a client
+    disconnect.  That cancellation closes this async generator, but a second
+    cancellation can otherwise interrupt the first await in its ``finally``
+    block.  Run the bounded reap in its own task and shield that task until it
+    completes; the caller still receives its cancellation once cleanup is
+    complete.
+    """
+    # The non-streaming provider is also used by the scoring-worker image,
+    # which intentionally does not install the server's ASGI dependencies.
+    # This helper is exclusive to the streaming co-writer endpoint, where
+    # FastAPI provides AnyIO.
+    import anyio
+
+    reap_task = asyncio.create_task(_reap_process_group(proc))
+    try:
+        # Starlette uses AnyIO's level cancellation: after its cancel scope
+        # fires, every await outside a shield raises again.  asyncio.shield()
+        # only protects the child task, so retrying it in a loop spins without
+        # ever letting the reaper run.  An AnyIO shield protects this wait from
+        # the active ASGI cancel scope instead.
+        with anyio.CancelScope(shield=True):
+            await asyncio.shield(reap_task)
+    except asyncio.CancelledError:
+        # Direct asyncio Task.cancel() is not governed by an AnyIO scope.  It
+        # may interrupt the first wait, so finish cleanup behind the same
+        # shield before re-delivering that cancellation to the caller.
+        with anyio.CancelScope(shield=True):
+            await asyncio.shield(reap_task)
+        raise
+
+    # Re-deliver an ASGI cancellation that was deferred by the shield only
+    # after the process has been reaped.
+    await anyio.lowlevel.checkpoint_if_cancelled()
 
 
 async def _reap_process_group(proc: asyncio.subprocess.Process) -> bool:

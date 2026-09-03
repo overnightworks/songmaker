@@ -1843,6 +1843,83 @@ def test_song_chat_send(client: TestClient) -> None:
     assert data["assistant_message"]["content"] == "Hello from Claude"
 
 
+def test_song_chat_marks_job_cancelled_when_request_is_cancelled(
+    client: TestClient,
+) -> None:
+    from unittest.mock import patch
+
+    from fastapi import Request
+
+    from songmaker_cli.api_models.settings import SendChatRequest
+    from songmaker_cli.chat_api import api_song_chat
+    from songmaker_cli.jobs._runtime import _stop_chat_job_heartbeat
+
+    factory = client.app.state.ctx.db
+
+    async def _exercise() -> tuple[asyncio.Event, asyncio.Event]:
+        claude_started = asyncio.Event()
+        heartbeat_started = asyncio.Event()
+        heartbeat_stopped = asyncio.Event()
+        heartbeat_stop_calls = 0
+
+        async def _keep_heartbeat(*_args, **_kwargs) -> None:
+            heartbeat_started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                heartbeat_stopped.set()
+
+        async def _acall(*_args, **_kwargs) -> None:
+            claude_started.set()
+            await asyncio.Future()
+
+        async def _stop_heartbeat(*args, **kwargs) -> None:
+            nonlocal heartbeat_stop_calls
+            heartbeat_stop_calls += 1
+            await _stop_chat_job_heartbeat(*args, **kwargs)
+
+        request = Request({"type": "http", "app": client.app})
+        user = AuthenticatedUser(
+            id=_DEFAULT_USER_ID,
+            username="test_user",
+            role="user",
+            is_active=True,
+        )
+        with factory() as session:
+            with patch(
+                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
+                _keep_heartbeat,
+            ), patch(
+                "songmaker_cli.jobs._runtime._stop_chat_job_heartbeat",
+                _stop_heartbeat,
+            ), patch("songmaker_cli.chat_api.acall_claude", _acall):
+                task = asyncio.create_task(api_song_chat(
+                    "s1",
+                    SendChatRequest(message="hi"),
+                    request,
+                    user,
+                    session,
+                ))
+                await claude_started.wait()
+                await heartbeat_started.wait()
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+
+        assert heartbeat_stop_calls == 1
+        return heartbeat_stopped, claude_started
+
+    heartbeat_stopped, claude_started = asyncio.run(_exercise())
+
+    assert claude_started.is_set()
+    assert heartbeat_stopped.is_set()
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+        assert job.status == "failed"
+        assert job.error_type == "cancelled"
+        assert job.error == "Turn cancelled by the client."
+
+
 def test_chat_heartbeat_writer_updates_an_active_job(client: TestClient) -> None:
     from songmaker_cli.constants import JobStatus
     from songmaker_cli.jobs._runtime import _write_chat_job_heartbeat

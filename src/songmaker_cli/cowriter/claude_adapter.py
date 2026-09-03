@@ -22,18 +22,21 @@ async def stream_claude_turn(
     model: str,
     messages: list[dict[str, str]],
 ) -> AsyncIterator[StreamEvent]:
+    stream = acall_claude_with_mcp_stream(
+        prompt="",
+        user_id=user_id,
+        system=system,
+        model=model,
+        messages=messages,
+        timeout_seconds=COWRITER_CLI_TIMEOUT_SECONDS,
+    )
     try:
-        async for event in acall_claude_with_mcp_stream(
-            prompt="",
-            user_id=user_id,
-            system=system,
-            model=model,
-            messages=messages,
-            timeout_seconds=COWRITER_CLI_TIMEOUT_SECONDS,
-        ):
+        async for event in stream:
             yield event
     except UnavailableError as exc:
         raise ProviderUnavailableError("claude", str(exc)) from exc
+    finally:
+        await stream.aclose()
 
 
 def call_claude_once(

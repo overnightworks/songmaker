@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -104,22 +104,21 @@ router = APIRouter()
 
 
 class _ChatStreamingResponse(StreamingResponse):
-    """Stop an inline chat heartbeat even when ASGI sending disconnects."""
+    """Abort an inline chat turn when its ASGI response cannot complete."""
 
-    def __init__(
-        self, content, *, heartbeat_task: asyncio.Task[None], job_id: str,
-        stop_heartbeat, **kwargs,
-    ):
+    def __init__(self, content, *, abort_chat_turn, **kwargs):
         super().__init__(content, **kwargs)
-        self._heartbeat_task = heartbeat_task
-        self._job_id = job_id
-        self._stop_heartbeat = stop_heartbeat
+        self._abort_chat_turn = abort_chat_turn
 
     async def __call__(self, scope, receive, send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            await self._stop_heartbeat(self._heartbeat_task, self._job_id)
+            try:
+                if isinstance(self.body_iterator, AsyncGenerator):
+                    await self.body_iterator.aclose()
+            finally:
+                await self._abort_chat_turn()
 
 
 COWRITER_ROLE = (
@@ -420,6 +419,7 @@ async def api_chat_turn(
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
     from songmaker_cli.jobs._runtime import (
+        _cancel_chat_job,
         _fail_chat_job,
         _keep_chat_job_heartbeat,
         _stop_chat_job_heartbeat,
@@ -513,86 +513,105 @@ async def api_chat_turn(
         _fail_chat_job(session, job_id, "Chat setup failed", "setup_error")
         raise
 
+    chat_turn_finished = False
+
+    async def finish_chat_turn(*, cancelled: bool) -> None:
+        """Persist a terminal chat state and stop its heartbeat once."""
+        nonlocal chat_turn_finished
+        if chat_turn_finished:
+            return
+        chat_turn_finished = True
+        if cancelled:
+            await _cancel_chat_job(session, heartbeat_task, job_id)
+        else:
+            await _stop_chat_job_heartbeat(heartbeat_task, job_id)
+
     async def event_generator() -> AsyncIterator[str]:
+        turn_has_terminal_status = False
         assistant_text = ""
         started = time.monotonic()
+        stream = stream_cowriter_turn(
+            provider=provider,
+            model=cowriter_model,
+            user_id=user.id,
+            system=COWRITER_SYSTEM_PROMPT,
+            messages=api_messages,
+            session=session,
+            user=user,
+        )
         try:
-            async for event in stream_cowriter_turn(
-                provider=provider,
-                model=cowriter_model,
-                user_id=user.id,
-                system=COWRITER_SYSTEM_PROMPT,
-                messages=api_messages,
-                session=session,
-                user=user,
-            ):
-                if isinstance(event, FinalEvent):
-                    assistant_text = event.text
-                    break
-                yield _sse_format(event)
-            log.info(
-                "cowriter turn provider=%s windowed=%s duration_ms=%d tail_budget=%d",
-                provider,
-                compacted.windowed,
-                int((time.monotonic() - started) * 1000),
-                tail_budget,
-            )
-        except asyncio.CancelledError:
-            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
-            raise
-        except ProviderUnavailableError as e:
-            log.warning("Co-writer %s unavailable: %s", e.provider, e)
-            _fail_chat_job(session, job_id, f"{e.provider} unavailable", "unavailable")
-            yield _sse_format({
-                "type": "error",
-                "status": 503,
-                "message": f"{e.provider} is currently unavailable",
-            })
-            return
-        except Exception as exc:
-            log.error("Co-writer chat failed (%s)", type(exc).__name__)
-            _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
-            yield _sse_format({
-                "type": "error",
-                "status": 500,
-                "message": "Chat request failed",
-            })
-            return
+            try:
+                async for event in stream:
+                    if isinstance(event, FinalEvent):
+                        assistant_text = event.text
+                        break
+                    yield _sse_format(event)
+                log.info(
+                    "cowriter turn provider=%s windowed=%s duration_ms=%d tail_budget=%d",
+                    provider,
+                    compacted.windowed,
+                    int((time.monotonic() - started) * 1000),
+                    tail_budget,
+                )
+            except ProviderUnavailableError as e:
+                log.warning("Co-writer %s unavailable: %s", e.provider, e)
+                _fail_chat_job(session, job_id, f"{e.provider} unavailable", "unavailable")
+                turn_has_terminal_status = True
+                yield _sse_format({
+                    "type": "error",
+                    "status": 503,
+                    "message": f"{e.provider} is currently unavailable",
+                })
+                return
+            except Exception as exc:
+                log.error("Co-writer chat failed (%s)", type(exc).__name__)
+                _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
+                turn_has_terminal_status = True
+                yield _sse_format({
+                    "type": "error",
+                    "status": 500,
+                    "message": "Chat request failed",
+                })
+                return
 
-        try:
-            conversation = get_or_create_active_conversation(session, user.id)
-            user_msg = append_message(
-                session, conversation.id, "user", req.message,
-                song_id=req.current_song_id,
-            )
-            assistant_msg = append_message(
-                session, conversation.id, "assistant", assistant_text,
-                song_id=req.current_song_id,
-            )
-            if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
-                log.warning("Chat job %s was already terminal at completion", job_id)
-            session.commit()
-        except asyncio.CancelledError:
-            _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
-            raise
-        except Exception:
-            log.exception("Co-writer chat completion failed")
-            _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
-            yield _sse_format({
-                "type": "error",
-                "status": 500,
-                "message": "Chat completion failed",
-            })
-            return
+            try:
+                conversation = get_or_create_active_conversation(session, user.id)
+                user_msg = append_message(
+                    session, conversation.id, "user", req.message,
+                    song_id=req.current_song_id,
+                )
+                assistant_msg = append_message(
+                    session, conversation.id, "assistant", assistant_text,
+                    song_id=req.current_song_id,
+                )
+                if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
+                    log.warning("Chat job %s was already terminal at completion", job_id)
+                session.commit()
+            except Exception:
+                log.exception("Co-writer chat completion failed")
+                _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
+                turn_has_terminal_status = True
+                yield _sse_format({
+                    "type": "error",
+                    "status": 500,
+                    "message": "Chat completion failed",
+                })
+                return
 
-        yield _sse_format({
-            "type": "final",
-            "conversation_id": conversation.id,
-            "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
-            "assistant_message": ChatMessageResponse.from_orm(
-                assistant_msg,
-            ).model_dump(),
-        })
+            turn_has_terminal_status = True
+            yield _sse_format({
+                "type": "final",
+                "conversation_id": conversation.id,
+                "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
+                "assistant_message": ChatMessageResponse.from_orm(
+                    assistant_msg,
+                ).model_dump(),
+            })
+        finally:
+            try:
+                await stream.aclose()
+            finally:
+                await finish_chat_turn(cancelled=not turn_has_terminal_status)
 
     heartbeat_task = asyncio.create_task(
         _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
@@ -600,9 +619,7 @@ async def api_chat_turn(
 
     return _ChatStreamingResponse(
         event_generator(),
-        heartbeat_task=heartbeat_task,
-        job_id=job_id,
-        stop_heartbeat=_stop_chat_job_heartbeat,
+        abort_chat_turn=lambda: finish_chat_turn(cancelled=True),
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

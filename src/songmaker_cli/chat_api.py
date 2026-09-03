@@ -192,6 +192,7 @@ async def api_song_chat(
     session: Session = Depends(get_db_session),
 ) -> ChatTurnResponse:
     from songmaker_cli.jobs._runtime import (
+        _cancel_chat_job,
         _fail_chat_job,
         _keep_chat_job_heartbeat,
         _stop_chat_job_heartbeat,
@@ -210,6 +211,7 @@ async def api_song_chat(
     heartbeat_task = asyncio.create_task(
         _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
     )
+    heartbeat_needs_stopping = True
 
     try:
         context = _build_song_context(
@@ -258,7 +260,8 @@ async def api_song_chat(
             assistant_message=ChatMessageResponse.from_orm(assistant_msg),
         )
     except asyncio.CancelledError:
-        _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+        heartbeat_needs_stopping = False
+        await _cancel_chat_job(session, heartbeat_task, job_id)
         raise
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
@@ -272,7 +275,8 @@ async def api_song_chat(
         _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
         raise
     finally:
-        await _stop_chat_job_heartbeat(heartbeat_task, job_id)
+        if heartbeat_needs_stopping:
+            await _stop_chat_job_heartbeat(heartbeat_task, job_id)
 
 
 @router.get("/songs/{song_id}/chat")
