@@ -29,3 +29,5 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   Öffnen eines Albums zu einer kinetisch durchblätterbaren Reihe. Mini-Cover
   in der Leiste links hängen an #229; die Mobilbreite ist als offene Frage
   markiert, nicht gelöst.
+- `song-editor-take.html` — Repaint/Cover am Take im Song-Editor (#230).
+  Erste Fassung freigegeben am 03.09.2026.

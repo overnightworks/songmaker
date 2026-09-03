@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repaint/Cover am Take — Vorlage (#230, Scheibe 2)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@400;700&family=Open+Sans:wght@400;600&display=swap">
+<style>
+	/* ── doc-chrome tokens — dieselbe Familie wie album-browsing.html /
+	   navigation.html, für den Rahmen um die App-Ausschnitte herum ────── */
+	:root {
+		--paper: #f6f5f8;
+		--panel: #ffffff;
+		--panel-sunk: #f1eff4;
+		--ink: #1b1a20;
+		--ink-soft: #56525f;
+		--muted: #8b8794;
+		--rule: #e2dfe8;
+		--rule-strong: #cbc6d4;
+		--violet: #4b2fd1;
+		--crimson: #a81e2e;
+		--good: #1f7a4d;
+		--warn-bg: #fdf3e3;
+		--warn-ink: #7a5312;
+		--shadow: 0 1px 2px rgba(27, 26, 32, .06), 0 8px 24px rgba(27, 26, 32, .05);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--paper: #131218;
+			--panel: #1c1a22;
+			--panel-sunk: #232029;
+			--ink: #eeecf2;
+			--ink-soft: #b3aebe;
+			--muted: #857f92;
+			--rule: #302c3a;
+			--rule-strong: #443e52;
+			--violet: #a794ff;
+			--crimson: #ef8090;
+			--good: #5fc994;
+			--warn-bg: #2e2416;
+			--warn-ink: #e2bb70;
+			--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+		}
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		line-height: 1.55;
+		margin: 0;
+	}
+
+	.wrap {
+		max-width: 1280px;
+		margin: 0 auto;
+		padding: 3rem 1.5rem 5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 3rem;
+	}
+
+	.eyebrow {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .14em;
+		font-size: .82rem;
+		font-weight: 600;
+		color: var(--violet);
+	}
+
+	h1 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: clamp(2rem, 4.6vw, 2.8rem);
+		font-weight: 600;
+		letter-spacing: .01em;
+		margin: .35rem 0 0;
+		text-wrap: balance;
+	}
+
+	.lede {
+		max-width: 70ch;
+		color: var(--ink-soft);
+		margin: .85rem 0 0;
+	}
+
+	h2 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: 1.05rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+
+	h3 {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .92rem;
+		font-weight: 600;
+		margin: 0 0 .35rem;
+	}
+
+	code {
+		font-family: ui-monospace, monospace;
+		font-size: .88em;
+		background: var(--panel-sunk);
+		padding: .05em .3em;
+		border-radius: 2px;
+	}
+
+	.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+	/* ── warum-notiz / decisions ─────────────────────────────── */
+	.decisions { display: flex; flex-direction: column; gap: 1rem; }
+
+	.decision {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-left: 3px solid var(--violet);
+		border-radius: 3px;
+		padding: 1rem 1.15rem;
+	}
+
+	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
+	.decision p + p { margin-top: .5rem; }
+	.decision .quote {
+		font-style: italic;
+		color: var(--ink);
+		border-left: 2px solid var(--rule-strong);
+		padding-left: .7rem;
+		margin: .5rem 0;
+	}
+	.rec { color: var(--ink); }
+	.rec strong { color: var(--violet); }
+
+	.findings {
+		margin: .5rem 0 0;
+		padding-left: 1.15rem;
+		display: flex;
+		flex-direction: column;
+		gap: .45rem;
+		color: var(--ink-soft);
+		font-size: .9rem;
+	}
+	.findings li::marker { color: var(--violet); }
+	.findings code { font-size: .82em; }
+
+	/* ── Erwartungsliste (Ruling-Linien) ─────────────────────── */
+	.ruling-lines {
+		display: flex;
+		flex-direction: column;
+		gap: .6rem;
+	}
+	.ruling-line {
+		display: grid;
+		grid-template-columns: 2.4rem 1fr;
+		gap: .7rem;
+		align-items: baseline;
+		padding: .55rem .7rem;
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-radius: 3px;
+	}
+	.ruling-line .n {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-weight: 600;
+		color: var(--violet);
+		font-size: .92rem;
+	}
+	.ruling-line p { margin: 0; color: var(--ink); font-size: .92rem; }
+	.ruling-line .tag { margin-left: .5rem; }
+
+	/* ── states grid ──────────────────────────────────────────── */
+	.states {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.states-wide {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+		gap: 1.5rem;
+		align-items: start;
+	}
+
+	.state {
+		display: flex;
+		flex-direction: column;
+		gap: .9rem;
+	}
+
+	.state-head {
+		display: flex;
+		align-items: baseline;
+		gap: .6rem;
+		flex-wrap: wrap;
+	}
+
+	.tag {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .1em;
+		font-size: .74rem;
+		font-weight: 600;
+		padding: .1rem .5rem;
+		border-radius: 2px;
+	}
+
+	.tag-now { background: var(--warn-bg); color: var(--warn-ink); }
+	.tag-next { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+	.tag-bild { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
+
+	.state-note {
+		color: var(--ink-soft);
+		font-size: .92rem;
+		margin: 0;
+	}
+
+	.freeze-note {
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .86rem;
+		color: var(--warn-ink);
+		background: var(--warn-bg);
+		max-width: 72ch;
+		margin: 0 auto;
+		padding: .75rem 1.1rem;
+		border-radius: 3px;
+	}
+
+	.foot-note {
+		font-size: .86rem;
+		color: var(--muted);
+		max-width: 70ch;
+	}
+
+	/* ══════════════════════════════════════════════════════════════════
+	   App-Ausschnitte — echte App-Tokens (frontend/src/app.css, Dark-
+	   Theme-Werte), nicht die Doc-Chrome-Tokens oben. Klassen tragen
+	   dieselben Namen wie die realen Komponenten, wo eine 1:1-Entsprechung
+	   existiert (.take-row, .chip, .source-bar, .waveform-picker, …), damit
+	   sich das Bild direkt gegen den Code lesen lässt.
+	   ══════════════════════════════════════════════════════════════════ */
+	.app-shell {
+		--primary: #ff3220;
+		--accent: #a020f0;
+		--bg: #0d0d0d;
+		--surface: #111;
+		--surface-hover: #1a1a1a;
+		--border: #333;
+		--text: #e0e0e0;
+		--text-muted: #888;
+		--text-subtle: #888;
+		--text-disabled: #555;
+		--keep: #e04050;
+		--score-bad: #f44;
+		--font-display: 'Oswald', Impact, sans-serif;
+		--font-body: 'Open Sans', Arial, sans-serif;
+		--card-radius: 6px;
+		--btn-radius-pill: 16px;
+		--btn-radius-sm: 4px;
+
+		background: var(--bg);
+		color: var(--text);
+		font-family: var(--font-body);
+		border: 1px solid #000;
+		border-radius: 8px;
+		box-shadow: var(--shadow);
+		padding: 1rem;
+		overflow: hidden;
+	}
+
+	.app-shell.phone-width { max-width: 300px; }
+
+	.app-shell .frame-label {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		font-size: .68rem;
+		color: var(--text-muted);
+		margin-bottom: .6rem;
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+	}
+	.app-shell .frame-label .dot {
+		width: 6px; height: 6px; border-radius: 50%; background: var(--score-bad);
+	}
+
+	/* take row — mirrors TakesList.svelte's row + take-actions */
+	.take-row {
+		display: flex;
+		align-items: center;
+		gap: .6rem;
+		padding: .6rem .5rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.take-row:last-child { border-bottom: none; }
+	.take-row.dim { opacity: .55; }
+
+	.take-main { display: flex; flex-direction: column; gap: .15rem; min-width: 0; flex: 1; }
+	.take-label {
+		font-family: var(--font-display);
+		font-size: .92rem;
+		letter-spacing: .2px;
+	}
+	.take-sub {
+		font-size: .68rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.take-origin {
+		font-size: .68rem;
+		color: var(--accent);
+	}
+
+	.take-actions {
+		display: flex;
+		align-items: center;
+		gap: .35rem;
+		flex-shrink: 0;
+	}
+
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.7rem;
+		height: 1.7rem;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		font-size: .85rem;
+	}
+	.icon-btn.on { color: var(--keep); border-color: var(--keep); }
+	.icon-btn.on.pick { color: var(--primary); border-color: var(--primary); }
+
+	.take-action-btn {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .4px;
+		font-size: .66rem;
+		padding: .28rem .55rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-muted);
+	}
+	.take-action-btn.repaint:not(:disabled):hover,
+	.take-action-btn.repaint.demo-active { color: var(--primary); border-color: var(--primary); }
+	.take-action-btn.cover:not(:disabled):hover,
+	.take-action-btn.cover.demo-active { color: var(--accent); border-color: var(--accent); }
+	.take-action-btn:disabled {
+		color: var(--text-disabled);
+		border-color: var(--border);
+		cursor: not-allowed;
+	}
+
+	.overflow-dot {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.6rem;
+		height: 1.6rem;
+		color: var(--text-muted);
+		font-size: .95rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+	}
+
+	.no-audio-note {
+		font-size: .64rem;
+		color: var(--text-disabled);
+		flex-shrink: 0;
+		max-width: 8.5rem;
+		text-align: right;
+	}
+
+	/* recipe chips row — mirrors RecipeChips.svelte */
+	.chip-strip { display: flex; flex-wrap: wrap; gap: .5rem; }
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: .3rem;
+		padding: .3rem .65rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--surface);
+		font-size: .72rem;
+	}
+	.chip.repaint-on { border-color: var(--primary); }
+	.chip.cover-on { border-color: var(--accent); }
+	.chip-label {
+		color: var(--text-subtle);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .4px;
+		font-size: .62rem;
+	}
+	.chip-value { color: var(--text); font-family: var(--font-display); }
+
+	/* recipe panel — mirrors RecipePanel.svelte */
+	.recipe-panel {
+		display: flex;
+		flex-direction: column;
+		gap: .7rem;
+		padding: .8rem;
+		background: var(--surface);
+		border: 1px solid var(--primary);
+		border-radius: var(--card-radius);
+	}
+	.recipe-panel.cover-flavor { border-color: var(--accent); }
+
+	.recipe-panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-family: var(--font-display);
+		font-size: .68rem;
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		color: var(--text-muted);
+	}
+
+	.group-title {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		font-size: .7rem;
+		color: var(--text-muted);
+		margin: 0 0 .35rem;
+	}
+
+	.ghost-fields {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: .4rem;
+		margin-bottom: .7rem;
+	}
+	.ghost-field {
+		height: 1.6rem;
+		border-radius: var(--btn-radius-sm);
+		background: var(--bg);
+		border: 1px solid var(--border);
+	}
+
+	.segmented {
+		display: inline-flex;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		overflow: hidden;
+	}
+	.segmented button {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .3px;
+		font-size: .66rem;
+		padding: .3rem .55rem;
+		background: var(--bg);
+		border: none;
+		color: var(--text-muted);
+		border-right: 1px solid var(--border);
+	}
+	.segmented button:last-child { border-right: none; }
+	.segmented button.active.repaint { background: var(--primary); color: #fff; }
+	.segmented button.active.cover { background: var(--accent); color: #fff; }
+	.segmented button:disabled { color: var(--text-disabled); }
+
+	.repaint-row { display: flex; align-items: center; gap: .6rem; margin: .5rem 0; flex-wrap: wrap; }
+	.field-label {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .4px;
+		font-size: .68rem;
+		color: var(--text-muted);
+		width: 4.2rem;
+		flex-shrink: 0;
+	}
+
+	.source-bar {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		padding: .4rem .55rem;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		margin: .4rem 0;
+	}
+	.source-label { font-size: .74rem; color: var(--text); flex: 1; }
+	.source-label b { color: var(--accent); font-weight: 600; }
+	.source-dismiss {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 1rem;
+		line-height: 1;
+		width: 1.4rem;
+		height: 1.4rem;
+	}
+	.source-dismiss:hover { color: var(--score-bad); }
+
+	.paints-with-hint {
+		font-size: .68rem;
+		color: var(--text-muted);
+		font-style: italic;
+		margin: -.15rem 0 .3rem;
+	}
+
+	.waveform-picker {
+		position: relative;
+		height: 64px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		margin: .4rem 0;
+		display: flex;
+		align-items: center;
+		overflow: hidden;
+	}
+	.wf-bars {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+		width: 100%;
+		height: 100%;
+		padding: 0 2px;
+	}
+	.wf-bars span {
+		flex: 1;
+		background: #3a3a3a;
+		min-width: 1px;
+	}
+	.wf-range {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		background: color-mix(in srgb, var(--primary) 22%, transparent);
+		border-left: 2px solid var(--primary);
+		border-right: 2px solid var(--primary);
+	}
+	.wf-time {
+		position: absolute;
+		bottom: 2px;
+		right: 6px;
+		font-size: .6rem;
+		color: var(--text-muted);
+		background: rgba(0,0,0,.5);
+		padding: 0 .3rem;
+		border-radius: 2px;
+	}
+
+	.field-slider { display: flex; flex-direction: column; gap: .2rem; margin: .4rem 0; }
+	.field-slider .row {
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+		font-size: .72rem;
+		color: var(--text-muted);
+	}
+	.field-slider input[type="range"] { flex: 1; accent-color: var(--primary); }
+	.recipe-panel.cover-flavor .field-slider input[type="range"] { accent-color: var(--accent); }
+	.range-value { color: var(--text); font-size: .72rem; width: 2.6rem; text-align: right; }
+
+	/* generate bar — mirrors EditorHeader's generate button */
+	.generate-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+	.generate-btn {
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		font-size: .93rem;
+		padding: .55rem 1.3rem;
+		border-radius: var(--btn-radius-pill);
+		border: none;
+		color: #fff;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+	}
+	.generate-btn.off { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+	.generate-caption {
+		font-size: .68rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: .4px;
+		color: var(--text-muted);
+		text-align: center;
+		margin-top: .3rem;
+	}
+	.generate-cell { display: flex; flex-direction: column; align-items: center; }
+
+	/* mobile take strip */
+	.mobile-take-strip { display: flex; flex-direction: column; gap: .5rem; }
+
+	@media (max-width: 720px) {
+		.states, .states-wide { grid-template-columns: 1fr; }
+	}
+</style>
+</head>
+<body>
+<p class="freeze-note">
+	Vorgelegt 02.09.2026, <strong>ungesegnet</strong> — Zeichenauftrag zu Issue
+	<code>#230</code>, Scheibe 2 ("Sichtbarer, benannter Einstieg"). Diese Datei ist kein
+	eingefrorener Bildbesitzer wie <code>album-browsing.html</code> oder
+	<code>navigation.html</code>, solange der Operator sie nicht freigegeben hat — erst
+	danach gehört sie in <code>docs/design/README.md</code>.
+</p>
+<div class="wrap">
+
+	<header>
+		<div class="eyebrow">Songmaker · Target UI · Vorlage</div>
+		<h1>Repaint und Cover bekommen einen Namen</h1>
+		<p class="lede">
+			Reines HTML-Mockup für Issue <code>#230</code> ("Repaint/Cover-Wiederholung: bauen und
+			sichtbar machen"), Scheibe 2. Zeigt, wie die zwei am 22.08.2026 gebauten, aber nie benannten
+			Aktionen — Repaint und Cover — direkt am Take sichtbar werden, statt hinter „Use as
+			reference" im Overflow-Menü zu verschwinden. App-Beschriftungen sind Englisch (die App ist
+			Englisch, siehe <code>lib/constants.ts</code>); diese Notiz ist Deutsch. Tokens und
+			Bild-Aufbau von <code>docs/design/album-browsing.html</code> übernommen; die App-Ausschnitte
+			selbst nutzen die echten App-Tokens aus <code>frontend/src/app.css</code>
+			(<code>--surface</code>, <code>--primary</code>, <code>--accent</code>, …), damit sie
+			gegen den echten Dark-Theme-Look lesbar sind.
+		</p>
+	</header>
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Der Anlass — Operator-Ruling, 02.09.2026 (#230)</h3>
+			<p class="quote">
+				„Bauen. Repaint/Cover soll da sein und benutzbar sein — nicht schließen."
+			</p>
+			<p>
+				Aus dem Issue: alle Schichten sind seit dem 22.08.2026 gebaut und stimmig — Endpunkte,
+				ACE-Step-Parameter, Store, Recipe-Panel. Trotzdem <b>0 Nutzungen</b> vor Scheibe 1. Der
+				dokumentierte Grund: „Der einzige Einstieg ist ‚Use as reference' im Overflow-Menü eines
+				Takes (<code>TakeMenu.svelte:160</code>, <code>NowPlayingTake.svelte:228</code>) — nennt
+				weder Repaint noch Cover, setzt stumm <code>mode: 'repaint'</code>, und das Recipe-Panel
+				ist standardmäßig eingeklappt."
+			</p>
+		</div>
+
+		<div class="decision">
+			<h3>Belegte Befunde aus dem Code (Datei:Zeile)</h3>
+			<ul class="findings">
+				<li><code>TakesList.svelte:507-524</code> — jede Take-Zeile trägt heute schon Pick-
+					und Keep-Knöpfe direkt neben dem Overflow-Menü (<code>TakeMenu</code>). Repaint/Cover
+					fehlen an dieser Stelle komplett; das einzige Türchen ist der Menüpunkt
+					„Use as reference" im Overflow.</li>
+				<li><code>TakeMenu.svelte:156-163</code> — „Pin seed" und „Use as reference" sind
+					gleichrangige Menüpunkte in derselben Liste wie „Delete" und „Restore" — keine visuelle
+					Sonderstellung für die zwei Aktionen, um die es in #230 geht.</li>
+				<li><code>NowPlayingTake.svelte:221-230</code> — <code>onUseAsReference()</code> setzt
+					<code>pendingSource.set(&#123; generation, mode: 'repaint' &#125;)</code> fest auf
+					<code>'repaint'</code>. Cover ist über diesen Pfad nicht erreichbar, nur über das
+					Recipe-Panel selbst, nachdem eine Quelle schon gesetzt ist.</li>
+				<li><code>stores/recipe.ts:45-53</code> — <code>setSourceFromGeneration(gen, mode)</code>
+					existiert bereits und akzeptiert <code>'repaint'</code> <i>oder</i> <code>'cover'</code>
+					— die Store-Funktion ist bereit, nur kein UI-Pfad ruft sie mit <code>'cover'</code> auf.</li>
+				<li><code>RecipePanel.svelte:341-444</code> — Quellzeile (<code>.source-bar</code>) mit
+					„Source: v‹n› · take ‹m›" und genau einem „×"-Knopf (<code>clearSource</code>) existieren
+					bereits und funktionieren; Repaint zeigt <code>WaveformRangePicker</code> plus
+					„Repaint Strength" (nur im <code>balanced</code>-Modus sichtbar), Cover zeigt „Cover
+					Strength" und „Noise Strength". Keine Zeile erklärt, dass die Malfarbe die aktuellen
+					Editor-Inhalte sind, nicht die des Quell-Takes.</li>
+				<li><code>stores/recipe.ts:204-294</code> — <code>recipeChips()</code> hat schon ein
+					<code>repaint</code>-Feld; sein Wert ist heute <code>capitalize(repaintMode)</code>
+					oder <code>'Cover'</code> oder <code>'Off'</code> — nie die Quelle selbst. Der
+					Take-Bezug fehlt im geschlossenen Chip komplett.</li>
+				<li><code>SongDetailView.svelte:642-652</code> — <code>generateLabel()</code> hat vier
+					Zweige (queued/generating/GPU offline/Fallback), keiner davon fragt
+					<code>$sourceGeneration</code> ab. Der Knopf heißt immer „Generate", auch wenn er
+					gerade einen Repaint oder ein Cover auslöst.</li>
+				<li><code>api_models/songs.py:285</code> / <code>frontend/src/lib/api/types.ts:145</code>
+					— <code>src_generation_id</code> existiert bereits auf <code>GenerationItem</code> (wird
+					beim <i>Absenden</i> eines Repaints/Covers gesetzt, <code>api/generations.ts:41,80</code>)
+					— aber nirgends im Frontend <i>gelesen</i>. Keine Komponente zeigt „Repaint aus …" auf
+					dem Ergebnis-Take; das ist neue Anzeige-Logik, keine reine Layoutänderung.</li>
+				<li><code>utils/recipe-summary.ts:69</code> — <code>DUPLICATE_PARAM_KEYS</code> nennt
+					<code>seed</code>, <code>acestep_model</code>, <code>delivered_batch_size</code>
+					explizit als „bereits woanders gezeigt" — <code>src_generation_id</code> steht nicht auf
+					dieser Liste, weil es aktuell nirgends gezeigt wird.</li>
+				<li><code>routes/share/gen/[slug]/+page.svelte:38</code>, <code>share/song/[slug]/+page.svelte</code>
+					— eine geteilte Take-/Song-Seite zeigt Titel und Take-Nummer, keine Version, keinen
+					Recipe-Bezug. Eine Herkunftszeile aus TakesList/NowPlayingTake landet dort nicht von
+					selbst mit.</li>
+				<li><code>TakesList.svelte:470-472</code> — der einzige heute existierende „warum ist
+					diese Zeile eingeschränkt"-Text ist der Archiv-Badge „Archived — will be hard-deleted".
+					Kein Code-Pfad liefert heute eine Take-Zeile mit gesetzter <code>GenerationItem</code>
+					aber ohne <code>mp3_path</code> — der plausibelste reale Grund, Repaint/Cover an einer
+					Zeile zu sperren, ist eine bereits archivierte, zur Löschung vorgemerkte Quelle (siehe
+					offene Frage unten, Zustand (a)).</li>
+			</ul>
+		</div>
+
+		<div class="decision">
+			<h3>Der Vorschlag in drei Sätzen</h3>
+			<p class="rec">
+				<strong>1.</strong> „Repaint" und „Cover" werden zwei benannte Knöpfe direkt an jeder
+				spielbaren Take-Zeile, gleichrangig mit Pick/Keep — der Overflow-Menüpunkt „Use as
+				reference" entfällt, weil er dieselbe Handlung schlechter benannt zweimal anbieten würde.
+				<strong>2.</strong> Der geschlossene Recipe-Chip nennt Modus <i>und</i> Quelle
+				(„Repaint · v2 · take 3" statt nur „Conservative"), damit man den aktiven Zustand sieht,
+				ohne das Panel zu öffnen. <strong>3.</strong> Das offene Panel bekommt einen Satz, der
+				sagt, womit gemalt wird, und der Generate-Knopf nennt seine Handlung, statt immer
+				„Generate" zu heißen.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Die im Bild markierten Ruling-Linien</h2>
+		<p class="state-note">
+			Die 18-zeilige Erwartungsliste zu #230 ist am 02.09.2026 mit dem Operator besprochen, aber
+			noch nicht wortgleich in den Issue-Body übertragen — dieser Abschnitt hält die sieben
+			<b>[Bild]</b>-markierten Zeilen fest, exakt wie im Zeichenauftrag übergeben, damit das Bild
+			nachprüfbar gegen sie gehalten werden kann. Zwei zusätzliche Zeilen (9, 11) tauchen als
+			Kontext innerhalb der markierten Zustände auf, sind aber selbst nicht als [Bild] geführt.
+		</p>
+		<div class="ruling-lines">
+			<div class="ruling-line">
+				<span class="n">1.</span>
+				<p>Take-Zeile mit zwei benannten Aktionen „Repaint" und „Cover" direkt am Take, nicht
+					nur im Overflow-Menü. <span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">5.</span>
+				<p>Ergebnis-Take zeigt eine Herkunftszeile „Repaint aus v‹n›·‹m›" (bzw. Cover).
+					<span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">6.</span>
+				<p>Das Panel sagt, dass es mit dem Text und Stil malt, die jetzt im Editor stehen — nicht
+					mit denen des Quell-Takes. <span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">7.</span>
+				<p>Recipe-Chip im geschlossenen Zustand nennt Modus und Quelle, oder „Off".
+					<span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">8.</span>
+				<p>Der Generate-Knopf ist benannt: „Generate Repaint" / „Generate Cover" / „Generate".
+					<span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">13.</span>
+				<p>Die Quellzeile im Panel trägt genau einen „Quelle verwerfen"-Knopf.
+					<span class="tag tag-bild">Bild</span></p>
+			</div>
+			<div class="ruling-line">
+				<span class="n">17.</span>
+				<p>Auf Handybreite bleiben dieselben zwei Aktionen am Take bedienbar, ebenso der
+					Bereichswähler. <span class="tag tag-bild">Bild</span></p>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="states-wide">
+		<div class="state">
+			<div class="state-head">
+				<h2>(a) Take-Zeile — zwei benannte Aktionen</h2>
+				<span class="tag tag-next">Vorschlag · Zeile 1</span>
+			</div>
+			<p class="state-note">
+				Neben Pick/Keep/Overflow (unverändert aus <code>TakesList.svelte:507-524</code>) stehen
+				jetzt „Repaint" und „Cover" als eigene, benannte Knöpfe. Unten: derselbe Take, aber
+				archiviert und zur Löschung vorgemerkt — Repaint/Cover sind gesperrt, mit Grund
+				(<b>Zeile 9</b>, Kontext zu Zeile 1). Offene Frage dazu unten in „Was das Bild offen lässt".
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Takes — Offene Türen</div>
+				<div class="take-row">
+					<div class="take-main">
+						<span class="take-label">v2 · take 3</span>
+						<span class="take-sub">turbo · 3:24 · BPM 118</span>
+					</div>
+					<div class="take-actions">
+						<button class="icon-btn on pick" title="Unpick">★</button>
+						<button class="icon-btn" title="Keep">♡</button>
+						<button class="take-action-btn repaint">Repaint</button>
+						<button class="take-action-btn cover">Cover</button>
+						<span class="overflow-dot">⋯</span>
+					</div>
+				</div>
+				<div class="take-row dim">
+					<div class="take-main">
+						<span class="take-label">v1 · take 1</span>
+						<span class="take-sub">archived — will be hard-deleted</span>
+					</div>
+					<div class="take-actions">
+						<button class="icon-btn" disabled>★</button>
+						<button class="icon-btn" disabled>♡</button>
+						<button class="take-action-btn" disabled title="Archived takes are scheduled for deletion and can't be used as a source">Repaint</button>
+						<button class="take-action-btn" disabled title="Archived takes are scheduled for deletion and can't be used as a source">Cover</button>
+						<span class="no-audio-note">Archived — can't use as source</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>(b) Recipe-Chip — geschlossen, drei Zustände</h2>
+				<span class="tag tag-next">Vorschlag · Zeile 7</span>
+			</div>
+			<p class="state-note">
+				<code>recipeChips()</code>' „repaint"-Eintrag zeigt Modus <i>und</i> Quelle statt nur
+				des Modus-Namens. Label wechselt zwischen „REPAINT" und „COVER", je nachdem, was aktiv
+				ist; ohne Quelle bleibt es beim heutigen „Off".
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Recipe-Chip-Zeile</div>
+				<div class="chip-strip">
+					<span class="chip"><span class="chip-label">Repaint</span><span class="chip-value">Off</span></span>
+					<span class="chip repaint-on"><span class="chip-label">Repaint</span><span class="chip-value">v2 · take 3</span></span>
+					<span class="chip cover-on"><span class="chip-label">Cover</span><span class="chip-value">v2 · take 3</span></span>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="states-wide">
+		<div class="state">
+			<div class="state-head">
+				<h2>(c) Recipe-Panel offen — Repaint-Modus</h2>
+				<span class="tag tag-next">Vorschlag · Zeilen 6, 13</span>
+			</div>
+			<p class="state-note">
+				Bereichswähler mit der echten Take-Länge (3:24, aus
+				<code>generation_params.audio_duration</code>), „Repaint Strength" nur im
+				<code>balanced</code>-Modus (wie heute). Quellzeile „Source: v2 · take 3" mit genau
+				einem „×"; neu ist der kursive Hinweis darunter.
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Recipe-Panel</div>
+				<div class="recipe-panel">
+					<div class="recipe-panel-header"><span>Recipe · saved</span><span>Collapse ˄</span></div>
+					<div class="ghost-fields"><div class="ghost-field"></div><div class="ghost-field"></div><div class="ghost-field"></div></div>
+					<div class="group-title">Reproducibility</div>
+					<div class="repaint-row">
+						<span class="field-label">Seed</span>
+						<div class="segmented"><button>Random</button><button class="active repaint">Pinned 271828</button></div>
+					</div>
+					<div class="repaint-row">
+						<span class="field-label">Repaint</span>
+						<div class="segmented">
+							<button>Off</button>
+							<button class="active repaint">Conservative</button>
+							<button>Balanced</button>
+							<button>Aggressive</button>
+						</div>
+					</div>
+					<div class="source-bar">
+						<span class="source-label">Source: <b>v2 · take 3</b></span>
+						<div class="segmented"><button class="active repaint">Repaint</button><button>Cover</button></div>
+						<button class="source-dismiss" title="Clear source">×</button>
+					</div>
+					<p class="paints-with-hint">Paints using the lyrics and style currently in the editor — not the source take's own.</p>
+					<div class="waveform-picker">
+						<div class="wf-bars">
+							<span style="height:30%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:70%"></span><span style="height:35%"></span><span style="height:60%"></span><span style="height:45%"></span><span style="height:65%"></span><span style="height:38%"></span><span style="height:50%"></span><span style="height:72%"></span><span style="height:42%"></span><span style="height:58%"></span><span style="height:33%"></span><span style="height:62%"></span><span style="height:48%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:68%"></span><span style="height:36%"></span><span style="height:52%"></span><span style="height:44%"></span><span style="height:60%"></span><span style="height:30%"></span>
+						</div>
+						<div class="wf-range" style="left:28%; width:34%"></div>
+						<span class="wf-time">0:58.20 – 1:53.40 / 3:24.00</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>(c) Recipe-Panel offen — Cover-Modus</h2>
+				<span class="tag tag-next">Vorschlag · Zeilen 6, 13</span>
+			</div>
+			<p class="state-note">
+				Gleiche Quellzeile, gleicher Hinweis; statt des Bereichswählers zwei Regler
+				(Cover Strength, Noise Strength), wie heute in <code>RecipePanel.svelte:414-441</code>.
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Recipe-Panel</div>
+				<div class="recipe-panel cover-flavor">
+					<div class="recipe-panel-header"><span>Recipe · saved</span><span>Collapse ˄</span></div>
+					<div class="ghost-fields"><div class="ghost-field"></div><div class="ghost-field"></div><div class="ghost-field"></div></div>
+					<div class="group-title">Reproducibility</div>
+					<div class="repaint-row">
+						<span class="field-label">Seed</span>
+						<div class="segmented"><button class="active cover">Random</button><button>Pinned</button></div>
+					</div>
+					<div class="source-bar">
+						<span class="source-label">Source: <b>v2 · take 3</b></span>
+						<div class="segmented"><button>Repaint</button><button class="active cover">Cover</button></div>
+						<button class="source-dismiss" title="Clear source">×</button>
+					</div>
+					<p class="paints-with-hint">Paints using the lyrics and style currently in the editor — not the source take's own.</p>
+					<div class="field-slider">
+						<div class="row"><span>Cover Strength (Free ↔ Strict)</span></div>
+						<div class="row"><input type="range" value="70" readonly><span class="range-value">70%</span></div>
+					</div>
+					<div class="field-slider">
+						<div class="row"><span>Noise Strength</span></div>
+						<div class="row"><input type="range" value="15" readonly><span class="range-value">15%</span></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="states">
+		<div class="state">
+			<div class="state-head">
+				<h2>(d) Generate-Knopf — benannt nach Modus</h2>
+				<span class="tag tag-next">Vorschlag · Zeile 8</span>
+			</div>
+			<p class="state-note">
+				Dieselben drei Zustände wie der Chip in (b), am selben Knopf: ohne Quelle bleibt
+				„Generate", mit Quelle sagt der Knopf, was er auslöst.
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Generate</div>
+				<div class="generate-row">
+					<div class="generate-cell"><button class="generate-btn off">Generate</button><span class="generate-caption">kein Take gesetzt</span></div>
+					<div class="generate-cell"><button class="generate-btn">Generate Repaint</button><span class="generate-caption">Repaint aktiv</span></div>
+					<div class="generate-cell"><button class="generate-btn">Generate Cover</button><span class="generate-caption">Cover aktiv</span></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h2>(e) Ergebnis-Take — Herkunftszeile</h2>
+				<span class="tag tag-next">Vorschlag · Zeile 5</span>
+			</div>
+			<p class="state-note">
+				Sobald ein Take <code>src_generation_id</code> trägt (heute schon in den Daten, siehe
+				Befund oben), zeigt seine Zeile „Repaint from v2 · take 3" statt nur Modell/Dauer.
+				<b>Zeile 11</b> (Kontext): dieselbe Zeile fehlt auf geteilten Take-/Song-Seiten
+				(<code>routes/share/…</code> zeigen weder Version noch Recipe) — nicht gelöst hier,
+				nur festgehalten.
+			</p>
+			<div class="app-shell">
+				<div class="frame-label"><span class="dot"></span>Takes — Offene Türen</div>
+				<div class="take-row">
+					<div class="take-main">
+						<span class="take-label">v3 · take 1</span>
+						<span class="take-sub">turbo · 3:41 · BPM 118</span>
+						<span class="take-origin">Repaint from v2 · take 3</span>
+					</div>
+					<div class="take-actions">
+						<button class="icon-btn" title="Pick">★</button>
+						<button class="icon-btn" title="Keep">♡</button>
+						<button class="take-action-btn repaint">Repaint</button>
+						<button class="take-action-btn cover">Cover</button>
+						<span class="overflow-dot">⋯</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="states">
+		<div class="state">
+			<div class="state-head">
+				<h2>(f) Handybreite — Take-Zeile</h2>
+				<span class="tag tag-next">Vorschlag · Zeile 17</span>
+			</div>
+			<p class="state-note">
+				Beide Aktionen bleiben benannt statt zu Icons zu schrumpfen — auf Handybreite ist der
+				kürzeste eindeutige Text günstiger als ein weiteres unbeschriftetes Symbol. Der
+				Bereichswähler bleibt bedienbar (Ziehen der Griffe), keine Extra-Erklärung nötig.
+			</p>
+			<div class="app-shell phone-width">
+				<div class="frame-label"><span class="dot"></span>Takes — 375px</div>
+				<div class="mobile-take-strip">
+					<div class="take-row" style="flex-wrap: wrap;">
+						<div class="take-main" style="flex-basis: 100%;">
+							<span class="take-label">v2 · take 3</span>
+							<span class="take-sub">turbo · 3:24</span>
+						</div>
+						<div class="take-actions" style="flex-basis: 100%; justify-content: flex-end;">
+							<button class="icon-btn on pick">★</button>
+							<button class="icon-btn">♡</button>
+							<button class="take-action-btn repaint">Repaint</button>
+							<button class="take-action-btn cover">Cover</button>
+							<span class="overflow-dot">⋯</span>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="app-shell phone-width">
+				<div class="frame-label"><span class="dot"></span>Bereichswähler — 375px</div>
+				<div class="waveform-picker">
+					<div class="wf-bars">
+						<span style="height:30%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:70%"></span><span style="height:35%"></span><span style="height:60%"></span><span style="height:45%"></span><span style="height:65%"></span><span style="height:38%"></span><span style="height:50%"></span><span style="height:72%"></span><span style="height:42%"></span><span style="height:58%"></span><span style="height:33%"></span><span style="height:62%"></span><span style="height:48%"></span>
+					</div>
+					<div class="wf-range" style="left:20%; width:45%"></div>
+					<span class="wf-time">0:40.80 – 2:11.60</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="state">
+			<div class="state-head">
+				<h3>Was das Bild offen lässt</h3>
+			</div>
+			<div class="decision">
+				<p><b>1. Grund für ein gesperrtes Repaint/Cover.</b> Kein heutiger Code-Pfad liefert eine
+					Take-Zeile mit <code>GenerationItem</code>, aber ohne spielbare Audiodatei — der
+					Zustand in (a) unten ist als „archiviert, zur Löschung vorgemerkt" modelliert, weil das
+					der einzige reale, im Code belegte Fall ist, der Repaint/Cover sinnvoll sperrt (die
+					Quelle könnte während eines laufenden Jobs verschwinden). Ob „ohne Audiodatei" etwas
+					anderes meint, klärt sich erst beim Bau.</p>
+				<p><b>2. Woher „Cover from" vs. „Repaint from" kommt.</b> <code>GenerationItem</code>
+					trägt <code>src_generation_id</code>, aber kein eigenes Modus-Feld. Zustand (e) geht
+					davon aus, dass Repaint/Cover aus den vorhandenen <code>generation_params</code>
+					unterschieden wird (<code>repaint_mode</code>/<code>repainting_start</code> vs.
+					<code>audio_cover_strength</code>) — nicht geprüft, ob das für jeden Take zuverlässig
+					reicht.</p>
+				<p><b>3. Verbleib von „Use as reference".</b> Vorschlag entfernt den Menüpunkt aus
+					<code>TakeMenu.svelte</code> vollständig (Satz 1 oben). Falls ein Grund bestehen bleibt,
+					ihn zusätzlich zu behalten (z. B. als Tastatur-/Screenreader-Pfad ohne sichtbare
+					Zeilen-Knöpfe), ist das hier nicht entschieden.</p>
+			</div>
+		</div>
+	</section>
+
+	<p class="foot-note">
+		Vorgelegt 02.09.2026 als Bild-Owner für Issue <code>#230</code>, Scheibe 2. Noch nicht
+		freigegeben — erst nach Operator-Segen gehört diese Datei mit einem Eintrag in
+		<code>docs/design/README.md</code> zu den eingefrorenen Bildern. Basisstil aus
+		<code>docs/design/album-browsing.html</code>; App-Ausschnitte gegen die echten Tokens aus
+		<code>frontend/src/app.css</code> gehalten.
+	</p>
+
+</div>
+</body>
+</html>
