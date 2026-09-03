@@ -186,38 +186,6 @@ def test_recover_on_startup_releases_lock_on_error() -> None:
     ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
 
 
-# ── cleanup_stale_cron ────────────────────────────────────────────
-
-
-def test_cleanup_stale_cron_commits_on_recovery() -> None:
-    mock_session = MagicMock()
-    worker = _make_worker_with_db(mock_session)
-
-    with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-        return_value={"dummy": 2},
-    ) as mock_recover:
-        result = _run(worker.cleanup_stale_cron({"redis": AsyncMock()}))
-
-    assert result == 2
-    mock_recover.assert_called_once_with(mock_session, ("dummy",), return_counts=True)
-    mock_session.commit.assert_called_once()
-
-
-def test_cleanup_stale_cron_no_commit_when_zero() -> None:
-    mock_session = MagicMock()
-    worker = _make_worker_with_db(mock_session)
-
-    with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-        return_value={},
-    ):
-        result = _run(worker.cleanup_stale_cron({"redis": AsyncMock()}))
-
-    assert result == 0
-    mock_session.commit.assert_not_called()
-
-
 # ── module-level helpers ──────────────────────────────────────────
 
 

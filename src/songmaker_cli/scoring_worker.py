@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from arq import cron, func
+from arq import func
 
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
@@ -81,10 +81,4 @@ class ScoringWorkerSettings:
     job_timeout = _settings.arq_job_timeout
     job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = ScoringWorker.health_check_interval
-    cron_jobs = [
-        cron(
-            _scoring_worker.cleanup_stale_cron,
-            minute={i for i in range(0, 60, 2)},
-            second={0},
-        ),
-    ]
+    cron_jobs = []

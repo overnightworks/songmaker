@@ -191,7 +191,6 @@ class Settings(BaseSettings):
     scoring_device: str = "cpu"
     scorer_timeout_seconds: int = SCORER_TIMEOUT_SECONDS
     text_accuracy_timeout_seconds: int = TEXT_ACCURACY_TIMEOUT_SECONDS
-    stale_job_threshold_seconds: int = 1100
 
     # ── Soft delete ───────────────────────────────────────────────────
     soft_delete_retention_days: int = 30

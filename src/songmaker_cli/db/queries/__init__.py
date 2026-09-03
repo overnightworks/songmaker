@@ -140,8 +140,6 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
-from songmaker_cli.db.queries.jobs import StaleThresholds as StaleThresholds
-from songmaker_cli.db.queries.jobs import clear_stale_user_jobs as clear_stale_user_jobs
 from songmaker_cli.db.queries.jobs import count_total_queued_jobs as count_total_queued_jobs
 from songmaker_cli.db.queries.jobs import count_user_active_jobs as count_user_active_jobs
 from songmaker_cli.db.queries.jobs import (
@@ -153,15 +151,12 @@ from songmaker_cli.db.queries.jobs import (
     get_last_generate_job_for_song as get_last_generate_job_for_song,
 )
 from songmaker_cli.db.queries.jobs import get_queue_position as get_queue_position
-from songmaker_cli.db.queries.jobs import has_active_job_of_type as has_active_job_of_type
 from songmaker_cli.db.queries.jobs import (
     job_counts_by_type_and_status as job_counts_by_type_and_status,
 )
 from songmaker_cli.db.queries.jobs import job_duration_stats as job_duration_stats
 from songmaker_cli.db.queries.jobs import last_job_failure_time as last_job_failure_time
 from songmaker_cli.db.queries.jobs import lock_active_job as lock_active_job
-from songmaker_cli.db.queries.jobs import recover_stale_jobs as recover_stale_jobs
-from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age as recover_stale_jobs_by_age
 from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_age_and_type as recover_stale_jobs_by_age_and_type,
 )

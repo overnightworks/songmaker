@@ -10,6 +10,7 @@ from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
+    STALE_JOB_THRESHOLDS,
     USER_LORA_DATASET_DIRNAME,
     USER_LORAS_DIRNAME,
     JobStatus,
@@ -19,8 +20,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries import get_user_lora
-from songmaker_cli.lifecycle import reconcile_crashed_loras
-from songmaker_cli.settings import get_settings
+from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
 
 
 @pytest.fixture()
@@ -212,17 +212,12 @@ def test_no_stuck_loras_returns_zero(ctx) -> None:
     assert reconcile_crashed_loras(ctx) == 0
 
 
-def test_reconciles_when_worker_process_died_without_terminal_izing_the_job(
+def test_reaper_tick_reconciles_when_worker_process_died_without_terminalizing_the_job(
     ctx,
 ) -> None:
-    """Before #371: a dead MusicWorker process never terminal-izes the
-    LORA_TRAINING job it was running (WorkerBase's recovery is scoped to
-    GENERATE only), so this row stayed TRAINING forever — the job it waits
-    on was never going to change. reconcile_crashed_loras must now reap the
-    job itself instead of waiting on it.
-    """
-    stale = datetime.now(timezone.utc) - timedelta(
-        seconds=get_settings().stale_job_threshold_seconds + 60,
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(
+        seconds=STALE_JOB_THRESHOLDS[JobType.LORA_TRAINING].heartbeat_seconds + 60,
     )
     with ctx.db() as session:
         session.add(User(id="u1", username="u1", password_hash="x"))
@@ -240,9 +235,10 @@ def test_reconciles_when_worker_process_died_without_terminal_izing_the_job(
         )
         session.commit()
 
-    n = reconcile_crashed_loras(ctx)
+    recovered, reconciled = _run_stale_job_reaper_tick(ctx, now=now)
 
-    assert n == 1
+    assert recovered == 1
+    assert reconciled == 1
     with ctx.db() as s:
         assert get_user_lora(s, "L6", include_deleted_rows=True).status == LoraStatus.FAILED
         job = s.query(Job).filter_by(id="job-L6").first()

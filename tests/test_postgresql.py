@@ -153,12 +153,12 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
     pg_factory, tmp_path, monkeypatch,
 ) -> None:
     """PostgreSQL SKIP LOCKED permits exactly one failure audit per LoRA."""
-    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    terminalized_at = datetime.now(timezone.utc)
     with pg_factory() as session:
         session.add(User(id="lora-user", username="lora-user", password_hash="x"))
         session.add(Job(
-            id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING,
-            started_at=stale, heartbeat_at=stale,
+            id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.FAILED,
+            completed_at=terminalized_at,
         ))
         session.add(UserLora(
             id="lora-1", user_id="lora-user", name="Lora", slug="lora",

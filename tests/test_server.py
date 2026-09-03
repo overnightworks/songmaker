@@ -281,8 +281,11 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with TestClient(app):
-        pass
+    with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
+        with TestClient(app):
+            pass
+
+    mock_reap.assert_called_once_with(ctx)
 
     with factory() as session:
         from songmaker_cli.db.models import UserSession

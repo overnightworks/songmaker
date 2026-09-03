@@ -94,23 +94,14 @@ def test_generate_passes_repaint_params() -> None:
     assert kwargs["repaint_params"].repainting_end == 1.0
 
 
-def test_cleanup_stale_calls_base_cleanup_and_orphan_audit() -> None:
+def test_file_cleanup_cron_audits_orphans_and_expires_files() -> None:
     worker = _make_worker()
     worker.audit_orphaned_files = MagicMock()
 
-    with (
-        patch.object(
-            MusicWorker.__mro__[1],  # WorkerBase
-            "cleanup_stale_cron",
-            new_callable=AsyncMock,
-            return_value=0,
-        ) as mock_base,
-        patch("songmaker_cli.cleanup.run_cleanup_expired") as mock_expired,
-    ):
+    with patch("songmaker_cli.cleanup.run_cleanup_expired") as mock_expired:
         ctx = _mock_ctx()
-        _run(worker.cleanup_stale_cron(ctx))
+        _run(worker.cleanup_files_cron(ctx))
 
-    mock_base.assert_called_once_with(ctx)
     worker.audit_orphaned_files.assert_called_once()
     mock_expired.assert_called_once()
 
@@ -230,7 +221,7 @@ def test_music_worker_settings_queue_name() -> None:
 def test_music_worker_settings_has_cron() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
     names = {job.name for job in MusicWorkerSettings.cron_jobs}
-    assert "cron:MusicWorker.cleanup_stale_cron" in names
+    assert "cron:MusicWorker.cleanup_files_cron" in names
     assert "cron:MusicWorker.generation_retention_cron" in names
 
 

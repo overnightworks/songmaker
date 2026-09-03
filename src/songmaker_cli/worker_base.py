@@ -1,8 +1,8 @@
 """Shared infrastructure for arq workers.
 
 Provides the WorkerBase class subclassed by MusicWorker and ScoringWorker.
-Owns DB engine lifecycle, stale-job recovery, orphan-file audit, and the
-common arq startup/shutdown hooks.
+Owns DB engine lifecycle, restart recovery, orphan-file audit, and the common
+arq startup/shutdown hooks.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class WorkerBase:
 
     Subclasses set the ClassVars (job_types, recovery_lock_key, queue_name,
     max_jobs) and add their own task methods. The instance owns the DB
-    engine + factory and the stale-job recovery state.
+    engine + factory and the restart-recovery state.
 
     arq integration: instantiate once at module load, then expose the
     instance methods on a sibling WorkerSettings shim class so arq's
@@ -156,23 +156,6 @@ class WorkerBase:
             await self._reconcile_recovered_jobs(recovered)
         finally:
             await redis.delete(self.recovery_lock_key)
-        return sum(recovered.values())
-
-    async def cleanup_stale_cron(self, ctx) -> int:
-        """Periodic cleanup cron entrypoint.
-
-        Subclasses can override and call ``await super().cleanup_stale_cron(ctx)``
-        to extend with their own additional cleanup work.
-        """
-        from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-        with self.get_db_factory()() as session:
-            recovered = recover_stale_jobs_by_age_and_type(
-                session, self.job_types, return_counts=True,
-            )
-            if recovered:
-                session.commit()
-        await self._reconcile_recovered_jobs(recovered)
         return sum(recovered.values())
 
     async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
