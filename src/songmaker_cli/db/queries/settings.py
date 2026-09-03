@@ -43,6 +43,22 @@ class RawStoredJudgeSettings:
     model: str | None
 
 
+@dataclass(frozen=True)
+class ActiveCowriterSettings:
+    """A complete, supported co-writer provider and model pair."""
+
+    provider: str
+    model: str
+
+
+@dataclass(frozen=True)
+class ActiveJudgeSettings:
+    """A complete, supported judge provider and model pair."""
+
+    provider: str
+    model: str
+
+
 def list_active_models(session: Session) -> list[AvailableModel]:
     return (
         session.query(AvailableModel)
@@ -270,6 +286,30 @@ def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
         provider=stored_values.get(SETTING_JUDGE_PROVIDER),
         model=stored_values.get(SETTING_JUDGE_MODEL),
     )
+
+
+def get_active_cowriter_settings(session: Session) -> ActiveCowriterSettings | None:
+    """Resolve the active co-writer pair unless its saved provider was retired."""
+    stored = get_raw_stored_cowriter_settings(session)
+    if stored.provider not in (None, "") and stored.provider not in COWRITER_PROVIDERS:
+        return None
+    provider = get_cowriter_provider(session)
+    model = get_cowriter_model(session, provider)
+    if not model:
+        return None
+    return ActiveCowriterSettings(provider=provider, model=model)
+
+
+def get_active_judge_settings(session: Session) -> ActiveJudgeSettings | None:
+    """Resolve the active judge pair unless its saved provider was retired."""
+    stored = get_raw_stored_judge_settings(session)
+    if stored.provider not in (None, "") and stored.provider not in COWRITER_PROVIDERS:
+        return None
+    provider = get_judge_provider(session)
+    model = get_judge_model(session, provider)
+    if not model:
+        return None
+    return ActiveJudgeSettings(provider=provider, model=model)
 
 
 def get_claude_chat_model(session: Session) -> str:

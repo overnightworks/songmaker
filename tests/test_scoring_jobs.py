@@ -193,6 +193,38 @@ def test_judge_model_must_be_in_the_live_catalog(
     assert fetched["model"] == "grok-4.6"
 
 
+def test_default_judge_model_is_available_for_get_and_first_save(
+    admin_client, monkeypatch, every_provider_is_configured,
+) -> None:
+    client, _ = admin_client
+    aliases = {
+        "claude": ["haiku", "opus", "sonnet"],
+        "grok": LIVE_CATALOG["grok"],
+        "codex": LIVE_CATALOG["codex"],
+    }
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda provider: aliases[provider],
+    )
+
+    fetched = client.get("/api/settings/judge")
+    assert fetched.status_code == 200
+    default_model = fetched.json()["model"]
+    assert default_model in fetched.json()["allowed_models"]
+
+    first_save = client.put(
+        "/api/settings/judge",
+        json={"provider": "claude", "model": default_model},
+    )
+    assert first_save.status_code == 200
+
+    unknown = client.put(
+        "/api/settings/judge",
+        json={"provider": "claude", "model": "claude-nonexistent-9"},
+    )
+    assert unknown.status_code == 422
+
+
 def test_judge_and_cowriter_settings_are_independent_through_the_api(
     admin_client, every_provider_is_configured,
 ) -> None:
