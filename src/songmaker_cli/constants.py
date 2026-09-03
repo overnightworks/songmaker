@@ -150,6 +150,10 @@ CLI_TERMINATION_GRACE_SECONDS = 1
 # for anywhere near as long as the old 30s did.
 CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS = 10
 CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS = 5
+CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS = 120
+# A judge timeout has one stable reason across its provider's own bound and
+# the outer watchdog, so callers need not infer it from incidental prose.
+JUDGE_FAILURE_TIMEOUT: Final[str] = "judge_timeout"
 # Short on purpose: long enough to shield a struggling probe from being
 # re-run by every concurrent caller, short enough that a real repair (binary
 # reinstalled, DB reachable again) is picked up on the next request rather

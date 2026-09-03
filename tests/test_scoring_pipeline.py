@@ -26,6 +26,7 @@ from songmaker_cli.scoring.pipeline import (
     PipelineConfig,
     ScorerDependencyUnavailable,
     ScorerRegistry,
+    judge_watchdog_timeout,
     run_scoring_pipeline,
 )
 
@@ -595,6 +596,10 @@ def test_watchdog_outlives_the_slowest_scorer_in_the_child() -> None:
 
 def test_explicit_pipeline_timeout_is_kept() -> None:
     assert PipelineConfig(pipeline_timeout=42).pipeline_timeout == 42
+
+
+def test_judge_watchdog_outlives_the_provider_budget() -> None:
+    assert judge_watchdog_timeout(120) > 120
 
 
 # ── Outcome reporting ────────────────────────────────────────────

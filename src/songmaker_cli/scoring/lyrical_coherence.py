@@ -15,14 +15,22 @@ import logging
 from dataclasses import dataclass
 
 from songmaker_cli.claude.provider import parse_json_response
+from songmaker_cli.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.cowriter.dispatch import call_provider_once
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     LyricalCoherenceScore,
+    ScorerExecution,
+    ScorerOutcome,
+    ScorerRun,
     SongScores,
     TextAccuracyScore,
 )
-from songmaker_cli.scoring.pipeline import ScorerDependencyUnavailable, run_scorer
+from songmaker_cli.scoring.pipeline import (
+    ScorerDependencyUnavailable,
+    judge_watchdog_timeout,
+    run_scorer,
+)
 from songmaker_cli.scoring.registry import LYRICAL_COHERENCE_SCORER
 
 log = logging.getLogger(__name__)
@@ -38,6 +46,10 @@ class CoherenceJudgeConfig:
     provider: str
     model: str
     timeout: int
+
+    def __post_init__(self) -> None:
+        if self.timeout <= 0:
+            raise ValueError("Judge timeout must be positive")
 
 
 JUDGE_PROMPT = (  # noqa: E501
@@ -91,11 +103,18 @@ def judge_lyrical_coherence(
     child, its outcome is data, and only a successful judgement overwrites the
     stored lyrical_coherence score.
     """
-    return scores.including(run_scorer(
+    execution = run_scorer(
         LYRICAL_COHERENCE_SCORER,
         lambda: _judge(meta, scores.text_accuracy, config),
-        config.timeout,
-    ))
+        judge_watchdog_timeout(config.timeout),
+    )
+    if execution.run.outcome is ScorerOutcome.TIMED_OUT:
+        execution = ScorerExecution(run=ScorerRun(
+            scorer=LYRICAL_COHERENCE_SCORER,
+            outcome=ScorerOutcome.TIMED_OUT,
+            detail=JUDGE_FAILURE_TIMEOUT,
+        ))
+    return scores.including(execution)
 
 
 def _judge(

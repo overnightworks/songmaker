@@ -37,6 +37,7 @@ from songmaker_cli.agent_cli import (
 )
 from songmaker_cli.constants import (
     CLAUDE_CLI_BINARY,
+    CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
     CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
@@ -46,6 +47,7 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
+    JUDGE_FAILURE_TIMEOUT,
     SECRET_ENV_KEYS,
 )
 from songmaker_cli.settings import get_settings
@@ -146,6 +148,10 @@ class _ZombieProbeError(UnavailableError):
     """
 
 
+class _JudgeTimeoutExhausted(UnavailableError):
+    """The judge's caller-owned deadline elapsed without probing the CLI."""
+
+
 @dataclass
 class ClaudeResponse:
     text: str
@@ -198,14 +204,16 @@ def call_claude(
     model: str | None = None,
     max_tokens: int = 1024,
     messages: list[dict[str, str]] | None = None,
+    timeout_seconds: float | None = None,
 ) -> ClaudeResponse:
     if model is None:
         model = get_settings().claude_chat_model
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     if api_key:
         log.info("Claude: using API backend (model=%s)", model)
-        return _call_api(prompt, api_key, system, model, max_tokens, messages)
+        return _call_api(prompt, api_key, system, model, max_tokens, messages, deadline=deadline)
     log.info("Claude: using CLI backend (model=%s)", model)
-    return _call_cli(prompt, system, model, messages)
+    return _call_cli(prompt, system, model, messages, deadline=deadline)
 
 
 async def acall_claude(
@@ -935,8 +943,6 @@ async def verify_cli_tool_surface() -> str:
     state always reflects this gate's most recent answer rather than a
     value frozen at boot.
     """
-    build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
-
     async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
@@ -947,6 +953,7 @@ async def verify_cli_tool_surface() -> str:
             _unlink_quiet(config_path)
 
     try:
+        build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
         result = await _verify_tool_surface_async(
             build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
         )
@@ -974,7 +981,7 @@ async def averify_no_builtin_cli_tools() -> str:
     )
 
 
-def verify_no_builtin_cli_tools() -> str:
+def verify_no_builtin_cli_tools(*, deadline: float | None = None) -> str:
     """Raise unless the mounted CLI reaches no tool at all under
     ``_TOOL_ISOLATION_FLAGS``; return the resolved binary path to run the
     real turn with. Sync twin for ``_call_cli``, which has no event loop to
@@ -989,7 +996,7 @@ def verify_no_builtin_cli_tools() -> str:
         )
 
     return _verify_tool_surface_sync(
-        build, key, probe, timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+        build, key, probe, deadline=deadline,
     )
 
 
@@ -1121,7 +1128,7 @@ def _resolve_inflight_async(
 
 def _verify_tool_surface_sync(
     build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[float], _AnnouncedSurface],
-    *, timeout_seconds: float,
+    *, deadline: float | None = None,
 ) -> str:
     """Sync twin of ``_verify_tool_surface_async`` — a
     ``concurrent.futures.Future`` instead of an ``asyncio.Future``, since
@@ -1132,7 +1139,11 @@ def _verify_tool_surface_sync(
 
     future, is_leader = _claim_or_join_inflight_sync(key)
     if not is_leader:
-        follower_budget = _follower_wait_budget_seconds(timeout_seconds)
+        follower_budget = (
+            _remaining_judge_timeout(deadline)
+            if deadline is not None
+            else _follower_wait_budget_seconds(CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS)
+        )
         try:
             mismatch = future.result(timeout=follower_budget)
         except concurrent.futures.TimeoutError:
@@ -1142,14 +1153,36 @@ def _verify_tool_surface_sync(
             )
         return _finish_tool_surface_check(build, mismatch)
 
-    deadline = time.monotonic() + timeout_seconds
+    now = time.monotonic()
+    if deadline is not None:
+        try:
+            _remaining_judge_timeout(deadline)
+        except UnavailableError as exc:
+            _resolve_inflight_sync(key, future, exception=exc)
+            raise
+    probe_deadline = now + CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS
+    caller_deadline_bounds_probe = False
+    if deadline is not None:
+        caller_deadline_bounds_probe = deadline < probe_deadline
+        probe_deadline = min(deadline, probe_deadline)
     try:
-        surface = probe(deadline)
+        surface = probe(probe_deadline)
+        if caller_deadline_bounds_probe:
+            _remaining_judge_timeout(deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
-        _record_tool_surface_failure(key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError))
+        if (
+            caller_deadline_bounds_probe
+            and not isinstance(exc, _JudgeTimeoutExhausted)
+            and time.monotonic() >= deadline
+        ):
+            exc = _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
+        if not isinstance(exc, _JudgeTimeoutExhausted):
+            _record_tool_surface_failure(
+                key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError),
+            )
         _resolve_inflight_sync(key, future, exception=exc)
-        raise
+        raise exc
     except BaseException as exc:
         _resolve_inflight_sync(key, future, exception=_follower_safe_exception(build, exc))
         raise
@@ -1402,6 +1435,7 @@ def _probe_cli_surface_sync(
     and the OS does not reap an abandoned child of a still-live parent on
     its own.
     """
+    _remaining_judge_timeout(deadline)
     if not _reserve_zombie_admission():
         raise UnavailableError(
             "Claude CLI probe pool is saturated with unreaped processes; "
@@ -1759,6 +1793,7 @@ def _call_api(
     prompt: str, api_key: str, system: str | None,
     model: str, max_tokens: int,
     messages: list[dict[str, str]] | None = None,
+    *, deadline: float | None = None,
 ) -> ClaudeResponse:
     anthropic = _require_anthropic()
     with _client_lock:
@@ -1767,10 +1802,29 @@ def _call_api(
         client = _sync_clients[api_key]
 
     kwargs = _build_api_kwargs(prompt, system, model, max_tokens, messages)
-    response = client.messages.create(**kwargs)
+    request_client = (
+        client.with_options(
+            timeout=_remaining_judge_timeout(deadline), max_retries=0,
+        )
+        if deadline is not None
+        else client
+    )
+    try:
+        response = request_client.messages.create(**kwargs)
+    except anthropic.APITimeoutError as exc:
+        if deadline is not None:
+            raise UnavailableError(JUDGE_FAILURE_TIMEOUT) from exc
+        raise
     text = response.content[0].text if response.content else ""
     log.debug("Claude API response: %d chars", len(text))
     return ClaudeResponse(text=text)
+
+
+def _remaining_judge_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
+    return remaining
 
 
 async def _acall_api(
@@ -1797,6 +1851,7 @@ async def _acall_api(
 def _call_cli(
     prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
+    *, deadline: float | None = None,
 ) -> ClaudeResponse:
     """The tool-free CLI backend behind both ``call_claude()`` and the
     lyrical-coherence judge (``claude_adapter.call_claude_once``).
@@ -1809,7 +1864,7 @@ def _call_cli(
     """
     if model is None:
         model = get_settings().claude_chat_model
-    binary = verify_no_builtin_cli_tools()
+    binary = verify_no_builtin_cli_tools(deadline=deadline)
     flat_prompt = _flatten_messages(prompt, messages)
     stdin_body = _stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)
@@ -1817,10 +1872,23 @@ def _call_cli(
 
     try:
         proc = subprocess.run(
-            cmd, input=stdin_body, capture_output=True, text=True, timeout=120, env=env,
+            cmd,
+            input=stdin_body,
+            capture_output=True,
+            text=True,
+            timeout=(
+                _remaining_judge_timeout(deadline)
+                if deadline is not None
+                else CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS
+            ),
+            env=env,
         )
-    except subprocess.TimeoutExpired:
-        raise UnavailableError("Claude CLI timed out after 120s")
+    except subprocess.TimeoutExpired as exc:
+        if deadline is not None:
+            raise UnavailableError(JUDGE_FAILURE_TIMEOUT) from exc
+        raise UnavailableError(
+            f"Claude CLI timed out after {CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS}s",
+        ) from exc
 
     if proc.returncode != 0:
         log.warning(

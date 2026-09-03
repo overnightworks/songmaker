@@ -48,15 +48,15 @@ def _split_by_host(scorers: list[str] | None) -> tuple[list[str] | None, bool]:
 def _judge_failure_reason(scores: SongScores) -> str | None:
     """Why the lyrical-coherence judge itself failed this run, if it did.
 
-    Never for a legitimate skip (no lyrics, no transcript) or a timeout —
-    both already have their own outcome — only for the judge call actually
-    failing, e.g. its configured provider has no credential. A scorer's fate
-    is normally data (``run_scorer`` never raises), but an unconfigured
-    judge provider is a setup problem, not noise in one run, so it must not
-    leave the job looking green.
+    Never for a legitimate skip (no lyrics, no transcript). A provider
+    failure or a timeout means this run has no judge verdict, so the job must
+    not look green even though the child scores remain useful data.
     """
     for run in scores.runs:
-        if run.scorer == LYRICAL_COHERENCE_SCORER and run.outcome is ScorerOutcome.FAILED:
+        if (
+            run.scorer == LYRICAL_COHERENCE_SCORER
+            and run.outcome in (ScorerOutcome.FAILED, ScorerOutcome.TIMED_OUT)
+        ):
             return run.detail
     return None
 
