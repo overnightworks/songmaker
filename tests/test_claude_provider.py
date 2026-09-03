@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import queue
 import subprocess
 import threading
 import time
@@ -722,7 +724,9 @@ def _init_line(
     }).encode() + b"\n"
 
 
-def _fake_cli(first_line: bytes, *, still_running: bool = False) -> MagicMock:
+def _fake_cli(
+    first_line: bytes | None, *, still_running: bool = False, stdin_blocked: bool = False,
+) -> MagicMock:
     """A stand-in for the ``subprocess.Popen`` handle the probe spawns.
 
     Both gates go through ``subprocess.Popen`` now (round 6: the async gate
@@ -734,9 +738,22 @@ def _fake_cli(first_line: bytes, *, still_running: bool = False) -> MagicMock:
     proc = MagicMock()
     proc.pid = 4343
     proc.poll.return_value = None if still_running else 0
-    proc.stdin = MagicMock()
-    proc.stdout = MagicMock()
-    proc.stdout.readline.return_value = first_line
+    stdin_reader, stdin_writer = os.pipe()
+    stdout_reader, stdout_writer = os.pipe()
+    proc.stdin = os.fdopen(stdin_writer, "wb", buffering=0)
+    proc.stdout = os.fdopen(stdout_reader, "rb", buffering=0)
+    proc._stdin_reader = os.fdopen(stdin_reader, "rb", buffering=0)
+    proc._stdout_writer = os.fdopen(stdout_writer, "wb", buffering=0)
+    if stdin_blocked:
+        os.set_blocking(proc.stdin.fileno(), False)
+        try:
+            while True:
+                os.write(proc.stdin.fileno(), b"x" * 65536)
+        except BlockingIOError:
+            pass
+    if first_line is not None:
+        proc._stdout_writer.write(first_line)
+        proc._stdout_writer.close()
     proc.wait.return_value = None
     return proc
 
@@ -1574,13 +1591,10 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
         return False
 
     def fake_popen(*_cmd, **_kw):
-        proc = MagicMock()
+        proc = _fake_cli(b"")
         proc.pid = 9090
         proc.poll.return_value = 0
-        proc.stdin = MagicMock()
-        proc.stdin.write.side_effect = BrokenPipeError("broken")
-        proc.stdout = MagicMock()
-        proc.wait.return_value = None
+        proc._stdin_reader.close()
         return proc
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
@@ -1588,7 +1602,7 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
     monkeypatch.setattr(provider, "CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
 
     started = time.monotonic()
-    with pytest.raises(UnavailableError, match="broken") as exc:
+    with pytest.raises(UnavailableError, match="Broken pipe") as exc:
         asyncio.run(verify_cli_tool_surface())
     elapsed = time.monotonic() - started
 
@@ -1742,6 +1756,161 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
         popen_may_return.set()  # let the orphaned thread finish, do not leave it hanging
 
 
+def test_delayed_probe_start_is_a_probe_failure_not_a_judge_timeout(
+    claude_binary, monkeypatch,
+) -> None:
+    spawned: list[object] = []
+
+    monkeypatch.setattr(provider.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        provider.subprocess, "Popen", lambda *_args, **_kwargs: spawned.append(1),
+    )
+
+    with pytest.raises(UnavailableError) as exc:
+        provider._probe_cli_surface_sync(
+            str(claude_binary), mcp_config_path=None, deadline=100.0,
+        )
+
+    assert not isinstance(exc.value, provider._JudgeTimeoutExhausted)
+    assert str(exc.value) == "Claude CLI probe did not start within its budget"
+    assert spawned == []
+
+
+def test_async_probe_waits_for_cleanup_after_its_answer_budget_is_exhausted(
+    monkeypatch,
+) -> None:
+    worker_started = asyncio.Event()
+    cleanup_may_finish = asyncio.Event()
+
+    async def delayed_worker(*_args, **_kwargs) -> object:
+        worker_started.set()
+        await cleanup_may_finish.wait()
+        raise provider._ZombieProbeError("probe process outlived SIGKILL")
+
+    monkeypatch.setattr(provider.asyncio, "to_thread", delayed_worker)
+
+    async def receive_zombie_after_cleanup() -> None:
+        loop = asyncio.get_running_loop()
+        probe = asyncio.create_task(
+            provider._probe_cli_surface_async(
+                "claude", mcp_config_path=None, deadline=loop.time(),
+            ),
+        )
+        await asyncio.wait_for(worker_started.wait(), timeout=1)
+        assert not probe.done()
+        cleanup_may_finish.set()
+        with pytest.raises(provider._ZombieProbeError):
+            await probe
+
+    asyncio.run(receive_zombie_after_cleanup())
+
+
+@pytest.mark.parametrize("stdin_blocked", [False, True], ids=["read", "write"])
+def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
+    claude_binary, monkeypatch, stdin_blocked: bool,
+) -> None:
+    spawned = threading.Event()
+    reaped = threading.Event()
+    processes: list[MagicMock] = []
+
+    def fake_popen(*_cmd, **_kw) -> MagicMock:
+        proc = _fake_cli(None, stdin_blocked=stdin_blocked)
+        processes.append(proc)
+        spawned.set()
+        return proc
+
+    def fake_reap(_proc: object) -> bool:
+        reaped.set()
+        return False
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+
+    try:
+        started = time.monotonic()
+        with pytest.raises(UnavailableError, match="did not answer"):
+            verify_no_builtin_cli_tools()
+        assert time.monotonic() - started < 1
+        assert spawned.is_set()
+        assert reaped.wait(timeout=1)
+        assert provider._reserve_zombie_admission() is True
+        provider._release_zombie_admission()
+    finally:
+        for proc in processes:
+            proc.stdout.close()
+            proc._stdin_reader.close()
+            proc._stdout_writer.close()
+
+
+def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
+    claude_binary, monkeypatch,
+) -> None:
+    process_spawned = threading.Event()
+    cleanup_started = threading.Event()
+    cleanup_waiting = threading.Event()
+    release_cleanup = threading.Event()
+    processes: list[MagicMock] = []
+    cleanup_wait_budgets: list[float | None] = []
+    _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
+
+    class ProbeResultQueue(queue.Queue):
+        first_get = True
+
+        def get(self, timeout: float | None = None):
+            if self.first_get:
+                self.first_get = False
+                assert process_spawned.wait(timeout=1)
+                raise queue.Empty
+            cleanup_wait_budgets.append(timeout)
+            cleanup_waiting.set()
+            return super().get(timeout=timeout)
+
+    def fake_popen(*_cmd, **_kw) -> MagicMock:
+        proc = _fake_cli(None)
+        processes.append(proc)
+        process_spawned.set()
+        return proc
+
+    def fake_reap(_proc: object) -> bool:
+        cleanup_started.set()
+        assert release_cleanup.wait(timeout=1)
+        return True
+
+    monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
+    monkeypatch.setattr(provider.queue, "Queue", ProbeResultQueue)
+
+    async def verify_after_cleanup() -> None:
+        probe = asyncio.create_task(averify_no_builtin_cli_tools())
+        assert await asyncio.to_thread(process_spawned.wait, 1)
+        processes[0]._stdout_writer.close()
+        assert await asyncio.to_thread(cleanup_started.wait, 1)
+        assert cleanup_waiting.is_set()
+        assert cleanup_wait_budgets == [provider._follower_wait_budget_seconds(0)]
+        assert not probe.done()
+        release_cleanup.set()
+        with pytest.raises(provider._ZombieProbeError):
+            await probe
+
+    try:
+        asyncio.run(verify_after_cleanup())
+        with provider._tool_surface_lock:
+            failure = provider._tool_surface_failures[key]
+        assert failure.is_zombie is True
+        assert failure.ttl_seconds() == provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS
+    finally:
+        release_cleanup.set()
+        for proc in processes:
+            if not proc.stdout.closed:
+                proc.stdout.close()
+            if not proc._stdin_reader.closed:
+                proc._stdin_reader.close()
+            if not proc._stdout_writer.closed:
+                proc._stdout_writer.close()
+
+
 def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
     claude_binary, monkeypatch,
 ) -> None:
@@ -1833,11 +2002,8 @@ def test_judge_preflight_deadline_abort_never_becomes_a_clean_verdict(
         return _fake_cli(_init_line([]))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(
-        provider.time,
-        "monotonic",
-        MagicMock(side_effect=(100.0, 100.0, 100.0, 100.0, 100.03)),
-    )
+    clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
+    monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.03))
 
     with pytest.raises(UnavailableError) as exc:
         verify_no_builtin_cli_tools(deadline=100.02)
@@ -1876,11 +2042,8 @@ def test_judge_deadline_timeout_from_the_sync_probe_is_not_cached(
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
     monkeypatch.setattr(provider.threading, "Thread", tracked_thread)
-    monkeypatch.setattr(
-        provider.time,
-        "monotonic",
-        MagicMock(side_effect=(100.0, 100.0, 100.0, 100.0, 100.03)),
-    )
+    clock = iter((100.0, 100.0, 100.0, 100.0, 100.03))
+    monkeypatch.setattr(provider.time, "monotonic", lambda: next(clock, 100.03))
 
     with pytest.raises(UnavailableError) as exc:
         verify_no_builtin_cli_tools(deadline=100.02)

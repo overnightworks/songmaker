@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import queue
+import selectors
 import shutil
 import signal
 import subprocess
@@ -1398,7 +1399,7 @@ async def _probe_cli_surface_async(
             asyncio.to_thread(
                 _probe_cli_surface_sync, binary, mcp_config_path=mcp_config_path, deadline=deadline,
             ),
-            timeout=remaining,
+            timeout=_follower_wait_budget_seconds(remaining),
         )
     except asyncio.TimeoutError:
         # The thread this submitted to the executor — if it ever gets to
@@ -1419,9 +1420,10 @@ def _probe_cli_surface_sync(
 
     ``subprocess.Popen`` and a pipe write have no native timeout parameter,
     so spawn, write, and read all run on one background thread; the calling
-    thread bounds its own wait for that thread's answer with a single
-    ``queue.get(timeout=)`` against the remaining budget. But the reap —
-    and the admission-slot release that goes with it — happens *inside
+    thread first waits for the answer with ``queue.get(timeout=)`` against
+    the remaining budget, then waits once more for cleanup when the process
+    already spawned. The reap — and the admission-slot release that goes
+    with it — happens *inside
     that thread's own ``finally``* (round 7, Finding 1), not out here:
     a caller that stops waiting (this budget ran out, or the whole
     ``asyncio.to_thread`` was itself abandoned — see
@@ -1436,7 +1438,8 @@ def _probe_cli_surface_sync(
     and the OS does not reap an abandoned child of a still-live parent on
     its own.
     """
-    _remaining_judge_timeout(deadline)
+    if deadline <= time.monotonic():
+        raise UnavailableError("Claude CLI probe did not start within its budget")
     if not _reserve_zombie_admission():
         raise UnavailableError(
             "Claude CLI probe pool is saturated with unreaped processes; "
@@ -1446,6 +1449,7 @@ def _probe_cli_surface_sync(
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     env = _scrub_env()
     result: queue.Queue[tuple[bool, object, bool]] = queue.Queue(maxsize=1)
+    process_spawned = threading.Event()
 
     def _run() -> None:
         proc: subprocess.Popen | None = None
@@ -1464,13 +1468,36 @@ def _probe_cli_surface_sync(
             except OSError as exc:
                 payload = exc
                 return
+            process_spawned.set()
             try:
                 assert proc.stdin is not None and proc.stdout is not None
-                proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
-                proc.stdin.close()
-                payload = proc.stdout.readline()
-                ok = True
-            except OSError as exc:
+                prompt = memoryview(_TOOL_SURFACE_PROBE_PROMPT.encode())
+                with selectors.DefaultSelector() as selector:
+                    selector.register(proc.stdin, selectors.EVENT_WRITE)
+                    while prompt:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError("Claude CLI probe did not answer within its budget")
+                        for key, _ in selector.select(timeout=remaining):
+                            written = os.write(key.fd, prompt)
+                            prompt = prompt[written:]
+                    selector.unregister(proc.stdin)
+                    proc.stdin.close()
+                    selector.register(proc.stdout, selectors.EVENT_READ)
+                    line = bytearray()
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError("Claude CLI probe did not answer within its budget")
+                        for key, _ in selector.select(timeout=remaining):
+                            chunk = os.read(key.fd, 4096)
+                            line.extend(chunk)
+                            line_end = line.find(b"\n")
+                            if line_end >= 0 or not chunk:
+                                payload = bytes(line[:line_end + 1] if line_end >= 0 else line)
+                                ok = True
+                                return
+            except (OSError, TimeoutError) as exc:
                 payload = exc
         finally:
             # Always — whether or not the caller that started this thread
@@ -1493,11 +1520,14 @@ def _probe_cli_surface_sync(
         remaining = max(deadline - time.monotonic(), 0)
         ok, payload, became_zombie = result.get(timeout=remaining)
     except queue.Empty:
-        # The thread is still working — spawning, writing, reading, or
-        # reaping — and will finish and reap on its own regardless of
-        # whether this function is still listening; see its own finally
-        # above. This caller just stops waiting for that outcome.
-        raise UnavailableError("Claude CLI probe did not answer within its budget")
+        if not process_spawned.is_set():
+            raise UnavailableError("Claude CLI probe did not answer within its budget")
+        try:
+            ok, payload, became_zombie = result.get(
+                timeout=_follower_wait_budget_seconds(0),
+            )
+        except queue.Empty:
+            raise UnavailableError("Claude CLI probe did not answer within its budget")
 
     # A zombie always wins, before its answer is ever trusted: a process
     # that outlived even SIGKILL is not "clean, with an unrelated cleanup
