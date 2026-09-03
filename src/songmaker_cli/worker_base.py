@@ -15,6 +15,7 @@ from typing import ClassVar
 from arq.connections import RedisSettings
 
 from songmaker_cli.constants import (
+    JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
     RECOVERY_LOCK_TTL_SECONDS,
 )
@@ -35,7 +36,7 @@ def build_redis_settings(settings: Settings | None = None) -> RedisSettings:
 class WorkerBase:
     """Base class for arq workers.
 
-    Subclasses set the ClassVars (job_type, recovery_lock_key, queue_name,
+    Subclasses set the ClassVars (job_types, recovery_lock_key, queue_name,
     max_jobs) and add their own task methods. The instance owns the DB
     engine + factory and the stale-job recovery state.
 
@@ -45,7 +46,7 @@ class WorkerBase:
     finds bound methods.
     """
 
-    job_type: ClassVar[str]
+    job_types: ClassVar[tuple[str, ...]]
     recovery_lock_key: ClassVar[str]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
@@ -64,6 +65,14 @@ class WorkerBase:
     @property
     def drain_timeout(self) -> int:
         return self._settings.arq_drain_timeout
+
+    def recovery_statuses_by_type(self) -> dict[str, frozenset[str]]:
+        """Return statuses this worker may terminalize at restart boundaries."""
+        return {job_type: JOB_ACTIVE_STATUSES for job_type in self.job_types}
+
+    def worker_name(self) -> str:
+        """Return the stable, human-readable name derived from owned job types."""
+        return "+".join(self.job_types)
 
     def get_db_factory(self):
         with self._db_lock:
@@ -90,9 +99,9 @@ class WorkerBase:
 
         configure_logging()
 
-        log.info("%s worker starting up...", self.job_type)
+        log.info("%s worker starting up...", self.worker_name())
         await self._recover_on_startup(ctx)
-        log.info("%s worker ready", self.job_type)
+        log.info("%s worker ready", self.worker_name())
 
     async def on_shutdown(self, ctx) -> None:
         from songmaker_cli.db.queries import recover_stale_jobs_by_type
@@ -103,13 +112,16 @@ class WorkerBase:
         ):
             try:
                 with self.get_db_factory()() as session:
-                    recovered = recover_stale_jobs_by_type(session, self.job_type)
+                    recovered = recover_stale_jobs_by_type(
+                        session, self.recovery_statuses_by_type(),
+                    )
                     if recovered:
                         log.warning(
                             "Shutdown: marked %d in-progress %s jobs as failed",
-                            recovered, self.job_type,
+                            sum(recovered.values()), self.worker_name(),
                         )
                     session.commit()
+                await self._reconcile_recovered_jobs(recovered)
             finally:
                 await redis.delete(self.recovery_lock_key)
         else:
@@ -129,16 +141,22 @@ class WorkerBase:
             log.info("Stale job recovery skipped — another worker holds the lock")
             return 0
 
-        recovered = 0
+        recovered: dict[str, int] = {}
         try:
             with self.get_db_factory()() as session:
-                recovered = recover_stale_jobs_by_type(session, self.job_type)
+                recovered = recover_stale_jobs_by_type(
+                    session, self.recovery_statuses_by_type(),
+                )
                 if recovered:
-                    log.info("Recovered %d stale %s jobs", recovered, self.job_type)
+                    log.info(
+                        "Recovered %d stale %s jobs",
+                        sum(recovered.values()), self.worker_name(),
+                    )
                 session.commit()
+            await self._reconcile_recovered_jobs(recovered)
         finally:
             await redis.delete(self.recovery_lock_key)
-        return recovered
+        return sum(recovered.values())
 
     async def cleanup_stale_cron(self, ctx) -> int:
         """Periodic cleanup cron entrypoint.
@@ -149,10 +167,16 @@ class WorkerBase:
         from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
         with self.get_db_factory()() as session:
-            count = recover_stale_jobs_by_age_and_type(session, self.job_type)
-            if count:
+            recovered = recover_stale_jobs_by_age_and_type(
+                session, self.job_types, return_counts=True,
+            )
+            if recovered:
                 session.commit()
-        return count
+        await self._reconcile_recovered_jobs(recovered)
+        return sum(recovered.values())
+
+    async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
+        """Run worker-specific cleanup after stale jobs become terminal."""
 
     def audit_orphaned_files(self) -> None:
         """Log audio files on disk that have no matching DB record."""

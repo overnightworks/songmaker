@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import queue
+import selectors
 import shutil
 import signal
 import subprocess
@@ -45,6 +46,7 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
     CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+    CLI_OUTPUT_READ_LIMIT_BYTES,
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
@@ -110,6 +112,7 @@ _CLI_INIT_EVENT_SUBTYPE: Final = "init"
 _TOOL_SURFACE_PROBE_PROMPT: Final = "."
 
 _STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
+_CLI_PROBE_READ_CHUNK_BYTES: Final = 4096
 
 
 def clear_client_cache() -> None:
@@ -943,8 +946,6 @@ async def verify_cli_tool_surface() -> str:
     state always reflects this gate's most recent answer rather than a
     value frozen at boot.
     """
-    build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
-
     async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
@@ -955,6 +956,7 @@ async def verify_cli_tool_surface() -> str:
             _unlink_quiet(config_path)
 
     try:
+        build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
         result = await _verify_tool_surface_async(
             build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
         )
@@ -1172,15 +1174,19 @@ def _verify_tool_surface_sync(
             _remaining_judge_timeout(deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
+        is_zombie = isinstance(exc, _ZombieProbeError)
+        if is_zombie:
+            _record_tool_surface_failure(key, str(exc), is_zombie=True)
         if (
             caller_deadline_bounds_probe
+            and not is_zombie
             and not isinstance(exc, _JudgeTimeoutExhausted)
             and time.monotonic() >= deadline
         ):
             exc = _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
-        if not isinstance(exc, _JudgeTimeoutExhausted):
+        if not is_zombie and not isinstance(exc, _JudgeTimeoutExhausted):
             _record_tool_surface_failure(
-                key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError),
+                key, str(exc), is_zombie=False,
             )
         _resolve_inflight_sync(key, future, exception=exc)
         raise exc
@@ -1238,9 +1244,12 @@ def _follower_safe_exception(build: BinaryBuild, exc: BaseException) -> BaseExce
 
 
 def _follower_wait_budget_seconds(probe_timeout_seconds: float) -> float:
+    return probe_timeout_seconds + _cleanup_margin_seconds()
+
+
+def _cleanup_margin_seconds() -> float:
     return (
-        probe_timeout_seconds
-        + CLAUDE_CLI_SIGTERM_GRACE_SECONDS
+        CLAUDE_CLI_SIGTERM_GRACE_SECONDS
         + CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS
         + _FOLLOWER_WAIT_MARGIN_SECONDS
     )
@@ -1398,14 +1407,14 @@ async def _probe_cli_surface_async(
             asyncio.to_thread(
                 _probe_cli_surface_sync, binary, mcp_config_path=mcp_config_path, deadline=deadline,
             ),
-            timeout=remaining,
+            timeout=remaining + _cleanup_margin_seconds(),
         )
     except asyncio.TimeoutError:
         # The thread this submitted to the executor — if it ever gets to
         # run at all — still reaps whatever it spawns on its own; see
         # _probe_cli_surface_sync's own finally. Giving up here only means
         # this caller no longer waits for that outcome.
-        raise UnavailableError("Claude CLI probe did not start within its budget")
+        raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
 
 
 # ── the probe itself: one overall deadline, sync ────────────────────
@@ -1419,9 +1428,10 @@ def _probe_cli_surface_sync(
 
     ``subprocess.Popen`` and a pipe write have no native timeout parameter,
     so spawn, write, and read all run on one background thread; the calling
-    thread bounds its own wait for that thread's answer with a single
-    ``queue.get(timeout=)`` against the remaining budget. But the reap —
-    and the admission-slot release that goes with it — happens *inside
+    thread first waits for the answer with ``queue.get(timeout=)`` against
+    the remaining budget, then waits once more for cleanup when the process
+    already spawned. The reap — and the admission-slot release that goes
+    with it — happens *inside
     that thread's own ``finally``* (round 7, Finding 1), not out here:
     a caller that stops waiting (this budget ran out, or the whole
     ``asyncio.to_thread`` was itself abandoned — see
@@ -1436,7 +1446,8 @@ def _probe_cli_surface_sync(
     and the OS does not reap an abandoned child of a still-live parent on
     its own.
     """
-    _remaining_judge_timeout(deadline)
+    if deadline <= time.monotonic():
+        raise UnavailableError("Claude CLI probe preflight budget was already exhausted")
     if not _reserve_zombie_admission():
         raise UnavailableError(
             "Claude CLI probe pool is saturated with unreaped processes; "
@@ -1446,6 +1457,7 @@ def _probe_cli_surface_sync(
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     env = _scrub_env()
     result: queue.Queue[tuple[bool, object, bool]] = queue.Queue(maxsize=1)
+    process_spawned = threading.Event()
 
     def _run() -> None:
         proc: subprocess.Popen | None = None
@@ -1464,12 +1476,39 @@ def _probe_cli_surface_sync(
             except OSError as exc:
                 payload = exc
                 return
+            process_spawned.set()
             try:
                 assert proc.stdin is not None and proc.stdout is not None
-                proc.stdin.write(_TOOL_SURFACE_PROBE_PROMPT.encode())
-                proc.stdin.close()
-                payload = proc.stdout.readline()
-                ok = True
+                prompt = memoryview(_TOOL_SURFACE_PROBE_PROMPT.encode())
+                with selectors.DefaultSelector() as selector:
+                    selector.register(proc.stdin, selectors.EVENT_WRITE)
+                    while prompt:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError("Claude CLI probe did not answer within its budget")
+                        for key, _ in selector.select(timeout=remaining):
+                            written = os.write(key.fd, prompt)
+                            prompt = prompt[written:]
+                    selector.unregister(proc.stdin)
+                    proc.stdin.close()
+                    selector.register(proc.stdout, selectors.EVENT_READ)
+                    line = bytearray()
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError("Claude CLI probe did not answer within its budget")
+                        for key, _ in selector.select(timeout=remaining):
+                            chunk = os.read(key.fd, _CLI_PROBE_READ_CHUNK_BYTES)
+                            line.extend(chunk)
+                            if len(line) > CLI_OUTPUT_READ_LIMIT_BYTES:
+                                raise OSError(
+                                    "Claude CLI probe output exceeded its read limit",
+                                )
+                            line_end = line.find(b"\n")
+                            if line_end >= 0 or not chunk:
+                                payload = bytes(line[:line_end + 1] if line_end >= 0 else line)
+                                ok = True
+                                return
             except OSError as exc:
                 payload = exc
         finally:
@@ -1493,11 +1532,14 @@ def _probe_cli_surface_sync(
         remaining = max(deadline - time.monotonic(), 0)
         ok, payload, became_zombie = result.get(timeout=remaining)
     except queue.Empty:
-        # The thread is still working — spawning, writing, reading, or
-        # reaping — and will finish and reap on its own regardless of
-        # whether this function is still listening; see its own finally
-        # above. This caller just stops waiting for that outcome.
-        raise UnavailableError("Claude CLI probe did not answer within its budget")
+        if not process_spawned.is_set():
+            raise UnavailableError("Claude CLI probe did not start within its budget")
+        try:
+            ok, payload, became_zombie = result.get(
+                timeout=_cleanup_margin_seconds(),
+            )
+        except queue.Empty:
+            raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
 
     # A zombie always wins, before its answer is ever trusted: a process
     # that outlived even SIGKILL is not "clean, with an unrelated cleanup

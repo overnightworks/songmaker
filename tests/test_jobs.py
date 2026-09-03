@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +12,12 @@ import pytest
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, JobFunction, JobType
+from songmaker_cli.constants import (
+    ARQ_SCORING_QUEUE_NAME,
+    JUDGE_FAILURE_TIMEOUT,
+    JobFunction,
+    JobType,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -1020,18 +1026,23 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
     assert live_scorer_process._process.pid != pid_before
 
 
-def test_scoring_job_keeps_the_child_when_only_the_parents_judge_timed_out(
+def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
     seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
-    stubbed_claude_judge, caplog: pytest.LogCaptureFixture,
+    stubbed_claude_judge,
 ) -> None:
-    """The coherence judge runs here, not in the child. When it blows its
-    budget the abandoned thread is this process's problem — killing the child
-    would reclaim nothing, so it keeps running."""
-    import logging
-    import time
+    """A judge timeout leaves the child usable and marks the job partial. The
+    abandoned thread is this process's problem — killing the child would
+    reclaim nothing, so it keeps running.
+    """
+    from songmaker_cli.claude.provider import UnavailableError
 
-    monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "1")
-    stubbed_claude_judge.side_effect = lambda *_args, **_kwargs: time.sleep(2)
+    judge_timeout = threading.Event()
+
+    def signal_judge_timeout(*_args: object, **_kwargs: object) -> None:
+        judge_timeout.set()
+        raise UnavailableError(JUDGE_FAILURE_TIMEOUT)
+
+    stubbed_claude_judge.side_effect = signal_judge_timeout
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
     pid_before = live_scorer_process._process.pid
@@ -1040,17 +1051,22 @@ def test_scoring_job_keeps_the_child_when_only_the_parents_judge_timed_out(
         lambda *_args, **_kwargs: _scoring_result(with_whisper=True),
     )
 
-    with (
-        caplog.at_level(logging.INFO),
-        patch(
-            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
-        ),
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
-    assert "lyrical_coherence=timed_out" in caplog.text
+    assert judge_timeout.is_set()
     assert live_scorer_process.alive
     assert live_scorer_process._process.pid == pid_before
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        scores = session.query(Score).filter_by(generation_id="g1").one()
+        assert job.status == "partial"
+        assert job.error_type == "judge_error"
+        assert JUDGE_FAILURE_TIMEOUT in job.error
+        assert scores.value["dynamics"] == 55.0
+        assert "lyrical_coherence" not in scores.value
 
 
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
