@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app
+from conftest import fake_cli_process, make_test_app
 
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
@@ -46,17 +46,6 @@ def _init_line(tools: list[str]) -> bytes:
     }).encode() + b"\n"
 
 
-def _fake_cli(first_line: bytes) -> MagicMock:
-    proc = MagicMock()
-    proc.pid = 9191
-    proc.poll.return_value = 0
-    proc.stdin = MagicMock()
-    proc.stdout = MagicMock()
-    proc.stdout.readline.return_value = first_line
-    proc.wait.return_value = None
-    return proc
-
-
 def _use_real_gate_with_fake_cli(monkeypatch, binary_path: Path, *lines: bytes) -> None:
     """Undo the test suite's blanket verify_cli_tool_surface() stub (see
     conftest._no_claude_cli_tool_surface_probe) for this one test, so the
@@ -68,7 +57,7 @@ def _use_real_gate_with_fake_cli(monkeypatch, binary_path: Path, *lines: bytes) 
     queued = list(lines)
 
     def fake_popen(_cmd, **_kw):
-        return _fake_cli(queued.pop(0))
+        return fake_cli_process(queued.pop(0))
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
 

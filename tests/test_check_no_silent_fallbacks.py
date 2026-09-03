@@ -243,6 +243,44 @@ def test_getattr_literal_default_is_reported(
     assert "songmaker_cli/m.py:1" in out
 
 
+@pytest.mark.parametrize(
+    ("default", "literal_type", "keyword"),
+    [
+        ("()", "tuple", ""),
+        ("(1,)", "tuple", "default="),
+        ("[]", "list", ""),
+        ("[1]", "list", "default="),
+        ("{}", "dict", ""),
+        ("{'key': 'value'}", "dict", "default="),
+        ("{1}", "set", ""),
+        ("{1, 2}", "set", "default="),
+        ("dict()", None, ""),
+        ("set()", None, ""),
+        ("frozenset()", None, "default="),
+    ],
+)
+def test_getattr_container_literal_defaults_are_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str], default: str,
+    literal_type: str | None, keyword: str,
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/m.py": (
+            f'value = getattr(obj, "status", {keyword}{default})\n'
+        ),
+    })
+    rc = _run(monkeypatch, tmp_path)
+    out = capsys.readouterr().out
+    if literal_type is None:
+        assert rc == 0
+        assert f"[{checker.GETATTR_LITERAL_DEFAULT}]" not in out
+    else:
+        assert rc == 1
+        assert checker.GETATTR_LITERAL_DEFAULT in out
+        assert f"{literal_type} literal" in out
+        assert "songmaker_cli/m.py:1" in out
+
+
 def test_getattr_signed_numeric_literal_default_is_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
