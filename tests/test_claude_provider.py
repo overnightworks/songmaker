@@ -199,8 +199,10 @@ def test_clearing_the_provider_login_cache_delegates_to_the_runner() -> None:
 # ── list_cli_model_aliases ───────────────────────────────────────────
 
 
-def _model_command_result(stdout: str, returncode: int = 0) -> MagicMock:
-    return MagicMock(stdout=stdout, stderr="", returncode=returncode)
+def _model_command_result(
+    stdout: str, returncode: int = 0, stderr: str = "",
+) -> MagicMock:
+    return MagicMock(stdout=stdout, stderr=stderr, returncode=returncode)
 
 
 def test_list_cli_model_aliases_parses_available_line() -> None:
@@ -274,7 +276,7 @@ def test_list_cli_model_aliases_nonzero_exit_raises_named_error() -> None:
             return_value=_model_command_result("", returncode=1),
         ),
     ):
-        with pytest.raises(UnavailableError, match="exited 1"):
+        with pytest.raises(UnavailableError, match="Claude CLI could not list models"):
             list_cli_model_aliases()
 
 

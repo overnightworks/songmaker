@@ -22,8 +22,14 @@ from songmaker_cli.agent_cli import (
     codex_cli_login,
     grok_cli_status,
 )
-from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
-from songmaker_cli.claude.provider import cli_login_status, list_cli_model_aliases
+from songmaker_cli.claude.provider import (
+    CLAUDE_CLI_MODEL_CATALOG_ERROR,
+    cli_login_status,
+    list_cli_model_aliases,
+)
+from songmaker_cli.claude.provider import (
+    UnavailableError as ClaudeCliUnavailableError,
+)
 from songmaker_cli.constants import (
     ANTHROPIC_API_VERSION,
     COWRITER_ANTHROPIC_MODELS_URL,
@@ -437,7 +443,7 @@ def _list_claude_cli_models() -> list[str]:
         aliases = list_cli_model_aliases()
     except ClaudeCliUnavailableError as exc:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER, f"could not list claude CLI models: {exc}",
+            _CLAUDE_PROVIDER, CLAUDE_CLI_MODEL_CATALOG_ERROR,
         ) from exc
     if not aliases:
         raise ProviderModelCatalogUnavailableError(

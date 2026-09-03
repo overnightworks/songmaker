@@ -256,7 +256,8 @@ def test_claude_cli_catalog_failure_is_named_error(monkeypatch):
     )
 
     with pytest.raises(
-        ProviderModelCatalogUnavailableError, match="claude CLI",
+        ProviderModelCatalogUnavailableError,
+        match="Claude CLI could not list models",
     ) as raised:
         list_provider_models("claude")
     assert type(raised.value) is ProviderModelCatalogUnavailableError

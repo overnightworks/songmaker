@@ -65,6 +65,7 @@ MCP_ALLOWED_TOOLS: Final = f"{COWRITER_TOOL_PREFIX}*"
 
 _NO_BUILTIN_TOOLS: Final = ""
 _NO_SETTING_SOURCES: Final = ""
+CLAUDE_CLI_MODEL_CATALOG_ERROR: Final = "Claude CLI could not list models."
 
 # The CLI is a bind-mounted, self-updating binary reading a prompt that carries
 # untrusted content (lyrics, @-mentions, tool results). These flags make its
@@ -548,8 +549,13 @@ def list_cli_model_aliases() -> list[str]:
     except OSError as exc:
         raise UnavailableError(f"Claude CLI /model failed to run: {exc}") from exc
     if result.returncode != 0:
+        log.warning(
+            "Claude CLI model catalog failed (rc=%d, stderr_chars=%d)",
+            result.returncode,
+            len(result.stderr),
+        )
         raise UnavailableError(
-            f"Claude CLI /model exited {result.returncode}: {result.stderr.strip()}",
+            CLAUDE_CLI_MODEL_CATALOG_ERROR,
         )
     return _parse_cli_model_aliases(result.stdout)
 

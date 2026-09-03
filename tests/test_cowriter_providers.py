@@ -16,7 +16,11 @@ from fastapi.testclient import TestClient
 from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.api_models.settings import ProviderSurfaceState, ProviderSurfaceStatus
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
+from songmaker_cli.claude.provider import (
+    CLAUDE_CLI_MODEL_CATALOG_ERROR,
+    FinalEvent,
+    ToolCallEvent,
+)
 from songmaker_cli.constants import (
     COWRITER_MAX_TOOL_ROUNDS,
     SETTING_CLAUDE_SCORING_MODEL,
@@ -946,6 +950,57 @@ def test_models_errors_cover_every_provider_not_only_the_saved_one(
     assert settings["models_by_provider"]["grok"] == []
     assert "codex" not in settings["models_errors"]
     assert "XAI_API_KEY" in settings["models_errors"]["grok"]
+
+
+def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
+    admin_client, monkeypatch,
+):
+    import songmaker_cli.cowriter.catalog as catalog
+
+    client, _ = admin_client
+    secret_stderr = "/home/operator/.claude/credentials.json: permission denied"
+    def _configured_catalog(provider, surface, settings):
+        if provider == "claude":
+            return catalog.ConfiguredProvider(
+                provider, catalog.ProviderSetupMethod.CLAUDE_CLI,
+            )
+        return catalog.ConfiguredProvider(
+            provider, catalog.ProviderSetupMethod.API_KEY,
+            f"{provider.upper()}_API_KEY",
+        )
+
+    def _list_provider_models(provider):
+        if provider == "claude":
+            return catalog._list_claude_cli_models()
+        return list(LIVE_CATALOG[provider])
+
+    monkeypatch.setattr(catalog, "_provider_configuration", _configured_catalog)
+    monkeypatch.setattr(catalog, "list_provider_models", _list_provider_models)
+    monkeypatch.setattr(
+        "songmaker_cli.claude.provider._find_claude_binary",
+        lambda: "/usr/bin/claude",
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.claude.provider.subprocess.run",
+        lambda *args, **kwargs: MagicMock(
+            stdout="", stderr=secret_stderr, returncode=1,
+        ),
+    )
+
+    refresh_provider_snapshots()
+
+    for path in ("/api/settings/cowriter", "/api/settings/judge"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert secret_stderr not in response.json()["models_errors"]["claude"]
+        assert response.json()["models_errors"]["claude"] == CLAUDE_CLI_MODEL_CATALOG_ERROR
+
+    response = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "claude", "model": "sonnet"},
+    )
+    assert response.status_code == 503
+    assert secret_stderr not in response.text
 
 
 def test_provider_status_requires_admin(admin_client):
