@@ -339,6 +339,9 @@ export class ResourceSyncController {
 		const source = this.source;
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
+		// Not a session loss (issue #385 finding 2): the account exists and is still logged in,
+		// an admin disabled it, so this must not read as "sign in again" -- that would only fail
+		// the same way.
 		if (result === 'disabled') {
 			this.teardown({ resetStore: false });
 			this.setVisibleError(AUTH_ACCOUNT_DISABLED_MESSAGE);
