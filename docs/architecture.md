@@ -772,6 +772,8 @@ persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
 In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
+The job stream projects the queued job's `queue_reason` and `queue_position` on every change, including a reason-only change; it does not decide or mutate GPU admission.
+
 ## Scoring Flow
 
 The parent-hosted lyrical-coherence judge owns one provider budget and carries

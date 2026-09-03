@@ -98,6 +98,7 @@ function defaultProps() {
 		generateLabel: 'Generate',
 		generateDisabled: false,
 		generateTitle: '',
+		generateQueueReason: null as string | null,
 		generating: false,
 		compact: false
 	};
@@ -204,6 +205,25 @@ describe('EditorHeader', () => {
 		const { target } = await render({ compact: true });
 		expect(target.querySelector('.detail-header .generate-btn')).toBeNull();
 		expect(target.querySelector('.editor-generate-bar .generate-btn')).not.toBeNull();
+	});
+
+	it('puts the compact queue reason on a second flex row below Generate', async () => {
+		const { target } = await render({
+			compact: true,
+			generateQueueReason: 'Waiting for LoRA training.'
+		});
+		const bar = target.querySelector('.editor-generate-bar');
+		if (!bar) throw new Error('Expected the compact Generate bar');
+
+		expect(bar.querySelector('.generate-btn')?.nextElementSibling?.textContent).toBe(
+			'Waiting for LoRA training.'
+		);
+		expect(editorHeaderSource).toMatch(
+			/\.editor-generate-bar \{[^}]*display: flex;[^}]*flex-wrap: wrap;/
+		);
+		expect(editorHeaderSource).toMatch(
+			/\.editor-generate-bar \.generate-queue-reason \{[^}]*flex-basis: 100%;/
+		);
 	});
 });
 

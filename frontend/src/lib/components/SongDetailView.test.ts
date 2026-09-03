@@ -690,6 +690,25 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 		expect(btn?.disabled).toBe(false);
 		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
 	});
+
+	it('shows a queued generation reason and its position from the job stream', async () => {
+		activeJobs.set([
+			{
+				job: jobStatus({
+					status: 'queued',
+					queue_reason: 'Waiting for LoRA training on this GPU.',
+					queue_position: 2
+				}),
+				songId: 's1'
+			}
+		]);
+		const target = await renderView();
+
+		expect(generateBtn(target)?.textContent).toContain('Queued (#2)');
+		expect(target.querySelector('.generate-queue-reason')?.textContent).toBe(
+			'Waiting for LoRA training on this GPU.'
+		);
+	});
 });
 
 describe('SongDetailView Generate double-click guard (#234)', () => {

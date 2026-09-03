@@ -13,6 +13,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '$lib/api/types';
+	import { WORKER_TRAINING_REMAINING_TEMPLATE } from '$lib/constants';
 
 	const POLL_INTERVAL_MS = 3000;
 	const LOAD_JOB_TYPE = 'load_model_on_worker';
@@ -139,6 +140,12 @@
 				? `Loading ${state.target_loading}… (${elapsed} elapsed)`
 				: `Loading ${state.target_loading}…`;
 		}
+		if (state.training_hold_seconds != null) {
+			return WORKER_TRAINING_REMAINING_TEMPLATE.replace(
+				'{seconds}',
+				String(state.training_hold_seconds)
+			);
+		}
 		if (state.loaded.length === 0) return 'No model loaded';
 		if (state.queue_depth > 0) return `Busy (${state.queue_depth} in queue)`;
 		return 'Idle';
@@ -179,6 +186,7 @@
 
 	function isCardBusy(worker: WorkerInfoItem): boolean {
 		if (worker.state?.target_loading) return true;
+		if (worker.state?.training_hold_seconds != null) return true;
 		if (loadingByWorker.has(worker.identity.id)) return true;
 		return false;
 	}
@@ -310,7 +318,7 @@
 							<span class="row-label">Status:</span>
 							<span class="row-value">
 								{describeStatus(worker)}
-								{#if trackedJob || worker.state.target_loading}
+								{#if trackedJob || worker.state.target_loading || worker.state.training_hold_seconds != null}
 									<span class="spinner" aria-label="loading">⏳</span>
 								{/if}
 							</span>

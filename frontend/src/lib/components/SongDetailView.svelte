@@ -109,6 +109,7 @@
 		EDITOR_NETWORK_ERROR,
 		EDITOR_NO_MODELS_WARNING,
 		EDITOR_QUEUED_LABEL,
+		EDITOR_QUEUE_POSITION_TEMPLATE,
 		EDITOR_QUEUE_BUSY_TITLE,
 		EDITOR_SAVE_ACCESSIBLE_LABEL,
 		EDITOR_SAVE_LABEL,
@@ -646,7 +647,7 @@
 	function generateLabel(): string {
 		if (isGenerating && generateJob?.status === 'queued') {
 			return generateJob.queue_position
-				? `${EDITOR_QUEUED_LABEL} (#${generateJob.queue_position})`
+				? EDITOR_QUEUE_POSITION_TEMPLATE.replace('{position}', String(generateJob.queue_position))
 				: EDITOR_QUEUED_LABEL;
 		}
 		if (generatePending) return EDITOR_GENERATING_LABEL;
@@ -735,6 +736,7 @@
 				$recipeModel === null ||
 				gpuOffline}
 			generateTitle={generateTitle()}
+			generateQueueReason={generateJob?.status === 'queued' ? generateJob.queue_reason : null}
 			generating={generatePending}
 			{compact}
 		/>

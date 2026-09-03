@@ -20,7 +20,8 @@
 		TAKES_ERROR,
 		TAKES_GENERATING_LABEL,
 		TAKES_LOADING,
-		TAKES_MOBILE_HINT
+		TAKES_MOBILE_HINT,
+		TAKES_QUEUED_LABEL
 	} from '$lib/constants';
 	import {
 		nowPlayingTakeLabel,
@@ -397,7 +398,12 @@
 				<span class="generating-label">
 					v{latestVersionNumber} · {TAKES_GENERATING_LABEL}
 					{#if generateJob.status === 'queued'}
-						{generateJob.queue_position ? `· queued #${generateJob.queue_position}` : '· queued'}
+						{generateJob.queue_position
+							? `· ${TAKES_QUEUED_LABEL} #${generateJob.queue_position}`
+							: `· ${TAKES_QUEUED_LABEL}`}
+						{#if generateJob.queue_reason}
+							· {generateJob.queue_reason}
+						{/if}
 					{/if}
 				</span>
 				<span class="generating-bar">

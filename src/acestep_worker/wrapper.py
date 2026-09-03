@@ -139,14 +139,16 @@ async def _start_gpu_hold_renewal(
     return asyncio.create_task(_renew_gpu_hold_until_done(redis, worker_id, token))
 
 
-async def _claim_gpu_hold_handover(deps: WorkerDeps, token: str) -> bool:
+async def _create_gpu_hold_handover_task(deps: WorkerDeps, token: str) -> str | None:
     async with deps.gpu_hold_handover_lock:
         if token in deps.gpu_hold_handover_tokens:
-            return False
+            return None
         if not await gpu_hold_matches(deps.redis, deps.worker_id, token):
-            return False
+            return None
+        task_id = await deps.task_store.create("train_lora")
         deps.gpu_hold_handover_tokens.add(token)
-        return True
+        deps.gpu_hold_handover_tasks[token] = task_id
+        return task_id
 
 
 async def _release_gpu_hold_handover(deps: WorkerDeps, token: str) -> None:
@@ -169,6 +171,7 @@ async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
     gpu_health = deps.gpu_health_checker()
+    hold_seconds = await deps.redis.ttl(gpu_hold_key(deps.worker_id))
     return {
         "loaded": [{"mode": info.mode, "size_gb": info.size_gb} for info in snapshot.loaded],
         "target_loading": snapshot.target_loading,
@@ -183,6 +186,7 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
         "vram_measured": snapshot.vram_measured,
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
+        "training_hold_seconds": hold_seconds if hold_seconds > 0 else None,
         "pinned": list(snapshot.pinned),
         "gpu_healthy": not gpu_health.is_broken,
         "gpu_health_detail": gpu_health.detail,
@@ -394,9 +398,10 @@ def build_router(deps: WorkerDeps) -> APIRouter:
     )
     async def hold_handover(req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
         async with deps.gpu_hold_handover_lock:
+            task_id = deps.gpu_hold_handover_tasks.get(req.token)
             return GpuHoldHandoverResponse(
-                claimed=req.token in deps.gpu_hold_handover_tokens,
-                task_id=deps.gpu_hold_handover_tasks.get(req.token),
+                claimed=task_id is not None,
+                task_id=task_id,
             )
 
     @router.post(
@@ -417,13 +422,9 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 status_code=501,
                 detail="Worker not configured with a train_lora runner",
             )
-        if not await _claim_gpu_hold_handover(deps, req.hold_token):
-            raise HTTPException(
-                status_code=409,
-                detail="GPU hold token is invalid or already handed over",
-            )
         loaded = None
         renew_task = None
+        task_id = None
         try:
             loaded = await deps.cache.acquire_for_use(req.mode)
             if loaded is None:
@@ -439,9 +440,12 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 )
             except RuntimeError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
-            task_id = await deps.task_store.create("train_lora")
-            async with deps.gpu_hold_handover_lock:
-                deps.gpu_hold_handover_tasks[req.hold_token] = task_id
+            task_id = await _create_gpu_hold_handover_task(deps, req.hold_token)
+            if task_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="GPU hold token is invalid or already handed over",
+                )
         except BaseException:
             try:
                 if renew_task is not None:

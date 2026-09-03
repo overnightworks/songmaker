@@ -792,6 +792,21 @@ def test_build_state_payload(tmp_path: Path) -> None:
     assert payload["loading_last_log_line"] is None
 
 
+def test_build_state_payload_projects_the_remaining_training_hold(tmp_path: Path) -> None:
+    from acestep_worker.heartbeat import reserve_gpu_hold
+    from acestep_worker.wrapper import build_state_payload
+
+    deps, redis = _make_deps(tmp_path)
+
+    async def go():
+        assert await reserve_gpu_hold(redis, deps.worker_id, "hold-token", 15)
+        return await build_state_payload(deps)
+
+    payload = _run(go())
+    assert payload["training_hold_seconds"] is not None
+    assert 0 < payload["training_hold_seconds"] <= 15
+
+
 def test_build_state_payload_after_load_uses_detail_shape(tmp_path: Path) -> None:
     from acestep_worker.wrapper import build_state_payload
 

@@ -279,6 +279,14 @@ function onlineWorkerPool(): WorkerPoolResponse {
 	};
 }
 
+function trainingWorkerPool(): WorkerPoolResponse {
+	const pool = onlineWorkerPool();
+	const state = pool.workers[0].state;
+	if (state === null) throw new Error('Expected a heartbeating worker');
+	state.training_hold_seconds = 12;
+	return pool;
+}
+
 async function renderOnline(): Promise<HTMLElement> {
 	api.listWorkers.mockResolvedValue(onlineWorkerPool());
 	const target = document.createElement('div');
@@ -321,6 +329,20 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 		const restartButton = findButtonByText(target, 'Restart');
 		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
 		expect(restartButton.disabled).toBe(false);
+	});
+
+	it('shows a held online worker as training with the remaining lease', async () => {
+		api.listWorkers.mockResolvedValue(trainingWorkerPool());
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft'] } });
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.textContent).toContain('Training (12s remaining)');
+		expect(target.textContent).not.toContain('Idle');
+		expect(target.querySelector('.status-online')).not.toBeNull();
 	});
 });
 

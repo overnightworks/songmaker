@@ -2552,6 +2552,51 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     assert "completed" in statuses
 
 
+def test_stream_job_emits_queue_reason_and_position_without_a_status_change(
+    client: TestClient,
+) -> None:
+    import asyncio
+    import json
+
+    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.jobs_api import _job_event_generator
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(
+            session,
+            job.id,
+            "queued",
+            queue_reason="Waiting for LoRA training on this GPU.",
+        )
+        session.commit()
+        job_id = job.id
+
+    async def collect_updates() -> list[dict]:
+        stream = _job_event_generator(ctx, job_id)
+        first = json.loads((await anext(stream)).removeprefix("data: "))
+        with ctx.db() as session:
+            update_job_status(
+                session,
+                job_id,
+                "queued",
+                queue_reason="Waiting for the next GPU slot.",
+            )
+            session.commit()
+        second = json.loads((await anext(stream)).removeprefix("data: "))
+        await stream.aclose()
+        return [first, second]
+
+    first, second = asyncio.run(collect_updates())
+
+    assert first["status"] == second["status"] == "queued"
+    assert first["queue_reason"] == "Waiting for LoRA training on this GPU."
+    assert second["queue_reason"] == "Waiting for the next GPU slot."
+    assert first["queue_position"] == second["queue_position"] == 2
+
+
 def test_stream_job_sends_heartbeat_without_status_change(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

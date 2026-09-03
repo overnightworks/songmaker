@@ -53,6 +53,7 @@
 		generateLabel: string;
 		generateDisabled: boolean;
 		generateTitle: string;
+		generateQueueReason?: string | null;
 		generating: boolean;
 		compact: boolean;
 	}
@@ -91,6 +92,7 @@
 		generateLabel,
 		generateDisabled,
 		generateTitle,
+		generateQueueReason = null,
 		generating,
 		compact
 	}: Props = $props();
@@ -224,6 +226,9 @@
 			>
 				{generateLabel}
 			</button>
+			{#if generateQueueReason}
+				<span class="generate-queue-reason">{generateQueueReason}</span>
+			{/if}
 		{/if}
 	</div>
 </div>
@@ -241,6 +246,9 @@
 		>
 			{generateLabel}
 		</button>
+		{#if generateQueueReason}
+			<span class="generate-queue-reason">{generateQueueReason}</span>
+		{/if}
 	</div>
 {/if}
 
@@ -453,6 +461,13 @@
 		cursor: not-allowed;
 	}
 
+	.generate-queue-reason {
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		max-width: 18rem;
+		overflow-wrap: anywhere;
+	}
+
 	@media (prefers-reduced-motion: no-preference) {
 		.generate-btn.generating {
 			animation: gen-pulse 1.5s ease-in-out infinite;
@@ -476,9 +491,15 @@
 		bottom: var(--player-height);
 		z-index: 30;
 		display: flex;
+		flex-wrap: wrap;
 		padding: 0.6rem 0.8rem;
 		background: var(--bg);
 		border-top: 1px solid var(--border);
+	}
+
+	.editor-generate-bar .generate-queue-reason {
+		flex-basis: 100%;
+		text-align: center;
 	}
 
 	.editor-generate-bar .generate-btn {

@@ -110,6 +110,10 @@ export const TAKES_ERROR = 'Failed to load takes';
 // {version} is replaced with the version number Generate would create next.
 export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
 export const TAKES_GENERATING_LABEL = 'generating';
+export const TAKES_QUEUED_LABEL = 'queued';
+export const EDITOR_QUEUED_LABEL = 'Queued';
+export const EDITOR_QUEUE_POSITION_TEMPLATE = `${EDITOR_QUEUED_LABEL} (#{position})`;
+export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
@@ -175,7 +179,6 @@ export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
-export const EDITOR_QUEUED_LABEL = 'Queued...';
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';

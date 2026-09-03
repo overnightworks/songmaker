@@ -56,6 +56,7 @@ class WorkerEphemeralState(BaseModel):
     loading_started_at: str | None = None
     loading_last_log_line: str | None = None
     queue_depth: int = 0
+    training_hold_seconds: int | None = None
     vram_used_gb: float | None = None
     vram_total_gb: float | None = None
     vram_measured: bool | None = None

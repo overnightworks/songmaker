@@ -158,6 +158,7 @@ def get_queue_position(session: Session, job: Job) -> int | None:
     Filtered by ``job.type`` — music and scoring queues are independent
     worker pools, so ordering across them is meaningless.
     """
+    session.flush()
     if job.status != JobStatus.QUEUED:
         return None
     ahead = (

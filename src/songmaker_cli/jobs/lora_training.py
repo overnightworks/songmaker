@@ -267,7 +267,9 @@ async def _stop_lora_renewal(
     try:
         await renew_task
     except asyncio.CancelledError:
-        pass
+        current_task = asyncio.current_task()
+        if current_task is not None and current_task.cancelling():
+            raise
     except Exception:
         if not suppress_failure:
             raise

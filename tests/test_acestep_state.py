@@ -111,7 +111,11 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     async def _zero_queue(*_args, **_kwargs):
         return 0
 
+    async def _no_hold(*_args, **_kwargs):
+        return -2
+
     fake_redis.get = _zero_queue
+    fake_redis.ttl = _no_hold
     deps = WorkerDeps(
         worker_id="acestep-worker-0",
         cache=cache,
@@ -222,6 +226,14 @@ def test_worker_is_online_false_when_no_heartbeat() -> None:
 
 def test_worker_is_online_true_when_gpu_healthy() -> None:
     assert worker_is_online({"loaded": [], "gpu_healthy": True}) is True
+
+
+def test_held_worker_remains_online() -> None:
+    from songmaker_cli.admin_api import _derive_worker_status
+
+    assert _derive_worker_status(
+        {"loaded": [], "gpu_healthy": True, "training_hold_seconds": 12},
+    ) == "online"
 
 
 def test_worker_is_online_false_when_gpu_unhealthy() -> None:

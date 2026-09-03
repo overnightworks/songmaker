@@ -449,7 +449,7 @@ def test_handover_claim_cannot_race_a_coordinator_release(
     from fastapi import HTTPException
 
     from acestep_worker.heartbeat import release_gpu_hold
-    from acestep_worker.wrapper import _claim_gpu_hold_handover, _release_gpu_hold_handover
+    from acestep_worker.wrapper import _create_gpu_hold_handover_task, _release_gpu_hold_handover
 
     deps = _make_deps(tmp_path)
     claim_entered = asyncio.Event()
@@ -467,13 +467,13 @@ def test_handover_claim_cannot_race_a_coordinator_release(
             for route in build_router(deps).routes
             if route.path == "/gpu_hold/release"
         )
-        claim_task = asyncio.create_task(_claim_gpu_hold_handover(deps, "hold-token"))
+        claim_task = asyncio.create_task(_create_gpu_hold_handover_task(deps, "hold-token"))
         await claim_entered.wait()
         release_task = asyncio.create_task(release(GpuHoldTokenRequest(token="hold-token")))
         await asyncio.sleep(0)
         assert not release_task.done()
         allow_claim.set()
-        assert await claim_task
+        assert await claim_task is not None
         with pytest.raises(HTTPException, match="owned by a training task") as exc_info:
             await release_task
         assert exc_info.value.status_code == 409
@@ -482,6 +482,24 @@ def test_handover_claim_cannot_race_a_coordinator_release(
         assert await release_gpu_hold(deps.redis, deps.worker_id, "hold-token")
 
     monkeypatch.setattr("acestep_worker.wrapper.gpu_hold_matches", delayed_match)
+    _run(scenario())
+
+
+def test_handover_does_not_report_a_claim_without_a_task(tmp_path: Path) -> None:
+    deps = _make_deps(tmp_path)
+
+    async def scenario() -> None:
+        async with deps.gpu_hold_handover_lock:
+            deps.gpu_hold_handover_tokens.add("hold-token")
+        endpoint = next(
+            route.endpoint
+            for route in build_router(deps).routes
+            if route.path == "/gpu_hold/handover"
+        )
+        response = await endpoint(GpuHoldTokenRequest(token="hold-token"))
+        assert response.claimed is False
+        assert response.task_id is None
+
     _run(scenario())
 
 

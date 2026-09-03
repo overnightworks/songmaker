@@ -285,6 +285,25 @@ describe('TakesList', () => {
 		expect(target.querySelector('.generating-row')?.textContent).toContain('generating');
 	});
 
+	it('shows a queued generation reason and position without treating it as a failure', async () => {
+		const { target } = await render({
+			generateJob: {
+				id: 'j1',
+				type: 'generate',
+				status: 'queued',
+				progress: 0,
+				queue_position: 2,
+				queue_reason: 'Waiting for LoRA training on this GPU.'
+			}
+		});
+
+		expect(target.querySelector('.generating-label')?.textContent).toContain('queued #2');
+		expect(target.querySelector('.generating-label')?.textContent).toContain(
+			'Waiting for LoRA training on this GPU.'
+		);
+		expect(target.querySelector('.failed-row')).toBeNull();
+	});
+
 	it('labels the generating row with the version actually being generated, not the next draft version', async () => {
 		// draftVersionNumber (the number Generate would create *next*) is 4
 		// here — the two must not be conflated, since a running job always

@@ -1299,6 +1299,48 @@ def test_cancel_before_handover_releases_the_job_hold() -> None:
     release.assert_awaited_once()
 
 
+def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
+    from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
+
+    async def exercise() -> AsyncMock:
+        renew_task = asyncio.create_task(asyncio.Event().wait())
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+
+        def task_response() -> dict[str, str]:
+            current_task = asyncio.current_task()
+            assert current_task is not None
+            current_task.cancel()
+            return {"task_id": "task-1"}
+
+        response.json.side_effect = task_response
+        client = MagicMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        client.post = AsyncMock(return_value=response)
+        release = AsyncMock()
+
+        with (
+            patch("httpx.AsyncClient", return_value=client),
+            patch("songmaker_cli.jobs.lora_training._release_lora_hold", release),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await _pick_and_call_worker(
+                target_mode="sft",
+                request_payload={},
+                worker=_WorkerHandle(base_url="http://fake", id="w0"),
+                hold_token="hold-token",
+                renew_task=renew_task,
+                on_progress=lambda _fraction: None,
+                on_heartbeat=lambda: None,
+            )
+        assert renew_task.cancelled()
+        return release
+
+    release = _run(exercise())
+    release.assert_not_awaited()
+
+
 def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -> None:
     import fakeredis.aioredis
     import httpx
