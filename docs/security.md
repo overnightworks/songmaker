@@ -305,15 +305,15 @@ All responses include:
 ## Error Handling
 
 - **Job errors**: Sanitized before storing in DB. Internal exception details logged server-side only; clients see generic messages like "Internal error during processing".
-- **API errors**: All `HTTPException` messages are human-readable strings with no internal paths or stack traces. User input is never reflected in error messages.
+- **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py:463-467`, `chat_api.py:266-269`); the model-catalog failure path is an exception tracked in #476 (`settings_api.py:577-578,658-659`).
 - **Validation errors**: Custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema).
-- **ACE-Step errors**: Raw responses logged server-side; clients see "ACE-Step returned an error".
-- **Claude CLI errors**: stderr is logged server-side; clients see "Claude is currently unavailable".
+- **ACE-Step errors**: `_sanitize_error` maps known exception types to fixed messages, but passes `WorkerGenerationFailed` through verbatim (`jobs/_runtime.py:26-59`); this sanitization gap is tracked as #327 Finding 9.
+- **Claude CLI errors**: Chat paths log the exit code and stderr length, not stderr itself (`claude/provider.py:297-305,1829-1835,1889-1895`). The live co-writer emits an SSE event with `status: 503` and `<provider> is currently unavailable` on an otherwise HTTP 200 response (`conversation_api.py:556-564,620-625`), while the legacy chat endpoint returns HTTP 503 with `Claude is currently unavailable` (`chat_api.py:266-269`). The model catalog remains a gap: `list_cli_model_aliases` includes CLI stderr in its exception (`claude/provider.py:550-553`), which reaches `models_errors` on settings GET and can become the HTTP 503 detail on settings PUT (`cowriter/catalog.py:155-170,428-440`; `settings_api.py:485-503,570-578,605-622,651-659`); see #476.
 - **OpenAPI/docs**: Disabled (`docs_url=None, redoc_url=None, openapi_url=None`).
 
 ## Request Size Limits
 
-`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body.
+Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body.
 
 JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
 
@@ -340,7 +340,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 `POST /api/albums/{album_id}/cover` and `POST /api/songs/{song_id}/cover` accept JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Album files live at `{audio_dir}/covers/{album_id}/`; song files live at `{audio_dir}/song-covers/{song_id}/`. Authenticated GET/POST/DELETE use `check_album_access` / `check_song_access` (foreign resources 404). Authenticated and public song cover endpoints stream only that song's files — 404 when the song has no own cover, even if the parent album has one. Public bytes use the matching share slug. The song-cover body budget is the cover ceiling; it is not the `/api/songs/{id}/reimport` ceiling.
 
-**Note**: For production deployments exposed to the internet, configure equivalent path-specific limits at the reverse proxy so oversized requests are rejected at the network edge. A blanket 1 MiB proxy limit would also block the documented audio-upload and cover routes.
+**Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
 ## Response Compression
 
@@ -348,7 +348,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 ## Request Timeout
 
-Uvicorn's `timeout-keep-alive` is set to `REQUEST_TIMEOUT` (default 30s). Idle connections exceeding this are closed. For production, use a reverse proxy timeout (e.g., nginx `proxy_read_timeout`) for full request-level timeout enforcement.
+`REQUEST_TIMEOUT` (default 30s) is Uvicorn's `timeout-keep-alive`: Songmaker closes an *idle keep-alive connection* after that period. It is not a general request deadline. This repository ships no reverse proxy, so it provides no proxy-level request timeout; an operator who deploys one owns any upstream timeout policy. The absence of that in-repository edge policy is recorded in #327.
 
 The resource-event SSE has its own monotonic 60-second wall. DB polling runs outside
 the async event loop, is awaited only for the remaining wall time, and no DB session
@@ -369,7 +369,8 @@ takes no request-scoped `Depends()` at all (neither `get_db_session` nor
 `get_current_user`, which itself takes `get_db_session` — see "Job streams" above)
 and no poll holds a DB session across a `send()` or a sleep, so a stuck slow-reader
 `send()` pins neither a pool connection nor a blocked thread — only the ASGI
-connection itself, capped in turn by the Redis lease's concurrent-stream ceiling.
+connection itself, capped in turn by the Redis lease's concurrent-stream ceiling. This
+remaining send-side gap is tracked by #331.
 Two earlier attempts (2026-09-01 and 2026-09-02) still had a `Depends()`-held
 session somewhere in the request -- first directly, then one level up through
 `get_current_user` -- and each would have let this same slow-reader gap also pin a
@@ -380,7 +381,7 @@ being in place.
 ## Claude Chat Security
 
 - **System prompt**: Hardcoded server-side (`SYSTEM_PROMPT` in `chat_api.py`). Clients cannot override it. Song context is wrapped in `<song_context>` XML tags with an untrusted-data notice instructing Claude to ignore instructions inside tags.
-- **Multi-turn history**: Stored in `chat_messages` table, scoped to song. Ownership enforced via `check_song_access()` on every endpoint. Max 50 messages per song.
+- **Multi-turn history**: Stored in `chat_messages` and scoped to a conversation; the co-writer applies a token budget with a rolling summary for older messages (`conversation_api.py:477-503`; `cowriter/history.py:65-76,89-144`). Ownership is enforced via `check_song_access()` on every endpoint.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
 - **CLI backend, every call shape**: `_build_mcp_cli_cmd()` (the co-writer, MCP tools attached) and `_build_cli_cmd()` (the legacy `/songs/{id}/chat` endpoint and the lyrical-coherence judge, no tools at all) both apply `--tools ""` (removes the CLI's entire built-in tool set, so a tool a future Claude Code version ships cannot be called even though nobody here has heard of it), `--setting-sources ""` (drops any profile `~/.claude/settings.json`, whose `permissions.allow` and `defaultMode` would otherwise decide what a session may do), `--strict-mcp-config` (ignores MCP servers configured anywhere but in the temporary config we write, when one is attached at all), and `--disable-slash-commands` (the CLI otherwise still resolves its own slash commands and skills from a prompt beginning with `/`; our own prompts never do, but this closes the channel rather than relying on that). The co-writer additionally gets `--allowedTools mcp__songmaker__*`, pre-approving our own MCP tools so the non-interactive session never waits for a permission answer nobody is there to give. No `--disallowedTools` list is kept, and `--permission-mode bypassPermissions` is gone from both — with nothing but the allowlisted tools present, there is nothing left to bypass. The two builders themselves check nothing — they format flags — which is why the next bullet is a separate mechanism, not a property of these functions.
 - **Tool-surface verification, one gate per call shape, not per caller**: `_build_cli_cmd()` is reached only through `_call_cli()`/`_acall_cli()`, and those two call `verify_no_builtin_cli_tools()`/`averify_no_builtin_cli_tools()` themselves before building anything — so `chat_api.py`'s legacy endpoint and the lyrical-coherence judge are covered by the same gate without either having called it themselves (#351). `_build_mcp_cli_cmd()` is reached only through the two MCP-attached entry points (`acall_claude_with_mcp`/`acall_claude_with_mcp_stream`), which call `verify_cli_tool_surface()` themselves the same way — a separate gate, not routed through `_call_cli()`/`_acall_cli()`. On a cache **miss**, the CLI is a bind-mounted binary that updates itself, so the relevant gate starts a session with exactly the flags above and reads the tool names — and the `slash_commands` list — out of the CLI's own `system` init event (`subtype` checked too, not just `type`); a cache **hit** returns the remembered verdict without starting a session at all. The co-writer's probe attaches the real `--mcp-config` and requires the reported tool set to equal, exactly, the eleven `mcp__songmaker__*` names — a hand-maintained literal tuple in `provider.py`, not imported from `mcp_server/server.py` (that would pull the `mcp` package into containers that do not carry it), kept honest by a test that compares the two — not merely a subset check, so a tool going missing is caught the same way an extra one is, but an unexpected tool or a reachable slash command is *always* a permanent mismatch regardless of whether the MCP connection itself came up (a CLI reporting `tools=["Bash"]` with its MCP connection also down is confirmed dangerous, not merely unverifiable). The tool-free probe requires no tool and no slash command at all, and deliberately never attaches `--mcp-config`: registering and listing MCP tools touches no database (only a tool *call* does), so that is not why this probe stays separate — it needs the `mcp` extra, which the scoring-worker container does not install; that container does have a reachable database (it writes scores back to it), so the database is not its actual gap (confirmed live: a missing `mcp` package makes the MCP connection fail, and a failed connection reports zero tools, the same shape a clean tool-free CLI reports).
@@ -396,12 +397,10 @@ being in place.
 
 ## Agent-CLI Mounts
 
-The web co-writer uses the operator's Claude *subscription*. Grok and Codex
-catalog and turn paths require `XAI_API_KEY` / `OPENAI_API_KEY`; neither
-service receives their binary or login mirror. The lyrical-coherence judge uses
-Claude's subscription as a fallback and likewise uses API keys for Grok and
-Codex. The host owns the real logins; containers receive only redacted,
-read-only mirror files.
+`songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
+credential mirrors read-only (`docker-compose.yml:98-133`). The scoring worker
+mounts only Claude's binary and credential mirror; it does not mount Grok or
+Codex (`docker-compose.yml:246-259`).
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
@@ -626,18 +625,15 @@ The ACE-Step worker pool runs each model-serving worker as a separate peer conta
 - **Failure modes**: Missing env var → 503 ("Internal API not configured"). Wrong/missing token → 401. The 503 vs 401 split tells the operator whether the issue is config or credentials.
 - **CSRF**: `/api/internal/*` is exempt from the CSRF middleware. Workers do not have sessions; the internal token is the only credential that matters.
 
-### Reverse proxy responsibility
+### Deployment boundary
 
-The reverse proxy (nginx/caddy/cloudflare) **must not expose `/api/internal/*` to the public internet**. The internal API trusts any caller that knows the token, and the token lives in container env vars — there is no per-user authorization on these endpoints. Example nginx block:
-
-```nginx
-location /api/internal/ {
-    deny all;
-    return 404;
-}
-```
-
-This is the same hardening principle as `/metrics`: an unauthenticated-but-internal endpoint that's safe behind the proxy and unsafe in front of it.
+This repository ships no reverse-proxy service or configuration: there is no
+nginx, Caddy, Traefik, or tunnel policy here. The internal API trusts any caller
+that knows the token, and has no per-user authorization. Compose publishes the
+web port only on the host loopback interface, while workers use the Compose
+network; an operator who adds an upstream proxy or tunnel is responsible for
+keeping `/api/internal/*` unavailable to public traffic. That edge policy is not
+implemented by this repository (#327).
 
 ### Token rotation
 
@@ -665,7 +661,7 @@ The most a compromised worker can do is publish bogus state to Redis, register w
 
 ### Future hardening
 
-If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the docker network, not `0.0.0.0`). The current single-port design is acceptable for self-hosted single-tenant deployments behind a reverse proxy that filters paths.
+If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the Docker network, not `0.0.0.0`). Today the single-port design has no repository-provided edge path filter; its safety depends on the loopback-only published port and on any operator-provided upstream access policy.
 
 ## Requirement Approval Witnesses
 
@@ -741,19 +737,19 @@ All mutating operations are logged to the `audit_log` table:
 
 | Setting | How |
 |---------|-----|
-| HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
+| HTTPS termination | Songmaker does not terminate TLS. An operator-provided TLS terminator must set `X-Forwarded-Proto: https`; Songmaker honors it only when the direct peer matches `TRUSTED_PROXIES`, which activates the `Secure` cookie flag and HSTS. No terminator configuration is shipped here. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
-| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the compose network needs it. |
+| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the Compose network needs it. |
 | Published ports | `docker-compose.yml` publishes `songmaker-web`, Grafana, and Prometheus as `127.0.0.1:8080:8080` / `127.0.0.1:3000:3000` / `127.0.0.1:9090:9090`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The Prometheus API is host-local for the same reason; its lifecycle HTTP endpoints stay disabled, so Compose-network peers cannot stop or reload it. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
-| Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
+| Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). If an operator provides an upstream proxy, align its path-specific limits for defense in depth; this repository provides no such proxy configuration. |
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. |
 | Resource-event stream open limit | `RESOURCE_EVENT_STREAM_OPEN_LIMIT` (per-user resource-events stream opens, default 12/min). CI overrides it — see "Resource-event streams" above. |
-| Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
+| Request timeout | `REQUEST_TIMEOUT` (default 30s) limits idle keep-alive connections, not full requests. The two SSE routes have their own 60-second walls; Songmaker has no general application request deadline. |
 | Auto-deploy cleanup timeout | `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (default 600). Bounds each post-deploy Docker cleanup command. |
 
 The two-minute auto-deploy tick checks the active-job queue and required alert-channel configuration before it pulls or builds. It also runs `scripts/check_agent_cli_mounts.sh` before those steps when that verifier is installed; a verifier failure is a named deploy refusal, so it increments the tick's existing consecutive-failure counter and follows its alert escalation. A checkout that predates the verifier logs `mount preflight not installed, skipping` and continues with its installed guards, making the temporary compatibility state visible rather than silently bypassing it. After fetching `origin/main`, the tick asks GitHub for that exact commit's check runs and pulls only when every reported run has completed successfully. Running runs stay neutral, and no runs stay neutral only for the 30-minute grace period measured from the commit time; a missing first run beyond that period, failed runs, an unavailable or malformed GitHub answer, or a 60-second check-run lookup timeout are named deploy refusals that use the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment.
@@ -798,15 +794,15 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 ## Known Limitations
 
 - **Claude CLI agents**: `--disable-slash-commands` closes slash commands and skills (verified empty in the init event's `slash_commands` list — see Claude Chat Security above), but the CLI still lists five built-in *agents* (`claude`, `Explore`, `general-purpose`, `Plan`, `statusline-setup`) in that same init event even with every isolation flag set. No exploit path is confirmed: reaching one needs a `Task`-shaped tool, and `--tools ""` already removes that. A future CLI version that could reach an agent some other way would reopen this; the tool-surface gate does not check the `agents` field today.
-- **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
+- **No IP binding on sessions**: A stolen session cookie works from any IP. The auth dependency calls `resolve_client_ip()` to obtain the real client IP when the direct peer is in `TRUSTED_PROXIES` (otherwise the direct peer), then stores it for later comparisons; an IP or user-agent change is written to the audit trail. It is not an authorization check: the session remains valid so ordinary mobile-network changes do not log a user out (#327).
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Redis session staleness**: If Redis delete fails during user deactivation or after a failed login commit, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
-- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth. Reachability, not auth, is what limits it today: the web container's port is published to `127.0.0.1` only, so `/metrics` is host-local unless the tunnel in front of it forwards that path — configure the tunnel to block `/metrics` from public access. This is sufficient for single-user / friends-only deployments. If exposing to untrusted traffic, add `require_auth` or bind metrics to a separate internal port.
+- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth (`health_api.py:211-218`). The web container binds port 8080 to `127.0.0.1`, so the repository makes this endpoint host-local by default (`docker-compose.yml:89-90`); a public deployment needs a filtering layer in front of it, which this repository does not provide (#327).
 
 ## Hardening Roadmap (for public internet exposure)
 
-The application-layer security (auth, CSRF, IDOR, injection, error sanitization) is solid for a self-hosted tool behind a reverse proxy. The gaps below are infrastructure-level and would need addressing before exposing the app to untrusted public traffic at scale.
+The application-layer security (auth, CSRF, IDOR, injection, error sanitization) is solid for a self-hosted tool. The gaps below are infrastructure-level and would need addressing before exposing the app to untrusted public traffic at scale; any public edge configuration is operator-owned, not shipped by this repository.
 
 ### ~~1. Replace SQLite with PostgreSQL~~ (Done)
 PostgreSQL is now required for production. SQLite is used only in tests (`init_test_db()`).
