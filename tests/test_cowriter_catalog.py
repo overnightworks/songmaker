@@ -20,6 +20,7 @@ from songmaker_cli.cowriter.catalog import (
     UnconfiguredProvider,
     get_provider_configuration,
     list_provider_models,
+    models_with_active_model,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderModelCatalogUnavailableError,
@@ -208,6 +209,22 @@ def test_claude_cli_catalog_uses_cli_model_aliases(monkeypatch):
     )
 
     assert list_provider_models("claude") == ["haiku", "opus", "sonnet"]
+
+
+def test_catalog_adds_an_active_claude_model_id_once():
+    assert models_with_active_model(
+        "claude",
+        ["haiku", "claude-opus-4-6", "opus"],
+        "claude-opus-4-6",
+    ) == ["claude-opus-4-6", "haiku", "opus"]
+
+
+def test_catalog_rejects_an_active_model_id_from_another_provider():
+    assert models_with_active_model(
+        "claude",
+        ["haiku", "opus"],
+        "grok-4.6",
+    ) == ["haiku", "opus"]
 
 
 def test_claude_cli_catalog_failure_is_named_error(monkeypatch):

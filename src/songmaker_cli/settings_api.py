@@ -419,15 +419,22 @@ def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfac
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
-def _models_for_provider(provider: str) -> tuple[list[str], str | None]:
-    from songmaker_cli.cowriter.catalog import list_provider_models
+def _models_for_provider(
+    provider: str,
+    active_model: str | None = None,
+) -> tuple[list[str], str | None]:
+    from songmaker_cli.cowriter.catalog import list_provider_models, models_with_active_model
     from songmaker_cli.cowriter.errors import (
         ProviderModelCatalogUnavailableError,
         ProviderUnavailableError,
     )
 
     try:
-        return list_provider_models(provider), None
+        return models_with_active_model(
+            provider,
+            list_provider_models(provider),
+            active_model,
+        ), None
     except (
         ProviderUnavailableError,
         ProviderModelCatalogUnavailableError,
@@ -437,16 +444,17 @@ def _models_for_provider(provider: str) -> tuple[list[str], str | None]:
 
 def _cowriter_response(session) -> CowriterSettingsResponse:
     provider = get_cowriter_provider(session)
+    model = get_cowriter_model(session, provider)
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
-        models, error = _models_for_provider(name)
+        models, error = _models_for_provider(name, model if name == provider else None)
         models_by_provider[name] = models
         if error:
             errors[name] = error
     return CowriterSettingsResponse(
         provider=provider,
-        model=get_cowriter_model(session, provider),
+        model=model,
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
@@ -506,6 +514,11 @@ def api_set_cowriter_settings(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
+    active_provider: str | None = None
+    active_model: str | None = None
+    if stored_settings.provider is None or stored_settings.provider in COWRITER_PROVIDERS:
+        active_provider = get_cowriter_provider(session)
+        active_model = get_cowriter_model(session, active_provider)
     provider_or_model_changed = not _matches_complete_stored_provider_and_model(
         stored_settings.provider,
         stored_settings.model,
@@ -516,7 +529,10 @@ def api_set_cowriter_settings(
         from songmaker_cli.cowriter.catalog import ProviderSurface
 
         _require_provider_can_answer(req.provider, ProviderSurface.CO_WRITER)
-        allowed, catalog_error = _models_for_provider(req.provider)
+        allowed, catalog_error = _models_for_provider(
+            req.provider,
+            active_model if req.provider == active_provider else None,
+        )
         if catalog_error:
             raise HTTPException(503, catalog_error)
         if req.model not in allowed:

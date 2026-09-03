@@ -286,6 +286,34 @@ def test_model_must_be_in_the_live_catalog(admin_client, every_provider_is_confi
     assert ok.json()["model"] == "grok-4.6"
 
 
+def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
+    admin_client, monkeypatch, every_provider_is_configured,
+):
+    client, _ = admin_client
+    aliases = {
+        "claude": ["haiku", "opus", "sonnet"],
+        "grok": LIVE_CATALOG["grok"],
+        "codex": LIVE_CATALOG["codex"],
+    }
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda provider: aliases[provider],
+    )
+
+    settings = client.get("/api/settings/cowriter")
+
+    assert settings.status_code == 200
+    assert settings.json()["model"] == "claude-opus-4-6"
+    assert settings.json()["models_by_provider"]["claude"] == [
+        "claude-opus-4-6", "haiku", "opus", "sonnet",
+    ]
+    saved = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "claude", "model": "claude-opus-4-6"},
+    )
+    assert saved.status_code == 200
+
+
 def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_configured):
     client, _ = admin_client
     captured: dict = {}

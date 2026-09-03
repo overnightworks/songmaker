@@ -159,6 +159,17 @@ def list_provider_models(provider: str) -> list[str]:
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
+def models_with_active_model(
+    provider: str,
+    models: list[str],
+    active_model: str | None,
+) -> list[str]:
+    catalog = set(models)
+    if active_model is not None and _is_provider_model_id(provider, active_model):
+        catalog.add(active_model)
+    return sorted(catalog)
+
+
 def _models_for_setup_method(
     provider: str,
     method: ProviderSetupMethod,
@@ -326,8 +337,7 @@ def _list_grok_models(key: str) -> list[str]:
     )
     chat = [
         model_id for model_id in ids
-        if model_id.startswith(COWRITER_GROK_MODEL_PREFIX)
-        and not _contains_marker(model_id, COWRITER_GROK_NON_CHAT_MARKERS)
+        if _is_provider_model_id(_GROK_PROVIDER, model_id)
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
@@ -344,8 +354,7 @@ def _list_openai_models(key: str) -> list[str]:
     )
     chat = [
         model_id for model_id in ids
-        if model_id.startswith(COWRITER_OPENAI_CHAT_PREFIXES)
-        and not _contains_marker(model_id, COWRITER_OPENAI_NON_CHAT_MARKERS)
+        if _is_provider_model_id(_CODEX_PROVIDER, model_id)
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
@@ -379,7 +388,7 @@ def _list_claude_models(key: str) -> list[str]:
     )
     chat = [
         model_id for model_id in ids
-        if model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)
+        if _is_provider_model_id(_CLAUDE_PROVIDER, model_id)
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
@@ -391,3 +400,19 @@ def _list_claude_models(key: str) -> list[str]:
 def _contains_marker(model_id: str, markers: tuple[str, ...]) -> bool:
     lowered = model_id.lower()
     return any(marker in lowered for marker in markers)
+
+
+def _is_provider_model_id(provider: str, model_id: str) -> bool:
+    if provider == _CLAUDE_PROVIDER:
+        return model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)
+    if provider == _GROK_PROVIDER:
+        return (
+            model_id.startswith(COWRITER_GROK_MODEL_PREFIX)
+            and not _contains_marker(model_id, COWRITER_GROK_NON_CHAT_MARKERS)
+        )
+    if provider == _CODEX_PROVIDER:
+        return (
+            model_id.startswith(COWRITER_OPENAI_CHAT_PREFIXES)
+            and not _contains_marker(model_id, COWRITER_OPENAI_NON_CHAT_MARKERS)
+        )
+    return False

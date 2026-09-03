@@ -591,6 +591,29 @@ describe('admin models tab', () => {
 		expect(scoring.textContent).toContain('Nothing changed.');
 	});
 
+	it('selects the active full model ID supplied by the catalog', async () => {
+		api.fetchCowriterSettings.mockResolvedValue({
+			provider: 'claude',
+			model: 'claude-opus-4-6',
+			tail_token_budget: 8000,
+			allowed_providers: ['claude', 'codex', 'grok'],
+			allowed_models: ['claude-opus-4-6', 'haiku', 'opus', 'sonnet'],
+			models_by_provider: {
+				claude: ['claude-opus-4-6', 'haiku', 'opus', 'sonnet'],
+				codex: [],
+				grok: []
+			},
+			models_errors: {}
+		});
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
+			'claude-opus-4-6'
+		);
+	});
+
 	it('has no Chat Model field anymore', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
