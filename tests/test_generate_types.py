@@ -114,25 +114,18 @@ def test_discovers_routes_from_included_routers() -> None:
     assert {SeededChild, SeededRequest, SeededResponse} <= set(result.models)
 
 
-def test_route_routers_cover_every_api_route_in_the_real_app(tmp_path: Path) -> None:
+def test_route_routers_discover_every_openapi_path_in_the_real_app(tmp_path: Path) -> None:
     from conftest import make_test_app
 
     client, _ = make_test_app(tmp_path)
-    app_route_paths = {
-        route.path
-        for route in generate_types._complete_router_routes(client.app)
-        if route.include_in_schema
-    }
     discovered_route_paths = {
-        route.path
+        route.path.replace(":path", "")
         for router in generate_types._route_routers()
         for route in generate_types._complete_router_routes(router)
         if route.include_in_schema
     }
 
-    assert app_route_paths
-    assert discovered_route_paths
-    assert app_route_paths <= discovered_route_paths
+    assert discovered_route_paths == set(client.app.openapi()["paths"])
 
 
 @pytest.mark.parametrize("arguments", (["generate_types.py", "--check"], ["generate_types.py"]))

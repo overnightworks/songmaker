@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from types import UnionType
-from typing import Annotated, Any, Literal, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, cast, get_args, get_origin
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -212,9 +212,6 @@ def _router_label(router: APIRouter) -> str:
 
 def _discover_router_routes(
     router: APIRouter,
-    *,
-    inherited_prefix: str = "",
-    ancestors: frozenset[int] = frozenset(),
 ) -> tuple[DiscoveredRoute, ...]:
     """Return HTTP routes, including FastAPI's deferred router inclusions.
 
@@ -241,53 +238,23 @@ def _discover_router_routes(
             "its module may not have been imported or registered",
         )
 
-    router_id = id(router)
-    if router_id in ancestors:
-        raise RouteIntrospectionError(
-            f"router {_router_label(router)!r} includes itself recursively",
+    discovered = tuple(
+        DiscoveredRoute(
+            path=route.path,
+            response_model=route.response_model,
+            body_params=route.dependant.body_params,
+            include_in_schema=route.include_in_schema,
         )
-
-    discovered: list[DiscoveredRoute] = []
-    for route in router.routes:
-        if isinstance(route, APIRoute):
-            discovered.append(
-                DiscoveredRoute(
-                    path=f"{inherited_prefix}{route.path}",
-                    response_model=route.response_model,
-                    body_params=route.dependant.body_params,
-                    include_in_schema=route.include_in_schema,
-                ),
-            )
-            continue
-
-        included_router = getattr(route, "original_router", None)
-        if included_router is None:
-            continue
-        if not isinstance(included_router, APIRouter):
-            raise RouteIntrospectionError(
-                f"router {_router_label(router)!r} has an invalid included router",
-            )
-
-        include_context = getattr(route, "include_context", None)
-        included_prefix = getattr(include_context, "prefix", None)
-        if not isinstance(included_prefix, str):
-            raise RouteIntrospectionError(
-                f"router {_router_label(router)!r} has an included router without a prefix",
-            )
-        discovered.extend(
-            _discover_router_routes(
-                included_router,
-                inherited_prefix=f"{inherited_prefix}{included_prefix}",
-                ancestors=ancestors | {router_id},
-            ),
-        )
+        for route in router.routes
+        if isinstance(route, APIRoute)
+    )
 
     if not discovered:
         raise RouteIntrospectionError(
             f"router {_router_label(router)!r} has no HTTP API routes; "
             "its module may not have been imported or registered",
         )
-    return tuple(discovered)
+    return discovered
 
 
 def _registered_child_routers(router: APIRouter) -> tuple[APIRouter, ...]:
@@ -296,11 +263,7 @@ def _registered_child_routers(router: APIRouter) -> tuple[APIRouter, ...]:
         child_router = getattr(route, "original_router", None)
         if child_router is None:
             continue
-        if not isinstance(child_router, APIRouter):
-            raise RouteIntrospectionError(
-                f"router {_router_label(router)!r} has an invalid included router",
-            )
-        children.append(child_router)
+        children.append(cast(APIRouter, child_router))
     return tuple(children)
 
 
