@@ -229,8 +229,11 @@ def test_parallel_cold_asks_spawn_the_cli_once() -> None:
     started = threading.Event()
     release = threading.Event()
     answers: list[str] = []
+    probe_calls = 0
 
     def probe() -> str:
+        nonlocal probe_calls
+        probe_calls += 1
         started.set()
         release.wait()
         return "answer"
@@ -247,14 +250,20 @@ def test_parallel_cold_asks_spawn_the_cli_once() -> None:
     second.join(timeout=1)
 
     assert answers == ["answer", "answer"]
+    assert probe_calls == 1
 
 
-def test_parallel_cold_asks_share_one_failure() -> None:
+def test_parallel_cold_asks_share_one_failure(monkeypatch) -> None:
     started = threading.Event()
     release = threading.Event()
+    follower_paused_after_miss = threading.Event()
+    resume_follower = threading.Event()
     failures: list[Exception] = []
+    probe_calls = 0
 
     def probe() -> str:
+        nonlocal probe_calls
+        probe_calls += 1
         started.set()
         release.wait()
         raise AgentCliUnavailableError("bad answer")
@@ -266,18 +275,51 @@ def test_parallel_cold_asks_share_one_failure() -> None:
             cached.get()
         failures.append(raised.value)
 
-    first = threading.Thread(target=ask)
-    second = threading.Thread(target=ask)
-    first.start()
-    assert started.wait(timeout=1)
-    second.start()
-    assert second.is_alive()
-    release.set()
-    first.join(timeout=1)
-    second.join(timeout=1)
+    first = threading.Thread(
+        target=ask,
+        name="single-flight leader caller",
+        daemon=True,
+    )
+    second = threading.Thread(
+        target=ask,
+        name="single-flight follower caller",
+    )
+    real_refresh = cached.refresh
+
+    def pause_follower_after_cache_miss() -> str:
+        if threading.current_thread() is second:
+            follower_paused_after_miss.set()
+            assert resume_follower.wait(timeout=1)
+        return real_refresh()
+
+    monkeypatch.setattr(cached, "refresh", pause_follower_after_cache_miss)
+
+    first_started = False
+    second_started = False
+    try:
+        first.start()
+        first_started = True
+        assert started.wait(timeout=1)
+        second.start()
+        second_started = True
+        assert follower_paused_after_miss.wait(timeout=1)
+        release.set()
+        first.join(timeout=1)
+        assert not first.is_alive()
+        resume_follower.set()
+    finally:
+        release.set()
+        resume_follower.set()
+        if first_started:
+            first.join(timeout=1)
+            assert not first.is_alive()
+        if second_started:
+            second.join(timeout=1)
+            assert not second.is_alive()
 
     assert len(failures) == 2
     assert failures[0] is failures[1]
+    assert probe_calls == 1
 
 
 def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None:
