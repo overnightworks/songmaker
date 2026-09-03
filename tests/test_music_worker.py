@@ -143,6 +143,14 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         session.add_all([
             Job(id="generate-1", type=JobType.GENERATE, status=JobStatus.RUNNING),
             Job(id="lora-job-1", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING),
+            Job(
+                id="load-model-1", type=JobType.LOAD_MODEL_ON_WORKER,
+                status=JobStatus.RUNNING,
+            ),
+            Job(
+                id="download-model-1", type=JobType.DOWNLOAD_MODEL_ON_WORKER,
+                status=JobStatus.RUNNING,
+            ),
             UserLora(
                 id="lora-1", user_id="u1", name="Lora", slug="lora",
                 status=LoraStatus.TRAINING, training_job_id="lora-job-1",
@@ -162,21 +170,27 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
     with factory() as session:
         generate = session.query(Job).filter_by(id="generate-1").one()
         lora_job = session.query(Job).filter_by(id="lora-job-1").one()
+        load_model = session.query(Job).filter_by(id="load-model-1").one()
+        download_model = session.query(Job).filter_by(id="download-model-1").one()
         lora = session.query(UserLora).filter_by(id="lora-1").one()
         audits = session.query(AuditLog).filter_by(
             action=AuditAction.TRAIN_LORA, resource_id="lora-1",
         ).all()
 
-    assert worker.job_types == (JobType.GENERATE, JobType.LORA_TRAINING)
-    assert generate.status == JobStatus.FAILED
-    assert generate.error_type == "server_restart"
-    assert lora_job.status == JobStatus.FAILED
-    assert lora_job.error_type == "server_restart"
+    assert worker.job_types == (
+        JobType.GENERATE,
+        JobType.LORA_TRAINING,
+        JobType.LOAD_MODEL_ON_WORKER,
+        JobType.DOWNLOAD_MODEL_ON_WORKER,
+    )
+    for job in (generate, lora_job, load_model, download_model):
+        assert job.status == JobStatus.FAILED
+        assert job.error_type == "server_restart"
     assert lora.status == LoraStatus.FAILED
     assert len(audits) == 1
 
 
-def test_queued_lora_training_survives_worker_restart(tmp_path) -> None:
+def test_queued_music_jobs_survive_worker_restart(tmp_path) -> None:
     factory = init_test_db(tmp_path / "songmaker.db")
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -185,6 +199,14 @@ def test_queued_lora_training_survives_worker_restart(tmp_path) -> None:
         session.add_all([
             Job(id="generate-queued", type=JobType.GENERATE, status=JobStatus.QUEUED),
             Job(id="lora-queued", type=JobType.LORA_TRAINING, status=JobStatus.QUEUED),
+            Job(
+                id="load-model-queued", type=JobType.LOAD_MODEL_ON_WORKER,
+                status=JobStatus.QUEUED,
+            ),
+            Job(
+                id="download-model-queued", type=JobType.DOWNLOAD_MODEL_ON_WORKER,
+                status=JobStatus.QUEUED,
+            ),
             UserLora(
                 id="lora-queued", user_id="u1", name="Lora", slug="lora",
                 status=LoraStatus.QUEUED, training_job_id="lora-queued",
@@ -205,10 +227,14 @@ def test_queued_lora_training_survives_worker_restart(tmp_path) -> None:
     with factory() as session:
         generate = session.query(Job).filter_by(id="generate-queued").one()
         lora_job = session.query(Job).filter_by(id="lora-queued").one()
+        load_model = session.query(Job).filter_by(id="load-model-queued").one()
+        download_model = session.query(Job).filter_by(id="download-model-queued").one()
         lora = session.query(UserLora).filter_by(id="lora-queued").one()
 
-    assert generate.status == JobStatus.FAILED
+    assert generate.status == JobStatus.QUEUED
     assert lora_job.status == JobStatus.QUEUED
+    assert load_model.status == JobStatus.QUEUED
+    assert download_model.status == JobStatus.QUEUED
     assert lora.status == LoraStatus.QUEUED
 
 

@@ -15,17 +15,16 @@ from typing import ClassVar
 from arq.connections import RedisSettings
 
 from songmaker_cli.constants import (
-    JOB_ACTIVE_STATUSES,
+    ARQ_HEALTH_CHECK_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
     RECOVERY_LOCK_TTL_SECONDS,
+    JobStatus,
 )
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries import get_job
 from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
-
-HEALTH_CHECK_INTERVAL_SECONDS = 30
 
 
 def build_redis_settings(settings: Settings | None = None) -> RedisSettings:
@@ -50,7 +49,7 @@ class WorkerBase:
     recovery_lock_key: ClassVar[str]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
-    health_check_interval: ClassVar[int] = HEALTH_CHECK_INTERVAL_SECONDS
+    health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -68,7 +67,7 @@ class WorkerBase:
 
     def recovery_statuses_by_type(self) -> dict[str, frozenset[str]]:
         """Return statuses this worker may terminalize at restart boundaries."""
-        return {job_type: JOB_ACTIVE_STATUSES for job_type in self.job_types}
+        return {job_type: frozenset({JobStatus.RUNNING}) for job_type in self.job_types}
 
     def worker_name(self) -> str:
         """Return the stable, human-readable name derived from owned job types."""

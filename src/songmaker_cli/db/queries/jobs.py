@@ -7,7 +7,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
@@ -19,6 +19,8 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.models import Job
+from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
 
@@ -174,11 +176,88 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     return hb < cutoff
 
 
+@dataclass(frozen=True)
+class QueuedJobVerdict:
+    error: str
+    error_type: str
+
+
+def _queued_verdict(
+    job: Job,
+    thresholds: JobStaleThresholds,
+    liveness: WorkerLiveness,
+    now: datetime,
+    max_queue_depth: int | None,
+) -> QueuedJobVerdict | None:
+    if thresholds.liveness_signal is None:
+        liveness = WorkerLiveness.UNKNOWN
+    if liveness is WorkerLiveness.DEAD:
+        return QueuedJobVerdict(
+            error="No worker alive for this job type — please retry.",
+            error_type="no_worker_alive",
+        )
+    if liveness is WorkerLiveness.ALIVE:
+        if max_queue_depth is None:
+            max_queue_depth = get_settings().max_queue_depth
+        full_queue_cutoff = now - timedelta(
+            seconds=thresholds.full_queue_bound_seconds(max_queue_depth),
+        )
+        if _is_started_stale(job, full_queue_cutoff):
+            return QueuedJobVerdict(
+                error="Queued longer than a full queue could take — please retry.",
+                error_type="queued_full_queue_bound",
+            )
+        return None
+    age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
+    if _is_started_stale(job, age_cutoff):
+        return QueuedJobVerdict(
+            error="Queued too long — please retry.",
+            error_type="queued_too_long",
+        )
+    return None
+
+
 def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     started_at = job.started_at
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
     return started_at < cutoff
+
+
+def _before_stale_job_recovery_update(_job: Job) -> None:
+    """Provide a deterministic seam between stale-candidate read and update."""
+
+
+def _recover_stale_job_if_unchanged(
+    session: Session,
+    job: Job,
+    *,
+    status: str,
+    heartbeat_at: datetime | None,
+    error: str,
+    error_type: str,
+    completed_at: datetime,
+) -> bool:
+    result = session.execute(
+        update(Job)
+        .where(
+            Job.id == job.id,
+            Job.status == status,
+            Job.heartbeat_at.is_not_distinct_from(heartbeat_at),
+        )
+        .values(
+            status=JobStatus.FAILED,
+            error=error,
+            error_type=error_type,
+            completed_at=completed_at,
+        )
+        .execution_options(synchronize_session=False),
+    )
+    session.expire(job)
+    if result.rowcount != 1:
+        log.debug("Skipped stale-job recovery because job %s changed", job.id)
+        return False
+    return True
 
 
 def recover_stale_jobs_by_type(
@@ -217,13 +296,18 @@ def recover_stale_jobs_by_age_and_type(
     *,
     user_id: str | None = None,
     now: datetime | None = None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+    max_queue_depth: int | None = None,
 ) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
-    Queued jobs age out by ``started_at``; running jobs age out only when
-    their heartbeat is old.  ``user_id`` lets the submission path apply that
-    exact policy before enforcing an active-job limit, without defining a
-    second freshness threshold.
+    Queued jobs fail immediately when their execution worker is known dead.
+    Unknown signals use the #446 age guard; alive signals allow one full queue
+    before failing. The lifecycle reaper uses the configured global queue
+    depth; a submission supplies its resolved per-user queue depth. Running
+    jobs fail only when their heartbeat is old.
+    ``user_id`` lets the submission path apply that exact policy before
+    enforcing an active-job limit, without defining a second freshness bound.
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -249,23 +333,34 @@ def recover_stale_jobs_by_age_and_type(
     recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in candidates_with_thresholds:
+        status = job.status
+        heartbeat_at = job.heartbeat_at
         if job.status == JobStatus.QUEUED:
-            cutoff = now - timedelta(seconds=thresholds.queued_seconds)
-            is_stale = _is_started_stale(job, cutoff)
+            liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
+            verdict = _queued_verdict(
+                job, thresholds, liveness, now, max_queue_depth,
+            )
+            if verdict is None:
+                continue
+            error = verdict.error
+            error_type = verdict.error_type
         else:
             cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
-            is_stale = _is_heartbeat_stale(job, cutoff)
-        if not is_stale:
+            if not _is_heartbeat_stale(job, cutoff):
+                continue
+            error = "Heartbeat lost — please retry."
+            error_type = "heartbeat_lost"
+        _before_stale_job_recovery_update(job)
+        if not _recover_stale_job_if_unchanged(
+            session,
+            job,
+            status=status,
+            heartbeat_at=heartbeat_at,
+            error=error,
+            error_type=error_type,
+            completed_at=now,
+        ):
             continue
-        was_queued = job.status == JobStatus.QUEUED
-        job.status = JobStatus.FAILED
-        if was_queued:
-            job.error = "No worker available — please retry."
-            job.error_type = "no_worker_available"
-        else:
-            job.error = "Heartbeat lost — please retry."
-            job.error_type = "heartbeat_lost"
-        job.completed_at = now
         recovered += 1
         recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()

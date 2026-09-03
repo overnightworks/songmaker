@@ -190,11 +190,11 @@ def test_incr_decr_queue_depth(redis, event_loop) -> None:
 
 
 def test_decode_handles_str_branch() -> None:
-    from songmaker_cli.acestep_state import _decode
+    from songmaker_cli.acestep_state import decode_redis_text
 
-    assert _decode(None) is None
-    assert _decode(b"abc") == "abc"
-    assert _decode("xyz") == "xyz"
+    assert decode_redis_text(None) is None
+    assert decode_redis_text(b"abc") == "abc"
+    assert decode_redis_text("xyz") == "xyz"
 
 
 def test_list_worker_states(redis, event_loop) -> None:

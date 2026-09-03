@@ -200,7 +200,9 @@ async def api_song_chat(
     check_redis_health(request)
     check_song_access(session, song_id, user)
 
-    job = create_job_with_rate_limit(session, user, JobType.CHAT)
+    job = create_job_with_rate_limit(
+        session, user, JobType.CHAT, redis=request.app.state.ctx.redis,
+    )
     job_id = job.id
     update_job_status(session, job_id, JobStatus.RUNNING)
     session.commit()
