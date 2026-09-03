@@ -11,6 +11,7 @@ from typing import Final
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli import queue_streams
+from songmaker_cli.audio_paths import canonical_audio_filename
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
@@ -74,21 +75,19 @@ def create_generation(
     version_id: str | None,
     mp3_path: str,
     model_mode: str,
+    audio_dir: Path,
     seed: int | None = None,
     generation_params: dict | None = None,
     wav_path: str | None = None,
     src_generation_id: str | None = None,
     generation_id: str | None = None,
-    audio_dir: Path | None = None,
 ) -> Generation:
     """Create the row for a completed generation.
 
-    ``audio_dir``, when given, measures the produced file's real length via
-    :func:`_probe_audio_duration_or_none` and stores it on
-    ``audio_duration_sec`` — the take's own length, never the requested
-    ``generation_params.audio_duration`` parameter it was asked for. Omitted
-    (the default), the generation is created without a measured duration,
-    same as any other row that hasn't had one measured yet.
+    The stored MP3 filename is canonicalized against ``audio_dir`` before the
+    row is added. Its measured duration is stored on ``audio_duration_sec`` —
+    the take's own length, never the requested
+    ``generation_params.audio_duration`` parameter it was asked for.
     """
     max_num = (
         session.query(Generation.generation_number)
@@ -98,11 +97,15 @@ def create_generation(
     )
     gen_number = (max_num[0] + 1) if max_num else INITIAL_GENERATION_NUMBER
 
+    canonical_mp3_path = canonical_audio_filename(audio_dir, mp3_path) if mp3_path else ""
+    if mp3_path and canonical_mp3_path is None:
+        raise ValueError("Generation MP3 path must stay within the audio directory")
+
     gen = Generation(
         song_id=song_id,
         version_id=version_id,
         generation_number=gen_number,
-        mp3_path=mp3_path,
+        mp3_path=canonical_mp3_path,
         wav_path=wav_path,
         seed=seed,
         generation_params=generation_params,
@@ -112,8 +115,7 @@ def create_generation(
     )
     if generation_id is not None:
         gen.id = generation_id
-    if audio_dir is not None:
-        gen.audio_duration_sec = _probe_audio_duration_or_none(audio_dir, mp3_path)
+    gen.audio_duration_sec = _probe_audio_duration_or_none(audio_dir, canonical_mp3_path)
     session.add(gen)
     session.flush()
     log.info("Created generation #%d for song %s (seed=%s)", gen_number, song_id, seed)

@@ -252,7 +252,7 @@ def test_create_song_first_in_album_uses_initial_track_number(
 
 
 def test_create_generation_first_for_song_uses_initial_number(
-    seeded_session: Session,
+    seeded_session: Session, tmp_path: Path,
 ) -> None:
     from songmaker_cli.db.queries import create_generation
     from songmaker_cli.db.queries.generations import INITIAL_GENERATION_NUMBER
@@ -266,6 +266,7 @@ def test_create_generation_first_for_song_uses_initial_number(
         version_id=None,
         mp3_path="x.mp3",
         model_mode="sft",
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     assert gen.generation_number == INITIAL_GENERATION_NUMBER
@@ -299,20 +300,25 @@ def test_generation_version_lyrics_stay_on_the_producing_version(
     assert SongResponse.from_orm(song).lyrics == "latest draft"
 
 
-def test_generation_missing_version_lyrics_is_null(seeded_session: Session) -> None:
+def test_generation_missing_version_lyrics_is_null(
+    seeded_session: Session, tmp_path: Path,
+) -> None:
     gen = create_generation(
         seeded_session,
         song_id="s1",
         version_id=None,
         mp3_path="test/no_version.mp3",
         model_mode="sft",
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     loaded = get_generation(seeded_session, gen.id)
     assert GenerationResponse.from_orm(loaded).version_lyrics is None
 
 
-def test_generation_empty_version_lyrics_is_null(seeded_session: Session) -> None:
+def test_generation_empty_version_lyrics_is_null(
+    seeded_session: Session, tmp_path: Path,
+) -> None:
     empty = Version(
         id="v-empty",
         song_id="s1",
@@ -328,6 +334,7 @@ def test_generation_empty_version_lyrics_is_null(seeded_session: Session) -> Non
         version_id=empty.id,
         mp3_path="test/empty_lyrics.mp3",
         model_mode="sft",
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     loaded = get_generation(seeded_session, gen.id)
@@ -699,7 +706,7 @@ def test_job_to_dict(seeded_session: Session) -> None:
 # ── Create generation + scores tests ─────────────────────────────────
 
 
-def test_create_generation(seeded_session: Session) -> None:
+def test_create_generation(seeded_session: Session, tmp_path: Path) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -708,6 +715,7 @@ def test_create_generation(seeded_session: Session) -> None:
         model_mode="sft",
         seed=123,
         generation_params={"bpm": 140},
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     assert gen.generation_number == 3
@@ -715,7 +723,52 @@ def test_create_generation(seeded_session: Session) -> None:
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
-def test_create_generation_with_model_mode(seeded_session: Session) -> None:
+def test_create_generation_canonicalizes_mp3_path(
+    seeded_session: Session, tmp_path: Path,
+) -> None:
+    gen = create_generation(
+        seeded_session,
+        "s1",
+        "v1",
+        "test/../test/new_gen.mp3",
+        model_mode="sft",
+        audio_dir=tmp_path,
+    )
+
+    assert gen.mp3_path == "test/new_gen.mp3"
+
+
+def test_create_generation_preserves_empty_mp3_path_for_wav_only_take(
+    seeded_session: Session, tmp_path: Path,
+) -> None:
+    gen = create_generation(
+        seeded_session,
+        "s1",
+        "v1",
+        "",
+        model_mode="sft",
+        wav_path="test/new_gen.wav",
+        audio_dir=tmp_path,
+    )
+
+    assert gen.mp3_path == ""
+
+
+def test_create_generation_rejects_an_mp3_path_outside_the_audio_directory(
+    seeded_session: Session, tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="must stay within the audio directory"):
+        create_generation(
+            seeded_session,
+            "s1",
+            "v1",
+            "../outside.mp3",
+            model_mode="sft",
+            audio_dir=tmp_path,
+        )
+
+
+def test_create_generation_with_model_mode(seeded_session: Session, tmp_path: Path) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -723,12 +776,13 @@ def test_create_generation_with_model_mode(seeded_session: Session) -> None:
         "test/gen.mp3",
         model_mode="turbo",
         seed=1,
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     assert gen.model_mode == "turbo"
 
 
-def test_create_generation_with_wav_path(seeded_session: Session) -> None:
+def test_create_generation_with_wav_path(seeded_session: Session, tmp_path: Path) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -737,6 +791,7 @@ def test_create_generation_with_wav_path(seeded_session: Session) -> None:
         model_mode="sft",
         seed=1,
         wav_path="test/gen.wav",
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     assert gen.wav_path == "test/gen.wav"
@@ -774,8 +829,8 @@ def test_create_generation_measures_duration_even_when_requested_zero(
     assert probed == [tmp_path / "test/gen.mp3"]
 
 
-def test_create_generation_without_audio_dir_leaves_duration_unmeasured(
-    seeded_session: Session,
+def test_create_generation_without_an_audio_file_leaves_duration_unmeasured(
+    seeded_session: Session, tmp_path: Path,
 ) -> None:
     gen = create_generation(
         seeded_session,
@@ -784,6 +839,7 @@ def test_create_generation_without_audio_dir_leaves_duration_unmeasured(
         "test/gen.mp3",
         model_mode="sft",
         seed=1,
+        audio_dir=tmp_path,
     )
     seeded_session.commit()
     assert gen.audio_duration_sec is None

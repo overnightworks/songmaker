@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -27,7 +26,6 @@ from songmaker_cli.api_models.songs import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
-    canonical_audio_filename,
     canonical_audio_path,
     require_canonical_audio_filename,
     require_existing_audio_path,
@@ -152,26 +150,24 @@ def _picked_generation(song):
 def _shared_audio_url(
     route: str,
     generation,
-    audio_dir: Path,
 ) -> str | None:
     if (
         generation is None
         or not is_playable_take(generation)
     ):
         return None
-    return _shared_audio_url_for_filename(route, generation.mp3_path, audio_dir)
+    return _shared_audio_url_for_filename(route, generation.mp3_path)
 
 
 def _shared_audio_url_for_filename(
     route: str,
     stored_filename: str,
-    audio_dir: Path,
 ) -> str | None:
-    filename = canonical_audio_filename(audio_dir, stored_filename)
-    if filename != stored_filename:
-        log.warning("Stored audio path is not canonical: %r", stored_filename)
+    try:
+        require_canonical_audio_filename(stored_filename)
+    except HTTPException:
         return None
-    return f"{route}/{filename}"
+    return f"{route}/{stored_filename}"
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -185,7 +181,7 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
         valid_tracks = {
             (entry.id, entry.generation.id)
             for entry in playlist.entries
-            if entry.generation is not None
+            if entry.generation is not None and is_playable_take(entry.generation)
         }
         if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, "Queue stream not found")
@@ -249,7 +245,7 @@ def get_shared_album(
             id=s.id,
             title=s.title,
             track_number=s.track_number,
-            audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen, ctx.audio_dir),
+            audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
@@ -305,13 +301,16 @@ def get_shared_album_stream(
         gen = _picked_generation(song)
         if not gen:
             continue
+        audio_url = _shared_audio_url(f"/shared/{slug}/audio", gen)
+        if audio_url is None:
+            continue
         sources.append(
             track_source_from_generation(
                 gen,
                 key=f"{song.id}:{gen.id}:{index}",
                 index=len(sources),
                 entry_id=None,
-                audio_url=f"/shared/{slug}/audio/{gen.mp3_path}",
+                audio_url=audio_url,
             )
         )
     ensure_sources_detachable(sources)
@@ -369,7 +368,7 @@ def get_shared_song(
         title=song.title,
         artist=song.album.artist if song.album else "",
         album_title=song.album.title if song.album else "",
-        audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen, ctx.audio_dir),
+        audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen),
         cover=cover,
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
@@ -445,7 +444,7 @@ def get_shared_generation(
         seed=gen.seed,
         audio_url=(
             _shared_audio_url_for_filename(
-                f"/shared/gen/{slug}/audio", gen.mp3_path, ctx.audio_dir,
+                f"/shared/gen/{slug}/audio", gen.mp3_path,
             )
             if gen.mp3_path else None
         ),
@@ -458,7 +457,7 @@ def get_shared_generation(
 
 
 @router.get("/shared/gen/{slug}/audio/{filename:path}")
-async def get_shared_gen_audio(
+def get_shared_gen_audio(
     slug: str,
     filename: str,
     request: Request,
@@ -504,7 +503,7 @@ def get_shared_playlist(
             artist=gen.song.album.artist if gen.song and gen.song.album else "",
             generation_number=gen.generation_number,
             audio_url=_shared_audio_url(
-                f"/shared/playlist/{slug}/audio", gen, ctx.audio_dir,
+                f"/shared/playlist/{slug}/audio", gen,
             ),
             generation_id=media.generation_id,
             audio_duration=media.audio_duration,
@@ -531,7 +530,12 @@ def get_shared_playlist_stream(
     entries = sorted(playlist.entries, key=lambda e: e.position)
     for entry in entries:
         gen = entry.generation
-        if gen is None:
+        if gen is None or not is_playable_take(gen):
+            continue
+        audio_url = _shared_audio_url(
+            f"/shared/playlist/{slug}/audio", gen,
+        )
+        if audio_url is None:
             continue
         sources.append(
             track_source_from_generation(
@@ -539,7 +543,7 @@ def get_shared_playlist_stream(
                 key=entry.id,
                 index=len(sources),
                 entry_id=entry.id,
-                audio_url=f"/shared/playlist/{slug}/audio/{gen.mp3_path}",
+                audio_url=audio_url,
             )
         )
     ensure_sources_detachable(sources)
