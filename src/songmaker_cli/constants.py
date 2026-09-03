@@ -174,11 +174,10 @@ CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS = 5
 # spawns another zombie. Cached failures of that specific kind get this much
 # longer TTL instead of CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS.
 CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS = 300
-# A hard ceiling on background reapers tracked at once (across every key and
-# every process the tool-surface probe has ever spawned) — small on purpose:
-# beyond it, a new zombie is logged and left for the OS/asyncio's own child
-# reaping rather than growing an unbounded pool of waiting tasks/threads.
-CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS = 8
+# A hard ceiling on all Claude CLI processes: live turns, probes, and processes
+# that are still waiting for a background reaper. A zombie storm deliberately
+# degrades to refusing new work (fail-closed), rather than growing without bound.
+CLAUDE_CLI_MAX_CONCURRENT_PROCESSES = 8
 COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
 COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"

@@ -39,7 +39,7 @@ from songmaker_cli.agent_cli import (
 from songmaker_cli.constants import (
     CLAUDE_CLI_BINARY,
     CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
-    CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
+    CLAUDE_CLI_MAX_CONCURRENT_PROCESSES,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
     CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
@@ -155,7 +155,7 @@ class _JudgeTimeoutExhausted(UnavailableError):
     """The judge's caller-owned deadline elapsed without probing the CLI."""
 
 
-class _ZombieReaperPoolSaturated(UnavailableError):
+class _ClaudeCliProcessPoolSaturated(UnavailableError):
     """A CLI process was refused before it could create another child process."""
 
 
@@ -846,12 +846,19 @@ _tool_surface_inflight_sync: dict[
     _ToolSurfaceKey, concurrent.futures.Future[_ToolSurfaceMismatch]
 ] = {}
 
-# The zombie-reaper reservations are process-wide and shared by both the
-# async and sync gates — their own lock, since they are touched from plain
-# threads as well as the event loop and must never be entangled with the
-# tool-surface dicts' lock.
+# The process-pool reservations are process-wide and shared by probes and real
+# turns — their own lock, since probes touch them from plain threads as well
+# as the event loop and must never be entangled with the tool-surface dicts'
+# lock.
+@dataclass(eq=False)
+class _ZombieReservation:
+    """A pool slot before it is bound to the spawned process's PID."""
+
+    pid: int | None = None
+
+
 _zombie_registry_lock = threading.Lock()
-_zombie_reap_reservations: set[int | object] = set()
+_zombie_reap_reservations: set[_ZombieReservation] = set()
 _zombie_reap_tasks: set[asyncio.Task] = set()
 # The independent async tasks that actually run a probe (round 7,
 # Finding 2) — tracked the same way, for the same two reasons: keep a
@@ -876,10 +883,6 @@ def clear_cli_tool_surface_cache() -> None:
         _tool_surface_failures.clear()
         _tool_surface_inflight_async.clear()
         _tool_surface_inflight_sync.clear()
-    with _zombie_registry_lock:
-        _zombie_reap_reservations.clear()
-        _zombie_reap_tasks.clear()
-        _tool_surface_probe_tasks.clear()
     with _tool_surface_health_lock:
         _tool_surface_health_state = "unverified"
 
@@ -1058,7 +1061,7 @@ async def _run_probe_and_resolve_async(
         surface = await probe(deadline)
         mismatch = _evaluate_tool_surface(key, surface)
     except UnavailableError as exc:
-        if not isinstance(exc, _ZombieReaperPoolSaturated):
+        if not isinstance(exc, _ClaudeCliProcessPoolSaturated):
             _record_tool_surface_failure(
                 key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError),
             )
@@ -1181,7 +1184,7 @@ def _verify_tool_surface_sync(
         ):
             exc = _JudgeTimeoutExhausted(JUDGE_FAILURE_TIMEOUT)
         if not is_zombie and not isinstance(
-            exc, (_JudgeTimeoutExhausted, _ZombieReaperPoolSaturated),
+            exc, (_JudgeTimeoutExhausted, _ClaudeCliProcessPoolSaturated),
         ):
             _record_tool_surface_failure(
                 key, str(exc), is_zombie=False,
@@ -1448,10 +1451,7 @@ def _probe_cli_surface_sync(
         raise UnavailableError("Claude CLI probe preflight budget was already exhausted")
     reservation = _reserve_zombie_admission()
     if reservation is None:
-        raise _ZombieReaperPoolSaturated(
-            "Claude CLI probe pool is saturated with unreaped processes; "
-            "refusing to start another",
-        )
+        raise _ClaudeCliProcessPoolSaturated(_claude_cli_process_pool_limit_message())
 
     cmd = _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path)
     env = _scrub_env()
@@ -1703,30 +1703,47 @@ def _reap_in_background_sync(proc: subprocess.Popen) -> None:
 # ── zombie-reaper reservations, shared by both domains ───────────────
 
 
-def _reserve_zombie_admission() -> object | None:
-    """Reserve capacity before spawning and return its opaque handle."""
-    reservation = object()
+def _claude_cli_process_pool_limit_message() -> str:
+    return (
+        "Claude CLI process pool is at its concurrency limit "
+        f"({CLAUDE_CLI_MAX_CONCURRENT_PROCESSES}); refusing to start another"
+    )
+
+
+def _reserve_zombie_admission() -> _ZombieReservation | None:
+    """Reserve one shared CLI-process slot before spawning."""
+    reservation = _ZombieReservation()
     with _zombie_registry_lock:
-        if len(_zombie_reap_reservations) >= CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS:
-            log.error(
-                "Zombie-reaper reservation pool at its cap of %d; refusing "
-                "to start another CLI process",
-                CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS,
-            )
+        if len(_zombie_reap_reservations) >= CLAUDE_CLI_MAX_CONCURRENT_PROCESSES:
+            log.error(_claude_cli_process_pool_limit_message())
             return None
         _zombie_reap_reservations.add(reservation)
         return reservation
 
 
-def _bind_zombie_reservation(reservation: object, pid: int) -> None:
+def _bind_zombie_reservation(reservation: _ZombieReservation, pid: int | None) -> None:
+    if pid is None:
+        raise ValueError("Cannot bind a Claude CLI process reservation without a PID")
     with _zombie_registry_lock:
-        _zombie_reap_reservations.remove(reservation)
-        _zombie_reap_reservations.add(pid)
+        reservation.pid = pid
+        # A test fixture may clear the registry while Popen is still returning.
+        # Re-adding this handle keeps that successfully spawned process reaped.
+        _zombie_reap_reservations.add(reservation)
 
 
-def _release_zombie_reservation(reservation: int | object) -> None:
+def _release_zombie_reservation(reservation: _ZombieReservation | int | None) -> None:
+    if reservation is None:
+        raise ValueError("Cannot release a Claude CLI process reservation without a PID")
     with _zombie_registry_lock:
-        _zombie_reap_reservations.discard(reservation)
+        if isinstance(reservation, _ZombieReservation):
+            _zombie_reap_reservations.discard(reservation)
+            return
+        handle = next(
+            (candidate for candidate in _zombie_reap_reservations if candidate.pid == reservation),
+            None,
+        )
+        if handle is not None:
+            _zombie_reap_reservations.discard(handle)
 
 
 async def _spawn_reserved_async_cli_process(
@@ -1734,10 +1751,7 @@ async def _spawn_reserved_async_cli_process(
 ) -> asyncio.subprocess.Process:
     reservation = _reserve_zombie_admission()
     if reservation is None:
-        raise _ZombieReaperPoolSaturated(
-            "Claude CLI process pool is saturated with unreaped processes; "
-            "refusing to start another",
-        )
+        raise _ClaudeCliProcessPoolSaturated(_claude_cli_process_pool_limit_message())
     try:
         proc = await asyncio.create_subprocess_exec(*cmd, **kwargs)
     except BaseException:
@@ -1903,37 +1917,45 @@ def _call_cli(
     cmd = _build_cli_cmd(binary, model)
     env = _scrub_env()
 
+    reservation = _reserve_zombie_admission()
+    if reservation is None:
+        raise _ClaudeCliProcessPoolSaturated(_claude_cli_process_pool_limit_message())
     try:
-        proc = subprocess.run(
-            cmd,
-            input=stdin_body,
-            capture_output=True,
-            text=True,
-            timeout=(
-                _remaining_judge_timeout(deadline)
-                if deadline is not None
-                else CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS
-            ),
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        if deadline is not None:
-            raise UnavailableError(JUDGE_FAILURE_TIMEOUT) from exc
-        raise UnavailableError(
-            f"Claude CLI timed out after {CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS}s",
-        ) from exc
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=stdin_body,
+                capture_output=True,
+                text=True,
+                timeout=(
+                    _remaining_judge_timeout(deadline)
+                    if deadline is not None
+                    else CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS
+                ),
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            if deadline is not None:
+                raise UnavailableError(JUDGE_FAILURE_TIMEOUT) from exc
+            raise UnavailableError(
+                f"Claude CLI timed out after {CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS}s",
+            ) from exc
 
-    if proc.returncode != 0:
-        log.warning(
-            "Claude CLI failed (rc=%d, stderr_chars=%d)",
-            proc.returncode,
-            len(proc.stderr),
-        )
-        raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
+        if proc.returncode != 0:
+            log.warning(
+                "Claude CLI failed (rc=%d, stderr_chars=%d)",
+                proc.returncode,
+                len(proc.stderr),
+            )
+            raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
 
-    text = _parse_cli_output(proc.stdout)
-    log.debug("Claude CLI response: %d chars", len(text))
-    return ClaudeResponse(text=text.strip())
+        text = _parse_cli_output(proc.stdout)
+        log.debug("Claude CLI response: %d chars", len(text))
+        return ClaudeResponse(text=text.strip())
+    finally:
+        # subprocess.run() returns only after its child has exited, including
+        # after its own timeout cleanup, so this opaque handle is safe to free.
+        _release_zombie_reservation(reservation)
 
 
 async def _acall_cli(

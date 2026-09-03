@@ -48,15 +48,25 @@ from songmaker_cli.constants import (
 )
 
 
+def _reset_cli_process_pool_for_test() -> None:
+    """Test isolation only; production cache invalidation keeps live slots."""
+    with provider._zombie_registry_lock:
+        provider._zombie_reap_reservations.clear()
+        provider._zombie_reap_tasks.clear()
+        provider._tool_surface_probe_tasks.clear()
+
+
 @pytest.fixture(autouse=True)
 def _clear_claude_clients():
     clear_client_cache()
     clear_cli_login_status_cache()
     clear_cli_tool_surface_cache()
+    _reset_cli_process_pool_for_test()
     yield
     clear_client_cache()
     clear_cli_login_status_cache()
     clear_cli_tool_surface_cache()
+    _reset_cli_process_pool_for_test()
 
 
 def _run_with_clock(coroutine, clock: dict[str, float]):
@@ -437,6 +447,34 @@ def test_call_cli_success(_no_tool_gate_open) -> None:
     assert result.text == "cli response"
 
 
+def test_call_cli_uses_the_shared_process_pool_and_refuses_at_its_cap(
+    _no_tool_gate_open, monkeypatch,
+) -> None:
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
+    run_calls = 0
+
+    def fake_run(*_args: object, **_kwargs: object) -> MagicMock:
+        nonlocal run_calls
+        run_calls += 1
+        with provider._zombie_registry_lock:
+            assert len(provider._zombie_reap_reservations) == 1
+        return MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
+
+    with patch("subprocess.run", side_effect=fake_run):
+        assert _call_cli("hello").text == "ok"
+
+        live_turn = _reserve_zombie_process(42)
+        with pytest.raises(UnavailableError) as exc:
+            _call_cli("one too many")
+
+    assert str(exc.value) == (
+        "Claude CLI process pool is at its concurrency limit (1); "
+        "refusing to start another"
+    )
+    assert run_calls == 1
+    provider._release_zombie_reservation(live_turn)
+
+
 def test_call_cli_strips_secrets_from_child_env(
     _no_tool_gate_open, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -612,6 +650,97 @@ def test_acall_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
         asyncio.run(_acall_cli("hello"))
 
     assert create.call_args.args[0] == "/opt/claude/versions/2.1.257"
+
+
+def test_healthy_cowriter_turn_holds_its_process_pool_reservation_until_it_exits(
+    monkeypatch,
+) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    proc = MagicMock(pid=1234, returncode=0)
+
+    async def communicate(_stdin: bytes) -> tuple[bytes, bytes]:
+        started.set()
+        await release.wait()
+        return b'{"result":"ok"}', b""
+
+    proc.communicate = AsyncMock(side_effect=communicate)
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+    monkeypatch.setattr(
+        provider.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc),
+    )
+
+    async def run_turn() -> None:
+        turn = asyncio.create_task(provider.acall_claude_with_mcp("hi", user_id="u-1"))
+        await started.wait()
+        with provider._zombie_registry_lock:
+            assert len(provider._zombie_reap_reservations) == 1
+        release.set()
+        assert (await turn).text == "ok"
+        with provider._zombie_registry_lock:
+            assert not provider._zombie_reap_reservations
+
+    asyncio.run(run_turn())
+
+
+def test_cowriter_refuses_a_healthy_turn_when_the_shared_process_pool_is_full(
+    monkeypatch,
+) -> None:
+    process_cap = 2
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", process_cap)
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+    release = asyncio.Event()
+    started = [asyncio.Event() for _ in range(process_cap)]
+    processes: list[MagicMock] = []
+    spawned: list[tuple[object, ...]] = []
+
+    for pid, turn_started in enumerate(started, start=1):
+        proc = MagicMock(pid=pid, returncode=0)
+
+        async def communicate(
+            _stdin: bytes, turn_started: asyncio.Event = turn_started,
+        ) -> tuple[bytes, bytes]:
+            turn_started.set()
+            await release.wait()
+            return b'{"result":"ok"}', b""
+
+        proc.communicate = AsyncMock(side_effect=communicate)
+        processes.append(proc)
+
+    async def fake_exec(*cmd: object, **_kwargs: object) -> MagicMock:
+        spawned.append(cmd)
+        return processes.pop(0)
+
+    monkeypatch.setattr(provider.asyncio, "create_subprocess_exec", fake_exec)
+
+    async def run_turns() -> None:
+        running = []
+        for turn_started in started:
+            running.append(
+                asyncio.create_task(provider.acall_claude_with_mcp("hi", user_id="u-1")),
+            )
+            await turn_started.wait()
+
+        expected = (
+            f"Claude CLI process pool is at its concurrency limit ({process_cap}); "
+            "refusing to start another"
+        )
+        with pytest.raises(UnavailableError) as exc:
+            await provider.acall_claude_with_mcp("hi", user_id="u-1")
+        assert str(exc.value) == expected
+        assert len(spawned) == process_cap
+        with provider._tool_surface_lock:
+            assert not provider._tool_surface_failures
+            assert not provider._tool_surface_verdicts
+
+        release.set()
+        assert [turn.text for turn in await asyncio.gather(*running)] == ["ok"] * process_cap
+
+    asyncio.run(run_turns())
 
 
 # ── _find_claude_binary ─────────────────────────────────────────────
@@ -954,7 +1083,7 @@ def test_reap_process_group_confirms_a_normal_exit_without_signaling_a_zombie(
     signals: list[int] = []
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
     monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=True))
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     tracked: list[int] = []
     monkeypatch.setattr(provider, "_track_zombie_reap_async", lambda proc: tracked.append(proc.pid))
 
@@ -1025,12 +1154,12 @@ def test_track_zombie_reap_starts_the_reaper_held_by_its_reservation() -> None:
 
 def test_zombie_reap_reservations_have_a_hard_cap(monkeypatch, caplog) -> None:
     caplog.set_level("ERROR")
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 2)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 2)
 
     first = _reserve_zombie_process(1)
     second = _reserve_zombie_process(2)
     assert provider._reserve_zombie_admission() is None
-    assert any("at its cap" in r.message for r in caplog.records)
+    assert any("at its concurrency limit (2)" in r.message for r in caplog.records)
 
     provider._release_zombie_reservation(1)
     provider._release_zombie_reservation(2)
@@ -1904,7 +2033,7 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider, "_reap_process_group_sync", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
 
     try:
         started = time.monotonic()
@@ -2183,7 +2312,7 @@ def test_exhausted_judge_deadline_never_spawns_or_caches_a_preflight_failure(
 def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
     claude_binary, monkeypatch,
 ) -> None:
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 2)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 2)
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
     monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
@@ -2226,7 +2355,10 @@ def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
         await asyncio.gather(*(started.wait() for started in reapers_started))
         with pytest.raises(UnavailableError) as exc:
             verify_no_builtin_cli_tools()
-        assert "saturated" in str(exc.value)
+        assert str(exc.value) == (
+            "Claude CLI process pool is at its concurrency limit (2); "
+            "refusing to start another"
+        )
         assert spawned == []
         with provider._tool_surface_lock:
             assert key not in provider._tool_surface_failures
@@ -2245,7 +2377,7 @@ def test_zombie_reap_reservation_is_reserved_atomically_not_just_counted(monkeyp
     proceed. A real reservation closes that: the second concurrent
     attempt at the cap must be refused right at the reservation, not
     discover the gap only later when it happens to become a zombie."""
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
 
     reservation = provider._reserve_zombie_admission()
     assert reservation is not None
@@ -2257,12 +2389,35 @@ def test_zombie_reap_reservation_is_reserved_atomically_not_just_counted(monkeyp
     provider._release_zombie_reservation(next_reservation)
 
 
+def test_clearing_the_tool_surface_cache_keeps_live_processes_in_the_pool(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
+    reservation = provider._reserve_zombie_admission()
+    assert reservation is not None
+    provider._bind_zombie_reservation(reservation, 42)
+
+    clear_cli_tool_surface_cache()
+
+    with provider._zombie_registry_lock:
+        assert provider._zombie_reap_reservations == {reservation}
+    assert provider._reserve_zombie_admission() is None
+    provider._release_zombie_reservation(42)
+    with provider._zombie_registry_lock:
+        assert not provider._zombie_reap_reservations
+
+
+def test_releasing_a_process_reservation_without_a_pid_is_a_programming_error() -> None:
+    with pytest.raises(ValueError, match="without a PID"):
+        provider._release_zombie_reservation(None)
+
+
 def test_zombie_reap_reservation_has_no_toctou_window_under_real_concurrency(
     monkeypatch,
 ) -> None:
     """The same property, proven with two genuinely concurrent threads
     racing the same 1-slot pool rather than two sequential calls."""
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     both_may_proceed = threading.Barrier(2)
     results: list[object | None] = []
     results_lock = threading.Lock()
@@ -2288,7 +2443,7 @@ def test_zombie_reap_reservation_has_no_toctou_window_under_real_concurrency(
 
 
 def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch) -> None:
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
 
     def fail_start(_runner: threading.Thread) -> None:
         raise RuntimeError("thread start failed")
@@ -2369,7 +2524,7 @@ def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
 def test_stream_failure_starts_one_background_reaper(
     monkeypatch, failure: BaseException, expected_error: type[BaseException], message: str,
 ) -> None:
-    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_ZOMBIE_REAPERS", 1)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
     monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
