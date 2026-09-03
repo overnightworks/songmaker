@@ -233,6 +233,9 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         "songmaker_cli.cowriter.catalog.list_provider_models",
         lambda provider: [f"{provider}-model"],
     )
+    monkeypatch.setattr(
+        server, "provider_status_refresh_loop", lifecycle.provider_status_refresh_loop,
+    )
     client, _ = make_test_app(tmp_path)
 
     with client:

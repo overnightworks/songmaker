@@ -155,11 +155,6 @@ class CachedProbe[T]:
                 return self._answer()
         return self.refresh()
 
-    def read(self) -> T | None:
-        """Return the last successful result without starting a probe."""
-        with self._lock:
-            return self._value
-
     def refresh(self) -> T:
         """Start or join one single-flight refresh."""
         with self._lock:

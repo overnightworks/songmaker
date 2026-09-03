@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, make_fake_redis, refresh_provider_snapshots
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -208,6 +208,7 @@ def test_default_judge_model_is_available_for_get_and_first_save(
         "songmaker_cli.cowriter.catalog.list_provider_models",
         lambda provider: aliases[provider],
     )
+    refresh_provider_snapshots()
 
     fetched = client.get("/api/settings/judge")
     assert fetched.status_code == 200

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 # Required env vars for Settings construction at module-import time.
@@ -118,6 +119,26 @@ def _no_claude_cli_tool_surface_probe():
             "songmaker_cli.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
         ),
     ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _no_provider_status_probe():
+    """Keep TestClient lifespans from probing installed provider CLIs or APIs.
+
+    The provider-status loop refreshes immediately at application startup. A
+    developer machine can have all three CLIs installed, which would otherwise
+    make ordinary TestClient tests start login probes (and, with credentials,
+    reach provider model catalogs). The lifecycle-loop tests opt back into the
+    real loop where they provide its dependencies explicitly.
+    """
+    async def _idle_provider_status_loop(app) -> None:
+        from songmaker_cli.lifecycle import BackgroundLoopName, background_loop_registry
+
+        background_loop_registry(app).record_success(BackgroundLoopName.PROVIDER_STATUS_REFRESH)
+        await asyncio.Future()
+
+    with patch("songmaker_cli.server.provider_status_refresh_loop", _idle_provider_status_loop):
         yield
 
 
@@ -371,6 +392,15 @@ def make_song_md():
     return _make
 
 
+def refresh_provider_snapshots() -> None:
+    """Refresh every provider after a test changes its catalog dependencies."""
+    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
+
+    for provider in COWRITER_PROVIDERS:
+        refresh_provider_snapshot(provider)
+
+
 @pytest.fixture
 def every_provider_is_configured(monkeypatch):
     from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
@@ -381,3 +411,4 @@ def every_provider_is_configured(monkeypatch):
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
+    refresh_provider_snapshots()
