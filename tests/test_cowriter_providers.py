@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, make_fake_redis, refresh_provider_snapshots
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -61,10 +60,13 @@ LIVE_CATALOG = {
 @pytest.fixture(autouse=True)
 def _clear_agent_cli_caches():
     from songmaker_cli.agent_cli import clear_agent_cli_caches
+    from songmaker_cli.cowriter.catalog import clear_provider_snapshots
 
     clear_agent_cli_caches()
+    clear_provider_snapshots()
     yield
     clear_agent_cli_caches()
+    clear_provider_snapshots()
 
 
 def _fake_user(user_id: str, role: str = "user"):
@@ -329,6 +331,7 @@ def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
         "songmaker_cli.cowriter.catalog.list_provider_models",
         lambda provider: aliases[provider],
     )
+    refresh_provider_snapshots()
 
     settings = client.get("/api/settings/cowriter")
 
@@ -759,19 +762,23 @@ def test_provider_status_projects_the_catalog_contract(
     calls = _stub_cli_runners(
         monkeypatch, claude=claude_login, grok=grok, codex=codex_login,
     )
+    refresh_provider_snapshots()
 
     client, _ = admin_client
     response = client.get("/api/settings/providers")
 
     assert response.status_code == 200
     actual = {item["provider"]: (item["cowriter"], item["judge"]) for item in response.json()}
+    for statuses in actual.values():
+        for status in statuses:
+            assert status.pop("probed_at") is not None
     assert actual == expected
     assert all(count <= 1 for count in calls.values())
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_provider_status_keeps_unparseable_cli_output_unconfigured(
-    admin_client, monkeypatch, provider, caplog
+def test_refresh_records_unparseable_cli_output_as_unconfigured(
+    admin_client, monkeypatch, provider,
 ):
     for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
@@ -781,6 +788,15 @@ def test_provider_status_keeps_unparseable_cli_output_unconfigured(
         monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", lambda _binary: "not JSON")
     else:
         monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", lambda *_args: "not status")
+    refresh_provider_snapshots()
+    from songmaker_cli.cowriter.catalog import UnconfiguredProvider, provider_snapshot
+
+    snapshot = provider_snapshot(provider)
+    assert snapshot is not None
+    assert isinstance(snapshot.cowriter, UnconfiguredProvider)
+    assert isinstance(snapshot.judge, UnconfiguredProvider)
+    assert snapshot.probed_at is not None
+
     client, _ = admin_client
     response = client.get("/api/settings/providers")
 
@@ -789,13 +805,71 @@ def test_provider_status_keeps_unparseable_cli_output_unconfigured(
     for surface in ("cowriter", "judge"):
         status = by_provider[provider][surface]
         assert status["state"] == "unconfigured"
-    if provider != "claude":
-        assert any(
-            record.name == "songmaker_cli.cowriter.catalog"
-            and record.levelno == logging.WARNING
-            and provider in record.getMessage()
-            for record in caplog.records
-        )
+        assert status["probed_at"] is not None
+
+
+@pytest.mark.parametrize("provider", ["grok", "codex"])
+def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
+    monkeypatch, provider,
+):
+    from songmaker_cli.agent_cli import AgentCliUnavailableError
+    from songmaker_cli.cowriter.catalog import (
+        ConfiguredProvider,
+        ProviderSetupMethod,
+        provider_snapshot,
+        refresh_provider_snapshot,
+    )
+
+    def unavailable_cli(_provider: str) -> None:
+        raise AgentCliUnavailableError("unavailable")
+
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._refresh_cli_login",
+        unavailable_cli,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        lambda name, _surface: ConfiguredProvider(
+            name, ProviderSetupMethod.API_KEY, f"{name.upper()}_API_KEY",
+        ),
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda name: [f"{name}-model"],
+    )
+
+    snapshot = refresh_provider_snapshot(provider)
+
+    assert snapshot == provider_snapshot(provider)
+    assert snapshot.cowriter == ConfiguredProvider(
+        provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
+    )
+    assert snapshot.models == (f"{provider}-model",)
+
+
+def test_settings_responses_project_one_snapshot_generation_per_provider(
+    admin_client, monkeypatch,
+):
+    from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._refresh_cli_login", lambda _provider: None)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.get_provider_configuration",
+        lambda provider, _surface: ConfiguredProvider(
+            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
+        ),
+    )
+    refresh_provider_snapshots()
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.provider_snapshot",
+        lambda _provider: (_ for _ in ()).throw(AssertionError("individual snapshot read")),
+    )
+
+    client, _ = admin_client
+
+    assert client.get("/api/settings/providers").status_code == 200
+    assert client.get("/api/settings/cowriter").status_code == 200
+    assert client.get("/api/settings/judge").status_code == 200
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
@@ -835,6 +909,7 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
 
     client, _ = admin_client
     try:
+        refresh_provider_snapshots()
         response = client.get("/api/settings/providers")
     finally:
         if provider == "claude":
@@ -865,6 +940,7 @@ def test_models_errors_cover_every_provider_not_only_the_saved_one(
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
     )
+    refresh_provider_snapshots()
     settings = client.get("/api/settings/cowriter").json()
     assert settings["provider"] == "codex"
     assert settings["models_by_provider"]["grok"] == []
@@ -881,6 +957,42 @@ def test_provider_status_requires_admin(admin_client):
         client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
 
     assert resp.status_code == 403
+
+
+def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
+    admin_client, monkeypatch,
+):
+    calls = 0
+
+    def _counting_popen(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("settings request started a process")
+
+    monkeypatch.setattr("songmaker_cli.agent_cli.subprocess.Popen", _counting_popen)
+    client, _ = admin_client
+
+    cowriter = client.get("/api/settings/cowriter")
+    judge = client.get("/api/settings/judge")
+    providers = client.get("/api/settings/providers")
+
+    assert cowriter.status_code == 200
+    assert judge.status_code == 200
+    assert providers.status_code == 200
+    assert set(cowriter.json()["probed_at"].values()) == {None}
+    assert set(judge.json()["probed_at"].values()) == {None}
+    for provider in providers.json():
+        for surface in ("cowriter", "judge"):
+            assert provider[surface]["state"] == "unverified"
+            assert provider[surface]["probed_at"] is None
+    response = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "grok", "model": "grok-4.6"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["status"]["state"] == "unverified"
+    assert calls == 0
 
 
 @pytest.mark.parametrize(
@@ -928,6 +1040,10 @@ def test_provider_change_requires_a_configured_surface(
         return status
 
     monkeypatch.setattr("songmaker_cli.settings_api._surface_status", _surface_status)
+    monkeypatch.setattr(
+        "songmaker_cli.settings_api._models_for_provider",
+        lambda provider, _active_model: (list(LIVE_CATALOG[provider]), None),
+    )
     client, factory = admin_client
     with factory() as session:
         original_cowriter_state = _stored_cowriter_state(session)
@@ -977,6 +1093,10 @@ def test_model_change_requires_a_configured_surface(
         return next(statuses)
 
     monkeypatch.setattr("songmaker_cli.settings_api._surface_status", _surface_status)
+    monkeypatch.setattr(
+        "songmaker_cli.settings_api._models_for_provider",
+        lambda provider, _active_model: (list(LIVE_CATALOG[provider]), None),
+    )
     client, factory = admin_client
 
     first = client.put(path, json={"provider": "grok", "model": "grok-4.6"})
@@ -1017,6 +1137,7 @@ def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
     )
+    refresh_provider_snapshots()
     settings = client.get("/api/settings/judge").json()
     assert settings["provider"] == "codex"
     assert settings["models_by_provider"]["grok"] == []
@@ -1132,6 +1253,7 @@ def test_cowriter_save_that_actually_changes_the_model_still_needs_a_live_catalo
         )
 
     with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):
+        refresh_provider_snapshots()
         resp = client.put(
             "/api/settings/cowriter",
             json={"provider": "grok", "model": "grok-4.5"},

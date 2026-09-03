@@ -125,6 +125,8 @@ export const PROVIDER_NOT_CONFIGURED_LABEL = 'not configured';
 export const PROVIDER_LOGIN_ONLY_LABEL = 'login only';
 export const PROVIDER_KEY_ONLY_LABEL = 'key only';
 export const PROVIDER_MISSING_DEPENDENCY_LABEL = 'missing dependency';
+export const PROVIDER_UNVERIFIED_LABEL = 'Unchecked';
+export const PROVIDER_UNVERIFIED_DETAIL = 'Provider check is still running in the background';
 export const PROVIDER_STATUS_DESCRIPTION =
 	"Each provider's real reachability — whether it can answer you, by what means, and what is still missing when it cannot.";
 export const PROVIDER_STATUS_REFRESHING_MESSAGE = 'Refreshing provider status...';

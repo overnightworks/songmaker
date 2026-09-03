@@ -163,6 +163,9 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
         "stale_job_reaper": {
             "state": "ok", "consecutive_failures": 0, "last_error": None,
         },
+        "provider_status_refresh": {
+            "state": "ok", "consecutive_failures": 0, "last_error": None,
+        },
     }
     assert metrics.status_code == 200
     assert 'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3' in metrics.text

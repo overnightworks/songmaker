@@ -234,6 +234,7 @@ export interface CowriterSettings {
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
 	models_errors: Record<string, string>;
+	probed_at: Record<string, string | null>;
 	tail_token_budget: number;
 }
 
@@ -385,6 +386,7 @@ export interface JudgeSettings {
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
 	models_errors: Record<string, string>;
+	probed_at: Record<string, string | null>;
 }
 
 export interface JudgeSettingsRequest {
@@ -581,11 +583,12 @@ export interface ProviderStatus {
 }
 
 export interface ProviderSurfaceStatus {
-	state: 'configured' | 'cli_login_needs_api_key' | 'api_key_needs_cli_login' | 'missing_dependency' | 'unconfigured';
+	state: 'unverified' | 'configured' | 'cli_login_needs_api_key' | 'api_key_needs_cli_login' | 'missing_dependency' | 'unconfigured';
 	needs?: 'cli_login' | 'api_key' | null;
 	setup_method?: 'api_key' | 'claude_cli' | 'grok_cli' | 'codex_cli' | null;
 	environment_key?: string | null;
 	missing_dependency?: string | null;
+	probed_at?: string | null;
 }
 
 export interface QueueStreamManifest {

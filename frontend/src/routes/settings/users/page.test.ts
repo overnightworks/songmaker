@@ -432,6 +432,27 @@ describe('admin models tab', () => {
 		expect(providers.textContent).toContain('Codex CLI login');
 	});
 
+	it('names an unverified provider while its background check is running', async () => {
+		api.fetchProviderStatus.mockResolvedValue([
+			providerStatus('claude', {
+				state: 'unverified',
+				probed_at: '2026-09-03T09:00:00Z'
+			})
+		]);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('Provider check is still running in the background');
+		expect(requireElement(providers, '.provider-status-row')).toHaveClass('unverified');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		expect(pillNamed(cowriter, 'Claude')).toMatchObject({
+			disabled: true,
+			textContent: expect.stringContaining('Unchecked')
+		});
+		expect(cowriter.textContent).toContain('Provider check is still running in the background');
+	});
+
 	it('does not offer a CLI-only provider for either surface', async () => {
 		api.fetchProviderStatus.mockResolvedValue(GROK_SIGNED_IN_WITHOUT_TURNS);
 		const target = await renderPage(true);

@@ -58,6 +58,8 @@
 		PROVIDER_LOGIN_ONLY_LABEL,
 		PROVIDER_MISSING_DEPENDENCY_LABEL,
 		PROVIDER_NOT_CONFIGURED_LABEL,
+		PROVIDER_UNVERIFIED_DETAIL,
+		PROVIDER_UNVERIFIED_LABEL,
 		PROVIDER_STATUS_DESCRIPTION,
 		PROVIDER_STATUS_EMPTY_MESSAGE,
 		PROVIDER_STATUS_REFRESHING_MESSAGE,
@@ -300,6 +302,8 @@
 
 	function surfaceDetail(surface: ProviderSurfaceStatus): string {
 		switch (surface.state) {
+			case 'unverified':
+				return PROVIDER_UNVERIFIED_DETAIL;
 			case 'missing_dependency':
 				return providerMissingDependencyDetail(surface.missing_dependency);
 			case 'unconfigured':
@@ -323,6 +327,7 @@
 		if (typeof detail !== 'object' || detail === null) return false;
 		const status = detail as Partial<ProviderSurfaceStatus>;
 		return (
+			status.state === 'unverified' ||
 			status.state === 'configured' ||
 			status.state === 'cli_login_needs_api_key' ||
 			status.state === 'api_key_needs_cli_login' ||
@@ -369,7 +374,8 @@
 			missing_dependency: 1,
 			cli_login_needs_api_key: 2,
 			api_key_needs_cli_login: 2,
-			configured: 3
+			unverified: 3,
+			configured: 4
 		};
 		return stateRank[status.cowriter.state] <= stateRank[status.judge.state]
 			? status.cowriter.state
@@ -388,6 +394,7 @@
 		const status = surfaceFor(provider, surface);
 		const state = status?.state;
 		if (state === 'missing_dependency') return PROVIDER_MISSING_DEPENDENCY_LABEL;
+		if (state === 'unverified') return PROVIDER_UNVERIFIED_LABEL;
 		if (state === 'cli_login_needs_api_key') return PROVIDER_LOGIN_ONLY_LABEL;
 		return state === 'api_key_needs_cli_login'
 			? PROVIDER_KEY_ONLY_LABEL
@@ -1062,7 +1069,9 @@
 							<div
 								class="provider-status-row"
 								class:ok={state === 'configured'}
-								class:partial={state === 'cli_login_needs_api_key' ||
+								class:unverified={state === 'unverified'}
+								class:partial={state === 'unverified' ||
+									state === 'cli_login_needs_api_key' ||
 									state === 'api_key_needs_cli_login'}
 								class:bad={state === 'missing_dependency' || state === 'unconfigured'}
 							>
@@ -1591,6 +1600,11 @@
 
 	.provider-status-row.partial .dot {
 		background: var(--score-ok);
+	}
+
+	.provider-status-row.unverified .dot {
+		border-radius: 0;
+		transform: rotate(45deg);
 	}
 
 	.provider-status-row .name {

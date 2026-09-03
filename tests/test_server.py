@@ -292,6 +292,25 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
         assert session.query(UserSession).count() == 0
 
 
+def test_testclient_lifespan_does_not_start_provider_probe_process(
+    tmp_path: Path, mock_arq_pool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started = 0
+
+    def _counting_popen(*_args, **_kwargs):
+        nonlocal started
+        started += 1
+        raise AssertionError("TestClient lifespan started a provider probe process")
+
+    monkeypatch.setattr("songmaker_cli.agent_cli.subprocess.Popen", _counting_popen)
+    client, _ = make_test_app(tmp_path)
+
+    with client:
+        client.portal.call(asyncio.sleep, 0)
+
+    assert started == 0
+
+
 # ── run_server ──────────────────────────────────────────────────────
 
 

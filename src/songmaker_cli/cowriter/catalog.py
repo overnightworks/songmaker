@@ -7,7 +7,9 @@ not a fallback list.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
 from importlib.util import find_spec
 from typing import Final
@@ -50,6 +52,9 @@ XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
 
 log = logging.getLogger(__name__)
+
+_provider_snapshots_lock = threading.Lock()
+_provider_snapshots: dict[str, "ProviderSnapshot"] = {}
 
 
 class ProviderSetupMethod(StrEnum):
@@ -111,6 +116,15 @@ type ProviderConfiguration = (
 
 
 @dataclass(frozen=True)
+class ProviderSnapshot:
+    cowriter: ProviderConfiguration
+    judge: ProviderConfiguration
+    models: tuple[str, ...]
+    models_error: str | None
+    probed_at: datetime
+
+
+@dataclass(frozen=True)
 class _ProviderApiCredential:
     secret: SecretStr | None
     environment_key: str
@@ -121,6 +135,60 @@ def get_provider_configuration(
     surface: ProviderSurface,
 ) -> ProviderConfiguration:
     return _provider_configuration(provider, surface, get_settings())
+
+
+def provider_snapshot(provider: str) -> ProviderSnapshot | None:
+    """Return a provider's last background refresh without probing."""
+    with _provider_snapshots_lock:
+        return _provider_snapshots.get(provider)
+
+
+def provider_snapshots() -> dict[str, ProviderSnapshot]:
+    """Return one consistent view of the background provider refreshes."""
+    with _provider_snapshots_lock:
+        return dict(_provider_snapshots)
+
+
+def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
+    """Refresh one provider's reachability and model catalog."""
+    try:
+        _refresh_cli_login(provider)
+    except AgentCliUnavailableError as exc:
+        log.warning("%s CLI probe unavailable: %s", provider, type(exc).__name__)
+    cowriter = get_provider_configuration(provider, ProviderSurface.CO_WRITER)
+    judge = get_provider_configuration(provider, ProviderSurface.JUDGE)
+    try:
+        models = tuple(list_provider_models(provider))
+        models_error = None
+    except (ProviderUnavailableError, ProviderModelCatalogUnavailableError) as exc:
+        models = ()
+        models_error = str(exc)
+    snapshot = ProviderSnapshot(
+        cowriter=cowriter,
+        judge=judge,
+        models=models,
+        models_error=models_error,
+        probed_at=datetime.now(timezone.utc),
+    )
+    with _provider_snapshots_lock:
+        _provider_snapshots[provider] = snapshot
+    return snapshot
+
+
+def clear_provider_snapshots() -> None:
+    with _provider_snapshots_lock:
+        _provider_snapshots.clear()
+
+
+def _refresh_cli_login(provider: str) -> None:
+    if provider == _CLAUDE_PROVIDER:
+        from songmaker_cli.claude.provider import cli_login_status
+
+        cli_login_status()
+    elif provider == _GROK_PROVIDER:
+        grok_cli_status()
+    elif provider == _CODEX_PROVIDER:
+        codex_cli_login()
 
 
 def list_provider_models(provider: str) -> list[str]:
