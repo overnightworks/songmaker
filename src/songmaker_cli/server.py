@@ -36,7 +36,7 @@ from songmaker_cli.lifecycle import (
     BackgroundLoopRegistry,
     auto_setup_admin,
     cleanup_expired_resource_events,
-    reap_stale_chat_jobs,
+    reap_stale_jobs,
     reconcile_crashed_loras,
     report_claude_cli_tool_surface,
     resource_event_cleanup_loop,
@@ -114,7 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         session.commit()
 
     auto_setup_admin(ctx)
-    reap_stale_chat_jobs(ctx)
+    reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
     # Logs the result at boot; /health reads the live state from

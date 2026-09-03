@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
@@ -400,6 +401,11 @@ SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
+# These are not independently configurable timeouts. They document the
+# measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
+LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
+SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 600
+GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
 RESOURCE_EVENT_STREAM_CONNECTION_SECONDS: Final[int] = 60
 RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
@@ -518,6 +524,38 @@ class JobType(StrEnum):
     SCORE = "score"
     CHAT = "chat"
     LORA_TRAINING = "lora_training"
+
+
+@dataclass(frozen=True)
+class JobStaleThresholds:
+    """Maximum inactive time for a queued or running job type."""
+
+    queued_seconds: int
+    heartbeat_seconds: int
+
+
+# The one stale-job policy.  Each heartbeat threshold is derived from the
+# slowest measured/provisioned progress signal for that type; see #331 F20.
+# A queued job has no worker heartbeat, so all types use the same 15-minute
+# admission bound.
+STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
+    JobType.CHAT: JobStaleThresholds(
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # chat timer: 15 s; twelve missed intervals
+    JobType.LORA_TRAINING: JobStaleThresholds(
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # measured train_lora heartbeat: <= 60 s, with five intervals' margin
+    JobType.SCORE: JobStaleThresholds(
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
+    JobType.GENERATE: JobStaleThresholds(
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # two ~=600 s SSE-read windows plus safety margin (#331 F23)
+}
 
 
 class JobFunction(StrEnum):

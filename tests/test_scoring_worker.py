@@ -134,9 +134,9 @@ def test_scoring_worker_settings_queue_name() -> None:
     assert ScoringWorkerSettings.queue_name == ARQ_SCORING_QUEUE_NAME
 
 
-def test_scoring_worker_settings_has_cron() -> None:
+def test_scoring_worker_has_no_periodic_job_reaper() -> None:
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
-    assert len(ScoringWorkerSettings.cron_jobs) == 1
+    assert ScoringWorkerSettings.cron_jobs == []
 
 
 def test_scoring_worker_settings_functions() -> None:

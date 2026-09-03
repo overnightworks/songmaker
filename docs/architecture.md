@@ -830,9 +830,8 @@ parent's coherence budget, which is spent after the child returns.
   `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: recovers stale `generate` and `lora_training` jobs every 2 minutes,
-  reconciles any terminalized LoRAs, then audits orphaned audio files. The
-  same two job types are recovered on MusicWorker startup and shutdown.
+- Cron: audits orphaned audio files and applies file-expiry cleanup. The same
+  two job types are recovered on MusicWorker startup and shutdown.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -841,13 +840,12 @@ parent's coherence budget, which is spent after the child returns.
 - Handles `score` tasks
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
-- Cron: recovers stale score jobs every 2 minutes
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
 - Path helpers (`_audio_dir`, `_data_dir`)
 - Timeout constants, terminal status set
-- Common startup, shutdown, and stale recovery for every named worker job
+- Common startup, shutdown, and restart recovery for every named worker job
   type. MusicWorker owns `generate` and `lora_training`; the scoring worker
   owns `score`.
 - A worker restart terminalizes only `RUNNING` `lora_training` jobs, so a
@@ -856,26 +854,31 @@ parent's coherence budget, which is spent after the child returns.
 - Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Chat and LoRA-training job recovery** (`jobs/lora_training.py`, web process — #371):
-`chat` jobs run inline in an API request (`chat_api.py`, `conversation_api.py`),
-never inside an arq worker, so they have no worker-scoped cron at all.
-`lora_training` jobs run inside MusicWorker and are recovered by that worker;
-the web process also reaps them when no worker returns. Both paths reuse the
-generic `recover_stale_jobs_by_age_and_type()` (age + `heartbeat_at`) that
-backs generate/score:
+**Stale-job recovery** (web process — #446): The lifecycle loop is the one
+periodic owner for every job type. It calls the generic
+`recover_stale_jobs_by_age_and_type()` rule, which uses `started_at` for a
+queued job and `heartbeat_at` for a running job. Worker startup/shutdown
+recovery is separate: it records that worker process restarting, rather than
+deciding whether a still-running job is stale.
+
+- `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
+
+  | Type | queued | running heartbeat | limiting signal |
+  | --- | ---: | ---: | --- |
+  | `chat` | 900 s | 180 s | 15-s chat timer, twelve missed intervals |
+  | `lora_training` | 900 s | 300 s | measured ≤60-s training heartbeat with margin |
+  | `score` | 900 s | 600 s | 300-s scorer + 120-s judge with margin |
+  | `generate` | 900 s | 1300 s | two ≈600-s SSE-read windows with margin |
+
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
-  minutes, matching the arq-worker cron cadence), behind the same
+  minutes), behind the same
   single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
   so only one web replica reaps a given tick.
-- `reap_stale_chat_jobs()` makes a queued chat job eligible for `No worker
-  available — please retry.` after 900 seconds; the next 120-second reaper tick
-  detects it no later than 1,020 seconds after creation. A running turn sends a
-  heartbeat every 15 seconds; twelve missed intervals (180 seconds), plus the
-  120-second reaper tick, detects a dead web process no later than 300 seconds
-  after its last heartbeat and reports `Heartbeat lost — please retry.`
-- `reap_stale_lora_training_jobs()` uses the same default
-  `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
-  MusicWorker's `arq_job_timeout` envelope.
+- A queued stale job reports `No worker available — please retry.`; a running
+  one reports `Heartbeat lost — please retry.` The request path applies that
+  same rule only to the submitting user's jobs just before active-job limits,
+  so a job that crosses a threshold between lifecycle ticks cannot cause a
+  spurious 429.
 - `reconcile_crashed_loras()` runs once at web startup and after the web
   reaper; MusicWorker calls the same job-owned reconciliation after it
   terminalizes a `lora_training` job. The path locks one active LoRA candidate

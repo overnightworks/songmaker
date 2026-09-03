@@ -118,15 +118,13 @@ class MusicWorker(WorkerBase):
             ctx, job_id, mode, db_factory=self.get_db_factory(),
         )
 
-    async def cleanup_stale_cron(self, ctx) -> int:
+    async def cleanup_files_cron(self, ctx) -> None:
         from songmaker_cli.cleanup import run_cleanup_expired
 
-        count = await super().cleanup_stale_cron(ctx)
         await asyncio.to_thread(self.audit_orphaned_files)
         await asyncio.to_thread(
             run_cleanup_expired, self.get_db_factory(), self.audio_dir(),
         )
-        return count
 
     async def generation_retention_cron(self, ctx) -> int:
         from songmaker_cli.cleanup import run_generation_retention
@@ -158,7 +156,7 @@ class MusicWorkerSettings:
     health_check_interval = MusicWorker.health_check_interval
     cron_jobs = [
         cron(
-            _music_worker.cleanup_stale_cron,
+            _music_worker.cleanup_files_cron,
             minute={i for i in range(0, 60, 2)},
             second={0},
         ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -150,6 +151,48 @@ def test_active_job_limit(client: TestClient, monkeypatch) -> None:
 
     assert resp.status_code == 429
     assert "active job" in resp.json()["detail"]
+
+
+def test_stale_own_job_does_not_block_generate_at_active_job_limit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobType
+
+    monkeypatch.setenv("MAX_USER_ACTIVE_JOBS", "1")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
+    _login_as(client, "user")
+    user_id = _get_user_id(client)
+    stale_at = datetime.now(timezone.utc) - timedelta(
+        seconds=STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds + 1,
+    )
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        other_user = create_user(session, "other_user", hash_password("t3stP@ssw0rd"))
+        own_job = Job(
+            type="generate", user_id=user_id, status="running",
+            started_at=stale_at, heartbeat_at=stale_at,
+        )
+        other_job = Job(
+            type="generate", user_id=other_user.id, status="running",
+            started_at=stale_at, heartbeat_at=stale_at,
+        )
+        session.add_all((own_job, other_job))
+        session.commit()
+        own_job_id, other_job_id = own_job.id, other_job.id
+
+    with _mock_arq():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
+
+    assert resp.status_code == 200
+    with factory() as session:
+        own_job = session.query(Job).filter_by(id=own_job_id).one()
+        other_job = session.query(Job).filter_by(id=other_job_id).one()
+        assert own_job.status == "failed"
+        assert own_job.error_type == "heartbeat_lost"
+        assert other_job.status == "running"
 
 
 def test_score_job_does_not_block_generate(client: TestClient) -> None:

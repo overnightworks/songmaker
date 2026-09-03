@@ -35,7 +35,6 @@ from songmaker_cli.db.queries import (
     archive_generation,
     cleanup_album,
     cleanup_song,
-    clear_stale_user_jobs,
     count_recent_failed_attempts,
     count_total_queued_jobs,
     count_user_active_jobs,
@@ -74,7 +73,7 @@ from songmaker_cli.db.queries import (
     prune_overflow_sessions,
     record_login_attempt,
     recover_stale_jobs,
-    recover_stale_jobs_by_age,
+    recover_stale_jobs_by_age_and_type,
     save_rating,
     save_scores,
     unarchive_generation,
@@ -1701,10 +1700,10 @@ def test_recover_stale_jobs_none(db_session: Session) -> None:
     assert recover_stale_jobs(db_session) == 0
 
 
-# ── recover_stale_jobs_by_age ─────────────────────────────────────
+# ── stale job reaper ──────────────────────────────────────────────
 
 
-def test_recover_stale_jobs_by_age(db_session: Session) -> None:
+def test_reaper_marks_a_stale_running_job_as_heartbeat_lost(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     j_old = create_job(db_session, "generate")
@@ -1722,14 +1721,14 @@ def test_recover_stale_jobs_by_age(db_session: Session) -> None:
     j_old.heartbeat_at = old_time
     db_session.commit()
 
-    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session)
     db_session.commit()
 
     assert count == 1
 
     old_after = get_job(db_session, j_old.id)
     assert old_after.status == "failed"
-    assert old_after.error_type == "stale_timeout"
+    assert old_after.error_type == "heartbeat_lost"
     assert old_after.completed_at is not None
 
     recent_after = get_job(db_session, j_recent.id)
@@ -1739,17 +1738,17 @@ def test_recover_stale_jobs_by_age(db_session: Session) -> None:
     assert completed_after.status == "completed"
 
 
-def test_recover_stale_jobs_by_age_none(db_session: Session) -> None:
+def test_reaper_leaves_a_recent_job_alone(db_session: Session) -> None:
     j1 = create_job(db_session, "generate")
     db_session.commit()
 
     update_job_status(db_session, j1.id, "running")
     db_session.commit()
 
-    assert recover_stale_jobs_by_age(db_session, threshold_seconds=3600) == 0
+    assert recover_stale_jobs_by_age_and_type(db_session) == 0
 
 
-def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
+def test_reaper_marks_a_stale_queued_job_as_unavailable(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     j_queued = create_job(db_session, "generate")
@@ -1760,7 +1759,7 @@ def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
     j_queued.heartbeat_at = old
     db_session.commit()
 
-    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session)
     db_session.commit()
 
     assert count == 1
@@ -1768,6 +1767,33 @@ def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
     assert after.status == "failed"
     assert after.error_type == "no_worker_available"
     assert "No worker available" in after.error
+
+
+@pytest.mark.parametrize("job_type", ("chat", "lora_training", "score", "generate"))
+def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
+    db_session: Session,
+    job_type: str,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobStatus, JobType
+
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    thresholds = STALE_JOB_THRESHOLDS[JobType(job_type)]
+    queued = create_job(db_session, job_type)
+    running = create_job(db_session, job_type)
+    healthy = create_job(db_session, job_type)
+    update_job_status(db_session, running.id, JobStatus.RUNNING)
+    update_job_status(db_session, healthy.id, JobStatus.RUNNING)
+    queued.started_at = now - timedelta(seconds=thresholds.queued_seconds + 1)
+    running.heartbeat_at = now - timedelta(seconds=thresholds.heartbeat_seconds + 1)
+    healthy.heartbeat_at = now
+    db_session.commit()
+
+    assert recover_stale_jobs_by_age_and_type(db_session, now=now) == 2
+    assert get_job(db_session, queued.id).error_type == "no_worker_available"
+    assert get_job(db_session, running.id).error_type == "heartbeat_lost"
+    assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
 
 def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
@@ -1791,20 +1817,16 @@ def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
         job.heartbeat_at = old
     db_session.commit()
 
-    count = recover_stale_jobs_by_age_and_type(
-        db_session,
-        "generate",
-        threshold_seconds=1800,
-    )
+    count = recover_stale_jobs_by_age_and_type(db_session, "generate")
     db_session.commit()
 
     assert count == 2
     assert get_job(db_session, j_queued.id).error_type == "no_worker_available"
-    assert get_job(db_session, j_running.id).error_type == "stale_timeout"
+    assert get_job(db_session, j_running.id).error_type == "heartbeat_lost"
     assert get_job(db_session, j_other.id).status == "queued"
 
 
-def test_default_type_recovery_keeps_an_old_queued_generate_with_a_heartbeat(
+def test_reaper_uses_queued_age_instead_of_queued_heartbeat(
     db_session: Session,
 ) -> None:
     from datetime import datetime, timedelta, timezone
@@ -1827,12 +1849,12 @@ def test_default_type_recovery_keeps_an_old_queued_generate_with_a_heartbeat(
     recovered = recover_stale_jobs_by_age_and_type(db_session, "generate")
     db_session.commit()
 
-    assert recovered == 1
-    assert get_job(db_session, queued.id).status == "queued"
-    assert get_job(db_session, running.id).error_type == "stale_timeout"
+    assert recovered == 2
+    assert get_job(db_session, queued.id).error_type == "no_worker_available"
+    assert get_job(db_session, running.id).error_type == "heartbeat_lost"
 
 
-def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
+def test_chat_recovery_reads_its_constant_table_not_settings(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1840,10 +1862,7 @@ def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
 
     import songmaker_cli.settings as settings
     from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.db.queries import (
-        StaleThresholds,
-        recover_stale_jobs_by_age_and_type,
-    )
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
 
     job = create_job(db_session, JobType.CHAT)
     db_session.commit()
@@ -1860,22 +1879,14 @@ def test_chat_recovery_with_explicit_thresholds_does_not_read_settings(
 
     monkeypatch.setattr(settings, "get_settings", _unexpected_settings_read)
 
-    recovered = recover_stale_jobs_by_age_and_type(
-        db_session,
-        JobType.CHAT,
-        stale_thresholds=StaleThresholds(
-            queued_seconds=900,
-            heartbeat_seconds=180,
-        ),
-        now=now,
-    )
+    recovered = recover_stale_jobs_by_age_and_type(db_session, JobType.CHAT, now=now)
     db_session.commit()
 
     assert recovered == 1
     assert get_job(db_session, job.id).error_type == "heartbeat_lost"
 
 
-def test_recover_stale_jobs_by_age_distinguishes_queued_vs_running(
+def test_reaper_distinguishes_queued_vs_running(
     db_session: Session,
 ) -> None:
     from datetime import datetime, timedelta, timezone
@@ -1893,22 +1904,22 @@ def test_recover_stale_jobs_by_age_distinguishes_queued_vs_running(
         job.heartbeat_at = old
     db_session.commit()
 
-    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session)
     db_session.commit()
 
     assert count == 2
     queued_after = get_job(db_session, j_queued.id)
     running_after = get_job(db_session, j_running.id)
     assert queued_after.error_type == "no_worker_available"
-    assert running_after.error_type == "stale_timeout"
+    assert running_after.error_type == "heartbeat_lost"
     assert "No worker available" in queued_after.error
-    assert "timed out" in running_after.error
+    assert "Heartbeat lost" in running_after.error
 
 
-# ── clear_stale_user_jobs ─────────────────────────────────────────
+# ── user-filtered stale job reaper ─────────────────────────────────
 
 
-def test_clear_stale_user_jobs(db_session: Session) -> None:
+def test_user_filtered_reaper(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     user = create_user(db_session, "testuser", "hash", role="user")
@@ -1920,10 +1931,12 @@ def test_clear_stale_user_jobs(db_session: Session) -> None:
     update_job_status(db_session, j_recent.id, "running")
     db_session.commit()
 
-    j_stale.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    stale = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    j_stale.started_at = stale
+    j_stale.heartbeat_at = stale
     db_session.commit()
 
-    count = clear_stale_user_jobs(db_session, user.id, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session, user_id=user.id)
     db_session.commit()
 
     assert count == 1
@@ -1931,7 +1944,7 @@ def test_clear_stale_user_jobs(db_session: Session) -> None:
     assert get_job(db_session, j_recent.id).status == "running"
 
 
-def test_clear_stale_user_jobs_only_own(db_session: Session) -> None:
+def test_user_filtered_reaper_only_owns_its_jobs(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     user_a = create_user(db_session, "user_a", "hash", role="user")
@@ -1944,11 +1957,14 @@ def test_clear_stale_user_jobs_only_own(db_session: Session) -> None:
     update_job_status(db_session, j_b.id, "running")
     db_session.commit()
 
-    j_a.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
-    j_b.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    stale = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    j_a.started_at = stale
+    j_a.heartbeat_at = stale
+    j_b.started_at = stale
+    j_b.heartbeat_at = stale
     db_session.commit()
 
-    count = clear_stale_user_jobs(db_session, user_a.id, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session, user_id=user_a.id)
     db_session.commit()
 
     assert count == 1
@@ -1956,7 +1972,7 @@ def test_clear_stale_user_jobs_only_own(db_session: Session) -> None:
     assert get_job(db_session, j_b.id).status == "running"
 
 
-def test_clear_stale_user_jobs_queued(db_session: Session) -> None:
+def test_user_filtered_reaper_catches_queued_jobs(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
     user = create_user(db_session, "testuser", "hash", role="user")
@@ -1966,14 +1982,14 @@ def test_clear_stale_user_jobs_queued(db_session: Session) -> None:
     j_queued.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
     db_session.commit()
 
-    count = clear_stale_user_jobs(db_session, user.id, threshold_seconds=1800)
+    count = recover_stale_jobs_by_age_and_type(db_session, user_id=user.id)
     db_session.commit()
 
     assert count == 1
     assert get_job(db_session, j_queued.id).status == "failed"
 
 
-def test_clear_stale_user_jobs_none_stale(db_session: Session) -> None:
+def test_user_filtered_reaper_leaves_fresh_jobs_alone(db_session: Session) -> None:
     user = create_user(db_session, "testuser", "hash", role="user")
     j = create_job(db_session, "generate", user_id=user.id)
     db_session.commit()
@@ -1981,7 +1997,7 @@ def test_clear_stale_user_jobs_none_stale(db_session: Session) -> None:
     update_job_status(db_session, j.id, "running")
     db_session.commit()
 
-    assert clear_stale_user_jobs(db_session, user.id, threshold_seconds=3600) == 0
+    assert recover_stale_jobs_by_age_and_type(db_session, user_id=user.id) == 0
 
 
 # ── queue_position ────────────────────────────────────────────────

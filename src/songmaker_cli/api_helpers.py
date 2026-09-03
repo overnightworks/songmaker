@@ -49,7 +49,6 @@ from songmaker_cli.db.models import (
     UserLoraSample,
 )
 from songmaker_cli.db.queries import (
-    clear_stale_user_jobs,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
@@ -57,6 +56,7 @@ from songmaker_cli.db.queries import (
     get_album,
     get_generation,
     get_song,
+    recover_stale_jobs_by_age_and_type,
     resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
@@ -224,7 +224,7 @@ def create_job_with_rate_limit(
     _begin_exclusive(session)
 
     is_admin = user.role == ROLE_ADMIN
-    clear_stale_user_jobs(session, user.id)
+    recover_stale_jobs_by_age_and_type(session, user_id=user.id)
 
     settings = get_settings()
     if job_type in _QUEUEABLE_JOB_TYPES:

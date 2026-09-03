@@ -13,18 +13,13 @@ from sqlalchemy.orm import Session
 from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
+    STALE_JOB_THRESHOLDS,
     JobStatus,
     JobType,
 )
 from songmaker_cli.db.models import Job
 
 log = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class StaleThresholds:
-    queued_seconds: int
-    heartbeat_seconds: int
 
 
 def has_active_job_of_type(session: Session, job_type: str) -> bool:
@@ -191,40 +186,6 @@ def recover_stale_jobs(session: Session) -> int:
     return len(stale)
 
 
-def clear_stale_user_jobs(
-    session: Session, user_id: str,
-    threshold_seconds: int | None = None,
-) -> int:
-    """Mark stale running/queued jobs for a user as failed. Returns count cleared.
-
-    Called at job submission time so users auto-unblock without waiting
-    for the periodic cron cleanup.
-    """
-    if threshold_seconds is None:
-        from songmaker_cli.settings import get_settings
-        threshold_seconds = get_settings().stale_job_threshold_seconds
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=threshold_seconds)
-    stale = (
-        session.query(Job)
-        .filter(
-            Job.user_id == user_id,
-            Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.started_at < cutoff,
-        )
-        .all()
-    )
-    for job in stale:
-        job.status = JobStatus.FAILED
-        job.error = "Job timed out (exceeded maximum run time)"
-        job.error_type = "stale_timeout"
-        job.completed_at = now
-    session.flush()
-    if stale:
-        log.info("Cleared %d stale jobs for user %s", len(stale), user_id)
-    return len(stale)
-
-
 def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     """Check if the job's heartbeat indicates a hung worker.
 
@@ -244,47 +205,6 @@ def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
     return started_at < cutoff
-
-
-def recover_stale_jobs_by_age(
-    session: Session, threshold_seconds: int | None = None,
-) -> int:
-    """Mark running/queued jobs older than threshold as failed. Returns count recovered.
-
-    Uses heartbeat_at to detect hung workers (alive but not progressing).
-    """
-    if threshold_seconds is None:
-        from songmaker_cli.settings import get_settings
-        threshold_seconds = get_settings().stale_job_threshold_seconds
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=threshold_seconds)
-    candidates = (
-        session.query(Job)
-        .filter(
-            Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.started_at < cutoff,
-        )
-        .all()
-    )
-    recovered = 0
-    for job in candidates:
-        if not _is_heartbeat_stale(job, cutoff):
-            log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
-            continue
-        was_queued = job.status == JobStatus.QUEUED
-        job.status = JobStatus.FAILED
-        if was_queued:
-            job.error = "No worker available — please retry."
-            job.error_type = "no_worker_available"
-        else:
-            job.error = "Job timed out (exceeded maximum run time)"
-            job.error_type = "stale_timeout"
-        job.completed_at = now
-        recovered += 1
-    session.flush()
-    if recovered:
-        log.info("Recovered %d stale jobs (threshold=%ds)", recovered, threshold_seconds)
-    return recovered
 
 
 def _job_type_collection(job_types: str | Collection[str]) -> tuple[str, ...]:
@@ -325,101 +245,66 @@ def recover_stale_jobs_by_type(
 
 
 def recover_stale_jobs_by_age_and_type(
-    session: Session, job_types: str | Collection[str],
-    threshold_seconds: int | None = None,
+    session: Session,
+    job_types: str | Collection[str] | None = None,
     *,
-    stale_thresholds: StaleThresholds | None = None,
+    user_id: str | None = None,
     now: datetime | None = None,
     return_counts: bool = False,
 ) -> int | dict[str, int]:
-    """Recover jobs with baseline defaults or explicit chat liveness thresholds."""
-    recovered_types = _job_type_collection(job_types)
+    """Recover stale jobs using the one per-type liveness policy.
+
+    Queued jobs age out by ``started_at``; running jobs age out only when
+    their heartbeat is old.  ``user_id`` lets the submission path apply that
+    exact policy before enforcing an active-job limit, without defining a
+    second freshness threshold.
+    """
+    recovered_types = (
+        _job_type_collection(job_types)
+        if job_types is not None
+        else tuple(STALE_JOB_THRESHOLDS)
+    )
     if now is None:
         now = datetime.now(timezone.utc)
     elif now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
 
-    if stale_thresholds is None:
-        if threshold_seconds is None:
-            from songmaker_cli.settings import get_settings
-            threshold_seconds = get_settings().stale_job_threshold_seconds
-        cutoff = now - timedelta(seconds=threshold_seconds)
-        candidates = (
-            session.query(Job)
-            .filter(
-                Job.status.in_(JOB_ACTIVE_STATUSES),
-                Job.type.in_(recovered_types),
-                Job.started_at < cutoff,
-            )
-            .all()
-        )
-        recovered = 0
-        recovered_by_type: dict[str, int] = {}
-        for job in candidates:
-            if not _is_heartbeat_stale(job, cutoff):
-                log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
-                continue
-            was_queued = job.status == JobStatus.QUEUED
-            job.status = JobStatus.FAILED
-            if was_queued:
-                job.error = "No worker available — please retry."
-                job.error_type = "no_worker_available"
-            else:
-                job.error = "Job timed out (exceeded maximum run time)"
-                job.error_type = "stale_timeout"
-            job.completed_at = now
-            recovered += 1
-            recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
-        session.flush()
-        if recovered:
-            log.info(
-                "Recovered %d stale %s jobs (threshold=%ds)",
-                recovered, ", ".join(recovered_types), threshold_seconds,
-            )
-        return recovered_by_type if return_counts else recovered
-
-    queued_cutoff = now - timedelta(seconds=stale_thresholds.queued_seconds)
-    heartbeat_cutoff = now - timedelta(seconds=stale_thresholds.heartbeat_seconds)
-    candidates = (
-        session.query(Job)
-        .filter(
-            Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.type.in_(recovered_types),
-        )
-        .all()
+    query = session.query(Job).filter(
+        Job.status.in_(JOB_ACTIVE_STATUSES),
+        Job.type.in_(recovered_types),
     )
+    if user_id is not None:
+        query = query.filter(Job.user_id == user_id)
+    candidates = query.all()
     recovered = 0
     recovered_by_type: dict[str, int] = {}
     for job in candidates:
+        thresholds = STALE_JOB_THRESHOLDS[JobType(job.type)]
         if job.status == JobStatus.QUEUED:
-            is_stale = _is_started_stale(job, queued_cutoff)
+            cutoff = now - timedelta(seconds=thresholds.queued_seconds)
+            is_stale = _is_started_stale(job, cutoff)
         else:
-            is_stale = _is_heartbeat_stale(job, heartbeat_cutoff)
+            cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
+            is_stale = _is_heartbeat_stale(job, cutoff)
         if not is_stale:
-            log.info("Skipping stale job %s — it is still making progress", job.id)
             continue
         was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
         if was_queued:
             job.error = "No worker available — please retry."
             job.error_type = "no_worker_available"
-        elif job.type == JobType.CHAT:
+        else:
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
-        else:
-            job.error = "Job timed out (exceeded maximum run time)"
-            job.error_type = "stale_timeout"
         job.completed_at = now
         recovered += 1
         recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()
     if recovered:
         log.info(
-            "Recovered %d stale %s jobs (queued=%ds, heartbeat=%ds)",
+            "Recovered %d stale job(s) by liveness policy: %s",
             recovered,
-            ", ".join(recovered_types),
-            stale_thresholds.queued_seconds,
-            stale_thresholds.heartbeat_seconds,
+            recovered_by_type,
         )
     return recovered_by_type if return_counts else recovered
 
