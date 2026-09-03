@@ -2,7 +2,8 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path, and the URL is already a resolved library address built by songRoutePath/albumRoutePath */
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { albumRoutePath, openTakeAddress, songRoutePath } from '$lib/stores/libraryContext';
+	import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
+	import { openTakeAddress } from '$lib/stores/libraryContext';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 
 	type AddressState =

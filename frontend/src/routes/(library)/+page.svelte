@@ -15,6 +15,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+	import { readLegacySongQuery } from '$lib/routes/addresses';
 	import {
 		currentLibraryHistoryState,
 		isLibraryHistoryState,
@@ -36,8 +37,9 @@
 	let failure = $state<string | null>(null);
 	let openRequests = 0;
 
-	const songId = $derived(page.url.searchParams.get('song'));
-	const generationId = $derived(page.url.searchParams.get('gen'));
+	const legacySongQuery = $derived(readLegacySongQuery(page.url.searchParams));
+	const songId = $derived(legacySongQuery.songId);
+	const generationId = $derived(legacySongQuery.generationId);
 
 	// A tab that already carries a LibraryHistoryState naming this exact
 	// legacy `?song=` entry has `onPopstate` (navigation.ts) apply it

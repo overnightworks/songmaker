@@ -24,15 +24,13 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
+import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
-	isAlbumRoutePath,
 	isLibraryHistoryState,
-	isPlaylistRoutePath,
-	isSongRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
 	libraryRootState,

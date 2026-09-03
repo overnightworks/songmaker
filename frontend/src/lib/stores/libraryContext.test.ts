@@ -82,26 +82,21 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto } from '$app/navigation';
+import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
 	albumIsExpanded,
-	albumRoutePath,
 	applyLibraryHistory,
 	captureLibraryScroll,
 	detailTab,
 	hydrateLibraryFromHistory,
-	isAlbumRoutePath,
 	isLibraryHistoryState,
-	isPlaylistRoutePath,
-	isSongRoutePath,
-	isTakeRoutePath,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
 	openPlaylistAddress,
 	openSongAddress,
 	openTakeAddress,
-	playlistRoutePath,
 	resolveLegacySongQueryAddress,
 	libraryRootState,
 	libraryScrollAnchor,
@@ -109,7 +104,6 @@ import {
 	resetLibraryContextForTests,
 	setLibraryFilter,
 	snapshotLibraryHistory,
-	songRoutePath,
 	writeLibraryHistory
 } from './libraryContext';
 
@@ -643,60 +637,6 @@ describe('libraryHistoryUrl', () => {
 	});
 });
 
-describe('isAlbumRoutePath', () => {
-	it('is an album address only with a slug behind it', () => {
-		expect(isAlbumRoutePath('/album/anfield')).toBe(true);
-		expect(isAlbumRoutePath('/album/')).toBe(false);
-		expect(isAlbumRoutePath('/')).toBe(false);
-		expect(isAlbumRoutePath('/settings/voices')).toBe(false);
-	});
-
-	// A song address is one segment deeper than its album's (issue #275), and a
-	// take address one segment deeper still (issue #281), and both must still
-	// read as an album route: isLibraryWorkspacePath (navigation.ts) leans on
-	// this boolean alone to decide whether the workspace mounts here, and a
-	// song or take address is a third and fourth entrance to it.
-	it('is also true two and three segments deeper, where a song and its takes live', () => {
-		expect(isAlbumRoutePath('/album/anfield/stadion-lauf-a')).toBe(true);
-		expect(isAlbumRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
-	});
-});
-
-describe('isSongRoutePath', () => {
-	it('is a song address only with both an album and a song slug', () => {
-		expect(isSongRoutePath('/album/anfield/stadion-lauf-a')).toBe(true);
-		expect(isSongRoutePath('/album/anfield')).toBe(false);
-		expect(isSongRoutePath('/album/anfield/')).toBe(false);
-		expect(isSongRoutePath('/')).toBe(false);
-	});
-
-	// A take address is one segment deeper than its song's (issue #281) and,
-	// like isAlbumRoutePath above, still reads as a song route -- syncSongAddressToRename
-	// (navigation.ts) leans on that to pull a rename along under a take address too.
-	it('is also true one segment deeper, where a take lives', () => {
-		expect(isSongRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
-	});
-});
-
-describe('isTakeRoutePath', () => {
-	it('is a take address only with an album, a song, and a take number', () => {
-		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a/take/3')).toBe(true);
-		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a')).toBe(false);
-		expect(isTakeRoutePath('/album/anfield/stadion-lauf-a/take/')).toBe(false);
-		expect(isTakeRoutePath('/album/anfield')).toBe(false);
-		expect(isTakeRoutePath('/')).toBe(false);
-	});
-});
-
-describe('isPlaylistRoutePath', () => {
-	it('is a playlist address only with a slug behind it', () => {
-		expect(isPlaylistRoutePath('/playlist/friday-night')).toBe(true);
-		expect(isPlaylistRoutePath('/playlist/')).toBe(false);
-		expect(isPlaylistRoutePath('/')).toBe(false);
-		expect(isPlaylistRoutePath('/album/anfield')).toBe(false);
-	});
-});
-
 // libraryRouteShape itself is not exported -- writeLibraryHistory's own
 // crossing decision (goto vs. a raw synchronous write) is the observable
 // behaviour, so that is what these pin. Central to issue #265's S7: since
@@ -751,12 +691,6 @@ describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
 			noScroll: true,
 			keepFocus: true
 		});
-	});
-});
-
-describe('playlistRoutePath', () => {
-	it('names a playlist by its slug, one path segment, no nesting under an album', () => {
-		expect(playlistRoutePath('friday-night')).toBe('/playlist/friday-night');
 	});
 });
 

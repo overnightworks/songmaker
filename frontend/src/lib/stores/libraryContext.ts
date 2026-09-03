@@ -31,6 +31,15 @@ import {
 	loadPlaylistDetail,
 	playlistList
 } from '$lib/stores/playlists';
+import {
+	albumRoutePath,
+	legacySongRoutePath,
+	libraryRouteShape,
+	pendingTakeRoutePath,
+	playlistRoutePath,
+	songRoutePath,
+	takeRoutePath
+} from '$lib/routes/addresses';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
 // 'browse' shows the library wall (the LibraryWall component); 'detail' shows
@@ -81,10 +90,6 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 const FILTERS: ReadonlySet<string> = new Set(['albums', 'playlists', 'shared']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
-
-const ALBUM_ROUTE_PREFIX = '/album/';
-const TAKE_ROUTE_SEGMENT = '/take/';
-const PLAYLIST_ROUTE_PREFIX = '/playlist/';
 
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
@@ -152,109 +157,6 @@ export function libraryWallStateFrom(state: LibraryHistoryState): LibraryHistory
 	};
 }
 
-export function albumRoutePath(albumId: string): string {
-	return `${ALBUM_ROUTE_PREFIX}${encodeURIComponent(albumId)}`;
-}
-
-export function isAlbumRoutePath(pathname: string): boolean {
-	return pathname.startsWith(ALBUM_ROUTE_PREFIX) && pathname.length > ALBUM_ROUTE_PREFIX.length;
-}
-
-// A song's own address (issue #275), one segment under its album's. The song
-// is named by its slug, not its id — matching how the album segment already
-// names the album by slug rather than a surrogate key.
-export function songRoutePath(albumId: string, songSlug: string): string {
-	return `${albumRoutePath(albumId)}/${encodeURIComponent(songSlug)}`;
-}
-
-// A take's own address (issue #281), one segment under its song's own. <n>
-// is generation_number, not the generation's uuid -- see isTakeRoutePath.
-export function takeRoutePath(albumId: string, songSlug: string, takeNumber: number): string {
-	return `${songRoutePath(albumId, songSlug)}${TAKE_ROUTE_SEGMENT}${takeNumber}`;
-}
-
-export function isSongRoutePath(pathname: string): boolean {
-	if (!isAlbumRoutePath(pathname)) return false;
-	const rest = pathname.slice(ALBUM_ROUTE_PREFIX.length);
-	const slashIndex = rest.indexOf('/');
-	return slashIndex !== -1 && rest.length > slashIndex + 1;
-}
-
-// A take's own address (issue #281), one segment under its song's. <n> is
-// generation_number -- the number the surface already shows the person
-// ("Take 3"), not the generation's uuid, matching how the album and song
-// segments already name their resource by the key a person recognizes rather
-// than a surrogate one. isSongRoutePath is also true for a take address (it
-// only asks "is there a second segment"), so this only narrows further; it
-// never needs to be checked on its own.
-export function isTakeRoutePath(pathname: string): boolean {
-	if (!isSongRoutePath(pathname)) return false;
-	const takeIndex = pathname.indexOf(TAKE_ROUTE_SEGMENT);
-	return takeIndex !== -1 && pathname.length > takeIndex + TAKE_ROUTE_SEGMENT.length;
-}
-
-// A playlist's own address (issue #286), a sibling of /album/<slug> rather
-// than a segment under it -- playlists have no album to nest inside. Named
-// by its slug, not its id, matching every other library address.
-export function playlistRoutePath(slug: string): string {
-	return `${PLAYLIST_ROUTE_PREFIX}${encodeURIComponent(slug)}`;
-}
-
-export function isPlaylistRoutePath(pathname: string): boolean {
-	return (
-		pathname.startsWith(PLAYLIST_ROUTE_PREFIX) && pathname.length > PLAYLIST_ROUTE_PREFIX.length
-	);
-}
-
-// The six shapes a pathname can take for the crossing check below. Five are
-// library addresses, distinct from the isAlbumRoutePath boolean below, which
-// answers "is this under /album/" for isLibraryWorkspacePath — that boolean
-// is deliberately true for 'album', 'album-song' and 'album-song-take'
-// alike, since all three mount the workspace. This finer distinction is what
-// writeLibraryHistory needs: it must treat album <-> album-song and
-// album-song <-> album-song-take as route crossings too, not just root <->
-// album, or a track (or a take within it) opened from a shallower address
-// would leave the router still believing it is on the shallower route file
-// while the bar reads one segment deeper -- see the note on
-// writeLibraryHistory for what a stale router does on the next Back/Forward.
-// A take opened from another take in the same song stays 'album-song-take'
-// on both sides, so that move is the frequent-churn case, not a crossing --
-// it is still the same route file, /take/[n], with only the param changed.
-// 'playlist' is its own shape for the same reason: switching from one open
-// playlist to another stays 'playlist' on both sides (frequent churn, not a
-// crossing), while every move between it and the four /album/... shapes
-// crosses route files and must go through goto.
-//
-// The sixth, 'external', is everything outside the five -- Settings, login,
-// a share page. Until issue #265's S7 nothing ever asked libraryRouteShape
-// about such a path: ensureLibraryWorkspaceRoute (#264) always navigated the
-// browser onto the workspace *before* any library history write ran, so by
-// the time writeLibraryHistory read window.location.pathname it was already
-// one of the five. With that guard gone, writeLibraryHistory is what detects
-// a caller opening a collection or a song from off the library route at
-// all, and it can only do that if leaving a non-library path counts as a
-// crossing every time -- collapsing 'external' into 'root' (both would
-// satisfy `!isAlbumRoutePath && !isPlaylistRoutePath`) would make a write
-// landing on '/' from Settings same-shape, take the raw `history.pushState`
-// branch, and leave the router mounted on Settings' route file while the bar
-// reads '/' -- exactly the desync writeLibraryHistory's own crossing check
-// exists to prevent, undetected because the one library path with no
-// address-owning leaf route of its own to force a `goto` is '/' itself. See
-// navigation.test.ts's "opening a collection from off the library route"
-// suite, which pins this for every entry point that used to route through
-// the removed guard.
-type LibraryRouteShape =
-	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist' | 'external';
-
-function libraryRouteShape(pathname: string): LibraryRouteShape {
-	if (isPlaylistRoutePath(pathname)) return 'playlist';
-	if (isAlbumRoutePath(pathname)) {
-		if (!isSongRoutePath(pathname)) return 'album';
-		return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
-	}
-	return pathname === '/' ? 'root' : 'external';
-}
-
 // An open song's own address once its slug is known (issue #275). A selected
 // take addresses onto its own path one segment deeper (issue #281), by its
 // generation_number rather than its uuid -- but only once that take is among
@@ -279,11 +181,9 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 			)?.generation_number;
 			return takeNumber !== undefined
 				? takeRoutePath(song.album_id, song.slug, takeNumber)
-				: `${path}?gen=${state.generationId}`;
+				: pendingTakeRoutePath(path, state.generationId);
 		}
-		return state.generationId
-			? `/?song=${state.songId}&gen=${state.generationId}`
-			: `/?song=${state.songId}`;
+		return legacySongRoutePath(state.songId, state.generationId);
 	}
 	if (state.surface === 'detail' && state.collection?.kind === 'album') {
 		return albumRoutePath(state.collection.id);
