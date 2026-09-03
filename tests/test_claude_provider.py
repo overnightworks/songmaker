@@ -1415,6 +1415,46 @@ def test_claude_cli_tool_surface_health_transitions_from_ok_to_drift_after_a_bui
     assert len(commands) == 2
 
 
+def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_disappears(
+    claude_binary, monkeypatch,
+) -> None:
+    commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
+
+    asyncio.run(verify_cli_tool_surface())
+    assert provider.claude_cli_tool_surface_health() == "ok"
+    monkeypatch.setattr(
+        provider,
+        "_require_claude_binary",
+        lambda: (_ for _ in ()).throw(UnavailableError("Claude CLI is unavailable")),
+    )
+
+    with pytest.raises(UnavailableError, match="unavailable"):
+        asyncio.run(verify_cli_tool_surface())
+
+    assert provider.claude_cli_tool_surface_health() == "unverified"
+    assert len(commands) == 1
+
+
+def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_is_unreadable(
+    claude_binary, monkeypatch,
+) -> None:
+    commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
+
+    asyncio.run(verify_cli_tool_surface())
+    assert provider.claude_cli_tool_surface_health() == "ok"
+    monkeypatch.setattr(
+        provider,
+        "_binary_build",
+        lambda _binary: (_ for _ in ()).throw(UnavailableError("Claude CLI is unreadable")),
+    )
+
+    with pytest.raises(UnavailableError, match="unreadable"):
+        asyncio.run(verify_cli_tool_surface())
+
+    assert provider.claude_cli_tool_surface_health() == "unverified"
+    assert len(commands) == 1
+
+
 # ── #351 round 6: unexpected tool/slash command always permanent ─────
 
 
