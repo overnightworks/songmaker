@@ -454,7 +454,13 @@ root.
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
 
-The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
+The API client and `types.ts` are the frontend's contract with the backend.
+`scripts/generate_types.py --check` derives the browser-facing models from the
+registered FastAPI routes' response and body annotations, follows nested
+Pydantic models, supplements them with the exported `api_models`, and verifies
+their TypeScript interfaces. The backend-only `/api/internal/` worker
+protocol is the sole excluded route role. When a routed model changes,
+regenerate `types.ts` and run the check.
 
 Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). Labelled controls (album/playlist header Play, the editor's Co-Writer/Recipe toggles and Generate, the compact Write | Takes tabs, Now Playing's Queue | This take tabs, the library search field) take the sibling `[data-hitbox='text']` instead: it raises the height to the same touch target and leaves the width to the label and the layout, since forcing the square would clamp a width the layout owns and `data-hitbox-face` — a fixed 24/44px box — cuts straight through a word (#163). A face is only ever drawn on an icon-only control. PlayerBar and the share surface's transport/Now Playing frames are out of this primitive's scope.
 

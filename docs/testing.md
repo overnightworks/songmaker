@@ -87,6 +87,23 @@ file's job:
 `src/` tree, over a table of read and write statements that pins that
 boundary, and over seeded files at every path that used to be exempt.
 
+### API type contract
+
+`scripts/generate_types.py --check` derives the browser contract from the
+registered `api`, `health_api`, and `sharing_api` routers without starting the
+application lifecycle. It follows every route's `response_model` and body
+parameter through nested Pydantic annotations, then supplements that set with
+exported `api_models` and checks that each discovered model has a TypeScript
+interface in `frontend/src/lib/api/types.ts`. The output always states `Checked
+N API models`. The only route role excluded is
+`/api/internal/`: worker registration is a
+backend-to-backend protocol rather than a browser surface.
+
+Run `python scripts/generate_types.py` after changing a routed model, then
+`python scripts/generate_types.py --check`. `tests/test_generate_types.py`
+plants routed response, body, and nested models to prove a stale type file
+fails with the missing model name and a regenerated file passes.
+
 ### Alert rules (promtool)
 
 `monitoring/rules/alert.rules.yml` is Prometheus' own schema, so Prometheus' own
