@@ -419,6 +419,15 @@ The idle transport Play keeps its own path, since it must keep the listener's
 shuffle setting. Navigation reads playback only through `idlePlayTarget()`
 ("what would Play start"), never as a queue.
 
+Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
+snapshot endpoints prepare the count-windowed sources after releasing the
+request session and before their build can reach ffmpeg. The product cap is six
+hours of measured audio; a longer queue receives 422 rather than a shortened
+stream. `queue_streams.py` derives its 336-second ffmpeg timeout from that cap,
+the measured-rate policy, and its reserve; `tests/test_queue_streams.py` pins
+the formula and proves that both endpoints reject an overlong queue before
+ffmpeg runs.
+
 Escape is also a global "one level up" shortcut, mounted once in
 `+layout.svelte` (`lib/utils/escape-level-up.ts`): from a song it goes to
 that song's collection interior, from a collection interior it goes to the

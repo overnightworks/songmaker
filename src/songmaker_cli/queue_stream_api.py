@@ -41,6 +41,7 @@ from songmaker_cli.queue_streams import (
     ensure_sources_detachable,
     load_queue_stream_manifest,
     pin_snapshot,
+    prepare_queue_stream_admission,
     queue_stream_audio_path,
     track_source_from_generation,
     unpin_snapshot,
@@ -104,6 +105,7 @@ def api_create_queue_stream(
 
     ensure_sources_detachable(sources)
     session.close()
+    admission = prepare_queue_stream_admission(ctx, sources)
 
     snapshot = build_queue_stream_snapshot(
         ctx,
@@ -111,6 +113,7 @@ def api_create_queue_stream(
         scope="auth",
         scope_id=user.id,
         stream_url="",
+        admission=admission,
     )
     snapshot.stream_url = f"/api/queue-streams/{snapshot.snapshot_id}/audio"
     return snapshot
@@ -356,6 +359,7 @@ def api_create_library_queue_stream(
     )
     ensure_sources_detachable(membership.sources)
     session.close()
+    admission = prepare_queue_stream_admission(ctx, membership.sources)
 
     snapshot = build_queue_stream_snapshot(
         ctx,
@@ -364,6 +368,7 @@ def api_create_library_queue_stream(
         scope_id=user.id,
         stream_url="",
         force_windowed=not membership.skipped_complete,
+        admission=admission,
     )
     snapshot.stream_url = f"/api/queue-streams/{snapshot.snapshot_id}/audio"
     snapshot.skipped = membership.skipped

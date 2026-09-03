@@ -1,4 +1,11 @@
-"""Build and serve cached continuous queue streams."""
+"""Build and serve cached continuous queue streams.
+
+This module owns queue-stream duration and ffmpeg timeout limits. A host
+measurement on 2026-09-03 concatenated 900.049 seconds of synthetic MP3 audio
+in 5.394 seconds (166.8 audio seconds per wall second). The 100x minimum rate
+and 120-second reserve keep the six-hour product cap within a measured,
+conservative ffmpeg budget.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +20,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from pathlib import Path
 from typing import Literal
 
@@ -34,11 +42,24 @@ QUEUE_STREAM_DIRNAME = "queue-streams"
 QUEUE_STREAM_TTL = timedelta(hours=8)
 QUEUE_STREAM_ORPHAN_MAX_AGE = timedelta(hours=24)
 QUEUE_STREAM_MAX_TRACKS = 200
+QUEUE_STREAM_FFMPEG_MEASURED_AUDIO_SECONDS_PER_WALL_SECOND = 166.8
+QUEUE_STREAM_FFMPEG_MIN_AUDIO_SECONDS_PER_WALL_SECOND = 100
+QUEUE_STREAM_FFMPEG_TIMEOUT_RESERVE_SECONDS = 120
 QUEUE_STREAM_MAX_DURATION_SECONDS = 60 * 60 * 6
 QUEUE_STREAM_MAX_CACHE_BYTES = 1024 * 1024 * 1024
 QUEUE_STREAM_PINNED_MAX_BYTES = 4 * 1024 * 1024 * 1024  # 4 GiB server-wide cap for pinned snapshots
 QUEUE_STREAM_PIN_MAX_AGE = timedelta(days=30)  # Abandoned pins expire after this age
-FFMPEG_TIMEOUT_SECONDS = 600
+
+
+def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
+    return (
+        ceil(duration_seconds / QUEUE_STREAM_FFMPEG_MIN_AUDIO_SECONDS_PER_WALL_SECOND)
+        + QUEUE_STREAM_FFMPEG_TIMEOUT_RESERVE_SECONDS
+    )
+
+
+FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
+QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
 
 
 class PinnedBytesExceededError(Exception):
@@ -119,6 +140,12 @@ class QueueStreamPreparedSource:
     mtime_ns: int
 
 
+@dataclass(frozen=True)
+class QueueStreamAdmission:
+    prepared_sources: list[QueueStreamPreparedSource]
+    windowed_by_count: bool
+
+
 def track_source_from_generation(
     gen: Generation,
     *,
@@ -162,21 +189,16 @@ def build_queue_stream_snapshot(
     scope_id: str,
     stream_url: str,
     force_windowed: bool = False,
+    admission: QueueStreamAdmission | None = None,
 ) -> QueueStreamManifestResponse:
-    if not sources:
-        raise HTTPException(422, "Queue has no playable tracks")
-    over_track_limit = len(sources) > QUEUE_STREAM_MAX_TRACKS
-    windowed_by_count = force_windowed or over_track_limit
-    if over_track_limit:
-        sources = sources[:QUEUE_STREAM_MAX_TRACKS]
+    admission = admission or prepare_queue_stream_admission(ctx, sources)
+    windowed_by_count = force_windowed or admission.windowed_by_count
 
     stream_dir = _stream_dir(ctx)
     stream_dir.mkdir(parents=True, exist_ok=True)
 
-    prepared_sources, windowed_by_duration = _prepare_sources(ctx, sources)
-    if not prepared_sources:
-        raise HTTPException(422, "Queue is too long for stream playback")
-    windowed = windowed_by_count or windowed_by_duration
+    prepared_sources = admission.prepared_sources
+    windowed = windowed_by_count
     content_hash = _content_hash(scope, scope_id, prepared_sources, windowed=windowed)
     with _build_lock(content_hash):
         reusable = _find_reusable_snapshot(ctx, content_hash, stream_url)
@@ -190,7 +212,6 @@ def build_queue_stream_snapshot(
             stream_url=stream_url,
             content_hash=content_hash,
             windowed_by_count=windowed_by_count,
-            windowed_by_duration=windowed_by_duration,
         )
 
 
@@ -203,7 +224,6 @@ def _build_queue_stream_snapshot(
     stream_url: str,
     content_hash: str,
     windowed_by_count: bool = False,
-    windowed_by_duration: bool = False,
 ) -> QueueStreamManifestResponse:
     stream_dir = _stream_dir(ctx)
     snapshot_id = uuid.uuid4().hex
@@ -226,10 +246,7 @@ def _build_queue_stream_snapshot(
         audio_paths.append(prepared.audio_path)
         offset = end
 
-    if not tracks:
-        raise HTTPException(422, "Queue is too long for stream playback")
-
-    windowed = windowed_by_count or windowed_by_duration
+    windowed = windowed_by_count
 
     try:
         write_concat_file(concat_path, audio_paths)
@@ -265,18 +282,16 @@ def _build_queue_stream_snapshot(
     )
 
 
-def _prepare_sources(
+def prepare_queue_stream_admission(
     ctx: AppContext,
     sources: list[QueueStreamSource],
-) -> tuple[list[QueueStreamPreparedSource], bool]:
-    """Probe sources one at a time, stopping before the track that would
-    exceed the duration cap.
-
-    Returns (prepared, windowed_by_duration). Sources beyond the window are never probed,
-    so a corrupt track outside the window does not fail the build.
-    """
+) -> QueueStreamAdmission:
+    if not sources:
+        raise HTTPException(422, "Queue has no playable tracks")
+    windowed_by_count = len(sources) > QUEUE_STREAM_MAX_TRACKS
+    sources = sources[:QUEUE_STREAM_MAX_TRACKS]
     prepared: list[QueueStreamPreparedSource] = []
-    offset = 0.0
+    total_duration = 0.0
     for source in sources:
         gen = source.generation
         if not gen.mp3_path:
@@ -287,8 +302,9 @@ def _prepare_sources(
         except OSError as exc:
             raise HTTPException(404, "Audio file not found") from exc
         duration = probe_audio_duration(audio_path)
-        if offset + duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
-            return prepared, True
+        total_duration += duration
+        if total_duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
+            raise HTTPException(422, QUEUE_STREAM_DURATION_LIMIT_DETAIL)
         prepared.append(
             QueueStreamPreparedSource(
                 source=source,
@@ -298,8 +314,16 @@ def _prepare_sources(
                 mtime_ns=stat.st_mtime_ns,
             )
         )
-        offset += duration
-    return prepared, False
+    if not queue_stream_duration_fits_ffmpeg_timeout(total_duration):
+        raise RuntimeError("Queue stream duration exceeds the ffmpeg timeout budget")
+    return QueueStreamAdmission(
+        prepared_sources=prepared,
+        windowed_by_count=windowed_by_count,
+    )
+
+
+def queue_stream_duration_fits_ffmpeg_timeout(duration_seconds: float) -> bool:
+    return queue_stream_ffmpeg_timeout_seconds(duration_seconds) <= FFMPEG_TIMEOUT_SECONDS
 
 
 def _content_hash(

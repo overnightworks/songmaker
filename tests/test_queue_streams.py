@@ -25,8 +25,13 @@ from songmaker_cli.queue_stream_api import (
     shuffle_library_sources,
 )
 from songmaker_cli.queue_streams import (
+    FFMPEG_TIMEOUT_SECONDS,
+    QUEUE_STREAM_DURATION_LIMIT_DETAIL,
+    QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
     build_queue_stream_snapshot,
+    queue_stream_duration_fits_ffmpeg_timeout,
+    queue_stream_ffmpeg_timeout_seconds,
     read_audio_duration,
     track_source_from_generation,
 )
@@ -687,51 +692,54 @@ def test_queue_stream_request_model_rejects_more_than_500_tracks(
     assert resp_at_limit.json()["windowed"] is True
 
 
-def test_queue_stream_windowed_by_duration(tmp_path: Path, monkeypatch) -> None:
+def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
-    # duration=10s per track; cap at 15s admits only the first track
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 10)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
 
-    resp = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
+    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
 
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["windowed"] is True
-    assert len(data["tracks"]) == 1
-    assert data["tracks"][0]["generation_id"] == "g1"
+    assert resp.json()["total_duration"] == 10
 
 
-def test_queue_stream_cache_identity_includes_windowed_semantics(
+def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
+    concat_calls: list[object] = []
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
+    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
+    monkeypatch.setattr(
+        qs,
+        "run_ffmpeg_concat",
+        lambda *_args, **_kwargs: concat_calls.append("ffmpeg"),
+    )
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
 
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
-    windowed = client.post(
+    response = client.post(
         "/api/queue-streams",
         json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
     )
-    assert windowed.status_code == 200
-    assert windowed.json()["windowed"] is True
 
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 60 * 60 * 6)
-    complete = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert complete.status_code == 200
-    assert complete.json()["windowed"] is False
-    assert complete.json()["snapshot_id"] != windowed.json()["snapshot_id"]
+    assert response.status_code == 422
+    assert response.json()["detail"] == QUEUE_STREAM_DURATION_LIMIT_DETAIL
+    assert concat_calls == []
+
+
+def test_queue_stream_duration_cap_sets_ffmpeg_timeout() -> None:
+    assert FFMPEG_TIMEOUT_SECONDS == queue_stream_ffmpeg_timeout_seconds(
+        QUEUE_STREAM_MAX_DURATION_SECONDS
+    )
+    assert queue_stream_duration_fits_ffmpeg_timeout(QUEUE_STREAM_MAX_DURATION_SECONDS)
+    assert not queue_stream_duration_fits_ffmpeg_timeout(QUEUE_STREAM_MAX_DURATION_SECONDS + 1)
 
 
 def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, monkeypatch) -> None:
@@ -995,6 +1003,30 @@ def test_library_stream_order_and_tracks(tmp_path: Path, monkeypatch) -> None:
     # indices are contiguous from 0
     assert [t["index"] for t in data["tracks"]] == [0, 1]
     assert data["tracks"][1]["start_offset"] == pytest.approx(10.0)
+
+
+def test_library_stream_rejects_duration_above_cap_before_ffmpeg(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import songmaker_cli.queue_streams as qs
+
+    concat_calls: list[object] = []
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
+    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
+    monkeypatch.setattr(
+        qs,
+        "run_ffmpeg_concat",
+        lambda *_args, **_kwargs: concat_calls.append("ffmpeg"),
+    )
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    response = client.post("/api/queue-streams/library", json={})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == QUEUE_STREAM_DURATION_LIMIT_DETAIL
+    assert concat_calls == []
 
 
 def test_library_stream_picks_picked_over_first(tmp_path: Path, monkeypatch) -> None:
@@ -1829,6 +1861,11 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1_500)
     monkeypatch.setattr(queue_stream_api, "list_songs", lambda *_args, **_kwargs: songs)
     monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(
+        queue_stream_api,
+        "prepare_queue_stream_admission",
+        lambda *_args: queue_streams.QueueStreamAdmission([], False),
+    )
     monkeypatch.setattr(queue_stream_api, "build_queue_stream_snapshot", fake_build)
 
     resp = client.post("/api/queue-streams/library", json={"shuffle": False})
