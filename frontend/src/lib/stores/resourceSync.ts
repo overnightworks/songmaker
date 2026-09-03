@@ -30,6 +30,7 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
+import { classifyAuthFailure } from '$lib/stores/auth';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
 export type ResourceSyncStatus =
@@ -339,9 +340,6 @@ export class ResourceSyncController {
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
 		if (result === 'disabled') {
-			// A 403 here means the account itself was disabled, not that the
-			// session died -- signing in again would fail the same way, so this
-			// must not run the session-lost redirect (finding 2).
 			this.teardown({ resetStore: false });
 			this.setVisibleError(RESOURCE_SYNC_ACCOUNT_DISABLED_ERROR);
 			this.resolveReady(false);
@@ -696,10 +694,8 @@ export async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 		await fetchMe();
 		return 'ok';
 	} catch (err) {
-		if (!(err instanceof ApiError)) return 'retryable';
-		if (err.status === 403) return 'disabled';
-		if (err.status === 401) return 'unauthorized';
-		return 'retryable';
+		const failure = classifyAuthFailure(err);
+		return failure === 'retryable' ? 'retryable' : failure;
 	}
 }
 

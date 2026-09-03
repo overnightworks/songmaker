@@ -5,6 +5,8 @@ export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 // Cross-file contract: fetch.ts's handleSessionLost writes this param,
 // whatever reads it back (the login page) must use the same name.
 export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
+export const AUTH_SESSION_EXPIRED_MESSAGE = 'Sitzung abgelaufen';
+export const AUTH_ACCOUNT_DISABLED_MESSAGE = 'Konto deaktiviert';
 
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a

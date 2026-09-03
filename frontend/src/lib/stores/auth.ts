@@ -16,19 +16,16 @@ export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
-export type AuthFailureKind = 'unauthenticated' | 'transient';
+export type AuthFailureKind = 'unauthorized' | 'disabled' | 'retryable';
+export type AuthNotice = Exclude<AuthFailureKind, 'retryable'>;
 
-/**
- * A 401 or 403 on auth/me means the caller is logged out — 403 covers
- * `get_current_user` returning "Account disabled" for a revoked account, which
- * is permanent, not transient. Every other failure (429, 5xx, network) is
- * transient. Mirrors `probeResourceAuth` in `resourceSync.ts`.
- */
+export const authNotice = writable<AuthNotice | null>(null);
+
 export function classifyAuthFailure(error: unknown): AuthFailureKind {
-	if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-		return 'unauthenticated';
-	}
-	return 'transient';
+	if (!(error instanceof ApiError)) return 'retryable';
+	if (error.status === 401) return 'unauthorized';
+	if (error.status === 403) return 'disabled';
+	return 'retryable';
 }
 
 function describeAuthCheckFailure(error: unknown): string {
@@ -47,13 +44,17 @@ export async function checkAuth(): Promise<AuthUser | null> {
 		const user = await fetchMe();
 		currentUser.set(user);
 		authCheckError.set(null);
+		authNotice.set(null);
 		return user;
 	} catch (err) {
-		if (classifyAuthFailure(err) === 'unauthenticated') {
+		const failure = classifyAuthFailure(err);
+		if (failure !== 'retryable') {
 			authCheckError.set(null);
+			authNotice.set(failure);
 			currentUser.set(null);
 			return null;
 		}
+		authNotice.set(null);
 		authCheckError.set(describeAuthCheckFailure(err));
 		return get(currentUser);
 	} finally {
@@ -63,6 +64,7 @@ export async function checkAuth(): Promise<AuthUser | null> {
 
 export async function login(username: string, password: string): Promise<AuthUser> {
 	authError.set('');
+	authNotice.set(null);
 	try {
 		const user = await apiLogin(username, password);
 		currentUser.set(user);

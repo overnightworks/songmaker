@@ -1,8 +1,12 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
-	import { APP_NAME } from '$lib/constants';
-	import { login, authError } from '$lib/stores/auth';
+	import {
+		APP_NAME,
+		AUTH_ACCOUNT_DISABLED_MESSAGE,
+		AUTH_SESSION_EXPIRED_MESSAGE
+	} from '$lib/constants';
+	import { login, authError, authNotice } from '$lib/stores/auth';
 
 	let username = $state('');
 	let password = $state('');
@@ -74,7 +78,11 @@
 					</button>
 				</div>
 			</label>
-			{#if $authError}
+			{#if $authNotice === 'disabled'}
+				<p class="error">{AUTH_ACCOUNT_DISABLED_MESSAGE}</p>
+			{:else if $authNotice === 'unauthorized'}
+				<p class="error">{AUTH_SESSION_EXPIRED_MESSAGE}</p>
+			{:else if $authError}
 				<p class="error">{$authError}</p>
 			{/if}
 			<button type="submit" class="submit-btn" disabled={submitting}>

@@ -25,6 +25,7 @@ import {
 	authLoading,
 	authError,
 	authCheckError,
+	authNotice,
 	isAdmin,
 	checkAuth,
 	classifyAuthFailure,
@@ -49,6 +50,7 @@ beforeEach(() => {
 	authLoading.set(true);
 	authError.set('');
 	authCheckError.set(null);
+	authNotice.set(null);
 });
 
 describe('auth store', () => {
@@ -67,11 +69,11 @@ describe('auth store', () => {
 
 describe('classifyAuthFailure', () => {
 	it.each([
-		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthenticated'],
-		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'unauthenticated'],
-		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'transient'],
-		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'transient'],
-		['a network error', new TypeError('Failed to fetch'), 'transient']
+		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthorized'],
+		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'disabled'],
+		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'retryable'],
+		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'retryable'],
+		['a network error', new TypeError('Failed to fetch'), 'retryable']
 	])('classifies %s as %s', (_label, error, expected) => {
 		expect(classifyAuthFailure(error)).toBe(expected);
 	});
@@ -80,12 +82,14 @@ describe('classifyAuthFailure', () => {
 describe('checkAuth', () => {
 	it('sets currentUser on success and clears any prior check error', async () => {
 		authCheckError.set('stale error');
+		authNotice.set('disabled');
 		mockFetchMe.mockResolvedValueOnce({ id: 'u1', username: 'admin', role: 'admin' });
 		const user = await checkAuth();
 		expect(user).toEqual({ id: 'u1', username: 'admin', role: 'admin' });
 		expect(get(currentUser)).toEqual(user);
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
+		expect(get(authNotice)).toBeNull();
 	});
 
 	it('logs out on a 401 and clears the known user', async () => {
@@ -96,6 +100,7 @@ describe('checkAuth', () => {
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
+		expect(get(authNotice)).toBe('unauthorized');
 	});
 
 	it('logs out on a 403 (account disabled) and clears the known user', async () => {
@@ -106,14 +111,17 @@ describe('checkAuth', () => {
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
+		expect(get(authNotice)).toBe('disabled');
 	});
 
 	it('keeps an unknown user null through a transient failure on first load', async () => {
+		authNotice.set('disabled');
 		mockFetchMe.mockRejectedValueOnce(new ApiError(429, 'slow down', AUTH_ME_PATH));
 		const user = await checkAuth();
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authCheckError)).not.toBeNull();
+		expect(get(authNotice)).toBeNull();
 	});
 
 	it.each([
@@ -141,9 +149,11 @@ describe('login', () => {
 	});
 
 	it('sets authError on 401', async () => {
+		authNotice.set('disabled');
 		mockApiLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', '/api/auth/login'));
 		await expect(login('alice', 'wrong')).rejects.toThrow();
 		expect(get(authError)).toBe('Invalid username or password.');
+		expect(get(authNotice)).toBeNull();
 	});
 
 	it('sets authError on 429', async () => {
