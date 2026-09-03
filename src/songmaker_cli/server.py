@@ -402,5 +402,5 @@ def run_server(
     uvicorn.run(
         app, host=settings.host, port=port, log_level="info",
         timeout_keep_alive=settings.request_timeout_seconds,
-        proxy_headers=False,
+        proxy_headers=False, log_config=None, access_log=False,
     )

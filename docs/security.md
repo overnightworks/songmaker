@@ -304,7 +304,7 @@ All responses include:
 
 ## Error Handling
 
-- **Generation, scoring, and LoRA job errors**: `_sanitize_error` maps known worker and setup doses to fixed musician-facing messages and logs raw failures with the job ID only on the server; generation, scoring, and LoRA store that returned message in `job.error` (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:473-483`; `jobs/scoring.py:194-213`; `jobs/lora_training.py:506-515,618-631`).
+- **Generation, scoring, and LoRA job errors**: `_sanitize_error` maps known worker and setup doses to fixed musician-facing messages and logs raw failures with the job ID only on the server; generation, scoring, and LoRA store that returned message in `job.error` (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:473-483`; `jobs/scoring.py:194-213`; `jobs/lora_training.py:506-515,618-631`). Raw reasons live in the service's JSON container log, retained as five rotated 10 MB files.
 - **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py:463-467`, `chat_api.py:266-269`); the model-catalog failure path now uses a fixed message (`settings_api.py:577-578,658-659`; #476 closed).
 - **Validation errors**: The custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema) (`server.py:273-290`).
 - **ACE-Step errors**: Worker failures map through `_sanitize_error` to a fixed message before the generation job persists `job.error`; only the silent-stream dose stays distinct (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:469-480`).

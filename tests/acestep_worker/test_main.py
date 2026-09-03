@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+import logging
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from acestep_worker.__main__ import build_deps, main
+from acestep_worker.__main__ import build_deps, configure_logging, main
 from acestep_worker.gpu_util import GpuHealth
 
 
@@ -76,3 +79,32 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     run_mock.assert_called_once()
     _, kwargs = run_mock.call_args
     assert kwargs["port"] == 8765
+
+
+def test_configure_logging_emits_common_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging("INFO")
+
+    logging.getLogger("acestep.worker").info("worker ready")
+
+    payload = json.loads(capsys.readouterr().err)
+    assert payload == {
+        "event": "worker ready",
+        "level": "info",
+        "logger": "acestep.worker",
+        "timestamp": payload["timestamp"],
+    }
+    assert datetime.fromisoformat(payload["timestamp"])
+
+
+def test_configure_logging_includes_exception_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging("INFO")
+
+    try:
+        raise ValueError("generation failed")
+    except ValueError:
+        logging.getLogger("acestep.worker").exception("generation failed")
+
+    payload = json.loads(capsys.readouterr().err)
+    assert "ValueError: generation failed" in payload["exception"]

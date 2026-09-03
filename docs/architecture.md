@@ -77,6 +77,8 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
+Production application containers (web, music-worker, scoring-worker, and ACE-Step workers) write JSON log lines with `timestamp`, `level`, `logger`, and `event`; Docker retains five 10 MB files per service so operational history remains bounded.
+
 ## Job Routing
 
 ```

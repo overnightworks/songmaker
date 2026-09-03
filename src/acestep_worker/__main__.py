@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
@@ -30,6 +32,28 @@ DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "xl-sft": 12.0,
     "xl-base": 12.0,
 }
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
+            "level": record.levelname.lower(),
+            "logger": record.name,
+            "event": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def configure_logging(log_level: str) -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(log_level)
 
 
 def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
@@ -111,10 +135,16 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
 
 def main() -> None:
     settings = get_worker_settings()
-    logging.basicConfig(level=settings.log_level)
+    configure_logging(settings.log_level)
     deps = build_deps(settings)
     app = create_app(deps)
-    uvicorn.run(app, host="0.0.0.0", port=settings.worker_port)  # noqa: S104  # nosec B104
+    uvicorn.run(
+        app,
+        # The worker must accept connections on the container network.
+        host="0.0.0.0",  # nosec B104
+        port=settings.worker_port,
+        log_config=None,
+    )  # noqa: S104
 
 
 if __name__ == "__main__":  # pragma: no cover

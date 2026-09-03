@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -327,6 +329,8 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
     mock_uvicorn.assert_called_once()
     call_kwargs = mock_uvicorn.call_args
     assert call_kwargs.kwargs.get("port") == 9999
+    assert call_kwargs.kwargs.get("log_config") is None
+    assert call_kwargs.kwargs.get("access_log") is False
 
 
 def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
@@ -1102,31 +1106,38 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
 
 
 class TestConfigureLogging:
-    def test_text_mode_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_text_mode_default(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
         from songmaker_cli.logging_config import configure_logging
         configure_logging()
-        import logging
-        root = logging.getLogger()
-        assert root.handlers
-        import structlog
-        formatter = root.handlers[0].formatter
-        assert isinstance(formatter, structlog.stdlib.ProcessorFormatter)
-        last_processor = formatter.processors[-1]
-        assert isinstance(last_processor, structlog.dev.ConsoleRenderer)
+        logging.getLogger("songmaker.test").info("text mode")
+        assert "text mode" in capsys.readouterr().err
 
-    def test_json_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_json_mode(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
         monkeypatch.setenv("LOG_FORMAT", "json")
         from songmaker_cli.logging_config import configure_logging
         configure_logging()
-        import logging
-        root = logging.getLogger()
-        assert root.handlers
-        import structlog
-        formatter = root.handlers[0].formatter
-        assert isinstance(formatter, structlog.stdlib.ProcessorFormatter)
-        last_processor = formatter.processors[-1]
-        assert isinstance(last_processor, structlog.processors.JSONRenderer)
+        logging.getLogger("songmaker.test").info("json mode")
+        assert json.loads(capsys.readouterr().err)["event"] == "json mode"
+
+    def test_json_mode_emits_common_log_fields(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setenv("LOG_FORMAT", "json")
+        from songmaker_cli.logging_config import configure_logging
+        configure_logging()
+
+        logging.getLogger("songmaker.test").info("worker ready")
+
+        payload = json.loads(capsys.readouterr().err)
+        assert payload["event"] == "worker ready"
+        assert payload["level"] == "info"
+        assert payload["logger"] == "songmaker.test"
+        assert datetime.fromisoformat(payload["timestamp"])
 
 
 # ── health endpoint ──────────────────────────────────────────────

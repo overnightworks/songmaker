@@ -1,7 +1,14 @@
+x-logging: &service-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *service-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-songmaker}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -25,6 +32,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *service-logging
     volumes:
       - redisdata:/data
     healthcheck:
@@ -49,6 +57,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
     entrypoint: ["uv", "run", "alembic", "upgrade", "head"]
     restart: "no"
+    logging: *service-logging
     cap_drop:
       - ALL
 
@@ -57,6 +66,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *service-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,6 +89,7 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      LOG_FORMAT: json
       HOST: "0.0.0.0"
     # Published to the loopback interface only: Docker's NAT chain bypasses
     # the INPUT chain (and with it UFW), so a "8080:8080" binding reaches the
@@ -140,6 +151,7 @@ services:
       dockerfile: docker/music-worker.Dockerfile
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
+    logging: *service-logging
     healthcheck:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "music"]
       interval: 30s
@@ -166,6 +178,7 @@ services:
       LORA_TRAINING_SAVE_EVERY_N_EPOCHS: "${LORA_TRAINING_SAVE_EVERY_N_EPOCHS:-5}"
       LORA_TRAINING_POLL_INTERVAL_SECONDS: "${LORA_TRAINING_POLL_INTERVAL_SECONDS:-5}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      LOG_FORMAT: json
     volumes:
       - audiofiles:/app/data/audio
 
@@ -175,6 +188,7 @@ services:
       dockerfile: docker/acestep-worker.Dockerfile
     runtime: nvidia
     restart: unless-stopped
+    logging: *service-logging
     depends_on:
       redis:
         condition: service_healthy
@@ -221,6 +235,7 @@ services:
         - hf_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
+    logging: *service-logging
     healthcheck:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "scoring"]
       interval: 30s
@@ -246,6 +261,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOG_FORMAT: json
     volumes:
       - audiofiles:/app/data/audio
       - hfcache:/app/.cache/huggingface/hub
@@ -267,6 +283,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
+    logging: *service-logging
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -299,6 +316,7 @@ services:
   alertmanager:
     image: prom/alertmanager:latest
     restart: unless-stopped
+    logging: *service-logging
     # Only the four non-secret values travel as environment (they are
     # readable in `docker inspect`, which for a hostname, a port and two
     # addresses is what they already are in .env.docker.example). The
@@ -341,6 +359,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     restart: unless-stopped
+    logging: *service-logging
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
