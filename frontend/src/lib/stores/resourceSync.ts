@@ -17,6 +17,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
@@ -44,6 +45,11 @@ export interface ResourceSyncState {
 	highWaterMark: string | null;
 	appliedSequence: string | null;
 	ready: boolean;
+}
+
+export interface ResourceSyncTrackedSizes {
+	deferred: number;
+	seenGenerationIds: number;
 }
 
 export interface ResourceEventSource {
@@ -108,6 +114,13 @@ export class ResourceSyncController {
 
 	get state(): ResourceSyncState {
 		return get(this.store);
+	}
+
+	get trackedSizes(): ResourceSyncTrackedSizes {
+		return {
+			deferred: this.deferred.length,
+			seenGenerationIds: this.seenGenerationIds.size
+		};
 	}
 
 	start(): void {
@@ -469,6 +482,10 @@ export class ResourceSyncController {
 	private deferEvent(event: GenerationCreatedResourceEvent): void {
 		if (this.deferred.some((queued) => queued.generation_id === event.generation_id)) return;
 		this.deferred.push(event);
+		if (this.deferred.length > RESOURCE_SYNC_TRACKED_EVENT_LIMIT) {
+			this.deferred.sort((a, b) => compareDecimalId(a.sequence, b.sequence));
+			this.deferred = this.deferred.slice(-RESOURCE_SYNC_TRACKED_EVENT_LIMIT);
+		}
 	}
 
 	private promoteDeferredSongs(): void {
@@ -529,7 +546,7 @@ export class ResourceSyncController {
 			this.deps.applySong(song);
 			this.failedSongIds.delete(songId);
 			for (const generation of song.generations) {
-				this.seenGenerationIds.add(generation.id);
+				this.trackSeenGenerationId(generation.id);
 			}
 			this.clearLiveErrorIfHealed();
 		} catch (err) {
@@ -544,6 +561,14 @@ export class ResourceSyncController {
 			this.failedSongIds.add(songId);
 			this.setVisibleError(errorMessage(err));
 		}
+	}
+
+	private trackSeenGenerationId(generationId: string): void {
+		this.seenGenerationIds.delete(generationId);
+		this.seenGenerationIds.add(generationId);
+		if (this.seenGenerationIds.size <= RESOURCE_SYNC_TRACKED_EVENT_LIMIT) return;
+		const oldest = this.seenGenerationIds.values().next().value;
+		if (oldest !== undefined) this.seenGenerationIds.delete(oldest);
 	}
 
 	private isAfterWatermark(sequence: string): boolean {

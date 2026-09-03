@@ -411,6 +411,7 @@ export const RESOURCE_SYNC_ERROR = 'Library sync failed';
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
+export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
 
