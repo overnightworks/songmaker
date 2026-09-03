@@ -50,7 +50,7 @@ server = [
     "pillow>=12.3,<13",
 ]
 claude = [
-    "anthropic>=0.20,<1",
+    "anthropic>=0.20,<2",
 ]
 mcp = [
     "mcp>=2,<3",

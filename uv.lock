@@ -1641,7 +1641,7 @@ whisper = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13,<2" },
-    { name = "anthropic", marker = "extra == 'claude'", specifier = ">=0.20,<1" },
+    { name = "anthropic", marker = "extra == 'claude'", specifier = ">=0.20,<2" },
     { name = "arq", marker = "extra == 'server'", specifier = ">=0.26,<1" },
     { name = "audiobox-aesthetics", marker = "extra == 'scoring'", specifier = ">=0.0.4,<1" },
     { name = "bcrypt", marker = "extra == 'server'", specifier = ">=4.0,<6" },
