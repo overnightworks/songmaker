@@ -35,6 +35,16 @@
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
+	const songsByAlbum = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per derivation, never mutated reactively
+		const index = new Map<string, SongItem[]>();
+		for (const song of songs) {
+			const albumSongs = index.get(song.album_id);
+			if (albumSongs) albumSongs.push(song);
+			else index.set(song.album_id, [song]);
+		}
+		return index;
+	});
 	const collection = $derived($openCollection);
 	const currentSongId = $derived($selectedSongId);
 	const current = $derived(audioPlayer.current);
@@ -73,10 +83,6 @@
 		previousOpenAlbumId = openAlbumId;
 		if (enteredAlbum) expandAlbum(openAlbumId as string);
 	});
-
-	function albumTracks(albumId: string): SongItem[] {
-		return songs.filter((song) => song.album_id === albumId).sort(compareAlbumTracks);
-	}
 
 	function isAlbumExpanded(albumId: string): boolean {
 		return expandedAlbumId === albumId;
@@ -222,30 +228,32 @@
 					<div
 						class="album-songs"
 						data-open={expanded}
-						id={`rail-library-album-${album.id}`}
 						inert={!expanded}
+						id={`rail-library-album-${album.id}`}
 					>
 						<div class="album-songs-content">
-							<ul>
-								{#each albumTracks(album.id) as song (song.id)}
-									<li>
-										<button
-											type="button"
-											class="row row-sub2"
-											class:row-active={song.id === currentSongId}
-											onclick={() => onTrackClick(song)}
-										>
-											{#if isSongPlaying(song)}
-												<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
-													<span></span><span></span><span></span>
-												</span>
-											{/if}
-											<span class="row-title">{song.title}</span>
-											<span class="row-meta">{trackMeta(song)}</span>
-										</button>
-									</li>
-								{/each}
-							</ul>
+							{#if expanded}
+								<ul>
+									{#each [...(songsByAlbum.get(album.id) ?? [])].sort(compareAlbumTracks) as song (song.id)}
+										<li>
+											<button
+												type="button"
+												class="row row-sub2"
+												class:row-active={song.id === currentSongId}
+												onclick={() => onTrackClick(song)}
+											>
+												{#if isSongPlaying(song)}
+													<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
+														<span></span><span></span><span></span>
+													</span>
+												{/if}
+												<span class="row-title">{song.title}</span>
+												<span class="row-meta">{trackMeta(song)}</span>
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
 						</div>
 					</div>
 				</li>

@@ -113,6 +113,34 @@ describe('RailLibraryGroup', () => {
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '5']);
 	});
 
+	it('does not render tracks for a collapsed album', async () => {
+		const target = await render();
+		expect(target.querySelectorAll('.row-sub2')).toHaveLength(0);
+	});
+
+	it('keeps each collapsed album disclosure connected to its empty track container', async () => {
+		const target = await render();
+		const disclosure = requireElement<HTMLButtonElement>(target, '.album-disclose');
+		const controlledId = disclosure.getAttribute('aria-controls');
+
+		expect(controlledId).toBe('rail-library-album-a1');
+		expect(target.querySelector(`#${controlledId}`)?.getAttribute('data-open')).toBe('false');
+		expect((target.querySelector(`#${controlledId}`) as HTMLElement).inert).toBe(true);
+	});
+
+	it('renders a newly opened album tracks in track order', async () => {
+		songList.set([
+			song({ id: 's1', title: 'Ebb', track_number: 2 }),
+			song({ id: 's2', title: 'Tide', track_number: 1 })
+		]);
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, '.album-disclose').click();
+		await tick();
+
+		const rows = target.querySelectorAll('.row-sub2 .row-title');
+		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Tide', 'Ebb']);
+	});
+
 	it('pre-expands the open album and marks its selected track, in track order', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
 		selectedSongId.set('s2');
