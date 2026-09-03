@@ -902,7 +902,10 @@ active job type without a policy-table row is a loop failure and is exposed by
   reaper; MusicWorker calls the same job-owned reconciliation after it
   terminalizes a `lora_training` job. The path locks one active LoRA candidate
   with `skip_locked`, commits its FAILED status and one audit entry in that
-  transaction, then removes its working files. A second process finds no
+  transaction, then removes its working files. Only a LoRA whose training job
+  is missing or terminal is a candidate; a still-RUNNING job's LoRA waits for
+  the lifecycle reaper to terminalize it (heartbeat threshold plus one tick).
+  A second process finds no
   unlocked candidate to clean up.
 
 **Backwards-compatible shim** (`worker.py`):
