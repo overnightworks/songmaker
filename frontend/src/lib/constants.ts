@@ -159,7 +159,7 @@ export function providerConfiguredDetail(
 	cliLogin: string | null | undefined,
 	environmentKey: string | null | undefined
 ): string {
-	return `${PROVIDER_CONFIGURED_LABEL} — ${cliLogin ?? `${environmentKey ?? 'provider credentials'} set`}`;
+	return `Configured via ${cliLogin ?? environmentKey ?? 'provider credentials'}`;
 }
 
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal

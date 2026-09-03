@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from songmaker_cli import agent_cli
 from songmaker_cli.claude.provider import AssistantTextEvent, StreamEvent
 from songmaker_cli.cowriter import claude_adapter, dispatch
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
@@ -132,7 +133,7 @@ def test_grok_dispatch_uses_the_api_for_a_missing_or_tokenless_mirror(
     mirror_document,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr(dispatch, "GROK_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(auth_file))
     if mirror_document is not None:
         auth_file.write_text(json.dumps(mirror_document))
     monkeypatch.setenv("XAI_API_KEY", "api-key")
@@ -163,7 +164,9 @@ def test_grok_dispatch_names_the_missing_api_credential_when_no_mirror_exists(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(dispatch, "GROK_CLI_AUTH_FILE", str(tmp_path / "auth.json"))
+    monkeypatch.setattr(
+        "songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(tmp_path / "auth.json"),
+    )
     monkeypatch.delenv("XAI_API_KEY", raising=False)
 
     async def collect() -> list[StreamEvent]:
@@ -221,7 +224,7 @@ def test_grok_cli_token_discriminator_accepts_only_a_nonempty_string_key(
     monkeypatch, tmp_path: Path,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr(dispatch, "GROK_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(auth_file))
 
     auth_file.write_text(json.dumps({"realm": {"key": "subscription-token"}}))
     assert dispatch._grok_cli_token_is_present() is True
@@ -271,7 +274,7 @@ def test_codex_dispatch_uses_the_api_for_a_missing_or_tokenless_mirror(
     mirror_document,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
     if mirror_document is not None:
         auth_file.write_text(json.dumps(mirror_document))
     monkeypatch.setenv("OPENAI_API_KEY", "api-key")
@@ -304,7 +307,7 @@ def test_codex_dispatch_rejects_invalid_mirror_without_http_fallback(
 ) -> None:
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(mirror_document))
-    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -321,7 +324,7 @@ def test_codex_dispatch_rejects_invalid_json_without_http_fallback(
 ) -> None:
     auth_file = tmp_path / "auth.json"
     auth_file.write_text("{")
-    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -336,7 +339,7 @@ def test_codex_cli_access_token_discriminator_reports_an_unreadable_mirror(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        dispatch.Path,
+        agent_cli.Path,
         "read_text",
         lambda _path: (_ for _ in ()).throw(OSError("unreadable")),
     )
@@ -368,7 +371,7 @@ def test_codex_cli_access_token_discriminator_accepts_only_a_nonempty_string(
     monkeypatch, tmp_path: Path,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr(dispatch, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
 
     auth_file.write_text(json.dumps({"tokens": {"access_token": "subscription-token"}}))
     assert dispatch._codex_cli_access_token_is_present() is True

@@ -19,8 +19,10 @@ from pydantic import SecretStr
 
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
+    codex_cli_access_token_is_present,
     codex_cli_login,
     grok_cli_status,
+    grok_cli_token_is_present,
 )
 from songmaker_cli.claude.provider import (
     CLAUDE_CLI_MODEL_CATALOG_ERROR,
@@ -199,8 +201,7 @@ def _refresh_cli_login(provider: str) -> None:
 
 def list_provider_models(provider: str) -> list[str]:
     settings = get_settings()
-    # The catalog is for models that can serve a turn; JUDGE is the weaker surface.
-    configuration = _provider_configuration(provider, ProviderSurface.JUDGE, settings)
+    configuration = _catalog_configuration(provider, settings)
     match configuration:
         case ConfiguredProvider():
             return _models_for_setup_method(provider, configuration.method, settings)
@@ -233,6 +234,15 @@ def list_provider_models(provider: str) -> list[str]:
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
+def _catalog_configuration(provider: str, settings: Settings) -> ProviderConfiguration:
+    """Use the judge setup unless only its API key is missing."""
+    judge = _provider_configuration(provider, ProviderSurface.JUDGE, settings)
+    if not isinstance(judge, CliLoginNeedsApiKeyProvider):
+        return judge
+    cowriter = _provider_configuration(provider, ProviderSurface.CO_WRITER, settings)
+    return cowriter if isinstance(cowriter, ConfiguredProvider) else judge
+
+
 def models_with_active_model(
     provider: str,
     models: list[str],
@@ -252,6 +262,8 @@ def _models_for_setup_method(
 ) -> list[str]:
     if method is ProviderSetupMethod.CLAUDE_CLI:
         return _list_claude_cli_models()
+    if method is ProviderSetupMethod.GROK_CLI:
+        return _list_grok_cli_models()
     if method is ProviderSetupMethod.CODEX_CLI:
         raise ProviderModelCatalogUnavailableError(
             provider,
@@ -279,6 +291,7 @@ def _provider_configuration(
 ) -> ProviderConfiguration:
     credential = _provider_api_credential(provider, settings)
     key_is_set = bool(_secret(credential.secret))
+    cli_method = _cli_setup_method(provider)
     if key_is_set and _api_key_carries(provider, surface):
         if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
             return DependencyUnavailableProvider(
@@ -290,8 +303,7 @@ def _provider_configuration(
             ProviderSetupMethod.API_KEY,
             credential.environment_key,
         )
-    cli_method = _cli_setup_method(provider)
-    if cli_method is not None and _cli_carries(cli_method):
+    if cli_method is not None and _cli_carries(cli_method, surface):
         return ConfiguredProvider(provider, cli_method)
     if cli_method is not None:
         return CliLoginNeedsApiKeyProvider(
@@ -313,8 +325,11 @@ def _api_key_carries(provider: str, surface: ProviderSurface) -> bool:
     return not (provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER)
 
 
-def _cli_carries(method: ProviderSetupMethod) -> bool:
-    return method is ProviderSetupMethod.CLAUDE_CLI
+def _cli_carries(method: ProviderSetupMethod, surface: ProviderSurface) -> bool:
+    return method is ProviderSetupMethod.CLAUDE_CLI or (
+        method in {ProviderSetupMethod.GROK_CLI, ProviderSetupMethod.CODEX_CLI}
+        and surface is ProviderSurface.CO_WRITER
+    )
 
 
 def _needed_setup(provider: str, surface: ProviderSurface) -> ProviderNeed:
@@ -327,9 +342,9 @@ def _cli_setup_method(provider: str) -> ProviderSetupMethod | None:
     try:
         if provider == _CLAUDE_PROVIDER and cli_login_status().logged_in:
             return ProviderSetupMethod.CLAUDE_CLI
-        if provider == _GROK_PROVIDER and grok_cli_status().login.logged_in:
+        if provider == _GROK_PROVIDER and grok_cli_token_is_present():
             return ProviderSetupMethod.GROK_CLI
-        if provider == _CODEX_PROVIDER and codex_cli_login().logged_in:
+        if provider == _CODEX_PROVIDER and codex_cli_access_token_is_present():
             return ProviderSetupMethod.CODEX_CLI
     except AgentCliUnavailableError as exc:
         log.warning("%s CLI probe unavailable: %s: %s", provider, type(exc).__name__, exc)
@@ -417,6 +432,24 @@ def _list_grok_models(key: str) -> list[str]:
     if not chat:
         raise ProviderModelCatalogUnavailableError(
             _GROK_PROVIDER, "no chat models returned by grok",
+        )
+    return sorted(chat)
+
+
+def _list_grok_cli_models() -> list[str]:
+    try:
+        model_names = grok_cli_status().model_names
+    except AgentCliUnavailableError as exc:
+        raise ProviderModelCatalogUnavailableError(
+            _GROK_PROVIDER, "could not list grok CLI models",
+        ) from exc
+    chat = [
+        model_id for model_id in model_names
+        if _is_provider_model_id(_GROK_PROVIDER, model_id)
+    ]
+    if not chat:
+        raise ProviderModelCatalogUnavailableError(
+            _GROK_PROVIDER, "no chat models returned by grok CLI",
         )
     return sorted(chat)
 

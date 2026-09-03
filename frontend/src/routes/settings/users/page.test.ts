@@ -93,7 +93,13 @@ const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
 	setup_method: 'claude_cli',
 	environment_key: null
 };
-const SIGNED_IN_GROK_CLI: ProviderSurfaceStatus = {
+const GROK_VIA_CLI: ProviderSurfaceStatus = {
+	state: 'configured',
+	needs: null,
+	setup_method: 'grok_cli',
+	environment_key: null
+};
+const GROK_CLI_NEEDS_API_KEY: ProviderSurfaceStatus = {
 	state: 'cli_login_needs_api_key',
 	needs: 'api_key',
 	setup_method: 'grok_cli',
@@ -105,10 +111,10 @@ const NO_CODEX_KEY: ProviderSurfaceStatus = {
 	setup_method: null,
 	environment_key: 'OPENAI_API_KEY'
 };
-const GROK_SIGNED_IN_WITHOUT_TURNS: ProviderStatus[] = [
+const GROK_CONFIGURED_VIA_CLI: ProviderStatus[] = [
 	providerStatus('claude', CLAUDE_VIA_CLI),
 	providerStatus('codex', NO_CODEX_KEY),
-	providerStatus('grok', SIGNED_IN_GROK_CLI)
+	providerStatus('grok', GROK_VIA_CLI, GROK_CLI_NEEDS_API_KEY)
 ];
 const CLAUDE_KEY_WITHOUT_CLI: ProviderStatus[] = [
 	providerStatus(
@@ -127,7 +133,7 @@ const CLAUDE_KEY_WITHOUT_CLI: ProviderStatus[] = [
 		}
 	),
 	providerStatus('codex', NO_CODEX_KEY),
-	providerStatus('grok', SIGNED_IN_GROK_CLI)
+	providerStatus('grok', GROK_VIA_CLI)
 ];
 const TAB_LABELS = [
 	'Users',
@@ -406,7 +412,7 @@ describe('admin models tab', () => {
 		const providers = sectionByHeading(target, 'Providers');
 
 		expect(providers.textContent).toContain('Claude Code CLI login');
-		expect(providers.textContent).toContain('OPENAI_API_KEY set');
+		expect(providers.textContent).toContain('Configured via OPENAI_API_KEY');
 		expect(providers.textContent).toContain('Missing XAI_API_KEY');
 	});
 
@@ -453,16 +459,20 @@ describe('admin models tab', () => {
 		expect(cowriter.textContent).toContain('Provider check is still running in the background');
 	});
 
-	it('does not offer a CLI-only provider for either surface', async () => {
-		api.fetchProviderStatus.mockResolvedValue(GROK_SIGNED_IN_WITHOUT_TURNS);
+	it('offers Grok through its CLI login to the co-writer but not scoring', async () => {
+		api.fetchProviderStatus.mockResolvedValue(GROK_CONFIGURED_VIA_CLI);
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		for (const heading of ['Co-Writer', 'Scoring']) {
-			const picker = sectionByHeading(target, heading);
-			expect(pillNamed(picker, 'Grok').disabled).toBe(true);
-			expect(picker.textContent).toContain('answering needs its API key');
-		}
+		expect(pillNamed(sectionByHeading(target, 'Co-Writer'), 'Grok').disabled).toBe(false);
+		const scoring = sectionByHeading(target, 'Scoring');
+		expect(pillNamed(scoring, 'Grok').disabled).toBe(true);
+		expect(scoring.textContent).toContain('answering needs its API key');
+		const providers = sectionByHeading(target, 'Providers');
+		expect(providers.textContent).toContain('Configured via Grok CLI login');
+		expect(providers.textContent).toContain(
+			'Grok CLI login found — but answering needs its API key'
+		);
 	});
 
 	it('names a missing dependency and a missing status without inventing an API key', async () => {

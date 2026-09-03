@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from songmaker_cli.agent_cli import (
+    AgentCliUnavailableError,
+    codex_cli_access_token_is_present,
+    grok_cli_token_is_present,
+)
 from songmaker_cli.claude.provider import StreamEvent
 from songmaker_cli.constants import (
-    CODEX_CLI_AUTH_FILE,
     COWRITER_GROK_CHAT_URL,
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
-    GROK_CLI_AUTH_FILE,
 )
 from songmaker_cli.cowriter.catalog import (
     OPENAI_API_KEY_ENVIRONMENT,
@@ -164,51 +165,13 @@ def _require_secret(provider: str, secret, environment_key: str) -> str:
 
 def _grok_cli_token_is_present() -> bool:
     try:
-        raw_auth = Path(GROK_CLI_AUTH_FILE).read_text()
-    except FileNotFoundError:
-        return False
-    except OSError as exc:
+        return grok_cli_token_is_present()
+    except AgentCliUnavailableError as exc:
         raise ProviderUnavailableError("grok", "grok_cli_error") from exc
-    try:
-        document = json.loads(raw_auth)
-    except json.JSONDecodeError as exc:
-        raise ProviderUnavailableError("grok", "grok_cli_error") from exc
-    if not isinstance(document, dict):
-        raise ProviderUnavailableError("grok", "grok_cli_error")
-    for realm in document.values():
-        if not isinstance(realm, dict):
-            raise ProviderUnavailableError("grok", "grok_cli_error")
-        key = realm.get("key")
-        if key is None:
-            continue
-        if not isinstance(key, str):
-            raise ProviderUnavailableError("grok", "grok_cli_error")
-        if key:
-            return True
-    return False
 
 
 def _codex_cli_access_token_is_present() -> bool:
     try:
-        raw_auth = Path(CODEX_CLI_AUTH_FILE).read_text()
-    except FileNotFoundError:
-        return False
-    except OSError as exc:
+        return codex_cli_access_token_is_present()
+    except AgentCliUnavailableError as exc:
         raise ProviderUnavailableError("codex", "codex_cli_error") from exc
-    try:
-        document = json.loads(raw_auth)
-    except json.JSONDecodeError as exc:
-        raise ProviderUnavailableError("codex", "codex_cli_error") from exc
-    if not isinstance(document, dict):
-        raise ProviderUnavailableError("codex", "codex_cli_error")
-    if "tokens" not in document:
-        return False
-    tokens = document["tokens"]
-    if not isinstance(tokens, dict):
-        raise ProviderUnavailableError("codex", "codex_cli_error")
-    if "access_token" not in tokens:
-        return False
-    access_token = tokens["access_token"]
-    if not isinstance(access_token, str):
-        raise ProviderUnavailableError("codex", "codex_cli_error")
-    return bool(access_token)
