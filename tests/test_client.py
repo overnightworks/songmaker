@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from http.client import HTTPResponse
 from io import BytesIO
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ import pytest
 from conftest import mock_http_response as _mock_response
 
 from acestep_engine.client import (
+    _AUDIO_UPLOAD_FIELDS,
     _MAX_CAUSE_CHARS,
     AceStepClient,
     is_acestep_available,
@@ -533,8 +535,9 @@ def test_submit_task_repaint_uploads_source_audio(tmp_path) -> None:
 
     request = mock_urlopen.call_args.args[0]
     body = request.data.decode()
+    audio_form_names = dict(_AUDIO_UPLOAD_FIELDS)
     assert request.headers["Content-type"].startswith("multipart/form-data; boundary=")
-    assert 'name="ctx_audio"; filename="source.wav"' in body
+    assert f'name="{audio_form_names["src_audio_path"]}"; filename="source.wav"' in body
     assert 'name="src_audio_path"' not in body
     assert 'name="task_type"\r\n\r\nrepaint\r\n' in body
     assert 'name="repainting_start"\r\n\r\n10.0\r\n' in body
@@ -562,10 +565,32 @@ def test_submit_task_uploads_reference_audio(tmp_path) -> None:
 
     request = mock_urlopen.call_args.args[0]
     body = request.data.decode()
+    audio_form_names = dict(_AUDIO_UPLOAD_FIELDS)
     assert request.headers["Content-type"].startswith("multipart/form-data; boundary=")
-    assert 'name="ref_audio"; filename="reference.wav"' in body
+    assert (
+        f'name="{audio_form_names["reference_audio_path"]}"; '
+        'filename="reference.wav"'
+    ) in body
     assert 'name="reference_audio_path"' not in body
     assert "reference audio" in body
+
+
+def test_submit_task_rejects_missing_audio_file(tmp_path) -> None:
+    client = AceStepClient()
+    missing_audio = tmp_path / "missing.wav"
+    config = AceStepConfig(
+        prompt="test", lyrics="la la",
+        task_type="repaint", src_audio_path=str(missing_audio),
+    )
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        with pytest.raises(
+            TaskSubmissionError,
+            match=f"ACE-Step audio input is not a file: {re.escape(str(missing_audio))}",
+        ):
+            client._submit_task(config)
+
+    mock_urlopen.assert_not_called()
 
 
 # ── submit json/pydantic decode error (non-retryable) ─────────────

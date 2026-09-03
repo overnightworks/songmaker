@@ -202,6 +202,11 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
 
 
 def _encode_multipart_submit_payload(payload: dict) -> tuple[bytes, str] | None:
+    """Encode audio inputs as the multipart form accepted by ``/release_task``.
+
+    Each upload is read completely into memory; a six-hour reference file needs
+    a full in-memory buffer until its submission request is sent.
+    """
     audio_files = [
         (payload_name, form_name, Path(path))
         for payload_name, form_name in _AUDIO_UPLOAD_FIELDS

@@ -11,14 +11,24 @@ allow_population_by_field_name which pydantic v2 has renamed but still honours.
 """
 from __future__ import annotations
 
+import inspect
+import re
 import sys
 import warnings
 from dataclasses import asdict
+from email import policy
+from email.parser import BytesParser
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from conftest import mock_http_response as _mock_response
 
-from acestep_engine.client import _build_submit_payload
+from acestep_engine.client import (
+    _AUDIO_UPLOAD_FIELDS,
+    AceStepClient,
+    _build_submit_payload,
+)
 
 _VENDORED_ACESTEP_PATH = (
     Path(__file__).resolve().parent.parent / "vendor" / "acestep"
@@ -37,6 +47,33 @@ with warnings.catch_warnings():
             f"vendored acestep package not importable: {exc}",
             allow_module_level=True,
         )
+
+try:
+    from acestep.api.http.release_task_request_parser import (  # type: ignore[import-not-found]
+        parse_release_task_request,
+    )
+except ImportError:
+    # Source: vendor/acestep/acestep/api/http/release_task_request_parser.py:110-111
+    _FORK_MULTIPART_AUDIO_FIELDS = {
+        "reference_audio_path": "ref_audio",
+        "src_audio_path": "ctx_audio",
+    }
+else:
+    parser_source = inspect.getsource(parse_release_task_request)
+
+    def _primary_multipart_form_name(pattern: str) -> str:
+        match = re.search(pattern, parser_source)
+        assert match, f"Fork parser is missing primary multipart field: {pattern}"
+        return match.group(1)
+
+    _FORK_MULTIPART_AUDIO_FIELDS = {
+        "reference_audio_path": _primary_multipart_form_name(
+            r'ref_upload = form\.get\("([^\"]+)"\)',
+        ),
+        "src_audio_path": _primary_multipart_form_name(
+            r'ctx_upload = form\.get\("([^\"]+)"\)',
+        ),
+    }
 
 from acestep_engine.models import AceStepConfig  # noqa: E402
 
@@ -113,24 +150,62 @@ def test_acestep_config_has_no_unknown_fields() -> None:
     )
 
 
-def test_repaint_submit_payload_matches_vendored_request_schema() -> None:
+def _multipart_form_parts(body: bytes, content_type: str) -> dict[str, bytes]:
+    message = BytesParser(policy=policy.default).parsebytes(
+        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode() + body,
+    )
+    return {
+        part.get_param("name", header="content-disposition"): part.get_payload(
+            decode=True,
+        )
+        for part in message.iter_parts()
+    }
+
+
+def test_submit_task_matches_fork_multipart_audio_contract(tmp_path) -> None:
+    source_audio = tmp_path / "source.wav"
+    reference_audio = tmp_path / "reference.wav"
+    source_audio.write_bytes(b"source audio")
+    reference_audio.write_bytes(b"reference audio")
     config = _base_config(
         task_type="repaint",
-        src_audio_path="/tmp/source.wav",
+        src_audio_path=str(source_audio),
+        reference_audio_path=str(reference_audio),
         repainting_start=10.0,
         repainting_end=20.0,
         repaint_mode="conservative",
         repaint_strength=0.25,
     )
-    payload = _build_submit_payload(config)
-    fork_fields = set(GenerateMusicRequest.model_fields)
+    response_data = b'{"data":{"task_id":"multipart-1"},"code":200}'
 
-    assert set(payload) <= fork_fields
-    assert {
-        "task_type",
-        "src_audio_path",
-        "repainting_start",
-        "repainting_end",
-        "repaint_mode",
-        "repaint_strength",
-    } <= fork_fields
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        assert AceStepClient()._submit_task(config) == "multipart-1"
+
+    request = mock_urlopen.call_args.args[0]
+    multipart_parts = _multipart_form_parts(
+        request.data,
+        request.headers["Content-type"],
+    )
+    audio_form_names = dict(_AUDIO_UPLOAD_FIELDS)
+
+    assert audio_form_names == _FORK_MULTIPART_AUDIO_FIELDS
+    assert multipart_parts[audio_form_names["src_audio_path"]] == b"source audio"
+    assert multipart_parts[audio_form_names["reference_audio_path"]] == b"reference audio"
+
+    multipart_values = {
+        name: value.decode()
+        for name, value in multipart_parts.items()
+        if name not in audio_form_names.values()
+    }
+    assert set(multipart_values) <= set(GenerateMusicRequest.model_fields)
+    assert "prompt" in multipart_values
+
+    json_payload = _build_submit_payload(config)
+    json_payload.pop("src_audio_path")
+    json_payload.pop("reference_audio_path")
+    assert multipart_values == {
+        name: str(value).lower() if isinstance(value, bool) else str(value)
+        for name, value in json_payload.items()
+        if value is not None
+    }

@@ -372,7 +372,7 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 | Cover | `cover` | Cover button on generation | Re-interpret with different style/lyrics, keep melody |
 | Reference | `text2music` + `reference_audio_path` | Upload in generation settings | Guide timbre/style from an external audio track |
 
-**Repaint** uploads the original WAV as multipart `ctx_audio`, with `repainting_start` and `repainting_end` (0.0-1.0 fractions). `thinking` is auto-disabled. The result is a new generation — non-destructive. ACE-Step 1.5 adds server-side crossfade controls:
+**Repaint** uploads the original WAV as multipart `ctx_audio`, with `repainting_start` and `repainting_end` in seconds. Songmaker converts its 0.0-1.0 UI fractions to seconds before submission. `thinking` is auto-disabled. The result is a new generation — non-destructive. ACE-Step 1.5 adds server-side crossfade controls:
 - `repaint_mode`: `conservative` / `balanced` / `aggressive` — how much source audio is preserved
 - `repaint_strength`: 0-1, intensity for balanced mode
 - `repaint_latent_crossfade_frames`: latent-level boundary blend width
