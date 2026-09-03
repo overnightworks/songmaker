@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal, Sequence
+from typing import Any, Final, Literal, Sequence
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
@@ -119,6 +119,7 @@ CLI_PROBE_CALLER_TIMEOUT_SECONDS = (
     + (2 * CLI_TERMINATION_GRACE_SECONDS)
     + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
 )
+_BACKGROUND_REAP_POLL_SECONDS: Final = 0.1
 
 log = logging.getLogger(__name__)
 
@@ -369,7 +370,14 @@ def _run_cli_bounded(
     finally:
         if process is not None:
             became_zombie = _reap_process_group(process)
-            _notify_reaped(on_reaped, process.pid, became_zombie)
+            if became_zombie and on_reaped is not None:
+                threading.Thread(
+                    target=_reap_in_background,
+                    args=(process, on_reaped),
+                    daemon=True,
+                ).start()
+            else:
+                _notify_reaped(on_reaped, process.pid, became_zombie=False)
             _publish_bounded_outcome(
                 state,
                 CliRunOutcome(
@@ -556,6 +564,20 @@ def _reap_process_group(process: subprocess.Popen[bytes]) -> bool:
             log.warning("agent CLI process group %s survived its SIGKILL grace period", process.pid)
             return True
     return False
+
+
+def _reap_in_background(
+    process: subprocess.Popen[bytes],
+    on_reaped: Callable[[int, bool], None] | None,
+) -> None:
+    try:
+        while _process_group_exists(process.pid):
+            process.poll()
+            time.sleep(_BACKGROUND_REAP_POLL_SECONDS)
+    except OSError:
+        log.exception("background reap of agent CLI process group %s failed", process.pid)
+    finally:
+        _notify_reaped(on_reaped, process.pid, became_zombie=True)
 
 
 def _wait_for_process_group_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
