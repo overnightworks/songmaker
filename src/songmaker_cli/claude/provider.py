@@ -902,6 +902,11 @@ def _record_tool_surface_health(state: Literal["ok", "drift"]) -> None:
         _tool_surface_health_state = state
 
 
+def _discard_tool_surface_probe_task(task: asyncio.Task) -> None:
+    with _tool_surface_lock:
+        _tool_surface_probe_tasks.discard(task)
+
+
 async def shutdown_tool_surface_background_tasks() -> None:
     """Cancel every outstanding background zombie reaper and probe-runner
     task — call from the app's own shutdown (``server.py``'s lifespan),
@@ -911,7 +916,10 @@ async def shutdown_tool_surface_background_tasks() -> None:
     background work once it is shutting down anyway.
     """
     with _zombie_registry_lock:
-        tasks = list(_zombie_reap_tasks) + list(_tool_surface_probe_tasks)
+        tasks = list(_zombie_reap_tasks)
+    with _tool_surface_lock:
+        tasks.extend(_tool_surface_probe_tasks)
+        _tool_surface_probe_tasks.clear()
     for task in tasks:
         task.cancel()
     if tasks:
@@ -1036,7 +1044,7 @@ async def _verify_tool_surface_async(
         task = asyncio.create_task(_run_probe_and_resolve_async(key, probe, deadline, future))
         with _tool_surface_lock:
             _tool_surface_probe_tasks.add(task)
-        task.add_done_callback(_tool_surface_probe_tasks.discard)
+        task.add_done_callback(_discard_tool_surface_probe_task)
 
     mismatch = await _await_follower_result_async(build, future, timeout_seconds)
     return _finish_tool_surface_check(build, mismatch)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import queue
 import subprocess
@@ -53,6 +54,7 @@ def _reset_cli_process_pool_for_test() -> None:
     with provider._zombie_registry_lock:
         provider._zombie_reap_reservations.clear()
         provider._zombie_reap_tasks.clear()
+    with provider._tool_surface_lock:
         provider._tool_surface_probe_tasks.clear()
 
 
@@ -1200,20 +1202,30 @@ def test_reap_in_background_sync_eventually_reaps_logs_and_releases_its_reservat
     provider._release_zombie_reservation(reservation)
 
 
-def test_shutdown_tool_surface_background_tasks_cancels_every_tracked_task() -> None:
-    async def _hang() -> None:
-        await asyncio.sleep(999)
+def test_shutdown_tool_surface_background_tasks_cancels_a_probe_runner_task(
+    claude_binary, monkeypatch,
+) -> None:
+    probe_started = asyncio.Event()
+    probe_cancelled = asyncio.Event()
 
-    async def _run() -> bool:
-        task = asyncio.create_task(_hang())
-        with provider._zombie_registry_lock:
-            provider._zombie_reap_tasks.add(task)
+    async def pending_probe(*_args, **_kwargs) -> provider._AnnouncedSurface:
+        probe_started.set()
+        try:
+            await asyncio.Future()
+        finally:
+            probe_cancelled.set()
+
+    monkeypatch.setattr(provider, "_probe_cli_surface_async", pending_probe)
+
+    async def _run() -> None:
+        waiter = asyncio.create_task(averify_no_builtin_cli_tools())
+        await probe_started.wait()
         await provider.shutdown_tool_surface_background_tasks()
-        return task.cancelled()
+        await probe_cancelled.wait()
+        with pytest.raises(UnavailableError):
+            await waiter
 
-    cancelled = asyncio.run(asyncio.wait_for(_run(), timeout=2))
-
-    assert cancelled is True
+    asyncio.run(asyncio.wait_for(_run(), timeout=2))
 
 
 
@@ -1951,15 +1963,45 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
     try:
         with pytest.raises(UnavailableError) as exc:
             asyncio.run(asyncio.wait_for(averify_no_builtin_cli_tools(), timeout=3))
-        # Two independent bounds can be what actually fires first — the
-        # outer asyncio.wait_for around asyncio.to_thread (round 7,
-        # Finding 1) or the inner queue.get inside the sync twin — both
-        # are the deadline correctly holding, just observed from either
-        # side of the thread boundary.
-        assert "did not answer" in str(exc.value) or "did not start" in str(exc.value)
+        assert str(exc.value) == "Claude CLI probe did not start within its budget"
     finally:
         popen_may_return.set()
         assert popen_returned.wait(timeout=1)
+
+
+def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
+    claude_binary, monkeypatch,
+) -> None:
+    monkeypatch.setattr(provider, "_cleanup_margin_seconds", lambda: 0)
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        work_started = loop.create_future()
+        release_work = threading.Event()
+
+        def occupy_executor() -> None:
+            loop.call_soon_threadsafe(work_started.set_result, None)
+            release_work.wait()
+
+        loop.set_default_executor(executor)
+        occupied_work = loop.run_in_executor(None, occupy_executor)
+        await work_started
+        deadline = loop.time() + 0.05
+        try:
+            with pytest.raises(UnavailableError) as exc:
+                await asyncio.wait_for(
+                    provider._probe_cli_surface_async(
+                        str(claude_binary), mcp_config_path=None, deadline=deadline,
+                    ),
+                    timeout=1,
+                )
+            assert str(exc.value) == "Claude CLI probe cleanup did not finish within its budget"
+        finally:
+            release_work.set()
+            await occupied_work
+
+    asyncio.run(_run())
 
 
 def test_delayed_probe_start_is_a_probe_failure_not_a_judge_timeout(
