@@ -22,7 +22,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
-    ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     CLAUDE_SCORING_MODEL_DEFAULT,
     COVER_UPLOAD_BODY_MAX_BYTES,
@@ -30,6 +29,7 @@ from songmaker_cli.constants import (
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
+    acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
 
@@ -79,9 +79,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_generation_timeout_order(self) -> Settings:
         """Keep scheduler, reaper, and arq's silent-worker bounds ordered."""
-        sse_read_timeout = (
-            int(EngineSettings().acestep_poll_timeout)
-            + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+        sse_read_timeout = acestep_sse_read_timeout_seconds(
+            EngineSettings().acestep_poll_timeout,
         )
         generate_reaper_threshold = generate_job_heartbeat_stale_threshold_seconds(
             sse_read_timeout,

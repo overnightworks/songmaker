@@ -403,9 +403,15 @@ GENERATE_LOAD_MODEL_TIMEOUT_SECONDS: Final[int] = 600
 GENERATE_SUBMIT_TIMEOUT_SECONDS: Final[int] = 30
 ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS: Final[int] = 30
-ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = (
-    int(get_engine_settings().acestep_poll_timeout)
-    + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+
+
+def acestep_sse_read_timeout_seconds(poll_timeout: float) -> int:
+    """Return the SSE read timeout for one configured polling interval."""
+    return int(poll_timeout) + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+
+
+ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = acestep_sse_read_timeout_seconds(
+    get_engine_settings().acestep_poll_timeout,
 )
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
