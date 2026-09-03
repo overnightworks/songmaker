@@ -399,6 +399,7 @@ SSE_POLL_INTERVAL_SECONDS = 1
 SSE_HEARTBEAT_SECONDS: Final[int] = 15
 SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
+WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 # These are not independently configurable timeouts. They document the
@@ -406,6 +407,8 @@ JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
 SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 600
 GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
+LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
+DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
 RESOURCE_EVENT_STREAM_CONNECTION_SECONDS: Final[int] = 60
 RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
@@ -524,38 +527,8 @@ class JobType(StrEnum):
     SCORE = "score"
     CHAT = "chat"
     LORA_TRAINING = "lora_training"
-
-
-@dataclass(frozen=True)
-class JobStaleThresholds:
-    """Maximum inactive time for a queued or running job type."""
-
-    queued_seconds: int
-    heartbeat_seconds: int
-
-
-# The one stale-job policy.  Each heartbeat threshold is derived from the
-# slowest measured/provisioned progress signal for that type; see #331 F20.
-# A queued job has no worker heartbeat, so all types use the same 15-minute
-# admission bound.
-STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
-    JobType.CHAT: JobStaleThresholds(
-        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-        heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # chat timer: 15 s; twelve missed intervals
-    JobType.LORA_TRAINING: JobStaleThresholds(
-        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-        heartbeat_seconds=LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # measured train_lora heartbeat: <= 60 s, with five intervals' margin
-    JobType.SCORE: JobStaleThresholds(
-        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-        heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
-    JobType.GENERATE: JobStaleThresholds(
-        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-        heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # two ~=600 s SSE-read windows plus safety margin (#331 F23)
-}
+    LOAD_MODEL_ON_WORKER = "load_model_on_worker"
+    DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
 
 
 class JobFunction(StrEnum):
@@ -564,6 +537,49 @@ class JobFunction(StrEnum):
     LOAD_MODEL_ON_WORKER = "load_model_on_worker"
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
     LORA_TRAINING = "lora_training"
+
+
+@dataclass(frozen=True)
+class JobStaleThresholds:
+    """Maximum inactive time for a queued or running job type.
+
+    Queued thresholds are chosen, not measured. A job waiting in a deep queue
+    can exceed them; see #331 F27, which moves queued reaping to worker
+    liveness rather than age.
+    """
+
+    queued_seconds: int
+    heartbeat_seconds: int
+
+
+# The one stale-job policy. Each heartbeat threshold is derived from the
+# slowest measured or provisioned progress signal for that type; see #331 F20.
+STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
+    JobType.CHAT: JobStaleThresholds(
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # chat timer: 15 s; twelve missed intervals
+    JobType.LORA_TRAINING: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # measured train_lora heartbeat: <= 60 s, with five intervals' margin
+    JobType.SCORE: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
+    JobType.GENERATE: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # two ~=600 s SSE-read windows plus safety margin (#331 F23)
+    JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # 960 s worker request timeout plus margin; no progress signal exists
+    JobType.DOWNLOAD_MODEL_ON_WORKER: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    ),  # worker polls download progress every 2 s; 180 s tolerates 90 misses
+}
 
 
 class ResourceType(StrEnum):

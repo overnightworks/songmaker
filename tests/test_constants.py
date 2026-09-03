@@ -9,7 +9,9 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
+    STALE_JOB_THRESHOLDS,
     AuditAction,
+    JobFunction,
     JobStatus,
     JobType,
     ResourceType,
@@ -73,6 +75,13 @@ def test_job_type_values():
     assert JobType.GENERATE == "generate"
     assert JobType.SCORE == "score"
     assert JobType.CHAT == "chat"
+
+
+def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
+    """ARQ job functions and direct job types share the reaper's one policy."""
+    reachable_types = set(JobType) | {JobType(job_function) for job_function in JobFunction}
+
+    assert set(STALE_JOB_THRESHOLDS) == reachable_types
 
 
 def test_resource_type_values():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from songmaker_cli.api_models import (
     VersionResponse,
     WhisperCue,
 )
+from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobStatus, JobType
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -72,7 +74,6 @@ from songmaker_cli.db.queries import (
     pick_generation,
     prune_overflow_sessions,
     record_login_attempt,
-    recover_stale_jobs,
     recover_stale_jobs_by_age_and_type,
     save_rating,
     save_scores,
@@ -1659,47 +1660,6 @@ def test_count_total_queued_jobs(db_session: Session) -> None:
     assert count_total_queued_jobs(db_session) == 2
 
 
-def test_recover_stale_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import update_job_status
-
-    j1 = create_job(db_session, "generate")
-    j2 = create_job(db_session, "score")
-    j3 = create_job(db_session, "generate")
-    db_session.commit()
-
-    update_job_status(db_session, j1.id, "running", progress=0.5)
-    update_job_status(db_session, j3.id, "completed", progress=1.0)
-    db_session.commit()
-
-    count = recover_stale_jobs(db_session)
-    db_session.commit()
-
-    assert count == 2
-
-    j1_after = get_job(db_session, j1.id)
-    assert j1_after.status == "failed"
-    assert j1_after.error_type == "server_restart"
-    assert j1_after.completed_at is not None
-
-    j2_after = get_job(db_session, j2.id)
-    assert j2_after.status == "failed"
-
-    j3_after = get_job(db_session, j3.id)
-    assert j3_after.status == "completed"
-
-
-def test_recover_stale_jobs_none(db_session: Session) -> None:
-    j1 = create_job(db_session, "generate")
-    db_session.commit()
-
-    from songmaker_cli.db.queries import update_job_status
-
-    update_job_status(db_session, j1.id, "completed", progress=1.0)
-    db_session.commit()
-
-    assert recover_stale_jobs(db_session) == 0
-
-
 # ── stale job reaper ──────────────────────────────────────────────
 
 
@@ -1769,17 +1729,15 @@ def test_reaper_marks_a_stale_queued_job_as_unavailable(db_session: Session) -> 
     assert "No worker available" in after.error
 
 
-@pytest.mark.parametrize("job_type", ("chat", "lora_training", "score", "generate"))
+@pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))
 def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     db_session: Session,
-    job_type: str,
+    job_type: JobType,
 ) -> None:
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobStatus, JobType
-
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    thresholds = STALE_JOB_THRESHOLDS[JobType(job_type)]
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     healthy = create_job(db_session, job_type)
@@ -1796,62 +1754,41 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
 
-def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
+@pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))
+def test_reaper_keeps_jobs_at_each_strict_threshold_cutoff(
+    db_session: Session,
+    job_type: JobType,
+) -> None:
+    """The reaper uses strict `<`: equality with either cutoff stays active."""
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
+    queued = create_job(db_session, job_type)
+    running = create_job(db_session, job_type)
+    update_job_status(db_session, running.id, JobStatus.RUNNING)
+    queued.started_at = now - timedelta(seconds=thresholds.queued_seconds)
+    running.heartbeat_at = now - timedelta(seconds=thresholds.heartbeat_seconds)
+    db_session.commit()
+
+    assert recover_stale_jobs_by_age_and_type(db_session, now=now) == 0
+    assert get_job(db_session, queued.id).status == JobStatus.QUEUED
+    assert get_job(db_session, running.id).status == JobStatus.RUNNING
+
+
+def test_reaper_rejects_an_active_type_without_a_policy_row(
     db_session: Session,
 ) -> None:
-    from datetime import datetime, timedelta, timezone
-
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-    j_queued = create_job(db_session, "generate")
-    j_running = create_job(db_session, "generate")
-    j_other = create_job(db_session, "score")
+    known_stale = create_job(db_session, JobType.GENERATE)
+    unknown_active = create_job(db_session, "unknown_type")
+    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    known_stale.started_at = old
+    known_stale.heartbeat_at = old
     db_session.commit()
 
-    update_job_status(db_session, j_running.id, "running", progress=0.5)
-    db_session.commit()
+    with pytest.raises(RuntimeError, match="unknown_type"):
+        recover_stale_jobs_by_age_and_type(db_session)
 
-    old = datetime.now(timezone.utc) - timedelta(seconds=3600)
-    for job in (j_queued, j_running, j_other):
-        job.started_at = old
-        job.heartbeat_at = old
-    db_session.commit()
-
-    count = recover_stale_jobs_by_age_and_type(db_session, "generate")
-    db_session.commit()
-
-    assert count == 2
-    assert get_job(db_session, j_queued.id).error_type == "no_worker_available"
-    assert get_job(db_session, j_running.id).error_type == "heartbeat_lost"
-    assert get_job(db_session, j_other.id).status == "queued"
-
-
-def test_reaper_uses_queued_age_instead_of_queued_heartbeat(
-    db_session: Session,
-) -> None:
-    from datetime import datetime, timedelta, timezone
-
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-    queued = create_job(db_session, "generate")
-    running = create_job(db_session, "generate")
-    db_session.commit()
-    update_job_status(db_session, running.id, "running", progress=0.5)
-    db_session.commit()
-
-    old = datetime.now(timezone.utc) - timedelta(days=1)
-    queued.started_at = old
-    queued.heartbeat_at = datetime.now(timezone.utc)
-    running.started_at = old
-    running.heartbeat_at = old
-    db_session.commit()
-
-    recovered = recover_stale_jobs_by_age_and_type(db_session, "generate")
-    db_session.commit()
-
-    assert recovered == 2
-    assert get_job(db_session, queued.id).error_type == "no_worker_available"
-    assert get_job(db_session, running.id).error_type == "heartbeat_lost"
+    assert get_job(db_session, known_stale.id).status == JobStatus.QUEUED
+    assert get_job(db_session, unknown_active.id).status == JobStatus.QUEUED
 
 
 def test_chat_recovery_reads_its_constant_table_not_settings(
@@ -1879,7 +1816,7 @@ def test_chat_recovery_reads_its_constant_table_not_settings(
 
     monkeypatch.setattr(settings, "get_settings", _unexpected_settings_read)
 
-    recovered = recover_stale_jobs_by_age_and_type(db_session, JobType.CHAT, now=now)
+    recovered = recover_stale_jobs_by_age_and_type(db_session, now=now)
     db_session.commit()
 
     assert recovered == 1

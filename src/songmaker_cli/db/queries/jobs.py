@@ -14,20 +14,13 @@ from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
     STALE_JOB_THRESHOLDS,
+    JobStaleThresholds,
     JobStatus,
     JobType,
 )
 from songmaker_cli.db.models import Job
 
 log = logging.getLogger(__name__)
-
-
-def has_active_job_of_type(session: Session, job_type: str) -> bool:
-    return (
-        session.query(Job)
-        .filter(Job.type == job_type, Job.status.in_(JOB_ACTIVE_STATUSES))
-        .first()
-    ) is not None
 
 
 def create_job(
@@ -167,25 +160,6 @@ def get_queue_position(session: Session, job: Job) -> int | None:
     return ahead + 1
 
 
-def recover_stale_jobs(session: Session) -> int:
-    """Mark all running/queued jobs as failed on startup. Returns count recovered."""
-    now = datetime.now(timezone.utc)
-    stale = (
-        session.query(Job)
-        .filter(Job.status.in_(JOB_ACTIVE_STATUSES))
-        .all()
-    )
-    for job in stale:
-        job.status = JobStatus.FAILED
-        job.error = "Server restarted while job was in progress"
-        job.error_type = "server_restart"
-        job.completed_at = now
-    session.flush()
-    if stale:
-        log.info("Recovered %d stale jobs", len(stale))
-    return len(stale)
-
-
 def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     """Check if the job's heartbeat indicates a hung worker.
 
@@ -205,12 +179,6 @@ def _is_started_stale(job: Job, cutoff: datetime) -> bool:
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
     return started_at < cutoff
-
-
-def _job_type_collection(job_types: str | Collection[str]) -> tuple[str, ...]:
-    if isinstance(job_types, str):
-        return (job_types,)
-    return tuple(job_types)
 
 
 def recover_stale_jobs_by_type(
@@ -246,12 +214,10 @@ def recover_stale_jobs_by_type(
 
 def recover_stale_jobs_by_age_and_type(
     session: Session,
-    job_types: str | Collection[str] | None = None,
     *,
     user_id: str | None = None,
     now: datetime | None = None,
-    return_counts: bool = False,
-) -> int | dict[str, int]:
+) -> int:
     """Recover stale jobs using the one per-type liveness policy.
 
     Queued jobs age out by ``started_at``; running jobs age out only when
@@ -259,11 +225,6 @@ def recover_stale_jobs_by_age_and_type(
     exact policy before enforcing an active-job limit, without defining a
     second freshness threshold.
     """
-    recovered_types = (
-        _job_type_collection(job_types)
-        if job_types is not None
-        else tuple(STALE_JOB_THRESHOLDS)
-    )
     if now is None:
         now = datetime.now(timezone.utc)
     elif now.tzinfo is None:
@@ -271,15 +232,23 @@ def recover_stale_jobs_by_age_and_type(
 
     query = session.query(Job).filter(
         Job.status.in_(JOB_ACTIVE_STATUSES),
-        Job.type.in_(recovered_types),
     )
     if user_id is not None:
         query = query.filter(Job.user_id == user_id)
     candidates = query.all()
+    candidates_with_thresholds: list[tuple[Job, JobStaleThresholds]] = []
+    for job in candidates:
+        try:
+            thresholds = STALE_JOB_THRESHOLDS[JobType(job.type)]
+        except (KeyError, ValueError) as exc:
+            raise RuntimeError(
+                f"Active job {job.id} has no stale-job threshold for type {job.type!r}",
+            ) from exc
+        candidates_with_thresholds.append((job, thresholds))
+
     recovered = 0
     recovered_by_type: dict[str, int] = {}
-    for job in candidates:
-        thresholds = STALE_JOB_THRESHOLDS[JobType(job.type)]
+    for job, thresholds in candidates_with_thresholds:
         if job.status == JobStatus.QUEUED:
             cutoff = now - timedelta(seconds=thresholds.queued_seconds)
             is_stale = _is_started_stale(job, cutoff)
@@ -306,7 +275,7 @@ def recover_stale_jobs_by_age_and_type(
             recovered,
             recovered_by_type,
         )
-    return recovered_by_type if return_counts else recovered
+    return recovered
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

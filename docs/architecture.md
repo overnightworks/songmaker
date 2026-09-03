@@ -830,8 +830,9 @@ parent's coherence budget, which is spent after the child returns.
   `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: audits orphaned audio files and applies file-expiry cleanup. The same
-  two job types are recovered on MusicWorker startup and shutdown.
+- Cron: audits orphaned audio files and applies file-expiry cleanup. The
+  `generate` and `lora_training` job types are recovered on MusicWorker
+  startup and shutdown.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -855,20 +856,36 @@ parent's coherence budget, which is spent after the child returns.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Stale-job recovery** (web process — #446): The lifecycle loop is the one
-periodic owner for every job type. It calls the generic
-`recover_stale_jobs_by_age_and_type()` rule, which uses `started_at` for a
-queued job and `heartbeat_at` for a running job. Worker startup/shutdown
-recovery is separate: it records that worker process restarting, rather than
-deciding whether a still-running job is stale.
+periodic owner for every job type: `chat`, `generate`, `score`,
+`lora_training`, `load_model_on_worker`, and `download_model_on_worker`. It
+calls the generic `recover_stale_jobs_by_age_and_type()` rule, which uses
+`started_at` for a queued job and `heartbeat_at` for a running job. Worker
+startup/shutdown recovery is separate: it records that worker process
+restarting, rather than deciding whether a still-running job is stale. An
+active job type without a policy-table row is a loop failure and is exposed by
+`/health`; it is never silently skipped.
 
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 
   | Type | queued | running heartbeat | limiting signal |
   | --- | ---: | ---: | --- |
   | `chat` | 900 s | 180 s | 15-s chat timer, twelve missed intervals |
-  | `lora_training` | 900 s | 300 s | measured ≤60-s training heartbeat with margin |
-  | `score` | 900 s | 600 s | 300-s scorer + 120-s judge with margin |
-  | `generate` | 900 s | 1300 s | two ≈600-s SSE-read windows with margin |
+  | `lora_training` | 1100 s | 300 s | measured ≤60-s training heartbeat with margin |
+  | `score` | 1100 s | 600 s | 300-s scorer + 120-s judge with margin |
+  | `generate` | 1100 s | 1300 s | two ≈600-s SSE-read windows with margin |
+  | `load_model_on_worker` | 1100 s | 1300 s | 960-s worker request timeout plus margin; no progress signal |
+  | `download_model_on_worker` | 1100 s | 180 s | worker polls download progress every 2 s; 180 s tolerates 90 missed polls |
+
+  Queued bounds are chosen, not measured. A job waiting in a deep queue can
+  exceed them; #331 F27 moves queued reaping to worker liveness rather than
+  age.
+
+  `download_model_on_worker()` refreshes its job heartbeat through both
+  `_on_progress` and `_on_heartbeat` for every consumed SSE event. The worker
+  emits download progress from its 2-second poll. `DOWNLOAD_MAX_ATTEMPTS`
+  bounds retries after failed streams; it is not a total-runtime bound. A load
+  request has no progress stream, so its 1300-second heartbeat bound covers
+  the 960-second HTTP request timeout with margin.
 
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
   minutes), behind the same

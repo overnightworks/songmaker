@@ -359,8 +359,8 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
     tick. If the ARQ worker crashed mid-training, the LoRA row stays in
-    PREPROCESSING / TRAINING / EXPORTING even though no job is running. This
-    Delegates locked, per-LoRA database reconciliation and post-commit
+    PREPROCESSING / TRAINING / EXPORTING even though no job is running. It
+    delegates locked, per-LoRA database reconciliation and post-commit
     filesystem cleanup to the LoRA job owner after the lifecycle reaper has
     terminalized its job.
 
