@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Final
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
+from acestep_engine.settings import get_engine_settings
 
 APP_NAME = "Hallucinai"
 
@@ -397,6 +398,20 @@ GZIP_COMPRESS_LEVEL: Final[int] = 6
 SSE_POLL_INTERVAL_SECONDS = 1
 SSE_HEARTBEAT_SECONDS: Final[int] = 15
 SSE_HEARTBEAT_COMMENT: Final[str] = ": heartbeat\n\n"
+GENERATE_LOAD_MODEL_TIMEOUT_SECONDS: Final[int] = 600
+GENERATE_SUBMIT_TIMEOUT_SECONDS: Final[int] = 30
+ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS: Final[int] = 10
+ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS: Final[int] = 30
+
+
+def acestep_sse_read_timeout_seconds(poll_timeout: float) -> int:
+    """Return the SSE read timeout for one configured polling interval."""
+    return int(poll_timeout) + ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS
+
+
+ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = acestep_sse_read_timeout_seconds(
+    get_engine_settings().acestep_poll_timeout,
+)
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
@@ -405,7 +420,26 @@ JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 # measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
 SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 600
-GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
+JOB_REAPER_INTERVAL_SECONDS: Final[int] = 120
+GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS: Final[int] = JOB_REAPER_INTERVAL_SECONDS
+GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS: Final[int] = (
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+    + GENERATE_SUBMIT_TIMEOUT_SECONDS
+    + ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
+)
+
+
+def generate_job_heartbeat_stale_threshold_seconds(sse_read_timeout_seconds: int) -> int:
+    """Return the generate heartbeat bound for one configured SSE read window."""
+    return (
+        max(GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS, sse_read_timeout_seconds)
+        + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+    )
+
+
+GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = (
+    generate_job_heartbeat_stale_threshold_seconds(ACESTEP_SSE_READ_TIMEOUT_SECONDS)
+)
 LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
 DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
@@ -569,7 +603,7 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    ),  # two ~=600 s SSE-read windows plus safety margin (#331 F23)
+    ),  # max(load + submit + connect, SSE read) plus one reaper tick
     JobType.LOAD_MODEL_ON_WORKER: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,

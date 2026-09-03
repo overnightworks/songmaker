@@ -5,7 +5,15 @@ from __future__ import annotations
 import json
 
 from songmaker_cli.constants import (
+    ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS,
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
+    GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS,
+    GENERATE_SUBMIT_TIMEOUT_SECONDS,
     JOB_ACTIVE_STATUSES,
+    JOB_REAPER_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
@@ -16,6 +24,7 @@ from songmaker_cli.constants import (
     JobType,
     ResourceType,
 )
+from songmaker_cli.settings import Settings
 
 
 def test_default_model_mode_is_in_available() -> None:
@@ -82,6 +91,32 @@ def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
     reachable_types = set(JobType) | {JobType(job_function) for job_function in JobFunction}
 
     assert set(STALE_JOB_THRESHOLDS) == reachable_types
+
+
+def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:
+    settings = Settings(
+        database_url="postgresql://example",
+        redis_url="redis://example",
+        session_secret="session-secret",
+        songmaker_internal_token="internal-token",
+    )
+
+    assert GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS == (
+        max(GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS, ACESTEP_SSE_READ_TIMEOUT_SECONDS)
+        + GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS
+    )
+    assert GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS == (
+        GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+        + GENERATE_SUBMIT_TIMEOUT_SECONDS
+        + ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
+    )
+    assert GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS == JOB_REAPER_INTERVAL_SECONDS
+    assert GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS > max(
+        GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS, ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    )
+    assert ACESTEP_SSE_READ_TIMEOUT_SECONDS < (
+        STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds
+    ) < settings.arq_job_timeout
 
 
 def test_resource_type_values():

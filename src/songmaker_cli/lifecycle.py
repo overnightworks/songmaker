@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    JOB_REAPER_INTERVAL_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -30,7 +31,6 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
 )
 
 # The web process owns stale-job recovery for every job type.
-JOB_REAPER_INTERVAL_SECONDS: Final = 120
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
 

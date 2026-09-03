@@ -13,9 +13,16 @@ import pytest
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_state import queue_depth_key, worker_state_key
+from songmaker_cli.constants import (
+    ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
+    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
+    GENERATE_SUBMIT_TIMEOUT_SECONDS,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
+    WORKER_STREAM_WENT_SILENT,
     DispatchOptions,
     DownloadTaskResultDTO,
     GenerationTaskResultDTO,
@@ -154,6 +161,14 @@ def test_pick_worker_no_online_raises(db_session) -> None:
         _run(pick_worker(db_session, redis, "sft"))
 
 
+def test_dispatch_options_use_the_shared_generate_timeout_windows() -> None:
+    options = DispatchOptions()
+
+    assert options.load_model_timeout_seconds == GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+    assert options.generate_submit_timeout_seconds == GENERATE_SUBMIT_TIMEOUT_SECONDS
+    assert options.sse_connect_timeout_seconds == ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
+
+
 def test_pick_worker_skips_worker_with_broken_gpu(db_session) -> None:
     """Issue #367: a worker whose GPU has gone away (NVML present but
     unreachable) keeps heartbeating fine, so heartbeat presence alone must
@@ -282,6 +297,29 @@ def test_consume_task_stream_progress_calls_callback() -> None:
     assert captured == [0.2, 0.5]
 
 
+def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
+    worker = _make_picked()
+    heartbeats = 0
+
+    def on_heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+
+    # TaskStore.subscribe() sends its current running snapshot first.
+    events = [
+        ("running", {"task_id": "gen-1"}),
+        ("done", {
+            "task_id": "gen-1",
+            "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
+        }),
+    ]
+    client = _make_stream_client(events)
+    with _patch_async_client(client):
+        _run(consume_task_stream(worker, "gen-1", on_heartbeat=on_heartbeat))
+
+    assert heartbeats == 2
+
+
 def test_consume_task_stream_invalid_result_raises() -> None:
     worker = _make_picked()
     client = _make_stream_client([("done", {"task_id": "g", "result": {"mode": "sft"}})])
@@ -372,6 +410,24 @@ def test_consume_task_stream_gives_up_after_max_reconnects() -> None:
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
         with pytest.raises(httpx.ConnectError):
             _run(consume_task_stream(worker, "gen-1", options=options))
+
+
+def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
+    worker = _make_picked()
+    client = _make_stream_client(httpx.ReadTimeout("stream went silent"))
+
+    with patch(
+        "songmaker_cli.scheduler.httpx.AsyncClient", return_value=client,
+    ) as async_client:
+        with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
+            _run(consume_task_stream(worker, "gen-1"))
+
+    timeout = async_client.call_args.kwargs["timeout"]
+    assert timeout.read == ACESTEP_SSE_READ_TIMEOUT_SECONDS
+    assert async_client.call_count == 1
+    assert client.stream.call_count == 1
+    client.__aexit__.assert_awaited_once()
+    client.stream.return_value.__aexit__.assert_awaited_once()
 
 
 # ── dispatch_generation ────────────────────────────────────────────
