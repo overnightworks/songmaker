@@ -48,6 +48,8 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.queries import (
     delete_all_user_rate_limits,
+    get_active_cowriter_settings,
+    get_active_judge_settings,
     get_all_global_rate_limits,
     get_raw_stored_cowriter_settings,
     get_user,
@@ -421,7 +423,7 @@ def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfac
 
 def _models_for_provider(
     provider: str,
-    active_model: str | None = None,
+    active_model: str | None,
 ) -> tuple[list[str], str | None]:
     from songmaker_cli.cowriter.catalog import list_provider_models, models_with_active_model
     from songmaker_cli.cowriter.errors import (
@@ -514,11 +516,7 @@ def api_set_cowriter_settings(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
-    active_provider: str | None = None
-    active_model: str | None = None
-    if stored_settings.provider is None or stored_settings.provider in COWRITER_PROVIDERS:
-        active_provider = get_cowriter_provider(session)
-        active_model = get_cowriter_model(session, active_provider)
+    active_settings = get_active_cowriter_settings(session)
     provider_or_model_changed = not _matches_complete_stored_provider_and_model(
         stored_settings.provider,
         stored_settings.model,
@@ -531,7 +529,9 @@ def api_set_cowriter_settings(
         _require_provider_can_answer(req.provider, ProviderSurface.CO_WRITER)
         allowed, catalog_error = _models_for_provider(
             req.provider,
-            active_model if req.provider == active_provider else None,
+            active_settings.model
+            if active_settings is not None and req.provider == active_settings.provider
+            else None,
         )
         if catalog_error:
             raise HTTPException(503, catalog_error)
@@ -559,16 +559,17 @@ def api_set_cowriter_settings(
 
 def _judge_response(session: Session) -> JudgeSettingsResponse:
     provider = get_judge_provider(session)
+    model = get_judge_model(session, provider)
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
-        models, error = _models_for_provider(name)
+        models, error = _models_for_provider(name, model if name == provider else None)
         models_by_provider[name] = models
         if error:
             errors[name] = error
     return JudgeSettingsResponse(
         provider=provider,
-        model=get_judge_model(session, provider),
+        model=model,
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
@@ -600,7 +601,13 @@ def api_set_judge_settings(
     from songmaker_cli.cowriter.catalog import ProviderSurface
 
     _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
-    allowed, catalog_error = _models_for_provider(req.provider)
+    active_settings = get_active_judge_settings(session)
+    allowed, catalog_error = _models_for_provider(
+        req.provider,
+        active_settings.model
+        if active_settings is not None and req.provider == active_settings.provider
+        else None,
+    )
     if catalog_error:
         raise HTTPException(503, catalog_error)
     if req.model not in allowed:

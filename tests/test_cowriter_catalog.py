@@ -216,7 +216,19 @@ def test_catalog_adds_an_active_claude_model_id_once():
         "claude",
         ["haiku", "claude-opus-4-6", "opus"],
         "claude-opus-4-6",
-    ) == ["claude-opus-4-6", "haiku", "opus"]
+    ) == ["haiku", "claude-opus-4-6", "opus"]
+
+
+def test_catalog_preserves_provider_order_when_appending_an_active_model():
+    assert models_with_active_model(
+        "grok",
+        ["grok-4.6", "grok-4.5"],
+        "grok-4.7",
+    ) == ["grok-4.6", "grok-4.5", "grok-4.7"]
+
+
+def test_catalog_ignores_an_empty_active_model():
+    assert models_with_active_model("claude", ["haiku", "opus"], "") == ["haiku", "opus"]
 
 
 def test_catalog_rejects_an_active_model_id_from_another_provider():

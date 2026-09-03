@@ -291,6 +291,12 @@ from songmaker_cli.db.queries.resource_events import (
 )
 from songmaker_cli.db.queries.sentinels import UNSET as UNSET
 from songmaker_cli.db.queries.settings import (
+    ActiveCowriterSettings as ActiveCowriterSettings,
+)
+from songmaker_cli.db.queries.settings import (
+    ActiveJudgeSettings as ActiveJudgeSettings,
+)
+from songmaker_cli.db.queries.settings import (
     RawStoredCowriterSettings as RawStoredCowriterSettings,
 )
 from songmaker_cli.db.queries.settings import (
@@ -298,6 +304,12 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
+from songmaker_cli.db.queries.settings import (
+    get_active_cowriter_settings as get_active_cowriter_settings,
+)
+from songmaker_cli.db.queries.settings import (
+    get_active_judge_settings as get_active_judge_settings,
+)
 from songmaker_cli.db.queries.settings import (
     get_claude_chat_model as get_claude_chat_model,
 )

@@ -164,10 +164,11 @@ def models_with_active_model(
     models: list[str],
     active_model: str | None,
 ) -> list[str]:
-    catalog = set(models)
-    if active_model is not None and _is_provider_model_id(provider, active_model):
-        catalog.add(active_model)
-    return sorted(catalog)
+    catalog = list(models)
+    if active_model and _is_provider_model_id(provider, active_model):
+        if active_model not in catalog:
+            catalog.append(active_model)
+    return catalog
 
 
 def _models_for_setup_method(

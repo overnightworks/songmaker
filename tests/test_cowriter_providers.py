@@ -286,6 +286,36 @@ def test_model_must_be_in_the_live_catalog(admin_client, every_provider_is_confi
     assert ok.json()["model"] == "grok-4.6"
 
 
+def test_cowriter_rejects_unknown_and_cross_provider_models_before_and_after_saving(
+    admin_client, every_provider_is_configured,
+):
+    client, _ = admin_client
+
+    fresh_unknown = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "claude", "model": "claude-nonexistent-9"},
+    )
+    assert fresh_unknown.status_code == 422
+
+    saved = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "claude", "model": "claude-opus-4-6"},
+    )
+    assert saved.status_code == 200
+
+    saved_unknown = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "claude", "model": "claude-nonexistent-9"},
+    )
+    assert saved_unknown.status_code == 422
+
+    cross_provider = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "grok", "model": "claude-opus-4-6"},
+    )
+    assert cross_provider.status_code == 422
+
+
 def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
     admin_client, monkeypatch, every_provider_is_configured,
 ):
@@ -305,7 +335,7 @@ def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
     assert settings.status_code == 200
     assert settings.json()["model"] == "claude-opus-4-6"
     assert settings.json()["models_by_provider"]["claude"] == [
-        "claude-opus-4-6", "haiku", "opus", "sonnet",
+        "haiku", "opus", "sonnet", "claude-opus-4-6",
     ]
     saved = client.put(
         "/api/settings/cowriter",
