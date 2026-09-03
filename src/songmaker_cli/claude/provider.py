@@ -1810,10 +1810,9 @@ def _call_api(
         if deadline is not None
         else client
     )
-    timeout_error = getattr(anthropic, "APITimeoutError", ())
     try:
         response = request_client.messages.create(**kwargs)
-    except timeout_error as exc:
+    except anthropic.APITimeoutError as exc:
         if deadline is not None:
             raise UnavailableError(JUDGE_FAILURE_TIMEOUT) from exc
         raise

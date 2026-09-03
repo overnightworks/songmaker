@@ -338,6 +338,14 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
     get_settings.cache_clear()
     preflight_completed = threading.Event()
     cli_stopped = threading.Event()
+    judged: SongScores | None = None
+
+    from songmaker_cli.scoring.lyrical_coherence import judge_lyrical_coherence
+
+    def capture_judged(*args: object, **kwargs: object) -> SongScores:
+        nonlocal judged
+        judged = judge_lyrical_coherence(*args, **kwargs)
+        return judged
 
     def verified_binary(*_args: object, **_kwargs: object) -> str:
         preflight_completed.set()
@@ -362,11 +370,17 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
             "songmaker_cli.claude.provider.subprocess.run",
             side_effect=timed_out_cli,
         ),
+        patch(
+            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
+            side_effect=capture_judged,
+        ),
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 
     assert preflight_completed.is_set()
     assert cli_stopped.is_set()
+    assert judged is not None
+    assert judged.runs[-1].outcome is ScorerOutcome.FAILED
     from songmaker_cli.db.models import Score
     with factory() as session:
         job = session.query(Job).filter_by(id="j-score").one()

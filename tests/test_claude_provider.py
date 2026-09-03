@@ -264,7 +264,7 @@ def test_call_api_success() -> None:
     mock_content.text = "response text"
     mock_client.messages.create.return_value = MagicMock(content=[mock_content])
 
-    mock_anthropic = MagicMock()
+    mock_anthropic = MagicMock(APITimeoutError=Exception)
     mock_anthropic.Anthropic.return_value = mock_client
 
     with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
@@ -279,7 +279,7 @@ def test_call_api_with_system_prompt() -> None:
     mock_content.text = "ok"
     mock_client.messages.create.return_value = MagicMock(content=[mock_content])
 
-    mock_anthropic = MagicMock()
+    mock_anthropic = MagicMock(APITimeoutError=Exception)
     mock_anthropic.Anthropic.return_value = mock_client
 
     with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
@@ -295,7 +295,7 @@ def test_call_api_empty_response() -> None:
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(content=[])
 
-    mock_anthropic = MagicMock()
+    mock_anthropic = MagicMock(APITimeoutError=Exception)
     mock_anthropic.Anthropic.return_value = mock_client
 
     with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
@@ -315,7 +315,7 @@ def test_judge_api_uses_its_remaining_budget_without_retries() -> None:
     mock_client.with_options.return_value = mock_client
     mock_content = MagicMock(text="judge verdict")
     mock_client.messages.create.return_value = MagicMock(content=[mock_content])
-    mock_anthropic = MagicMock()
+    mock_anthropic = MagicMock(APITimeoutError=Exception)
     mock_anthropic.Anthropic.return_value = mock_client
 
     with (
