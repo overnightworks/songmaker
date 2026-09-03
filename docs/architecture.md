@@ -824,8 +824,8 @@ parent's coherence budget, which is spent after the child returns.
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
 - Cron: recovers stale `generate` and `lora_training` jobs every 2 minutes,
-  then audits orphaned audio files. The same two job types are recovered on
-  MusicWorker startup and shutdown.
+  reconciles any terminalized LoRAs, then audits orphaned audio files. The
+  same two job types are recovered on MusicWorker startup and shutdown.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -867,11 +867,11 @@ backs generate/score:
   `stale_job_threshold_seconds` generate/score use, since `train_lora` shares
   MusicWorker's `arq_job_timeout` envelope.
 - `reconcile_crashed_loras()` runs once at web startup and after the web
-  reaper; MusicWorker calls the same reconciliation path after it recovers a
-  stale job. The path locks active LoRA candidates with `skip_locked`, then
-  `cleanup_failed_lora()` removes working files, records one audit entry, and
-  marks the LoRA failed in that transaction. A second process finds no active
-  candidate to clean up.
+  reaper; MusicWorker calls the same job-owned reconciliation after it
+  terminalizes a `lora_training` job. The path locks one active LoRA candidate
+  with `skip_locked`, commits its FAILED status and one audit entry in that
+  transaction, then removes its working files. A second process finds no
+  unlocked candidate to clean up.
 
 **Backwards-compatible shim** (`worker.py`):
 - Imports tasks from music_worker and scoring_worker

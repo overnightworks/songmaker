@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 class ScoringWorker(WorkerBase):
-    job_type = JobType.SCORE
+    job_types = (JobType.SCORE,)
     recovery_lock_key = RECOVERY_LOCK_SCORING_KEY
     queue_name = ARQ_SCORING_QUEUE_NAME
 

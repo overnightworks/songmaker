@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.constants import LORA_ACTIVE_STATUSES, LoraStatus
-from songmaker_cli.db.models import UserLora, UserLoraSample
+from songmaker_cli.constants import JOB_TERMINAL_STATUSES, LORA_ACTIVE_STATUSES, LoraStatus
+from songmaker_cli.db.models import Job, UserLora, UserLoraSample
 
 log = logging.getLogger(__name__)
 
@@ -97,16 +98,45 @@ def restore_user_lora(session: Session, lora_id: str) -> UserLora:
     return lora
 
 
-def list_active_user_loras(session: Session) -> list[UserLora]:
-    """Return loras in a non-terminal training status (for crash recovery)."""
-    return (
+def list_active_user_loras(
+    session: Session,
+    *,
+    reconcilable_only: bool = False,
+    excluded_ids: set[str] | None = None,
+    limit: int | None = None,
+) -> list[UserLora]:
+    """Return active LoRAs, optionally locking one eligible crash-recovery row.
+
+    The default returns every active, non-deleted LoRA as before.  Recovery
+    callers request ``reconcilable_only`` to select an unlocked LoRA whose
+    training job is missing or terminal; PostgreSQL then locks that LoRA row
+    with ``SKIP LOCKED`` so one process owns its failure audit.
+    """
+    query = (
         session.query(UserLora)
         .filter(
             UserLora.status.in_(LORA_ACTIVE_STATUSES),
             UserLora.deleted_at.is_(None),
         )
-        .all()
     )
+    if not reconcilable_only:
+        return query.all()
+
+    query = query.outerjoin(Job, UserLora.training_job_id == Job.id).filter(
+        or_(
+            UserLora.training_job_id.is_(None),
+            Job.id.is_(None),
+            Job.status.in_(JOB_TERMINAL_STATUSES),
+        ),
+    )
+    if excluded_ids:
+        query = query.filter(UserLora.id.notin_(excluded_ids))
+    query = query.order_by(UserLora.id).with_for_update(
+        of=UserLora, skip_locked=True,
+    )
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
 
 
 def count_user_lora_samples(session: Session, lora_id: str) -> int:

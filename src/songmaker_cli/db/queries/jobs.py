@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -293,27 +293,35 @@ def _job_type_collection(job_types: str | Collection[str]) -> tuple[str, ...]:
     return tuple(job_types)
 
 
-def recover_stale_jobs_by_type(session: Session, job_types: str | Collection[str]) -> int:
-    """Mark all running/queued jobs of the given types as failed."""
-    recovered_types = _job_type_collection(job_types)
+def recover_stale_jobs_by_type(
+    session: Session,
+    recoverable_statuses: Mapping[str, Collection[str]],
+) -> dict[str, int]:
+    """Fail restart-interrupted jobs and return recovery counts keyed by type.
+
+    Each job type declares the active statuses a worker may recover at process
+    startup or shutdown.  This keeps a queued job eligible to a new worker
+    unless its owner explicitly says that queueing is unsafe to resume.
+    """
     now = datetime.now(timezone.utc)
-    stale = (
-        session.query(Job)
-        .filter(
-            Job.status.in_(JOB_ACTIVE_STATUSES),
-            Job.type.in_(recovered_types),
+    recovered: dict[str, int] = {}
+    for job_type, statuses in recoverable_statuses.items():
+        stale = (
+            session.query(Job)
+            .filter(Job.type == job_type, Job.status.in_(statuses))
+            .all()
         )
-        .all()
-    )
-    for job in stale:
-        job.status = JobStatus.FAILED
-        job.error = "Server restarted while job was in progress"
-        job.error_type = "server_restart"
-        job.completed_at = now
+        for job in stale:
+            job.status = JobStatus.FAILED
+            job.error = "Server restarted while job was in progress"
+            job.error_type = "server_restart"
+            job.completed_at = now
+        if stale:
+            recovered[job_type] = len(stale)
     session.flush()
-    if stale:
-        log.info("Recovered %d stale %s jobs", len(stale), ", ".join(recovered_types))
-    return len(stale)
+    if recovered:
+        log.info("Recovered stale jobs by type: %s", recovered)
+    return recovered
 
 
 def recover_stale_jobs_by_age_and_type(
@@ -322,7 +330,8 @@ def recover_stale_jobs_by_age_and_type(
     *,
     stale_thresholds: StaleThresholds | None = None,
     now: datetime | None = None,
-) -> int:
+    return_counts: bool = False,
+) -> int | dict[str, int]:
     """Recover jobs with baseline defaults or explicit chat liveness thresholds."""
     recovered_types = _job_type_collection(job_types)
     if now is None:
@@ -345,6 +354,7 @@ def recover_stale_jobs_by_age_and_type(
             .all()
         )
         recovered = 0
+        recovered_by_type: dict[str, int] = {}
         for job in candidates:
             if not _is_heartbeat_stale(job, cutoff):
                 log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
@@ -359,13 +369,14 @@ def recover_stale_jobs_by_age_and_type(
                 job.error_type = "stale_timeout"
             job.completed_at = now
             recovered += 1
+            recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
         session.flush()
         if recovered:
             log.info(
                 "Recovered %d stale %s jobs (threshold=%ds)",
                 recovered, ", ".join(recovered_types), threshold_seconds,
             )
-        return recovered
+        return recovered_by_type if return_counts else recovered
 
     queued_cutoff = now - timedelta(seconds=stale_thresholds.queued_seconds)
     heartbeat_cutoff = now - timedelta(seconds=stale_thresholds.heartbeat_seconds)
@@ -378,6 +389,7 @@ def recover_stale_jobs_by_age_and_type(
         .all()
     )
     recovered = 0
+    recovered_by_type: dict[str, int] = {}
     for job in candidates:
         if job.status == JobStatus.QUEUED:
             is_stale = _is_started_stale(job, queued_cutoff)
@@ -391,7 +403,7 @@ def recover_stale_jobs_by_age_and_type(
         if was_queued:
             job.error = "No worker available — please retry."
             job.error_type = "no_worker_available"
-        elif len(recovered_types) == 1 and recovered_types[0] == JobType.CHAT:
+        elif job.type == JobType.CHAT:
             job.error = "Heartbeat lost — please retry."
             job.error_type = "heartbeat_lost"
         else:
@@ -399,6 +411,7 @@ def recover_stale_jobs_by_age_and_type(
             job.error_type = "stale_timeout"
         job.completed_at = now
         recovered += 1
+        recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()
     if recovered:
         log.info(
@@ -408,7 +421,7 @@ def recover_stale_jobs_by_age_and_type(
             stale_thresholds.queued_seconds,
             stale_thresholds.heartbeat_seconds,
         )
-    return recovered
+    return recovered_by_type if return_counts else recovered
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

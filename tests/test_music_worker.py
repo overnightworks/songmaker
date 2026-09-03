@@ -136,7 +136,7 @@ def test_on_shutdown_disposes_db() -> None:
     worker._db_engine = MagicMock()
 
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={},
     ):
         _run(worker.on_shutdown(_mock_ctx()))
 
@@ -183,6 +183,42 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
     assert lora_job.error_type == "server_restart"
     assert lora.status == LoraStatus.FAILED
     assert len(audits) == 1
+
+
+def test_queued_lora_training_survives_worker_restart(tmp_path) -> None:
+    factory = init_test_db(tmp_path / "songmaker.db")
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    with factory() as session:
+        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add_all([
+            Job(id="generate-queued", type=JobType.GENERATE, status=JobStatus.QUEUED),
+            Job(id="lora-queued", type=JobType.LORA_TRAINING, status=JobStatus.QUEUED),
+            UserLora(
+                id="lora-queued", user_id="u1", name="Lora", slug="lora",
+                status=LoraStatus.QUEUED, training_job_id="lora-queued",
+            ),
+        ])
+        session.commit()
+
+    worker = MusicWorker()
+    worker.get_db_factory = MagicMock(return_value=factory)
+    worker.audio_dir = MagicMock(return_value=audio_dir)
+    redis = AsyncMock()
+    redis.set = AsyncMock(return_value=True)
+
+    with patch("songmaker_cli.logging_config.configure_logging"):
+        _run(worker.on_startup({"redis": redis}))
+    _run(worker.on_shutdown({"redis": redis}))
+
+    with factory() as session:
+        generate = session.query(Job).filter_by(id="generate-queued").one()
+        lora_job = session.query(Job).filter_by(id="lora-queued").one()
+        lora = session.query(UserLora).filter_by(id="lora-queued").one()
+
+    assert generate.status == JobStatus.FAILED
+    assert lora_job.status == JobStatus.QUEUED
+    assert lora.status == LoraStatus.QUEUED
 
 
 def test_music_worker_settings_queue_name() -> None:

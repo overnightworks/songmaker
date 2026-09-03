@@ -98,7 +98,7 @@ def test_on_shutdown_stops_scorer() -> None:
             return_value=mock_scorer,
         ),
         patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={},
         ),
     ):
         _run(worker.on_shutdown(ctx))
@@ -122,7 +122,7 @@ def test_on_shutdown_handles_missing_scorer() -> None:
             side_effect=RuntimeError("not initialized"),
         ),
         patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={},
         ),
     ):
         _run(worker.on_shutdown(ctx))

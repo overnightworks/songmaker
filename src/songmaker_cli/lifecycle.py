@@ -7,12 +7,11 @@ import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
-from pathlib import Path
 from typing import Final, Literal
 
 from arq.connections import ArqRedis
 from fastapi import FastAPI
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -401,60 +400,22 @@ def reap_stale_chat_jobs(ctx: AppContext, *, now: datetime | None = None) -> int
     return recovered
 
 
-def reconcile_crashed_loras_for_database(
-    db_factory: sessionmaker[Session], audio_dir: Path,
-) -> int:
-    """Reconcile terminal or missing training jobs while holding each LoRA lock."""
-    from songmaker_cli.constants import JOB_TERMINAL_STATUSES, LORA_ACTIVE_STATUSES
-    from songmaker_cli.db.models import UserLora
-    from songmaker_cli.db.queries import get_job
-    from songmaker_cli.jobs.lora_training import cleanup_failed_lora
-
-    reconciled = 0
-    with db_factory() as session:
-        active = (
-            session.query(UserLora)
-            .filter(
-                UserLora.status.in_(LORA_ACTIVE_STATUSES),
-                UserLora.deleted_at.is_(None),
-            )
-            .with_for_update(skip_locked=True)
-            .all()
-        )
-        for lora in active:
-            job = get_job(session, lora.training_job_id) if lora.training_job_id else None
-            if job is not None and job.status not in JOB_TERMINAL_STATUSES:
-                continue
-            cleanup_failed_lora(
-                lora_id=lora.id,
-                user_id=lora.user_id,
-                audio_dir=audio_dir,
-                db_factory=db_factory,
-                error_message="Training crashed or was interrupted",
-                session=session,
-            )
-            reconciled += 1
-        session.commit()
-    return reconciled
-
-
 def reconcile_crashed_loras(ctx: AppContext) -> int:
     """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
     tick. If the ARQ worker crashed mid-training, the LoRA row stays in
-    PREPROCESSING / TRAINING / EXPORTING even though no job is running --
-    and, left alone, its ``training_job_id`` would too, since nothing else
-    terminal-izes a LORA_TRAINING job (see :func:`reap_stale_lora_training_jobs`).
-    This first reaps that job, then detects that the associated
-    ``training_job_id`` is either missing or in a terminal state, and
-    reuses the job runner's ``cleanup_failed_lora`` helper to release disk
-    space and mark the row FAILED.
+    PREPROCESSING / TRAINING / EXPORTING even though no job is running. This
+    first reaps stale jobs as a web-process fallback, then delegates the
+    locked, per-LoRA database reconciliation and post-commit filesystem cleanup
+    to the LoRA job owner.
 
     Returns the number of rows reconciled.
     """
+    from songmaker_cli.jobs.lora_training import reconcile_crashed_loras as reconcile
+
     reap_stale_lora_training_jobs(ctx)
-    reconciled = reconcile_crashed_loras_for_database(ctx.db, ctx.audio_dir)
+    reconciled = reconcile(ctx.db, ctx.audio_dir)
     if reconciled:
         log.info("Reconciled %d crashed LoRA(s)", reconciled)
     return reconciled
