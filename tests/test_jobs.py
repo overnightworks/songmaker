@@ -1656,6 +1656,7 @@ def test_load_model_on_worker_success(seeded_db) -> None:
 
 
 def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
+    from songmaker_cli.constants import JOB_ERROR_INTERNAL
     from songmaker_cli.jobs import load_model_on_worker
 
     with seeded_db() as session:
@@ -1667,7 +1668,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
     with seeded_db() as session:
         job = get_job(session, "job1")
         assert job.status == "failed"
-        assert "not registered" in job.error
+        assert job.error == JOB_ERROR_INTERNAL
         assert job.error_type == "worker_missing"
 
 
@@ -1698,10 +1699,12 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
 def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
     from unittest.mock import AsyncMock
 
+    from songmaker_cli.constants import JOB_ERROR_WORKER_GENERATION_FAILED
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
-    fake_response = MagicMock(status_code=500, text="boom")
+    worker_response = "load failed at /opt/acestep/models/sft"
+    fake_response = MagicMock(status_code=500, text=worker_response)
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
@@ -1716,12 +1719,11 @@ def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
         job = get_job(session, "w1-job")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
-        assert "500" in job.error
+        assert job.error == JOB_ERROR_WORKER_GENERATION_FAILED
+        assert worker_response not in job.error
 
 
-def test_load_model_on_worker_5xx_includes_long_tail(seeded_db) -> None:
-    """502 from the worker carries the ACE-Step subprocess tail; we want
-    enough of it to be useful (4000 chars), not 200."""
+def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, caplog) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import load_model_on_worker
@@ -1741,11 +1743,8 @@ def test_load_model_on_worker_5xx_includes_long_tail(seeded_db) -> None:
     with patch("httpx.AsyncClient", return_value=fake_client):
         _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
-    with seeded_db() as session:
-        job = get_job(session, "w1-job")
-        assert job.status == "failed"
-        assert "did not become healthy" in job.error
-        assert job.error.count("loading shard 2/4") >= 30
+    assert "w1-job" in caplog.text
+    assert long_tail in caplog.text
 
 
 # ── download_model_on_worker ────────────────────────────────────────
@@ -1923,6 +1922,7 @@ async def _instant_sleep(_seconds: float) -> None:
 def test_download_model_on_worker_sse_error(seeded_db) -> None:
     from unittest.mock import AsyncMock
 
+    from songmaker_cli.constants import JOB_ERROR_WORKER_GENERATION_FAILED
     from songmaker_cli.jobs import download_model_on_worker
     from songmaker_cli.scheduler import WorkerTaskFailed
 
@@ -1957,7 +1957,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         job = get_job(session, "dl6")
         assert job.status == "failed"
         assert job.error_type == "download_error"
-        assert "HF 401" in job.error
+        assert job.error == JOB_ERROR_WORKER_GENERATION_FAILED
     assert consume_calls["count"] == 3
 
 
@@ -2041,6 +2041,7 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
 
 def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> None:
     from songmaker_cli.acestep_state import download_key
+    from songmaker_cli.constants import JOB_ERROR_INTERNAL
     from songmaker_cli.jobs import download_model_on_worker
 
     _seed_download_job(seeded_db, "dl10")
@@ -2053,7 +2054,7 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
         job = get_job(session, "dl10")
         assert job.status == "failed"
         assert job.error_type == "duplicate_download"
-        assert "previous-job" in job.error
+        assert job.error == JOB_ERROR_INTERNAL
     assert redis.store[download_key("sft")] == "previous-job"
 
 

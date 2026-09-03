@@ -8,7 +8,7 @@ import os
 
 from songmaker_cli.constants import JobStatus
 
-from ._runtime import _touch_heartbeat, _update_job
+from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ async def load_model_on_worker(
 
     from songmaker_cli.db.queries import get_worker_identity
     from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.scheduler import WorkerTaskFailed
     from songmaker_cli.settings import get_settings
 
     factory = db_factory
@@ -33,7 +34,9 @@ async def load_model_on_worker(
     if worker is None:
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Worker '{worker_id}' not registered",
+            error=_sanitize_error(
+                RuntimeError(f"Worker '{worker_id}' not registered"), job_id,
+            ),
             error_type="worker_missing",
         )
         return
@@ -48,7 +51,7 @@ async def load_model_on_worker(
     except httpx.HTTPError as exc:
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Worker unreachable: {exc}",
+            error=_sanitize_error(ConnectionError(str(exc)), job_id),
             error_type="worker_unreachable",
         )
         return
@@ -56,7 +59,12 @@ async def load_model_on_worker(
     if response.status_code >= 400:
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Worker returned {response.status_code}: {response.text[:4000]}",
+            error=_sanitize_error(
+                WorkerTaskFailed(
+                    f"Worker returned {response.status_code}: {response.text[:4000]}",
+                ),
+                job_id,
+            ),
             error_type="worker_error",
         )
         return
@@ -91,7 +99,7 @@ async def download_model_on_worker(
     if mode not in MODEL_CONFIG_PATHS:
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Unknown model mode '{mode}'",
+            error=_sanitize_error(ValueError(f"Unknown model mode '{mode}'"), job_id),
             error_type="invalid_mode",
         )
         return
@@ -102,7 +110,12 @@ async def download_model_on_worker(
         existing = await read_download_in_progress(redis, mode)
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Another download for '{mode}' is already in progress (job {existing})",
+            error=_sanitize_error(
+                RuntimeError(
+                    f"Another download for '{mode}' is already in progress (job {existing})",
+                ),
+                job_id,
+            ),
             error_type="duplicate_download",
         )
         return
@@ -114,7 +127,7 @@ async def download_model_on_worker(
     def _on_heartbeat() -> None:
         _touch_heartbeat(factory, job_id)
 
-    last_error: str | None = None
+    last_error: Exception | None = None
     try:
         for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
             try:
@@ -123,7 +136,7 @@ async def download_model_on_worker(
             except NoCapacityError as exc:
                 _update_job(
                     factory, job_id, JobStatus.FAILED,
-                    error=str(exc),
+                    error=_sanitize_error(exc, job_id),
                     error_type="no_workers",
                 )
                 return
@@ -140,7 +153,7 @@ async def download_model_on_worker(
             except httpx.HTTPError as exc:
                 _update_job(
                     factory, job_id, JobStatus.FAILED,
-                    error=f"Worker unreachable: {exc}",
+                    error=_sanitize_error(ConnectionError(str(exc)), job_id),
                     error_type="worker_unreachable",
                 )
                 return
@@ -148,7 +161,12 @@ async def download_model_on_worker(
             if submit.status_code >= 400:
                 _update_job(
                     factory, job_id, JobStatus.FAILED,
-                    error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
+                    error=_sanitize_error(
+                        WorkerTaskFailed(
+                            f"Worker returned {submit.status_code}: {submit.text[:200]}",
+                        ),
+                        job_id,
+                    ),
                     error_type="worker_error",
                 )
                 return
@@ -166,25 +184,21 @@ async def download_model_on_worker(
                 _update_job(factory, job_id, JobStatus.COMPLETED, progress=1.0)
                 return
             except WorkerTaskFailed as exc:
-                last_error = (
-                    f"Download attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS} failed: {exc}"
-                )
+                last_error = exc
                 log.warning(
-                    "download attempt %d/%d for %s failed: %s",
-                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+                    "Download job %s attempt %d/%d for %s failed: %s",
+                    job_id, attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
                 )
             except (httpx.RemoteProtocolError, httpx.ReadError) as exc:
-                last_error = (
-                    f"SSE drop on attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS}: {exc}"
-                )
+                last_error = ConnectionError(str(exc))
                 log.warning(
-                    "SSE drop on download attempt %d/%d for %s: %s",
-                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+                    "Download job %s SSE drop on attempt %d/%d for %s: %s",
+                    job_id, attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
                 )
             except httpx.HTTPError as exc:
                 _update_job(
                     factory, job_id, JobStatus.FAILED,
-                    error=f"SSE transport failed: {exc}",
+                    error=_sanitize_error(ConnectionError(str(exc)), job_id),
                     error_type="sse_transport",
                 )
                 return
@@ -194,7 +208,9 @@ async def download_model_on_worker(
 
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=last_error or "All download attempts exhausted",
+            error=_sanitize_error(
+                last_error or RuntimeError("All download attempts exhausted"), job_id,
+            ),
             error_type="download_error",
         )
     finally:
