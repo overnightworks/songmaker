@@ -9,7 +9,6 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	APP_NAME,
 	collectionRowPlayLabel,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_TAB_WRITE_LABEL,
@@ -19,7 +18,6 @@ import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
-	RAIL_ALBUM_DISCLOSE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -170,21 +168,17 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
 }
 
-/** Back to the wall — on mobile the rail is a drawer the header opens. */
+/** Back to the wall through LIBRARY's first child, in both rail shells. */
 async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	if (shell === 'desktop') {
-		await page
-			.getByRole('navigation', { name: RAIL_NAV_LABEL })
-			.getByRole('button', { name: APP_NAME, exact: true })
-			.click();
-		return;
-	}
-	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-	// The LIBRARY group is a disclosure. Until its first child becomes the
-	// wall target, the wordmark remains the rail's one Library shortcut.
-	await drawer.getByRole('button', { name: APP_NAME, exact: true }).click();
-	await expect(drawer).toBeHidden();
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('button', { name: nameStartingWith('All albums') })
+		.click();
+	if (shell === 'mobile')
+		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
 /**
@@ -384,12 +378,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	guard.assertWithinBudget(LIBRARY_FLOW_API_REQUEST_BUDGET[shell]);
 });
 
-/**
- * One album's own row inside the rail's LIBRARY group. Every album's chevron
- * shares the exact same accessible name (RAIL_ALBUM_DISCLOSE_LABEL — #326),
- * so a flow must narrow to the row that carries this album's title before it
- * can find that album's own chevron or its own songs.
- */
+/** One album's own one-target row inside the rail's LIBRARY group. */
 function railAlbumRow(rail: Locator, albumTitle: string): Locator {
 	return rail
 		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
@@ -487,9 +476,8 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 	function secondAlbumRow(): Locator {
 		return railAlbumRow(rail, library.secondAlbumTitle);
 	}
-	const secondAlbumChevron = secondAlbumRow().getByRole('button', {
-		name: RAIL_ALBUM_DISCLOSE_LABEL,
-		exact: true
+	const secondAlbumButton = secondAlbumRow().getByRole('button', {
+		name: containing(library.secondAlbumTitle)
 	});
 	function secondAlbumSong(): Locator {
 		return secondAlbumRow().getByRole('button', {
@@ -497,27 +485,16 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 		});
 	}
 
-	// The chevron alone toggles a closed album's tracks -- loaded on demand,
-	// the first time it opens -- and never navigates (#326 finding 1).
-	await expect(secondAlbumChevron).toHaveAttribute('aria-expanded', 'false');
+	// An album row has one action: it opens that album and its tracks together.
+	// Its caret is display only, so the old chevron-only destination is gone.
+	await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'false');
 	await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
-	await secondAlbumChevron.click();
-	await expect(secondAlbumChevron).toHaveAttribute('aria-expanded', 'true');
-	// The promise jsdom cannot measure (#326 finding 3): the row really
-	// renders, not merely carries data-open="true" -- .rail-group-panel's
-	// grid-template-rows collapses a closed panel to zero height. Opening it
-	// by its chevron alone -- not just by its label -- still enforces the
-	// one-slot rule (#323): the album that was open closes too.
+	await secondAlbumButton.click();
+	await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'true');
+	// The one-slot rule is visible as well as navigable: opening one album
+	// closes the former row and takes the surface to the selected album.
 	await expectRailRowExpanded(secondAlbumRow(), secondAlbumSong());
 	await expectRailRowCollapsed(firstAlbumRow(), firstAlbumSong());
-	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
-	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}`));
-
-	// The row's label is the navigation target (ruled sentence 5 of #302): a
-	// list entry click goes directly into that album.
-	await railAlbumRow(rail, library.secondAlbumTitle)
-		.getByRole('button', { name: containing(library.secondAlbumTitle) })
-		.click();
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
 	// The group header changes only the tree, and native keyboard activation
@@ -562,6 +539,12 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 	const [afterSettingsBox] = await boundingBoxes(settingsToggle);
 	expect(afterSettingsBox.y).toBeCloseTo(beforeSettingsBox.y, 0);
 	await expect(settingsToggle).toBeInViewport();
+
+	await openLibraryWall(page, shell);
+	rail = await openRailNav(page, shell);
+	await expect(
+		rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) })
+	).toHaveAttribute('aria-expanded', 'false');
 
 	console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
