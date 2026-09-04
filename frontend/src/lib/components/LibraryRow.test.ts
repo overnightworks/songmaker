@@ -132,6 +132,34 @@ function restoreScrollIntoView(): void {
 	delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
 }
 
+function stubResizeObserver(): () => void {
+	const callbacks: ResizeObserverCallback[] = [];
+	vi.stubGlobal(
+		'ResizeObserver',
+		class {
+			constructor(callback: ResizeObserverCallback) {
+				callbacks.push(callback);
+			}
+			observe(): void {}
+			disconnect(): void {}
+		}
+	);
+	return () => {
+		for (const callback of callbacks) callback([], {} as ResizeObserver);
+	};
+}
+
+function setRowLayout(row: HTMLElement, tileCount: number, clientWidth: number): void {
+	Object.defineProperty(row, 'clientWidth', { value: clientWidth, configurable: true });
+	Array.from(row.querySelectorAll<HTMLElement>('.row-tile')).forEach((tile, index) => {
+		Object.defineProperties(tile, {
+			offsetLeft: { value: index * 92, configurable: true },
+			offsetWidth: { value: 84, configurable: true }
+		});
+		tile.hidden = index >= tileCount;
+	});
+}
+
 beforeEach(() => {
 	fetchSongs
 		.mockReset()
@@ -242,6 +270,38 @@ describe('LibraryRow', () => {
 		expect(root.querySelector('.library-row-scrim')?.classList.contains('has-overflow')).toBe(
 			false
 		);
+	});
+
+	it('keeps a few tiles flush left instead of adding a leading centring inset', async () => {
+		const resize = stubResizeObserver();
+		albumList.set([
+			album({ id: 'a-1', title: 'Anfield' }),
+			album({ id: 'a-2', title: 'Sommerluft' }),
+			album({ id: 'a-3', title: 'Vernissage' })
+		]);
+		const root = await render({ kind: 'album', id: 'a-1' });
+		const row = root.querySelector<HTMLElement>('.library-row');
+		if (!row) throw new Error('Expected .library-row to be rendered');
+		setRowLayout(row, 3, 400);
+		resize();
+
+		expect(row.style.getPropertyValue('--row-edge-inset')).toBe('0px');
+	});
+
+	it('adds exactly the inset needed to centre edge tiles once the row overflows', async () => {
+		const resize = stubResizeObserver();
+		albumList.set(
+			Array.from({ length: 12 }, (_, index) =>
+				album({ id: `a-${index}`, title: `Album ${index}` })
+			)
+		);
+		const root = await render({ kind: 'album', id: 'a-6' });
+		const row = root.querySelector<HTMLElement>('.library-row');
+		if (!row) throw new Error('Expected .library-row to be rendered');
+		setRowLayout(row, 12, 400);
+		resize();
+
+		expect(row.style.getPropertyValue('--row-edge-inset')).toBe('158px');
 	});
 
 	it('shows the overflow scrim once the row genuinely has more to scroll to', async () => {
