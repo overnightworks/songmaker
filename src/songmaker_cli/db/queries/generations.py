@@ -13,8 +13,12 @@ from sqlalchemy.orm import Session, aliased, joinedload
 from songmaker_cli import queue_streams
 from songmaker_cli.audio_paths import canonical_audio_filename
 from songmaker_cli.constants import JobStatus
-from songmaker_cli.db.models import Generation, Rating, Score, Song
-from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
+from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
+from songmaker_cli.db.queries.sharing import (
+    disable_sharing,
+    enable_sharing,
+    playable_take_filter,
+)
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +64,26 @@ def get_generation(session: Session, gen_id: str) -> Generation | None:
         )
         .filter_by(id=gen_id)
         .first()
+    )
+
+
+def list_own_playable_generations(session: Session, user_id: str) -> list[Generation]:
+    """Return a musician's playable takes with the fields picker callers need."""
+    return (
+        session.query(Generation)
+        .join(Generation.song)
+        .join(Song.album)
+        .outerjoin(Generation.version)
+        .options(
+            joinedload(Generation.song).joinedload(Song.album),
+            joinedload(Generation.version),
+        )
+        .filter(
+            Album.created_by == user_id,
+            playable_take_filter(),
+        )
+        .order_by(Generation.created_at.desc(), Generation.id.desc())
+        .all()
     )
 
 
