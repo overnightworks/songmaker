@@ -16,23 +16,18 @@ RUN chown songmaker:songmaker /app
 USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
-    uv sync --frozen --no-dev --extra server --extra scoring --extra whisper --extra claude && \
-    rm -rf src/songmaker_cli/__init__.py
+# The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source
+# distribution, so this locked sync alone may build it.
+RUN uv sync --frozen --no-dev --no-install-project --extra server --extra scoring --extra whisper --extra claude # NOSONAR: nvidia-ml-py3 has no wheel in the lockfile; every dependency remains resolved from uv.lock.
 
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
-RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run python -c "\
-from faster_whisper import WhisperModel; \
-WhisperModel('large-v3', device='cpu', compute_type='int8')"
-RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run python -c "\
-from audiobox_aesthetics.infer import AesPredictor; \
-import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; \
-AesPredictor(checkpoint_pth='default')"
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run --no-sync --frozen --no-build python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')"
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run --no-sync --frozen --no-build python -c "from audiobox_aesthetics.infer import AesPredictor; import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; AesPredictor(checkpoint_pth='default')"
 
-COPY --chown=songmaker src/ src/
-COPY --chown=songmaker alembic.ini ./
-COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
-RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper --extra claude
+COPY --chown=root:root src/ src/
+COPY --chown=root:root alembic.ini ./
+COPY --chown=root:root scripts/arq_healthcheck.py scripts/
+RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable .
 
 # The judge uses only Claude's CLI fallback; Grok and Codex use HTTP APIs.
 RUN install -d /home/songmaker/.claude
@@ -41,6 +36,10 @@ RUN install -d /home/songmaker/.claude
 # workers, and Docker seeds an empty named volume from whichever image
 # mounts it first — as root when that image lacks the directory. Every
 # image that mounts it must carry it, owned by songmaker.
-RUN mkdir -p /app/data/audio
+USER root
+RUN chown root:root /app && chmod 755 /app && \
+    chmod -R a-w src alembic.ini scripts && \
+    install -d -o songmaker -g songmaker /app/data/audio
+USER songmaker
 
 ENTRYPOINT ["/app/.venv/bin/arq"]
