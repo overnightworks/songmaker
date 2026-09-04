@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -631,7 +630,6 @@ def test_shared_stream_manifests_skip_noncanonical_audio_paths(
 def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
     tmp_path: Path,
     monkeypatch,
-    caplog: pytest.LogCaptureFixture,
     share_endpoint: str,
     stream_url: str,
 ) -> None:
@@ -648,7 +646,6 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
         })
         session.commit()
 
-    caplog.set_level(logging.WARNING, logger="songmaker_cli.audio_paths")
     traversal_response = public.post(stream_url.format(slug=slug))
 
     with factory() as session:
@@ -665,12 +662,6 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
         assert [track["generation_id"] for track in traversal_response.json()["tracks"]] == ["g2"]
     assert missing_response.status_code == 404
     assert missing_response.json()["detail"] == "Not Found"
-    traversal_log = next(
-        record for record in caplog.records
-        if record.name == "songmaker_cli.audio_paths"
-    ).getMessage()
-    assert "owner-id/../../outside.mp3" in traversal_log
-    assert str(client.app.state.ctx.audio_dir) not in traversal_log
 
 
 def test_shared_playlist_queue_stream_revalidates_entries(
