@@ -25,7 +25,11 @@ from songmaker_cli.constants import (
     GROK_CLI_PROMPT_FILE_PLACEHOLDER,
     GROK_CLI_STREAMING_OUTPUT_FORMAT,
 )
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 
 _AUTH_FAILURE_MARKERS: Final = ("401", "oidc", "unauthenticated")
 _IGNORED_EVENT_TYPES: Final = frozenset({"thought", "usage", "available_commands", "plan"})
@@ -105,7 +109,16 @@ async def stream_grok_cli_turn(
     except _GrokCliStreamFailure as exc:
         channel.request_abort()
         await asyncio.shield(runner)
-        raise ProviderUnavailableError("grok", exc.code) from exc
+        reason = (
+            SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+            if exc.code == "grok_cli_tool_call_blocked"
+            else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        )
+        raise ProviderUnavailableError(
+            "grok",
+            "cli",
+            normalize_route_failure(reason),
+        ) from exc
     finally:
         channel.request_abort()
         try:
@@ -171,13 +184,21 @@ def _raise_for_grok_outcome(
 ) -> None:
     if error_message is not None or not outcome.complete or outcome.returncode != 0 or not saw_end:
         if _contains_auth_failure(error_message) or _contains_auth_failure(outcome.stderr):
-            raise ProviderUnavailableError("grok", "cli_login_expired")
+            raise ProviderUnavailableError(
+                "grok",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+            )
         log.warning(
             "Grok CLI failed (rc=%s, stderr_bytes=%d)",
             outcome.returncode,
             len(outcome.stderr.encode()),
         )
-        raise ProviderUnavailableError("grok", "grok_cli_error")
+        raise ProviderUnavailableError(
+            "grok",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        )
 
 
 def _contains_auth_failure(value: str | None) -> bool:

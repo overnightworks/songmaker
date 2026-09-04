@@ -238,12 +238,15 @@ export interface CowriterSettings {
 	current_models_not_in_catalog: Record<string, string>;
 	probed_at: Record<string, string | null>;
 	tail_token_budget: number;
+	provider_routes?: Record<string, 'cli' | 'api'>;
+	provider_routes_status?: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
 }
 
 export interface CowriterSettingsRequest {
 	provider: string;
 	model: string;
 	tail_token_budget?: number | null;
+	provider_routes?: Record<string, 'cli' | 'api'> | null;
 }
 
 export interface CreateUserRequest {
@@ -580,10 +583,27 @@ export interface ProviderNotConfiguredDetail {
 	status: ProviderSurfaceStatus;
 }
 
+export interface ProviderRouteReadiness {
+	state: 'ready' | 'not_configured' | 'disturbed' | 'unverified';
+	reason?: SafeRouteReason | null;
+	probed_at?: string | null;
+	setup_label: string;
+}
+
+export interface ProviderRouteStatusResponse {
+	models: string[];
+	catalogue_failure?: SafeRouteReason | null;
+	catalog_source?: string | null;
+	catalog_version?: string | null;
+	readiness: ProviderRouteReadiness;
+	retained_model_id?: string | null;
+}
+
 export interface ProviderStatus {
 	provider: string;
 	cowriter: ProviderSurfaceStatus;
 	judge: ProviderSurfaceStatus;
+	cowriter_routes?: Record<'cli' | 'api', ProviderRouteStatusResponse>;
 }
 
 export interface ProviderSurfaceStatus {
@@ -735,6 +755,11 @@ export interface ResourceHelloEvent {
 
 export interface ResourceResyncEvent {
 	high_water_mark: string;
+}
+
+export interface SafeRouteReason {
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'claude_api_tool_loop_pending' | 'route_failed';
+	message: string;
 }
 
 export interface ScoreRequest {

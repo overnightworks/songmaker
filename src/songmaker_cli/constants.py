@@ -127,6 +127,7 @@ CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
+SETTING_PROVIDER_ROUTES = "provider_routes"
 SETTING_JUDGE_PROVIDER = "judge_provider"
 SETTING_JUDGE_MODEL = "judge_model"
 # The judge is its own task with its own provider choice (not coupled to the

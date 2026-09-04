@@ -19,7 +19,11 @@ from songmaker_cli.claude.provider import (
     _stdin_prompt,
 )
 from songmaker_cli.constants import CODEX_CLI_BINARY, COWRITER_CLI_TIMEOUT_SECONDS
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
@@ -118,7 +122,16 @@ async def stream_codex_cli_turn(
     except _CodexCliStreamFailure as exc:
         channel.request_abort()
         await asyncio.shield(runner)
-        raise ProviderUnavailableError("codex", exc.code) from exc
+        reason = (
+            SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+            if exc.code == "codex_cli_tool_call_blocked"
+            else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        )
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(reason),
+        ) from exc
     finally:
         channel.request_abort()
         try:
@@ -268,18 +281,30 @@ def _raise_for_codex_outcome(
     if not outcome.complete or outcome.returncode != 0:
         _raise_codex_cli_failure(outcome, None)
     if not saw_success:
-        raise ProviderUnavailableError("codex", "codex_cli_stream_protocol_error")
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        )
 
 
 def _raise_codex_cli_failure(outcome: CliRunOutcome, error_message: str | None) -> None:
     if _contains_auth_failure(error_message) or _contains_auth_failure(outcome.stderr):
-        raise ProviderUnavailableError("codex", "cli_login_expired")
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
     log.warning(
         "Codex CLI failed (rc=%s, stderr_bytes=%d)",
         outcome.returncode,
         len(outcome.stderr.encode()),
     )
-    raise ProviderUnavailableError("codex", "codex_cli_error")
+    raise ProviderUnavailableError(
+        "codex",
+        "cli",
+        normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+    )
 
 
 def _contains_auth_failure(value: str | None) -> bool:
