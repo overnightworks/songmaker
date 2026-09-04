@@ -260,6 +260,76 @@ def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
     assert observed_abort.is_set()
 
 
+def test_codex_image_gate_accepts_the_real_stream_line_by_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    channels = []
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        channels.append(channel)
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        artifact = home / "generated_images" / "thread" / "cover.png"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(_png_bytes())
+        stream = _image_event_stream(home, Path(kwargs["cwd"]))
+        for line in stream.splitlines(keepends=True):
+            assert channel._send(line.encode())
+        return _outcome(stdout=stream)
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    assert codex_cli_adapter.generate_codex_cover_image(
+        "prompt", deadline=10_000_000,
+    ).startswith(b"\x89PNG")
+    assert channels and all(not channel.abort_requested() for channel in channels)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda records: records[3]["item"].update(type="collab_agent_tool_call"),
+        lambda records: records[4]["item"].update(exit_code=1),
+        lambda records: records[4]["item"].update(id="other-command"),
+        lambda records: records.insert(5, {
+            "type": "item.started",
+            "item": {**records[3]["item"], "id": "second-command"},
+        }),
+        lambda records: records[3].update(type="item.updated"),
+        lambda records: records[3].update(type="turn.unknown"),
+    ),
+)
+def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    observed_abort = threading.Event()
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        records = _image_event_records(home, Path(kwargs["cwd"]))
+        mutate(records)
+        for record in records:
+            if not channel._send((json.dumps(record) + "\n").encode()):
+                break
+        if channel._abort_requested.wait(timeout=1):
+            observed_abort.set()
+        return _outcome(complete=False, reason=CliRunReason.CANCELLED)
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert observed_abort.is_set()
+
+
 def test_cover_prompt_quotes_and_bounds_song_data(cover_job) -> None:
     factory, _, job_id = cover_job
     with factory() as session:
