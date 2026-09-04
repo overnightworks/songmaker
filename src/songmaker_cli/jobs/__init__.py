@@ -37,6 +37,7 @@ from ._runtime import (
     _touch_heartbeat,
     _update_job,
 )
+from .cover_suggestions import build_cover_prompt, run_cover_suggestion_job
 from .generation import (
     GenerationContext,
     _apply_cover_overrides,
@@ -94,6 +95,7 @@ __all__ = [
     "audio_file_path",
     "build_ace_config",
     "cleanup_failed_lora",
+    "build_cover_prompt",
     "dispatch_generation",
     "download_model_on_worker",
     "get_scorer_process",
@@ -102,6 +104,7 @@ __all__ = [
     "post_process_generation",
     "resolve_model_mode",
     "run_generation_job",
+    "run_cover_suggestion_job",
     "run_lora_training_job",
     "run_scoring_job",
 ]

@@ -110,6 +110,9 @@ class Album(ShareMixin, Base):
     )
 
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")
+    cover_suggestions: Mapped[list[AlbumCoverSuggestion]] = relationship(
+        back_populates="album", cascade="all, delete-orphan",
+    )
 
 
 class Song(ShareMixin, Base):
@@ -334,10 +337,32 @@ class Job(Base):
     song_id: Mapped[str | None] = mapped_column(
         ForeignKey("songs.id", ondelete="SET NULL"), nullable=True, index=True,
     )
+    album_id: Mapped[str | None] = mapped_column(
+        ForeignKey("albums.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+
+    album: Mapped[Album | None] = relationship()
+
+
+class AlbumCoverSuggestion(Base):
+    __tablename__ = "album_cover_suggestions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    album_id: Mapped[str] = mapped_column(
+        ForeignKey("albums.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    png_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+
+    album: Mapped[Album] = relationship(back_populates="cover_suggestions")
+    job: Mapped[Job] = relationship()
 
 
 # ── Auth ────────────────────────────────────────────────────────────

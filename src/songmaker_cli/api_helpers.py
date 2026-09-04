@@ -77,6 +77,7 @@ _LORA_SLUG_LOCK_ID = 3
 _SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
+COVER_SUGGESTIONS_LOCK_ID = 7
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
@@ -516,6 +517,23 @@ def check_generation_access(
         album = gen.song.album if gen.song else None
         if not album or album.created_by != user.id:
             raise HTTPException(404, "Generation not found")
+    return gen
+
+
+def check_own_generation_access(
+    session: Session, gen_id: str, user: AuthenticatedUser,
+) -> Generation:
+    """Load a generation and require its album to belong to the caller.
+
+    Unlike the general generation access helper, this intentionally does not
+    grant administrators access to another musician's take. Callers use it
+    where a take becomes private source material rather than an administrative
+    resource.
+    """
+    gen = check_generation_access(session, gen_id, user)
+    album = gen.song.album if gen.song else None
+    if not album or album.created_by != user.id:
+        raise HTTPException(404, "Generation not found")
     return gen
 
 

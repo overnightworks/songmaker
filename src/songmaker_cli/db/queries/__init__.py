@@ -97,6 +97,15 @@ from songmaker_cli.db.queries.conversations import (
 from songmaker_cli.db.queries.conversations import (
     upsert_summary as upsert_summary,
 )
+from songmaker_cli.db.queries.cover_suggestions import (
+    delete_album_cover_suggestions as delete_album_cover_suggestions,
+)
+from songmaker_cli.db.queries.cover_suggestions import (
+    get_album_cover_suggestion as get_album_cover_suggestion,
+)
+from songmaker_cli.db.queries.cover_suggestions import (
+    list_album_cover_suggestions as list_album_cover_suggestions,
+)
 from songmaker_cli.db.queries.generations import (
     all_generation_paths as all_generation_paths,
 )
@@ -129,6 +138,9 @@ from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_delete as list_generations_expired_for_delete,
 )
 from songmaker_cli.db.queries.generations import (
+    list_own_playable_generations as list_own_playable_generations,
+)
+from songmaker_cli.db.queries.generations import (
     measure_generation_audio_duration as measure_generation_audio_duration,
 )
 from songmaker_cli.db.queries.generations import pick_generation as pick_generation
@@ -140,6 +152,7 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
+from songmaker_cli.db.queries.jobs import count_cover_jobs_since as count_cover_jobs_since
 from songmaker_cli.db.queries.jobs import (
     count_queued_generation_jobs as count_queued_generation_jobs,
 )
@@ -151,9 +164,13 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.jobs import create_job as create_job
 from songmaker_cli.db.queries.jobs import get_job as get_job
 from songmaker_cli.db.queries.jobs import (
+    get_last_cover_job_for_album as get_last_cover_job_for_album,
+)
+from songmaker_cli.db.queries.jobs import (
     get_last_generate_job_for_song as get_last_generate_job_for_song,
 )
 from songmaker_cli.db.queries.jobs import get_queue_position as get_queue_position
+from songmaker_cli.db.queries.jobs import has_active_cover_job as has_active_cover_job
 from songmaker_cli.db.queries.jobs import (
     job_counts_by_type_and_status as job_counts_by_type_and_status,
 )

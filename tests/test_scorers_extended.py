@@ -712,7 +712,7 @@ def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
 
     assert judged.lyrical_coherence is None
     assert judged.runs[-1].outcome is ScorerOutcome.FAILED
-    assert "Claude unreachable" in judged.runs[-1].detail
+    assert judged.runs[-1].detail == "Selected route failed."
     assert "lyrical_coherence" not in judged.refreshed_output_keys()
 
 
@@ -835,7 +835,7 @@ def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured(
 
     assert judged.lyrical_coherence is None
     assert judged.runs[-1].outcome is ScorerOutcome.FAILED
-    assert "grok" in judged.runs[-1].detail
+    assert judged.runs[-1].detail == "API key is not set."
     claude_call.assert_not_called()
 
 

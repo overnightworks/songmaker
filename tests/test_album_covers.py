@@ -130,9 +130,14 @@ def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
 
 def test_cover_upload_path_is_large_and_sized_to_cover_budget() -> None:
     assert is_large_upload_path("/api/albums/alice-album/cover")
+    assert not is_large_upload_path("/api/albums/alice-album/cover", "PUT")
     assert not is_large_upload_path("/api/albums/alice-album/cover/extra")
     assert not is_large_upload_path("/api/albums//cover")
     assert body_limit_for_path("/api/albums/alice-album/cover") == COVER_UPLOAD_BODY_MAX_BYTES
+    assert (
+        body_limit_for_path("/api/albums/alice-album/cover", "PUT")
+        == JSON_REQUEST_BODY_MAX_BYTES
+    )
     assert COVER_UPLOAD_BODY_MAX_BYTES > JSON_REQUEST_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES > COVER_MAX_BYTES
 

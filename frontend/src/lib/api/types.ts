@@ -218,6 +218,22 @@ export interface CoverRequest {
 	seed?: number | null;
 }
 
+export interface CoverSuggestionResponse {
+	id: string;
+	url: string;
+}
+
+export interface CoverSuggestionSelectionRequest {
+	suggestion_id: string;
+}
+
+export interface CoverSuggestionsResponse {
+	job?: JobItem | null;
+	suggestions: CoverSuggestionResponse[];
+	used_today: number;
+	daily_limit: number;
+}
+
 export interface CoverTaskParams {
 	src_wav_path: string;
 	src_generation_id: string;
@@ -494,6 +510,19 @@ export interface ModelCapabilities {
 	defaults: Record<string, unknown>;
 	max_inference_steps: number;
 	hidden_params: string[];
+}
+
+export interface OwnPlayableTakeListResponse {
+	takes: OwnPlayableTakeResponse[];
+}
+
+export interface OwnPlayableTakeResponse {
+	generation_id: string;
+	song_title: string;
+	generation_number: number;
+	audio_url: string;
+	caption: string;
+	lyrics: string;
 }
 
 export interface PinModelOnWorkerRequest {
@@ -1023,6 +1052,10 @@ export interface UserLoraSampleCreateRequest {
 	caption: string;
 	lyrics: string;
 	position?: number | null;
+}
+
+export interface UserLoraSampleFromGenerationRequest {
+	generation_id: string;
 }
 
 export interface UserLoraSampleItem {

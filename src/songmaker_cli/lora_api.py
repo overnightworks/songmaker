@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -12,18 +13,24 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
+    check_own_generation_access,
+    raise_audio_file_http_error,
     unique_lora_slug,
 )
 from songmaker_cli.api_models import (
+    OwnPlayableTakeListResponse,
+    OwnPlayableTakeResponse,
     StatusResponse,
     UserLoraCreateRequest,
     UserLoraListResponse,
     UserLoraResponse,
+    UserLoraSampleFromGenerationRequest,
     UserLoraSamplePatchRequest,
     UserLoraSampleResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool
+from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
 from songmaker_cli.constants import (
     LORA_ACTIVE_STATUSES,
     USER_LORA_AUDIO_EXTENSIONS,
@@ -47,6 +54,7 @@ from songmaker_cli.db.queries import (
     delete_user_lora_sample,
     get_user_lora,
     get_user_lora_sample,
+    list_own_playable_generations,
     list_user_loras_for_user,
     record_audit,
     soft_delete_user_lora,
@@ -54,6 +62,7 @@ from songmaker_cli.db.queries import (
     update_user_lora,
     update_user_lora_sample,
 )
+from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -112,6 +121,17 @@ def api_list_loras(
     )
 
 
+@router.get("/loras/own-takes")
+def api_list_own_playable_takes(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> OwnPlayableTakeListResponse:
+    takes = list_own_playable_generations(session, user.id)
+    return OwnPlayableTakeListResponse(
+        takes=[OwnPlayableTakeResponse.from_orm(take) for take in takes],
+    )
+
+
 @router.get("/loras/{lora_id}")
 def api_get_lora(
     lora_id: str,
@@ -139,6 +159,64 @@ def api_delete_lora(
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.LORA, lora_id)
     session.commit()
     return StatusResponse()
+
+
+@router.post("/loras/{lora_id}/samples/from-generation")
+def api_add_sample_from_generation(
+    lora_id: str,
+    data: UserLoraSampleFromGenerationRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> UserLoraSampleResponse:
+    lora = get_user_lora(session, lora_id, include_deleted_rows=True)
+    check_lora_access(lora, user)
+    _reject_if_active_or_deleted(lora)
+
+    generation = check_own_generation_access(session, data.generation_id, user)
+    if not is_playable_take(generation):
+        raise HTTPException(422, "Generation is not playable")
+
+    try:
+        source = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=False)
+    if not source.is_file():
+        raise HTTPException(404, "Generation not found")
+
+    if count_user_lora_samples(session, lora_id) >= USER_LORA_MAX_SAMPLES:
+        raise HTTPException(
+            409, f"LoRA already has the maximum of {USER_LORA_MAX_SAMPLES} samples",
+        )
+
+    destination: Path | None = None
+    try:
+        sample = add_user_lora_sample(
+            session,
+            lora_id,
+            "",
+            caption=generation.version.prompt if generation.version else "",
+            lyrics=generation.version.lyrics if generation.version else "",
+        )
+        relative_path = (
+            Path(USER_LORAS_DIRNAME)
+            / user.id / lora_id / USER_LORA_SAMPLES_DIRNAME
+            / f"{sample.id}{source.suffix.lower()}"
+        )
+        sample.audio_path = str(relative_path)
+        session.flush()
+
+        destination = ctx.audio_dir / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        session.commit()
+    except Exception:
+        session.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
+
+    return UserLoraSampleResponse.from_orm(sample)
 
 
 @router.post("/loras/{lora_id}/samples")

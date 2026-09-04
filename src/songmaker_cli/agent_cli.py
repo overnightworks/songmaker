@@ -14,7 +14,7 @@ import tempfile
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -318,6 +318,7 @@ def run_cli_bounded(
     prompt_file_bytes: bytes | None = None,
     prompt_file_arg_index: int | None = None,
     cwd: str | None = None,
+    extra_env: Mapping[str, str] | None = None,
 ) -> CliRunOutcome:
     """Run a CLI with bounded input, output, and caller cleanup waits.
 
@@ -343,6 +344,7 @@ def run_cli_bounded(
             prompt_file_bytes,
             prompt_file_arg_index,
             cwd,
+            extra_env,
         ),
         daemon=True,
     ).start()
@@ -404,6 +406,7 @@ def _run_cli_bounded(
     prompt_file_bytes: bytes | None,
     prompt_file_arg_index: int | None,
     cwd: str | None,
+    extra_env: Mapping[str, str] | None,
 ) -> None:
     process: subprocess.Popen[bytes] | None = None
     prompt_file_path: str | None = None
@@ -423,7 +426,7 @@ def _run_cli_bounded(
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
-                env=scrubbed_env(),
+                env=_child_env(extra_env),
                 start_new_session=True,
                 cwd=cwd,
             )
@@ -493,6 +496,14 @@ def _run_cli_bounded(
         _publish_bounded_outcome(state, outcome)
         if stdout_line_channel is not None:
             stdout_line_channel._close(outcome)
+
+
+def _child_env(extra_env: Mapping[str, str] | None) -> dict[str, str]:
+    """Build the scrubbed child environment with explicit local additions."""
+    env = scrubbed_env()
+    if extra_env is not None:
+        env.update(extra_env)
+    return env
 
 
 def _with_private_prompt_file(
