@@ -398,7 +398,7 @@ being in place.
 ## Agent-CLI Mounts
 
 `songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
-credential mirrors read-only (`docker-compose.yml:98-133`). The scoring worker
+credential mirrors read-only. The scoring worker
 mounts only Claude's binary and credential mirror; it does not mount Grok or
 Codex (`docker-compose.yml:246-259`).
 
@@ -435,13 +435,18 @@ The one-turn Codex command is `codex exec --json --sandbox read-only` with
 `--ephemeral`, `approval_policy="never"`, and `mcp_servers={}`. It receives a
 private temporary working directory (which is deliberately not a Git
 repository), a stdin prompt rather than a prompt file, and the runner's
-secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited. Its JSONL
+secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited. It pins
+`--disable code_mode_host`, `--disable code_mode`, and `--disable
+code_mode_only`, so the native Code Mode companion is neither mounted nor
+started. Its JSONL
 gate permits only lifecycle observations, completed assistant text, and a
 completed turn with usage; it discards reasoning, aborts and refuses every
 reported command, MCP, web-search, or file-change item, and treats unknown or
-malformed items as `codex_cli_stream_protocol_error`. Event payloads, prompts,
-and stderr are not logged; failure logging contains only the return code and
-stderr length.
+malformed items as `codex_cli_stream_protocol_error`. Only a completed `error`
+item is a named CLI failure when no completed turn follows; an error item that
+is started or updated remains a protocol failure. Event payloads, prompts, and
+stderr are not logged; failure logging contains only the return code and stderr
+length.
 `approval_policy="never"` means auto-approval within the sandbox, not that
 tools cannot run: the JSONL gate refuses a tool only after Codex reports the
 item, so these flags do not rule out execution or a web-search request before

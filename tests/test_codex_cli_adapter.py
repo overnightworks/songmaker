@@ -7,6 +7,7 @@ import json
 import os
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +15,8 @@ from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+
+_RECORDED_STREAM = Path(__file__).parent / "fixtures" / "codex_cli_real_stream.jsonl"
 
 
 def _outcome(
@@ -54,6 +57,15 @@ async def _collect():
     return [event async for event in _stream()]
 
 
+def _recorded_stream_lines() -> list[bytes]:
+    events = [json.loads(line) for line in _RECORDED_STREAM.read_text().splitlines()]
+    for event in events:
+        item = event.get("item")
+        if isinstance(item, dict) and item.get("type") == "agent_message":
+            item["text"] = "OK"
+    return [json.dumps(event).encode() + b"\n" for event in events]
+
+
 def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch) -> None:
     calls: list = []
     observed_cwd_modes: list[int] = []
@@ -78,7 +90,8 @@ def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch)
     command, kwargs = calls[0]
     assert command == (
         "codex", "exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check",
-        "--ignore-user-config", "--ignore-rules", "--ephemeral", "-c", 'approval_policy="never"',
+        "--ignore-user-config", "--ignore-rules", "--ephemeral", "--disable", "code_mode_host",
+        "--disable", "code_mode", "--disable", "code_mode_only", "-c", 'approval_policy="never"',
         "-c", "mcp_servers={}", "--model", "codex-test", "-",
     )
     assert kwargs["stdin_payload"] == b"system\n\nUser: hello"
@@ -89,6 +102,39 @@ def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch)
     assert observed_cwd_modes == [0o700]
     assert os.path.basename(kwargs["cwd"]).startswith("songmaker-codex-cli-")
     assert not os.path.exists(kwargs["cwd"])
+
+
+def test_codex_cli_accepts_the_recorded_real_stream_and_returns_one_final(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(
+        codex_cli_adapter,
+        "run_cli_bounded",
+        _runner(_recorded_stream_lines(), _outcome(), calls),
+    )
+
+    assert asyncio.run(_collect()) == [
+        AssistantTextEvent(text="OK"),
+        FinalEvent(text="OK"),
+    ]
+
+
+@pytest.mark.parametrize("event_type", sorted(codex_cli_adapter._ITEM_EVENT_TYPES))
+@pytest.mark.parametrize("item_type", sorted(codex_cli_adapter._INFORMATIONAL_ITEM_TYPES))
+def test_codex_cli_ignores_informational_item_lifecycle_events(
+    monkeypatch, event_type, item_type,
+) -> None:
+    calls: list = []
+    item: dict[str, str] = {"type": item_type}
+    expected = [FinalEvent(text="")]
+    if event_type == "item.completed" and item_type == "agent_message":
+        item["text"] = "OK"
+        expected = [AssistantTextEvent(text="OK"), FinalEvent(text="OK")]
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        json.dumps({"type": event_type, "item": item}).encode() + b"\n",
+        b'{"type":"turn.completed","usage":{}}\n',
+    ], _outcome(), calls))
+
+    assert asyncio.run(_collect()) == expected
 
 
 @pytest.mark.parametrize("item_type", sorted(codex_cli_adapter._BLOCKED_ITEM_TYPES))
@@ -109,7 +155,7 @@ def test_codex_cli_blocks_tool_items_without_emitting_a_final(monkeypatch, item_
     "line",
     (
         b"not json\n",
-        b'{"type":"item.completed","item":{"type":"todo_list"}}\n',
+        b'{"type":"item.completed","item":{"type":"future_item"}}\n',
         b'{"type":"item.completed","item":{"type":"agent_message"}}\n',
         b'{"type":"turn.completed"}\n',
     ),
@@ -124,6 +170,99 @@ def test_codex_cli_rejects_malformed_and_unknown_stream_items(monkeypatch, line)
         asyncio.run(_collect())
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+
+
+def test_codex_cli_names_unknown_stream_events_in_the_log(monkeypatch, caplog) -> None:
+    calls: list = []
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        b'{"type":"turn.unknown"}\n',
+    ], _outcome(), calls))
+    caplog.set_level("WARNING")
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+        asyncio.run(_collect())
+
+    assert "event_type=turn.unknown" in caplog.text
+
+
+def test_codex_cli_names_unknown_item_types_without_logging_item_content(
+    monkeypatch, caplog,
+) -> None:
+    calls: list = []
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        b'{"type":"item.completed","item":{"type":"future_item","text":"secret"}}\n',
+    ], _outcome(), calls))
+    caplog.set_level("WARNING")
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+        asyncio.run(_collect())
+
+    assert "event_type=item.completed" in caplog.text
+    assert "item_type=future_item" in caplog.text
+    assert "secret" not in caplog.text
+
+
+def test_codex_cli_delivers_a_completed_turn_after_logging_an_error_item(
+    monkeypatch, caplog,
+) -> None:
+    calls: list = []
+    message = (
+        "Code Mode is unavailable because failed to spawn code-mode host "
+        "/private/companion/token-value"
+    )
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        json.dumps({"type": "item.completed", "item": {
+            "type": "error", "message": message,
+        }}).encode() + b"\n",
+        b'{"type":"item.completed","item":{"type":"agent_message","text":"OK"}}\n',
+        b'{"type":"turn.completed","usage":{}}\n',
+    ], _outcome(), calls))
+    caplog.set_level("WARNING")
+
+    assert asyncio.run(_collect()) == [
+        AssistantTextEvent(text="OK"),
+        FinalEvent(text="OK"),
+    ]
+
+    assert "message_class=code_mode_is_unavailable" in caplog.text
+    assert message not in caplog.text
+    assert "/private/companion" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("message", "code"),
+    (
+        ("Code Mode is unavailable", "codex_cli_error"),
+        ("Request failed with 401 Unauthorized", "cli_login_expired"),
+    ),
+)
+def test_codex_cli_classifies_an_error_item_without_a_completed_turn(
+    monkeypatch, message, code,
+) -> None:
+    calls: list = []
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        json.dumps({"type": "item.completed", "item": {
+            "type": "error", "message": message,
+        }}).encode() + b"\n",
+    ], _outcome(), calls))
+
+    with pytest.raises(ProviderUnavailableError, match=code):
+        asyncio.run(_collect())
+
+
+@pytest.mark.parametrize("event_type", ("item.started", "item.updated"))
+def test_codex_cli_rejects_nonterminal_error_items_as_protocol_errors(
+    monkeypatch, event_type,
+) -> None:
+    calls: list = []
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        json.dumps({"type": event_type, "item": {
+            "type": "error", "message": "not a terminal CLI failure",
+        }}).encode() + b"\n",
+    ], _outcome(), calls))
+
+    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+        asyncio.run(_collect())
 
 
 @pytest.mark.parametrize(
