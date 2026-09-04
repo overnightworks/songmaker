@@ -610,9 +610,13 @@ binary and `claude.json` mirror. Its Grok and Codex judge calls use
 `XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
 only widen the blast radius.
 
-The Grok mirror is mounted only into its `songmaker-web` consumer. The Codex
-binary and mirror are also mounted into `songmaker-music-worker`, not into the
-scoring worker.
+The Grok mirror is mounted only into its `songmaker-web` consumer. Grok turns
+run with a private `0700` working directory and their own session tree, both
+removed after success or abort; prompts and tool results reach the CLI only
+through a private prompt file. The text tool protocol does not grant Grok CLI
+tools: every start and resume keeps `--deny '*'`, and native tool-call events
+abort the turn. The Codex binary and mirror are also mounted into
+`songmaker-music-worker`, not into the scoring worker.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
