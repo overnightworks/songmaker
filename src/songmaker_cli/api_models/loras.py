@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, UserLora, UserLoraSample
@@ -21,6 +21,8 @@ class UserLoraSampleCreateRequest(BaseModel):
 
 
 class UserLoraSampleFromGenerationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     generation_id: str = Field(min_length=1)
 
 
@@ -103,15 +105,15 @@ class OwnPlayableTakeResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, generation: Generation) -> OwnPlayableTakeResponse:
-        if generation.song is None or generation.version is None:
-            raise ValueError("Playable take must include its song and version")
+        if generation.song is None:
+            raise ValueError("Playable take must include its song")
         return cls(
             generation_id=generation.id,
             song_title=generation.song.title,
             generation_number=generation.generation_number,
             audio_url=f"/audio/{generation.mp3_path}",
-            caption=generation.version.prompt,
-            lyrics=generation.version.lyrics,
+            caption=generation.version.prompt if generation.version else "",
+            lyrics=generation.version.lyrics if generation.version else "",
         )
 
 

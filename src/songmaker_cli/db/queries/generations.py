@@ -73,7 +73,7 @@ def list_own_playable_generations(session: Session, user_id: str) -> list[Genera
         session.query(Generation)
         .join(Generation.song)
         .join(Song.album)
-        .join(Generation.version)
+        .outerjoin(Generation.version)
         .options(
             joinedload(Generation.song).joinedload(Song.album),
             joinedload(Generation.version),

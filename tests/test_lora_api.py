@@ -318,10 +318,11 @@ def _make_take(
     lyrics: str = "A line from the take",
     audio: bytes = b"ID3 source audio",
     is_archived: bool = False,
+    has_version: bool = True,
 ) -> str:
     album_id = f"album-{take_id}"
     song_id = f"song-{take_id}"
-    version_id = f"version-{take_id}"
+    version_id = f"version-{take_id}" if has_version else None
     audio_path = f"{owner_id}/{take_id}.mp3"
     with ctx.db() as session:
         session.add(Album(
@@ -336,13 +337,14 @@ def _make_take(
             album_id=album_id,
             track_number=1,
         ))
-        session.add(Version(
-            id=version_id,
-            song_id=song_id,
-            version_number=1,
-            prompt=caption,
-            lyrics=lyrics,
-        ))
+        if version_id:
+            session.add(Version(
+                id=version_id,
+                song_id=song_id,
+                version_number=1,
+                prompt=caption,
+                lyrics=lyrics,
+            ))
         session.add(Generation(
             id=take_id,
             song_id=song_id,
@@ -429,6 +431,74 @@ def test_add_sample_from_missing_take_returns_404(
     )
 
     assert response.status_code == 404
+
+
+def test_add_sample_from_take_with_escaping_audio_path_returns_404(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    client, ctx = client_and_ctx
+    lora_id = _make_lora(ctx)
+    take_id = _make_take(ctx)
+    (ctx.audio_dir.parent / "secret.mp3").write_bytes(b"secret audio")
+    with ctx.db() as session:
+        session.get(Generation, take_id).mp3_path = "../secret.mp3"
+        session.commit()
+
+    response = client.post(
+        f"/api/loras/{lora_id}/samples/from-generation",
+        json={"generation_id": take_id},
+    )
+
+    assert response.status_code == 404
+    assert not (ctx.audio_dir / "user_loras").exists()
+    with ctx.db() as session:
+        assert session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count() == 0
+
+
+def test_versionless_own_take_is_listed_and_copied_with_empty_metadata(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    client, ctx = client_and_ctx
+    lora_id = _make_lora(ctx)
+    take_id = _make_take(ctx, has_version=False, audio=b"reimported take")
+
+    catalogue = client.get("/api/loras/own-takes")
+    response = client.post(
+        f"/api/loras/{lora_id}/samples/from-generation",
+        json={"generation_id": take_id},
+    )
+
+    assert catalogue.status_code == 200
+    assert catalogue.json()["takes"][0] == {
+        "generation_id": take_id,
+        "song_title": f"Take song {take_id}",
+        "generation_number": 4,
+        "audio_url": f"/audio/{USER_A}/{take_id}.mp3",
+        "caption": "",
+        "lyrics": "",
+    }
+    assert response.status_code == 200, response.text
+    sample = response.json()
+    assert sample["caption"] == ""
+    assert sample["lyrics"] == ""
+    assert (ctx.audio_dir / sample["audio_path"]).read_bytes() == b"reimported take"
+
+
+def test_add_sample_from_generation_rejects_audio_path_payload(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    client, ctx = client_and_ctx
+    lora_id = _make_lora(ctx)
+    take_id = _make_take(ctx)
+
+    response = client.post(
+        f"/api/loras/{lora_id}/samples/from-generation",
+        json={"generation_id": take_id, "audio_path": "/etc/passwd"},
+    )
+
+    assert response.status_code == 422
+    with ctx.db() as session:
+        assert session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count() == 0
 
 
 def test_own_take_catalogue_only_returns_callers_playable_takes(

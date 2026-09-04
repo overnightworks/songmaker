@@ -14,6 +14,7 @@ from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
     check_own_generation_access,
+    raise_audio_file_http_error,
     unique_lora_slug,
 )
 from songmaker_cli.api_models import (
@@ -29,6 +30,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool
+from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
 from songmaker_cli.constants import (
     LORA_ACTIVE_STATUSES,
     USER_LORA_AUDIO_EXTENSIONS,
@@ -172,10 +174,13 @@ def api_add_sample_from_generation(
     _reject_if_active_or_deleted(lora)
 
     generation = check_own_generation_access(session, data.generation_id, user)
-    if not is_playable_take(generation) or generation.version is None:
+    if not is_playable_take(generation):
         raise HTTPException(422, "Generation is not playable")
 
-    source = ctx.audio_dir / generation.mp3_path
+    try:
+        source = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=False)
     if not source.is_file():
         raise HTTPException(404, "Generation not found")
 
@@ -190,8 +195,8 @@ def api_add_sample_from_generation(
             session,
             lora_id,
             "",
-            caption=generation.version.prompt,
-            lyrics=generation.version.lyrics,
+            caption=generation.version.prompt if generation.version else "",
+            lyrics=generation.version.lyrics if generation.version else "",
         )
         relative_path = (
             Path(USER_LORAS_DIRNAME)
