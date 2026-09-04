@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, RootModel, field_validator, model_validat
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
 from songmaker_cli.constants import MEMORY_MAX_LENGTH
+from songmaker_cli.cowriter.errors import SafeRouteReason
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import GenerationPreset
@@ -108,6 +109,32 @@ class CowriterSettingsRequest(BaseModel):
     provider: str
     model: str
     tail_token_budget: int | None = None
+    provider_routes: dict[str, Literal["cli", "api"]] | None = None
+
+    @model_validator(mode="after")
+    def _validate_provider_routes(self) -> CowriterSettingsRequest:
+        if (
+            self.provider_routes is not None
+            and set(self.provider_routes) != {"claude", "grok", "codex"}
+        ):
+            raise ValueError("provider_routes must contain exactly claude, grok, and codex")
+        return self
+
+
+class ProviderRouteReadiness(BaseModel):
+    state: Literal["ready", "not_configured", "disturbed", "unverified"]
+    reason: SafeRouteReason | None = None
+    probed_at: ComputedTimestamp = None
+    setup_label: str
+
+
+class ProviderRouteStatusResponse(BaseModel):
+    models: list[str]
+    catalogue_failure: SafeRouteReason | None = None
+    catalog_source: str | None = None
+    catalog_version: str | None = None
+    readiness: ProviderRouteReadiness
+    retained_model_id: str | None = None
 
 
 class CowriterSettingsResponse(BaseModel):
@@ -121,6 +148,8 @@ class CowriterSettingsResponse(BaseModel):
     current_models_not_in_catalog: dict[str, str] = Field(default_factory=dict)
     probed_at: dict[str, ComputedTimestamp]
     tail_token_budget: int
+    provider_routes: dict[str, Literal["cli", "api"]]
+    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]]
 
 
 class JudgeSettingsRequest(BaseModel):
@@ -166,6 +195,9 @@ class ProviderStatusResponse(BaseModel):
     provider: str
     cowriter: ProviderSurfaceStatus
     judge: ProviderSurfaceStatus
+    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse] = Field(
+        default_factory=dict,
+    )
 
 
 class ChatRequest(BaseModel):

@@ -584,14 +584,15 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 | MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
 
-The Co-Writer dispatcher owns provider transport choice. Claude turns use its
-MCP-enabled CLI; Grok chooses its subscription CLI when the mounted
-`auth.json` carries a token and otherwise uses `XAI_API_KEY`; Codex chooses
-its subscription CLI when the mounted `.codex/auth.json` contains a nonempty
-`tokens.access_token`, otherwise `OPENAI_API_KEY`. A selected Grok or Codex
-CLI failure remains on that path for the turn. Their adapters convert bounded
-CLI streams to chat events; the Codex transport's security and stream-gate
-contract is documented in `docs/security.md`.
+`db/queries/settings.py` owns the complete instance-wide Co-Writer route map.
+Each new turn captures its provider, model, and explicit `cli` or `api` route
+before its SSE generator starts; `cowriter/dispatch.py` only executes that
+route and returns one normalized route failure instead of trying its sibling.
+`cowriter/catalog.py` refreshes both routes per provider independently, and
+the settings responses project the selected route for legacy callers while
+also returning the route-keyed readiness and catalogue snapshots. The Judge
+remains API-only. Claude's API route is explicitly not configured until R2c
+owns its native tool loop.
 
 ### Engine packages (`src/`)
 
@@ -711,12 +712,12 @@ stream.
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song, durable memory, server-resolved @-mentions, and the relevant take's whisper/pick/keep/scores (`current_generation_id`). Unknown mention or generation IDs 404; a take for the wrong song or a non-playable take is 422. Provider is the persisted studio setting (`claude`, `grok`, or `codex`); missing credentials fail that provider by name. If the client aborts a non-terminal turn, its job immediately becomes `FAILED` with `error_type` `cancelled` and `Turn cancelled by the client.`; its heartbeat stops. A terminal job is left unchanged. |
-| GET | `/api/settings/cowriter` | user | Co-writer provider, selected model, and live model catalogs from each provider or CLI; when the active saved or default value is a genuine model ID for that provider, it belongs to the valid set and is appended at the end without changing provider order. A `models_errors` map names why an unreachable provider's catalog came back empty (not only the saved provider's) |
-| PUT | `/api/settings/cowriter` | admin | Persist co-writer provider, model, and history-tail budget. Only an exact, complete persisted provider/model pair makes a save unchanged; a fresh, partial, empty, or retired stored pair is a change. A change requires that provider to be `configured` for the co-writer surface and validates the model against its live catalog; the active saved or default value, when a genuine model ID for that provider, belongs to the valid set and is appended at the end without changing provider order. A budget-only save against an exact persisted pair is never blocked by a temporarily unreachable provider or catalog. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. It captures the persisted provider/model/route once before streaming. A selected-route failure emits exactly one 503 frame with safe `provider`, `route`, and normalized `reason`; it never retries the sibling route. |
+| GET | `/api/settings/cowriter` | user | Co-writer provider/model plus the effective `provider_routes` map and a typed readiness/catalogue snapshot for both routes of every provider. The existing provider-keyed model fields remain the selected-route projection. |
+| PUT | `/api/settings/cowriter` | admin | Atomically persist provider, model, optional complete route map, and history-tail budget. Omitting the map retains it. Only a changed active provider/model/route requires that route to be ready and its model catalogue to contain the submitted model. |
 | GET | `/api/settings/judge` | user | `lyrical_coherence` judge provider, selected model, and live model catalogs per provider; when the active saved or default value is a genuine model ID for that provider, it belongs to the valid set and is appended at the end without changing provider order. `models_errors` has the same shape as the co-writer response |
 | PUT | `/api/settings/judge` | admin | Persist judge provider and model. Every save requires that provider to be `configured` for the judge surface and validates the model against its live catalog, including a request equal to the persisted pair; the active saved or default value, when a genuine model ID for that provider, belongs to the valid set and is appended at the end without changing provider order. A fresh or retired stored pair is safely replaceable. |
-| GET | `/api/settings/providers` | admin | Provider reachability per `cowriter` and `judge` surface. `configured` means a turn can run on that surface; Grok uses the same mirrored CLI access-token discriminator as turn dispatch, ahead of its API key. The other states name the missing API key, CLI login, or dependency. The agent-CLI runner caches its probes for `CLI_LOGIN_STATUS_CACHE_SECONDS`. |
+| GET | `/api/settings/providers` | admin | Existing selected-route `cowriter` and API-only `judge` projections plus additive route-keyed Co-Writer snapshots. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |

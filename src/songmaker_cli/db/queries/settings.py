@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Final
 
 from sqlalchemy.orm import Session
 
@@ -22,9 +24,13 @@ from songmaker_cli.constants import (
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
+    SETTING_PROVIDER_ROUTES,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
+
+_PROVIDER_ROUTES: Final = frozenset(COWRITER_PROVIDERS)
+_ROUTE_VALUES: Final = frozenset(("cli", "api"))
 
 
 @dataclass(frozen=True)
@@ -49,6 +55,77 @@ class ActiveCowriterSettings:
 
     provider: str
     model: str
+
+
+def _provider_routes_row(session: Session) -> RateLimitSetting | None:
+    return (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == SETTING_PROVIDER_ROUTES,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+
+
+def _legacy_default_provider_routes() -> dict[str, str]:
+    """Preserve the pre-route dispatcher selection for an unset setting only."""
+    from songmaker_cli.agent_cli import (
+        AgentCliUnavailableError,
+        codex_cli_access_token_is_present,
+        grok_cli_token_is_present,
+    )
+
+    routes = {"claude": "cli"}
+    for provider, token_is_present in (
+        ("grok", grok_cli_token_is_present),
+        ("codex", codex_cli_access_token_is_present),
+    ):
+        try:
+            routes[provider] = "cli" if token_is_present() else "api"
+        except AgentCliUnavailableError:
+            routes[provider] = "cli"
+    return routes
+
+
+def _parse_provider_routes(value_text: str) -> dict[str, str]:
+    try:
+        routes = json.loads(value_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("provider_routes must be valid JSON") from exc
+    if not isinstance(routes, dict):
+        raise ValueError("provider_routes must be an object")
+    if set(routes) != _PROVIDER_ROUTES:
+        raise ValueError("provider_routes must contain exactly claude, grok, and codex")
+    if any(route not in _ROUTE_VALUES for route in routes.values()):
+        raise ValueError("provider_routes values must be cli or api")
+    return {provider: routes[provider] for provider in sorted(_PROVIDER_ROUTES)}
+
+
+def get_effective_provider_routes(session: Session) -> dict[str, str]:
+    """Return the persisted map, or the exact old per-provider choice when unset."""
+    row = _provider_routes_row(session)
+    if row is None or not row.value_text:
+        return _legacy_default_provider_routes()
+    return _parse_provider_routes(row.value_text)
+
+
+def set_provider_routes(session: Session, routes: dict[str, str]) -> None:
+    """Persist the complete global route map in its compact text setting."""
+    validated = _parse_provider_routes(json.dumps(routes, separators=(",", ":"), sort_keys=True))
+    encoded = json.dumps(validated, separators=(",", ":"), sort_keys=True)
+    if len(encoded) > 100:
+        raise ValueError("provider_routes exceeds the settings storage limit")
+    row = _provider_routes_row(session)
+    if row is None:
+        session.add(RateLimitSetting(
+            setting_key=SETTING_PROVIDER_ROUTES,
+            value=0,
+            value_text=encoded,
+        ))
+    else:
+        row.value_text = encoded
+    session.flush()
 
 
 @dataclass(frozen=True)
@@ -347,9 +424,16 @@ def get_cowriter_model(session: Session, provider: str) -> str:
     return ""
 
 
-def set_cowriter_settings(session: Session, provider: str, model: str) -> None:
+def set_cowriter_settings(
+    session: Session,
+    provider: str,
+    model: str,
+    routes: dict[str, str] | None = None,
+) -> None:
     set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
     set_claude_model(session, SETTING_COWRITER_MODEL, model)
+    if routes is not None:
+        set_provider_routes(session, routes)
 
 
 def get_judge_provider(session: Session) -> str:

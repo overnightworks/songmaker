@@ -19,7 +19,11 @@ from songmaker_cli.claude.provider import (
     StreamEvent,
     ToolCallEvent,
 )
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -728,8 +732,12 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     c, factory = client
 
     async def _down(*_args, **_kwargs):
-        raise ProviderUnavailableError("claude", "down")
-        yield  # pragma: no cover
+        raise ProviderUnavailableError(
+            "claude",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
+        yield
 
     with patch(
         "songmaker_cli.conversation_api.stream_cowriter_turn",
@@ -740,7 +748,16 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     events = _stream_events(resp)
     err = next(e for e in events if e.get("type") == "error")
     assert err["status"] == 503
-    assert "claude" in err["message"]
+    assert err == {
+        "type": "error",
+        "status": 503,
+        "provider": "claude",
+        "route": "cli",
+        "reason": {
+            "code": "cli_auth_rejected",
+            "message": "CLI login was rejected or has expired.",
+        },
+    }
 
     with factory() as session:
         assert session.query(Conversation).count() == 0

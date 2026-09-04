@@ -44,6 +44,9 @@ from songmaker_cli.constants import (
 from songmaker_cli.cowriter.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
+    SafeRouteReason,
+    SafeRouteReasonCode,
+    normalize_route_failure,
 )
 from songmaker_cli.settings import Settings, get_settings
 
@@ -83,6 +86,18 @@ class ProviderSetupMethod(StrEnum):
 class ProviderSurface(StrEnum):
     CO_WRITER = "cowriter"
     JUDGE = "judge"
+
+
+class ProviderRoute(StrEnum):
+    CLI = "cli"
+    API = "api"
+
+
+class ProviderRouteReadinessState(StrEnum):
+    READY = "ready"
+    NOT_CONFIGURED = "not_configured"
+    DISTURBED = "disturbed"
+    UNVERIFIED = "unverified"
 
 
 class ProviderNeed(StrEnum):
@@ -139,6 +154,19 @@ class ProviderSnapshot:
     models_error: str | None
     models_source: str | None
     probed_at: datetime
+    routes: dict[ProviderRoute, "ProviderRouteSnapshot"]
+
+
+@dataclass(frozen=True)
+class ProviderRouteSnapshot:
+    models: tuple[str, ...]
+    catalogue_failure: SafeRouteReason | None
+    catalog_source: str | None
+    catalog_version: str | None
+    readiness: ProviderRouteReadinessState
+    reason: SafeRouteReason | None
+    probed_at: datetime
+    setup_label: str
 
 
 @dataclass(frozen=True)
@@ -168,29 +196,96 @@ def provider_snapshots() -> dict[str, ProviderSnapshot]:
 
 def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
     """Refresh one provider's reachability and model catalog."""
-    try:
-        _refresh_cli_login(provider)
-    except AgentCliUnavailableError as exc:
-        log.warning("%s CLI probe unavailable: %s", provider, type(exc).__name__)
+    settings = get_settings()
+    routes = {
+        route: _refresh_provider_route(provider, route, settings)
+        for route in ProviderRoute
+    }
     cowriter = get_provider_configuration(provider, ProviderSurface.CO_WRITER)
     judge = get_provider_configuration(provider, ProviderSurface.JUDGE)
-    try:
-        models = tuple(list_provider_models(provider))
-        models_error = None
-    except (ProviderUnavailableError, ProviderModelCatalogUnavailableError) as exc:
-        models = ()
-        models_error = str(exc)
+    selected = routes[ProviderRoute.CLI]
     snapshot = ProviderSnapshot(
         cowriter=cowriter,
         judge=judge,
-        models=models,
-        models_error=models_error,
-        models_source=_model_catalog_source(provider, cowriter, models_error),
+        models=selected.models,
+        models_error=selected.catalogue_failure.message if selected.catalogue_failure else None,
+        models_source=selected.catalog_source,
         probed_at=datetime.now(timezone.utc),
+        routes=routes,
     )
     with _provider_snapshots_lock:
         _provider_snapshots[provider] = snapshot
     return snapshot
+
+
+def _refresh_provider_route(
+    provider: str,
+    route: ProviderRoute,
+    settings: Settings,
+) -> ProviderRouteSnapshot:
+    now = datetime.now(timezone.utc)
+    if provider == _CLAUDE_PROVIDER and route is ProviderRoute.API:
+        reason = normalize_route_failure(SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING)
+        return ProviderRouteSnapshot(
+            (), reason, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
+            reason, now, "API key",
+        )
+    credential = _provider_api_credential(provider, settings)
+    if route is ProviderRoute.API and not _secret(credential.secret):
+        reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
+        return ProviderRouteSnapshot(
+            (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
+            reason, now, "API key",
+        )
+    if route is ProviderRoute.CLI:
+        try:
+            if not _cli_is_logged_in(provider):
+                reason = normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
+                return ProviderRouteSnapshot(
+                    (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
+                    reason, now, "CLI login",
+                )
+        except AgentCliUnavailableError:
+            reason = normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
+            return ProviderRouteSnapshot(
+                (), None, None, None, ProviderRouteReadinessState.DISTURBED,
+                reason, now, "CLI login",
+            )
+    try:
+        models = tuple(list_provider_models(provider, route))
+    except ProviderModelCatalogUnavailableError as exc:
+        reason = getattr(exc, "reason", None) or normalize_route_failure(
+            SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR,
+        )
+        return ProviderRouteSnapshot(
+            (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
+            reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+        )
+    except ProviderUnavailableError as exc:
+        reason = getattr(exc, "reason", None) or normalize_route_failure(
+            SafeRouteReasonCode.ROUTE_FAILED,
+        )
+        return ProviderRouteSnapshot(
+            (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
+            reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+        )
+    source = _CODEX_CLI_KNOWN_MODELS_SOURCE if (
+        provider == _CODEX_PROVIDER and route is ProviderRoute.CLI
+    ) else "provider API" if route is ProviderRoute.API else "provider CLI"
+    return ProviderRouteSnapshot(
+        models, None, source, None, ProviderRouteReadinessState.READY,
+        None, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+    )
+
+
+def _cli_is_logged_in(provider: str) -> bool:
+    if provider == _CLAUDE_PROVIDER:
+        return cli_login_status().logged_in
+    if provider == _GROK_PROVIDER:
+        return grok_cli_status().login.logged_in
+    if provider == _CODEX_PROVIDER:
+        return codex_cli_login().logged_in
+    raise ValueError(f"Unknown co-writer provider '{provider}'")
 
 
 def _model_catalog_source(
@@ -222,48 +317,34 @@ def _refresh_cli_login(provider: str) -> None:
         codex_cli_login()
 
 
-def list_provider_models(provider: str) -> list[str]:
+def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
     settings = get_settings()
-    configuration = _catalog_configuration(provider, settings)
-    match configuration:
-        case ConfiguredProvider():
-            return _models_for_setup_method(provider, configuration.method, settings)
-        case DependencyUnavailableProvider():
-            raise ProviderUnavailableError(
-                provider,
-                f"{provider} is unavailable: required dependency "
-                f"'{configuration.dependency}' is not installed",
-            )
-        case CliLoginNeedsApiKeyProvider(missing_environment_key=environment_key):
-            raise ProviderUnavailableError(
-                provider,
-                f"{provider} is not configured: missing {environment_key}",
-            )
-        case ApiKeyNeedsCliLoginProvider():
-            raise ProviderUnavailableError(
-                provider,
-                f"{provider} cannot list models until its CLI login is available",
-            )
-        case UnconfiguredProvider(missing_environment_key=environment_key) if environment_key:
-            raise ProviderUnavailableError(
-                provider,
-                f"{provider} is not configured: missing {environment_key}",
-            )
-        case UnconfiguredProvider():
-            raise ProviderUnavailableError(
-                provider,
-                f"{provider} cannot list models until {configuration.need.value} is configured",
-            )
-    raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
+    if provider not in COWRITER_PROVIDERS:
+        raise ProviderUnavailableError(provider, f"Unknown co-writer provider '{provider}'")
+    if provider == _CLAUDE_PROVIDER and route is ProviderRoute.API:
+        raise ProviderUnavailableError(
+            provider,
+            route.value,
+            normalize_route_failure(SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING),
+        )
+    if route is ProviderRoute.CLI:
+        return _models_for_setup_method(provider, _cli_setup_method_for(provider), settings)
+    key = _secret(_provider_api_credential(provider, settings).secret)
+    if not key:
+        raise ProviderUnavailableError(
+            provider, route.value, normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET),
+        )
+    return _models_for_setup_method(provider, ProviderSetupMethod.API_KEY, settings)
 
 
-def _catalog_configuration(provider: str, settings: Settings) -> ProviderConfiguration:
-    """Use the judge setup unless only its API key is missing."""
-    judge = _provider_configuration(provider, ProviderSurface.JUDGE, settings)
-    if not isinstance(judge, CliLoginNeedsApiKeyProvider):
-        return judge
-    cowriter = _provider_configuration(provider, ProviderSurface.CO_WRITER, settings)
-    return cowriter if isinstance(cowriter, ConfiguredProvider) else judge
+def _cli_setup_method_for(provider: str) -> ProviderSetupMethod:
+    if provider == _CLAUDE_PROVIDER:
+        return ProviderSetupMethod.CLAUDE_CLI
+    if provider == _GROK_PROVIDER:
+        return ProviderSetupMethod.GROK_CLI
+    if provider == _CODEX_PROVIDER:
+        return ProviderSetupMethod.CODEX_CLI
+    raise ValueError(f"Unknown co-writer provider '{provider}'")
 
 
 def models_with_active_model(
@@ -272,7 +353,7 @@ def models_with_active_model(
     active_model: str | None,
 ) -> list[str]:
     catalog = list(models)
-    if active_model and _is_provider_model_id(provider, active_model):
+    if active_model:
         if active_model not in catalog:
             catalog.append(active_model)
     return catalog

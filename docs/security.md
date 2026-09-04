@@ -612,14 +612,16 @@ Both provider-facing images install the `claude` extra, so
 replace the web container's Claude CLI mirror: the co-writer needs the CLI
 with Songmaker's MCP tools, and the SDK has no equivalent tool path.
 
-### The API-key path, honestly
+### Co-Writer API keys
 
-A Claude API key answers the judge and lists models, but the co-writer still
-needs the Claude Code CLI login because its tool-enabled turns run through that
-CLI. `/api/settings/providers` reports reachability separately for `cowriter`
-and `judge`; only `configured` means a turn can run and is offered by the
-settings page. A mirrored Grok token selects its subscription CLI for a
-co-writer turn; Codex still needs `OPENAI_API_KEY` for its turn surface.
+`ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
+through the deployment `.env` and become `Settings` secrets. The API and DOM
+expose only safe readiness metadata (`set`/`not set` through route state),
+never a key value, raw provider body, command output, or a secret-derived
+value. A Co-Writer route is administrator-selected; a failed selected route
+returns its fixed safe reason and never retries the sibling CLI/API route.
+Claude's API route remains explicitly unavailable until its native tool loop
+lands; the Judge remains API-only.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
 request. `provider_status_refresh` owns those probes; an empty snapshot is reported
