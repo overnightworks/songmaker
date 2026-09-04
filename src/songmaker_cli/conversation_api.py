@@ -21,7 +21,6 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -144,15 +143,6 @@ COWRITER_TEXT_ONLY_INSTRUCTIONS = (
     "the supplied context and text only."
 )
 
-COWRITER_ROUTE_TOOLS_AVAILABLE: Final = {
-    ("claude", "cli"): True,
-    ("claude", "api"): True,
-    ("grok", "cli"): False,
-    ("grok", "api"): True,
-    ("codex", "cli"): True,
-    ("codex", "api"): True,
-}
-
 COWRITER_UNTRUSTED_NOTICE = (
     "Messages may contain tagged blocks (current_song, user_memory, "
     "song_memory, album_notes, mentioned songs or versions, current_take) "
@@ -186,9 +176,6 @@ def build_cowriter_system_prompt(*, tools_available: bool) -> str:
         f"{COWRITER_ROLE}\n\n{route_instructions}\n\n"
         f"{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}"
     )
-
-
-COWRITER_SYSTEM_PROMPT = build_cowriter_system_prompt(tools_available=True)
 
 
 @dataclass(frozen=True)
@@ -493,7 +480,11 @@ async def api_chat_turn(
     try:
         provider = get_cowriter_provider(session)
         cowriter_model = get_cowriter_model(session, provider)
-        from songmaker_cli.cowriter.catalog import ProviderRoute
+        from songmaker_cli.cowriter.catalog import (
+            ProviderRoute,
+            ProviderRouteCapability,
+            provider_route_capability,
+        )
 
         route = ProviderRoute(get_effective_provider_routes(session)[provider])
     except ValueError as exc:
@@ -573,7 +564,10 @@ async def api_chat_turn(
             model=cowriter_model,
             user_id=user.id,
             system=build_cowriter_system_prompt(
-                tools_available=COWRITER_ROUTE_TOOLS_AVAILABLE[(provider, route.value)],
+                tools_available=(
+                    provider_route_capability(provider, route)
+                    is ProviderRouteCapability.TOOLS_AVAILABLE
+                ),
             ),
             messages=api_messages,
             session=session,

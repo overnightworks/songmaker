@@ -1279,6 +1279,10 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     assert providers.status_code == 200
     assert set(cowriter.json()["probed_at"].values()) == {None}
     assert set(judge.json()["probed_at"].values()) == {None}
+    grok_cli = cowriter.json()["provider_routes_status"]["grok"]["cli"]["readiness"]
+    assert grok_cli["state"] == "unverified"
+    assert grok_cli["capability"] == "text_only"
+    assert grok_cli["reason"] is None
     for provider in providers.json():
         for surface in ("cowriter", "judge"):
             assert provider[surface]["state"] == "unverified"

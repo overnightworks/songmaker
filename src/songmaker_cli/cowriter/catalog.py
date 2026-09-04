@@ -223,7 +223,7 @@ def _refresh_provider_route(
     settings: Settings,
 ) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
-    capability = _route_capability(provider, route)
+    capability = provider_route_capability(provider, route)
     credential = _provider_api_credential(provider, settings)
     if route is ProviderRoute.API and not _secret(credential.secret):
         reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
@@ -277,10 +277,11 @@ def _refresh_provider_route(
     )
 
 
-def _route_capability(
+def provider_route_capability(
     provider: str,
     route: ProviderRoute,
 ) -> ProviderRouteCapability:
+    """Return the fixed feature capability of a provider transport route."""
     if provider == _GROK_PROVIDER and route is ProviderRoute.CLI:
         return ProviderRouteCapability.TEXT_ONLY
     return ProviderRouteCapability.TOOLS_AVAILABLE
