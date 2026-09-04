@@ -173,16 +173,13 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 /** Back to the wall — on mobile the rail is a drawer the header opens. */
 async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'desktop') {
-		await workspace(page).getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true }).click();
+		await workspace(page).getByRole('button', { name: APP_NAME, exact: true }).click();
 		return;
 	}
 	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-	// The LIBRARY rail group (#308) is a disclosure, not a link -- its own
-	// title does not navigate yet (a later slice), and it shares the drawer
-	// with the wordmark, so "Library" alone is no longer unique there. The
-	// wordmark is named after what it is, not what it does (GitHub's own logo
-	// pattern) -- it is still the rail's one library shortcut.
+	// The LIBRARY group is a disclosure. Until its first child becomes the
+	// wall target, the wordmark remains the rail's one Library shortcut.
 	await drawer.getByRole('button', { name: APP_NAME, exact: true }).click();
 	await expect(drawer).toBeHidden();
 }
@@ -515,10 +512,10 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 		.click();
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
-	// The group's own title is a second destination beside its disclosure
-	// (ruled sentence 5 of #302): it opens the wall on the Albums tab.
+	// The group header now only changes the tree. The wordmark remains the
+	// Library-wall shortcut until 1B adds the "All albums" child target.
 	rail = await openRailNav(page, shell);
-	await rail.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true }).click();
+	await rail.getByRole('button', { name: APP_NAME, exact: true }).click();
 	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
 	await expect(page).toHaveURL('/');
 
@@ -527,7 +524,9 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 	// that the rail's own list genuinely overflows, so this really scrolls
 	// past content rather than measuring a page that never needed to scroll.
 	rail = await openRailNav(page, shell);
-	const libraryGroupTitle = rail.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true });
+	const libraryGroupTitle = rail.getByRole('button', {
+		name: nameStartingWith(RAIL_LIBRARY_LABEL)
+	});
 	const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
 	await expect(libraryGroupTitle).toBeInViewport();
 	await expect(settingsToggle).toBeInViewport();
