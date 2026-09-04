@@ -40,9 +40,9 @@ CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
 _BLOCKED_ITEM_TYPES: Final = frozenset({
-    "command_execution", "mcp_tool_call", "web_search", "file_change",
+    "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
+    "mcp_tool_call", "web_search",
 })
-_IMAGE_TEXT_ITEM_TYPES: Final = frozenset({"agent_message", "reasoning"})
 _CODEX_CLI_ISOLATION_ARGS: Final = (
     "--skip-git-repo-check",
     "--ignore-user-config",
@@ -59,6 +59,15 @@ _CODEX_CLI_ISOLATION_ARGS: Final = (
     "-c",
     "mcp_servers={}",
 )
+_INFORMATIONAL_ITEM_TYPES: Final = frozenset({
+    "agent_message", "reasoning", "todo_list",
+})
+_ITEM_EVENT_TYPES: Final = frozenset({
+    "item.started", "item.updated", "item.completed",
+})
+_INFORMATIONAL_EVENT_TYPES: Final = frozenset({"thread.started", "turn.started"})
+_CLI_LOGIN_EXPIRED: Final = "cli_login_expired"
+_CODEX_CLI_ERROR: Final = "codex_cli_error"
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +124,7 @@ async def stream_codex_cli_turn(
     text_chunks: list[str] = []
     saw_success = False
     error_message: str | None = None
+    completed_error_item_message: str | None = None
     try:
         while True:
             line_or_outcome = await asyncio.to_thread(channel.receive)
@@ -124,24 +134,23 @@ async def stream_codex_cli_turn(
             if saw_success:
                 raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
             event_type, event = _parse_codex_line(line_or_outcome)
-            if event_type in {"thread.started", "turn.started"}:
+            if event_type in _INFORMATIONAL_EVENT_TYPES:
                 continue
-            if event_type == "item.completed":
-                item_type, text = _completed_item(event)
-                if item_type == "agent_message":
-                    text_chunks.append(text)
-                    yield AssistantTextEvent(text=text)
-                    continue
-                if item_type == "reasoning":
-                    continue
-                if item_type in _BLOCKED_ITEM_TYPES:
-                    raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-            if event_type.startswith("item."):
+            if event_type in _ITEM_EVENT_TYPES:
                 item_type = _item_type(event)
                 if item_type in _BLOCKED_ITEM_TYPES:
                     raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                if event_type == "item.completed" and item_type == "error":
+                    completed_error_item_message = _completed_error_item_message(event)
+                    _log_completed_error_item(completed_error_item_message)
+                    continue
+                if item_type not in _INFORMATIONAL_ITEM_TYPES:
+                    raise _unsupported_stream_event(event_type, item_type)
+                if event_type == "item.completed" and item_type == "agent_message":
+                    text = _completed_agent_message(event)
+                    text_chunks.append(text)
+                    yield AssistantTextEvent(text=text)
+                continue
             if event_type == "turn.completed":
                 _completed_turn(event)
                 saw_success = True
@@ -154,9 +163,14 @@ async def stream_codex_cli_turn(
                 error_message = _failed_turn_message(event)
                 channel.request_abort()
                 continue
-            raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+            raise _unsupported_stream_event(event_type)
         await asyncio.shield(runner)
-        _raise_for_codex_outcome(outcome, saw_success, error_message)
+        _raise_for_codex_outcome(
+            outcome,
+            saw_success,
+            error_message,
+            completed_error_item_message,
+        )
         yield FinalEvent(text="".join(text_chunks))
     except _CodexCliStreamFailure as exc:
         channel.request_abort()
@@ -243,7 +257,7 @@ def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str
 
 
 def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
-    if _contains_auth_failure(outcome.stderr):
+    if _codex_cli_failure_code(outcome.stderr) == _CLI_LOGIN_EXPIRED:
         raise CodexImageLoginError()
     if outcome.reason in {
         CliRunReason.DEADLINE_BEFORE_SPAWN,
@@ -262,7 +276,7 @@ def _validate_codex_image_events(output: str) -> None:
     try:
         for line in output.splitlines():
             event_type, event = _parse_codex_line(line.encode("utf-8"))
-            if event_type in {"thread.started", "turn.started"}:
+            if event_type in _INFORMATIONAL_EVENT_TYPES:
                 continue
             if event_type == "turn.completed":
                 if saw_completed_turn or not isinstance(event.get("usage"), dict):
@@ -271,15 +285,15 @@ def _validate_codex_image_events(output: str) -> None:
                 continue
             if event_type in {"error", "turn.failed"}:
                 raise CodexImageCliError()
-            if event_type.startswith("item."):
+            if event_type in _ITEM_EVENT_TYPES:
                 item_type = _item_type(event)
                 if event_type == "item.completed" and item_type == "error":
                     completed_error_item_message = _completed_error_item_message(event)
                     continue
-                if item_type in _IMAGE_TEXT_ITEM_TYPES or item_type == "image_gen":
-                    continue
                 if item_type in _BLOCKED_ITEM_TYPES:
                     raise ImageToolBlockedError()
+                if item_type in _INFORMATIONAL_ITEM_TYPES or item_type == "image_gen":
+                    continue
                 raise CodexImageCliError()
             raise CodexImageCliError()
     except _CodexCliStreamFailure as exc:
@@ -287,17 +301,10 @@ def _validate_codex_image_events(output: str) -> None:
     if saw_completed_turn:
         return
     if completed_error_item_message is not None:
-        if _contains_auth_failure(completed_error_item_message):
+        if _codex_cli_failure_code(completed_error_item_message) == _CLI_LOGIN_EXPIRED:
             raise CodexImageLoginError()
         raise CodexImageCliError()
     raise CodexImageCliError()
-
-
-def _completed_error_item_message(event: dict[str, object]) -> str:
-    message = _item(event).get("message")
-    if not isinstance(message, str):
-        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-    return message
 
 
 def _find_only_generated_png(codex_home: Path) -> Path:
@@ -350,15 +357,37 @@ def _parse_codex_line(line: bytes) -> tuple[str, dict[str, object]]:
     return event_type, event
 
 
-def _completed_item(event: dict[str, object]) -> tuple[str, str]:
+def _completed_agent_message(event: dict[str, object]) -> str:
     item = _item(event)
-    item_type = _item_type(event)
-    if item_type == "agent_message":
-        text = item.get("text")
-        if not isinstance(text, str):
-            raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-        return item_type, text
-    return item_type, ""
+    text = item.get("text")
+    if not isinstance(text, str):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return text
+
+
+def _completed_error_item_message(event: dict[str, object]) -> str:
+    message = _item(event).get("message")
+    if not isinstance(message, str):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return message
+
+
+def _log_completed_error_item(message: str) -> None:
+    log.warning(
+        "Codex CLI error item (message_class=%s)",
+        _error_message_class(message),
+    )
+
+
+def _error_message_class(message: str) -> str:
+    words: list[str] = []
+    for word in message.split():
+        if not word.isalpha() or len(word) > 24:
+            break
+        words.append(word.lower())
+        if len(words) == 4:
+            break
+    return "_".join(words) or "unclassified"
 
 
 def _item_type(event: dict[str, object]) -> str:
@@ -373,6 +402,20 @@ def _item(event: dict[str, object]) -> dict[str, object]:
     if not isinstance(item, dict):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return item
+
+
+def _unsupported_stream_event(
+    event_type: str, item_type: str | None = None,
+) -> _CodexCliStreamFailure:
+    if item_type is None:
+        log.warning("Codex CLI stream protocol error (event_type=%s)", event_type)
+    else:
+        log.warning(
+            "Codex CLI stream protocol error (event_type=%s, item_type=%s)",
+            event_type,
+            item_type,
+        )
+    return _CodexCliStreamFailure("codex_cli_stream_protocol_error")
 
 
 def _completed_turn(event: dict[str, object]) -> None:
@@ -401,7 +444,14 @@ def _raise_for_codex_outcome(
     outcome: CliRunOutcome,
     saw_success: bool,
     error_message: str | None,
+    completed_error_item_message: str | None,
 ) -> None:
+    if saw_success:
+        if not outcome.complete or outcome.returncode != 0:
+            _raise_codex_cli_failure(outcome, None)
+        return
+    if completed_error_item_message is not None:
+        _raise_codex_cli_failure(outcome, completed_error_item_message)
     if error_message is not None:
         _raise_codex_cli_failure(outcome, error_message)
     if not outcome.complete or outcome.returncode != 0:
@@ -411,14 +461,22 @@ def _raise_for_codex_outcome(
 
 
 def _raise_codex_cli_failure(outcome: CliRunOutcome, error_message: str | None) -> None:
-    if _contains_auth_failure(error_message) or _contains_auth_failure(outcome.stderr):
-        raise ProviderUnavailableError("codex", "cli_login_expired")
+    code = _codex_cli_failure_code(error_message, outcome.stderr)
+    if code == _CLI_LOGIN_EXPIRED:
+        raise ProviderUnavailableError("codex", code)
     log.warning(
         "Codex CLI failed (rc=%s, stderr_bytes=%d)",
         outcome.returncode,
         len(outcome.stderr.encode()),
     )
-    raise ProviderUnavailableError("codex", "codex_cli_error")
+    raise ProviderUnavailableError("codex", code)
+
+
+def _codex_cli_failure_code(*messages: str | None) -> str:
+    """Classify the shared Codex CLI error surface without exposing its payload."""
+    if any(_contains_auth_failure(message) for message in messages):
+        return _CLI_LOGIN_EXPIRED
+    return _CODEX_CLI_ERROR
 
 
 def _contains_auth_failure(value: str | None) -> bool:
