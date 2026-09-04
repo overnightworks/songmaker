@@ -22,7 +22,9 @@ import lyric_alignment_golden as golden  # noqa: E402
     ids=["ratios", "alignments"],
 )
 def test_golden_generation_is_deterministic(generate):
-    assert generate() == generate()
+    first = generate()
+    second = generate()
+    assert first == second
 
 
 def test_committed_fixture_file_matches_current_generator_output():
