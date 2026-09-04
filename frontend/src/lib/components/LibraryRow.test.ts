@@ -234,22 +234,28 @@ describe('LibraryRow', () => {
 		const root = renderCollapsibleRow(false);
 		await tick();
 
-		expect(root.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
+		const header = root.querySelector('.library-row-bar');
+		expect(header).not.toBeNull();
+		expect(header?.textContent).toContain('Albums');
+		expect(header?.textContent).toContain('Anfield · 2 songs');
+		expect(header?.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
 		expect(root.querySelector('.library-row-filter-input')).not.toBeNull();
 
 		root.querySelector<HTMLButtonElement>('[aria-label="Collapse albums"]')?.click();
 		await tick();
 
-		expect(root.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
+		expect(header?.textContent).toContain('Anfield · 2 songs');
+		expect(header?.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
 		expect(root.querySelector('.library-row-filter-input')).toBeNull();
-		expect(root.textContent).toContain('Anfield · 2 songs');
 		expect(localStorage.getItem('libraryRowOpen')).toBe('false');
 	});
 
 	it('starts a mobile song or take row collapsed before its first settled frame', () => {
 		const root = renderCollapsibleRow(true);
 
-		expect(root.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
+		const header = root.querySelector('.library-row-bar');
+		expect(header?.textContent).toContain('Anfield · 2 songs');
+		expect(header?.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
 		expect(root.querySelector('.library-row-filter-input')).toBeNull();
 	});
 
