@@ -39,10 +39,13 @@ from songmaker_cli.api_models.library import (
     ShareInventoryType,
 )
 from songmaker_cli.api_models.loras import (
+    OwnPlayableTakeListResponse,
+    OwnPlayableTakeResponse,
     UserLoraCreateRequest,
     UserLoraListResponse,
     UserLoraResponse,
     UserLoraSampleCreateRequest,
+    UserLoraSampleFromGenerationRequest,
     UserLoraSamplePatchRequest,
     UserLoraSampleResponse,
 )
@@ -302,6 +305,8 @@ __all__ = [
     "LoginAttemptResponse",
     "LoginRequest",
     "ModelAvailability",
+    "OwnPlayableTakeListResponse",
+    "OwnPlayableTakeResponse",
     "PaginatedResponse",
     "PinModelOnWorkerRequest",
     "PlaylistAlbumSkipResponse",
@@ -367,6 +372,7 @@ __all__ = [
     "UserLoraListResponse",
     "UserLoraResponse",
     "UserLoraSampleCreateRequest",
+    "UserLoraSampleFromGenerationRequest",
     "UserLoraSamplePatchRequest",
     "UserLoraSampleResponse",
     "UserRateLimitsResponse",

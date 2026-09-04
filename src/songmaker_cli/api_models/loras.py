@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import UserLora, UserLoraSample
+    from songmaker_cli.db.models import Generation, UserLora, UserLoraSample
 
 
 class UserLoraCreateRequest(BaseModel):
@@ -18,6 +18,10 @@ class UserLoraSampleCreateRequest(BaseModel):
     caption: str = Field(min_length=1)
     lyrics: str = Field(min_length=1)
     position: int | None = Field(default=None, ge=0)
+
+
+class UserLoraSampleFromGenerationRequest(BaseModel):
+    generation_id: str = Field(min_length=1)
 
 
 class UserLoraSamplePatchRequest(BaseModel):
@@ -87,3 +91,29 @@ class UserLoraResponse(BaseModel):
 
 class UserLoraListResponse(BaseModel):
     loras: list[UserLoraResponse]
+
+
+class OwnPlayableTakeResponse(BaseModel):
+    generation_id: str
+    song_title: str
+    generation_number: int
+    audio_url: str
+    caption: str
+    lyrics: str
+
+    @classmethod
+    def from_orm(cls, generation: Generation) -> OwnPlayableTakeResponse:
+        if generation.song is None or generation.version is None:
+            raise ValueError("Playable take must include its song and version")
+        return cls(
+            generation_id=generation.id,
+            song_title=generation.song.title,
+            generation_number=generation.generation_number,
+            audio_url=f"/audio/{generation.mp3_path}",
+            caption=generation.version.prompt,
+            lyrics=generation.version.lyrics,
+        )
+
+
+class OwnPlayableTakeListResponse(BaseModel):
+    takes: list[OwnPlayableTakeResponse]

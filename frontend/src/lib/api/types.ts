@@ -496,6 +496,19 @@ export interface ModelCapabilities {
 	hidden_params: string[];
 }
 
+export interface OwnPlayableTakeListResponse {
+	takes: OwnPlayableTakeResponse[];
+}
+
+export interface OwnPlayableTakeResponse {
+	generation_id: string;
+	song_title: string;
+	generation_number: number;
+	audio_url: string;
+	caption: string;
+	lyrics: string;
+}
+
 export interface PinModelOnWorkerRequest {
 	mode: string;
 }
@@ -1022,6 +1035,10 @@ export interface UserLoraSampleCreateRequest {
 	caption: string;
 	lyrics: string;
 	position?: number | null;
+}
+
+export interface UserLoraSampleFromGenerationRequest {
+	generation_id: string;
 }
 
 export interface UserLoraSampleItem {
