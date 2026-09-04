@@ -178,8 +178,8 @@ class GitRunner:
                 stderr=subprocess.PIPE,
                 shell=False,
             )
-            assert process.stdout is not None
-            assert process.stderr is not None
+            if process.stdout is None or process.stderr is None:
+                raise RequirementBinderError("local Git did not provide output pipes")
             selector.register(process.stdout, selectors.EVENT_READ, stdout)
             selector.register(process.stderr, selectors.EVENT_READ, stderr)
             while selector.get_map():
@@ -734,7 +734,8 @@ def _install_plan(
         if before.witness_directory is None:
             witness_directory.mkdir(mode=0o755)
             created_directory = _directory_snapshot(root, WITNESSES_DIRECTORY)
-            assert created_directory is not None
+            if created_directory is None:
+                raise RequirementBinderError("witness directory could not be inspected")
             _fsync_directory(witness_directory.parent)
         witness_temp = _write_temp(
             witness_directory,

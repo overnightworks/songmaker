@@ -751,9 +751,7 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
         record for record in caplog.records
         if record.name == "songmaker_cli.audio_paths"
     ).getMessage()
-    assert "admin_user/../../outside.mp3" in traversal_log
-    assert "Audio path traversal denied" in traversal_log
-    assert str(sharing_app.app.state.ctx.audio_dir) not in traversal_log
+    assert traversal_log == "Audio path traversal denied"
 
 
 @pytest.mark.acceptance("ACC-SHARE-18")

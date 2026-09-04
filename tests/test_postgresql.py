@@ -234,7 +234,8 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
 
     def heartbeat() -> None:
         try:
-            assert reaper_read.wait(timeout=10), "reaper did not read the job"
+            if not reaper_read.wait(timeout=10):
+                raise RuntimeError("reaper did not read the job")
             with pg_factory() as session:
                 update_job_heartbeat(session, job_id)
                 session.commit()
@@ -327,8 +328,10 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
     second = threading.Thread(target=_reconcile_second)
     second.start()
     try:
-        assert second_done.wait(timeout=10), "second reconciliation waited on the locked LoRA"
-        assert results == [0]
+        if not second_done.wait(timeout=10):
+            raise RuntimeError("second reconciliation waited on the locked LoRA")
+        if results != [0]:
+            raise RuntimeError(f"unexpected reconciliation results: {results}")
     finally:
         release_lock.set()
 
@@ -362,7 +365,8 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
         try:
             with pg_factory() as session:
                 start.wait(timeout=10)
-                assert not session.new and not session.dirty and not session.deleted
+                if session.new or session.dirty or session.deleted:
+                    raise RuntimeError("session unexpectedly has pending changes")
                 session.commit()
                 _begin_exclusive(session, _SESSION_CAP_LOCK_ID)
                 expires = datetime.now(timezone.utc) + timedelta(hours=1)

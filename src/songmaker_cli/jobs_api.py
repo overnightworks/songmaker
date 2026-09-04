@@ -183,7 +183,7 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
                 return
             await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, remaining))
     except asyncio.CancelledError:
-        return
+        raise
 
 
 def _get_job_stream_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:

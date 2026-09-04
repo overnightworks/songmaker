@@ -176,8 +176,8 @@ handlers validate the requested canonical filename and make their allowlist
 decision with a scalar query before delivering bytes. A missing file, a
 noncanonical filename, and a path that would escape the audio root (including
 through a symlink) all return the indistinguishable visitor response `404 Not
-Found`. Traversal rejection is logged at `WARNING` with the requested relative
-path rendered via `%r`; the resolved server path is never logged.
+Found`. Traversal rejection is logged at `WARNING` without the caller-supplied
+path.
 
 ### Per-IP (global middleware)
 
