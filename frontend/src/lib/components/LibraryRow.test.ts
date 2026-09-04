@@ -10,6 +10,7 @@ import { albumList, updateAlbumInList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { LIBRARY_ROW_FILTER_EMPTY } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
+import { libraryRowOpenPreference } from '$lib/stores/playbackSettings';
 import libraryRowSource from './LibraryRow.svelte?raw';
 
 const fetchSongs = vi.fn();
@@ -28,6 +29,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import LibraryRowHarness from './LibraryRow.harness.svelte';
+import LibraryRow from './LibraryRow.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -148,6 +150,8 @@ beforeEach(() => {
 	playlistList.set([playlist({ id: 'p-1' }), playlist({ id: 'p-2', title: 'Für Thomas' })]);
 	playlistLoad.set({ status: 'ready', error: null });
 	openCollection.set({ kind: 'album', id: 'a-1' });
+	libraryRowOpenPreference.set(null);
+	localStorage.removeItem('libraryRowOpen');
 	history.replaceState(null, '', '/');
 });
 
@@ -157,6 +161,8 @@ afterEach(async () => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
+	libraryRowOpenPreference.set(null);
+	localStorage.removeItem('libraryRowOpen');
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -173,7 +179,47 @@ async function render(collection: {
 	return target;
 }
 
+async function renderCollapsibleRow(compact: boolean): Promise<HTMLElement> {
+	vi.stubGlobal('matchMedia', () => ({
+		matches: compact,
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn()
+	}));
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted.push(
+		mount(LibraryRow, {
+			target,
+			props: { collection: { kind: 'album', id: 'a-1' }, collapsible: true }
+		})
+	);
+	await tick();
+	return target;
+}
+
 describe('LibraryRow', () => {
+	it('keeps the same row owner collapsible on song and take surfaces', async () => {
+		const root = await renderCollapsibleRow(false);
+
+		expect(root.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
+		expect(root.querySelector('.library-row-filter-input')).not.toBeNull();
+
+		root.querySelector<HTMLButtonElement>('[aria-label="Collapse albums"]')?.click();
+		await tick();
+
+		expect(root.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
+		expect(root.querySelector('.library-row-filter-input')).toBeNull();
+		expect(root.textContent).toContain('Anfield · 2 songs');
+		expect(localStorage.getItem('libraryRowOpen')).toBe('false');
+	});
+
+	it('starts a song or take row collapsed at 375 px until the browser has a preference', async () => {
+		const root = await renderCollapsibleRow(true);
+
+		expect(root.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
+		expect(root.querySelector('.library-row-filter-input')).toBeNull();
+	});
+
 	it('renders one tile per sibling album, marking the open one for assistive tech', async () => {
 		const root = await render({ kind: 'album', id: 'a-1' });
 		const titles = Array.from(root.querySelectorAll('.tile-title')).map((el) => el.textContent);

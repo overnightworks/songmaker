@@ -355,6 +355,9 @@ export function libraryRowFilterAriaLabel(collectionLabel: string): string {
 export const LIBRARY_ROW_FILTER_CLEAR_LABEL = 'Clear filter';
 export const LIBRARY_ROW_FILTER_CLEAR_GLYPH = '×';
 export const LIBRARY_ROW_FILTER_EMPTY = 'Nothing matches';
+export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
+export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';
+export const LIBRARY_ROW_COMPACT_MEDIA = '(max-width: 375px)';
 
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';
