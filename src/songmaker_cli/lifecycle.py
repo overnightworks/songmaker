@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -105,6 +107,46 @@ class BackgroundLoopRegistry:
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
     return app.state.background_loop_registry
+
+
+def _codex_image_sandbox_runtime_error() -> str | None:
+    bubblewrap = shutil.which("bwrap")
+    if bubblewrap is None:
+        return "bubblewrap is not installed"
+    try:
+        result = subprocess.run(
+            (
+                bubblewrap,
+                "--unshare-user",
+                "--uid", "0",
+                "--gid", "0",
+                "--ro-bind", "/", "/",
+                "--proc", "/proc",
+                "--dev", "/dev",
+                "--",
+                "/usr/bin/true",
+            ),
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "bubblewrap user namespaces are unavailable"
+    if result.returncode != 0:
+        return "bubblewrap user namespaces are unavailable"
+    return None
+
+
+def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
+    """Report whether the future web cover route can enter its user namespace."""
+    error = _codex_image_sandbox_runtime_error()
+    if error is not None:
+        log.info("Codex cover image path not set up: %s", error)
+        return "not_set_up"
+    log.info("Codex cover image sandbox runtime verified")
+    return "ready"
 
 
 async def provider_status_refresh_loop(app: FastAPI) -> None:
