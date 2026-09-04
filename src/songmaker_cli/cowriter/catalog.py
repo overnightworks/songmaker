@@ -100,6 +100,11 @@ class ProviderRouteReadinessState(StrEnum):
     UNVERIFIED = "unverified"
 
 
+class ProviderRouteCapability(StrEnum):
+    TOOLS_AVAILABLE = "tools_available"
+    TEXT_ONLY = "text_only"
+
+
 class ProviderNeed(StrEnum):
     CLI_LOGIN = "cli_login"
     API_KEY = "api_key"
@@ -161,6 +166,7 @@ class ProviderRouteSnapshot:
     catalog_source: str | None
     catalog_version: str | None
     readiness: ProviderRouteReadinessState
+    capability: ProviderRouteCapability
     reason: SafeRouteReason | None
     probed_at: datetime
     setup_label: str
@@ -217,12 +223,13 @@ def _refresh_provider_route(
     settings: Settings,
 ) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
+    capability = provider_route_capability(provider, route)
     credential = _provider_api_credential(provider, settings)
     if route is ProviderRoute.API and not _secret(credential.secret):
         reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
         return ProviderRouteSnapshot(
             (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-            reason, now, "API key",
+            capability, reason, now, "API key",
         )
     if (
         route is ProviderRoute.API
@@ -240,13 +247,13 @@ def _refresh_provider_route(
                 reason = normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
                 return ProviderRouteSnapshot(
                     (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-                    reason, now, "CLI login",
+                    capability, reason, now, "CLI login",
                 )
         except AgentCliUnavailableError:
             reason = normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
             return ProviderRouteSnapshot(
                 (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-                reason, now, "CLI login",
+                capability, reason, now, "CLI login",
             )
     try:
         models = tuple(list_provider_models(provider, route))
@@ -256,7 +263,7 @@ def _refresh_provider_route(
         )
         return ProviderRouteSnapshot(
             (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
-            reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+            capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
         )
     except ProviderUnavailableError as exc:
         reason = exc.reason or normalize_route_failure(
@@ -264,15 +271,30 @@ def _refresh_provider_route(
         )
         return ProviderRouteSnapshot(
             (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
-            reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+            capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
         )
     source = _CODEX_CLI_KNOWN_MODELS_SOURCE if (
         provider == _CODEX_PROVIDER and route is ProviderRoute.CLI
     ) else "provider API" if route is ProviderRoute.API else "provider CLI"
+    reason = (
+        normalize_route_failure(SafeRouteReasonCode.ROUTE_TEXT_ONLY)
+        if capability is ProviderRouteCapability.TEXT_ONLY
+        else None
+    )
     return ProviderRouteSnapshot(
         models, None, source, None, ProviderRouteReadinessState.READY,
-        None, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+        capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
     )
+
+
+def provider_route_capability(
+    provider: str,
+    route: ProviderRoute,
+) -> ProviderRouteCapability:
+    """Return the fixed feature capability of a provider transport route."""
+    if provider == _GROK_PROVIDER and route is ProviderRoute.CLI:
+        return ProviderRouteCapability.TEXT_ONLY
+    return ProviderRouteCapability.TOOLS_AVAILABLE
 
 
 def _cli_is_logged_in(provider: str) -> bool:

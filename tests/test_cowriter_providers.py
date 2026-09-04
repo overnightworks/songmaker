@@ -465,6 +465,7 @@ def test_claude_api_catalog_is_ready_for_the_cowriter_and_judge(
     claude_api = cowriter["provider_routes_status"]["claude"]["api"]
     assert claude_api["models"] == LIVE_CATALOG["claude"]
     assert claude_api["readiness"]["state"] == "ready"
+    assert claude_api["readiness"]["capability"] == "tools_available"
     assert claude_api["readiness"]["reason"] is None
 
     judge = client.get("/api/settings/judge").json()
@@ -674,6 +675,24 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
             "finished",
         ]
         assert job.status == "completed"
+
+
+def test_grok_cli_route_status_is_ready_but_text_only(
+    admin_client, every_provider_is_configured,
+):
+    client, _ = admin_client
+    refresh_provider_snapshots()
+
+    response = client.get("/api/settings/cowriter")
+
+    assert response.status_code == 200
+    readiness = response.json()["provider_routes_status"]["grok"]["cli"]["readiness"]
+    assert readiness["state"] == "ready"
+    assert readiness["capability"] == "text_only"
+    assert readiness["reason"] == {
+        "code": "route_text_only",
+        "message": "Song tools are not available over the Grok CLI today.",
+    }
 
 
 def test_cowriter_put_without_routes_preserves_the_stored_route_map(
@@ -1456,6 +1475,10 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     assert providers.status_code == 200
     assert set(cowriter.json()["probed_at"].values()) == {None}
     assert set(judge.json()["probed_at"].values()) == {None}
+    grok_cli = cowriter.json()["provider_routes_status"]["grok"]["cli"]["readiness"]
+    assert grok_cli["state"] == "unverified"
+    assert grok_cli["capability"] == "text_only"
+    assert grok_cli["reason"] is None
     for provider in providers.json():
         for surface in ("cowriter", "judge"):
             assert provider[surface]["state"] == "unverified"

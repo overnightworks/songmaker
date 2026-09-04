@@ -123,6 +123,7 @@ class CowriterSettingsRequest(BaseModel):
 
 class ProviderRouteReadiness(BaseModel):
     state: Literal["ready", "not_configured", "disturbed", "unverified"]
+    capability: Literal["tools_available", "text_only"]
     reason: SafeRouteReason | None = None
     probed_at: ComputedTimestamp = None
     setup_label: str
