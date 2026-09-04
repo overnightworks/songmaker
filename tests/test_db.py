@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -2362,7 +2363,11 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     assert tables == expected
 
 
-def test_training_epoch_migration_up_and_down(tmp_path: Path) -> None:
+def test_training_epoch_migration_up_and_down(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    isolated_logging,
+) -> None:
     from alembic import command
     from alembic.config import Config
     from sqlalchemy import create_engine, inspect
@@ -2376,6 +2381,8 @@ def test_training_epoch_migration_up_and_down(tmp_path: Path) -> None:
     config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
     command.upgrade(config, migration.revision)
+    logging.getLogger("migration.test").warning("capture remains attached")
+    assert "capture remains attached" in caplog.text
     engine = create_engine(f"sqlite:///{db_path}")
     assert {"current_epoch", "train_epochs", "training_started_at"} <= {
         column["name"] for column in inspect(engine).get_columns("jobs")
@@ -2383,6 +2390,11 @@ def test_training_epoch_migration_up_and_down(tmp_path: Path) -> None:
     engine.dispose()
 
     command.downgrade(config, migration.down_revision)
+    from songmaker_cli.db.migration_logging import _MigrationLogHandler
+
+    root = logging.getLogger()
+    assert caplog.handler in root.handlers
+    assert sum(isinstance(handler, _MigrationLogHandler) for handler in root.handlers) == 1
     engine = create_engine(f"sqlite:///{db_path}")
     assert not {"current_epoch", "train_epochs", "training_started_at"} & {
         column["name"] for column in inspect(engine).get_columns("jobs")

@@ -19,11 +19,23 @@ class _SongmakerCliLogHandler(logging.StreamHandler):
 
 def configure_cli_logging(level: int) -> None:
     """Configure the CLI's plain logging until a command selects another format."""
-    logging.basicConfig(
-        level=level,
-        format="%(name)s: %(message)s",
-        handlers=[_SongmakerCliLogHandler()],
-    )
+    handler = _SongmakerCliLogHandler()
+    handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    root = logging.getLogger()
+    _replace_songmaker_handlers(root, (_SongmakerCliLogHandler,), handler)
+    root.setLevel(level)
+
+
+def _replace_songmaker_handlers(
+    root: logging.Logger,
+    owned_handler_types: tuple[type[logging.Handler], ...],
+    replacement: logging.Handler,
+) -> None:
+    for existing_handler in root.handlers[:]:
+        if isinstance(existing_handler, owned_handler_types):
+            root.removeHandler(existing_handler)
+            existing_handler.close()
+    root.addHandler(replacement)
 
 
 def configure_logging() -> None:
@@ -67,8 +79,9 @@ def configure_logging() -> None:
     handler = _SongmakerLogHandler()
     handler.setFormatter(formatter)
     root = logging.getLogger()
-    for existing_handler in root.handlers[:]:
-        if isinstance(existing_handler, (_SongmakerCliLogHandler, _SongmakerLogHandler)):
-            root.removeHandler(existing_handler)
-    root.addHandler(handler)
+    _replace_songmaker_handlers(
+        root,
+        (_SongmakerCliLogHandler, _SongmakerLogHandler),
+        handler,
+    )
     root.setLevel(logging.INFO)

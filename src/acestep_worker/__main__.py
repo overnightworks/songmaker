@@ -47,11 +47,18 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
+class _AcestepWorkerLogHandler(logging.StreamHandler):
+    pass
+
+
 def configure_logging(log_level: str) -> None:
-    handler = logging.StreamHandler()
+    handler = _AcestepWorkerLogHandler()
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
-    root.handlers.clear()
+    for existing_handler in root.handlers[:]:
+        if isinstance(existing_handler, _AcestepWorkerLogHandler):
+            root.removeHandler(existing_handler)
+            existing_handler.close()
     root.addHandler(handler)
     root.setLevel(log_level)
 
