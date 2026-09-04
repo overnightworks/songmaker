@@ -132,11 +132,10 @@ describe('Rail', () => {
 			'.rail-group > .disclose-row > button.disclose'
 		);
 		expect(scrolledToggles).toHaveLength(2);
-		const scrolledTitles = scroll.querySelectorAll(
-			'.rail-group > .disclose-row > button.group-title'
+		expect(scrolledToggles[0]?.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
+		expect(scrolledToggles[1]?.querySelector('.group-title')?.textContent?.trim()).toBe(
+			'Playlists'
 		);
-		expect(scrolledTitles[0]?.textContent?.trim()).toBe('Library');
-		expect(scrolledTitles[1]?.textContent?.trim()).toBe('Playlists');
 		expect(scroll.textContent).not.toContain('Settings');
 
 		const settingsPin = requireElement(target, '.rail-settings-pin');

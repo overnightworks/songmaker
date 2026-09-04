@@ -311,6 +311,9 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
     state.write_text("")
     scratch = tmp_path / "tmp"
     scratch.mkdir()
+    codex_resources = tmp_path / "codex-resources"
+    codex_resources.mkdir()
+    (codex_resources / "bwrap").symlink_to("/bin/sh")
 
     def _environment(**overrides: str) -> dict[str, str]:
         built = {name: os.environ[name] for name in INHERITED_ENVIRONMENT
@@ -327,6 +330,8 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
             "SONGMAKER_CLAUDE_CLI": "/bin/sh",
             "SONGMAKER_GROK_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CLI": "/bin/sh",
+            "SONGMAKER_CODEX_CODE_MODE_HOST": "/bin/sh",
+            "SONGMAKER_CODEX_RESOURCES": str(codex_resources),
         })
         built.setdefault("SUDO_USER", DEFAULT_SUDO_USER)
         built.setdefault("SONGMAKER_UNIT_DIR", str(units))
