@@ -7,42 +7,47 @@ Sicherheitsowner: `docs/security.md`.
 
 ## Ergebnis des Host-Experiments vom 04.09.2026
 
-Das Experiment lief nur mit einem wegwerfbaren, lokalen stdio-MCP-Server
-`echo`; er kennt genau das Werkzeug `echo`, keine Datenbank und keine
-Songdaten. Für jede CLI entstand ein eigenes `0700`-Home. Die vorhandene
-Auth-Datei wurde als Bytes hineinkopiert und anschließend auf `0600` gesetzt;
-`config.toml` war ebenfalls `0600`. Das Profil und alle Aufzeichnungen wurden
-nach der Messung entfernt. Weder Zugangsdaten noch Werkzeug-Nutzlasten gehören
-in diese Datei, Logs oder den Plan.
+Das Experiment lief mit einem wegwerfbaren, lokalen stdio-MCP-Server `echo`;
+er kennt genau dieses Werkzeug, keine Datenbank und keine Songdaten. Jedes
+Profil war `0700`; die Auth-Datei wurde byteweise kopiert und auf `0600`
+gesetzt. Zugangsdaten und Werkzeug-Nutzlasten gehören weder in diesen Plan
+noch in Logs.
 
-Die folgenden Befehle sind die reproduzierbare Messform; `<tmp>` steht für das
-wegwerfbare Profil und `<echo-server>` für den lokalen Server:
+Grok nutzte dieselbe Prompt-Übergabe wie der Produktionsadapter:
 
 ```text
 GROK_HOME=<tmp>/grok grok mcp add echo -- /usr/bin/python3 <echo-server>
-GROK_HOME=<tmp>/grok grok --single 'Call the echo tool with hello and answer OK' \
+GROK_HOME=<tmp>/grok grok --prompt-file <prompt-file> \
   --output-format streaming-json --allow 'MCPTool(echo__*)' --max-turns <n> \
   --no-subagents --disable-web-search
-
-CODEX_HOME=<tmp>/codex codex mcp add echo -- /usr/bin/python3 <echo-server>
-printf '%s' 'Call the echo tool with hello and answer OK' | \
-  CODEX_HOME=<tmp>/codex codex exec --json --sandbox read-only \
-  --skip-git-repo-check --ignore-rules --ephemeral \
-  -c 'approval_policy="never"' -
 ```
 
-| CLI | Startereignis und Verbindung | Allow ohne Prompt | Deny-Vorrang | Turn-Grenze |
-| --- | --- | --- | --- | --- |
-| Grok 1.0.5 | Erstes `available_commands` listet nur Builtins; nach `initialize`, `notifications/initialized`, `tools/list` folgt ein weiteres `available_commands` mit `echo__echo`. Der MCP-Aufruf erscheint außen als `tool_call` `use_tool`; sein `rawInput.tool_name` ist `echo__echo`. | `--allow 'MCPTool(echo__*)'` ließ den explizit erzwungenen lokalen Aufruf ohne Interaktionsprompt laufen (`tools/call`, danach `tool_call_update` `completed`). Der normale Satz allein kann vorher Builtins wählen und ist daher kein Allow-Beweis. | Mit derselben Allow-Form plus `--deny '*'` wurde der explizite MCP-Aufruf als `use_tool` versucht, aber `failed`; der Server erhielt kein `tools/call`. Deny gewinnt. | `--max-turns 1` schafft Aufruf, aber keine Antwort (`max_turns_reached`, `end.cancelled`); mit `2` kommen Aufruf und Textantwort zustande. Die Produktgrenze muss daher mindestens zwei Turns sein, nicht eins. |
-| Codex 0.147.0 | Erstes JSON-Ereignis ist `thread.started`, dann `turn.started`; die CLI gibt keine Werkzeugliste aus. Der Server erhielt zwar `initialize`, `notifications/initialized`, `tools/list`, aber die Namen stehen nicht im CLI-Stream. | Die registrierte Konfiguration erzeugte `item.started`/`item.completed` für `mcp_tool_call`, doch bei `approval_policy="never"` endete der Aufruf ohne Prompt als „user cancelled MCP tool call“; kein `tools/call` erreichte den Server. Das ist keine erlaubte Werkzeugnutzung. | Codex bietet keine Tool-Allow/Deny-Flagform. `-c 'mcp_servers.echo.enabled=false'` verhinderte jede MCP-Verbindung; dies ist nur ein Konfigurations-Disable, kein Vorrangbeweis. | `codex exec --help` bietet kein `--max-turns`; dafür gibt es keine zu behauptende Produktgrenze. |
+Grok 1.0.5 meldete dreimal dieselben 25 Builtins:
+`run_terminal_command`, `read_file`, `search_replace`, `list_dir`, `grep`,
+`kill_command_or_subagent`, `todo_write`,
+`get_command_or_subagent_output`, `spawn_subagent`, `scheduler_create`,
+`scheduler_delete`, `scheduler_list`, `monitor`, `search_tool`, `use_tool`,
+`workflow`, `enter_plan_mode`, `exit_plan_mode`, `ask_user_question`,
+`image_gen`, `image_edit`, `image_to_video`, `reference_to_video` und
+`write`, außerdem eine nichtleere Slash-Command-Liste. Erst nach
+`initialize`, `notifications/initialized` und `tools/list` erschien
+`echo__echo`; der äußere Aufruf ist `tool_call` `use_tool` mit
+`rawInput.tool_name = "echo__echo"`.
 
-**Folge:** Der Bau schaltet keinen Provider auf Werkzeugnutzung, solange ein
-echter, sicherer Start die jeweilige vollständige Oberfläche und einen
-automatisch erlaubten Aufruf nicht belegt. Der aktuelle Codex-Befund endet als
-`codex_cli_tool_surface_unverified`. Für Grok bleibt der Anbieter ebenfalls
-`grok_cli_tool_surface_unverified`, bis die Allow-Form die beworbenen Builtins
-unreachbar macht; die Messung zeigt, dass bloßes Listen der Builtins nicht als
-harmlos angenommen werden darf. Es gibt keinen Ersatz über die HTTP-API.
+| geprüfte Form | Ergebnis |
+| --- | --- |
+| Nur `--allow 'MCPTool(echo__*)'` mit `--prompt-file` | Der Turn führte zuerst `search_tool` `completed` aus, dann `echo__echo` `completed`; bei `--max-turns 2` kam `max_turns_reached`/`end.cancelled`, kein Final. Allow begrenzt Builtins nicht. |
+| `--deny read_file` | `read_file` blieb sichtbar und der erzwungene Aufruf auf `/dev/null` wurde `completed`: der rohe Ereignisname ist keine Grok-Regelsyntax. |
+| `--deny Read` | Die Builtin-Liste blieb sichtbar; derselbe Aufruf wurde als `tool_call_update` `failed` mit „Denied by permission policy: deny rule on read“ beendet. Die Regelklasse blockiert Ausführung, nicht die Anzeige. |
+| `--disallowed-tools <alle 25 Namen>` | 21 Namen verschwanden; `run_terminal_command`, `kill_command_or_subagent`, `get_command_or_subagent_output` und `spawn_subagent` blieben. Statt `read_file` lief danach `run_terminal_command` mit `cat /dev/null` `completed`. Die Namens-Deny ist nicht vollständig. |
+| Codex 0.147.0, `approval_policy="never"` | `thread.started`, `turn.started`, serverseitig `initialize`/`tools/list`, aber keine Namen im JSON-Stream. Der MCP-Aufruf endete ohne Prompt als „user cancelled MCP tool call“, ohne `tools/call`. `codex exec --help` bietet weder Tool-Allow/Deny noch `--max-turns` oder `--prompt-file`; der Produktionsadapter verwendet deshalb wie das Experiment stdin über `-`. |
+
+**Folge:** Die aktuelle Grok-Messung widerlegt eine aktivierbare explizite
+Builtin-Deny: weder rohe Namen noch `--disallowed-tools` erzwingen sie
+vollständig, und der erlaubte Echo-Turn führt vorher ein Builtin aus. Codex
+liefert weder Namen-Zeugen noch Deny-Form. Beide Adapter bleiben darum
+`*_cli_tool_surface_unverified`; es gibt keinen HTTP-Ersatz. Ein späterer
+CLI-Build darf erst nach allen unten genannten Host-Zeugen aktiviert werden.
 
 ## Ziel und Architektur
 
@@ -50,29 +55,44 @@ harmlos angenommen werden darf. Es gibt keinen Ersatz über die HTTP-API.
   `mcp__songmaker__*`-Namen. Die bisher private Konstante wird gezielt
   importierbar; ihr Literal und der vorhandene Drift-Test gegen
   `mcp_server/server.py` bleiben bestehen. Adapter führen keine zweite Liste.
+- `grok_cli_adapter.py` besitzt mit Kommentar „Owner: Grok-CLI-Adapter,
+  gemessen 2026-09-04, Grok 1.0.5“ genau eine benannte
+  `GROK_1_0_5_BUILTIN_DENY_NAMES`-Konstante mit den oben gemessenen 25
+  Ereignisnamen. `codex_cli_adapter.py` besitzt analog
+  `CODEX_0_147_0_BUILTIN_DENY_NAMES = frozenset()` mit dem Kommentar, dass
+  Codex 0.147.0 keinen Namen-Zeugen und keine Deny-Form liefert. Leer heißt
+  nicht erlaubt: Der Codex-Gate kann damit nie einen unbekannten Builtin
+  akzeptieren. Die Adapter übergeben diese Mengen nur an das gemeinsame Gate;
+  sie duplizieren weder die elf MCP-Namen noch Caches.
 - Der bestehende Claude-Gate-Owner wird verallgemeinert, statt Grok und Codex
   eigene Caches oder Sonden zu geben: `_tool_surface_key()` und
   `_verify_tool_surface_async()` parametrisieren auf aufgelösten Binary-Build,
-  erwartete Menge, profilierten Probe-Befehl und Parser. Single-flight,
+  erwartete MCP-Menge, benannte Builtin-Deny-Menge, profilierten Probe-Befehl
+  und Parser. Single-flight,
   Symlink-Auflösung, kurzer Probe-Fehler-TTL, langer Zombie-TTL und dauerhafter
   Mismatch-Cache bleiben genau dort. Grok und Codex schreiben
   `_tool_surface_health_state` nicht.
 - Die Probe verwendet das Produktionsprofil, Probe-User
   `tool-surface-probe`, keinen Werkzeugaufruf und keine Songdaten. Sie beendet
-  nach dem ersten **belegbaren Verbindungsevent**, nicht blind nach der ersten
-  Ausgabezeile: Grok sendet nachweislich zwei Builtin-Listen vor seiner
-  MCP-Liste. Der Parser hat ein festes kleines Ereignis-/Bytebudget und bleibt
-  fail-closed, wenn die Verbindung oder eine vollständige Menge ausbleibt.
-  Claude behält seinen bestehenden `read="first_line"`-Pfad. Codex hat nach
-  dem gemessenen Stream keinen Namen-Zeugen und bleibt deshalb unverified;
-  eine spätere Alternative muss denselben Namen-Zeugen liefern, nicht eine
-  zweite, vertrauenswürdige Liste erfinden.
+  nach dem vollständigen **belegbaren** `available_commands`-Zeugen, nicht
+  nach der ersten Ausgabezeile: Grok sendet Builtin-Listen vor der MCP-Liste.
+  Der Parser hat ein festes kleines Ereignis-/Bytebudget und bleibt fail-closed,
+  wenn die Verbindung oder eine vollständige Menge ausbleibt. Claude behält
+  seinen bestehenden `read="first_line"`-Pfad. Codex hat nach dem gemessenen
+  Stream keinen Namen-Zeugen und bleibt deshalb unverified; eine spätere
+  Alternative muss denselben Namen-Zeugen liefern, nicht eine zweite,
+  vertrauenswürdige Liste erfinden.
 - Nach einer dokumentierten Grok-Normalisierung
   `songmaker__name` → `mcp__songmaker__name` gilt Mengengleichheit mit den
-  elf Claude-Namen. Fehlende, zusätzliche oder fremde MCP-Namen sind
-  dauerhafter Mismatch. Angezeigte Builtins sind nur dann kein E2-Delta, wenn
-  der gemessene Allow-Mechanismus sie tatsächlich unerreichbar macht;
-  sie sind nie eine vertrauenswürdige Blocklist.
+  elf Claude-Namen. Das Gate akzeptiert pro Build genau dann, wenn diese Menge
+  exakt ist **und** jeder gemeldete Nicht-MCP-Toolname in der übergebenen
+  Deny-Menge steht; ein fehlender, zusätzlicher oder unbekannter Builtin ist
+  dauerhafter Mismatch und verweigert den Turn. Eine nichtleere
+  Slash-Command-Liste ist ebenfalls dauerhafter Mismatch, bis eine gemessene,
+  vollständige Deny dafür vorliegt. Mitgliedschaft in der Liste genügt nicht
+  zur Aktivierung: Die aktuelle Grok-Liste bleibt absichtlich unverified, weil
+  ihre vollständige Ausführungs-Deny widerlegt ist. So wird aus einer
+  beobachteten Liste keine vertrauenswürdige Blocklist.
 
 ## Profil, Geheimnisse und Prozessgrenzen
 
@@ -100,27 +120,38 @@ harmlos angenommen werden darf. Es gibt keinen Ersatz über die HTTP-API.
 
 ## Provider-Vertrag und Ereignisse
 
-- Grok verwendet ausschließlich die gemessene Allow-Form
-  `--allow 'MCPTool(songmaker__*)'`; `--deny '*'` ist ausdrücklich verboten,
-  weil es Allow überstimmt. `--no-subagents` und `--disable-web-search`
-  bleiben. Die Turn-Grenze wird erst nach einer erneuten Messung mit dem
-  echten Songmaker-Server auf mindestens zwei festgelegt; `1` ist widerlegt.
-  `--always-approve` wird nicht verwendet.
+- Groks Produktions- **und** Probe-argv verwenden ausschließlich
+  `--prompt-file <songmaker-private-prompt>`, `--allow
+  'MCPTool(songmaker__*)'`, die aus der benannten Deny-Konstante ableitbaren,
+  dokumentierten `--deny`-Regeln, `--no-subagents` und
+  `--disable-web-search`; `--single`, `--tools ''`, `--deny '*'` und
+  `--always-approve` sind verboten. Die Roh-Namen selbst werden nicht als
+  Regel ausgegeben, weil `--deny read_file` unwirksam gemessen ist. Für 1.0.5
+  gibt es keine vollständige Übersetzung mit einem `failed`-Pin für alle 25
+  Namen; der Gate verweigert daher jeden Grok-Turn, statt eine geschätzte
+  Turn-Grenze zu setzen. Erst ein neuer Host-Zeuge darf eine Grenze und eine
+  aktivierbare Deny-Übersetzung festlegen.
 - Codex entfernt `--ignore-user-config` und `mcp_servers={}`, damit das
   gestagte `CODEX_HOME` geladen wird; privater CWD, `--ignore-rules`,
   `--sandbox read-only`, `--ephemeral` und `approval_policy="never"` bleiben.
-  Weil diese Form beim Messlauf einen MCP-Aufruf abbrach, ist sie kein
-  Aktivierungskriterium. Ohne einen sicheren, dokumentierten Allow-Mechanismus
-  bleibt der Adapter fail-closed; der gefährliche Bypass ist keine Option.
+  Sein Produktions- und Experiment-argv bleiben identisch und reichen den
+  Prompt über stdin an `-`; eine Prompt-Datei-Unterstützung gibt es nicht.
+  Weil diese Form den MCP-Aufruf abbrach und kein Allow/Deny-Mechanismus
+  existiert, ist sie kein Aktivierungskriterium. Ohne Namen-Zeugen und sicheren
+  Deny bleibt der Adapter fail-closed; der gefährliche Bypass ist keine Option.
 - `dispatch.py` gibt `user_id` an beide CLI-Streamer weiter. Ein später
   verifizierter Grok-`tool_call`/`tool_call_update` und Codex-
   `mcp_tool_call` wird auf die bestehenden `ToolCallEvent` und
   `ToolResultEvent` abgebildet, mit kanonischem Namen
   `mcp__songmaker__…`, validierter ID und einer sicheren, begrenzten
-  Input-/Output-Darstellung. Groks äußeres `use_tool` wird nur dann als MCP
-  erkannt, wenn sein validierter `rawInput.tool_name` normalisiert werden
-  kann. Fremde oder unvollständige Ereignisse aborten und reapen ohne
-  `FinalEvent`. `execute_cowriter_tool` bleibt ausschließlich HTTP-Executor.
+  Input-/Output-Darstellung. Das Stream-Gate bricht bei **jedem** Grok-
+  `tool_call` ausserhalb `mcp__songmaker__*` sofort ab: Nur `use_tool` mit
+  gültigem `rawInput.tool_name`, das zu einem kanonischen Songmaker-Namen
+  normalisiert, darf weiter. Jeder Builtin-Aufruf (auch ein bereits `failed`
+  Deny-Aufruf), eine fremde MCP-Nennung oder ein unvollständiges Folgeereignis
+  fordert Abort an, wartet auf den Reap des Bounded-Runners und emittiert kein
+  `FinalEvent`. Für Codex gilt dieselbe Regel für jedes andere Tool-Item.
+  `execute_cowriter_tool` bleibt ausschließlich HTTP-Executor.
 - Ein unverified Gate, eine gestörte Staging-Datei oder ein Streamfehler bleibt
   ein benannter CLI-Fehler: kein HTTP-Wechsel und keine Teilantwort.
 
@@ -129,9 +160,9 @@ harmlos angenommen werden darf. Es gibt keinen Ersatz über die HTTP-API.
 | Satz | Beweis |
 | --- | --- |
 | Profil und Geheimnisse | Adapter-/Staging-Tests prüfen `0700`/`0600`, Byte-Kopie der Auth-Datei, komplette MCP-Env aus dem Claude-Owner, weder Geheimnis in argv noch Overlay/Ereignis/Exception und Löschen erst nach Reap. |
-| Gemeinsames Gate | `test_claude_provider.py` plus Adaptertests prüfen exakt elf Namen, fehlende/zusätzliche/fremde Namen, keine Verbindung, unparsebare oder budgetüberschreitende Ausgabe, Build-Key, dauerhaften Mismatch-Cache, kurzen Probe-Fehler-TTL, langen Zombie-TTL und Single-flight. Der Serverregistrierungs-Drift-Test bleibt grün. |
-| Command-Sätze | `test_grok_cli_adapter.py` ersetzt Pins auf `--deny '*'` und „jedes Werkzeug blockiert“ durch die gemessene Allow-Form, keine Subagents/Web und eine belegte Turn-Grenze. `test_codex_cli_adapter.py` entfernt `--ignore-user-config` und `mcp_servers={}` und prüft das fail-closed Ergebnis bis ein echter Allow-Zeuge existiert. |
-| Stream-Sätze | Gefälschte CLIs liefern erlaubte MCP-Start/Update/Resultat-Ereignisse; Tests erwarten passende `ToolCallEvent`/`ToolResultEvent`, Text und genau ein `FinalEvent`. Für fremde/defekte/abgebrochene Folgen erwarten sie benannten Fehler ohne Final. |
+| Gemeinsames Gate | `test_claude_provider.py` plus Adaptertests prüfen exakt elf Namen sowie: jeder gemeldete Nicht-MCP-Toolname steht in der Provider-Parameter-Deny-Menge; fehlende, zusätzliche oder unbekannte Namen und jede Slash-Command-Liste sind dauerhafter Mismatch. Ferner: keine Verbindung, unparsebare oder budgetüberschreitende Ausgabe, Build-Key, Mismatch-Cache, Probe-Fehler-/Zombie-TTL und Single-flight. Der Serverregistrierungs-Drift-Test bleibt grün. |
+| Command-Sätze | `test_grok_cli_adapter.py` pinnt die 25-namige, datierte Deny-Konstante, ausschließlich `MCPTool(songmaker__*)`, `--prompt-file` für Produktion und Probe sowie keine verbotenen Flags. Es pinnt die dokumentierte Regelübersetzung separat von der Namensliste: ein erzwungener `Read`-Builtin wird `failed`; ein nicht übersetzbarer oder unbelegter Name hält den Gate unverified. `test_codex_cli_adapter.py` pinnt `approval_policy="never"`, stdin-`-`, die leere datierte Deny-Konstante, kein `--ignore-user-config`/`mcp_servers={}` und das fail-closed Ergebnis. |
+| Stream-Sätze | Gefälschte CLIs liefern erlaubte MCP-Start/Update/Resultat-Ereignisse; Tests erwarten passende `ToolCallEvent`/`ToolResultEvent`, Text und genau ein `FinalEvent`. Ein Builtin-`tool_call` mit `completed` **oder** `failed`, eine fremde MCP-Nennung oder eine defekte Folge erwartet Abort, Reap und keinen Final. |
 | Dispatch und Persistenz | `test_cowriter_dispatch.py` und Conversation-Tests prüfen die `user_id`-Weitergabe, kein CLI→HTTP-Fallback, keine Teilantwort und keine Persistenz nach Fehler. |
 | Live-Abnahme | `REQ-COWRITER-12`/`13` bleiben offen, bis der Head nach Deploy den echten Gate-Zeugen und einen erfolgreichen lokalen Werkzeugturn am eigenen Song gefahren hat. Ein Dummy, eine gefälschte CLI oder diese Echo-Messung genügt nicht. |
 
