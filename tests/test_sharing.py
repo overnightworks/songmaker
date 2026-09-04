@@ -954,6 +954,14 @@ def test_shared_song_and_generation_manifests_expose_their_album_cover(
     assert unauthed.get(song["album_cover"]["card"]).status_code == 200
     assert unauthed.get(generation["album_cover"]["detail"]).status_code == 200
 
+    assert sharing_app.delete("/api/songs/s1/share").status_code == 200
+    assert unauthed.get(f"/shared/song/{song_slug}").status_code == 404
+    assert unauthed.get(song["album_cover"]["card"]).status_code == 404
+
+    assert sharing_app.delete("/api/generations/g1/share").status_code == 200
+    assert unauthed.get(f"/shared/gen/{generation_slug}").status_code == 404
+    assert unauthed.get(generation["album_cover"]["detail"]).status_code == 404
+
 
 def test_shared_generation_hides_a_noncanonical_stored_audio_path(
     sharing_app: TestClient,

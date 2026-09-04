@@ -11,7 +11,10 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function render(coverUrl: string | null): Promise<HTMLElement> {
+async function render(
+	coverUrl: string | null,
+	fill: string | null = '#37154a'
+): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(LibraryTileContent, {
@@ -21,7 +24,7 @@ async function render(coverUrl: string | null): Promise<HTMLElement> {
 			subtitle: '8 songs',
 			coverAlt: 'Album Open Windows',
 			coverUrl,
-			fill: '#37154a'
+			fill
 		}
 	});
 	await tick();
@@ -43,5 +46,11 @@ describe('LibraryTileContent', () => {
 
 		expect(target.querySelector('.tile-cover img')).toBeNull();
 		expect(target.querySelector('.tile-cover-fill')).not.toBeNull();
+	});
+
+	it('uses title initials when an album has neither a cover nor a color fallback', async () => {
+		const target = await render(null, null);
+
+		expect(target.querySelector('.tile-cover-initials')?.textContent).toBe('OW');
 	});
 });

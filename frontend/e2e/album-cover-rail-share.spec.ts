@@ -81,7 +81,6 @@ test('a fresh album cover reaches wall, row, rail, and every share page at deskt
 	await expect(wallTile.locator('.tile-cover img')).toHaveAttribute('alt', `Album ${albumTitle}`);
 
 	await page.goto(`/album/${album.id}`);
-	if (isMobile) await page.locator('.library-row-toggle').click();
 	await expect(page.locator('.row-tile.active .tile-cover img')).toBeVisible();
 	if (!isMobile) {
 		const railAlbum = page.locator('.album-row').filter({ hasText: albumTitle });

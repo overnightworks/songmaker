@@ -168,6 +168,19 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 		]);
 	});
 
+	it('does not use a song cover as the shared album cover', () => {
+		const view = fromSharedSong({
+			title: 'Solo Track',
+			artist: 'Artist',
+			album_title: 'Album',
+			audio_url: null,
+			cover: { card: '/song-c.jpg', detail: '/song-d.jpg' },
+			...media()
+		});
+
+		expect(view.cover).toBeNull();
+	});
+
 	it('produces a one-track collection for a shared take', () => {
 		const view = fromSharedGeneration({
 			title: 'Solo Track',
