@@ -15,19 +15,21 @@ USER songmaker
 RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
-    uv sync --frozen --no-dev --extra server && \
-    rm -rf src/songmaker_cli/__init__.py
+RUN uv sync --frozen --no-build --no-dev --no-install-project --extra server
 
-COPY --chown=songmaker src/ src/
-COPY --chown=songmaker alembic.ini ./
-COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
-RUN uv sync --frozen --no-dev --extra server
+COPY --chown=root:root src/ src/
+COPY --chown=root:root alembic.ini ./
+COPY --chown=root:root scripts/arq_healthcheck.py scripts/
+RUN uv sync --frozen --no-dev --extra server # NOSONAR: the local Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
 # mounts it first — as root when that image lacks the directory. Every
 # image that mounts it must carry it, owned by songmaker.
-RUN mkdir -p /app/data/audio
+USER root
+RUN chown root:root /app && chmod 755 /app && \
+    chmod -R a-w src alembic.ini scripts && \
+    install -d -o songmaker -g songmaker /app/data/audio
+USER songmaker
 
 ENTRYPOINT ["/app/.venv/bin/arq"]

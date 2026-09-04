@@ -750,6 +750,12 @@ so pushes, manual runs, weekly checks, and approval-comment edit/delete events
 rerun verification. The binder re-fetches immediately before a local write, and
 the resulting pushed commit must pass the live workflow.
 
+Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
+release tag (with the release series recorded beside it), so a moved tag cannot
+change a workflow. Python tools in CI and application dependencies in worker
+images are installed through `uv` with the committed `uv.lock`; the only source
+builds are the repository's own editable project, which has no published wheel.
+
 The local requirement binder now owns that write boundary. A parent process
 enforces a 120-second wall limit over one guarded private worker process group;
 an inherited pipe terminates that group if the parent disappears, and timeouts

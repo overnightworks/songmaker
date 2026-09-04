@@ -18,33 +18,37 @@ jobs:
     name: Bandit (Python security)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: "3.12"
 
-      - name: Install bandit
-        run: pip install bandit[toml]
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Install locked security tools
+        run: uv sync --frozen --extra dev # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
 
       - name: Run bandit
-        run: bandit -r src/ -c pyproject.toml
+        run: uv run bandit -r src/ -c pyproject.toml # NOSONAR: Bandit is installed from the committed uv.lock.
 
   pip-audit:
     name: pip-audit (Python dependencies)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: "3.12"
 
-      - name: Install project + pip-audit
-        run: pip install -e ".[server,dev,mcp]" pip-audit
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Install locked project and audit dependencies
+        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
 
       - name: Audit Python dependencies
-        run: pip-audit --skip-editable --ignore-vuln CVE-2026-4539
+        run: uv run pip-audit --skip-editable --ignore-vuln CVE-2026-4539 # NOSONAR: pip-audit is installed from the committed uv.lock.
 
   npm-audit:
     name: npm audit (Frontend dependencies)
@@ -53,13 +57,13 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
         with:
           version: 10
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.x
         with:
           node-version: "22"
           cache: pnpm

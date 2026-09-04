@@ -63,9 +63,11 @@ acestep-worker = [
     "nvidia-ml-py3>=7.352,<8",
 ]
 dev = [
+    "bandit[toml]>=1.8,<2",
     "pytest>=7.0,<10",
     "pytest-cov>=7.0,<8",
     "pytest-xdist>=3.8,<4",
+    "pip-audit>=2.9,<3",
     "ruff>=0.4,<1",
     "fakeredis[lua]>=2.0,<3",
     # Reads back what monitoring/alertmanager-entrypoint.sh generates, so
