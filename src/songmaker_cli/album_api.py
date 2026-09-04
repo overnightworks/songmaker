@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -10,7 +11,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
+    COVER_SUGGESTIONS_LOCK_ID,
     Pagination,
+    _begin_exclusive,
     check_album_access,
     cleanup_generation_files,
     owner_filter,
@@ -24,6 +27,9 @@ from songmaker_cli.api_models import (
     AlbumResponse,
     AlbumUpdateRequest,
     CleanupResponse,
+    CoverSuggestionSelectionRequest,
+    CoverSuggestionsResponse,
+    JobResponse,
     LibrarySort,
     PaginatedResponse,
     ShareResponse,
@@ -34,10 +40,16 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
     COVER_NOT_FOUND,
+    COVER_SUGGESTION_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
+    JobType,
     ResourceType,
+)
+from songmaker_cli.cover_suggestions import (
+    remove_cover_suggestion_files,
+    resolve_suggestion_png,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -54,12 +66,19 @@ from songmaker_cli.db.queries import (
     archive_album,
     cleanup_album,
     count_albums,
+    count_cover_jobs_since,
     count_picked_songs_by_album,
     count_songs_by_album,
     create_album,
+    create_job,
+    delete_album_cover_suggestions,
     disable_album_sharing,
     enable_album_sharing,
     get_album,
+    get_album_cover_suggestion,
+    get_last_cover_job_for_album,
+    has_active_cover_job,
+    list_album_cover_suggestions,
     list_albums,
     record_audit,
     restore_album,
@@ -70,6 +89,7 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -361,6 +381,116 @@ async def api_upload_album_cover(
     return _single_album_response(session, album)
 
 
+def _utc_day_start() -> datetime:
+    now = datetime.now(timezone.utc)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+@router.post("/albums/{album_id}/cover-suggestions")
+def api_create_cover_suggestions(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> JobResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    session.commit()
+    _begin_exclusive(session, COVER_SUGGESTIONS_LOCK_ID)
+    try:
+        if has_active_cover_job(session, album_id):
+            raise HTTPException(409, "Cover suggestions are already being generated")
+        settings = get_settings()
+        used_today = count_cover_jobs_since(session, album_id, _utc_day_start())
+        if used_today >= settings.cover_suggestions_daily_limit:
+            raise HTTPException(429, "Daily cover suggestion limit reached")
+        job = create_job(session, JobType.COVER, user_id=user.id, album_id=album_id)
+        session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
+    return JobResponse.from_orm(job)
+
+
+@router.get("/albums/{album_id}/cover-suggestions")
+def api_list_cover_suggestions(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> CoverSuggestionsResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    settings = get_settings()
+    return CoverSuggestionsResponse.from_orm(
+        job=get_last_cover_job_for_album(session, album.id),
+        suggestions=list_album_cover_suggestions(session, album.id),
+        used_today=count_cover_jobs_since(session, album.id, _utc_day_start()),
+        daily_limit=settings.cover_suggestions_daily_limit,
+    )
+
+
+@router.get("/albums/{album_id}/cover-suggestions/{suggestion_id}")
+def api_get_cover_suggestion(
+    album_id: str,
+    suggestion_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    suggestion = get_album_cover_suggestion(session, album.id, suggestion_id)
+    if suggestion is None:
+        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
+    try:
+        path = resolve_suggestion_png(ctx.audio_dir, album.id, suggestion.id, suggestion.png_path)
+    except (FileNotFoundError, HTTPException):
+        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
+    return FileResponse(path, media_type="image/png", headers=COVER_RESPONSE_HEADERS)
+
+
+@router.put("/albums/{album_id}/cover")
+def api_select_album_cover_suggestion(
+    album_id: str,
+    data: CoverSuggestionSelectionRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> AlbumResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    suggestion = get_album_cover_suggestion(session, album.id, data.suggestion_id)
+    if suggestion is None:
+        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
+    try:
+        payload = resolve_suggestion_png(
+            ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
+        ).read_bytes()
+        cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
+    except (FileNotFoundError, HTTPException):
+        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
+    except CoverRejectedError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    album = set_album_cover_key(session, album.id, cover_key)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
+    session.commit()
+    return _single_album_response(session, album)
+
+
+@router.delete("/albums/{album_id}/cover-suggestions")
+def api_delete_cover_suggestions(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> StatusResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    paths = delete_album_cover_suggestions(session, album.id)
+    session.commit()
+    remove_cover_suggestion_files(ctx.audio_dir, paths)
+    return StatusResponse()
+
+
 @router.delete("/albums/{album_id}/cover")
 def api_delete_album_cover(
     album_id: str,
@@ -375,4 +505,3 @@ def api_delete_album_cover(
     session.commit()
     remove_album_cover_files(ctx.audio_dir, album.id)
     return _single_album_response(session, album)
-

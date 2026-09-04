@@ -218,6 +218,22 @@ export interface CoverRequest {
 	seed?: number | null;
 }
 
+export interface CoverSuggestionResponse {
+	id: string;
+	url: string;
+}
+
+export interface CoverSuggestionSelectionRequest {
+	suggestion_id: string;
+}
+
+export interface CoverSuggestionsResponse {
+	job?: JobItem | null;
+	suggestions: CoverSuggestionResponse[];
+	used_today: number;
+	daily_limit: number;
+}
+
 export interface CoverTaskParams {
 	src_wav_path: string;
 	src_generation_id: string;

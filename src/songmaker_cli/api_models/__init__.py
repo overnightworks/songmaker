@@ -22,12 +22,18 @@ from songmaker_cli.api_models.auth import (
     UpdateUserRequest,
     UserResponse,
 )
+from songmaker_cli.api_models.cover_suggestions import (
+    CoverSuggestionResponse,
+    CoverSuggestionSelectionRequest,
+    CoverSuggestionsResponse,
+)
 from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,
     CoverTaskParams,
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.api_models.jobs import JobResponse
 from songmaker_cli.api_models.library import (
     LIBRARY_SORT_VALUES,
     LibraryAlbumHit,
@@ -178,34 +184,6 @@ class PaginatedResponse(BaseModel, Generic[T]):
     has_more: bool
 
 
-class JobResponse(BaseModel):
-    id: str
-    type: str
-    status: str
-    progress: float = 0.0
-    error: str | None = None
-    error_type: str | None = None
-    queue_reason: str | None = None
-    queue_position: int | None = None
-    started_at: str | None = None
-    completed_at: str | None = None
-
-    @classmethod
-    def from_orm(cls, job, queue_position: int | None = None) -> JobResponse:
-        return cls(
-            id=job.id,
-            type=job.type,
-            status=job.status,
-            progress=job.progress,
-            error=job.error,
-            error_type=job.error_type,
-            queue_reason=job.queue_reason,
-            queue_position=queue_position,
-            started_at=job.started_at.isoformat() if job.started_at else None,
-            completed_at=job.completed_at.isoformat() if job.completed_at else None,
-        )
-
-
 class LastFailedGenerationResponse(BaseModel):
     """A song's last failed generate/repaint/cover job, if it is still the
     last word on the song's takes (see api_last_failed_generation)."""
@@ -272,6 +250,9 @@ __all__ = [
     "ConversationMessagesResponse",
     "ConversationResponse",
     "CoverRequest",
+    "CoverSuggestionResponse",
+    "CoverSuggestionSelectionRequest",
+    "CoverSuggestionsResponse",
     "CoverTaskParams",
     "CreateUserRequest",
     "DEFAULT_LIBRARY_TAKE_POOL",

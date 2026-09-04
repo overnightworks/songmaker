@@ -26,9 +26,13 @@ log = logging.getLogger(__name__)
 
 
 def create_job(
-    session: Session, job_type: str, user_id: str | None = None, song_id: str | None = None,
+    session: Session,
+    job_type: str,
+    user_id: str | None = None,
+    song_id: str | None = None,
+    album_id: str | None = None,
 ) -> Job:
-    job = Job(type=job_type, user_id=user_id, song_id=song_id)
+    job = Job(type=job_type, user_id=user_id, song_id=song_id, album_id=album_id)
     session.add(job)
     session.flush()
     return job
@@ -46,6 +50,40 @@ def count_user_jobs_in_window(
             Job.started_at >= cutoff,
         )
         .count()
+    )
+
+
+def count_cover_jobs_since(session: Session, album_id: str, since: datetime) -> int:
+    return (
+        session.query(Job)
+        .filter(
+            Job.album_id == album_id,
+            Job.type == JobType.COVER,
+            Job.started_at >= since,
+        )
+        .count()
+    )
+
+
+def has_active_cover_job(session: Session, album_id: str) -> bool:
+    return (
+        session.query(Job)
+        .filter(
+            Job.album_id == album_id,
+            Job.type == JobType.COVER,
+            Job.status.in_(JOB_ACTIVE_STATUSES),
+        )
+        .first()
+        is not None
+    )
+
+
+def get_last_cover_job_for_album(session: Session, album_id: str) -> Job | None:
+    return (
+        session.query(Job)
+        .filter(Job.album_id == album_id, Job.type == JobType.COVER)
+        .order_by(Job.started_at.desc())
+        .first()
     )
 
 

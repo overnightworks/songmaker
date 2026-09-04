@@ -605,6 +605,7 @@ contract is documented in `docs/security.md`.
 ```
 User (username, role: admin|user, bcrypt hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
+  │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
   │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, share_slug?, is_shared)
@@ -614,7 +615,7 @@ User (username, role: admin|user, bcrypt hash)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, error, queue_position)
+  ├── Job (type, status, progress, error, queue_position, album?)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -694,7 +695,9 @@ stream.
 | GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Same membership as `POST /api/queue-streams/library`. Shares the queue-stream per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
-| GET/POST/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, or remove the album cover (JPEG/PNG; ownership 404) |
+| GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
+| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | Create a cover job subject to the configured per-album UTC-day limit, inspect its latest state and private suggestions, or discard suggestions after the database commit. |
+| GET | `/api/albums/{id}/cover-suggestions/{suggestion_id}` | user | Stream one private suggestion after the same album ownership check; no share route exists. |
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |

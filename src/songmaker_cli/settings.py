@@ -191,6 +191,7 @@ class Settings(BaseSettings):
     scoring_rate_limit_admin: int = 100
     chat_rate_limit_user: int = 30
     chat_rate_limit_admin: int = 300
+    cover_suggestions_daily_limit: int = Field(default=10, ge=1)
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120
