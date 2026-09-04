@@ -891,6 +891,7 @@ export interface SharedGenerationPayload {
 	audio_duration: number | null;
 	lyrics: string | null;
 	whisper_cues: WhisperCue[] | null;
+	album_cover?: AlbumCoverUrls | null;
 }
 
 export interface SharedPlaylistEntryPayload {
@@ -920,6 +921,7 @@ export interface SharedSongPayload {
 	lyrics: string | null;
 	whisper_cues: WhisperCue[] | null;
 	cover?: AlbumCoverUrls | null;
+	album_cover?: AlbumCoverUrls | null;
 }
 
 export interface SongCreateRequest {
