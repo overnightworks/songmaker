@@ -121,17 +121,21 @@ def album_cover_urls(album_id: str, cover_key: str) -> AlbumCoverUrls:
     )
 
 
-def public_album_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+def public_album_cover_urls_at(path: str, cover_key: str) -> AlbumCoverUrls:
     return AlbumCoverUrls(
         card=(
-            f"/shared/{slug}/cover?variant={COVER_VARIANT_CARD}"
+            f"{path}?variant={COVER_VARIANT_CARD}"
             f"&{COVER_VERSION_QUERY}={cover_key}"
         ),
         detail=(
-            f"/shared/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"{path}?variant={COVER_VARIANT_DETAIL}"
             f"&{COVER_VERSION_QUERY}={cover_key}"
         ),
     )
+
+
+def public_album_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+    return public_album_cover_urls_at(f"/shared/{slug}/cover", cover_key)
 
 
 class AlbumResponse(BaseModel):
@@ -234,6 +238,7 @@ class SharedSongResponse(BaseModel):
     whisper_cues: list[WhisperCue] | None
 
     cover: AlbumCoverUrls | None = None
+    album_cover: AlbumCoverUrls | None = None
 
 
 class SharedGenerationResponse(BaseModel):
@@ -247,6 +252,7 @@ class SharedGenerationResponse(BaseModel):
     audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
+    album_cover: AlbumCoverUrls | None = None
 
 
 def generation_expiry(gen: Generation) -> datetime | None:

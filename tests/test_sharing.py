@@ -923,6 +923,46 @@ def test_shared_generation_view_includes_pick_media(sharing_app: TestClient) -> 
     assert data["lyrics"] == "Hello"
 
 
+def test_shared_song_and_generation_manifests_expose_their_album_cover(
+    sharing_app: TestClient,
+) -> None:
+    ctx = sharing_app.app.state.ctx
+    with ctx.db() as session:
+        album = session.get(Album, "test_album")
+        assert album is not None
+        album.cover_key = "cover.png"
+        session.commit()
+    cover_dir = ctx.audio_dir / "covers" / "test_album"
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "original.png").write_bytes(b"cover")
+    (cover_dir / "card.jpg").write_bytes(b"cover")
+    (cover_dir / "detail.jpg").write_bytes(b"cover")
+
+    song_slug = sharing_app.post("/api/songs/s1/share").json()["share_slug"]
+    generation_slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
+    unauthed = TestClient(sharing_app.app, cookies={})
+
+    song = unauthed.get(f"/shared/song/{song_slug}").json()
+    generation = unauthed.get(f"/shared/gen/{generation_slug}").json()
+
+    assert song["album_cover"]["card"] == (
+        f"/shared/song/{song_slug}/album-cover?variant=card&v=cover.png"
+    )
+    assert generation["album_cover"]["detail"] == (
+        f"/shared/gen/{generation_slug}/album-cover?variant=detail&v=cover.png"
+    )
+    assert unauthed.get(song["album_cover"]["card"]).status_code == 200
+    assert unauthed.get(generation["album_cover"]["detail"]).status_code == 200
+
+    assert sharing_app.delete("/api/songs/s1/share").status_code == 200
+    assert unauthed.get(f"/shared/song/{song_slug}").status_code == 404
+    assert unauthed.get(song["album_cover"]["card"]).status_code == 404
+
+    assert sharing_app.delete("/api/generations/g1/share").status_code == 200
+    assert unauthed.get(f"/shared/gen/{generation_slug}").status_code == 404
+    assert unauthed.get(generation["album_cover"]["detail"]).status_code == 404
+
+
 def test_shared_generation_hides_a_noncanonical_stored_audio_path(
     sharing_app: TestClient,
 ) -> None:
@@ -1583,12 +1623,12 @@ _SHARED_ALBUM_SONG_KEYS = {
     "generation_id", "audio_duration", "lyrics", "whisper_cues",
 }
 _SHARED_SONG_KEYS = {
-    "title", "artist", "album_title", "audio_url", "cover",
+    "title", "artist", "album_title", "audio_url", "cover", "album_cover",
     "generation_id", "audio_duration", "lyrics", "whisper_cues",
 }
 _SHARED_GENERATION_KEYS = {
     "title", "artist", "album_title", "generation_number", "seed", "audio_url",
-    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues", "album_cover",
 }
 _SHARED_PLAYLIST_ENTRY_KEYS = {
     "entry_id", "song_title", "artist", "generation_number", "audio_url",

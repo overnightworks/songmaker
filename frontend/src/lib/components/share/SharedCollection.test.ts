@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mount, tick, unmount } from 'svelte';
+import { afterEach, describe, expect, it } from 'vitest';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
+import SharedCollection from './SharedCollection.svelte';
 
 // jsdom never computes layout (dvh/overflow), so the scroll contract is
 // pinned at the source level, matching layout.test.ts's `.app-shell.mobile`
@@ -11,10 +13,58 @@ function extractRule(source: string, selector: string): string {
 	return match[1];
 }
 
+let mounted: ReturnType<typeof mount> | undefined;
+
+afterEach(async () => {
+	if (mounted) await unmount(mounted);
+	mounted = undefined;
+	document.body.replaceChildren();
+});
+
+async function renderShare(cover: { card: string; detail: string } | null): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted = mount(SharedCollection, {
+		target,
+		props: {
+			loading: false,
+			errorKind: null,
+			resource: 'album',
+			view: {
+				kind: 'song',
+				title: 'Open Windows',
+				artist: 'Felix',
+				albumTitle: 'Open Windows',
+				year: null,
+				cover,
+				tracks: []
+			},
+			fetchStream: null
+		}
+	});
+	await tick();
+	return target;
+}
+
 describe('SharedCollection page root', () => {
 	it('is its own scroll container, filling the viewport height html/body clip to', () => {
 		const rule = extractRule(sharedCollectionSource, '.shared-page');
 		expect(rule).toContain('height: 100dvh');
 		expect(rule).toContain('overflow-y: auto');
+	});
+
+	it('shows an album cover on a shared song and falls back cleanly without one', async () => {
+		const withCover = await renderShare({ card: '/covers/card.jpg', detail: '/covers/detail.jpg' });
+		const image = withCover.querySelector<HTMLImageElement>('.header-cover img');
+		expect(image?.src).toContain('/covers/detail.jpg');
+		expect(image?.alt).toBe('Album Open Windows');
+
+		await unmount(mounted as ReturnType<typeof mount>);
+		mounted = undefined;
+		withCover.remove();
+
+		const withoutCover = await renderShare(null);
+		expect(withoutCover.querySelector('.header-cover img')).toBeNull();
+		expect(withoutCover.querySelector('.header-cover-initials')?.textContent).toBe('OW');
 	});
 });
