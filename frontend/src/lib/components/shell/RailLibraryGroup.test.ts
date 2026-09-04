@@ -113,6 +113,25 @@ describe('RailLibraryGroup', () => {
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '5']);
 	});
 
+	it('shows each album cover in the rail and keeps initials as its fallback', async () => {
+		albumList.set([
+			album({
+				id: 'a1',
+				title: 'Nachtstrom',
+				cover: { card: '/covers/nachtstrom.jpg', detail: '/covers/nachtstrom-detail.jpg' }
+			}),
+			album({ id: 'a2', title: 'Anfield', cover: null })
+		]);
+		const target = await render();
+
+		const cover = requireElement<HTMLImageElement>(target, '.album-art img');
+		expect(cover.src).toContain('/covers/nachtstrom.jpg');
+		expect(cover.alt).toBe('Album Nachtstrom');
+		expect(target.querySelectorAll('.album-art img')).toHaveLength(1);
+		expect(target.querySelectorAll('.album-art span')).toHaveLength(1);
+		expect(target.querySelector('.album-art span')?.textContent).toBe('AN');
+	});
+
 	it('does not render tracks for a collapsed album', async () => {
 		const target = await render();
 		expect(target.querySelectorAll('.row-sub2')).toHaveLength(0);

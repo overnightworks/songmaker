@@ -109,7 +109,7 @@ export function fromSharedSong(payload: SharedSongPayload): SharedCollectionView
 		artist: payload.artist,
 		albumTitle: payload.album_title || null,
 		year: null,
-		cover: payload.cover ?? null,
+		cover: payload.album_cover ?? null,
 		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }
@@ -121,7 +121,7 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 		artist: payload.artist,
 		albumTitle: payload.album_title || null,
 		year: null,
-		cover: null,
+		cover: payload.album_cover ?? null,
 		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }

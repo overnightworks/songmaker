@@ -149,11 +149,13 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			album_title: 'Album',
 			audio_url: '/audio/solo.mp3',
 			cover: { card: '/c.jpg', detail: '/d.jpg' },
+			album_cover: { card: '/album-c.jpg', detail: '/album-d.jpg' },
 			...media({ audio_duration: 210, lyrics: 'solo lyrics', whisper_cues: CUES })
 		});
 
 		expect(view.kind).toBe('song');
 		expect(view.albumTitle).toBe('Album');
+		expect(view.cover).toEqual({ card: '/album-c.jpg', detail: '/album-d.jpg' });
 		expect(view.tracks).toEqual([
 			track({
 				key: 'single',
@@ -173,11 +175,13 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			album_title: 'Album',
 			generation_number: 3,
 			seed: 42,
+			album_cover: { card: '/album-c.jpg', detail: '/album-d.jpg' },
 			audio_url: '/audio/take3.mp3',
 			...media({ audio_duration: 187, lyrics: 'take lyrics', whisper_cues: CUES })
 		});
 
 		expect(view.kind).toBe('take');
+		expect(view.cover).toEqual({ card: '/album-c.jpg', detail: '/album-d.jpg' });
 		expect(view.tracks).toEqual([
 			track({
 				key: 'single',

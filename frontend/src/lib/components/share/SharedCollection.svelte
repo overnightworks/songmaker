@@ -7,7 +7,7 @@
 		type SharedTrack
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
-	import { ALBUM_COVER_ALT_TYPE, SONG_COVER_ALT_TYPE } from '$lib/constants';
+	import { ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 	import { SHARE_NOW_PLAYING_NO_LYRICS, SHARE_NOW_PLAYING_SHEET_LABEL } from '$lib/constants/share';
 	import { formatTime, titleInitials } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -39,9 +39,7 @@
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
-	const coverAlt = $derived(
-		`${view?.kind === 'song' || view?.kind === 'take' ? SONG_COVER_ALT_TYPE : ALBUM_COVER_ALT_TYPE} ${view?.title ?? ''}`
-	);
+	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
 	const isPlaying = $derived(audioPlayer.status === 'playing');
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
 
