@@ -74,14 +74,21 @@
 		COWRITER_SAVE_MODEL_REQUIRED,
 		COWRITER_SAVE_NOTHING_CHANGED,
 		PROVIDER_ROUTE_API_LABEL,
+		PROVIDER_ROUTE_ACTIVE_LABEL,
 		PROVIDER_ROUTE_BROKEN_LABEL,
 		PROVIDER_ROUTE_CLI_LABEL,
+		PROVIDER_ROUTE_CONFIGURATION_REQUIRED,
 		PROVIDER_ROUTE_KEY_NOT_SET_LABEL,
 		PROVIDER_ROUTE_KEY_SET_LABEL,
 		PROVIDER_ROUTE_MODELS_LABEL,
+		PROVIDER_ROUTE_NO_MODELS_LABEL,
 		PROVIDER_ROUTE_NOT_SET_UP_LABEL,
 		PROVIDER_ROUTE_READY_LABEL,
+		PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL,
+		PROVIDER_ROUTE_STILL_ACTIVE_LABEL,
 		PROVIDER_ROUTE_TURN_BLOCKED_LABEL,
+		PROVIDER_ROUTE_UNAVAILABLE_DETAIL,
+		PROVIDER_ROUTE_UNAVAILABLE_LABEL,
 		providerRouteBlockedDetail,
 		providerRouteModelLabel
 	} from '$lib/constants';
@@ -454,18 +461,19 @@
 
 	type ProviderRoute = 'cli' | 'api';
 
-	function selectedCowriterRoute(provider: string): ProviderRoute {
-		return cowriterRoutes[provider] ?? cowriterSettings?.provider_routes?.[provider] ?? 'api';
+	function selectedCowriterRoute(provider: string): ProviderRoute | undefined {
+		return cowriterRoutes[provider] ?? cowriterSettings?.provider_routes?.[provider];
 	}
 
 	function routeStatus(
 		provider: string,
-		route: ProviderRoute
+		route: ProviderRoute | undefined
 	): ProviderRouteStatusResponse | undefined {
-		return cowriterSettings?.provider_routes_status?.[provider]?.[route];
+		return route ? cowriterSettings?.provider_routes_status?.[provider]?.[route] : undefined;
 	}
 
 	function routeStateLabel(status: ProviderRouteStatusResponse | undefined): string {
+		if (!status) return PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL;
 		if (status?.readiness.state === 'ready') return PROVIDER_ROUTE_READY_LABEL;
 		if (status?.readiness.state === 'disturbed') return PROVIDER_ROUTE_BROKEN_LABEL;
 		return PROVIDER_ROUTE_NOT_SET_UP_LABEL;
@@ -493,9 +501,32 @@
 		return status.catalog_source ?? undefined;
 	}
 
-	function routeIsReady(provider: string, route: ProviderRoute): boolean {
+	function routeIsReady(provider: string, route: ProviderRoute | undefined): boolean {
 		const status = routeStatus(provider, route);
-		return status ? status.readiness.state === 'ready' : answering(provider, 'cowriter');
+		return cowriterRouteStatusAvailable
+			? status?.readiness.state === 'ready'
+			: answering(provider, 'cowriter');
+	}
+
+	function routeModels(provider: string, route: ProviderRoute | undefined): string[] {
+		const status = routeStatus(provider, route);
+		if (!cowriterRouteStatusAvailable) {
+			return cowriterSettings?.models_by_provider?.[provider] ?? [];
+		}
+		if (!status) return [];
+		const retainedModel = status.retained_model_id;
+		return retainedModel && !status.models.includes(retainedModel)
+			? [...status.models, retainedModel]
+			: status.models;
+	}
+
+	function completeCowriterRoutes(): Record<string, ProviderRoute> | undefined {
+		if (!cowriterSettings || !cowriterRouteStatusAvailable) return undefined;
+		const entries = cowriterSettings.allowed_providers.map(
+			(provider) => [provider, selectedCowriterRoute(provider)] as const
+		);
+		if (entries.some(([, route]) => route === undefined)) return undefined;
+		return Object.fromEntries(entries) as Record<string, ProviderRoute>;
 	}
 
 	const cowriterRouteStatusAvailable = $derived(
@@ -503,11 +534,7 @@
 	);
 	const cowriterRoute = $derived(selectedCowriterRoute(cowriterProvider));
 	const selectedCowriterRouteStatus = $derived(routeStatus(cowriterProvider, cowriterRoute));
-	const cowriterModels = $derived(
-		selectedCowriterRouteStatus?.models ??
-			cowriterSettings?.models_by_provider?.[cowriterProvider] ??
-			[]
-	);
+	const cowriterModels = $derived(routeModels(cowriterProvider, cowriterRoute));
 	const cowriterModelsError = $derived(
 		selectedCowriterRouteStatus?.catalogue_failure?.message ??
 			cowriterSettings?.models_errors?.[cowriterProvider]
@@ -521,26 +548,38 @@
 			cowriterSettings?.current_models_not_in_catalog?.[cowriterProvider]
 	);
 	const cowriterSelectedRouteReady = $derived(routeIsReady(cowriterProvider, cowriterRoute));
+	const cowriterRoutesToSave = $derived(completeCowriterRoutes());
+	const cowriterHasReadyRoute = $derived(
+		cowriterSettings?.allowed_providers.some((provider) =>
+			(['cli', 'api'] as const).some((route) => routeIsReady(provider, route))
+		) ?? false
+	);
 	const cowriterDirty = $derived(
 		cowriterSettings !== null &&
 			(cowriterProvider !== cowriterSettings.provider ||
 				cowriterModel !== cowriterSettings.model ||
 				cowriterBudget !== cowriterSettings.tail_token_budget ||
-				Object.entries(cowriterRoutes).some(
-					([provider, route]) => cowriterSettings?.provider_routes?.[provider] !== route
+				cowriterSettings.allowed_providers.some(
+					(provider) => cowriterRoutes[provider] !== cowriterSettings?.provider_routes?.[provider]
 				))
 	);
 	const cowriterCanSave = $derived(
-		cowriterDirty && cowriterModel !== '' && cowriterSelectedRouteReady && !savingCowriter
+		cowriterDirty &&
+			cowriterModel !== '' &&
+			cowriterSelectedRouteReady &&
+			(!cowriterRouteStatusAvailable || cowriterRoutesToSave !== undefined) &&
+			!savingCowriter
 	);
 	const cowriterSaveReason = $derived(
 		savingCowriter
 			? ''
 			: !cowriterDirty
 				? COWRITER_SAVE_NOTHING_CHANGED
-				: cowriterModel === ''
-					? COWRITER_SAVE_MODEL_REQUIRED
-					: COWRITER_SAVE_CHANGED
+				: cowriterRouteStatusAvailable && cowriterRoutesToSave === undefined
+					? PROVIDER_ROUTE_CONFIGURATION_REQUIRED
+					: cowriterModel === ''
+						? COWRITER_SAVE_MODEL_REQUIRED
+						: COWRITER_SAVE_CHANGED
 	);
 
 	const judgeModels = $derived(judgeSettings?.models_by_provider?.[judgeProvider] ?? []);
@@ -553,21 +592,22 @@
 
 	function selectCowriterProvider(provider: string): void {
 		cowriterProvider = provider;
-		if (cowriterSettings && provider === cowriterSettings.provider) {
+		const models = routeModels(provider, selectedCowriterRoute(provider));
+		if (
+			cowriterSettings &&
+			provider === cowriterSettings.provider &&
+			models.includes(cowriterSettings.model)
+		) {
 			cowriterModel = cowriterSettings.model;
 			return;
 		}
-		const models =
-			routeStatus(provider, selectedCowriterRoute(provider))?.models ??
-			cowriterSettings?.models_by_provider?.[provider] ??
-			[];
 		cowriterModel = models[0] ?? '';
 	}
 
 	function selectCowriterRoute(provider: string, route: ProviderRoute): void {
 		cowriterRoutes = { ...cowriterRoutes, [provider]: route };
 		if (provider !== cowriterProvider) return;
-		const models = routeStatus(provider, route)?.models ?? [];
+		const models = routeModels(provider, route);
 		if (models.includes(cowriterModel)) return;
 		cowriterModel = models[0] ?? '';
 	}
@@ -590,7 +630,7 @@
 				cowriterProvider,
 				cowriterModel,
 				cowriterBudget,
-				cowriterRoutes
+				cowriterRoutesToSave
 			);
 			cowriterProvider = cowriterSettings.provider;
 			cowriterModel = cowriterSettings.model;
@@ -1220,7 +1260,11 @@
 						<div class="active-banner">
 							<span class="dot"></span>
 							<span>
-								<b>{cowriterDirty ? 'Still active' : 'Active'}</b>
+								<b
+									>{cowriterDirty
+										? PROVIDER_ROUTE_STILL_ACTIVE_LABEL
+										: PROVIDER_ROUTE_ACTIVE_LABEL}</b
+								>
 								<span class="model"
 									>{providerLabel(cowriterSettings.provider)} · {cowriterSettings.provider_routes?.[
 										cowriterSettings.provider
@@ -1238,6 +1282,28 @@
 							</div>
 						{/if}
 						{#if cowriterRouteStatusAvailable}
+							{#if !cowriterHasReadyRoute}
+								<div class="blocked-banner" role="alert">
+									<span>●</span>
+									<span
+										><strong>{PROVIDER_ROUTE_UNAVAILABLE_LABEL}</strong><br
+										/>{PROVIDER_ROUTE_UNAVAILABLE_DETAIL}</span
+									>
+								</div>
+							{:else if !cowriterSelectedRouteReady && cowriterRoute}
+								<div class="blocked-banner" role="alert">
+									<span>●</span>
+									<span
+										><strong>{PROVIDER_ROUTE_TURN_BLOCKED_LABEL}</strong><br
+										/>{providerRouteBlockedDetail(
+											providerLabel(cowriterProvider),
+											cowriterRoute,
+											routeStateLabel(selectedCowriterRouteStatus),
+											routeReason(selectedCowriterRouteStatus, cowriterRoute)
+										)}</span
+									>
+								</div>
+							{/if}
 							<div class="claude-field">
 								<span class="field-label">{PROVIDER_ROUTE_MODELS_LABEL}</span>
 								<div class="route-grid">
@@ -1245,9 +1311,23 @@
 										{@const selectedRoute = selectedCowriterRoute(provider)}
 										{@const cliStatus = routeStatus(provider, 'cli')}
 										{@const apiStatus = routeStatus(provider, 'api')}
-										<div class="route-card" class:selected={provider === cowriterProvider}>
+										{@const models = routeModels(provider, selectedRoute)}
+										{@const selectedStatus = routeStatus(provider, selectedRoute)}
+										{@const selectedRouteReady = routeIsReady(provider, selectedRoute)}
+										<div
+											class="route-card"
+											class:selected={provider === cowriterProvider}
+											class:unavailable={!selectedRouteReady}
+										>
 											<div class="route-card-head">
-												<span class="name">{providerLabel(provider)}</span>
+												<button
+													type="button"
+													class="route-provider"
+													class:selected={provider === cowriterProvider}
+													aria-pressed={provider === cowriterProvider}
+													onclick={() => selectCowriterProvider(provider)}
+													>{providerLabel(provider)}</button
+												>
 												<div class="route-switch" aria-label={`${providerLabel(provider)} route`}>
 													<button
 														type="button"
@@ -1255,18 +1335,16 @@
 														aria-label={`Use ${providerLabel(provider)} ${PROVIDER_ROUTE_CLI_LABEL} route`}
 														aria-pressed={selectedRoute === 'cli'}
 														onclick={() => selectCowriterRoute(provider, 'cli')}
+														>{PROVIDER_ROUTE_CLI_LABEL}</button
 													>
-														{PROVIDER_ROUTE_CLI_LABEL}
-													</button>
 													<button
 														type="button"
 														class:selected={selectedRoute === 'api'}
 														aria-label={`Use ${providerLabel(provider)} ${PROVIDER_ROUTE_API_LABEL} route`}
 														aria-pressed={selectedRoute === 'api'}
 														onclick={() => selectCowriterRoute(provider, 'api')}
+														>{PROVIDER_ROUTE_API_LABEL}</button
 													>
-														{PROVIDER_ROUTE_API_LABEL}
-													</button>
 												</div>
 											</div>
 											<div class="route-status-list">
@@ -1276,9 +1354,10 @@
 													class:broken={routeStateLabel(cliStatus) === PROVIDER_ROUTE_BROKEN_LABEL}
 													class:not-set-up={routeStateLabel(cliStatus) ===
 														PROVIDER_ROUTE_NOT_SET_UP_LABEL}
+													class:unavailable={routeStateLabel(cliStatus) ===
+														PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL}
 												>
-													<span class="dot"></span>
-													<span
+													<span class="dot"></span><span
 														><strong
 															>{PROVIDER_ROUTE_CLI_LABEL} · {routeStateLabel(cliStatus)}</strong
 														><small>{routeReason(cliStatus, 'cli')}</small></span
@@ -1290,104 +1369,113 @@
 													class:broken={routeStateLabel(apiStatus) === PROVIDER_ROUTE_BROKEN_LABEL}
 													class:not-set-up={routeStateLabel(apiStatus) ===
 														PROVIDER_ROUTE_NOT_SET_UP_LABEL}
+													class:unavailable={routeStateLabel(apiStatus) ===
+														PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL}
 												>
-													<span class="dot"></span>
-													<span
+													<span class="dot"></span><span
 														><strong
 															>{PROVIDER_ROUTE_API_LABEL} · {routeStateLabel(apiStatus)}</strong
 														><small>{routeReason(apiStatus, 'api')}</small></span
 													>
 												</div>
 											</div>
+											<div class="route-model">
+												<label for={`cowriter-model-${provider}`}
+													>{providerRouteModelLabel(selectedRoute)}</label
+												>
+												<select
+													id={`cowriter-model-${provider}`}
+													value={provider === cowriterProvider ? cowriterModel : (models[0] ?? '')}
+													disabled={provider !== cowriterProvider ||
+														models.length === 0 ||
+														!selectedRouteReady}
+													onchange={(event) =>
+														(cowriterModel = (event.currentTarget as HTMLSelectElement).value)}
+												>
+													{#if models.length === 0}
+														<option value="">{PROVIDER_ROUTE_NO_MODELS_LABEL}</option>
+													{:else}
+														{#each models as model (model)}
+															<option value={model}
+																>{model}{selectedStatus?.retained_model_id === model
+																	? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
+																	: ''}</option
+															>
+														{/each}
+													{/if}
+												</select>
+												{#if routeCatalogDetail(selectedStatus)}<p class="hint">
+														{routeCatalogDetail(selectedStatus)}
+													</p>{/if}
+												{#if selectedStatus?.catalogue_failure?.message}<p class="hint">
+														{selectedStatus.catalogue_failure.message}
+													</p>{/if}
+											</div>
 										</div>
 									{/each}
 								</div>
 							</div>
-						{/if}
-						<div class="claude-field">
-							<span class="field-label" id="cowriter-provider-label">Provider</span>
-							<div class="provider-picker" role="group" aria-labelledby="cowriter-provider-label">
-								{#each cowriterSettings.allowed_providers as provider (provider)}
-									{@const selectedRoute = selectedCowriterRoute(provider)}
-									{@const canAnswer = cowriterRouteStatusAvailable
-										? routeIsReady(provider, selectedRoute)
-										: answering(provider, 'cowriter')}
-									<button
-										type="button"
-										class="provider-pill"
-										class:selected={cowriterProvider === provider}
-										aria-pressed={cowriterProvider === provider}
-										disabled={!cowriterRouteStatusAvailable && !canAnswer}
-										onclick={() => selectCowriterProvider(provider)}
-									>
-										<span class="name">{providerLabel(provider)}</span>
-										<span
-											class="pill-status"
-											class:status-ok={canAnswer}
-											class:status-bad={!canAnswer}
+						{:else}
+							<div class="claude-field">
+								<span class="field-label" id="cowriter-provider-label">Provider</span>
+								<div class="provider-picker" role="group" aria-labelledby="cowriter-provider-label">
+									{#each cowriterSettings.allowed_providers as provider (provider)}
+										{@const canAnswer = answering(provider, 'cowriter')}
+										<button
+											type="button"
+											class="provider-pill"
+											class:selected={cowriterProvider === provider}
+											aria-pressed={cowriterProvider === provider}
+											disabled={!canAnswer}
+											onclick={() => selectCowriterProvider(provider)}
 										>
-											{cowriterRouteStatusAvailable
-												? routeStateLabel(routeStatus(provider, selectedRoute))
-												: canAnswer
-													? PROVIDER_CONFIGURED_LABEL
-													: pickerStatus(provider, 'cowriter')}
-										</span>
-										{#if !canAnswer}
-											<span class="pill-reason"
-												>{cowriterRouteStatusAvailable
-													? routeReason(routeStatus(provider, selectedRoute), selectedRoute)
-													: pickerReason(provider, 'cowriter')}</span
+											<span class="name">{providerLabel(provider)}</span>
+											<span
+												class="pill-status"
+												class:status-ok={canAnswer}
+												class:status-bad={!canAnswer}
 											>
-										{/if}
-									</button>
-								{/each}
+												{canAnswer ? PROVIDER_CONFIGURED_LABEL : pickerStatus(provider, 'cowriter')}
+											</span>
+											{#if !canAnswer}
+												<span class="pill-reason">{pickerReason(provider, 'cowriter')}</span>
+											{/if}
+										</button>
+									{/each}
+								</div>
 							</div>
-						</div>
-						{#if cowriterRouteStatusAvailable && !cowriterSelectedRouteReady}
-							<div class="blocked-banner" role="alert">
-								<span>●</span>
-								<span
-									><strong>{PROVIDER_ROUTE_TURN_BLOCKED_LABEL}</strong><br
-									/>{providerRouteBlockedDetail(
-										providerLabel(cowriterProvider),
-										cowriterRoute,
-										routeStateLabel(selectedCowriterRouteStatus),
-										routeReason(selectedCowriterRouteStatus, cowriterRoute)
-									)}</span
+							<div class="claude-field">
+								<label for="cowriter-model"
+									>{cowriterRouteStatusAvailable
+										? providerRouteModelLabel(cowriterRoute)
+										: 'Model'}</label
 								>
+								<select
+									id="cowriter-model"
+									bind:value={cowriterModel}
+									disabled={cowriterModels.length === 0}
+								>
+									{#if cowriterModels.length === 0 && cowriterModel}
+										<option value={cowriterModel}
+											>{cowriterModel} (current — live list unavailable)</option
+										>
+									{/if}
+									{#each cowriterModels as model (model)}
+										<option value={model}
+											>{model}{cowriterCurrentModelNotInCatalog === model
+												? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
+												: ''}</option
+										>
+									{/each}
+								</select>
+								{#if cowriterModelsSource}
+									<p class="hint">{cowriterModelsSource}</p>
+								{/if}
+								{#if cowriterModelsError}
+									<p class="hint">{cowriterModelsError}</p>
+								{/if}
 							</div>
 						{/if}
-						<div class="claude-field">
-							<label for="cowriter-model"
-								>{cowriterRouteStatusAvailable
-									? providerRouteModelLabel(cowriterRoute)
-									: 'Model'}</label
-							>
-							<select
-								id="cowriter-model"
-								bind:value={cowriterModel}
-								disabled={cowriterModels.length === 0 || !cowriterSelectedRouteReady}
-							>
-								{#if cowriterModels.length === 0 && cowriterModel}
-									<option value={cowriterModel}
-										>{cowriterModel} (current — live list unavailable)</option
-									>
-								{/if}
-								{#each cowriterModels as model (model)}
-									<option value={model}
-										>{model}{cowriterCurrentModelNotInCatalog === model
-											? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
-											: ''}</option
-									>
-								{/each}
-							</select>
-							{#if cowriterModelsSource}
-								<p class="hint">{cowriterModelsSource}</p>
-							{/if}
-							{#if cowriterModelsError}
-								<p class="hint">{cowriterModelsError}</p>
-							{/if}
-						</div>
 						<div class="claude-field">
 							<label for="cowriter-budget">History tail (tokens)</label>
 							<input
@@ -1908,6 +1996,10 @@
 		box-shadow: 0 0 0 1px var(--primary) inset;
 	}
 
+	.route-card.unavailable {
+		opacity: 0.72;
+	}
+
 	.route-card-head {
 		display: flex;
 		align-items: center;
@@ -1916,11 +2008,20 @@
 		margin-bottom: 0.5rem;
 	}
 
-	.route-card-head .name {
+	.route-provider {
+		border: 0;
+		padding: 0;
+		background: transparent;
 		font-family: var(--font-display);
 		font-weight: 600;
 		letter-spacing: 0.03em;
 		color: var(--text);
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.route-provider.selected {
+		color: var(--primary);
 	}
 
 	.route-switch {
@@ -1985,6 +2086,10 @@
 		background: transparent;
 	}
 
+	.route-status.unavailable .dot {
+		background: var(--text-muted);
+	}
+
 	.route-status strong {
 		font-weight: 600;
 		color: var(--text);
@@ -1997,6 +2102,26 @@
 
 	.route-status.broken small {
 		color: var(--score-bad);
+	}
+
+	.route-model {
+		margin-top: 0.55rem;
+	}
+
+	.route-model label {
+		display: block;
+		margin-bottom: 0.25rem;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+
+	.route-model select {
+		width: 100%;
+	}
+
+	.route-model .hint {
+		margin: 0.3rem 0 0;
+		font-size: 0.67rem;
 	}
 
 	.blocked-banner {

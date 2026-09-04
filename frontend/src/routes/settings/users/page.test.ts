@@ -158,16 +158,24 @@ function routeAwareCowriterSettings(overrides: Record<string, unknown> = {}) {
 		provider: 'claude',
 		model: 'claude-cli',
 		tail_token_budget: 8000,
-		allowed_providers: ['claude'],
+		allowed_providers: ['claude', 'codex', 'grok'],
 		allowed_models: ['claude-cli'],
-		models_by_provider: { claude: ['claude-cli'] },
+		models_by_provider: { claude: ['claude-cli'], codex: ['codex-cli'], grok: ['grok-cli'] },
 		models_errors: {},
 		models_sources: {},
-		provider_routes: { claude: 'cli' as const },
+		provider_routes: { claude: 'cli' as const, codex: 'cli' as const, grok: 'cli' as const },
 		provider_routes_status: {
 			claude: {
 				cli: routeStatus('ready', ['claude-cli'], undefined, '1.4.0'),
 				api: routeStatus('ready', ['claude-api'], undefined, '2026-09')
+			},
+			codex: {
+				cli: routeStatus('ready', ['codex-cli']),
+				api: routeStatus('ready', ['codex-api'])
+			},
+			grok: {
+				cli: routeStatus('ready', ['grok-cli']),
+				api: routeStatus('ready', ['grok-api'])
 			}
 		},
 		...overrides
@@ -772,13 +780,33 @@ describe('admin models tab', () => {
 		expect(cowriter.textContent).toContain('API · ready');
 		expect(cowriter.textContent).toContain('key: set');
 		expect(cowriter.textContent).toContain('Version 1.4.0');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('claude-cli');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
+			'claude-cli'
+		);
 
 		buttonNamed(cowriter, 'API').click();
 		await tick();
 
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('claude-api');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
+			'claude-api'
+		);
 		expect(cowriter.textContent).toContain('Version 2026-09');
+	});
+
+	it('keeps the selected route catalog when the saved provider is selected again', async () => {
+		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		buttonNamed(cowriter, 'API').click();
+		await tick();
+		buttonNamed(cowriter, 'Claude').click();
+		await tick();
+
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
+			'claude-api'
+		);
 	});
 
 	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {
@@ -801,7 +829,7 @@ describe('admin models tab', () => {
 		await selectTab(target, 'models');
 		const cowriter = sectionByHeading(target, 'Co-Writer');
 
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
 			'claude-legacy'
 		);
 		expect(cowriter.textContent).toContain('claude-legacy (current, not in catalog)');
@@ -810,7 +838,7 @@ describe('admin models tab', () => {
 	it('shows a selected broken route as a blocked turn without silently falling back', async () => {
 		api.fetchCowriterSettings.mockResolvedValue(
 			routeAwareCowriterSettings({
-				provider_routes: { claude: 'api' },
+				provider_routes: { claude: 'api', codex: 'cli', grok: 'cli' },
 				provider_routes_status: {
 					claude: {
 						cli: routeStatus('ready', ['claude-cli']),
@@ -830,12 +858,14 @@ describe('admin models tab', () => {
 		expect(cowriter.textContent).toContain('Turn blocked');
 		expect(cowriter.textContent).toContain('Rate limit exceeded');
 		expect(cowriter.textContent).toContain('Choose a ready route to continue.');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').disabled).toBe(true);
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').disabled).toBe(
+			true
+		);
 	});
 
 	it('names routes that are not set up and saves the complete route choice with the model', async () => {
 		const saved = routeAwareCowriterSettings({
-			provider_routes: { claude: 'api' },
+			provider_routes: { claude: 'api', codex: 'cli', grok: 'cli' },
 			model: 'claude-api',
 			allowed_models: ['claude-api']
 		});
@@ -872,8 +902,39 @@ describe('admin models tab', () => {
 		await flush();
 
 		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-api', 8000, {
-			claude: 'api'
+			claude: 'api',
+			codex: 'cli',
+			grok: 'cli'
 		});
+	});
+
+	it('shows no invented model when no route is ready', async () => {
+		api.fetchCowriterSettings.mockResolvedValue(
+			routeAwareCowriterSettings({
+				provider_routes_status: {
+					claude: {
+						cli: routeStatus('not_configured', []),
+						api: routeStatus('not_configured', [])
+					},
+					codex: {
+						cli: routeStatus('not_configured', []),
+						api: routeStatus('not_configured', [])
+					},
+					grok: {
+						cli: routeStatus('not_configured', []),
+						api: routeStatus('not_configured', [])
+					}
+				}
+			})
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const modelSelect = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude');
+
+		expect(cowriter.textContent).toContain('Provider unavailable');
+		expect(modelSelect.disabled).toBe(true);
+		expect(optionLabels(modelSelect)).toEqual(['No models available']);
 	});
 
 	it('lets a history-tail-only change stay saveable when the saved provider has no live catalog', async () => {

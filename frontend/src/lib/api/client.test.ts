@@ -261,7 +261,8 @@ describe('API client', () => {
 		mockOk({ provider: 'claude', model: 'claude-api' });
 		await updateCowriterSettings('claude', 'claude-api', 8000, {
 			claude: 'api',
-			codex: 'cli'
+			codex: 'cli',
+			grok: 'api'
 		});
 		const [url, init] = mockFetch.mock.calls[0];
 
@@ -271,7 +272,7 @@ describe('API client', () => {
 			provider: 'claude',
 			model: 'claude-api',
 			tail_token_budget: 8000,
-			provider_routes: { claude: 'api', codex: 'cli' }
+			provider_routes: { claude: 'api', codex: 'cli', grok: 'api' }
 		});
 	});
 

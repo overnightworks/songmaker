@@ -156,11 +156,22 @@ export const PROVIDER_ROUTE_KEY_SET_LABEL = 'key: set';
 export const PROVIDER_ROUTE_KEY_NOT_SET_LABEL = 'key: not set';
 export const PROVIDER_ROUTE_MODELS_LABEL = 'Provider routes';
 export const PROVIDER_ROUTE_MODEL_LABEL = 'model';
+export const PROVIDER_ROUTE_NO_MODELS_LABEL = 'No models available';
+export const PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL = 'status unavailable';
+export const PROVIDER_ROUTE_ACTIVE_LABEL = 'Active route';
+export const PROVIDER_ROUTE_STILL_ACTIVE_LABEL = 'Still active route';
+export const PROVIDER_ROUTE_UNAVAILABLE_LABEL = 'Provider unavailable';
+export const PROVIDER_ROUTE_UNAVAILABLE_DETAIL =
+	'No ready route is configured. A new turn cannot start.';
+export const PROVIDER_ROUTE_CONFIGURATION_REQUIRED =
+	'Select CLI or API for every provider before saving.';
 export const PROVIDER_ROUTE_TURN_BLOCKED_LABEL = 'Turn blocked';
 export const PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP = 'Choose a ready route to continue.';
 
-export function providerRouteModelLabel(route: 'cli' | 'api'): string {
-	return `${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} ${PROVIDER_ROUTE_MODEL_LABEL}`;
+export function providerRouteModelLabel(route: 'cli' | 'api' | undefined): string {
+	return route
+		? `${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} ${PROVIDER_ROUTE_MODEL_LABEL}`
+		: 'Model';
 }
 
 export function providerRouteBlockedDetail(
@@ -169,7 +180,7 @@ export function providerRouteBlockedDetail(
 	state: string,
 	reason: string
 ): string {
-	return `${provider} ${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} · ${state} — ${reason}. ${PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP}`;
+	return `${provider} ${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} · ${state} — ${reason} ${PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP}`;
 }
 
 export function providerMissingDependencyDetail(dependency: string | null | undefined): string {
