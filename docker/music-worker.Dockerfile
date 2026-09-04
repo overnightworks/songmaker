@@ -20,7 +20,7 @@ RUN uv sync --frozen --no-build --no-dev --no-install-project --extra server
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
-RUN uv sync --frozen --no-dev --extra server # NOSONAR: the local Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
+RUN uv sync --frozen --no-dev --extra server # NOSONAR: the local Songmaker project is installed editable and has no wheel; third-party dependencies are frozen in uv.lock.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

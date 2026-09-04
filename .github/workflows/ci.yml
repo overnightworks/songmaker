@@ -95,7 +95,7 @@ jobs:
           report=artifacts/acceptance-evidence.json
           rm -f "$report"
           set +e
-          uv run python scripts/acceptance_evidence.py run --output "$report" # NOSONAR: uv sync above installs this script's dependencies from the committed uv.lock.
+          uv run --no-sync --frozen --no-build python scripts/acceptance_evidence.py run --output "$report"
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
