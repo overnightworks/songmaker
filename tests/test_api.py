@@ -2629,6 +2629,29 @@ def test_stream_job_sends_heartbeat_without_status_change(
     assert frames[1] == ": heartbeat\n\n"
 
 
+def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
+    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.jobs_api import _job_event_generator
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_id = job.id
+
+    async def _cancel_stream() -> None:
+        stream = _job_event_generator(ctx, job_id)
+        await anext(stream)
+        next_frame = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0)
+        next_frame.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await next_frame
+        await stream.aclose()
+
+    asyncio.run(_cancel_stream())
+
+
 def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     import json
 

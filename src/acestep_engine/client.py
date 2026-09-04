@@ -116,7 +116,7 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
         return False
 
 
-ALLOWED_AUDIO_PATH_RE = re.compile(r"^(/v1/audio\b|[a-zA-Z0-9_./ -]+$)")
+ALLOWED_AUDIO_PATH_RE = re.compile(r"^(?:/v1/audio\b|[a-zA-Z0-9_./ -]+$)")
 
 
 def validate_audio_path(audio_path: str) -> None:
@@ -166,7 +166,7 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["repainting_end"] = config.repainting_end
         if config.repaint_mode:
             payload["repaint_mode"] = config.repaint_mode
-        if config.repaint_strength != 0.5:
+        if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
             payload["repaint_strength"] = config.repaint_strength
         if config.repaint_latent_crossfade_frames > 0:
             payload["repaint_latent_crossfade_frames"] = (
@@ -188,7 +188,7 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["use_cot_language"] = False
     if config.constrained_decoding:
         payload["constrained_decoding"] = True
-    if config.lm_repetition_penalty != 1.0:
+    if config.lm_repetition_penalty != 1.0:  # NOSONAR Exact protocol values must be forwarded.
         payload["lm_repetition_penalty"] = config.lm_repetition_penalty
     if config.use_adg:
         payload["use_adg"] = True
