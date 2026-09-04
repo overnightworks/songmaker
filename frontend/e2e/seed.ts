@@ -69,6 +69,8 @@ export interface SeededTake {
 /** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
 	albumTitle: string;
+	/** Number of songs in the primary album, for its rendered summary. */
+	albumSongCount: number;
 	/** Also the album's address: an album id is its slug (issue #269). */
 	albumId: string;
 	albumShareUrl: string;
@@ -277,6 +279,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	return {
 		albumTitle,
+		albumSongCount: SONG_TITLES.length,
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
