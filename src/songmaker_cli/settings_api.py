@@ -581,10 +581,8 @@ def _route_statuses(
     from songmaker_cli.cowriter.catalog import (
         ProviderRoute,
         ProviderRouteReadinessState,
-        ProviderSurface,
         models_with_active_model,
     )
-    from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_failure
 
     if snapshot is None:
         return {
@@ -605,25 +603,14 @@ def _route_statuses(
             if active_model and active_model not in route_snapshot.models
             else None
         )
-        readiness_state = route_snapshot.readiness.value
-        readiness_reason = route_snapshot.reason
-        if (
-            surface is ProviderSurface.CO_WRITER
-            and provider == "claude"
-            and route is ProviderRoute.API
-        ):
-            readiness_state = ProviderRouteReadinessState.NOT_CONFIGURED.value
-            readiness_reason = normalize_route_failure(
-                SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING,
-            )
         result[route.value] = ProviderRouteStatusResponse(
             models=models,
             catalogue_failure=route_snapshot.catalogue_failure,
             catalog_source=route_snapshot.catalog_source,
             catalog_version=route_snapshot.catalog_version,
             readiness=ProviderRouteReadiness(
-                state=readiness_state,
-                reason=readiness_reason,
+                state=route_snapshot.readiness.value,
+                reason=route_snapshot.reason,
                 probed_at=route_snapshot.probed_at.isoformat(),
                 setup_label=route_snapshot.setup_label,
             ),

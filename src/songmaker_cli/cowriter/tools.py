@@ -173,6 +173,17 @@ def openai_tool_schemas() -> list[dict[str, Any]]:
     ]
 
 
+def anthropic_tool_schemas() -> list[dict[str, Any]]:
+    return [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.parameters,
+        }
+        for tool in COWRITER_TOOLS
+    ]
+
+
 def _serialize(result: Any) -> str:
     if isinstance(result, list):
         return json.dumps(

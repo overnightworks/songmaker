@@ -251,14 +251,29 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
     assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
 
 
-def test_claude_api_is_the_pending_route_without_an_adapter_attempt(monkeypatch):
+def test_claude_api_dispatches_only_to_the_native_tool_adapter(monkeypatch):
+    stream = _Stream()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(dispatch, "stream_claude_api_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
     )
 
+    assert asyncio.run(_events("claude", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
+    assert stream.closed
+
+
+def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_attempt(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_claude_api_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("adapter must not run")),
+    )
+
     with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_events("claude", ProviderRoute.API))
 
-    assert raised.value.reason.code is SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING
+    assert raised.value.reason.code is SafeRouteReasonCode.API_KEY_NOT_SET

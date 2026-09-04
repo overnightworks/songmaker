@@ -591,8 +591,8 @@ route and returns one normalized route failure instead of trying its sibling.
 `cowriter/catalog.py` refreshes both routes per provider independently, and
 the settings responses project the selected route for legacy callers while
 also returning the route-keyed readiness and catalogue snapshots. The Judge
-remains API-only. Claude's API route is explicitly not configured until R2c
-owns its native tool loop.
+remains API-only. Claude's API route owns the same shared co-writer tool loop
+as Grok and Codex, while its CLI route continues to use the MCP transport.
 
 ### Engine packages (`src/`)
 

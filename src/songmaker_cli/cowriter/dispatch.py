@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
@@ -21,7 +22,11 @@ from songmaker_cli.constants import (
 from songmaker_cli.cowriter.catalog import (
     ProviderRoute,
 )
-from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
+from songmaker_cli.cowriter.claude_adapter import (
+    call_claude_once,
+    stream_claude_api_turn,
+    stream_claude_turn,
+)
 from songmaker_cli.cowriter.codex_cli_adapter import stream_codex_cli_turn
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
@@ -39,6 +44,12 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _ApiConnection:
+    api_key: str
+    api_url: str | None = None
+
+
 async def stream_cowriter_turn(
     *,
     provider: str,
@@ -54,8 +65,6 @@ async def stream_cowriter_turn(
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
     if not model:
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
-    if provider == "claude" and route is ProviderRoute.API:
-        raise _unavailable(provider, route, SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING)
     try:
         stream = _stream_for_route(
             provider=provider,
@@ -105,11 +114,20 @@ def _stream_for_route(
         if provider == "grok":
             return stream_grok_cli_turn(system=system, model=model, messages=messages)
         return stream_codex_cli_turn(system=system, model=model, messages=messages)
-    api_key, api_url = _api_connection(provider)
+    connection = _api_connection(provider)
+    if provider == "claude":
+        return stream_claude_api_turn(
+            api_key=connection.api_key,
+            system=system,
+            model=model,
+            messages=messages,
+            session=session,
+            user=user,
+        )
     return stream_openai_compatible_turn(
         provider=provider,
-        api_url=api_url,
-        api_key=api_key,
+        api_url=_require_api_url(provider, connection),
+        api_key=connection.api_key,
         model=model,
         system=system,
         messages=messages,
@@ -127,9 +145,12 @@ def call_provider_once(
     try:
         if provider == "claude":
             return call_claude_once(model=model, prompt=prompt, timeout=timeout, system=system)
-        api_key, api_url = _api_connection(provider)
+        connection = _api_connection(provider)
         return call_openai_compatible_once(
-            provider=provider, api_url=api_url, api_key=api_key, model=model,
+            provider=provider,
+            api_url=_require_api_url(provider, connection),
+            api_key=connection.api_key,
+            model=model,
             prompt=prompt, timeout=timeout, system=system,
         )
     except ClaudeUnavailableError:
@@ -143,23 +164,28 @@ def call_provider_once(
         raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED) from exc
 
 
-def _api_connection(provider: str) -> tuple[str, str]:
+def _api_connection(provider: str) -> _ApiConnection:
     settings = get_settings()
+    if provider == "claude":
+        api_key = _require_secret(provider, ProviderRoute.API, settings.anthropic_api_key)
+        return _ApiConnection(api_key)
     if provider == "grok":
-        return (
+        return _ApiConnection(
             _require_secret(provider, ProviderRoute.API, settings.xai_api_key),
             COWRITER_GROK_CHAT_URL,
         )
     if provider == "codex":
-        return (
+        return _ApiConnection(
             _require_secret(provider, ProviderRoute.API, settings.openai_api_key),
             COWRITER_OPENAI_CHAT_URL,
         )
-    raise _unavailable(
-        provider,
-        ProviderRoute.API,
-        SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING,
-    )
+    raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED)
+
+
+def _require_api_url(provider: str, connection: _ApiConnection) -> str:
+    if connection.api_url is None:
+        raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED)
+    return connection.api_url
 
 
 def _require_secret(provider: str, route: ProviderRoute, secret) -> str:

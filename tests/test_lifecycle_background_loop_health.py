@@ -245,6 +245,10 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         "songmaker_cli.cowriter.catalog._cli_is_logged_in",
         lambda _provider: True,
     )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._anthropic_sdk_available",
+        lambda: True,
+    )
 
     def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
         refreshed_routes.add((provider, route))

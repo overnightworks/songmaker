@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -447,7 +449,7 @@ def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
     assert saved.status_code == 200
 
 
-def test_claude_api_catalog_stays_available_to_the_judge_while_cowriter_is_pending(
+def test_claude_api_catalog_is_ready_for_the_cowriter_and_judge(
     admin_client, every_provider_is_configured,
 ):
     client, factory = admin_client
@@ -462,8 +464,8 @@ def test_claude_api_catalog_stays_available_to_the_judge_while_cowriter_is_pendi
     cowriter = client.get("/api/settings/cowriter").json()
     claude_api = cowriter["provider_routes_status"]["claude"]["api"]
     assert claude_api["models"] == LIVE_CATALOG["claude"]
-    assert claude_api["readiness"]["state"] == "not_configured"
-    assert claude_api["readiness"]["reason"]["code"] == "claude_api_tool_loop_pending"
+    assert claude_api["readiness"]["state"] == "ready"
+    assert claude_api["readiness"]["reason"] is None
 
     judge = client.get("/api/settings/judge").json()
     assert judge["models_by_provider"]["claude"] == LIVE_CATALOG["claude"]
@@ -477,8 +479,201 @@ def test_claude_api_catalog_stays_available_to_the_judge_while_cowriter_is_pendi
         item["provider"]: item
         for item in client.get("/api/settings/providers").json()
     }
-    assert providers["claude"]["cowriter"]["state"] == "unconfigured"
+    assert providers["claude"]["cowriter"]["state"] == "configured"
     assert providers["claude"]["judge"]["state"] == "configured"
+
+
+def test_claude_api_without_its_sdk_cannot_be_selected_for_the_cowriter(
+    admin_client,
+    monkeypatch,
+):
+    client, _ = admin_client
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False)
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
+    refresh_provider_snapshots()
+
+    response = client.put(
+        "/api/settings/cowriter",
+        json={
+            "provider": "claude",
+            "model": "claude-opus-4-6",
+            "provider_routes": {"claude": "api", "grok": "api", "codex": "api"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "api_http_error"
+
+
+@pytest.mark.acceptance("ACC-COWRITER-14")
+def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation(
+    admin_client,
+    every_provider_is_configured,
+    monkeypatch,
+):
+    client, factory = admin_client
+    with factory() as session:
+        session.add(User(
+            id="u-foreign",
+            username="u-foreign",
+            password_hash="x",
+            role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="alb-foreign",
+            title="Foreign",
+            artist="B",
+            created_by="u-foreign",
+        ))
+        session.add(Song(
+            id="s-foreign",
+            title="Foreign song",
+            album_id="alb-foreign",
+            track_number=1,
+        ))
+        session.commit()
+    settings = client.put(
+        "/api/settings/cowriter",
+        json={
+            "provider": "claude",
+            "model": "claude-opus-4-6",
+            "provider_routes": {"claude": "api", "grok": "api", "codex": "api"},
+        },
+    )
+    assert settings.status_code == 200
+
+    class ToolUse:
+        type = "tool_use"
+
+        def __init__(self, tool_use_id: str, name: str, input: dict) -> None:
+            self.id = tool_use_id
+            self.name = name
+            self.input = input
+
+    class Message:
+        def __init__(self, content: list[object]) -> None:
+            self.content = content
+
+    class Stream:
+        def __init__(self, text: list[str], message: Message) -> None:
+            self._text = text
+            self._message = message
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args) -> bool:
+            return False
+
+        @property
+        def text_stream(self):
+            return self._texts()
+
+        async def _texts(self):
+            for text in self._text:
+                yield text
+
+        async def get_final_message(self) -> Message:
+            return self._message
+
+    class Messages:
+        def __init__(self) -> None:
+            self.requests: list[dict] = []
+            self.streams = [
+                Stream([], Message([
+                    ToolUse(
+                        "write-1",
+                        "update_song_lyrics",
+                        {"song_id": "s1", "lyrics": "API-written lyrics"},
+                    ),
+                    ToolUse(
+                        "write-foreign",
+                        "update_song_lyrics",
+                        {"song_id": "s-foreign", "lyrics": "stolen lyrics"},
+                    ),
+                ])),
+                Stream(["finished"], Message([])),
+            ]
+
+        def stream(self, **kwargs):
+            self.requests.append(kwargs)
+            return self.streams.pop(0)
+
+    class Client:
+        def __init__(self) -> None:
+            self.messages = Messages()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args) -> bool:
+            return False
+
+    fake_client = Client()
+
+    class AsyncAnthropic:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self) -> Client:
+            return await fake_client.__aenter__()
+
+        async def __aexit__(self, *args) -> bool:
+            return await fake_client.__aexit__(*args)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "anthropic",
+        SimpleNamespace(AsyncAnthropic=AsyncAnthropic, APIError=Exception),
+    )
+    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+
+    response = client.post("/api/chat/turn", json={"message": "Please revise the lyrics."})
+    events = _stream_events(response)
+    final = next(event for event in events if event["type"] == "final")
+
+    assert response.status_code == 200
+    assert final["assistant_message"]["content"] == "finished"
+    assert [event["type"] for event in events].count("tool_call") == 2
+    tool_results = {
+        event["tool_use_id"]: event
+        for event in events
+        if event["type"] == "tool_result"
+    }
+    assert tool_results["write-1"]["is_error"] is False
+    assert tool_results["write-foreign"]["is_error"] is True
+    assert fake_client.messages.requests[0]["model"] == "claude-opus-4-6"
+    assert fake_client.messages.requests[1]["messages"][-1]["content"] == [
+        {
+            "type": "tool_result",
+            "tool_use_id": "write-1",
+            "content": tool_results["write-1"]["content"],
+            "is_error": False,
+        },
+        {
+            "type": "tool_result",
+            "tool_use_id": "write-foreign",
+            "content": tool_results["write-foreign"]["content"],
+            "is_error": True,
+        },
+    ]
+    with factory() as session:
+        song = session.get(Song, "s1")
+        foreign_song = session.get(Song, "s-foreign")
+        messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
+        job = session.query(Job).filter_by(type="chat").one()
+
+        assert song is not None and song.latest_version is not None
+        assert song.latest_version.lyrics == "API-written lyrics"
+        assert foreign_song is not None and foreign_song.latest_version is None
+        assert [message.role for message in messages] == ["user", "assistant"]
+        assert [message.content for message in messages] == [
+            "Please revise the lyrics.",
+            "finished",
+        ]
+        assert job.status == "completed"
 
 
 def test_cowriter_put_without_routes_preserves_the_stored_route_map(
@@ -1275,8 +1470,12 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     assert calls == 0
 
 
-def test_cowriter_put_rejects_an_unready_selected_route(admin_client):
+def test_cowriter_put_rejects_an_unready_selected_route(admin_client, monkeypatch):
     client, _ = admin_client
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    get_settings.cache_clear()
     refresh_provider_snapshots()
 
     response = client.put(
@@ -1289,7 +1488,7 @@ def test_cowriter_put_rejects_an_unready_selected_route(admin_client):
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "claude_api_tool_loop_pending"
+    assert response.json()["detail"]["code"] == "api_key_not_set"
 
 
 def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(
