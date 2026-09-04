@@ -17,6 +17,25 @@ from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 
 _RECORDED_STREAM = Path(__file__).parent / "fixtures" / "codex_cli_real_stream.jsonl"
+_REDACTED_CODEX_LOGIN = {
+    "auth_mode": "chatgpt",
+    "OPENAI_API_KEY": None,
+    "last_refresh": "2026-09-04T19:20:00Z",
+    "tokens": {
+        "id_token": "id-token",
+        "access_token": "access-token",
+        "account_id": "account",
+        "refresh_token": "",
+    },
+}
+
+
+@pytest.fixture(autouse=True)
+def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    mirror = tmp_path / "auth.json"
+    mirror.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(mirror))
+    return mirror
 
 
 def _outcome(
@@ -70,6 +89,7 @@ def _recorded_stream_lines() -> list[bytes]:
 def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch) -> None:
     calls: list = []
     observed_cwd_modes: list[int] = []
+    observed_auth: list[dict] = []
     runner = _runner([
         b'{"type":"thread.started"}\n',
         b'{"type":"turn.started"}\n',
@@ -80,6 +100,9 @@ def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch)
 
     def capture_cwd_mode(command, **kwargs):
         observed_cwd_modes.append(os.stat(kwargs["cwd"]).st_mode & 0o777)
+        auth_path = Path(kwargs["extra_env"]["CODEX_HOME"]) / "auth.json"
+        observed_auth.append(json.loads(auth_path.read_text()))
+        assert auth_path.stat().st_mode & 0o777 == 0o600
         return runner(command, **kwargs)
 
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", capture_cwd_mode)
@@ -101,6 +124,8 @@ def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch)
         codex_cli_adapter.CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES
     )
     assert observed_cwd_modes == [0o700]
+    assert observed_auth == [_REDACTED_CODEX_LOGIN]
+    assert calls[0][1]["extra_env"]["CODEX_HOME"].endswith("/codex-home")
     assert os.path.basename(kwargs["cwd"]).startswith("songmaker-codex-cli-")
     assert not os.path.exists(kwargs["cwd"])
 

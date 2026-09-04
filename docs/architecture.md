@@ -591,8 +591,12 @@ route and returns one normalized route failure instead of trying its sibling.
 `cowriter/catalog.py` refreshes both routes per provider independently, and
 the settings responses project the selected route for legacy callers while
 also returning the route-keyed readiness and catalogue snapshots. The Judge
-remains API-only. Claude's API route owns the same shared co-writer tool loop
-as Grok and Codex, while its CLI route continues to use the MCP transport.
+remains API-only. Claude's API route and Grok's CLI route own the same shared
+co-writer tool loop; Grok carries calls and results in its strict text
+protocol, while the CLI itself remains denied all built-in tools. Claude's CLI
+route continues to use the MCP transport. The shared loop delegates each call
+to the authorized tool executor and emits normalized SSE tool-call and
+tool-result events.
 
 ### Engine packages (`src/`)
 
@@ -735,11 +739,13 @@ stream.
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing |
 | POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
 | GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
-| GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the **song** file exists. |
-| GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited) |
+| GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the song file exists; `album_cover` is the parent album art, gated by this song share. |
+| GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited). `album_cover` is the parent album art, gated by this generation share. |
 | GET | `/shared/playlist/{slug}` | public | Read-only playlist JSON (no auth, rate-limited) |
 | GET | `/shared/{slug}/cover` | public | Stream the shared album cover after the same share-slug gate as album JSON |
 | GET | `/shared/song/{slug}/cover` | public | Stream the shared song's own cover after the song share-slug gate. 404 when the song has no file of its own, even if the album has one. |
+| GET | `/shared/song/{slug}/album-cover` | public | Stream the parent album cover after the same song share-slug gate as song JSON. |
+| GET | `/shared/gen/{slug}/album-cover` | public | Stream the parent album cover after the same generation share-slug gate as generation JSON. |
 | GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio after filename allowlist validation |
 | GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio after filename allowlist validation |
 | GET | `/shared/gen/{slug}/audio/{file}` | public | Stream shared generation audio after filename allowlist validation |

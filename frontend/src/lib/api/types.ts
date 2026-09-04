@@ -796,7 +796,7 @@ export interface ResourceResyncEvent {
 }
 
 export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_text_only' | 'route_failed';
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_failed';
 	message: string;
 }
 
@@ -894,6 +894,7 @@ export interface SharedGenerationPayload {
 	audio_duration: number | null;
 	lyrics: string | null;
 	whisper_cues: WhisperCue[] | null;
+	album_cover?: AlbumCoverUrls | null;
 }
 
 export interface SharedPlaylistEntryPayload {
@@ -923,6 +924,7 @@ export interface SharedSongPayload {
 	lyrics: string | null;
 	whisper_cues: WhisperCue[] | null;
 	cover?: AlbumCoverUrls | null;
+	album_cover?: AlbumCoverUrls | null;
 }
 
 export interface SongCreateRequest {

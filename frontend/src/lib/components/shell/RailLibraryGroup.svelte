@@ -16,6 +16,7 @@
 	} from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
+		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
 		RAIL_ALBUM_DISCLOSE_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
@@ -25,6 +26,7 @@
 		RAIL_PLAYING_MARKER_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
+	import { titleInitials } from '$lib/utils/format';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_ALBUM_ITEM_CLASS } from './rail-item-selector';
 
@@ -221,6 +223,13 @@
 							class:row-active={album.id === openAlbumId}
 							onclick={() => onAlbumLabelClick(album.id)}
 						>
+							<span class="album-art">
+								{#if album.cover?.card}
+									<img src={album.cover.card} alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`} />
+								{:else}
+									<span aria-hidden="true">{titleInitials(album.title)}</span>
+								{/if}
+							</span>
 							<span class="row-title">{album.title}</span>
 							<span class="row-meta">{album.song_count}</span>
 						</button>
@@ -373,6 +382,28 @@
 	.album-label:hover {
 		background: var(--surface-hover);
 		color: var(--text);
+	}
+
+	.album-art {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		flex: 0 0 20px;
+		overflow: hidden;
+		border-radius: 3px;
+		background: var(--surface-hover);
+		font-family: var(--font-display);
+		font-size: 0.55rem;
+		letter-spacing: 0.04em;
+		color: var(--text);
+	}
+
+	.album-art img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 
 	.row-title {

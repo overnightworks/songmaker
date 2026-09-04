@@ -80,6 +80,10 @@ class _CodexCliStreamFailure(Exception):
         self.code = code
 
 
+class _CodexLoginMirrorError(Exception):
+    """The redacted Codex login mirror cannot start an isolated CLI."""
+
+
 class CodexImageError(Exception):
     """A redacted failure while producing an album-cover suggestion."""
 
@@ -112,6 +116,17 @@ async def stream_codex_cli_turn(
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
     deadline = time.monotonic() + COWRITER_CLI_TIMEOUT_SECONDS
     turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-codex-cli-")
+    codex_home = Path(turn_directory.name) / "codex-home"
+    try:
+        codex_home.mkdir()
+        _copy_codex_login_mirror(codex_home)
+    except _CodexLoginMirrorError as exc:
+        turn_directory.cleanup()
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        ) from exc
     runner = asyncio.create_task(asyncio.to_thread(
         run_cli_bounded,
         _build_codex_cli_command(model),
@@ -121,6 +136,7 @@ async def stream_codex_cli_turn(
         output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
         stdout_line_channel=channel,
         cwd=turn_directory.name,
+        extra_env={"CODEX_HOME": str(codex_home)},
     ))
     text_chunks: list[str] = []
     saw_success = False
@@ -208,7 +224,10 @@ def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
         codex_home = root / "codex-home"
         work_dir.mkdir()
         codex_home.mkdir()
-        _copy_codex_login_mirror(codex_home)
+        try:
+            _copy_codex_login_mirror(codex_home)
+        except _CodexLoginMirrorError as exc:
+            raise CodexImageLoginError() from exc
         outcome = run_cli_bounded(
             _build_codex_image_command(),
             stdin_payload=prompt.encode("utf-8"),
@@ -225,26 +244,52 @@ def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
 
 
 def _copy_codex_login_mirror(codex_home: Path) -> None:
+    """Install the complete redacted mirror in one private Codex home.
+
+    Both Codex routes need the CLI's full subscription-login shape. The
+    host-side mirror has already redacted renewal credentials; this last copy
+    still writes a blank refresh field so an unexpectedly unredacted source
+    cannot give the child a renewable login.
+    """
     source = Path(CODEX_CLI_AUTH_FILE)
     target = codex_home / "auth.json"
     try:
         if not source.is_file():
-            raise CodexImageLoginError()
+            raise _CodexLoginMirrorError()
         document = json.loads(source.read_text())
         if not isinstance(document, dict):
-            raise CodexImageLoginError()
+            raise _CodexLoginMirrorError()
         tokens = document.get("tokens")
         if not isinstance(tokens, dict):
-            raise CodexImageLoginError()
+            raise _CodexLoginMirrorError()
         access_token = tokens.get("access_token")
         if not isinstance(access_token, str) or not access_token:
-            raise CodexImageLoginError()
-        target.write_text(json.dumps({"tokens": {"access_token": access_token}}))
+            raise _CodexLoginMirrorError()
+        auth_mode = document.get("auth_mode")
+        id_token = tokens.get("id_token")
+        account_id = tokens.get("account_id")
+        last_refresh = document.get("last_refresh")
+        if not all(isinstance(value, str) and value for value in (
+            auth_mode, id_token, account_id, last_refresh,
+        )):
+            raise _CodexLoginMirrorError()
+        redacted_refresh_token = access_token[:0]
+        target.write_text(json.dumps({
+            "auth_mode": auth_mode,
+            "OPENAI_API_KEY": None,
+            "last_refresh": last_refresh,
+            "tokens": {
+                "id_token": id_token,
+                "access_token": access_token,
+                "account_id": account_id,
+                "refresh_token": redacted_refresh_token,
+            },
+        }))
         target.chmod(0o600)
-    except CodexImageError:
+    except _CodexLoginMirrorError:
         raise
     except (OSError, TypeError, json.JSONDecodeError) as exc:
-        raise CodexImageLoginError() from exc
+        raise _CodexLoginMirrorError() from exc
 
 
 def _build_codex_image_command() -> tuple[str, ...]:

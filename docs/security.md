@@ -164,11 +164,11 @@ Album, song, generation, and playlist shares expose public read-only endpoints w
 | Resource | JSON endpoint | Audio endpoint |
 |----------|---------------|----------------|
 | Album | `/shared/{slug}` | `/shared/{slug}/audio/{file}`, `/shared/{slug}/cover` |
-| Song | `/shared/song/{slug}` | `/shared/song/{slug}/audio/{file}`, `/shared/song/{slug}/cover` |
-| Generation | `/shared/gen/{slug}` | `/shared/gen/{slug}/audio/{file}` |
+| Song | `/shared/song/{slug}` | `/shared/song/{slug}/audio/{file}`, `/shared/song/{slug}/cover`, `/shared/song/{slug}/album-cover` |
+| Generation | `/shared/gen/{slug}` | `/shared/gen/{slug}/audio/{file}`, `/shared/gen/{slug}/album-cover` |
 | Playlist | `/shared/playlist/{slug}` | `/shared/playlist/{slug}/audio/{file}` |
 
-Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares expose audio only for playable entry generations. Shared stream manifests likewise contain only playable takes, so every listed audio URL is authorized to return bytes. `create_generation()` canonicalizes every non-empty MP3 path at the single write boundary and rejects a path that would leave the audio root; WAV-only takes retain their empty MP3 sentinel. Public JSON assembly builds URLs from those canonical stored paths without filesystem resolution. Operators must run `scripts/audit_generation_audio_paths.py` once before deploying this boundary to identify legacy rows. The audit never changes rows: each reported ID must be reimported when its source is known, or archived until its file identity can be established, because blindly normalizing an old filename can attach a take to the wrong recording. Public JSON responses omit scores and edit history; an audio URL is present only when its stored relative path is already canonical and remains below the audio root. A noncanonical stored path is a data defect: it is not silently repaired, is omitted from the response, and is logged at `WARNING`. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists — never the parent album's art. Public cover bytes are served from `/shared/{slug}/cover` or `/shared/song/{slug}/cover` using that same slug gate — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
+Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares expose audio only for playable entry generations. Shared stream manifests likewise contain only playable takes, so every listed audio URL is authorized to return bytes. `create_generation()` canonicalizes every non-empty MP3 path at the single write boundary and rejects a path that would leave the audio root; WAV-only takes retain their empty MP3 sentinel. Public JSON assembly builds URLs from those canonical stored paths without filesystem resolution. Operators must run `scripts/audit_generation_audio_paths.py` once before deploying this boundary to identify legacy rows. The audit never changes rows: each reported ID must be reimported when its source is known, or archived until its file identity can be established, because blindly normalizing an old filename can attach a take to the wrong recording. Public JSON responses omit scores and edit history; an audio URL is present only when its stored relative path is already canonical and remains below the audio root. A noncanonical stored path is a data defect: it is not silently repaired, is omitted from the response, and is logged at `WARNING`. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists. Song and generation JSON include `album_cover` only while their own share remains public and the parent album cover file exists. Public cover bytes are served through the matching album, song, or generation share slug — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
 
 `audio_paths` owns stored-audio path resolution: queue-stream assembly uses
 `resolve_audio_path()`, while the album, song, and playlist shared-audio
@@ -610,9 +610,13 @@ binary and `claude.json` mirror. Its Grok and Codex judge calls use
 `XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
 only widen the blast radius.
 
-The Grok mirror is mounted only into its `songmaker-web` consumer. The Codex
-binary and mirror are also mounted into `songmaker-music-worker`, not into the
-scoring worker.
+The Grok mirror is mounted only into its `songmaker-web` consumer. Grok turns
+run with a private `0700` working directory and their own session tree, both
+removed after success or abort; prompts and tool results reach the CLI only
+through a private prompt file. The text tool protocol does not grant Grok CLI
+tools: every start and resume keeps `--deny '*'`, and native tool-call events
+abort the turn. The Codex binary and mirror are also mounted into
+`songmaker-music-worker`, not into the scoring worker.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and

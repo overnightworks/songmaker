@@ -18,6 +18,7 @@ from songmaker_cli.claude.provider import (
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
+    ToolResultEvent,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
@@ -285,7 +286,7 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 @pytest.mark.parametrize(
     ("provider", "route", "tools_available"),
     [
-        ("grok", "cli", False),
+        ("grok", "cli", True),
         ("grok", "api", True),
         ("claude", "api", True),
     ],
@@ -327,6 +328,9 @@ def test_chat_turn_uses_the_selected_provider_route_capability(
     assert isinstance(prompt, str)
     assert (COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS in prompt) is tools_available
     assert (COWRITER_TEXT_ONLY_INSTRUCTIONS in prompt) is (not tools_available)
+    if provider == "grok" and route == "cli":
+        assert "<songmaker_tool_call>" in prompt
+        assert "update_song_lyrics" in prompt
 
 
 def test_chat_turn_streams_sse_and_stores_messages(client):
@@ -712,6 +716,9 @@ def test_chat_turn_forwards_tool_call_events(client):
             name="mcp__songmaker__get_song",
             input={"song_id": "s1"},
         )
+        yield ToolResultEvent(
+            tool_use_id="tu-1", content="song", is_error=False,
+        )
         yield AssistantTextEvent(text="here")
         yield FinalEvent(text="here")
 
@@ -725,6 +732,8 @@ def test_chat_turn_forwards_tool_call_events(client):
     assert "tool_call" in types
     tool_event = next(e for e in events if e["type"] == "tool_call")
     assert tool_event["name"] == "mcp__songmaker__get_song"
+    tool_result = next(e for e in events if e["type"] == "tool_result")
+    assert tool_result["tool_use_id"] == "tu-1"
 
 
 def test_chat_turn_rejects_other_users_song(stranger_client):
