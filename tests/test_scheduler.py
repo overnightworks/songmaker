@@ -286,6 +286,24 @@ def test_pick_worker_missing_gpu_healthy_field_is_treated_as_not_online(db_sessi
         _run(pick_worker(db_session, redis, "sft"))
 
 
+def test_pick_worker_ignores_unreadable_heartbeat_instead_of_preferring_it(
+    db_session,
+    caplog,
+) -> None:
+    _seed(db_session, "renamed-field", host="h1")
+    _seed(db_session, "cold-worker", host="h2")
+    redis = _InMemoryRedis()
+    _set_state(redis, "renamed-field", {"renamed_loaded": ["sft"]})
+    _set_state(redis, "cold-worker", {"loaded": []})
+    _set_queue(redis, "renamed-field", 0)
+    _set_queue(redis, "cold-worker", 1)
+
+    picked = _run(pick_worker(db_session, redis, "sft"))
+
+    assert picked.id == "cold-worker"
+    assert any(record.args == ("renamed-field",) for record in caplog.records)
+
+
 # ── consume_task_stream ────────────────────────────────────────────
 
 

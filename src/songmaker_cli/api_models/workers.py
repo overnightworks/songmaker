@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import AceStepWorker
@@ -51,7 +51,7 @@ class LoadedModelDetail(BaseModel):
 
 
 class WorkerEphemeralState(BaseModel):
-    loaded: list[LoadedModelDetail] = []
+    loaded: list[LoadedModelDetail]
     target_loading: str | None = None
     loading_started_at: str | None = None
     loading_last_log_line: str | None = None
@@ -69,6 +69,17 @@ class WorkerEphemeralState(BaseModel):
     # neither is an operable "Idle" worker.
     gpu_healthy: bool | None = None
     gpu_health_detail: str | None = None
+
+    @field_validator("loaded", mode="before")
+    @classmethod
+    def normalize_legacy_loaded_models(cls, loaded: object) -> object:
+        """Keep accepting the string form emitted by older worker builds."""
+        if not isinstance(loaded, list):
+            return loaded
+        return [
+            {"mode": model, "size_gb": 0.0} if isinstance(model, str) else model
+            for model in loaded
+        ]
 
 
 WorkerStatus = Literal["online", "loading", "offline"]

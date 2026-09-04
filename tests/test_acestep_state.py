@@ -150,9 +150,9 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
 @pytest.mark.parametrize(
     ("payload_vram_measured", "expected"),
     [
-        pytest.param({"vram_measured": True}, True, id="measured"),
-        pytest.param({"vram_measured": False}, False, id="estimated"),
-        pytest.param({}, None, id="legacy-payload-missing-field"),
+        pytest.param({"loaded": [], "vram_measured": True}, True, id="measured"),
+        pytest.param({"loaded": [], "vram_measured": False}, False, id="estimated"),
+        pytest.param({"loaded": []}, None, id="legacy-payload-missing-field"),
     ],
 )
 def test_state_from_dict_reads_vram_measured(
@@ -229,11 +229,14 @@ def test_worker_is_online_true_when_gpu_healthy() -> None:
 
 
 def test_held_worker_remains_online() -> None:
-    from songmaker_cli.admin_api import _derive_worker_status
+    from songmaker_cli.admin_api import _derive_worker_status, _state_from_dict
 
-    assert _derive_worker_status(
+    state = _state_from_dict(
         {"loaded": [], "gpu_healthy": True, "training_hold_seconds": 12},
-    ) == "online"
+        queue_depth=0,
+    )
+
+    assert _derive_worker_status(state) == "online"
 
 
 def test_worker_is_online_false_when_gpu_unhealthy() -> None:

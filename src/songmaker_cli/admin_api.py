@@ -10,6 +10,7 @@ import logging
 import httpx
 from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,7 +32,6 @@ from songmaker_cli.api_models import (
     EvictModelOnWorkerRequest,
     GenerationRetentionReportResponse,
     JobResponse,
-    LoadedModelDetail,
     LoadModelOnWorkerRequest,
     LoginAttemptResponse,
     ModelAvailability,
@@ -306,56 +306,34 @@ def force_logout_endpoint(
     raise HTTPException(404, "Session not found")
 
 
-def _derive_worker_status(state: dict | None) -> str:
-    if not worker_is_online(state):
+def _derive_worker_status(state: WorkerEphemeralState | None) -> str:
+    if state is None or state.gpu_healthy is not True:
         return "offline"
-    if state.get("target_loading"):
+    if state.target_loading:
         return "loading"
     return "online"
 
 
-def _parse_loaded(raw_loaded) -> list[LoadedModelDetail]:
-    if not raw_loaded:
-        return []
-    out: list[LoadedModelDetail] = []
-    for entry in raw_loaded:
-        if isinstance(entry, dict) and "mode" in entry:
-            out.append(
-                LoadedModelDetail(
-                    mode=str(entry["mode"]),
-                    size_gb=float(entry.get("size_gb", 0.0)),
-                ),
-            )
-        elif isinstance(entry, str):
-            out.append(LoadedModelDetail(mode=entry, size_gb=0.0))
-    return out
-
-
-def _loaded_modes(state: dict | None) -> list[str]:
+def _loaded_modes(state: WorkerEphemeralState | None) -> list[str]:
     if state is None:
         return []
-    return [d.mode for d in _parse_loaded(state.get("loaded", []))]
+    return [detail.mode for detail in state.loaded]
 
 
-def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralState | None:
+def _state_from_dict(
+    state: dict | None,
+    queue_depth: int = 0,
+    worker_id: str | None = None,
+) -> WorkerEphemeralState | None:
     if state is None:
         return None
-    return WorkerEphemeralState(
-        loaded=_parse_loaded(state.get("loaded", [])),
-        target_loading=state.get("target_loading"),
-        loading_started_at=state.get("loading_started_at"),
-        loading_last_log_line=state.get("loading_last_log_line"),
-        queue_depth=queue_depth,
-        training_hold_seconds=state.get("training_hold_seconds"),
-        vram_used_gb=state.get("vram_used_gb"),
-        vram_total_gb=state.get("vram_total_gb"),
-        vram_measured=state.get("vram_measured"),
-        available_modes=list(state.get("available_modes", [])),
-        pinned=list(state.get("pinned", [])),
-        last_heartbeat_at=state.get("last_heartbeat_at"),
-        gpu_healthy=state.get("gpu_healthy"),
-        gpu_health_detail=state.get("gpu_health_detail"),
-    )
+    try:
+        return WorkerEphemeralState.model_validate({**state, "queue_depth": queue_depth})
+    except ValidationError:
+        log.warning(
+            "Ignoring invalid heartbeat from worker %s", worker_id or "unknown", exc_info=True,
+        )
+        return None
 
 
 async def _post_to_worker(
@@ -380,11 +358,12 @@ async def list_workers_endpoint(
     for w in workers:
         state = await read_worker_state(pool, w.id)
         queue_depth = await read_queue_depth(pool, w.id)
+        parsed_state = _state_from_dict(state, queue_depth, worker_id=w.id)
         infos.append(
             WorkerInfo(
                 identity=WorkerIdentity.from_orm(w),
-                state=_state_from_dict(state, queue_depth),
-                status=_derive_worker_status(state),
+                state=parsed_state,
+                status=_derive_worker_status(parsed_state),
             ),
         )
     return WorkerPoolResponse(workers=infos)
@@ -397,16 +376,16 @@ async def get_registry_endpoint(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> RegistryResponse:
     workers = list_worker_identities(db)
-    states: dict[str, dict | None] = {}
+    states: dict[str, WorkerEphemeralState | None] = {}
     for w in workers:
-        states[w.id] = await read_worker_state(pool, w.id)
+        states[w.id] = _state_from_dict(await read_worker_state(pool, w.id), worker_id=w.id)
 
-    any_worker_online = any(worker_is_online(st) for st in states.values())
+    any_worker_online = any(_derive_worker_status(st) != "offline" for st in states.values())
 
     downloaded_union: set[str] = set()
     for st in states.values():
         if st is not None:
-            downloaded_union.update(st.get("available_modes", []))
+            downloaded_union.update(st.available_modes)
 
     models: list[RegistryModelResponse] = []
     for mode in MODEL_CONFIG_PATHS:
@@ -417,7 +396,7 @@ async def get_registry_endpoint(
                 continue
             if mode in _loaded_modes(st):
                 loaded_on.append(worker_id)
-            if st.get("target_loading") == mode:
+            if st.target_loading == mode:
                 loading_on.append(worker_id)
         if not any_worker_online:
             availability: ModelAvailability = "unknown_no_worker"

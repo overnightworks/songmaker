@@ -775,6 +775,32 @@ def test_list_workers_includes_queue_depth(client: TestClient) -> None:
     assert resp.json()["workers"][0]["state"]["queue_depth"] == 3
 
 
+def test_list_workers_ignores_invalid_heartbeat(client: TestClient, caplog) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "renamed-field")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("renamed-field")] = json.dumps(
+        {"renamed_loaded": ["sft"], "gpu_healthy": True},
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+
+    assert resp.status_code == 200
+    assert resp.json()["workers"][0]["state"] is None
+    assert resp.json()["workers"][0]["status"] == "offline"
+    assert any(record.args == ("renamed-field",) for record in caplog.records)
+
+    registry = client.get("/api/admin/registry")
+    assert registry.status_code == 200
+    sft = next(model for model in registry.json()["models"] if model["mode"] == "sft")
+    assert sft["loaded_on"] == []
+
+
 def test_registry_union_across_workers(client: TestClient) -> None:
     import json
 

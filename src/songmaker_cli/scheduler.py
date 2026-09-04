@@ -26,7 +26,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -44,6 +44,7 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
+from songmaker_cli.api_models.workers import WorkerEphemeralState
 from songmaker_cli.constants import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
@@ -146,29 +147,26 @@ async def _list_online_workers(
         state = await read_worker_state(redis, ident.id)
         if not worker_is_online(state):
             continue
+        try:
+            heartbeat = WorkerEphemeralState.model_validate(state)
+        except ValidationError:
+            log.warning(
+                "Ignoring unreadable ACE-Step worker heartbeat for worker %s",
+                ident.id,
+                exc_info=True,
+            )
+            continue
         queue_depth = await read_queue_depth(redis, ident.id)
         online.append(
             _PickedWorker(
                 id=ident.id,
                 host=ident.host,
                 port=ident.port,
-                loaded_modes=_extract_loaded_modes(state.get("loaded", [])),
+                loaded_modes=[model.mode for model in heartbeat.loaded],
                 queue_depth=queue_depth,
             ),
         )
     return online
-
-
-def _extract_loaded_modes(raw_loaded: Any) -> list[str]:
-    if not raw_loaded:
-        return []
-    modes: list[str] = []
-    for entry in raw_loaded:
-        if isinstance(entry, dict) and "mode" in entry:
-            modes.append(str(entry["mode"]))
-        elif isinstance(entry, str):
-            modes.append(entry)
-    return modes
 
 
 def _pick_from(workers: list[_PickedWorker], target_mode: str) -> _PickedWorker:
