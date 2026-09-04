@@ -100,6 +100,10 @@ class CodexImageArtifactError(CodexImageError):
     """The isolated run did not leave one usable PNG artifact."""
 
 
+class CodexImageNotCreatedError(CodexImageError):
+    """The completed Codex turn did not create an image artifact."""
+
+
 class CodexImageTimeoutError(CodexImageError):
     """The bounded CLI call exceeded its image-generation deadline."""
 
@@ -365,11 +369,13 @@ def _validate_codex_image_events(output: str) -> None:
 
 
 def _find_only_generated_png(codex_home: Path) -> Path:
-    root = codex_home.resolve()
+    root = (codex_home / "generated_images").resolve()
     candidates = [
-        path for path in codex_home.glob("**/*.png")
+        path for path in root.glob("**/*.png")
         if path.is_file() and path.resolve().is_relative_to(root)
     ]
+    if not candidates:
+        raise CodexImageNotCreatedError()
     if len(candidates) != 1:
         raise CodexImageArtifactError()
     return candidates[0]

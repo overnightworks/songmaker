@@ -18,6 +18,7 @@ from songmaker_cli.constants import (
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
     JOB_ERROR_COVER_CLI_LOGIN,
     JOB_ERROR_COVER_IMAGE_FAILED,
+    JOB_ERROR_COVER_IMAGE_NOT_CREATED,
     JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
     JobStatus,
     JobType,
@@ -44,6 +45,7 @@ _REDACTED_CODEX_LOGIN = {
         "refresh_token": "",
     },
 }
+_FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _png_bytes(*, size: tuple[int, int] = (300, 100)) -> bytes:
@@ -102,6 +104,7 @@ def _install_fake_codex_cli(
     tmp_path: Path,
     *,
     outcome: CliRunOutcome | None = None,
+    creates_artifact: bool = True,
 ) -> list[dict]:
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps({
@@ -120,9 +123,10 @@ def _install_fake_codex_cli(
             "auth": (home / "auth.json").read_text(),
             **kwargs,
         })
-        artifact = home / "generated_images" / "cover.png"
-        artifact.parent.mkdir()
-        artifact.write_bytes(_png_bytes())
+        if creates_artifact:
+            artifact = home / "generated_images" / "cover.png"
+            artifact.parent.mkdir()
+            artifact.write_bytes(_png_bytes())
         return outcome or _outcome()
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
@@ -255,6 +259,54 @@ def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
         assert job.error == JOB_ERROR_COVER_IMAGE_FAILED
 
 
+def test_cover_job_names_a_completed_turn_that_creates_no_image(
+    cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    _install_fake_codex_cli(
+        monkeypatch,
+        tmp_path,
+        outcome=_outcome(stdout=(_FIXTURES / "codex-cover-no-image-events.jsonl").read_text()),
+        creates_artifact=False,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
+        lambda: ProviderSetupMethod.CODEX_CLI,
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == JOB_ERROR_COVER_IMAGE_NOT_CREATED
+        assert not job.album.cover_suggestions
+
+
+def test_codex_image_ignores_non_generated_png_assets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+
+    def fake_runner(_command, **kwargs):
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        artifact = home / "generated_images" / "cover.png"
+        artifact.parent.mkdir()
+        artifact.write_bytes(_png_bytes())
+        bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
+        bundled_asset.parent.mkdir(parents=True)
+        bundled_asset.write_bytes(_png_bytes())
+        return _outcome()
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    assert codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000).startswith(
+        b"\x89PNG"
+    )
+
+
 def test_codex_image_rejects_an_artifact_outside_its_private_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -271,7 +323,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.CodexImageArtifactError):
+    with pytest.raises(codex_cli_adapter.CodexImageNotCreatedError):
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
     assert outside.exists()
