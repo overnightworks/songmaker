@@ -195,7 +195,12 @@ async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
  * such a click must open it again.
  */
 async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
-	if (shell === 'mobile') await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+	if (shell === 'mobile') {
+		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
+		if (!(await drawer.isVisible())) {
+			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		}
+	}
 	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
