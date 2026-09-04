@@ -15,7 +15,9 @@ from songmaker_cli.auth import hash_password
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
+    ARQ_MUSIC_QUEUE_NAME,
     JSON_REQUEST_BODY_MAX_BYTES,
+    JobFunction,
     JobStatus,
     JobType,
 )
@@ -96,7 +98,7 @@ def _add_suggestion(factory, audio_dir: Path, *, album_id: str = "alice-album") 
     return suggestion_id
 
 
-def test_create_cover_suggestions_reports_unavailable_without_creating_a_dead_job(
+def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(
     alice_app: tuple[TestClient, object],
 ) -> None:
     client, factory = alice_app
@@ -104,14 +106,69 @@ def test_create_cover_suggestions_reports_unavailable_without_creating_a_dead_jo
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Cover suggestions are not available yet"}
+    assert response.json() == {"detail": "Worker not running"}
     operation = client.app.openapi()["paths"][
         "/api/albums/{album_id}/cover-suggestions"
     ]["post"]
-    assert "200" not in operation["responses"]
+    assert "200" in operation["responses"]
     assert operation["responses"]["503"]["description"] == "Cover suggestions are unavailable"
     with factory() as session:
         assert session.query(Job).filter_by(album_id="alice-album").count() == 0
+
+
+def test_create_cover_suggestions_enqueues_a_music_worker_job(
+    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, factory = alice_app
+    calls: list[tuple] = []
+
+    class Pool:
+        async def enqueue_job(self, *args, **kwargs) -> None:
+            calls.append((args, kwargs))
+
+    async def healthy() -> bool:
+        return True
+
+    monkeypatch.setattr("songmaker_cli.album_api.is_music_worker_healthy", healthy)
+    monkeypatch.setattr("songmaker_cli.album_api.get_arq_pool", lambda: Pool())
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    job_id = response.json()["id"]
+    assert response.json()["type"] == JobType.COVER
+    assert calls == [
+        ((JobFunction.COVER, job_id), {"_queue_name": ARQ_MUSIC_QUEUE_NAME}),
+    ]
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job is not None
+        assert job.status == JobStatus.QUEUED
+
+
+def test_create_cover_suggestions_marks_a_queue_failure_terminal(
+    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, factory = alice_app
+
+    class Pool:
+        async def enqueue_job(self, *_args, **_kwargs) -> None:
+            raise ConnectionError("redis down")
+
+    async def healthy() -> bool:
+        return True
+
+    monkeypatch.setattr("songmaker_cli.album_api.is_music_worker_healthy", healthy)
+    monkeypatch.setattr("songmaker_cli.album_api.get_arq_pool", lambda: Pool())
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Job queue unavailable"}
+    with factory() as session:
+        job = session.query(Job).filter_by(album_id="alice-album").one()
+        assert job.status == JobStatus.FAILED
+        assert job.error_type == "queue_unavailable"
 
 
 def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(

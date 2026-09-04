@@ -23,6 +23,13 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
+JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
+    "Codex CLI is not logged in. Sign in on the operator host, then try again."
+)
+JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
+    "Image tool blocked. Ask an administrator to enable the image tool."
+)
+JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -448,6 +455,10 @@ WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
+COVER_CLI_DEADLINE_SECONDS: Final[int] = 88
+COVER_JOB_BUDGET_SECONDS: Final[int] = 300
+COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
+COVER_PROMPT_MAX_CHARS: Final[int] = 6000
 # These are not independently configurable timeouts. They document the
 # measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
@@ -606,6 +617,7 @@ class WorkerLivenessSignal(StrEnum):
 
 
 class JobFunction(StrEnum):
+    COVER = "cover"
     GENERATE = "generate"
     SCORE = "score"
     LOAD_MODEL_ON_WORKER = "load_model_on_worker"
@@ -640,10 +652,10 @@ class JobStaleThresholds:
 # slowest measured or provisioned progress signal for that type; see #331 F20.
 STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.COVER: JobStaleThresholds(
-        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        liveness_signal=None,
-        restart_grace_seconds=None,
+        liveness_signal=WorkerLivenessSignal.MUSIC,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),
     JobType.CHAT: JobStaleThresholds(
         queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,

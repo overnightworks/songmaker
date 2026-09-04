@@ -25,6 +25,9 @@ from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     CLAUDE_SCORING_MODEL_DEFAULT,
+    COVER_CLI_DEADLINE_SECONDS,
+    COVER_JOB_BUDGET_SECONDS,
+    COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -146,6 +149,17 @@ class Settings(BaseSettings):
                 f"{LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
                 f"{self.lora_training_job_timeout})",
             )
+        if not (
+            self.cover_cli_deadline_seconds
+            < COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS
+            < self.cover_job_budget_seconds
+        ):
+            raise ValueError(
+                "Cover timeout order must be CLI deadline < reaper < job budget "
+                f"({self.cover_cli_deadline_seconds} < "
+                f"{COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
+                f"{self.cover_job_budget_seconds})",
+            )
         return self
 
     # ── HTTP server ───────────────────────────────────────────────────
@@ -192,6 +206,8 @@ class Settings(BaseSettings):
     chat_rate_limit_user: int = 30
     chat_rate_limit_admin: int = 300
     cover_suggestions_daily_limit: int = Field(default=10, ge=1)
+    cover_cli_deadline_seconds: int = Field(default=COVER_CLI_DEADLINE_SECONDS, ge=1)
+    cover_job_budget_seconds: int = Field(default=COVER_JOB_BUDGET_SECONDS, ge=1)
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120

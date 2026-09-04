@@ -8,9 +8,18 @@ import logging
 import tempfile
 import time
 from collections.abc import AsyncIterator
+from io import BytesIO
+from pathlib import Path
 from typing import Final
 
-from songmaker_cli.agent_cli import CliLineChannel, CliRunOutcome, run_cli_bounded
+from PIL import Image, ImageOps, UnidentifiedImageError
+
+from songmaker_cli.agent_cli import (
+    CliLineChannel,
+    CliRunOutcome,
+    CliRunReason,
+    run_cli_bounded,
+)
 from songmaker_cli.claude.provider import (
     AssistantTextEvent,
     FinalEvent,
@@ -18,7 +27,13 @@ from songmaker_cli.claude.provider import (
     _flatten_messages,
     _stdin_prompt,
 )
-from songmaker_cli.constants import CODEX_CLI_BINARY, COWRITER_CLI_TIMEOUT_SECONDS
+from songmaker_cli.constants import (
+    CODEX_CLI_AUTH_FILE,
+    CODEX_CLI_BINARY,
+    COVER_MAX_PIXELS,
+    COVER_PNG_MAGIC,
+    COWRITER_CLI_TIMEOUT_SECONDS,
+)
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
@@ -27,6 +42,7 @@ _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
 _BLOCKED_ITEM_TYPES: Final = frozenset({
     "command_execution", "mcp_tool_call", "web_search", "file_change",
 })
+_IMAGE_TEXT_ITEM_TYPES: Final = frozenset({"agent_message", "reasoning"})
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +52,30 @@ class _CodexCliStreamFailure(Exception):
 
     def __init__(self, code: str) -> None:
         self.code = code
+
+
+class CodexImageError(Exception):
+    """A redacted failure while producing an album-cover suggestion."""
+
+
+class CodexImageLoginError(CodexImageError):
+    """The isolated Codex CLI home has no usable login mirror."""
+
+
+class ImageToolBlockedError(CodexImageError):
+    """The CLI reported a tool other than the sole permitted image tool."""
+
+
+class CodexImageArtifactError(CodexImageError):
+    """The isolated run did not leave one usable PNG artifact."""
+
+
+class CodexImageTimeoutError(CodexImageError):
+    """The bounded CLI call exceeded its image-generation deadline."""
+
+
+class CodexImageCliError(CodexImageError):
+    """The CLI ended without a verified successful image result."""
 
 
 async def stream_codex_cli_turn(
@@ -112,6 +152,148 @@ async def stream_codex_cli_turn(
             await asyncio.shield(runner)
         finally:
             turn_directory.cleanup()
+
+
+def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
+    """Run one isolated Codex image turn and return its normalized PNG.
+
+    The image route deliberately owns neither credentials nor process control:
+    its caller has already selected the Codex CLI route, and every process is
+    spawned through ``run_cli_bounded``.  Its temporary ``CODEX_HOME`` is the
+    only place where a generated artifact may be discovered.
+    """
+    with tempfile.TemporaryDirectory(prefix="songmaker-cover-codex-") as directory:
+        root = Path(directory)
+        work_dir = root / "work"
+        codex_home = root / "codex-home"
+        work_dir.mkdir()
+        codex_home.mkdir()
+        _copy_codex_login_mirror(codex_home)
+        outcome = run_cli_bounded(
+            _build_codex_image_command(),
+            stdin_payload=prompt.encode("utf-8"),
+            read="all",
+            deadline=deadline,
+            output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
+            cwd=str(work_dir),
+            extra_env={"CODEX_HOME": str(codex_home)},
+        )
+        _raise_for_codex_image_outcome(outcome)
+        _validate_codex_image_events(outcome.stdout)
+        artifact = _find_only_generated_png(codex_home)
+        return _normalize_generated_png(artifact)
+
+
+def _copy_codex_login_mirror(codex_home: Path) -> None:
+    source = Path(CODEX_CLI_AUTH_FILE)
+    target = codex_home / "auth.json"
+    try:
+        if not source.is_file():
+            raise CodexImageLoginError()
+        document = json.loads(source.read_text())
+        if not isinstance(document, dict):
+            raise CodexImageLoginError()
+        tokens = document.get("tokens")
+        if not isinstance(tokens, dict):
+            raise CodexImageLoginError()
+        access_token = tokens.get("access_token")
+        if not isinstance(access_token, str) or not access_token:
+            raise CodexImageLoginError()
+        target.write_text(json.dumps({"tokens": {"access_token": access_token}}))
+        target.chmod(0o600)
+    except CodexImageError:
+        raise
+    except (OSError, TypeError, json.JSONDecodeError) as exc:
+        raise CodexImageLoginError() from exc
+
+
+def _build_codex_image_command() -> tuple[str, ...]:
+    """Return the fixed command for the image-only Codex route."""
+    return (
+        CODEX_CLI_BINARY,
+        "exec",
+        "--json",
+        "--sandbox",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--ephemeral",
+        "-c",
+        'approval_policy="never"',
+        "-c",
+        "mcp_servers={}",
+        "-",
+    )
+
+
+def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
+    if _contains_auth_failure(outcome.stderr):
+        raise CodexImageLoginError()
+    if outcome.reason in {
+        CliRunReason.DEADLINE_BEFORE_SPAWN,
+        CliRunReason.DEADLINE_WHILE_WRITING,
+        CliRunReason.DEADLINE_WHILE_READING,
+        CliRunReason.CLEANUP_OVERRAN,
+    }:
+        raise CodexImageTimeoutError()
+    if not outcome.complete or outcome.returncode != 0:
+        raise CodexImageCliError()
+
+
+def _validate_codex_image_events(output: str) -> None:
+    saw_completed_turn = False
+    for line in output.splitlines():
+        event_type, event = _parse_codex_line(line.encode("utf-8"))
+        if event_type in {"thread.started", "turn.started"}:
+            continue
+        if event_type == "turn.completed":
+            if saw_completed_turn or not isinstance(event.get("usage"), dict):
+                raise CodexImageCliError()
+            saw_completed_turn = True
+            continue
+        if event_type in {"error", "turn.failed"}:
+            raise CodexImageCliError()
+        if event_type.startswith("item."):
+            item_type = _item_type(event)
+            if item_type in _IMAGE_TEXT_ITEM_TYPES or item_type == "image_gen":
+                continue
+            raise ImageToolBlockedError()
+        raise CodexImageCliError()
+    if not saw_completed_turn:
+        raise CodexImageCliError()
+
+
+def _find_only_generated_png(codex_home: Path) -> Path:
+    root = codex_home.resolve()
+    candidates = [
+        path for path in codex_home.glob("**/*.png")
+        if path.is_file() and path.resolve().is_relative_to(root)
+    ]
+    if len(candidates) != 1:
+        raise CodexImageArtifactError()
+    return candidates[0]
+
+
+def _normalize_generated_png(source: Path) -> bytes:
+    try:
+        if source.stat().st_size > 8 * 1024 * 1024:
+            raise CodexImageArtifactError()
+        with Image.open(source) as raw:
+            if raw.width < 1 or raw.height < 1 or raw.width * raw.height > COVER_MAX_PIXELS:
+                raise CodexImageArtifactError()
+            raw.load()
+            image = ImageOps.fit(raw.convert("RGB"), (1024, 1024), Image.Resampling.LANCZOS)
+        output = BytesIO()
+        image.save(output, format="PNG")
+        payload = output.getvalue()
+        if not payload.startswith(COVER_PNG_MAGIC):
+            raise CodexImageArtifactError()
+        return payload
+    except CodexImageArtifactError:
+        raise
+    except (OSError, UnidentifiedImageError, ValueError) as exc:
+        raise CodexImageArtifactError() from exc
 
 
 def _build_codex_cli_command(model: str) -> tuple[str, ...]:

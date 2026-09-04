@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.cowriter.catalog import (
     OPENAI_API_KEY_ENVIRONMENT,
     XAI_API_KEY_ENVIRONMENT,
+    ProviderSetupMethod,
 )
 from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
 from songmaker_cli.cowriter.codex_cli_adapter import stream_codex_cli_turn
@@ -175,3 +176,14 @@ def _codex_cli_access_token_is_present() -> bool:
         return codex_cli_access_token_is_present()
     except AgentCliUnavailableError as exc:
         raise ProviderUnavailableError("codex", "codex_cli_error") from exc
+
+
+def cover_image_provider_method() -> ProviderSetupMethod | None:
+    """Choose the one configured route for a generated cover image.
+
+    Cover generation intentionally has no HTTP/API fallback.  The image
+    adapter receives only this selected method and never reads credentials.
+    """
+    if _codex_cli_access_token_is_present():
+        return ProviderSetupMethod.CODEX_CLI
+    return None
