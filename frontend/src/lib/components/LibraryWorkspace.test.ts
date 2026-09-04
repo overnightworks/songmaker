@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AlbumItem } from '$lib/api/types';
+import type { AlbumItem, SongItem } from '$lib/api/types';
 import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -27,6 +27,7 @@ vi.mock('$lib/api/library', () => ({
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([]),
+	fetchVersions: vi.fn().mockResolvedValue([]),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
@@ -51,6 +52,26 @@ function album(): AlbumItem {
 		cover: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		is_archived: false
+	};
+}
+
+function song(): SongItem {
+	return {
+		id: 'stadion-lauf-a',
+		slug: 'stadion-lauf-a',
+		title: 'Stadionlauf A',
+		album_id: 'anfield',
+		album_title: ALBUM_TITLE,
+		artist: 'Artist',
+		track_number: 1,
+		vocal_language: 'en',
+		lyrics: '',
+		prompt: '',
+		version_count: 0,
+		generation_count: 0,
+		is_shared: false,
+		created_at: '2026-01-01T00:00:00+00:00',
+		generations: []
 	};
 }
 
@@ -135,5 +156,21 @@ describe('the library workspace', () => {
 
 		expect(target.textContent).toContain('Lost the stream');
 		expect(target.querySelector('.library-root')).not.toBeNull();
+	});
+
+	it('keeps the album row above both a song and its take', async () => {
+		streamLive();
+		openCollection.set({ kind: 'album', id: 'anfield' });
+		songList.set([song()]);
+		selectedSongId.set('stadion-lauf-a');
+		const target = renderWorkspace();
+		await tick();
+
+		expect(target.querySelector('.library-row-scrim')).not.toBeNull();
+		expect(target.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
+
+		selectedGenerationId.set('take-1');
+		await tick();
+		expect(target.querySelector('.library-row-scrim')).not.toBeNull();
 	});
 });

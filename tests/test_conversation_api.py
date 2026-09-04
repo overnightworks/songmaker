@@ -283,14 +283,15 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("route", "tools_available"),
+    ("provider", "route", "tools_available"),
     [
-        ("cli", False),
-        ("api", True),
+        ("grok", "cli", False),
+        ("grok", "api", True),
+        ("claude", "api", True),
     ],
 )
-def test_chat_turn_uses_the_selected_grok_route_capability(
-    client, route, tools_available,
+def test_chat_turn_uses_the_selected_provider_route_capability(
+    client, provider, route, tools_available,
 ):
     from songmaker_cli.conversation_api import (
         COWRITER_TEXT_ONLY_INSTRUCTIONS,
@@ -302,9 +303,13 @@ def test_chat_turn_uses_the_selected_grok_route_capability(
     with factory() as session:
         set_cowriter_settings(
             session,
-            "grok",
-            "grok-4.6",
-            routes={"claude": "cli", "grok": route, "codex": "cli"},
+            provider,
+            "claude-opus-4-6" if provider == "claude" else "grok-4.6",
+            routes={
+                "claude": "api" if provider == "claude" else "cli",
+                "grok": route,
+                "codex": "cli",
+            },
         )
         session.commit()
 

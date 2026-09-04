@@ -134,13 +134,16 @@ def test_check_lora_ready_rejects_cross_user(db_factory) -> None:
     assert exc.value.status_code == 404
 
 
-def test_check_lora_ready_admin_can_access(db_factory) -> None:
+def test_check_lora_ready_admin_cannot_access_another_users_lora(db_factory) -> None:
+    from fastapi import HTTPException
+
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
-        lora = check_lora_ready_for_generation(
-            session, lora_id, _auth(USER_B, role="admin"),
-        )
-        assert lora is not None
+        with pytest.raises(HTTPException) as exc:
+            check_lora_ready_for_generation(
+                session, lora_id, _auth(USER_B, role="admin"),
+            )
+    assert exc.value.status_code == 404
 
 
 def test_check_lora_ready_404_when_missing(db_factory) -> None:
@@ -189,7 +192,7 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
     assert result is config
 
 
-def test_generate_endpoint_rejects_non_ready_lora(tmp_path) -> None:
+def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
     from conftest import TEST_SECRET, make_fake_redis
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -203,7 +206,12 @@ def test_generate_endpoint_rejects_non_ready_lora(tmp_path) -> None:
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(id=USER_A, username="alice", password_hash="x"))
+        session.add(User(id=USER_B, username="bob", password_hash="x", role="admin"))
         session.flush()
+        lora = create_user_lora(session, USER_A, "voice", "voice")
+        update_user_lora(
+            session, lora.id, status=LoraStatus.READY, storage_path="user_loras/alice/voice",
+        )
         session.add(Album(id="A1", title="A", artist="a", created_by=USER_A))
         session.flush()
         session.add(
@@ -214,7 +222,7 @@ def test_generate_endpoint_rejects_non_ready_lora(tmp_path) -> None:
             Version(
                 id="V1", song_id="S1", version_number=1,
                 lyrics="la", prompt="pop", bpm=120, audio_duration=30,
-                generation_params={"user_lora_id": "missing"},
+                generation_params={"user_lora_id": lora.id},
             ),
         )
         session.commit()
@@ -226,9 +234,9 @@ def test_generate_endpoint_rejects_non_ready_lora(tmp_path) -> None:
     (tmp_path / "data").mkdir()
     app = FastAPI()
     app.state.ctx = ctx
-    app.dependency_overrides[get_current_user] = lambda: _auth(USER_A)
+    app.dependency_overrides[get_current_user] = lambda: _auth(USER_B, role="admin")
     app.include_router(router)
     client = TestClient(app)
 
     resp = client.post("/api/songs/S1/generate", json={"count": 1, "model": "sft"})
-    assert resp.status_code in (404, 422)
+    assert resp.status_code == 404

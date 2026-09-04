@@ -17,7 +17,7 @@ from songmaker_cli.claude.provider import (
     StreamEvent,
     UnavailableError,
 )
-from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
+from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter, tool_loop
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
@@ -250,29 +250,58 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
     with pytest.raises(ProviderUnavailableError) as limited:
         asyncio.run(collect())
     assert limited.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
 
-    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    responses = [
+        {"choices": [{"message": {"content": "", "tool_calls": [tool_call]}}]},
+        {"choices": [{"message": {"content": "done"}}]},
+    ]
+    monkeypatch.setattr(
+        openai_adapter,
+        "_post_chat",
+        lambda *_args, **_kwargs: _next_response(responses),
+    )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tool exploded")),
     )
-    with pytest.raises(ProviderUnavailableError) as failed:
-        asyncio.run(collect())
-    assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+    events = asyncio.run(collect())
+    result = next(event for event in events if event.type == "tool_result")
+    assert result.is_error is True
+    assert result.content == "Co-Writer tool failed."
 
 
-def test_claude_api_is_the_pending_route_without_an_adapter_attempt(monkeypatch):
+async def _next_response(responses):
+    return responses.pop(0)
+
+
+def test_claude_api_dispatches_only_to_the_native_tool_adapter(monkeypatch):
+    stream = _Stream()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(dispatch, "stream_claude_api_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
     )
 
+    assert asyncio.run(_events("claude", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
+    assert stream.closed
+
+
+def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_attempt(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_claude_api_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("adapter must not run")),
+    )
+
     with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_events("claude", ProviderRoute.API))
 
-    assert raised.value.reason.code is SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING
+    assert raised.value.reason.code is SafeRouteReasonCode.API_KEY_NOT_SET

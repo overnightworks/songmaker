@@ -26,10 +26,6 @@ from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_f
             SafeRouteReasonCode.ROUTE_TEXT_ONLY,
             "Song tools are not available over the Grok CLI today.",
         ),
-        (
-            SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING,
-            "Claude over API needs the tool loop — coming.",
-        ),
         (SafeRouteReasonCode.ROUTE_FAILED, "Selected route failed."),
     ],
 )

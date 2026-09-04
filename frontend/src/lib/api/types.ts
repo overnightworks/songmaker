@@ -512,6 +512,19 @@ export interface ModelCapabilities {
 	hidden_params: string[];
 }
 
+export interface OwnPlayableTakeListResponse {
+	takes: OwnPlayableTakeResponse[];
+}
+
+export interface OwnPlayableTakeResponse {
+	generation_id: string;
+	song_title: string;
+	generation_number: number;
+	audio_url: string;
+	caption: string;
+	lyrics: string;
+}
+
 export interface PinModelOnWorkerRequest {
 	mode: string;
 }
@@ -775,7 +788,7 @@ export interface ResourceResyncEvent {
 }
 
 export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_text_only' | 'claude_api_tool_loop_pending' | 'route_failed';
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_text_only' | 'route_failed';
 	message: string;
 }
 
@@ -1039,6 +1052,10 @@ export interface UserLoraSampleCreateRequest {
 	caption: string;
 	lyrics: string;
 	position?: number | null;
+}
+
+export interface UserLoraSampleFromGenerationRequest {
+	generation_id: string;
 }
 
 export interface UserLoraSampleItem {

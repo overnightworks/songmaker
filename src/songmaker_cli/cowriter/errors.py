@@ -21,7 +21,6 @@ class SafeRouteReasonCode(StrEnum):
     TOOL_PROTOCOL_ERROR = "tool_protocol_error"
     TOOL_LIMIT_EXCEEDED = "tool_limit_exceeded"
     ROUTE_TEXT_ONLY = "route_text_only"
-    CLAUDE_API_TOOL_LOOP_PENDING = "claude_api_tool_loop_pending"
     ROUTE_FAILED = "route_failed"
 
 
@@ -40,9 +39,6 @@ _SAFE_MESSAGES: dict[SafeRouteReasonCode, str] = {
     SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED: "Co-Writer tool-call limit was reached.",
     SafeRouteReasonCode.ROUTE_TEXT_ONLY: (
         "Song tools are not available over the Grok CLI today."
-    ),
-    SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING: (
-        "Claude over API needs the tool loop — coming."
     ),
     SafeRouteReasonCode.ROUTE_FAILED: "Selected route failed.",
 }

@@ -18,9 +18,7 @@ import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 import { DESKTOP_VIEWPORT, FlowGuard, MOBILE_VIEWPORT } from './helpers';
 import { readSeededLibrary, seedTakeStripSong } from './seed';
 
-/** Its own song (see seedTakeStripSong) rather than one of the base seed's
- *  SONG_TITLES, which other flows in the same run depend on staying at the
- *  base seed's one take each. */
+/** Its dedicated album keeps this flow from mutating the shared base library. */
 const KINETIC_STRIP_SONG_TITLE = 'Kinetic Strip Takes';
 
 /**
@@ -70,7 +68,7 @@ test.beforeAll(async ({}, testInfo) => {
 	// one for nothing.
 	if (testInfo.project.name === 'mobile') return;
 	const library = readSeededLibrary();
-	await seedTakeStripSong(library.albumId, KINETIC_STRIP_SONG_TITLE, TAKE_COUNT);
+	await seedTakeStripSong(library.kineticStripAlbumId, KINETIC_STRIP_SONG_TITLE, TAKE_COUNT);
 });
 
 /** Chip labels in the strip's real DOM order: newest take first (TakeStrip.svelte's sort). */
@@ -80,7 +78,7 @@ function takeLabelsNewestFirst(): string[] {
 
 async function openKineticStripSongCoWriter(page: Page): Promise<void> {
 	const library = readSeededLibrary();
-	const songAddress = `/album/${library.albumId}/${expectedSongSlug(KINETIC_STRIP_SONG_TITLE)}`;
+	const songAddress = `/album/${library.kineticStripAlbumId}/${expectedSongSlug(KINETIC_STRIP_SONG_TITLE)}`;
 	await page.goto(songAddress);
 	await expect(page.getByRole('heading', { name: KINETIC_STRIP_SONG_TITLE })).toBeVisible();
 	await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL }).click();

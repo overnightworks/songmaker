@@ -460,7 +460,7 @@ def check_song_access_including_deleted(
 def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLora:
     if not lora:
         raise HTTPException(404, "LoRA not found")
-    if user.role != ROLE_ADMIN and lora.user_id != user.id:
+    if lora.user_id != user.id:
         raise HTTPException(404, "LoRA not found")
     return lora
 
@@ -482,7 +482,7 @@ def check_lora_ready_for_generation(
     lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)
     if not lora:
         raise HTTPException(404, "LoRA not found")
-    if user.role != ROLE_ADMIN and lora.user_id != user.id:
+    if lora.user_id != user.id:
         raise HTTPException(404, "LoRA not found")
     if lora.deleted_at is not None:
         raise HTTPException(422, "LoRA is deleted")
@@ -501,7 +501,7 @@ def check_lora_sample_access(
     parent = sample.user_lora
     if not parent:
         raise HTTPException(404, "LoRA sample not found")
-    if user.role != ROLE_ADMIN and parent.user_id != user.id:
+    if parent.user_id != user.id:
         raise HTTPException(404, "LoRA sample not found")
     return sample
 
@@ -517,6 +517,23 @@ def check_generation_access(
         album = gen.song.album if gen.song else None
         if not album or album.created_by != user.id:
             raise HTTPException(404, "Generation not found")
+    return gen
+
+
+def check_own_generation_access(
+    session: Session, gen_id: str, user: AuthenticatedUser,
+) -> Generation:
+    """Load a generation and require its album to belong to the caller.
+
+    Unlike the general generation access helper, this intentionally does not
+    grant administrators access to another musician's take. Callers use it
+    where a take becomes private source material rather than an administrative
+    resource.
+    """
+    gen = check_generation_access(session, gen_id, user)
+    album = gen.song.album if gen.song else None
+    if not album or album.created_by != user.id:
+        raise HTTPException(404, "Generation not found")
     return gen
 
 
