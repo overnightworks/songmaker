@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
-def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> None:
+def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> tuple[float, float, str]:
     from faster_whisper import WhisperModel
 
     print(f"\n{'='*60}")
@@ -70,7 +70,9 @@ def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> None:
     return avg, load_time, transcript
 
 
-def benchmark_audiobox(mp3_path: Path, device: str, rounds: int) -> None:
+def benchmark_audiobox(
+    mp3_path: Path, device: str, rounds: int,
+) -> tuple[float, float, dict[str, float]]:
     print(f"\n{'='*60}")
     print(f"AUDIOBOX AESTHETICS on {device.upper()}")
     print(f"{'='*60}")
@@ -153,20 +155,20 @@ def main() -> None:
 
     if not args.audiobox_only:
         # Whisper CPU
-        cpu_avg, cpu_load, cpu_text = benchmark_whisper(args.mp3_path, "cpu", args.rounds)
+        cpu_avg, cpu_load, _ = benchmark_whisper(args.mp3_path, "cpu", args.rounds)
         results["whisper_cpu"] = {"avg": cpu_avg, "load": cpu_load}
 
         if has_gpu:
-            gpu_avg, gpu_load, gpu_text = benchmark_whisper(args.mp3_path, "cuda", args.rounds)
+            gpu_avg, gpu_load, _ = benchmark_whisper(args.mp3_path, "cuda", args.rounds)
             results["whisper_gpu"] = {"avg": gpu_avg, "load": gpu_load}
 
     if not args.whisper_only:
         # AudioBox CPU
-        cpu_avg, cpu_load, cpu_scores = benchmark_audiobox(args.mp3_path, "cpu", args.rounds)
+        cpu_avg, cpu_load, _ = benchmark_audiobox(args.mp3_path, "cpu", args.rounds)
         results["audiobox_cpu"] = {"avg": cpu_avg, "load": cpu_load}
 
         if has_gpu:
-            gpu_avg, gpu_load, gpu_scores = benchmark_audiobox(args.mp3_path, "cuda", args.rounds)
+            gpu_avg, gpu_load, _ = benchmark_audiobox(args.mp3_path, "cuda", args.rounds)
             results["audiobox_gpu"] = {"avg": gpu_avg, "load": gpu_load}
 
     # Summary

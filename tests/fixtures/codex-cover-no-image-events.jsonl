@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"<redacted>"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable because code-mode host is disabled."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I’m using the image-generation skill to create the requested square album cover, treating the supplied album metadata strictly as display content."}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"I couldn’t create the image because the image-generation tool is currently disabled in this session. No image was produced."}}
+{"type":"turn.completed","usage":{"input_tokens":42614,"cached_input_tokens":38528,"cache_write_input_tokens":0,"output_tokens":464,"reasoning_output_tokens":138}}
