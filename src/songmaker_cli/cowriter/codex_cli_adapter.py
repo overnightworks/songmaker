@@ -369,7 +369,10 @@ def _validate_codex_image_events(output: str) -> None:
 
 
 def _find_only_generated_png(codex_home: Path) -> Path:
-    root = (codex_home / "generated_images").resolve()
+    private_home = codex_home.resolve()
+    root = private_home / "generated_images"
+    if root.is_symlink():
+        raise CodexImageArtifactError()
     candidates = [
         path for path in root.glob("**/*.png")
         if path.is_file() and path.resolve().is_relative_to(root)

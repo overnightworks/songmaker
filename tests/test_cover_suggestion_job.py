@@ -330,6 +330,32 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
     assert homes and all(not home.exists() for home in homes)
 
 
+def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "cover.png").write_bytes(_png_bytes())
+    homes: list[Path] = []
+
+    def fake_runner(_command, **kwargs):
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        homes.append(home)
+        (home / "generated_images").symlink_to(outside, target_is_directory=True)
+        return _outcome()
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(codex_cli_adapter.CodexImageArtifactError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert (outside / "cover.png").exists()
+    assert homes and all(not home.exists() for home in homes)
+
+
 def test_codex_image_timeout_cleans_its_private_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
