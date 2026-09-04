@@ -148,7 +148,7 @@ def test_grok_cli_rejects_any_tool_call_and_never_emits_a_final(monkeypatch, eve
     with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(collect())
 
-    assert raised.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+    assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_TEXT_ONLY
     assert calls
 
 
