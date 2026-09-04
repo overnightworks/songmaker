@@ -84,6 +84,7 @@ def test_plain_strings_match_strenum_frozensets():
 
 
 def test_job_type_values():
+    assert JobType.COVER == "cover"
     assert JobType.GENERATE == "generate"
     assert JobType.SCORE == "score"
     assert JobType.CHAT == "chat"
@@ -98,6 +99,7 @@ def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
 
 def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
     expected_signals = {
+        JobType.COVER: WorkerLivenessSignal.MUSIC,
         JobType.CHAT: None,
         JobType.GENERATE: WorkerLivenessSignal.MODEL_EXECUTION,
         JobType.LOAD_MODEL_ON_WORKER: WorkerLivenessSignal.MODEL_EXECUTION,
@@ -124,6 +126,7 @@ def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
         for job_type, policy in STALE_JOB_THRESHOLDS.items()
         if policy.liveness_signal is not None
     } == {
+        JobType.COVER: 12_000,
         JobType.GENERATE: 76_000,
         JobType.LOAD_MODEL_ON_WORKER: 130_000,
         JobType.DOWNLOAD_MODEL_ON_WORKER: 18_000,

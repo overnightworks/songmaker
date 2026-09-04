@@ -30,6 +30,7 @@ def test_worker_liveness_maps_each_job_type_to_its_real_execution_signal() -> No
     )
 
     assert liveness == {
+        JobType.COVER: WorkerLiveness.DEAD,
         JobType.GENERATE: WorkerLiveness.DEAD,
         JobType.LOAD_MODEL_ON_WORKER: WorkerLiveness.DEAD,
         JobType.DOWNLOAD_MODEL_ON_WORKER: WorkerLiveness.DEAD,

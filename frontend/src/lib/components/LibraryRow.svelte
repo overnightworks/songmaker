@@ -156,6 +156,11 @@
 		const index = activeIndex;
 		const visibleKey = visibleTileKey;
 		if (!row || index === -1) return;
+		// The end inset changes the scrollable coordinate space. Set it before
+		// asking the browser to centre the open tile, otherwise a visible-key
+		// change can centre against the old edge and then shift the tile when
+		// the inset is applied.
+		updateEndInset(row);
 		const active = row.querySelector<HTMLElement>('.row-tile.active');
 		if (!active || typeof active.scrollIntoView !== 'function') return;
 		active.scrollIntoView({
@@ -173,6 +178,29 @@
 		return row.scrollWidth - row.clientWidth - row.scrollLeft > OVERFLOW_TOLERANCE_PX;
 	}
 
+	function visibleTileSpan(row: HTMLElement): { first: HTMLElement; width: number } | null {
+		const tiles = Array.from(row.querySelectorAll<HTMLElement>('.row-tile')).filter(
+			(tile) => !tile.hidden
+		);
+		const first = tiles[0];
+		const last = tiles.at(-1);
+		if (!first || !last) return null;
+		return {
+			first,
+			width: last.offsetLeft + last.offsetWidth - first.offsetLeft
+		};
+	}
+
+	function updateEndInset(row: HTMLElement): void {
+		const visibleTiles = visibleTileSpan(row);
+		const needsCentredEnds =
+			visibleTiles !== null && visibleTiles.width > row.clientWidth + OVERFLOW_TOLERANCE_PX;
+		const inset = needsCentredEnds
+			? Math.max(0, (row.clientWidth - visibleTiles.first.offsetWidth) / 2)
+			: 0;
+		row.style.setProperty('--row-edge-inset', `${inset}px`);
+	}
+
 	// The right-edge fade is a claim that there is more to scroll to -- true
 	// only while the row actually overflows. A short list (or one that has
 	// been scrolled all the way to its end) must not keep showing it just
@@ -188,6 +216,7 @@
 		}
 		void visibleTileKey;
 		const measure = () => {
+			updateEndInset(row);
 			hasMoreToTheRight = hasOverflowToTheRight(row);
 		};
 		measure();
@@ -265,11 +294,10 @@
 		display: flex;
 		gap: 0.5rem;
 		padding-block: 0.6rem;
-		/* Symmetric end insets, roughly half the row's own width minus half a
-		   tile, so the first and last tile can each reach the container's
-		   centre too -- without them, scrollIntoView({inline:'center'}) clamps
-		   an edge tile's scroll position and it can never actually centre. */
-		padding-inline: max(0.9rem, calc(50% - (var(--row-tile-width) / 2)));
+		/* End insets exist only when the tiles naturally overflow. Then each
+		   edge tile can reach the container centre; a short row stays flush
+		   left instead of inventing scrollable space before its first tile. */
+		padding-inline: var(--row-edge-inset, 0px);
 		overflow-x: auto;
 		cursor: grab;
 		user-select: none;

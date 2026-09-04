@@ -23,6 +23,10 @@ from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_f
         (SafeRouteReasonCode.TOOL_PROTOCOL_ERROR, "Co-Writer tool response was invalid."),
         (SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED, "Co-Writer tool-call limit was reached."),
         (
+            SafeRouteReasonCode.ROUTE_TEXT_ONLY,
+            "Song tools are not available over the Grok CLI today.",
+        ),
+        (
             SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING,
             "Claude over API needs the tool loop — coming.",
         ),

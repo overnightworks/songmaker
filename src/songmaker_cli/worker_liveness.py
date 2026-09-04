@@ -168,6 +168,7 @@ def worker_liveness_by_job_type(
     """Return each job's execution signal; either dead model worker is decisive."""
     model_execution = _model_execution_liveness(acestep, music)
     return {
+        JobType.COVER: music,
         JobType.GENERATE: model_execution,
         JobType.LOAD_MODEL_ON_WORKER: model_execution,
         JobType.DOWNLOAD_MODEL_ON_WORKER: model_execution,

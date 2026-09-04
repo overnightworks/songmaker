@@ -503,6 +503,97 @@
 		background: var(--panel-sunk);
 	}
 
+	/* ── route-aware provider controls (Issue #541) ───────────── */
+	.route-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: .7rem;
+	}
+
+	.route-card {
+		border: 1px solid var(--rule);
+		border-radius: 3px;
+		padding: .65rem;
+		background: var(--panel-sunk);
+	}
+
+	.route-card.unavailable { opacity: .72; }
+	.legacy-route-section { display: none; }
+
+	.route-card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: .4rem;
+		margin-bottom: .5rem;
+	}
+
+	.route-card-head .name {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-weight: 600;
+		letter-spacing: .03em;
+	}
+
+	.route-switch {
+		display: inline-flex;
+		border: 1px solid var(--rule-strong);
+		border-radius: 999px;
+		padding: .12rem;
+		background: var(--panel);
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: .68rem;
+		letter-spacing: .04em;
+	}
+
+	.route-switch span { padding: .13rem .35rem; color: var(--muted); }
+	.route-switch .selected { border-radius: 999px; background: var(--violet); color: #fff; }
+
+	.route-status-list { display: flex; flex-direction: column; gap: .3rem; }
+
+	.route-status {
+		display: grid;
+		grid-template-columns: .5rem 1fr;
+		gap: .35rem;
+		align-items: start;
+		font-size: .72rem;
+		line-height: 1.35;
+	}
+
+	.route-status .dot {
+		width: .48rem;
+		height: .48rem;
+		margin-top: .28rem;
+		border-radius: 50%;
+		background: var(--muted);
+	}
+
+	.route-status.ready .dot { background: var(--good); }
+	.route-status.broken .dot { background: var(--bad-ink); }
+	.route-status.not-set-up .dot { border: 1px solid var(--muted); background: transparent; }
+	.route-status strong { font-weight: 600; color: var(--ink); }
+	.route-status small { display: block; color: var(--ink-soft); }
+	.route-status.broken small { color: var(--bad-ink); }
+
+	.route-model { margin-top: .55rem; }
+	.route-model .field-label { margin-bottom: .25rem; }
+	.route-source { margin: .3rem 0 0; font-size: .67rem; color: var(--muted); }
+
+	.blocked-banner {
+		display: flex;
+		gap: .45rem;
+		align-items: flex-start;
+		padding: .55rem .65rem;
+		background: var(--bad-bg);
+		border: 1px solid color-mix(in srgb, var(--bad-ink) 35%, transparent);
+		border-radius: 3px;
+		font-size: .76rem;
+		color: var(--bad-ink);
+	}
+
+	@media (max-width: 760px) {
+		.route-grid { grid-template-columns: 1fr; }
+	}
+
 	.proposed-tag {
 		display: inline-block;
 		font-family: "Barlow Condensed", sans-serif;
@@ -650,52 +741,25 @@
 
 	<hr class="rule">
 
-	<section class="decisions">
-		<h2>Co-Writer, three states side by side</h2>
+	<section class="decisions legacy-route-section">
+		<h2>Co-Writer routes, three states side by side</h2>
 		<p class="state-note" style="min-height:auto">
-			Every state shows the full mini-page: providers first with their real status, then the
-			task block. The active model is always visible before any choice is offered.
+			Each provider has its own CLI/API route switch. The selected route supplies the model list;
+			an unavailable route never silently falls back to the other one.
 		</p>
 
-		<div class="states">
+		<div class="states legacy-states">
 			<div class="state">
 				<div class="state-head">
-					<h3>Normal case</h3>
-					<span class="tag tag-next">Claude active, model pickable</span>
+					<h3>Both routes ready</h3>
+					<span class="tag tag-next">Ready</span>
 				</div>
 				<p class="state-note">
-					All three providers are configured, including the Anthropic API key that the model
-					catalog needs (in addition to the CLI login). Everything works as designed.
+					The admin can choose the route for every provider. Each selected route exposes its own
+					models and version identifiers.
 				</p>
 
 				<div class="mini-page">
-					<div>
-						<p class="block-title">Providers</p>
-						<div class="provider-status-list">
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Claude</span>
-									<span class="detail">configured — Claude Code CLI login, plus ANTHROPIC_API_KEY for the live model catalog</span>
-								</span>
-							</div>
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Grok</span>
-									<span class="detail">configured — XAI_API_KEY set</span>
-								</span>
-							</div>
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Codex</span>
-									<span class="detail">configured — OPENAI_API_KEY set</span>
-								</span>
-							</div>
-						</div>
-					</div>
-
 					<div>
 						<p class="card-title">Co-Writer</p>
 						<p class="card-sub">Provider and model that answer your next message.</p>
@@ -703,33 +767,17 @@
 						<div class="active-banner ok">
 							<span class="dot"></span>
 							<span>
-								<b>Active</b>
-								<span class="model">Claude · claude-sonnet-4-6</span>
-								<span class="caption">Runs via the Claude Code CLI login.</span>
+								<b>Active route</b>
+								<span class="model">Claude · CLI · opus</span>
+								<span class="caption">New turns use the selected route immediately.</span>
 							</span>
 						</div>
 
-						<div class="field-row">
-							<span class="field-label">Provider</span>
-							<div class="provider-picker">
-								<div class="provider-pill selected">
-									<span class="name">Claude</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-								<div class="provider-pill">
-									<span class="name">Grok</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-								<div class="provider-pill">
-									<span class="name">Codex</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-							</div>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">Model</span>
-							<select class="mock"><option>claude-sonnet-4-6</option></select>
+						<p class="block-title">Provider routes</p>
+						<div class="route-grid">
+							<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>opus</option><option>sonnet</option></select><p class="route-source">CLI reports aliases; no version.</p></div></div>
+							<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>grok-4-1-fast</option></select><p class="route-source">Live API catalog.</p></div></div>
+							<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · model reported by CLI.</p></div></div>
 						</div>
 
 						<div class="field-row">
@@ -737,10 +785,7 @@
 							<input class="mock" value="24000">
 						</div>
 
-						<div class="btn-row">
-							<button class="mock-save disabled">Save</button>
-							<span class="save-reason">Nothing changed.</span>
-						</div>
+						<div class="btn-row"><button class="mock-save disabled">Save</button><span class="save-reason">Nothing changed.</span></div>
 					</div>
 				</div>
 			</div>
@@ -931,6 +976,62 @@
 							<button class="mock-save">Save</button>
 							<span class="save-reason dirty-mark">Changed, not saved yet.</span>
 						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Route states — admin Co-Writer settings</h2>
+		<p class="state-note" style="min-height:auto">
+			The selected route is explicit for every provider. API keys are shown only as set or not set;
+			CLI source text may identify its installed version.
+		</p>
+		<div class="states">
+			<div class="state">
+				<div class="state-head"><h3>(a) Both routes ready</h3><span class="tag tag-next">Ready</span></div>
+				<p class="state-note">Every provider can use either route. The chosen route supplies its own model dropdown.</p>
+				<div class="mini-page">
+					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+					<div class="active-banner ok"><span class="dot"></span><span><b>Active route</b><span class="model">Claude · CLI · opus</span><span class="caption">New turns follow this route immediately.</span></span></div>
+					<p class="block-title">Provider routes</p>
+					<div class="route-grid">
+						<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>opus</option><option>sonnet</option></select><p class="route-source">CLI alias; no version.</p></div></div>
+						<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>grok-4-1-fast</option></select><p class="route-source">Live API catalog.</p></div></div>
+						<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="state">
+				<div class="state-head"><h3>(b) Selected route broken</h3><span class="tag tag-now">Turn blocked</span></div>
+				<p class="state-note">The selected Grok API route is broken. The reason is visible and the turn stays blocked; there is no silent CLI fallback.</p>
+				<div class="mini-page">
+					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+					<div class="blocked-banner"><span>●</span><span><strong>Turn blocked</strong><br>Grok API · broken — rate limit exceeded. Choose a ready route to continue.</span></div>
+					<p class="block-title">Provider routes</p>
+					<div class="route-grid">
+						<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>claude-opus-4-6</option></select></div></div>
+						<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status broken"><span class="dot"></span><span><strong>API · broken</strong><small>Rate limit exceeded</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock" disabled><option>grok-4-1-fast</option></select></div></div>
+						<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="state">
+				<div class="state-head"><h3>(c) No routes set up</h3><span class="tag tag-state">Unavailable</span></div>
+				<p class="state-note">Neither route is configured for any provider. Providers remain visible but unavailable, with no model value invented.</p>
+				<div class="mini-page">
+					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+					<div class="blocked-banner"><span>●</span><span><strong>Provider unavailable</strong><br>No ready route is configured. A new turn cannot start.</span></div>
+					<p class="block-title">Provider routes</p>
+					<div class="route-grid">
+						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
+						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
+						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>Codex CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
 					</div>
 				</div>
 			</div>
