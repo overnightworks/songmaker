@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from io import BytesIO
 from pathlib import Path
@@ -31,6 +32,18 @@ from songmaker_cli.cowriter.errors import (
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs.cover_suggestions import build_cover_prompt, run_cover_suggestion_job
+
+_REDACTED_CODEX_LOGIN = {
+    "auth_mode": "chatgpt",
+    "OPENAI_API_KEY": None,
+    "last_refresh": "2026-09-04T19:20:00Z",
+    "tokens": {
+        "id_token": "id-token",
+        "access_token": "access-token",
+        "account_id": "account",
+        "refresh_token": "",
+    },
+}
 
 
 def _png_bytes(*, size: tuple[int, int] = (300, 100)) -> bytes:
@@ -91,7 +104,13 @@ def _install_fake_codex_cli(
     outcome: CliRunOutcome | None = None,
 ) -> list[dict]:
     auth_file = tmp_path / "auth.json"
-    auth_file.write_text('{"tokens":{"access_token":"token","refresh_token":"secret"}}')
+    auth_file.write_text(json.dumps({
+        **_REDACTED_CODEX_LOGIN,
+        "tokens": {
+            **_REDACTED_CODEX_LOGIN["tokens"],
+            "refresh_token": "renewal-secret",
+        },
+    }))
     calls: list[dict] = []
 
     def fake_runner(command, **kwargs):
@@ -143,7 +162,9 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
         "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c",
         "mcp_servers={}", "-",
     ) for call in calls)
-    assert all(call["auth"] == '{"tokens": {"access_token": "token"}}' for call in calls)
+    copied_logins = [json.loads(call["auth"]) for call in calls]
+    assert all(login == _REDACTED_CODEX_LOGIN for login in copied_logins)
+    assert all("renewal-secret" not in call["auth"] for call in calls)
     for path in paths:
         with Image.open(audio_dir / path) as image:
             assert image.size == (1024, 1024)
@@ -238,7 +259,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    auth_file.write_text('{"tokens":{"access_token":"token"}}')
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     outside = tmp_path / "outside.png"
     outside.write_bytes(_png_bytes())
     homes: list[Path] = []
@@ -261,7 +282,7 @@ def test_codex_image_timeout_cleans_its_private_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     auth_file = tmp_path / "auth.json"
-    auth_file.write_text('{"tokens":{"access_token":"token"}}')
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     homes: list[Path] = []
 
     def fake_runner(_command, **kwargs):
@@ -278,6 +299,25 @@ def test_codex_image_timeout_cleans_its_private_directory(
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
     assert homes and all(not home.exists() for home in homes)
+
+
+@pytest.mark.parametrize(
+    "document",
+    (
+        None,
+        {**_REDACTED_CODEX_LOGIN, "tokens": {"id_token": "id-token"}},
+    ),
+)
+def test_codex_image_names_missing_or_incomplete_login_mirrors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, document: dict | None,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    if document is not None:
+        auth_file.write_text(json.dumps(document))
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+
+    with pytest.raises(codex_cli_adapter.CodexImageLoginError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
 
 def test_cancelled_cover_job_removes_its_staging_group(
