@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,7 +29,6 @@ from songmaker_cli.api_models import (
     CleanupResponse,
     CoverSuggestionSelectionRequest,
     CoverSuggestionsResponse,
-    JobResponse,
     LibrarySort,
     PaginatedResponse,
     ShareResponse,
@@ -384,12 +383,22 @@ def _utc_day_start() -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-@router.post("/albums/{album_id}/cover-suggestions")
+@router.post(
+    "/albums/{album_id}/cover-suggestions",
+    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    response_model=None,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Album not found"},
+        status.HTTP_409_CONFLICT: {"description": "Cover suggestions are already running"},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Daily suggestion limit reached"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Cover suggestions are unavailable"},
+    },
+)
 def api_create_cover_suggestions(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> JobResponse:
+) -> None:
     album = get_album(session, album_id)
     check_album_access(album, user)
     session.commit()

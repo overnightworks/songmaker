@@ -696,7 +696,7 @@ stream.
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
-| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | Create a cover job subject to the configured per-album UTC-day limit, inspect its latest state and private suggestions, or discard suggestions after the database commit. |
+| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST currently returns 503 and creates no job until the C1b suggestion worker exists; it still reports an active job as 409 and the per-album UTC-day limit as 429. GET inspects the latest job state and private suggestions; DELETE discards suggestions after the database commit. |
 | GET | `/api/albums/{id}/cover-suggestions/{suggestion_id}` | user | Stream one private suggestion after the same album ownership check; no share route exists. |
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |

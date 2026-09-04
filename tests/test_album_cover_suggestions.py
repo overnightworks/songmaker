@@ -105,6 +105,11 @@ def test_create_cover_suggestions_reports_unavailable_without_creating_a_dead_jo
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Cover suggestions are not available yet"}
+    operation = client.app.openapi()["paths"][
+        "/api/albums/{album_id}/cover-suggestions"
+    ]["post"]
+    assert "200" not in operation["responses"]
+    assert operation["responses"]["503"]["description"] == "Cover suggestions are unavailable"
     with factory() as session:
         assert session.query(Job).filter_by(album_id="alice-album").count() == 0
 
@@ -300,7 +305,14 @@ def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     utc_midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
-    monkeypatch.setattr("songmaker_cli.album_api._utc_day_start", lambda: utc_midnight)
+
+    class FixedUtcDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz == timezone.utc
+            return utc_midnight + timedelta(microseconds=1)
+
+    monkeypatch.setattr("songmaker_cli.album_api.datetime", FixedUtcDateTime)
     _add_cover_job(
         factory,
         status=JobStatus.FAILED,
