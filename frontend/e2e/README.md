@@ -61,10 +61,11 @@ library through the public API (`seed.ts`) and saves the session as the storage
 state every test reuses. Seeding is the only place that talks to the API
 directly; everything a flow asserts, it clicks.
 
-The seed builds one album with three songs, a real take per song imported from
+The seed builds one base album with three songs, a real take per song imported from
 `fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist
 holding two of those takes, and a public link for the album — plus a second,
-songs-only album for the rail's one-open-album proof and enough filler albums
+songs-only album for the rail's one-open-album proof, a dedicated empty album
+for the kinetic-strip flow, and enough filler albums
 (`RAIL_FILLER_ALBUM_COUNT` in `seed.ts`) to overflow the rail's own scroll
 region for the Settings pin promise. The filler albums are seeded directly
 against the database (`scripts/seed_e2e_filler_albums.py`, run inside the web

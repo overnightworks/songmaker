@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import type { OpenCollection } from '$lib/stores/collection';
 	import { albumList } from '$lib/stores/libraryData';
@@ -8,20 +9,26 @@
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { albumSummaryLabel, playlistSummaryLabel } from '$lib/utils/format';
+	import { albumSummaryLabel, playlistSummaryLabel, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
+		LIBRARY_ROW_COLLAPSE_LABEL,
+		LIBRARY_ROW_COMPACT_MEDIA,
+		LIBRARY_ROW_EXPAND_LABEL,
 		LIBRARY_FILTER_LABELS,
 		LIBRARY_ROW_FILTER_EMPTY
 	} from '$lib/constants';
+	import { libraryRowOpenPreference, setLibraryRowOpen } from '$lib/stores/playbackSettings';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import LibraryRowFilter from './LibraryRowFilter.svelte';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		collection: OpenCollection;
+		collapsible?: boolean;
 	}
 
-	let { collection }: Props = $props();
+	let { collection, collapsible = false }: Props = $props();
 
 	interface RowTile {
 		id: string;
@@ -67,6 +74,44 @@
 	const rowLabel = $derived(
 		collection.kind === 'album' ? LIBRARY_FILTER_LABELS.albums : LIBRARY_FILTER_LABELS.playlists
 	);
+	const currentTile = $derived(tiles.find((tile) => tile.id === collection.id) ?? null);
+	const collapsedSummary = $derived.by(() => {
+		if (collection.kind !== 'album')
+			return currentTile ? `${currentTile.title} · ${currentTile.subtitle}` : '';
+		const album = $albumList.find((item) => item.id === collection.id);
+		return album ? `${album.title} · ${songCountLabel(album.song_count)}` : '';
+	});
+
+	function matchesCompactLibraryRow(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			typeof window.matchMedia === 'function' &&
+			window.matchMedia(LIBRARY_ROW_COMPACT_MEDIA).matches
+		);
+	}
+
+	// A narrow song/take surface starts closed only until the person expresses
+	// a preference. Reading the media query during initialization means a
+	// client-side album → song remount never paints the open row first. The
+	// preference itself belongs in playbackSettings, alongside Now Playing's
+	// browser-local choice, rather than following a route or a particular album.
+	let compact = $state(matchesCompactLibraryRow());
+	const rowOpen = $derived(!collapsible || ($libraryRowOpenPreference ?? !compact));
+
+	onMount(() => {
+		if (typeof window.matchMedia !== 'function') return;
+		const media = window.matchMedia(LIBRARY_ROW_COMPACT_MEDIA);
+		const sync = () => {
+			compact = media.matches;
+		};
+		sync();
+		media.addEventListener('change', sync);
+		return () => media.removeEventListener('change', sync);
+	});
+
+	function toggleRow(): void {
+		setLibraryRowOpen(!rowOpen);
+	}
 
 	// The row's own instant filter (#402) -- local component state only, not
 	// a store and not a URL param, so it never outlives this row and never
@@ -230,38 +275,60 @@
 	});
 </script>
 
-<div class="library-row-scrim" class:has-overflow={hasMoreToTheRight}>
-	<LibraryRowFilter bind:value={filterQuery} collectionLabel={rowLabel} />
-	{#if hasNoMatches}
-		<p class="library-row-filter-empty">{LIBRARY_ROW_FILTER_EMPTY}</p>
-	{/if}
-	<div
-		class="library-row"
-		aria-label={rowLabel}
-		bind:this={rowEl}
-		use:kineticScroll={{ itemSelector: '.row-tile', onOpen: openTile }}
-	>
-		{#each tiles as tile (tile.id)}
+<div
+	class="library-row-scrim"
+	class:collapsible
+	class:has-overflow={hasMoreToTheRight}
+	class:collapsed={!rowOpen}
+>
+	{#if collapsible}
+		<div class="library-row-bar">
+			<span class="library-row-label">{rowLabel}</span>
+			<span class="library-row-summary">{collapsedSummary}</span>
 			<button
 				type="button"
-				class="row-tile"
-				class:active={tile.id === collection.id}
-				class:filtered-out-but-open={tileFilteredOutButOpen(tile)}
-				data-tile-id={tile.id}
-				aria-current={tile.id === collection.id}
-				title={tile.title}
-				hidden={tileHidden(tile)}
+				class="library-row-toggle"
+				onclick={toggleRow}
+				aria-expanded={rowOpen}
+				aria-label={rowOpen ? LIBRARY_ROW_COLLAPSE_LABEL : LIBRARY_ROW_EXPAND_LABEL}
 			>
-				<LibraryTileContent
-					title={tile.title}
-					subtitle={tile.subtitle}
-					coverAlt={`${ALBUM_COVER_ALT_TYPE} ${tile.title}`}
-					coverUrl={tile.coverUrl}
-					fill={tile.fill}
-				/>
+				<Icon name={rowOpen ? 'chevron-up' : 'chevron-down'} size={16} />
 			</button>
-		{/each}
-	</div>
+		</div>
+	{/if}
+	{#if rowOpen}
+		<LibraryRowFilter bind:value={filterQuery} collectionLabel={rowLabel} />
+		{#if hasNoMatches}
+			<p class="library-row-filter-empty">{LIBRARY_ROW_FILTER_EMPTY}</p>
+		{/if}
+		<div
+			class="library-row"
+			aria-label={rowLabel}
+			bind:this={rowEl}
+			use:kineticScroll={{ itemSelector: '.row-tile', onOpen: openTile }}
+		>
+			{#each tiles as tile (tile.id)}
+				<button
+					type="button"
+					class="row-tile"
+					class:active={tile.id === collection.id}
+					class:filtered-out-but-open={tileFilteredOutButOpen(tile)}
+					data-tile-id={tile.id}
+					aria-current={tile.id === collection.id}
+					title={tile.title}
+					hidden={tileHidden(tile)}
+				>
+					<LibraryTileContent
+						title={tile.title}
+						subtitle={tile.subtitle}
+						coverAlt={`${ALBUM_COVER_ALT_TYPE} ${tile.title}`}
+						coverUrl={tile.coverUrl}
+						fill={tile.fill}
+					/>
+				</button>
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -272,6 +339,58 @@
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);
 		background: var(--surface-hover);
+	}
+
+	.library-row-bar {
+		display: flex;
+		align-items: center;
+		min-height: 2.5rem;
+		padding-inline: 0.9rem;
+		gap: 0.6rem;
+	}
+
+	.library-row-summary {
+		min-width: 0;
+		margin-left: auto;
+		overflow: hidden;
+		color: var(--primary);
+		font-size: 0.78rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.library-row-label {
+		flex-shrink: 0;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.library-row-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		border: 0;
+		border-radius: 4px;
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.library-row-toggle:hover {
+		background: var(--surface);
+		color: var(--text);
+	}
+
+	.library-row-toggle:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 
 	.library-row-scrim::after {
@@ -288,6 +407,12 @@
 
 	.library-row-scrim.has-overflow::after {
 		opacity: 1;
+	}
+
+	/* The scroll cue belongs to the tile strip. Keeping it below the control
+	   bar stops its fade from washing out the collapse/expand affordance. */
+	.library-row-scrim.collapsible::after {
+		top: 2.5rem;
 	}
 
 	.library-row {
