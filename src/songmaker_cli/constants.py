@@ -29,6 +29,10 @@ JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
 JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
     "Image tool blocked. Ask an administrator to enable the image tool."
 )
+JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
+    "Codex did not create a cover image. Try again or ask an administrator "
+    "to enable image generation."
+)
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
