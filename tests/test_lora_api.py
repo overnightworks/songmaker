@@ -110,6 +110,47 @@ def test_create_lora_happy_path(client_a: TestClient) -> None:
     assert data["samples"] == []
 
 
+def test_create_lora_allows_requests_below_configured_voice_limit(
+    client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MAX_USER_LORAS", "2")
+
+    first = client_a.post("/api/loras", json={"name": "First"})
+    second = client_a.post("/api/loras", json={"name": "Second"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+
+def test_create_lora_returns_named_voice_limit_error(
+    client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MAX_USER_LORAS", "1")
+    assert client_a.post("/api/loras", json={"name": "First"}).status_code == 200
+
+    response = client_a.post("/api/loras", json={"name": "Second"})
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Could not create voice\n"
+        "You have reached the limit of 1 voices. Delete a voice before creating another.",
+        "reason": "voice_limit",
+    }
+
+
+def test_create_lora_does_not_count_a_deleted_voice_toward_the_limit(
+    client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MAX_USER_LORAS", "1")
+    first = client_a.post("/api/loras", json={"name": "First"})
+    assert first.status_code == 200
+    assert client_a.delete(f"/api/loras/{first.json()['id']}").status_code == 200
+
+    replacement = client_a.post("/api/loras", json={"name": "Replacement"})
+
+    assert replacement.status_code == 200
+
+
 def test_create_lora_slug_collision_appends_suffix(client_a: TestClient) -> None:
     first = client_a.post("/api/loras", json={"name": "My Voice"})
     assert first.status_code == 200
@@ -1090,6 +1131,28 @@ def test_train_rejects_when_already_active(
 
     resp = client.post(f"/api/loras/{lora_id}/train")
     assert resp.status_code == 409
+
+
+def test_train_returns_named_training_queue_limit_error(
+    client_and_ctx: tuple[TestClient, AppContext], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, ctx = client_and_ctx
+    monkeypatch.setenv("MAX_QUEUED_LORA_TRAINING_JOBS", "1")
+    lora_id = _seed_trainable_lora(ctx)
+    with ctx.db() as session:
+        session.add(Job(
+            id="already-waiting", type="lora_training", status=JobStatus.QUEUED,
+        ))
+        session.commit()
+
+    response = client.post(f"/api/loras/{lora_id}/train")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Training queue is full\n"
+        "1 trainings are already waiting. Try again when one training starts or finishes.",
+        "reason": "training_queue_full",
+    }
 
 
 def test_train_rejects_when_soft_deleted(

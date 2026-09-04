@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
+from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import JobStatus, JobType, LoraStatus
 from songmaker_cli.db.engine import (
@@ -53,6 +54,8 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.lifecycle import reconcile_crashed_loras
+from songmaker_cli.lora_api import api_create_lora
+from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
@@ -150,6 +153,52 @@ def test_concurrent_job_creation(pg_factory) -> None:
     assert not errors, f"Errors during concurrent job creation: {errors}"
     assert len(results) == 10
     assert len(set(results)) == 10
+
+
+@SKIP_NO_PG
+def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
+    pg_factory, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The advisory lock admits one of two simultaneous creates at the limit.
+
+    The session lock timeout turns a missed lock release into a test failure,
+    rather than an indefinitely blocked CI worker.
+    """
+    monkeypatch.setenv("MAX_USER_LORAS", "1")
+    get_settings.cache_clear()
+    with pg_factory() as session:
+        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.commit()
+
+    barrier = threading.Barrier(2)
+    statuses: list[int] = []
+    errors: list[Exception] = []
+    user = AuthenticatedUser(
+        id="lora-user", username="lora-user", role="user", is_active=True,
+    )
+
+    def create(name: str) -> None:
+        try:
+            with pg_factory() as session:
+                session.execute(text("SET lock_timeout = '10s'"))
+                session.commit()
+                barrier.wait(timeout=10)
+                result = api_create_lora(UserLoraCreateRequest(name=name), user, session)
+                statuses.append(result.status_code if hasattr(result, "status_code") else 200)
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=create, args=(name,)) for name in ("First", "Second")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert not errors, f"Errors during concurrent LoRA creation: {errors}"
+    assert sorted(statuses) == [200, 409]
+    with pg_factory() as session:
+        assert session.query(UserLora).filter(UserLora.deleted_at.is_(None)).count() == 1
 
 
 @SKIP_NO_PG

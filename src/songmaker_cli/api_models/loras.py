@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,6 +13,16 @@ if TYPE_CHECKING:
 
 class UserLoraCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+
+class LoraCapacityReason(str, Enum):
+    VOICE_LIMIT = "voice_limit"
+    TRAINING_QUEUE_FULL = "training_queue_full"
+
+
+class LoraCapacityErrorResponse(BaseModel):
+    detail: str
+    reason: LoraCapacityReason
 
 
 class UserLoraSampleCreateRequest(BaseModel):

@@ -278,6 +278,8 @@ class Settings(BaseSettings):
     # ── arq workers ───────────────────────────────────────────────────
     arq_job_timeout: int = 1000
     arq_drain_timeout: int = 300
+    max_user_loras: int = Field(default=10, ge=1)
+    max_queued_lora_training_jobs: int = Field(default=2, ge=1)
     lora_training_job_timeout: int = Field(default=3600, gt=0)
     lora_training_lokr_linear_dim: int = Field(default=64, ge=1, le=256)
     lora_training_lokr_linear_alpha: int = Field(default=128, ge=1, le=512)
