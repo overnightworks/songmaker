@@ -17,7 +17,7 @@ from songmaker_cli.claude.provider import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from songmaker_cli.cowriter import claude_adapter
+from songmaker_cli.cowriter import claude_adapter, tool_loop
 from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, anthropic_tool_schemas
 from songmaker_cli.db.engine import init_test_db
@@ -203,7 +203,7 @@ def test_claude_api_refuses_a_tool_call_after_the_limit(monkeypatch) -> None:
         _FakeStream([], _AssistantMessage([_ToolUseBlock("call-1", "list_albums", {})])),
     ])
     _install_anthropic(monkeypatch, client)
-    monkeypatch.setattr(claude_adapter, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
 
     with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_events(**_turn_arguments()))
@@ -222,19 +222,27 @@ def test_claude_api_names_protocol_and_tool_execution_failures(monkeypatch) -> N
 
     assert malformed.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
-    failing_client = _FakeClient([_FakeStream([], _AssistantMessage([
-        _ToolUseBlock("call-1", "get_song", {"song_id": "s1"}),
-    ]))])
+    failing_client = _FakeClient([
+        _FakeStream([], _AssistantMessage([
+            _ToolUseBlock("call-1", "get_song", {"song_id": "s1"}),
+        ])),
+        _FakeStream([], _AssistantMessage([])),
+    ])
     _install_anthropic(monkeypatch, failing_client)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
         lambda *_args: (_ for _ in ()).throw(RuntimeError("failed")),
     )
 
-    with pytest.raises(ProviderUnavailableError) as failed:
-        asyncio.run(_events(**_turn_arguments()))
+    events = asyncio.run(_events(**_turn_arguments()))
 
-    assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+    assert events == [
+        ToolCallEvent(tool_use_id="call-1", name="get_song", input={"song_id": "s1"}),
+        ToolResultEvent(
+            tool_use_id="call-1", content="Co-Writer tool failed.", is_error=True,
+        ),
+        FinalEvent(text=""),
+    ]
 
 
 def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(monkeypatch) -> None:
