@@ -28,6 +28,9 @@ class _Task:
     kind: TaskKind
     state: TaskState = "pending"
     progress: float = 0.0
+    current_epoch: int | None = None
+    train_epochs: int | None = None
+    training_started_at: datetime | None = None
     result: TaskResult | None = None
     error: str | None = None
     created_at: datetime = field(default_factory=_now)
@@ -41,6 +44,9 @@ class _Task:
             kind=self.kind,
             state=self.state,
             progress=self.progress,
+            current_epoch=self.current_epoch,
+            train_epochs=self.train_epochs,
+            training_started_at=self.training_started_at,
             result=self.result,
             error=self.error,
             created_at=self.created_at,
@@ -62,17 +68,37 @@ class TaskStore:
         self._lock = asyncio.Lock()
         self._retention = retention_seconds
 
-    async def create(self, kind: TaskKind) -> str:
+    async def create(self, kind: TaskKind, *, train_epochs: int | None = None) -> str:
+        if kind != "train_lora" and train_epochs is not None:
+            raise ValueError("Only LoRA training tasks have epochs")
         task_id = f"{kind[:3]}-{uuid4().hex[:12]}"
         async with self._lock:
-            self._tasks[task_id] = _Task(task_id=task_id, kind=kind)
+            self._tasks[task_id] = _Task(
+                task_id=task_id,
+                kind=kind,
+                current_epoch=0 if train_epochs is not None else None,
+                train_epochs=train_epochs,
+            )
         return task_id
 
     async def mark_running(self, task_id: str) -> None:
         await self._update(task_id, state="running")
 
-    async def update_progress(self, task_id: str, progress: float) -> None:
-        await self._update(task_id, progress=progress)
+    async def mark_training_started(self, task_id: str) -> None:
+        await self._update(task_id, training_started_at=_now())
+
+    async def update_progress(
+        self,
+        task_id: str,
+        progress: float,
+        *,
+        current_epoch: int | None = None,
+    ) -> None:
+        await self._update(
+            task_id,
+            progress=progress,
+            current_epoch=current_epoch,
+        )
 
     async def complete(self, task_id: str, result: TaskResult) -> None:
         await self._update(
@@ -88,6 +114,8 @@ class TaskStore:
         *,
         state: TaskState | None = None,
         progress: float | None = None,
+        current_epoch: int | None = None,
+        training_started_at: datetime | None = None,
         result: TaskResult | None = None,
         error: str | None = None,
         terminal: bool = False,
@@ -100,6 +128,10 @@ class TaskStore:
                 task.state = state
             if progress is not None:
                 task.progress = progress
+            if current_epoch is not None:
+                task.current_epoch = current_epoch
+            if training_started_at is not None:
+                task.training_started_at = training_started_at
             if result is not None:
                 task.result = result
             if error is not None:

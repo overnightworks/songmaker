@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -701,6 +702,72 @@ def test_job_to_dict(seeded_session: Session) -> None:
     assert d["type"] == "generate"
     assert d["status"] == "queued"
     assert "id" in d
+
+
+def test_job_response_exposes_calculating_until_an_epoch_rate_exists(
+    seeded_session: Session,
+) -> None:
+    from songmaker_cli.api_models.jobs import REMAINING_TIME_ESTIMATE_CALCULATING
+
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.current_epoch = 0
+    job.train_epochs = 500
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(job)
+
+    assert response.current_epoch == 0
+    assert response.train_epochs == 500
+    assert response.remaining_time_estimate == REMAINING_TIME_ESTIMATE_CALCULATING
+
+
+def test_job_response_estimates_remaining_time_from_observed_epochs(
+    seeded_session: Session,
+) -> None:
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.status = JobStatus.RUNNING
+    job.current_epoch = 100
+    job.train_epochs = 500
+    job.started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.training_started_at = datetime(2030, 1, 1, 0, 5, tzinfo=timezone.utc)
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(
+        job,
+        now=datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc),
+    )
+
+    assert response.remaining_time_estimate == 1_200
+
+
+@pytest.mark.parametrize(
+    ("status", "remaining_time_estimate"),
+    [
+        (JobStatus.QUEUED, "calculating"),
+        (JobStatus.COMPLETED, 0),
+        (JobStatus.FAILED, 0),
+        (JobStatus.PARTIAL, 0),
+        (JobStatus.CANCELLED, 0),
+    ],
+)
+def test_job_response_does_not_estimate_after_training_stops(
+    seeded_session: Session,
+    status: JobStatus,
+    remaining_time_estimate: int | str,
+) -> None:
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.status = status
+    job.current_epoch = 400
+    job.train_epochs = 500
+    job.training_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(
+        job,
+        now=datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc),
+    )
+
+    assert response.remaining_time_estimate == remaining_time_estimate
 
 
 # ── Create generation + scores tests ─────────────────────────────────
@@ -2294,6 +2361,45 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "alembic_version",
     }
     assert tables == expected
+
+
+def test_training_epoch_migration_up_and_down(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    isolated_logging,
+) -> None:
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    from songmaker_cli.db.migrations.versions import (
+        a8c4d1e9f275_add_training_epochs_to_jobs as migration,
+    )
+
+    db_path = tmp_path / "training-epochs.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    logging.getLogger("migration.test").warning("capture remains attached")
+    assert "capture remains attached" in caplog.text
+    engine = create_engine(f"sqlite:///{db_path}")
+    assert {"current_epoch", "train_epochs", "training_started_at"} <= {
+        column["name"] for column in inspect(engine).get_columns("jobs")
+    }
+    engine.dispose()
+
+    command.downgrade(config, migration.down_revision)
+    from songmaker_cli.db.migration_logging import _MigrationLogHandler
+
+    root = logging.getLogger()
+    assert caplog.handler in root.handlers
+    assert sum(isinstance(handler, _MigrationLogHandler) for handler in root.handlers) == 1
+    engine = create_engine(f"sqlite:///{db_path}")
+    assert not {"current_epoch", "train_epochs", "training_started_at"} & {
+        column["name"] for column in inspect(engine).get_columns("jobs")
+    }
+    engine.dispose()
 
 
 def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> None:

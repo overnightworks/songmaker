@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 
 # Required env vars for Settings construction at module-import time.
@@ -28,12 +29,37 @@ from unittest.mock import MagicMock, patch  # noqa: E402
 import fakeredis  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
+import structlog  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 
 
 _fake_cli_processes: list[MagicMock] = []
+
+
+@pytest.fixture
+def isolated_logging():
+    managed_loggers = (
+        logging.getLogger(),
+        logging.getLogger("alembic"),
+        logging.getLogger("sqlalchemy.engine"),
+    )
+    logger_states = [
+        (logger, logger.handlers[:], logger.level, logger.disabled, logger.propagate)
+        for logger in managed_loggers
+    ]
+    structlog_state = structlog.get_config()
+    yield
+    for logger, handlers, level, disabled, propagate in logger_states:
+        for handler in logger.handlers:
+            if handler not in handlers:
+                handler.close()
+        logger.handlers[:] = handlers
+        logger.setLevel(level)
+        logger.disabled = disabled
+        logger.propagate = propagate
+    structlog.configure(**structlog_state)
 
 
 @pytest.fixture(scope="module", autouse=True)
