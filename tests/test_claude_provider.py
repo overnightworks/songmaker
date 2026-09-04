@@ -2084,7 +2084,8 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
         def get_map(self) -> dict[object, SimpleNamespace]:
             return self._registrations
 
-        def select(self, _timeout: float) -> list[tuple[SimpleNamespace, int]]:
+        def select(self, timeout: float | None = None) -> list[tuple[SimpleNamespace, int]]:
+            del timeout
             stdin = next(
                 (item for item in self._registrations.values() if item.data == "stdin"),
                 None,
@@ -2118,10 +2119,10 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
         except BaseException as error:
             failures.append(error)
 
+    probe_thread = threading.Thread(target=probe)
     try:
-        probe_thread = threading.Thread(target=probe)
         probe_thread.start()
-        pipe_stalled.wait()
+        assert pipe_stalled.wait(timeout=1), failures
         assert spawned.is_set()
         incrementing_monotonic_clock.now += provider.CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS
         expire_probe.set()
@@ -2136,6 +2137,8 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
         provider._release_zombie_reservation(reservation)
     finally:
         expire_probe.set()
+        probe_thread.join(timeout=1)
+        assert not probe_thread.is_alive()
         for proc in processes:
             proc.stdout.close()
             proc._stdin_reader.close()
