@@ -114,8 +114,8 @@ class FakeClient:
         return {
             "id": contract.EXPECTED_REPOSITORY_ID,
             "full_name": contract.EXPECTED_REPOSITORY_FULL_NAME,
-            "url": "https://api.github.com/repos/FlexOr2/songmaker",
-            "html_url": "https://github.com/FlexOr2/songmaker",
+            "url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
+            "html_url": f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
         }
 
     def issue(self, issue_number: int, _deadline: float) -> dict[str, Any]:
@@ -123,9 +123,9 @@ class FakeClient:
         return {
             "id": 2001,
             "number": self.issue_number,
-            "repository_url": "https://api.github.com/repos/FlexOr2/songmaker",
-            "url": f"https://api.github.com/repos/FlexOr2/songmaker/issues/{self.issue_number}",
-            "html_url": f"https://github.com/FlexOr2/songmaker/issues/{self.issue_number}",
+            "repository_url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
+            "url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/{self.issue_number}",
+            "html_url": f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/{self.issue_number}",
         }
 
     def comment(self, comment_id: int, _deadline: float) -> dict[str, Any]:
@@ -135,14 +135,14 @@ class FakeClient:
             "id": self.comment_id,
             "user": {"id": contract.EXPECTED_OPERATOR_ID},
             "issue_url": (
-                f"https://api.github.com/repos/FlexOr2/songmaker/issues/{self.issue_number}"
+                f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/{self.issue_number}"
             ),
             "url": (
-                "https://api.github.com/repos/FlexOr2/songmaker/issues/comments/"
+                f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/comments/"
                 f"{self.comment_id}"
             ),
             "html_url": (
-                f"https://github.com/FlexOr2/songmaker/issues/{self.issue_number}"
+                f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/{self.issue_number}"
                 f"#issuecomment-{self.comment_id}"
             ),
             "body": body,
