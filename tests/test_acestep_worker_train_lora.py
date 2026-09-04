@@ -68,8 +68,12 @@ def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
         operation_events.append(f"train_lora:{request.mode}")
         train_events.append(f"start:{port}")
         await store.mark_running(task_id)
-        await store.update_progress(task_id, 0.1)
-        await store.update_progress(task_id, 0.5)
+        await store.update_progress(task_id, 0.1, current_epoch=0)
+        await store.update_progress(
+            task_id,
+            0.5,
+            current_epoch=request.train_epochs // 2,
+        )
         await store.complete(
             task_id,
             TrainLoraTaskResult(
@@ -331,6 +335,8 @@ def test_train_lora_501_when_runner_missing(tmp_path: Path) -> None:
 
 
 def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
+    import json
+
     deps = _make_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
     dataset_dir.mkdir()
@@ -369,6 +375,14 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
     joined = "".join(events)
     assert "event: done" in joined
     assert "adapter_dir" in joined
+    progress_events = [
+        json.loads(frame.removeprefix("data: "))
+        for frame in joined.splitlines()
+        if frame.startswith("data: ")
+    ]
+    assert progress_events
+    assert all(event["train_epochs"] == 500 for event in progress_events)
+    assert any(event["current_epoch"] == 250 for event in progress_events)
     assert deps._operation_events == [  # type: ignore[attr-defined]
         "load_model:sft",
         "train_lora:sft",
@@ -467,7 +481,9 @@ def test_handover_claim_cannot_race_a_coordinator_release(
             for route in build_router(deps).routes
             if route.path == "/gpu_hold/release"
         )
-        claim_task = asyncio.create_task(_create_gpu_hold_handover_task(deps, "hold-token"))
+        claim_task = asyncio.create_task(
+            _create_gpu_hold_handover_task(deps, "hold-token", train_epochs=500),
+        )
         await claim_entered.wait()
         release_task = asyncio.create_task(release(GpuHoldTokenRequest(token="hold-token")))
         await asyncio.sleep(0)
@@ -577,7 +593,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
         )
         original_create = deps.task_store.create
 
-        async def failed_create(_: str) -> str:
+        async def failed_create(_: str, **_kwargs: object) -> str:
             raise RuntimeError("task store unavailable")
 
         monkeypatch.setattr(deps.task_store, "create", failed_create)

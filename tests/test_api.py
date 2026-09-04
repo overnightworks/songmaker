@@ -2522,6 +2522,37 @@ def test_stream_job_initial_state(client: TestClient) -> None:
     assert events[0]["status"] == "completed"
 
 
+def test_stream_job_carries_training_epochs_and_calculating_eta(
+    client: TestClient,
+) -> None:
+    import json
+
+    from songmaker_cli.api_models.jobs import REMAINING_TIME_ESTIMATE_CALCULATING
+    from songmaker_cli.constants import JobStatus
+    from songmaker_cli.db.queries import create_job
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "lora_training", user_id=_DEFAULT_USER_ID)
+        job.current_epoch = 0
+        job.train_epochs = 500
+        job.status = JobStatus.COMPLETED
+        session.commit()
+        job_id = job.id
+
+    _authenticate_job_stream_client(client)
+    with client.stream("GET", f"/api/jobs/{job_id}/stream") as response:
+        event = next(
+            json.loads(line.removeprefix("data: "))
+            for line in response.iter_lines()
+            if line.startswith("data: ")
+        )
+
+    assert event["current_epoch"] == 0
+    assert event["train_epochs"] == 500
+    assert event["remaining_time_estimate"] == REMAINING_TIME_ESTIMATE_CALCULATING
+
+
 def test_stream_job_sends_updates(client: TestClient) -> None:
     import asyncio
     import json

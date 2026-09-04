@@ -87,7 +87,7 @@ class _LoraHandoverProbe:
     task_id: str | None = None
 
 
-ProgressCallback = Callable[[float], Awaitable[None] | None]
+ProgressCallback = Callable[[float, int, int], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 
 
@@ -211,13 +211,24 @@ async def _pick_and_call_worker(
         task_id,
         options=DispatchOptions(),
     ):
-        if on_heartbeat is not None:
-            maybe = on_heartbeat()
-            if asyncio.iscoroutine(maybe):
-                await maybe
+        done = False
         if event_type == "progress":
             fraction = float(data.get("progress", 0.0))
-            maybe = on_progress(fraction)
+            current_epoch = data.get("current_epoch")
+            train_epochs = data.get("train_epochs")
+            if (
+                isinstance(current_epoch, bool)
+                or not isinstance(current_epoch, int)
+                or isinstance(train_epochs, bool)
+                or not isinstance(train_epochs, int)
+                or current_epoch < 0
+                or train_epochs < 1
+                or current_epoch > train_epochs
+            ):
+                raise WorkerProtocolError(
+                    "Worker progress event has invalid training epoch fields",
+                )
+            maybe = on_progress(fraction, current_epoch, train_epochs)
             if asyncio.iscoroutine(maybe):
                 await maybe
         elif event_type == "done":
@@ -231,9 +242,15 @@ async def _pick_and_call_worker(
                 raise WorkerTaskFailed(
                     f"Worker returned invalid train_lora result: {exc}",
                 ) from exc
-            break
+            done = True
         elif event_type == "error":
             raise WorkerTaskFailed(data.get("error") or "train_lora failed")
+        if on_heartbeat is not None:
+            maybe = on_heartbeat()
+            if asyncio.iscoroutine(maybe):
+                await maybe
+        if done:
+            break
     if last_result is None:
         raise WorkerTaskFailed("SSE stream ended without done/error event")
     return last_result
@@ -429,16 +446,21 @@ async def _prepare_and_submit_lora(
             shutil.rmtree(tmp_output)
 
         last_update = 0.0
+        last_epoch: int | None = None
         last_status_name: str = LoraStatus.PREPROCESSING
 
-        def on_progress(fraction: float) -> None:
-            nonlocal last_update, last_status_name
+        def on_progress(fraction: float, current_epoch: int, train_epochs: int) -> None:
+            nonlocal last_epoch, last_update, last_status_name
             import time as _t
 
             now = _t.monotonic()
-            if now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS:
+            if (
+                current_epoch == last_epoch
+                and now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS
+            ):
                 return
             last_update = now
+            last_epoch = current_epoch
             new_status = LoraStatus.PREPROCESSING
             if fraction >= 0.90:
                 new_status = LoraStatus.EXPORTING
@@ -449,7 +471,14 @@ async def _prepare_and_submit_lora(
                     update_user_lora(session, lora_id, status=new_status)
                     session.commit()
                 last_status_name = new_status
-            _update_job(db_factory, job_id, JobStatus.RUNNING, progress=fraction)
+            _update_job(
+                db_factory,
+                job_id,
+                JobStatus.RUNNING,
+                progress=fraction,
+                current_epoch=current_epoch,
+                train_epochs=train_epochs,
+            )
 
         def on_heartbeat() -> None:
             _touch_heartbeat(db_factory, job_id)

@@ -703,6 +703,40 @@ def test_job_to_dict(seeded_session: Session) -> None:
     assert "id" in d
 
 
+def test_job_response_exposes_calculating_until_an_epoch_rate_exists(
+    seeded_session: Session,
+) -> None:
+    from songmaker_cli.api_models.jobs import REMAINING_TIME_ESTIMATE_CALCULATING
+
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.current_epoch = 0
+    job.train_epochs = 500
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(job)
+
+    assert response.current_epoch == 0
+    assert response.train_epochs == 500
+    assert response.remaining_time_estimate == REMAINING_TIME_ESTIMATE_CALCULATING
+
+
+def test_job_response_estimates_remaining_time_from_observed_epochs(
+    seeded_session: Session,
+) -> None:
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.current_epoch = 100
+    job.train_epochs = 500
+    job.started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(
+        job,
+        now=datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc),
+    )
+
+    assert response.remaining_time_estimate == 2_400
+
+
 # ── Create generation + scores tests ─────────────────────────────────
 
 
@@ -2294,6 +2328,34 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "alembic_version",
     }
     assert tables == expected
+
+
+def test_training_epoch_migration_up_and_down(tmp_path: Path) -> None:
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    from songmaker_cli.db.migrations.versions import (
+        a8c4d1e9f275_add_training_epochs_to_jobs as migration,
+    )
+
+    db_path = tmp_path / "training-epochs.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    assert {"current_epoch", "train_epochs"} <= {
+        column["name"] for column in inspect(engine).get_columns("jobs")
+    }
+    engine.dispose()
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    assert not {"current_epoch", "train_epochs"} & {
+        column["name"] for column in inspect(engine).get_columns("jobs")
+    }
+    engine.dispose()
 
 
 def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> None:

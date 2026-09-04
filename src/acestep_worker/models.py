@@ -121,6 +121,8 @@ class TaskSnapshot(BaseModel):
     kind: TaskKind
     state: TaskState
     progress: float = 0.0
+    current_epoch: int | None = None
+    train_epochs: int | None = None
     result: TaskResult | None = None
     error: str | None = None
     created_at: datetime

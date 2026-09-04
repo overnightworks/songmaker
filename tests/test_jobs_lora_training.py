@@ -130,9 +130,9 @@ class _FakeWorker:
 
 
 async def _fake_events_ok(*args, **kwargs) -> AsyncIterator[tuple[str, dict]]:
-    yield ("progress", {"progress": 0.05})
-    yield ("progress", {"progress": 0.25})
-    yield ("progress", {"progress": 0.80})
+    yield ("progress", {"progress": 0.05, "current_epoch": 0, "train_epochs": 500})
+    yield ("progress", {"progress": 0.25, "current_epoch": 25, "train_epochs": 500})
+    yield ("progress", {"progress": 0.80, "current_epoch": 400, "train_epochs": 500})
     yield (
         "done",
         {
@@ -247,6 +247,8 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
 
         job = get_job(session, "job-1")
         assert job.status == JobStatus.COMPLETED
+        assert job.current_epoch == 400
+        assert job.train_epochs == 500
 
         audits = (
             session.query(AuditLog)
@@ -318,9 +320,9 @@ def test_training_progress_keeps_a_long_running_lora_alive(
     )
 
     async def progress_for_long_training(*_args, **_kwargs):
-        yield ("progress", {"progress": 0.20})
+        yield ("progress", {"progress": 0.20, "current_epoch": 0, "train_epochs": 500})
         fake_clock.advance(generation_timeout_seconds + 1)
-        yield ("progress", {"progress": 0.80})
+        yield ("progress", {"progress": 0.80, "current_epoch": 400, "train_epochs": 500})
         assert reap_stale_jobs(
             SimpleNamespace(db=db_factory),
             now=fake_clock.now,
@@ -1017,7 +1019,7 @@ def test_lora_renews_repeatedly_while_model_load_outlasts_the_hold_ttl() -> None
                 worker=worker,
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         return renewals
@@ -1289,7 +1291,7 @@ def test_cancel_before_handover_releases_the_job_hold() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()
@@ -1331,7 +1333,7 @@ def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()
@@ -1390,7 +1392,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         assert result.adapter_dir == "/tmp/adapter"
@@ -1455,7 +1457,7 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=job_renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         assert job_renew_task.cancelled()
@@ -1519,7 +1521,7 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()
