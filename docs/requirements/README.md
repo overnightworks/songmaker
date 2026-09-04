@@ -61,7 +61,7 @@ has one fixed path, a complete unbranched lineage, and exactly one tip whose
 digest matches the current file. One comment can bind only one revision.
 
 A witness is a strict, size-bounded JSON object. It binds the numeric repository,
-issue, comment, and operator-account identities; repository full name; exact
+issue, comment, and operator-account identities; repository full name at capture; exact
 GitHub creation/update timestamps; and base64 plus SHA-256 of the exact ASCII
 line `APPROVE REQUIREMENT REVISION NNNN sha256:<content-digest>`. Creation and
 update timestamps must be identical. Unknown, missing, duplicate, malformed,
@@ -75,6 +75,11 @@ an approval can be edited or deleted later. Edited/deleted comment events,
 pushes, same-repository pull requests, a weekly schedule, and manual dispatch
 rerun the live check. Fork pull requests deliberately skip the token-bearing
 job while the offline pull-request gate still runs.
+
+The live gate follows the current repository full name. Witnesses captured
+before an organization rename retain their recorded full name and remain valid
+only for the same numeric repository identity and explicitly trusted historical
+name; new witnesses record the current name.
 
 Approval is an account-bound authorization step, not proof of a human action.
 The repository operator may post it directly or explicitly delegate it to the
