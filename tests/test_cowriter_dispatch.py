@@ -17,7 +17,7 @@ from songmaker_cli.claude.provider import (
     StreamEvent,
     UnavailableError,
 )
-from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
+from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter, tool_loop
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
@@ -250,19 +250,33 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
     with pytest.raises(ProviderUnavailableError) as limited:
         asyncio.run(collect())
     assert limited.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
 
-    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    responses = [
+        {"choices": [{"message": {"content": "", "tool_calls": [tool_call]}}]},
+        {"choices": [{"message": {"content": "done"}}]},
+    ]
+    monkeypatch.setattr(
+        openai_adapter,
+        "_post_chat",
+        lambda *_args, **_kwargs: _next_response(responses),
+    )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tool exploded")),
     )
-    with pytest.raises(ProviderUnavailableError) as failed:
-        asyncio.run(collect())
-    assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+    events = asyncio.run(collect())
+    result = next(event for event in events if event.type == "tool_result")
+    assert result.is_error is True
+    assert result.content == "Co-Writer tool failed."
+
+
+async def _next_response(responses):
+    return responses.pop(0)
 
 
 def test_claude_api_dispatches_only_to_the_native_tool_adapter(monkeypatch):

@@ -9,13 +9,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from songmaker_cli.claude.provider import (
-    AssistantTextEvent,
     CliBinaryUnavailableError,
     CliToolSurfaceError,
-    FinalEvent,
     StreamEvent,
-    ToolCallEvent,
-    ToolResultEvent,
     UnavailableError,
     acall_claude_with_mcp_stream,
     call_claude,
@@ -23,12 +19,23 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.constants import (
     COWRITER_CLAUDE_API_MAX_TOKENS,
     COWRITER_CLI_TIMEOUT_SECONDS,
-    COWRITER_MAX_TOOL_ROUNDS,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
+)
+from songmaker_cli.cowriter.tool_loop import (
+    FinalText,
+    InitialTurn,
+    TextDelta,
+    ToolCall,
+    ToolCallBatch,
+    ToolLoopLimitError,
+    ToolLoopProtocolError,
+    ToolResultBatch,
+    TransportResponse,
+    stream_tool_loop,
 )
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
@@ -76,8 +83,6 @@ async def stream_claude_api_turn(
     """Stream one Claude API co-writer turn through the shared tool catalog."""
     from songmaker_cli.cowriter.tools import anthropic_tool_schemas, execute_cowriter_tool
 
-    anthropic_messages: list[dict[str, object]] = [dict(message) for message in messages]
-    text_chunks: list[str] = []
     anthropic = None
     try:
         anthropic = _require_anthropic_for_cowriter()
@@ -86,54 +91,98 @@ async def stream_claude_api_turn(
             timeout=COWRITER_CLI_TIMEOUT_SECONDS,
             max_retries=0,
         ) as client:
-            for round_index in range(COWRITER_MAX_TOOL_ROUNDS + 1):
-                async with client.messages.stream(
-                    model=model,
-                    max_tokens=COWRITER_CLAUDE_API_MAX_TOKENS,
-                    system=system,
-                    messages=anthropic_messages,
-                    tools=anthropic_tool_schemas(),
-                ) as stream:
-                    async for text in stream.text_stream:
-                        if not isinstance(text, str):
-                            raise _protocol_error(SafeRouteReasonCode.API_PROTOCOL_ERROR)
-                        text_chunks.append(text)
-                        yield AssistantTextEvent(text=text)
-                    assistant_message = await stream.get_final_message()
-                content = _assistant_content(assistant_message)
-                tool_uses = _tool_uses(content)
-                if tool_uses and round_index == COWRITER_MAX_TOOL_ROUNDS:
-                    raise _protocol_error(SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED)
-                if not tool_uses:
-                    yield FinalEvent(text="".join(text_chunks).strip())
-                    return
-                anthropic_messages.append({"role": "assistant", "content": content})
-                tool_results: list[dict[str, object]] = []
-                for tool_use_id, name, arguments in tool_uses:
-                    yield ToolCallEvent(tool_use_id=tool_use_id, name=name, input=arguments)
-                    try:
-                        result, is_error = execute_cowriter_tool(session, user, name, arguments)
-                    except Exception as exc:
-                        log.warning("Claude API co-writer tool failed class=%s", type(exc).__name__)
-                        raise _protocol_error(SafeRouteReasonCode.TOOL_EXECUTION_FAILED) from exc
-                    yield ToolResultEvent(
-                        tool_use_id=tool_use_id,
-                        content=result,
-                        is_error=is_error,
-                    )
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use_id,
-                        "content": result,
-                        "is_error": is_error,
-                    })
-                anthropic_messages.append({"role": "user", "content": tool_results})
+            transport = _ClaudeApiTransport(
+                client=client,
+                model=model,
+                tool_schemas=anthropic_tool_schemas(),
+            )
+            async for event in stream_tool_loop(
+                provider="claude",
+                route="api",
+                system=system,
+                messages=messages,
+                transport=transport,
+                executor=lambda name, arguments: execute_cowriter_tool(
+                    session, user, name, arguments,
+                ),
+            ):
+                yield event
+    except ToolLoopLimitError as exc:
+        raise _protocol_error(SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED) from exc
+    except ToolLoopProtocolError as exc:
+        raise _protocol_error(SafeRouteReasonCode.API_PROTOCOL_ERROR) from exc
     except ProviderUnavailableError:
         raise
     except Exception as exc:
         log.warning("Claude API co-writer failed class=%s", type(exc).__name__)
         raise _sdk_failure(anthropic, exc) from exc
-    raise AssertionError("unreachable")
+    return
+
+
+class _ClaudeApiTransport:
+    """Claude Messages API wire format behind the shared loop contract."""
+
+    def __init__(self, *, client: object, model: str, tool_schemas: list[dict[str, Any]]) -> None:
+        self._client = client
+        self._model = model
+        self._tool_schemas = tool_schemas
+        self._messages: list[dict[str, object]] | None = None
+        self._assistant_content: list[object] | None = None
+
+    async def aclose(self) -> None:
+        """The enclosing SDK client context owns connection cleanup."""
+
+    async def stream(
+        self, message: InitialTurn | ToolResultBatch,
+    ) -> AsyncIterator[TransportResponse]:
+        self._append_message(message)
+        messages_api = getattr(self._client, "messages", None)
+        if messages_api is None:
+            raise _protocol_error(SafeRouteReasonCode.API_PROTOCOL_ERROR)
+        async with messages_api.stream(
+            model=self._model,
+            max_tokens=COWRITER_CLAUDE_API_MAX_TOKENS,
+            system=self._system,
+            messages=self._messages,
+            tools=self._tool_schemas,
+        ) as stream:
+            async for text in stream.text_stream:
+                if not isinstance(text, str):
+                    raise _protocol_error(SafeRouteReasonCode.API_PROTOCOL_ERROR)
+                if text:
+                    yield TextDelta(text)
+            assistant_message = await stream.get_final_message()
+        content = _assistant_content(assistant_message)
+        tool_uses = _tool_uses(content)
+        if not tool_uses:
+            yield FinalText()
+            return
+        self._assistant_content = content
+        yield ToolCallBatch(tuple(
+            ToolCall(tool_use_id, name, arguments)
+            for tool_use_id, name, arguments in tool_uses
+        ))
+
+    def _append_message(self, message: InitialTurn | ToolResultBatch) -> None:
+        if isinstance(message, InitialTurn):
+            if self._messages is not None:
+                raise ToolLoopProtocolError()
+            self._system = message.system
+            self._messages = [dict(item) for item in message.messages]
+            return
+        if self._messages is None or self._assistant_content is None:
+            raise ToolLoopProtocolError()
+        self._messages.append({"role": "assistant", "content": self._assistant_content})
+        self._messages.append({
+            "role": "user",
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": result.tool_use_id,
+                "content": result.content,
+                "is_error": result.is_error,
+            } for result in message.results],
+        })
+        self._assistant_content = None
 
 
 def _require_anthropic_for_cowriter() -> object:
