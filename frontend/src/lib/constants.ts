@@ -296,7 +296,7 @@ export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
-export const ALBUM_COVER_UPLOAD_LABEL = 'Upload album cover';
+export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
 export const ALBUM_COVER_REPLACE_LABEL = 'Replace album cover';
 export const ALBUM_COVER_REMOVE_LABEL = 'Remove album cover';
 export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest cover';
@@ -310,7 +310,8 @@ export const ALBUM_COVER_SUGGESTIONS_FAILED_TITLE = 'Couldn’t make cover sugge
 export const ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK = 'Cover suggestions failed. Try again.';
 export const ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE =
 	'Creating 3 suggestions · {used} of {limit} today';
-export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace with suggestion';
+export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace…';
+export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
 
 export function albumCoverSuggestionAlt(title: string): string {
 	return `Cover suggestion for ${title}`;
@@ -329,9 +330,7 @@ export const COLLECTION_MENU_LABEL = 'More';
 export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
 export const COLLECTION_MENU_SHARE_PREFIX = 'Share';
 export const COLLECTION_MENU_DELETE_PREFIX = 'Delete';
-export const COLLECTION_MENU_COVER_LABEL = 'Cover…';
 export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
-export const COLLECTION_MENU_COVER_SUGGEST_LABEL = 'Suggest cover';
 export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
 export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive album';

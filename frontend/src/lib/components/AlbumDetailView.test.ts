@@ -302,7 +302,7 @@ describe('AlbumDetailView header', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toEqual([
-			'Cover…',
+			'Upload…',
 			'Rename',
 			'Add to playlist',
 			'Curate album',
@@ -424,6 +424,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
 			'Couldn’t make cover suggestions'
 		);
+		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
 	});
 
 	it('keeps a delayed previous album response from replacing the current album state', async () => {
@@ -498,7 +499,7 @@ describe('AlbumDetailView cover suggestions', () => {
 			expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'one' })
 		);
 		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
-		expect(target.querySelector('.cover-suggestions')?.textContent).not.toContain('Choose a cover');
+		expect(target.querySelector('.cover-suggestions')).toBeNull();
 	});
 
 	it('discards all suggestions and returns to the deliberate Suggest cover action', async () => {
@@ -525,9 +526,53 @@ describe('AlbumDetailView cover suggestions', () => {
 			element.textContent?.trim()
 		);
 
-		expect(items).toContain('Cover…');
-		expect(items).toContain('Suggest cover');
-		expect(items).toContain('Remove cover');
+		expect(items).toEqual([
+			'Upload…',
+			'Replace…',
+			'Remove cover',
+			'Rename',
+			'Add to playlist',
+			'Curate album',
+			'Archive album',
+			'Delete album'
+		]);
+	});
+
+	it('replaces stale suggestions before a new request and keeps its failure visible', async () => {
+		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({
+				suggestions: [
+					{ id: 'one', url: '/suggestion-one.png' },
+					{ id: 'two', url: '/suggestion-two.png' },
+					{ id: 'three', url: '/suggestion-three.png' }
+				]
+			})
+		);
+		discardAlbumCoverSuggestions.mockResolvedValue(undefined);
+		createAlbumCoverSuggestions.mockRejectedValue(
+			new Error('Daily cover suggestion limit reached')
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(3));
+		const menu = await openCollectionMenu(target);
+		Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((element) => element.textContent?.trim() === 'Replace…')
+			?.click();
+
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		expect(discardAlbumCoverSuggestions.mock.invocationCallOrder[0]).toBeLessThan(
+			createAlbumCoverSuggestions.mock.invocationCallOrder[0]
+		);
+		await vi.waitFor(() =>
+			expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+				'Daily cover suggestion limit reached'
+			)
+		);
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(0);
+		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
 	});
 
 	it('keeps replacement suggestions reachable when the album already has a cover', async () => {

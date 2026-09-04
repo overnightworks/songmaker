@@ -44,6 +44,7 @@
 		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTIONS_LOADING,
 		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
+		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SUGGESTIONS_TITLE,
 		ALBUM_COVER_SUGGESTING_LABEL,
 		ALBUM_COVER_SUGGESTION_USE_LABEL,
@@ -142,6 +143,15 @@
 		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
 	);
 	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
+	const showCoverSuggestionsPanel = $derived(
+		Boolean(
+			coverSuggestionsLoading ||
+			isCoverSuggestionGenerating ||
+			hasSuggestions ||
+			coverSuggestionFailure ||
+			!selectedAlbum?.cover
+		)
+	);
 	const coverSuggestionsProgressMessage = $derived(
 		coverSuggestions
 			? formatCoverSuggestionProgress(coverSuggestions.used_today, coverSuggestions.daily_limit)
@@ -225,13 +235,17 @@
 	}
 
 	async function suggestCover(): Promise<void> {
-		if (!selectedAlbum || isCoverSuggestionGenerating) return;
+		if (!selectedAlbum || isCoverSuggestionGenerating || coverSuggestionsLoading) return;
 		const albumId = selectedAlbum.id;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
 		suggestionsRequest += 1;
 		updateCoverSuggestionsState(albumId, (state) => ({ ...state, failure: null, isLoading: true }));
 		try {
+			if (hasSuggestions) {
+				await discardAlbumCoverSuggestions(albumId);
+				updateCoverSuggestionsState(albumId, (state) => ({ ...state, data: null }));
+			}
 			const job = await createAlbumCoverSuggestions(albumId);
 			if (albumId !== currentAlbumId) return;
 			trackJob(job, { albumId });
@@ -510,60 +524,64 @@
 				/>
 			{/snippet}
 		</CollectionHeader>
-		<section class="cover-suggestions" aria-live="polite">
-			{#if coverSuggestionsLoading && !isCoverSuggestionGenerating}
-				<p class="cover-suggestions-loading" role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</p>
-			{:else if isCoverSuggestionGenerating}
-				<h3>{ALBUM_COVER_SUGGESTING_LABEL}</h3>
-				{#if coverSuggestionsProgressMessage}
-					<p>{coverSuggestionsProgressMessage}</p>
+		{#if showCoverSuggestionsPanel}
+			<section class="cover-suggestions" aria-live="polite">
+				{#if coverSuggestionsLoading && !isCoverSuggestionGenerating}
+					<p class="cover-suggestions-loading" role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</p>
+				{:else if isCoverSuggestionGenerating}
+					<h3>{ALBUM_COVER_SUGGESTING_LABEL}</h3>
+					{#if coverSuggestionsProgressMessage}
+						<p>{coverSuggestionsProgressMessage}</p>
+					{/if}
+					<div class="suggestion-placeholders" aria-label={ALBUM_COVER_SUGGESTING_LABEL}>
+						{#each [1, 2, 3] as placeholder (placeholder)}
+							<span class="suggestion-placeholder"></span>
+						{/each}
+					</div>
+					<div
+						class="suggestion-progress"
+						aria-label={`${Math.round(coverSuggestionsProgress * 100)}%`}
+					>
+						<span style:width={`${Math.max(4, coverSuggestionsProgress * 100)}%`}></span>
+					</div>
+				{:else if coverSuggestionFailure}
+					<div class="cover-suggestion-failure" role="alert">
+						<strong>{ALBUM_COVER_SUGGESTIONS_FAILED_TITLE}</strong>
+						<p>{coverSuggestionFailure}</p>
+						<button type="button" onclick={suggestCover}
+							>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
+						>
+					</div>
+				{:else if hasSuggestions}
+					<h3>{ALBUM_COVER_SUGGESTIONS_TITLE}</h3>
+					<p>{ALBUM_COVER_SUGGESTIONS_DETAIL}</p>
+					<div class="suggestion-grid">
+						{#each coverSuggestions?.suggestions ?? [] as suggestion (suggestion.id)}
+							<article class="cover-suggestion">
+								<img src={suggestion.url} alt={albumCoverSuggestionAlt(selectedAlbum.title)} />
+								<button
+									type="button"
+									disabled={coverSuggestionsBusy}
+									onclick={() => selectCoverSuggestion(suggestion.id)}
+								>
+									{ALBUM_COVER_SUGGESTION_USE_LABEL}
+								</button>
+							</article>
+						{/each}
+					</div>
+					<button
+						class="suggestion-discard"
+						type="button"
+						disabled={coverSuggestionsBusy}
+						onclick={discardCoverSuggestions}>{ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL}</button
+					>
+				{:else if !selectedAlbum.cover}
+					<button class="suggest-cover" type="button" onclick={suggestCover}
+						>{ALBUM_COVER_SUGGEST_LABEL}</button
+					>
 				{/if}
-				<div class="suggestion-placeholders" aria-label={ALBUM_COVER_SUGGESTING_LABEL}>
-					{#each [1, 2, 3] as placeholder (placeholder)}
-						<span class="suggestion-placeholder"></span>
-					{/each}
-				</div>
-				<div
-					class="suggestion-progress"
-					aria-label={`${Math.round(coverSuggestionsProgress * 100)}%`}
-				>
-					<span style:width={`${Math.max(4, coverSuggestionsProgress * 100)}%`}></span>
-				</div>
-			{:else if hasSuggestions}
-				<h3>{ALBUM_COVER_SUGGESTIONS_TITLE}</h3>
-				<p>{ALBUM_COVER_SUGGESTIONS_DETAIL}</p>
-				<div class="suggestion-grid">
-					{#each coverSuggestions?.suggestions ?? [] as suggestion (suggestion.id)}
-						<article class="cover-suggestion">
-							<img src={suggestion.url} alt={albumCoverSuggestionAlt(selectedAlbum.title)} />
-							<button
-								type="button"
-								disabled={coverSuggestionsBusy}
-								onclick={() => selectCoverSuggestion(suggestion.id)}
-							>
-								{ALBUM_COVER_SUGGESTION_USE_LABEL}
-							</button>
-						</article>
-					{/each}
-				</div>
-				<button
-					class="suggestion-discard"
-					type="button"
-					disabled={coverSuggestionsBusy}
-					onclick={discardCoverSuggestions}>{ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL}</button
-				>
-			{:else if coverSuggestionFailure}
-				<div class="cover-suggestion-failure" role="alert">
-					<strong>{ALBUM_COVER_SUGGESTIONS_FAILED_TITLE}</strong>
-					<p>{coverSuggestionFailure}</p>
-					<button type="button" onclick={suggestCover}>{ALBUM_COVER_SUGGEST_LABEL}</button>
-				</div>
-			{:else if !selectedAlbum.cover}
-				<button class="suggest-cover" type="button" onclick={suggestCover}
-					>{ALBUM_COVER_SUGGEST_LABEL}</button
-				>
-			{/if}
-		</section>
+			</section>
+		{/if}
 		<input
 			bind:this={coverInput}
 			class="cover-file-input"
