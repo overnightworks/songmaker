@@ -271,10 +271,7 @@
 				failure: null
 			}));
 		} catch (error) {
-			updateCoverSuggestionsState(albumId, (state) => ({
-				...state,
-				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
-			}));
+			addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -301,10 +298,7 @@
 			}));
 			addToast('Cover saved', 'success');
 		} catch (error) {
-			updateCoverSuggestionsState(albumId, (state) => ({
-				...state,
-				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
-			}));
+			addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}

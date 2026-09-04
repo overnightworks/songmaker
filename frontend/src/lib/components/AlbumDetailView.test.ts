@@ -97,6 +97,7 @@ import AlbumNode from './AlbumNode.svelte';
 import { selectSong } from '$lib/stores/navigation';
 import { playAlbumSong } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
+import { addToast } from '$lib/stores/toast';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -225,6 +226,7 @@ beforeEach(() => {
 	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(coverSuggestions());
 	selectAlbumCoverSuggestion.mockReset();
 	discardAlbumCoverSuggestions.mockReset();
+	vi.mocked(addToast).mockReset();
 	activeJobs.set([]);
 	FakeJobEventSource.sources = [];
 	vi.mocked(selectSong).mockReset();
@@ -516,6 +518,38 @@ describe('AlbumDetailView cover suggestions', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.suggest-cover')?.textContent).toContain('Suggest cover')
 		);
+	});
+
+	it('keeps suggestions available when discarding them fails', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		discardAlbumCoverSuggestions.mockRejectedValue(new Error('Could not discard suggestions'));
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.suggestion-discard')).not.toBeNull());
+		requireElement<HTMLButtonElement>(target, '.suggestion-discard').click();
+
+		await vi.waitFor(() =>
+			expect(addToast).toHaveBeenCalledWith('Could not discard suggestions', 'error')
+		);
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it('keeps suggestions available when choosing one fails', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		selectAlbumCoverSuggestion.mockRejectedValue(new Error('Could not save cover'));
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion button')).not.toBeNull());
+		requireElement<HTMLButtonElement>(target, '.cover-suggestion button').click();
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Could not save cover', 'error'));
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
 	it('puts replacement by suggestion beside upload and removal in the existing overflow', async () => {
