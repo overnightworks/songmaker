@@ -8,6 +8,7 @@
 		COLLECTION_MENU_CLOSE_LABEL,
 		COLLECTION_MENU_COVER_LABEL,
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
+		COLLECTION_MENU_COVER_SUGGEST_LABEL,
 		COLLECTION_MENU_CURATE_LABEL,
 		COLLECTION_MENU_DELETE_PREFIX,
 		COLLECTION_MENU_LABEL,
@@ -32,6 +33,7 @@
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
+		oncoversuggest?: () => void;
 		hasCover?: boolean;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
@@ -53,6 +55,7 @@
 		ondelete,
 		onarchive,
 		oncover,
+		oncoversuggest,
 		hasCover = false,
 		onremovecover,
 		onaddtoplaylist,
@@ -155,6 +158,11 @@
 			{#if kind === 'album' && oncover}
 				<button class="menu-item" onclick={() => runAndClose(oncover)}
 					>{COLLECTION_MENU_COVER_LABEL}</button
+				>
+			{/if}
+			{#if kind === 'album' && oncoversuggest}
+				<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
+					>{COLLECTION_MENU_COVER_SUGGEST_LABEL}</button
 				>
 			{/if}
 			{#if kind === 'album' && hasCover && onremovecover}

@@ -11,6 +11,7 @@ const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 export interface ActiveJob {
 	job: JobStatus;
 	songId?: string;
+	albumId?: string;
 	genId?: string;
 	workerId?: string;
 	mode?: string;
@@ -88,8 +89,15 @@ const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function trackJob(
 	job: JobStatus,
-	context: { songId?: string; genId?: string; workerId?: string; mode?: string }
+	context: { songId?: string; albumId?: string; genId?: string; workerId?: string; mode?: string }
 ): void {
+	const existing = get(activeJobs).find((active) => active.job.id === job.id);
+	if (existing) {
+		activeJobs.update((jobs) =>
+			jobs.map((active) => (active.job.id === job.id ? { ...active, ...context, job } : active))
+		);
+		return;
+	}
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
 	if (context.songId && job.type === JOB_TYPE_GENERATE) dismissGenerationFailure(context.songId);
 	streamJob(job.id);

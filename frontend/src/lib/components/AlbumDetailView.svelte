@@ -10,6 +10,12 @@
 		updateAlbum,
 		uploadAlbumCover
 	} from '$lib/api/client';
+	import {
+		createAlbumCoverSuggestions,
+		discardAlbumCoverSuggestions,
+		fetchAlbumCoverSuggestions,
+		selectAlbumCoverSuggestion
+	} from '$lib/api/albums';
 	import { fetchSongs } from '$lib/api/songs';
 	import {
 		albumList,
@@ -29,8 +35,19 @@
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
+		albumCoverSuggestionAlt,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_COVER_SUGGESTIONS_DETAIL,
+		ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL,
+		ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK,
+		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
+		ALBUM_COVER_SUGGESTIONS_LOADING,
+		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
+		ALBUM_COVER_SUGGESTIONS_TITLE,
+		ALBUM_COVER_SUGGESTING_LABEL,
+		ALBUM_COVER_SUGGESTION_USE_LABEL,
+		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN,
 		collectionRowPlayLabel,
@@ -40,7 +57,8 @@
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import type { SongItem } from '$lib/api/types';
+	import { activeJobs, trackJob } from '$lib/stores/jobs';
+	import type { CoverSuggestionsResponse, SongItem } from '$lib/api/types';
 	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import Icon from './Icon.svelte';
@@ -49,6 +67,13 @@
 
 	interface Props {
 		albumId?: string;
+	}
+
+	interface CoverSuggestionsState {
+		albumId: string;
+		data: CoverSuggestionsResponse | null;
+		failure: string | null;
+		isLoading: boolean;
 	}
 
 	let { albumId }: Props = $props();
@@ -81,6 +106,195 @@
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
+	let coverSuggestionsState = $state<CoverSuggestionsState | null>(null);
+	let coverSuggestionsBusyAlbumId = $state<string | null>(null);
+	let suggestionsRequest = 0;
+	let completedCoverJobId: string | null = null;
+
+	const activeCoverJob = $derived(
+		currentAlbumId
+			? ($activeJobs.find((active) => active.albumId === currentAlbumId) ?? null)
+			: null
+	);
+	const coverSuggestions = $derived(
+		coverSuggestionsState?.albumId === currentAlbumId ? coverSuggestionsState.data : null
+	);
+	const coverSuggestionsFailure = $derived(
+		coverSuggestionsState?.albumId === currentAlbumId ? coverSuggestionsState.failure : null
+	);
+	const coverSuggestionsLoading = $derived(
+		coverSuggestionsState?.albumId === currentAlbumId && coverSuggestionsState.isLoading
+	);
+	const coverSuggestionsBusy = $derived(coverSuggestionsBusyAlbumId === currentAlbumId);
+	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
+	const isCoverSuggestionGenerating = $derived(
+		Boolean(activeCoverJob) ||
+			latestCoverJob?.status === 'queued' ||
+			latestCoverJob?.status === 'running'
+	);
+	const coverSuggestionFailure = $derived(
+		coverSuggestionsFailure ??
+			(latestCoverJob?.status === 'failed'
+				? (latestCoverJob.error ?? ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
+				: null)
+	);
+	const coverSuggestionsProgress = $derived(
+		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
+	);
+	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
+	const coverSuggestionsProgressMessage = $derived(
+		coverSuggestions
+			? formatCoverSuggestionProgress(coverSuggestions.used_today, coverSuggestions.daily_limit)
+			: null
+	);
+
+	$effect(() => {
+		const albumId = currentAlbumId;
+		if (!albumId) {
+			coverSuggestionsState = null;
+			return;
+		}
+		coverSuggestionsState = {
+			albumId,
+			data: null,
+			failure: null,
+			isLoading: true
+		};
+		queueMicrotask(() => void loadCoverSuggestions(albumId));
+	});
+
+	$effect(() => {
+		if (activeCoverJob) {
+			completedCoverJobId = activeCoverJob.job.id;
+			return;
+		}
+		if (completedCoverJobId && currentAlbumId) {
+			const albumId = currentAlbumId;
+			completedCoverJobId = null;
+			queueMicrotask(() => void loadCoverSuggestions(albumId));
+		}
+	});
+
+	async function loadCoverSuggestions(albumId: string): Promise<void> {
+		const request = ++suggestionsRequest;
+		updateCoverSuggestionsState(albumId, (state) => ({ ...state, isLoading: true }));
+		try {
+			const response = await fetchAlbumCoverSuggestions(albumId);
+			if (request !== suggestionsRequest || albumId !== currentAlbumId) return;
+			coverSuggestionsState = {
+				albumId,
+				data: response,
+				failure: null,
+				isLoading: false
+			};
+			if (response.job?.status === 'queued' || response.job?.status === 'running') {
+				trackJob(response.job, { albumId });
+			}
+		} catch (error) {
+			if (request !== suggestionsRequest || albumId !== currentAlbumId) return;
+			coverSuggestionsState = {
+				albumId,
+				data: null,
+				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+				isLoading: false
+			};
+		}
+	}
+
+	function updateCoverSuggestionsState(
+		albumId: string,
+		update: (state: CoverSuggestionsState) => CoverSuggestionsState
+	): void {
+		if (albumId !== currentAlbumId) return;
+		const state =
+			coverSuggestionsState?.albumId === albumId
+				? coverSuggestionsState
+				: { albumId, data: null, failure: null, isLoading: false };
+		coverSuggestionsState = update(state);
+	}
+
+	function errorMessage(error: unknown, fallback: string): string {
+		return error instanceof Error && error.message ? error.message : fallback;
+	}
+
+	function formatCoverSuggestionProgress(used: number, limit: number): string {
+		return ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE.replace('{used}', String(used)).replace(
+			'{limit}',
+			String(limit)
+		);
+	}
+
+	async function suggestCover(): Promise<void> {
+		if (!selectedAlbum || isCoverSuggestionGenerating) return;
+		const albumId = selectedAlbum.id;
+		// A page-load GET can resolve after this deliberate POST. Its older
+		// snapshot must not erase the just-created job and make progress vanish.
+		suggestionsRequest += 1;
+		updateCoverSuggestionsState(albumId, (state) => ({ ...state, failure: null, isLoading: true }));
+		try {
+			const job = await createAlbumCoverSuggestions(albumId);
+			if (albumId !== currentAlbumId) return;
+			trackJob(job, { albumId });
+			void loadCoverSuggestions(albumId);
+		} catch (error) {
+			updateCoverSuggestionsState(albumId, (state) => ({
+				...state,
+				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+				isLoading: false
+			}));
+		}
+	}
+
+	async function discardCoverSuggestions(): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		coverSuggestionsBusyAlbumId = albumId;
+		try {
+			await discardAlbumCoverSuggestions(albumId);
+			updateCoverSuggestionsState(albumId, (state) => ({
+				...state,
+				data: null,
+				failure: null
+			}));
+		} catch (error) {
+			updateCoverSuggestionsState(albumId, (state) => ({
+				...state,
+				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
+			}));
+		} finally {
+			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
+		}
+	}
+
+	async function selectCoverSuggestion(suggestionId: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		coverSuggestionsBusyAlbumId = albumId;
+		try {
+			const updated = await selectAlbumCoverSuggestion(albumId, {
+				suggestion_id: suggestionId
+			});
+			try {
+				await discardAlbumCoverSuggestions(albumId);
+			} catch (error) {
+				addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+			}
+			updateAlbumInList(albumId, () => updated);
+			updateCoverSuggestionsState(albumId, (state) => ({
+				...state,
+				data: null,
+				failure: null
+			}));
+			addToast('Cover saved', 'success');
+		} catch (error) {
+			updateCoverSuggestionsState(albumId, (state) => ({
+				...state,
+				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
+			}));
+		} finally {
+			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
+		}
+	}
 
 	async function onCoverFile(event: Event): Promise<void> {
 		const input = event.target as HTMLInputElement;
@@ -281,6 +495,7 @@
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
 			oncover={onCoverAction}
+			oncoversuggest={selectedAlbum.cover ? suggestCover : undefined}
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			onaddsong={openLibraryCreate}
@@ -295,6 +510,60 @@
 				/>
 			{/snippet}
 		</CollectionHeader>
+		<section class="cover-suggestions" aria-live="polite">
+			{#if coverSuggestionsLoading && !isCoverSuggestionGenerating}
+				<p class="cover-suggestions-loading" role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</p>
+			{:else if isCoverSuggestionGenerating}
+				<h3>{ALBUM_COVER_SUGGESTING_LABEL}</h3>
+				{#if coverSuggestionsProgressMessage}
+					<p>{coverSuggestionsProgressMessage}</p>
+				{/if}
+				<div class="suggestion-placeholders" aria-label={ALBUM_COVER_SUGGESTING_LABEL}>
+					{#each [1, 2, 3] as placeholder (placeholder)}
+						<span class="suggestion-placeholder"></span>
+					{/each}
+				</div>
+				<div
+					class="suggestion-progress"
+					aria-label={`${Math.round(coverSuggestionsProgress * 100)}%`}
+				>
+					<span style:width={`${Math.max(4, coverSuggestionsProgress * 100)}%`}></span>
+				</div>
+			{:else if hasSuggestions}
+				<h3>{ALBUM_COVER_SUGGESTIONS_TITLE}</h3>
+				<p>{ALBUM_COVER_SUGGESTIONS_DETAIL}</p>
+				<div class="suggestion-grid">
+					{#each coverSuggestions?.suggestions ?? [] as suggestion (suggestion.id)}
+						<article class="cover-suggestion">
+							<img src={suggestion.url} alt={albumCoverSuggestionAlt(selectedAlbum.title)} />
+							<button
+								type="button"
+								disabled={coverSuggestionsBusy}
+								onclick={() => selectCoverSuggestion(suggestion.id)}
+							>
+								{ALBUM_COVER_SUGGESTION_USE_LABEL}
+							</button>
+						</article>
+					{/each}
+				</div>
+				<button
+					class="suggestion-discard"
+					type="button"
+					disabled={coverSuggestionsBusy}
+					onclick={discardCoverSuggestions}>{ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL}</button
+				>
+			{:else if coverSuggestionFailure}
+				<div class="cover-suggestion-failure" role="alert">
+					<strong>{ALBUM_COVER_SUGGESTIONS_FAILED_TITLE}</strong>
+					<p>{coverSuggestionFailure}</p>
+					<button type="button" onclick={suggestCover}>{ALBUM_COVER_SUGGEST_LABEL}</button>
+				</div>
+			{:else if !selectedAlbum.cover}
+				<button class="suggest-cover" type="button" onclick={suggestCover}
+					>{ALBUM_COVER_SUGGEST_LABEL}</button
+				>
+			{/if}
+		</section>
 		<input
 			bind:this={coverInput}
 			class="cover-file-input"
@@ -387,6 +656,145 @@
 		white-space: nowrap;
 	}
 
+	.cover-suggestions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.65rem;
+		margin: 0 1.5rem;
+		padding: 1rem;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+	}
+
+	.cover-suggestions h3,
+	.cover-suggestions p {
+		margin: 0;
+	}
+
+	.cover-suggestions h3 {
+		font-family: var(--font-display);
+		font-size: 1rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.cover-suggestions p {
+		color: var(--text-subtle);
+		font-size: 0.83rem;
+	}
+
+	.cover-suggestions-loading {
+		font-style: italic;
+	}
+
+	.suggest-cover,
+	.cover-suggestion button,
+	.suggestion-discard,
+	.cover-suggestion-failure button {
+		align-self: flex-start;
+		padding: 0.45rem 0.8rem;
+		border: 1px solid var(--accent);
+		border-radius: var(--btn-radius-sm);
+		background: var(--accent);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	.suggestion-grid,
+	.suggestion-placeholders {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+
+	.cover-suggestion {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		min-width: 0;
+		padding: 0.45rem;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface-hover);
+	}
+
+	.cover-suggestion img,
+	.suggestion-placeholder {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: calc(var(--card-radius) / 2);
+		object-fit: cover;
+	}
+
+	.suggestion-placeholder {
+		background: linear-gradient(
+			110deg,
+			var(--surface-hover) 20%,
+			var(--border) 45%,
+			var(--surface-hover) 70%
+		);
+		background-size: 220% 100%;
+		animation: cover-suggestion-loading 1.2s linear infinite;
+	}
+
+	.suggestion-progress {
+		height: 0.25rem;
+		overflow: hidden;
+		border-radius: 999px;
+		background: var(--border);
+	}
+
+	.suggestion-progress span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--accent);
+		transition: width 180ms ease-out;
+	}
+
+	.suggestion-discard {
+		border-color: var(--border);
+		background: transparent;
+		color: var(--text-muted);
+	}
+
+	.cover-suggestion-failure {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		padding: 0.85rem;
+		border: 1px solid var(--danger);
+		border-left-width: 4px;
+		border-radius: var(--card-radius);
+		background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+	}
+
+	.cover-suggestion-failure strong {
+		color: var(--text);
+	}
+
+	@keyframes cover-suggestion-loading {
+		to {
+			background-position: -220% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.suggestion-placeholder {
+			animation: none;
+		}
+
+		.suggestion-progress span {
+			transition: none;
+		}
+	}
+
 	.picker-anchor {
 		position: relative;
 		margin: 0 1.5rem;
@@ -475,6 +883,25 @@
 	}
 
 	@media (max-width: 768px) {
+		.cover-suggestions {
+			margin: 0 0.8rem;
+		}
+
+		.suggestion-grid,
+		.suggestion-placeholders {
+			grid-template-columns: 1fr;
+		}
+
+		.cover-suggestion {
+			display: grid;
+			grid-template-columns: 4.4rem minmax(0, 1fr);
+			align-items: center;
+		}
+
+		.cover-suggestion img {
+			width: 4.4rem;
+		}
+
 		.item-list,
 		.picker-anchor {
 			padding-left: 0.8rem;
