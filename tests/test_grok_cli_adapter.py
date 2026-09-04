@@ -427,6 +427,7 @@ def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypa
             grok_cli_adapter.GROK_CLI_TURN_OUTPUT_READ_LIMIT_BYTES
         )
         assert "GROK_HOME" not in kwargs["extra_env"]
+        assert kwargs["unset_env"] == ("GROK_HOME",)
     assert first_kwargs["prompt_file_bytes"] == b"system\n\nUser: hello"
     assert second_kwargs["prompt_file_bytes"] == (
         b'<songmaker_tool_result>\n{"songs":[]}\n</songmaker_tool_result>'
@@ -457,6 +458,71 @@ def test_grok_tool_transport_rejects_a_multi_result_batch(monkeypatch) -> None:
 
     asyncio.run(reject_batch())
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("session_id", (None, "not-a-uuid"))
+def test_grok_tool_transport_rejects_missing_or_invalid_session_id(
+    monkeypatch, session_id,
+) -> None:
+    calls = []
+    end_event = {"type": "end", "stopReason": "stop"}
+    if session_id is not None:
+        end_event["sessionId"] = session_id
+    lines = [
+        json.dumps({"type": "text", "data": "done"}).encode() + b"\n",
+        json.dumps(end_event).encode() + b"\n",
+    ]
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner(lines, _outcome(), calls),
+    )
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            async for _ in transport.stream(InitialTurn("system", [])):
+                pass
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        await transport.aclose()
+
+    asyncio.run(collect())
+
+
+def test_grok_tool_transport_rejects_a_changed_resume_session_id(monkeypatch) -> None:
+    calls = []
+    changed_session_id = "4ee93ca6-9a08-4d8a-8539-e113a8d677ed"
+    rounds = iter([
+        _tool_round_lines("first"),
+        _tool_round_lines("second", changed_session_id),
+    ])
+
+    def run_cli_bounded(command, **kwargs):
+        calls.append((command, kwargs))
+        for line in next(rounds):
+            assert kwargs["stdout_line_channel"]._send(line)
+        outcome = _outcome()
+        kwargs["stdout_line_channel"]._close(outcome)
+        return outcome
+
+    monkeypatch.setattr(grok_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        assert [item async for item in transport.stream(InitialTurn("system", []))] == [
+            grok_cli_adapter.TextDelta("first"),
+            grok_cli_adapter.FinalText(""),
+        ]
+        with pytest.raises(ProviderUnavailableError) as raised:
+            async for _ in transport.stream(ToolResultBatch((
+                ToolResult("one", "1", False),
+            ))):
+                pass
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        await transport.aclose()
+
+    asyncio.run(collect())
+    assert calls[1][0][-2:] == ("--resume", _SESSION_ID)
 
 
 @pytest.mark.parametrize("event_type", ("tool_call", "tool_call_update"))

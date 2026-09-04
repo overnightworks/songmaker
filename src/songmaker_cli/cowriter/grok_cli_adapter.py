@@ -40,15 +40,6 @@ from songmaker_cli.cowriter.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from songmaker_cli.cowriter.text_tool_protocol import (
-    FinalText as ParsedFinalText,
-)
-from songmaker_cli.cowriter.text_tool_protocol import (
-    TextToolCall,
-    TextToolProtocolError,
-    TextToolStreamParser,
-    render_tool_result,
-)
 from songmaker_cli.cowriter.tool_loop import (
     FinalText,
     InitialTurn,
@@ -101,6 +92,18 @@ class GrokCliToolTransport:
         """Stream one response and retain its server-issued session ID."""
         if self._closed:
             raise RuntimeError("Grok CLI tool transport is closed")
+        # The canonical text-tool catalogue imports the optional MCP package.
+        # Keep it on this tool-using path so tool-free workers can import this
+        # adapter without that optional dependency.
+        from songmaker_cli.cowriter.text_tool_protocol import (
+            FinalText as ParsedFinalText,
+        )
+        from songmaker_cli.cowriter.text_tool_protocol import (
+            TextToolCall,
+            TextToolProtocolError,
+            TextToolStreamParser,
+        )
+
         try:
             prompt = _tool_transport_prompt(message)
         except TextToolProtocolError:
@@ -298,6 +301,11 @@ async def stream_grok_cli_turn(
 
 
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        TextToolProtocolError,
+        render_tool_result,
+    )
+
     if isinstance(message, InitialTurn):
         return _stdin_prompt(
             message.system,
