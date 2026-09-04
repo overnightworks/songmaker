@@ -61,7 +61,8 @@ export async function fetchCowriterSettings(): Promise<CowriterSettings> {
 export async function updateCowriterSettings(
 	provider: string,
 	model: string,
-	tailTokenBudget?: number
+	tailTokenBudget?: number,
+	providerRoutes?: Record<string, 'cli' | 'api'>
 ): Promise<CowriterSettings> {
 	return apiFetch<CowriterSettings>('/api/settings/cowriter', {
 		method: 'PUT',
@@ -69,7 +70,8 @@ export async function updateCowriterSettings(
 		body: JSON.stringify({
 			provider,
 			model,
-			tail_token_budget: tailTokenBudget
+			tail_token_budget: tailTokenBudget,
+			provider_routes: providerRoutes
 		})
 	});
 }
