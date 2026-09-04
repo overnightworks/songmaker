@@ -77,6 +77,9 @@
 		{/if}
 		<main class="main">
 			{#if song}
+				{#if collection}
+					<LibraryRow {collection} collapsible />
+				{/if}
 				<SongDetailView />
 			{:else if surface === 'create'}
 				<CreateForm albums={$albumList} />

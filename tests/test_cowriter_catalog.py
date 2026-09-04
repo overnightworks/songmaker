@@ -7,9 +7,12 @@ from unittest.mock import MagicMock
 import httpx
 
 from songmaker_cli.cowriter.catalog import (
+    DependencyUnavailableProvider,
     ProviderRoute,
     ProviderRouteCapability,
     ProviderRouteReadinessState,
+    ProviderSurface,
+    get_provider_configuration,
     list_provider_models,
     models_with_active_model,
     refresh_provider_snapshot,
@@ -55,6 +58,27 @@ def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch)
     )
 
     assert list_provider_models("claude", ProviderRoute.API) == ["claude-sonnet-4-6"]
+
+
+def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False)
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda _provider, route: ["sonnet"] if route is ProviderRoute.CLI else (
+            _ for _ in ()
+        ).throw(AssertionError("catalogue must not run")),
+    )
+
+    snapshot = refresh_provider_snapshot("claude")
+    route = snapshot.routes[ProviderRoute.API]
+    configuration = get_provider_configuration("claude", ProviderSurface.CO_WRITER)
+
+    assert route.readiness is ProviderRouteReadinessState.DISTURBED
+    assert route.reason is not None
+    assert route.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
+    assert configuration == DependencyUnavailableProvider("claude", "anthropic")
 
 
 def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):

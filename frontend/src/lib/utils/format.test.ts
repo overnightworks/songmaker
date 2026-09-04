@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { albumSummaryLabel, formatTime, playlistSummaryLabel, titleInitials } from './format.ts';
+import {
+	albumSummaryLabel,
+	formatTime,
+	playlistSummaryLabel,
+	songCountLabel,
+	titleInitials
+} from './format.ts';
 
 describe('formatTime', () => {
 	it('formats zero seconds', () => {
@@ -31,6 +37,16 @@ describe('albumSummaryLabel', () => {
 		[3, 2, '3 songs · 2 picks']
 	])('songCount=%i pickCount=%i -> %j', (songCount, pickCount, expected) => {
 		expect(albumSummaryLabel(songCount, pickCount)).toBe(expected);
+	});
+});
+
+describe('songCountLabel', () => {
+	it.each([
+		[0, '0 songs'],
+		[1, '1 song'],
+		[2, '2 songs']
+	])('songCount=%i -> %j', (songCount, expected) => {
+		expect(songCountLabel(songCount)).toBe(expected);
 	});
 });
 

@@ -97,3 +97,27 @@ export function setDesktopNowPlayingSurface(surface: NowPlayingSurfaceKind): voi
 		localStorage.setItem(DESKTOP_SURFACE_STORAGE_KEY, surface);
 	}
 }
+
+// The compressed library row is one shared frame around an album and its
+// songs. A missing value deliberately means "use this surface's default":
+// desktop starts open, while the narrow song/take surface starts closed.
+// Once a listener changes it, that choice follows the same per-browser
+// localStorage path as the desktop Now Playing surface.
+const LIBRARY_ROW_OPEN_STORAGE_KEY = 'libraryRowOpen';
+
+function readStoredLibraryRowOpen(): boolean | null {
+	if (typeof window === 'undefined') return null;
+	const stored = localStorage.getItem(LIBRARY_ROW_OPEN_STORAGE_KEY);
+	if (stored === 'true') return true;
+	if (stored === 'false') return false;
+	return null;
+}
+
+export const libraryRowOpenPreference = writable<boolean | null>(readStoredLibraryRowOpen());
+
+export function setLibraryRowOpen(open: boolean): void {
+	libraryRowOpenPreference.set(open);
+	if (typeof window !== 'undefined') {
+		localStorage.setItem(LIBRARY_ROW_OPEN_STORAGE_KEY, String(open));
+	}
+}

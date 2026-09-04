@@ -36,6 +36,13 @@ proof_kind = "integration"
 critical = true
 
 [[acceptance]]
+id = "ACC-COWRITER-14"
+text = "A Claude API Co-Writer turn persists its owned song write and leaves a foreign song unchanged."
+requirements = ["REQ-COWRITER-12"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
 id = "ACC-SHARE-18"
 text = "A public share audio request for an unknown share returns the same silent not-found response as a missing file."
 requirements = ["REQ-SHARE-18"]
