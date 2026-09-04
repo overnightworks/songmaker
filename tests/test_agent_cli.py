@@ -1036,6 +1036,21 @@ def test_child_environment_additions_are_local_to_the_spawned_cli(monkeypatch) -
     assert "CODEX_HOME" not in os.environ
 
 
+def test_bounded_runner_can_unset_an_inherited_child_variable(monkeypatch) -> None:
+    monkeypatch.setenv("GROK_HOME", "/outside/profile")
+
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", 'test -z "${GROK_HOME+x}"'),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        unset_env=("GROK_HOME",),
+    )
+
+    assert outcome.complete is True
+    assert outcome.returncode == 0
+
+
 def test_bounded_runner_does_not_pass_secrets_to_the_spawned_cli(monkeypatch) -> None:
     for key in SECRET_ENV_KEYS:
         monkeypatch.setenv(key, "leaked-value")

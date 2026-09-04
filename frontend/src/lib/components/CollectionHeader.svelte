@@ -24,6 +24,7 @@
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
+		oncoversuggest?: () => void;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		onaddsong?: () => void;
@@ -52,6 +53,7 @@
 		ondelete,
 		onarchive,
 		oncover,
+		oncoversuggest,
 		onremovecover,
 		onaddtoplaylist,
 		onaddsong,
@@ -119,6 +121,7 @@
 		{ondelete}
 		{onarchive}
 		{oncover}
+		{oncoversuggest}
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}

@@ -2,7 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type {
+	AlbumItem,
+	CoverSuggestionsResponse,
+	GenerationItem,
+	JobItem,
+	SongItem
+} from '$lib/api/types';
 import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_COVER_ALT_TYPE,
@@ -25,6 +31,10 @@ const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
 const archiveAlbum = vi.fn();
 const unarchiveAlbum = vi.fn();
+const createAlbumCoverSuggestions = vi.fn();
+const fetchAlbumCoverSuggestions = vi.fn();
+const selectAlbumCoverSuggestion = vi.fn();
+const discardAlbumCoverSuggestions = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -45,6 +55,13 @@ vi.mock('$lib/api/songs', () => ({
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
+}));
+vi.mock('$lib/api/albums', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/albums')>()),
+	createAlbumCoverSuggestions: (...args: unknown[]) => createAlbumCoverSuggestions(...args),
+	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
+	selectAlbumCoverSuggestion: (...args: unknown[]) => selectAlbumCoverSuggestion(...args),
+	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
@@ -79,8 +96,26 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 import AlbumNode from './AlbumNode.svelte';
 import { selectSong } from '$lib/stores/navigation';
 import { playAlbumSong } from '$lib/stores/player';
+import { activeJobs } from '$lib/stores/jobs';
+import { addToast } from '$lib/stores/toast';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
+
+class FakeJobEventSource {
+	static sources: FakeJobEventSource[] = [];
+	onmessage: ((event: MessageEvent) => void) | null = null;
+	onerror: ((event: Event) => void) | null = null;
+
+	constructor(readonly url: string) {
+		FakeJobEventSource.sources.push(this);
+	}
+
+	close(): void {}
+
+	emit(job: JobItem): void {
+		this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(job) }));
+	}
+}
 
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
@@ -156,6 +191,21 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	};
 }
 
+function coverSuggestions(
+	overrides: Partial<CoverSuggestionsResponse> = {}
+): CoverSuggestionsResponse {
+	return { job: null, suggestions: [], used_today: 0, daily_limit: 10, ...overrides };
+}
+
+function coverJob(overrides: Partial<JobItem> = {}): JobItem {
+	return { id: 'cover-job', type: 'cover', status: 'queued', progress: 0, ...overrides };
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+	let resolve!: (value: T) => void;
+	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
+}
+
 async function renderDetail(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -172,6 +222,13 @@ beforeEach(() => {
 	updateAlbum.mockReset();
 	archiveAlbum.mockReset();
 	unarchiveAlbum.mockReset();
+	createAlbumCoverSuggestions.mockReset();
+	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(coverSuggestions());
+	selectAlbumCoverSuggestion.mockReset();
+	discardAlbumCoverSuggestions.mockReset();
+	vi.mocked(addToast).mockReset();
+	activeJobs.set([]);
+	FakeJobEventSource.sources = [];
 	vi.mocked(selectSong).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 });
@@ -187,6 +244,8 @@ afterEach(async () => {
 	openCollection.set(null);
 	curationActive.set(false);
 	nowPlayingSurface.set('closed');
+	activeJobs.set([]);
+	vi.unstubAllGlobals();
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -245,7 +304,7 @@ describe('AlbumDetailView header', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toEqual([
-			'Cover…',
+			'Upload…',
 			'Rename',
 			'Add to playlist',
 			'Curate album',
@@ -335,6 +394,230 @@ describe('AlbumDetailView header', () => {
 		expect(document.body.querySelector('.confirm-btn')).toBeNull();
 		expect(get(albumList).some((a) => a.id === 'a-local')).toBe(false);
 		expect(get(openCollection)).toBeNull();
+	});
+});
+
+describe('AlbumDetailView cover suggestions', () => {
+	it('waits for a deliberate Suggest cover click before creating a job', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const target = await renderDetail();
+		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
+		await vi.waitFor(() => expect(target.querySelector('.suggest-cover')).not.toBeNull());
+
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
+		requireElement<HTMLButtonElement>(target, '.suggest-cover').click();
+
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
+	});
+
+	it('shows the API detail when suggesting a cover fails', async () => {
+		createAlbumCoverSuggestions.mockRejectedValue(
+			new Error('Daily cover suggestion limit reached')
+		);
+		const target = await renderDetail();
+		await vi.waitFor(() => expect(target.querySelector('.suggest-cover')).not.toBeNull());
+
+		requireElement<HTMLButtonElement>(target, '.suggest-cover').click();
+
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain('Daily cover suggestion limit reached')
+		);
+		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+			'Couldn’t make cover suggestions'
+		);
+		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
+	});
+
+	it('keeps a delayed previous album response from replacing the current album state', async () => {
+		const firstResponse = deferred<CoverSuggestionsResponse>();
+		albumList.set([album(), album({ id: 'a-other', title: 'Other Night' })]);
+		fetchAlbumCoverSuggestions.mockImplementationOnce(() => firstResponse.promise);
+		fetchAlbumCoverSuggestions.mockResolvedValueOnce(
+			coverSuggestions({
+				suggestions: [{ id: 'other-suggestion', url: '/other-suggestion.png' }]
+			})
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Loading cover suggestions…'));
+		selectedAlbumId.set('a-other');
+		await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledWith('a-other'));
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion')).not.toBeNull());
+
+		firstResponse.resolve(
+			coverSuggestions({ job: coverJob({ status: 'failed', error: 'Old album failure' }) })
+		);
+		await tick();
+		await tick();
+
+		expect(target.textContent).toContain('Other Night');
+		expect(target.textContent).not.toContain('Old album failure');
+		expect(target.querySelector<HTMLImageElement>('.cover-suggestion img')?.src).toContain(
+			'/other-suggestion.png'
+		);
+	});
+
+	it('hydrates an active cover job once and reloads suggestions after its streamed completion', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		fetchAlbumCoverSuggestions
+			.mockResolvedValueOnce(
+				coverSuggestions({ job: coverJob({ status: 'running', progress: 0.5 }) })
+			)
+			.mockResolvedValueOnce(
+				coverSuggestions({ suggestions: [{ id: 'finished', url: '/finished-suggestion.png' }] })
+			);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(FakeJobEventSource.sources).toHaveLength(1));
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
+		expect(get(activeJobs)).toHaveLength(1);
+
+		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
+
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion')).not.toBeNull());
+		expect(FakeJobEventSource.sources).toHaveLength(1);
+	});
+
+	it('shows three suggestions, selects one, and updates the shared album owner', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({
+				suggestions: [
+					{ id: 'one', url: '/suggestion-one.png' },
+					{ id: 'two', url: '/suggestion-two.png' },
+					{ id: 'three', url: '/suggestion-three.png' }
+				]
+			})
+		);
+		selectAlbumCoverSuggestion.mockResolvedValue(
+			album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(3));
+		requireElement<HTMLButtonElement>(target, '.cover-suggestion button').click();
+
+		await vi.waitFor(() =>
+			expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'one' })
+		);
+		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
+		expect(target.querySelector('.cover-suggestions')).toBeNull();
+	});
+
+	it('discards all suggestions and returns to the deliberate Suggest cover action', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		discardAlbumCoverSuggestions.mockResolvedValue(undefined);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.suggestion-discard')).not.toBeNull());
+		requireElement<HTMLButtonElement>(target, '.suggestion-discard').click();
+
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() =>
+			expect(target.querySelector('.suggest-cover')?.textContent).toContain('Suggest cover')
+		);
+	});
+
+	it('keeps suggestions available when discarding them fails', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		discardAlbumCoverSuggestions.mockRejectedValue(new Error('Could not discard suggestions'));
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.suggestion-discard')).not.toBeNull());
+		requireElement<HTMLButtonElement>(target, '.suggestion-discard').click();
+
+		await vi.waitFor(() =>
+			expect(addToast).toHaveBeenCalledWith('Could not discard suggestions', 'error')
+		);
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it('keeps suggestions available when choosing one fails', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		selectAlbumCoverSuggestion.mockRejectedValue(new Error('Could not save cover'));
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion button')).not.toBeNull());
+		requireElement<HTMLButtonElement>(target, '.cover-suggestion button').click();
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Could not save cover', 'error'));
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it('puts replacement by suggestion beside upload and removal in the existing overflow', async () => {
+		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		const items = Array.from(menu.querySelectorAll('.menu-item')).map((element) =>
+			element.textContent?.trim()
+		);
+
+		expect(items).toEqual([
+			'Upload…',
+			'Replace…',
+			'Remove cover',
+			'Rename',
+			'Add to playlist',
+			'Curate album',
+			'Archive album',
+			'Delete album'
+		]);
+	});
+
+	it('replaces stale suggestions before a new request and keeps its failure visible', async () => {
+		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({
+				suggestions: [
+					{ id: 'one', url: '/suggestion-one.png' },
+					{ id: 'two', url: '/suggestion-two.png' },
+					{ id: 'three', url: '/suggestion-three.png' }
+				]
+			})
+		);
+		discardAlbumCoverSuggestions.mockResolvedValue(undefined);
+		createAlbumCoverSuggestions.mockRejectedValue(
+			new Error('Daily cover suggestion limit reached')
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(3));
+		const menu = await openCollectionMenu(target);
+		Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((element) => element.textContent?.trim() === 'Replace…')
+			?.click();
+
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		expect(discardAlbumCoverSuggestions.mock.invocationCallOrder[0]).toBeLessThan(
+			createAlbumCoverSuggestions.mock.invocationCallOrder[0]
+		);
+		await vi.waitFor(() =>
+			expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+				'Daily cover suggestion limit reached'
+			)
+		);
+		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(0);
+		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
+	});
+
+	it('keeps replacement suggestions reachable when the album already has a cover', async () => {
+		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'replacement', url: '/replacement.png' }] })
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion')).not.toBeNull());
+		expect(target.textContent).toContain('Choose a cover');
 	});
 });
 

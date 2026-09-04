@@ -146,6 +146,35 @@ def test_create_cover_suggestions_enqueues_a_music_worker_job(
         assert job.status == JobStatus.QUEUED
 
 
+def test_create_cover_suggestions_replaces_stale_suggestions(
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, factory = alice_app
+    _add_suggestion(factory, tmp_path / "audio")
+    with factory() as session:
+        stale_job = session.query(Job).filter_by(album_id="alice-album").one()
+        stale_job.status = JobStatus.COMPLETED
+        session.commit()
+
+    class Pool:
+        async def enqueue_job(self, *_args, **_kwargs) -> None:
+            pass
+
+    async def healthy() -> bool:
+        return True
+
+    monkeypatch.setattr("songmaker_cli.album_api.is_music_worker_healthy", healthy)
+    monkeypatch.setattr("songmaker_cli.album_api.get_arq_pool", lambda: Pool())
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    assert client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"] == []
+    assert not (tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
+
+
 def test_create_cover_suggestions_marks_a_queue_failure_terminal(
     alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -336,13 +336,15 @@
 		--row-tile-width: 84px;
 
 		position: relative;
+		min-width: 0;
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);
 		background: var(--surface-hover);
 	}
 
 	.library-row-bar {
-		display: flex;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
 		min-height: 2.5rem;
 		padding-inline: 0.9rem;
@@ -351,10 +353,10 @@
 
 	.library-row-summary {
 		min-width: 0;
-		margin-left: auto;
 		overflow: hidden;
 		color: var(--primary);
 		font-size: 0.78rem;
+		text-align: right;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}

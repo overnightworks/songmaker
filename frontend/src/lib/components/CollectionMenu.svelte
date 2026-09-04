@@ -3,10 +3,11 @@
 	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
+		ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL,
+		ALBUM_COVER_UPLOAD_LABEL,
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 		COLLECTION_MENU_ARCHIVE_LABEL,
 		COLLECTION_MENU_CLOSE_LABEL,
-		COLLECTION_MENU_COVER_LABEL,
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
 		COLLECTION_MENU_CURATE_LABEL,
 		COLLECTION_MENU_DELETE_PREFIX,
@@ -32,6 +33,7 @@
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
+		oncoversuggest?: () => void;
 		hasCover?: boolean;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
@@ -53,6 +55,7 @@
 		ondelete,
 		onarchive,
 		oncover,
+		oncoversuggest,
 		hasCover = false,
 		onremovecover,
 		onaddtoplaylist,
@@ -154,7 +157,12 @@
 			</div>
 			{#if kind === 'album' && oncover}
 				<button class="menu-item" onclick={() => runAndClose(oncover)}
-					>{COLLECTION_MENU_COVER_LABEL}</button
+					>{ALBUM_COVER_UPLOAD_LABEL}</button
+				>
+			{/if}
+			{#if kind === 'album' && oncoversuggest}
+				<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
+					>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
 				>
 			{/if}
 			{#if kind === 'album' && hasCover && onremovecover}
