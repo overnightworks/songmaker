@@ -273,6 +273,7 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
             auth_mode, id_token, account_id, last_refresh,
         )):
             raise _CodexLoginMirrorError()
+        redacted_refresh_token = access_token[:0]
         target.write_text(json.dumps({
             "auth_mode": auth_mode,
             "OPENAI_API_KEY": None,
@@ -281,7 +282,7 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
                 "id_token": id_token,
                 "access_token": access_token,
                 "account_id": account_id,
-                "refresh_token": "",
+                "refresh_token": redacted_refresh_token,
             },
         }))
         target.chmod(0o600)
