@@ -59,7 +59,14 @@ test('a mobile song or take starts with its album row collapsed until expanded',
 }) => {
 	test.skip(!isMobile, 'This flow belongs to the mobile shell');
 	await page.setViewportSize(MOBILE_VIEWPORT);
-	await page.addInitScript(() => localStorage.removeItem('libraryRowOpen'));
+	await page.addInitScript(() => {
+		// Init scripts run on every document navigation. Clear the stored choice
+		// only for this test's first document, so opening the row remains a
+		// persisted browser preference when the test moves on to the take.
+		if (sessionStorage.getItem('navRowPreferenceReset') === 'true') return;
+		localStorage.removeItem('libraryRowOpen');
+		sessionStorage.setItem('navRowPreferenceReset', 'true');
+	});
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
 	const albumAddress = `/album/${library.albumId}`;
