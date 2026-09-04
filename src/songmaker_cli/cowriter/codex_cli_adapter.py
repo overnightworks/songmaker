@@ -25,8 +25,16 @@ CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
 _BLOCKED_ITEM_TYPES: Final = frozenset({
-    "command_execution", "mcp_tool_call", "web_search", "file_change",
+    "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
+    "mcp_tool_call", "web_search",
 })
+_INFORMATIONAL_ITEM_TYPES: Final = frozenset({
+    "agent_message", "reasoning", "todo_list",
+})
+_ITEM_EVENT_TYPES: Final = frozenset({
+    "item.started", "item.updated", "item.completed",
+})
+_INFORMATIONAL_EVENT_TYPES: Final = frozenset({"thread.started", "turn.started"})
 
 log = logging.getLogger(__name__)
 
@@ -68,24 +76,19 @@ async def stream_codex_cli_turn(
             if saw_success:
                 raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
             event_type, event = _parse_codex_line(line_or_outcome)
-            if event_type in {"thread.started", "turn.started"}:
+            if event_type in _INFORMATIONAL_EVENT_TYPES:
                 continue
-            if event_type == "item.completed":
-                item_type, text = _completed_item(event)
-                if item_type == "agent_message":
-                    text_chunks.append(text)
-                    yield AssistantTextEvent(text=text)
-                    continue
-                if item_type == "reasoning":
-                    continue
-                if item_type in _BLOCKED_ITEM_TYPES:
-                    raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-            if event_type.startswith("item."):
+            if event_type in _ITEM_EVENT_TYPES:
                 item_type = _item_type(event)
                 if item_type in _BLOCKED_ITEM_TYPES:
                     raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                if item_type not in _INFORMATIONAL_ITEM_TYPES:
+                    raise _unsupported_stream_event(event_type, item_type)
+                if event_type == "item.completed" and item_type == "agent_message":
+                    text = _completed_agent_message(event)
+                    text_chunks.append(text)
+                    yield AssistantTextEvent(text=text)
+                continue
             if event_type == "turn.completed":
                 _completed_turn(event)
                 saw_success = True
@@ -98,7 +101,7 @@ async def stream_codex_cli_turn(
                 error_message = _failed_turn_message(event)
                 channel.request_abort()
                 continue
-            raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+            raise _unsupported_stream_event(event_type)
         await asyncio.shield(runner)
         _raise_for_codex_outcome(outcome, saw_success, error_message)
         yield FinalEvent(text="".join(text_chunks))
@@ -149,15 +152,12 @@ def _parse_codex_line(line: bytes) -> tuple[str, dict[str, object]]:
     return event_type, event
 
 
-def _completed_item(event: dict[str, object]) -> tuple[str, str]:
+def _completed_agent_message(event: dict[str, object]) -> str:
     item = _item(event)
-    item_type = _item_type(event)
-    if item_type == "agent_message":
-        text = item.get("text")
-        if not isinstance(text, str):
-            raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-        return item_type, text
-    return item_type, ""
+    text = item.get("text")
+    if not isinstance(text, str):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return text
 
 
 def _item_type(event: dict[str, object]) -> str:
@@ -172,6 +172,20 @@ def _item(event: dict[str, object]) -> dict[str, object]:
     if not isinstance(item, dict):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return item
+
+
+def _unsupported_stream_event(
+    event_type: str, item_type: str | None = None,
+) -> _CodexCliStreamFailure:
+    if item_type is None:
+        log.warning("Codex CLI stream protocol error (event_type=%s)", event_type)
+    else:
+        log.warning(
+            "Codex CLI stream protocol error (event_type=%s, item_type=%s)",
+            event_type,
+            item_type,
+        )
+    return _CodexCliStreamFailure("codex_cli_stream_protocol_error")
 
 
 def _completed_turn(event: dict[str, object]) -> None:
