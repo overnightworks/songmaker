@@ -1,8 +1,4 @@
-"""Live co-writer model catalogs from each provider API.
-
-Model ids are never hardcoded. A failed catalog fetch is a named error,
-not a fallback list.
-"""
+"""Co-writer model catalogs from provider APIs and CLI routes."""
 
 from __future__ import annotations
 
@@ -58,6 +54,18 @@ _ANTHROPIC_SDK_DISTRIBUTION: Final = "anthropic"
 ANTHROPIC_API_KEY_ENVIRONMENT: Final = "ANTHROPIC_API_KEY"
 XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
+
+# Owner: Codex CLI route. Checked 2026-09-04: ``codex --help`` and
+# ``codex exec --help`` accept ``--model <MODEL>`` but do not enumerate models.
+# Source: https://developers.openai.com/api/docs/guides/latest-model
+_CODEX_CLI_KNOWN_MODELS: Final = (
+    "gpt-5.6",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "gpt-5.6-luna",
+    "gpt-6-astra",
+)
+_CODEX_CLI_KNOWN_MODELS_SOURCE: Final = "known models for the CLI route"
 
 log = logging.getLogger(__name__)
 
@@ -129,6 +137,7 @@ class ProviderSnapshot:
     judge: ProviderConfiguration
     models: tuple[str, ...]
     models_error: str | None
+    models_source: str | None
     probed_at: datetime
 
 
@@ -176,11 +185,25 @@ def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
         judge=judge,
         models=models,
         models_error=models_error,
+        models_source=_model_catalog_source(provider, cowriter, models_error),
         probed_at=datetime.now(timezone.utc),
     )
     with _provider_snapshots_lock:
         _provider_snapshots[provider] = snapshot
     return snapshot
+
+
+def _model_catalog_source(
+    provider: str,
+    cowriter: ProviderConfiguration,
+    models_error: str | None,
+) -> str | None:
+    if models_error is not None:
+        return None
+    if provider == _CODEX_PROVIDER and isinstance(cowriter, ConfiguredProvider):
+        if cowriter.method is ProviderSetupMethod.CODEX_CLI:
+            return _CODEX_CLI_KNOWN_MODELS_SOURCE
+    return None
 
 
 def clear_provider_snapshots() -> None:
@@ -265,11 +288,7 @@ def _models_for_setup_method(
     if method is ProviderSetupMethod.GROK_CLI:
         return _list_grok_cli_models()
     if method is ProviderSetupMethod.CODEX_CLI:
-        raise ProviderModelCatalogUnavailableError(
-            provider,
-            "the codex CLI has no non-interactive model catalog — "
-            f"set {OPENAI_API_KEY_ENVIRONMENT} to list codex models",
-        )
+        return list(_CODEX_CLI_KNOWN_MODELS)
 
     key = _secret(_provider_api_credential(provider, settings).secret)
     if provider == _GROK_PROVIDER:

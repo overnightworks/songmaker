@@ -117,6 +117,8 @@ class CowriterSettingsResponse(BaseModel):
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
     models_errors: dict[str, str] = Field(default_factory=dict)
+    models_sources: dict[str, str] = Field(default_factory=dict)
+    current_models_not_in_catalog: dict[str, str] = Field(default_factory=dict)
     probed_at: dict[str, ComputedTimestamp]
     tail_token_budget: int
 

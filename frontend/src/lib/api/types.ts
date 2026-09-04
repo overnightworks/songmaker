@@ -234,6 +234,8 @@ export interface CowriterSettings {
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
 	models_errors: Record<string, string>;
+	models_sources: Record<string, string>;
+	current_models_not_in_catalog: Record<string, string>;
 	probed_at: Record<string, string | null>;
 	tail_token_budget: number;
 }

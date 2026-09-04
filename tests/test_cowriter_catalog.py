@@ -299,7 +299,7 @@ def test_grok_cli_token_configures_turns_and_supplies_its_model_catalog(monkeypa
     assert list_provider_models("grok") == ["grok-4.6"]
 
 
-def test_codex_cli_token_configures_turns_and_judge_needs_an_api_key(monkeypatch):
+def test_codex_cli_token_configures_turns_and_supplies_known_cli_models(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present",
@@ -314,11 +314,13 @@ def test_codex_cli_token_configures_turns_and_judge_needs_an_api_key(monkeypatch
             "codex", ProviderSetupMethod.CODEX_CLI, "OPENAI_API_KEY",
         )
     )
-    with pytest.raises(
-        ProviderModelCatalogUnavailableError,
-        match="codex CLI has no non-interactive model catalog",
-    ):
-        list_provider_models("codex")
+    assert list_provider_models("codex") == [
+        "gpt-5.6",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-luna",
+        "gpt-6-astra",
+    ]
 
 
 def test_claude_key_needs_a_cli_login_for_the_co_writer(monkeypatch):

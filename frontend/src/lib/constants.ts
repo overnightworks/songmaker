@@ -143,6 +143,10 @@ export const PROVIDER_STATUS_EMPTY_MESSAGE = 'No provider status is available.';
 export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
 export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
 export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
+export const COWRITER_MODEL_CURRENT_NOT_IN_CATALOG = 'current, not in catalog';
+export const COWRITER_SAVE_NOTHING_CHANGED = 'Nothing changed.';
+export const COWRITER_SAVE_CHANGED = 'Changed, not saved yet.';
+export const COWRITER_SAVE_MODEL_REQUIRED = 'Choose a model before saving.';
 
 export function providerMissingDependencyDetail(dependency: string | null | undefined): string {
 	return `Missing ${dependency ?? 'required dependency'}`;

@@ -67,7 +67,11 @@
 		providerCliLoginNeedsApiKeyDetail,
 		providerConfiguredDetail,
 		providerMissingDependencyDetail,
-		providerMissingRequirementDetail
+		providerMissingRequirementDetail,
+		COWRITER_MODEL_CURRENT_NOT_IN_CATALOG,
+		COWRITER_SAVE_CHANGED,
+		COWRITER_SAVE_MODEL_REQUIRED,
+		COWRITER_SAVE_NOTHING_CHANGED
 	} from '$lib/constants';
 	import {
 		COMPACT_SELECT_CLASS,
@@ -436,6 +440,10 @@
 
 	const cowriterModels = $derived(cowriterSettings?.models_by_provider?.[cowriterProvider] ?? []);
 	const cowriterModelsError = $derived(cowriterSettings?.models_errors?.[cowriterProvider]);
+	const cowriterModelsSource = $derived(cowriterSettings?.models_sources?.[cowriterProvider]);
+	const cowriterCurrentModelNotInCatalog = $derived(
+		cowriterSettings?.current_models_not_in_catalog?.[cowriterProvider]
+	);
 	const cowriterDirty = $derived(
 		cowriterSettings !== null &&
 			(cowriterProvider !== cowriterSettings.provider ||
@@ -443,6 +451,15 @@
 				cowriterBudget !== cowriterSettings.tail_token_budget)
 	);
 	const cowriterCanSave = $derived(cowriterDirty && cowriterModel !== '' && !savingCowriter);
+	const cowriterSaveReason = $derived(
+		savingCowriter
+			? ''
+			: !cowriterDirty
+				? COWRITER_SAVE_NOTHING_CHANGED
+				: cowriterModel === ''
+					? COWRITER_SAVE_MODEL_REQUIRED
+					: COWRITER_SAVE_CHANGED
+	);
 
 	const judgeModels = $derived(judgeSettings?.models_by_provider?.[judgeProvider] ?? []);
 	const judgeModelsError = $derived(judgeSettings?.models_errors?.[judgeProvider]);
@@ -1164,9 +1181,16 @@
 									>
 								{/if}
 								{#each cowriterModels as model (model)}
-									<option value={model}>{model}</option>
+									<option value={model}
+										>{model}{cowriterCurrentModelNotInCatalog === model
+											? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
+											: ''}</option
+									>
 								{/each}
 							</select>
+							{#if cowriterModelsSource}
+								<p class="hint">{cowriterModelsSource}</p>
+							{/if}
 							{#if cowriterModelsError}
 								<p class="hint">{cowriterModelsError}</p>
 							{/if}
@@ -1185,9 +1209,7 @@
 							<button class="save-btn" onclick={handleSaveCowriter} disabled={!cowriterCanSave}>
 								{savingCowriter ? 'Saving...' : 'Save Co-Writer'}
 							</button>
-							<span class="save-reason"
-								>{cowriterDirty ? 'Changed, not saved yet.' : 'Nothing changed.'}</span
-							>
+							<span class="save-reason">{cowriterSaveReason}</span>
 						</div>
 					</div>
 				{:else}

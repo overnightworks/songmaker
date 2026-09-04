@@ -487,13 +487,21 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
     snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
+    sources: dict[str, str] = {}
+    current_models_not_in_catalog: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
+        snapshot = snapshots.get(name)
+        catalog_models = list(snapshot.models) if snapshot is not None else []
         models, error = _models_from_snapshot(
-            name, model if name == provider else None, snapshots.get(name),
+            name, model if name == provider else None, snapshot,
         )
         models_by_provider[name] = models
         if error:
             errors[name] = error
+        if snapshot is not None and snapshot.models_source is not None:
+            sources[name] = snapshot.models_source
+        if name == provider and model not in catalog_models:
+            current_models_not_in_catalog[name] = model
     return CowriterSettingsResponse(
         provider=provider,
         model=model,
@@ -501,6 +509,8 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
         models_errors=errors,
+        models_sources=sources,
+        current_models_not_in_catalog=current_models_not_in_catalog,
         probed_at=_provider_probe_times(snapshots),
         tail_token_budget=get_cowriter_tail_token_budget(session),
     )

@@ -600,6 +600,34 @@ describe('admin models tab', () => {
 		await tick();
 
 		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
+		expect(cowriter.textContent).toContain('Choose a model before saving.');
+	});
+
+	it('activates Codex with its CLI catalog and names its source', async () => {
+		api.fetchCowriterSettings.mockResolvedValue({
+			provider: 'claude',
+			model: 'claude-sonnet',
+			tail_token_budget: 8000,
+			allowed_providers: ['claude', 'codex', 'grok'],
+			allowed_models: ['claude-sonnet'],
+			models_by_provider: {
+				claude: ['claude-sonnet'],
+				codex: ['gpt-5.6', 'gpt-5.6-terra'],
+				grok: []
+			},
+			models_errors: {},
+			models_sources: { codex: 'known models for the CLI route' }
+		});
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		pillNamed(cowriter, 'Codex').click();
+		await tick();
+
+		expect(cowriter.textContent).toContain('known models for the CLI route');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('gpt-5.6');
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
 	});
 
 	it('disables picking an unconfigured provider in the scoring picker', async () => {
@@ -671,6 +699,29 @@ describe('admin models tab', () => {
 		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
 		expect(modelSelect.value).toBe('claude-sonnet');
 		expect(modelSelect.disabled).toBe(true);
+	});
+
+	it('keeps a saved model missing from the catalog selectable and honestly labelled', async () => {
+		api.fetchCowriterSettings.mockResolvedValue({
+			provider: 'claude',
+			model: 'claude-opus-4-6',
+			tail_token_budget: 8000,
+			allowed_providers: ['claude', 'codex', 'grok'],
+			allowed_models: ['opus', 'claude-opus-4-6'],
+			models_by_provider: { claude: ['opus', 'claude-opus-4-6'], codex: [], grok: [] },
+			models_errors: {},
+			current_models_not_in_catalog: { claude: 'claude-opus-4-6' }
+		});
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
+			'claude-opus-4-6'
+		);
+		expect(cowriter.textContent).toContain('claude-opus-4-6 (current, not in catalog)');
+		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
+		expect(cowriter.textContent).toContain('Nothing changed.');
 	});
 
 	it('lets a history-tail-only change stay saveable when the saved provider has no live catalog', async () => {
