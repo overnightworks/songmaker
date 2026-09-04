@@ -38,10 +38,15 @@ from songmaker_cli.cowriter.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from songmaker_cli.cowriter.grok_cli_adapter import stream_grok_cli_turn
+from songmaker_cli.cowriter.grok_cli_adapter import GrokCliToolTransport
 from songmaker_cli.cowriter.openai_adapter import (
     call_openai_compatible_once,
     stream_openai_compatible_turn,
+)
+from songmaker_cli.cowriter.tool_loop import (
+    ToolLoopLimitError,
+    ToolLoopProtocolError,
+    stream_tool_loop,
 )
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
@@ -117,7 +122,13 @@ def _stream_for_route(
                 user_id=user_id, system=system, model=model, messages=messages,
             )
         if provider == "grok":
-            return stream_grok_cli_turn(system=system, model=model, messages=messages)
+            return _stream_grok_cli_tool_turn(
+                model=model,
+                system=system,
+                messages=messages,
+                session=session,
+                user=user,
+            )
         return stream_codex_cli_turn(system=system, model=model, messages=messages)
     connection = _api_connection(provider)
     if provider == "claude":
@@ -139,6 +150,39 @@ def _stream_for_route(
         session=session,
         user=user,
     )
+
+
+async def _stream_grok_cli_tool_turn(
+    *,
+    model: str,
+    system: str,
+    messages: list[dict[str, str]],
+    session: Session,
+    user: AuthenticatedUser,
+) -> AsyncIterator[StreamEvent]:
+    """Run Grok's text protocol through the shared co-writer tool loop."""
+    from songmaker_cli.cowriter.tools import execute_cowriter_tool
+
+    try:
+        async for event in stream_tool_loop(
+            provider="grok",
+            route=ProviderRoute.CLI.value,
+            system=system,
+            messages=messages,
+            transport=GrokCliToolTransport(model=model),
+            executor=lambda name, arguments: execute_cowriter_tool(
+                session, user, name, arguments,
+            ),
+        ):
+            yield event
+    except ToolLoopLimitError as exc:
+        raise _unavailable(
+            "grok", ProviderRoute.CLI, SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED,
+        ) from exc
+    except ToolLoopProtocolError as exc:
+        raise _unavailable(
+            "grok", ProviderRoute.CLI, SafeRouteReasonCode.TOOL_PROTOCOL_ERROR,
+        ) from exc
 
 
 def call_provider_once(

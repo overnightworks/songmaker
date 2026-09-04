@@ -133,7 +133,7 @@ COWRITER_ROLE = (
 )
 
 COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS = (
-    "You can call the mcp__songmaker__* tools to read and edit songs in the "
+    "You can call Songmaker tools to read and edit songs in the "
     "user's library. Before every write, briefly say what you are about to "
     "change so the user can revert it if needed."
 )
@@ -165,16 +165,23 @@ COWRITER_MEMORY_INSTRUCTIONS = (
     "is stored. Do not write memory through tools."
 )
 
-def build_cowriter_system_prompt(*, tools_available: bool) -> str:
+def build_cowriter_system_prompt(
+    *, tools_available: bool, text_tool_protocol: bool = False,
+) -> str:
     """Build the route-honest co-writer instructions around shared context rules."""
     route_instructions = (
         COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS
         if tools_available
         else COWRITER_TEXT_ONLY_INSTRUCTIONS
     )
+    tool_protocol = ""
+    if text_tool_protocol:
+        from songmaker_cli.cowriter.text_tool_protocol import render_tool_catalog
+
+        tool_protocol = f"\n\n{render_tool_catalog()}"
     return (
         f"{COWRITER_ROLE}\n\n{route_instructions}\n\n"
-        f"{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}"
+        f"{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}{tool_protocol}"
     )
 
 
@@ -568,6 +575,7 @@ async def api_chat_turn(
                     provider_route_capability(provider, route)
                     is ProviderRouteCapability.TOOLS_AVAILABLE
                 ),
+                text_tool_protocol=(provider == "grok" and route is ProviderRoute.CLI),
             ),
             messages=api_messages,
             session=session,

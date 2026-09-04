@@ -124,8 +124,8 @@ def test_snapshot_refreshes_both_routes(monkeypatch):
         item.readiness is ProviderRouteReadinessState.READY
         for item in snapshot.routes.values()
     )
-    assert snapshot.routes[ProviderRoute.CLI].capability is ProviderRouteCapability.TEXT_ONLY
-    assert snapshot.routes[ProviderRoute.CLI].reason.code is SafeRouteReasonCode.ROUTE_TEXT_ONLY
+    assert snapshot.routes[ProviderRoute.CLI].capability is ProviderRouteCapability.TOOLS_AVAILABLE
+    assert snapshot.routes[ProviderRoute.CLI].reason is None
     assert snapshot.routes[ProviderRoute.API].capability is ProviderRouteCapability.TOOLS_AVAILABLE
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
@@ -14,7 +15,10 @@ from songmaker_cli.claude.provider import (
     AssistantTextEvent,
     CliBinaryUnavailableError,
     CliToolSurfaceError,
+    FinalEvent,
     StreamEvent,
+    ToolCallEvent,
+    ToolResultEvent,
     UnavailableError,
 )
 from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter, tool_loop
@@ -24,6 +28,10 @@ from songmaker_cli.cowriter.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
+from songmaker_cli.cowriter.tool_loop import FinalText, TextDelta, ToolCall, ToolCallBatch
+from songmaker_cli.db.engine import init_test_db
+from songmaker_cli.db.models import Album, Song, User, Version
+from songmaker_cli.middleware import AuthenticatedUser
 
 
 class _Stream(AsyncIterator[StreamEvent]):
@@ -63,7 +71,6 @@ async def _events(provider: str, route: ProviderRoute) -> list[StreamEvent]:
     ("provider", "route", "adapter"),
     [
         ("claude", ProviderRoute.CLI, "stream_claude_turn"),
-        ("grok", ProviderRoute.CLI, "stream_grok_cli_turn"),
         ("codex", ProviderRoute.CLI, "stream_codex_cli_turn"),
     ],
 )
@@ -85,13 +92,190 @@ def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
     assert stream.closed
 
 
+def test_grok_cli_dispatches_its_text_transport_through_the_shared_tool_loop(monkeypatch):
+    class Transport:
+        closed = False
+
+        def __init__(self):
+            self.round = 0
+
+        async def stream(self, _message):
+            if self.round == 0:
+                self.round += 1
+                yield TextDelta("I will update it. ")
+                yield ToolCallBatch((ToolCall(
+                    "call-1", "update_song_lyrics", {"song_id": "own-song", "lyrics": "new"},
+                ),))
+                return
+            yield FinalText("Done.")
+
+        async def aclose(self):
+            self.closed = True
+
+    transport = Transport()
+    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.tools.execute_cowriter_tool",
+        lambda _session, _user, name, arguments: (
+            "updated" if arguments["song_id"] == "own-song" else "Song not found", False,
+        ),
+    )
+
+    events = asyncio.run(_events("grok", ProviderRoute.CLI))
+
+    assert events == [
+        AssistantTextEvent(text="I will update it. "),
+        ToolCallEvent(
+            tool_use_id="call-1", name="update_song_lyrics",
+            input={"song_id": "own-song", "lyrics": "new"},
+        ),
+        ToolResultEvent(tool_use_id="call-1", content="updated", is_error=False),
+        AssistantTextEvent(text="Done."),
+        FinalEvent(text="I will update it. Done."),
+    ]
+    assert transport.closed
+
+
+def test_grok_cli_dispatch_names_a_text_protocol_error(monkeypatch):
+    class InvalidTransport:
+        async def stream(self, _message):
+            yield ToolCallBatch((ToolCall("call-1", "get_song", {"song_id": "s1"}),))
+            yield FinalText()
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: InvalidTransport())
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_events("grok", ProviderRoute.CLI))
+
+    assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
+
+
+def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    factory = init_test_db(tmp_path / "grok-dispatch.db")
+    with factory() as session:
+        session.add_all([
+            User(id="owner", username="owner", password_hash="x", role="user"),
+            User(id="other", username="other", password_hash="x", role="user"),
+        ])
+        session.flush()
+        session.add_all([
+            Album(id="owner-album", title="Owner", artist="Owner", created_by="owner"),
+            Album(id="other-album", title="Other", artist="Other", created_by="other"),
+            Song(id="owned-song", title="Owned", album_id="owner-album", track_number=1),
+            Song(id="other-song", title="Other", album_id="other-album", track_number=1),
+            Version(
+                id="owned-version", song_id="owned-song", version_number=1,
+                lyrics="old", prompt="rock", bpm=120, key_scale="Am", audio_duration=180,
+            ),
+            Version(
+                id="other-version", song_id="other-song", version_number=1,
+                lyrics="private", prompt="jazz", bpm=100, key_scale="C", audio_duration=180,
+            ),
+        ])
+        session.commit()
+
+    class Transport:
+        def __init__(self) -> None:
+            self.round = 0
+            self.closed = False
+
+        async def stream(self, _message):
+            calls = (
+                ToolCall("read-owned", "get_song", {"song_id": "owned-song"}),
+                ToolCall(
+                    "write-owned", "update_song_lyrics",
+                    {"song_id": "owned-song", "lyrics": "new lyrics"},
+                ),
+                ToolCall("read-foreign", "get_song", {"song_id": "other-song"}),
+            )
+            if self.round < len(calls):
+                call = calls[self.round]
+                self.round += 1
+                yield ToolCallBatch((call,))
+                return
+            yield FinalText("done")
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    transport = Transport()
+    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
+
+    async def collect():
+        with factory() as session:
+            return [
+                event
+                async for event in dispatch.stream_cowriter_turn(
+                    provider="grok",
+                    route=ProviderRoute.CLI,
+                    model="grok-test",
+                    user_id=user.id,
+                    system="system",
+                    messages=[],
+                    session=session,
+                    user=user,
+                )
+            ]
+
+    events = asyncio.run(collect())
+
+    results = [event for event in events if isinstance(event, ToolResultEvent)]
+    assert [result.is_error for result in results] == [False, False, True]
+    assert "Owned" in results[0].content
+    assert "Updated lyrics" in results[1].content
+    assert results[2].content == "Song not found"
+    assert transport.closed
+    with factory() as session:
+        assert session.get(Version, "owned-version").lyrics == "new lyrics"
+        assert session.get(Version, "other-version").lyrics == "private"
+
+
+def test_closing_a_grok_cli_turn_aborts_its_transport(monkeypatch):
+    class BlockingTransport:
+        closed = False
+
+        async def stream(self, _message):
+            yield TextDelta("partial")
+            await asyncio.Future()
+
+        async def aclose(self):
+            self.closed = True
+
+    transport = BlockingTransport()
+    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+
+    async def close_turn():
+        turn = dispatch.stream_cowriter_turn(
+            provider="grok",
+            route=ProviderRoute.CLI,
+            model="model",
+            user_id="user",
+            system="system",
+            messages=[],
+            session=MagicMock(),
+            user=MagicMock(),
+        )
+        assert await anext(turn) == AssistantTextEvent(text="partial")
+        await turn.aclose()
+
+    asyncio.run(close_turn())
+
+    assert transport.closed
+
+
 def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
     stream = _Stream()
     monkeypatch.setenv("XAI_API_KEY", "test-key")
     monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
-        "stream_grok_cli_turn",
+        "GrokCliToolTransport",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("CLI must not run")),
     )
 
@@ -120,7 +304,22 @@ def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, ada
         )
         yield AssistantTextEvent(text="unreachable")
 
-    monkeypatch.setattr(dispatch, adapter, failing_cli)
+    if provider == "grok":
+        class FailingTransport:
+            async def stream(self, _message):
+                raise ProviderUnavailableError(
+                    provider,
+                    "cli",
+                    normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+                )
+                yield  # pragma: no cover
+
+            async def aclose(self):
+                pass
+
+        monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: FailingTransport())
+    else:
+        monkeypatch.setattr(dispatch, adapter, failing_cli)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -135,7 +334,7 @@ def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, ada
 
 @pytest.mark.acceptance("ACC-COWRITER-11")
 def test_grok_cli_failure_never_falls_back_to_http(monkeypatch):
-    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "stream_grok_cli_turn")
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "")
 
 
 @pytest.mark.acceptance("ACC-COWRITER-13")
@@ -152,7 +351,19 @@ def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):
         )
         yield AssistantTextEvent(text="unreachable")
 
-    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", failing_cli)
+    class FailingTransport:
+        async def stream(self, _message):
+            raise ProviderUnavailableError(
+                "grok",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+            )
+            yield  # pragma: no cover
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: FailingTransport())
 
     with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_events("grok", ProviderRoute.CLI))
