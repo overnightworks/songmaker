@@ -10,8 +10,12 @@ function pluralize(count: number, noun: string): string {
 	return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
+export function songCountLabel(songCount: number): string {
+	return pluralize(songCount, 'song');
+}
+
 export function albumSummaryLabel(songCount: number, pickCount: number): string {
-	return `${pluralize(songCount, 'song')} · ${pluralize(pickCount, 'pick')}`;
+	return `${songCountLabel(songCount)} · ${pluralize(pickCount, 'pick')}`;
 }
 
 export function playlistSummaryLabel(entryCount: number): string {
