@@ -618,6 +618,20 @@ tools: every start and resume keeps `--deny '*'`, and native tool-call events
 abort the turn. The Codex binary and mirror are also mounted into
 `songmaker-music-worker`, not into the scoring worker.
 
+The dark Web cover-image route starts Codex with the fixed read-only image
+argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
+with Code Mode enabled only for this image run. Each run creates a private
+`0700` root whose `codex-home/` and `work/` directories are separate `0700`
+siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
+the process cwd is the resolved `work/` path. The streamed event gate permits
+`image_gen` and exactly one measured bootstrap pair: matching
+`item.started`/`item.completed` `command_execution` events with the same ID,
+the `sed -n '1,240p' CODEX_HOME/skills/.system/imagegen/SKILL.md` command,
+that cwd in both events, and completed exit code 0. Any other command, cwd,
+file change, MCP call, web search, collaboration or unknown event requests
+abort and is reported as `ImageToolBlockedError`; the process is reaped before
+the route returns. The tool-free Co-Writer text turn keeps Code Mode disabled.
+
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
 `bind.create_host_path: false`: a missing source fails before a writable host

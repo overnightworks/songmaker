@@ -77,6 +77,16 @@ def _outcome(
     )
 
 
+def _image_event_stream(codex_home: Path, work_dir: Path) -> str:
+    return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text().replace(
+        "{CODEX_HOME}", str(codex_home.resolve()),
+    ).replace("{WORK_DIR}", str(work_dir.resolve()))
+
+
+def _image_event_records(codex_home: Path, work_dir: Path) -> list[dict]:
+    return [json.loads(line) for line in _image_event_stream(codex_home, work_dir).splitlines()]
+
+
 @pytest.fixture()
 def cover_job(tmp_path: Path):
     factory = init_test_db(tmp_path / "songmaker.db")
@@ -121,13 +131,17 @@ def _install_fake_codex_cli(
         calls.append({
             "command": command,
             "auth": (home / "auth.json").read_text(),
+            "auth_mode": (home / "auth.json").stat().st_mode & 0o777,
+            "home_contents": sorted(path.name for path in home.iterdir()),
+            "home_mode": home.stat().st_mode & 0o777,
+            "work_mode": Path(kwargs["cwd"]).stat().st_mode & 0o777,
             **kwargs,
         })
-        if creates_artifact:
-            artifact = home / "generated_images" / "cover.png"
-            artifact.parent.mkdir()
+        if creates_artifact and outcome is None:
+            artifact = home / "generated_images" / "thread" / "cover.png"
+            artifact.parent.mkdir(parents=True)
             artifact.write_bytes(_png_bytes())
-        return outcome or _outcome()
+        return outcome or _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -158,17 +172,21 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
     assert all(call["stdin_payload"] is not None for call in calls)
     assert all(len(call["stdin_payload"].decode()) <= COVER_PROMPT_MAX_CHARS for call in calls)
     assert all("--sandbox" in call["command"] for call in calls)
-    assert all("workspace-write" in call["command"] for call in calls)
+    assert all("read-only" in call["command"] for call in calls)
     assert all(call["command"] == (
-        "codex", "exec", "--json", "--sandbox", "workspace-write",
+        "codex", "exec", "--json", "--sandbox", "read-only",
         "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
-        "--ephemeral", "--disable", "code_mode_host", "--disable", "code_mode",
-        "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c",
-        "mcp_servers={}", "-",
+        "--ephemeral", "--enable", "code_mode_host", "--disable", "code_mode",
+        "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c", "mcp_servers={}",
+        "-c", 'web_search="disabled"', "-",
     ) for call in calls)
     copied_logins = [json.loads(call["auth"]) for call in calls]
     assert all(login == _REDACTED_CODEX_LOGIN for login in copied_logins)
     assert all("renewal-secret" not in call["auth"] for call in calls)
+    assert all(call["home_contents"] == ["auth.json"] for call in calls)
+    assert all(call["auth_mode"] == 0o600 for call in calls)
+    assert all(call["home_mode"] == 0o700 for call in calls)
+    assert all(call["work_mode"] == 0o700 for call in calls)
     for path in paths:
         with Image.open(audio_dir / path) as image:
             assert image.size == (1024, 1024)
@@ -176,6 +194,70 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
             assert image.info == {}
     assert not list((audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(".*.staging"))
     assert all(not Path(call["cwd"]).exists() for call in calls)
+    assert all(Path(call["cwd"]).name == "work" for call in calls)
+    assert all(
+        Path(call["cwd"]).parent == Path(call["extra_env"]["CODEX_HOME"]).parent
+        for call in calls
+    )
+    assert all(
+        not Path(call["cwd"]).is_relative_to(Path(call["extra_env"]["CODEX_HOME"]))
+        for call in calls
+    )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda records: records[3]["item"].update(command="/bin/bash -lc \"id\""),
+        lambda records: records[3]["item"].update(cwd="/outside-the-private-root"),
+        lambda records: records[3]["item"].update(type="file_change"),
+        lambda records: records[3]["item"].update(type="mcp_tool_call"),
+        lambda records: records[3]["item"].update(type="web_search"),
+        lambda records: records[3]["item"].update(type="future_item"),
+    ),
+)
+def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
+    tmp_path: Path, mutate,
+) -> None:
+    codex_home = tmp_path / "codex-home"
+    work_dir = tmp_path / "work"
+    codex_home.mkdir()
+    work_dir.mkdir()
+    records = _image_event_records(codex_home, work_dir)
+    mutate(records)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter._validate_codex_image_events(
+            "\n".join(json.dumps(record) for record in records),
+            codex_home=codex_home,
+            work_dir=work_dir,
+        )
+
+
+def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    observed_abort = threading.Event()
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        records = _image_event_records(home, Path(kwargs["cwd"]))
+        records[3]["item"]["type"] = "web_search"
+        assert channel._send((json.dumps(records[3]) + "\n").encode())
+        if channel._abort_requested.wait(timeout=1):
+            observed_abort.set()
+        return _outcome(complete=False, reason=CliRunReason.CANCELLED)
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert observed_abort.is_set()
 
 
 def test_cover_prompt_quotes_and_bounds_song_data(cover_job) -> None:
@@ -266,7 +348,6 @@ def test_cover_job_names_a_completed_turn_that_creates_no_image(
     _install_fake_codex_cli(
         monkeypatch,
         tmp_path,
-        outcome=_outcome(stdout=(_FIXTURES / "codex-cover-no-image-events.jsonl").read_text()),
         creates_artifact=False,
     )
     monkeypatch.setattr(
@@ -297,7 +378,7 @@ def test_codex_image_ignores_non_generated_png_assets(
         bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
         bundled_asset.parent.mkdir(parents=True)
         bundled_asset.write_bytes(_png_bytes())
-        return _outcome()
+        return _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -318,7 +399,9 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        return _outcome()
+        return _outcome(stdout=_image_event_stream(
+            homes[-1], Path(kwargs["cwd"]),
+        ))
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -344,7 +427,7 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
         homes.append(home)
         (home / "generated_images").symlink_to(outside, target_is_directory=True)
-        return _outcome()
+        return _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
