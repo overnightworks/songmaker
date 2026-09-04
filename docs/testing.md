@@ -49,7 +49,7 @@ while issue #31 remains open. The live checks are:
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
-| Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
+| Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` (the frontend audit retries registry outages and annotates an inconclusive result) |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
 | Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
 | Acceptance evidence | #42-A1 runs the marked Pick-replacement API test and retains its commit-bound JSON report for 30 days |

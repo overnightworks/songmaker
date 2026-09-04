@@ -69,4 +69,42 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Audit frontend dependencies
-        run: pnpm audit --prod
+        run: |
+          set +e
+          audit_log="${RUNNER_TEMP}/pnpm-audit.log"
+          max_attempts=3
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "Audit attempt ${attempt}/${max_attempts}"
+            # pnpm audit does not accept fetch flags directly; configure its registry client per attempt.
+            npm_config_fetch_retries=1 npm_config_fetch_timeout=30000 \
+              pnpm audit --prod 2>&1 | tee "$audit_log"
+            audit_status=${PIPESTATUS[0]}
+
+            if [ "$audit_status" -eq 0 ]; then
+              exit 0
+            fi
+
+            if ! grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_META_FETCH_FAIL|FetchError|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED' "$audit_log"; then
+              exit "$audit_status"
+            fi
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              backoff_seconds=$((attempt * 20))
+              echo "npm registry unavailable; retrying in ${backoff_seconds}s"
+              sleep "$backoff_seconds"
+            fi
+          done
+
+          # Registry outages are infrastructure failures, not evidence of a vulnerable dependency.
+          echo "::warning title=npm registry unreachable::audit skipped after ${max_attempts} attempts"
+          {
+            echo "## npm audit: registry unreachable"
+            echo
+            echo "The npm registry was unreachable after ${max_attempts} attempts. The audit is inconclusive; retry it when the registry is available."
+            echo
+            echo '```text'
+            cat "$audit_log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
