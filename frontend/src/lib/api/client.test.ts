@@ -56,6 +56,7 @@ import {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
+	updateCowriterSettings,
 	checkSetupRequired,
 	setupAdmin,
 	login,
@@ -254,6 +255,24 @@ describe('API client', () => {
 		const result = await updateGenerationDefaults({ turbo: { shift: 5.0 } });
 		expect(result.turbo.shift).toBe(5.0);
 		expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
+	});
+
+	it('updateCowriterSettings sends the complete provider route selection', async () => {
+		mockOk({ provider: 'claude', model: 'claude-api' });
+		await updateCowriterSettings('claude', 'claude-api', 8000, {
+			claude: 'api',
+			codex: 'cli'
+		});
+		const [url, init] = mockFetch.mock.calls[0];
+
+		expect(url).toBe('/api/settings/cowriter');
+		expect(init.method).toBe('PUT');
+		expect(JSON.parse(init.body)).toEqual({
+			provider: 'claude',
+			model: 'claude-api',
+			tail_token_budget: 8000,
+			provider_routes: { claude: 'api', codex: 'cli' }
+		});
 	});
 
 	it('throws ApiError on non-ok response', async () => {

@@ -147,6 +147,30 @@ export const COWRITER_MODEL_CURRENT_NOT_IN_CATALOG = 'current, not in catalog';
 export const COWRITER_SAVE_NOTHING_CHANGED = 'Nothing changed.';
 export const COWRITER_SAVE_CHANGED = 'Changed, not saved yet.';
 export const COWRITER_SAVE_MODEL_REQUIRED = 'Choose a model before saving.';
+export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
+export const PROVIDER_ROUTE_API_LABEL = 'API';
+export const PROVIDER_ROUTE_READY_LABEL = 'ready';
+export const PROVIDER_ROUTE_NOT_SET_UP_LABEL = 'not set up';
+export const PROVIDER_ROUTE_BROKEN_LABEL = 'broken';
+export const PROVIDER_ROUTE_KEY_SET_LABEL = 'key: set';
+export const PROVIDER_ROUTE_KEY_NOT_SET_LABEL = 'key: not set';
+export const PROVIDER_ROUTE_MODELS_LABEL = 'Provider routes';
+export const PROVIDER_ROUTE_MODEL_LABEL = 'model';
+export const PROVIDER_ROUTE_TURN_BLOCKED_LABEL = 'Turn blocked';
+export const PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP = 'Choose a ready route to continue.';
+
+export function providerRouteModelLabel(route: 'cli' | 'api'): string {
+	return `${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} ${PROVIDER_ROUTE_MODEL_LABEL}`;
+}
+
+export function providerRouteBlockedDetail(
+	provider: string,
+	route: 'cli' | 'api',
+	state: string,
+	reason: string
+): string {
+	return `${provider} ${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} · ${state} — ${reason}. ${PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP}`;
+}
 
 export function providerMissingDependencyDetail(dependency: string | null | undefined): string {
 	return `Missing ${dependency ?? 'required dependency'}`;
