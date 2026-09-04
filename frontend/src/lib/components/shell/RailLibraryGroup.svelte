@@ -8,12 +8,7 @@
 		songList
 	} from '$lib/stores/libraryData';
 	import { selectedSongId } from '$lib/stores/player';
-	import {
-		compareAlbumTracks,
-		openAlbum,
-		openLibraryFilter,
-		selectSong
-	} from '$lib/stores/navigation';
+	import { compareAlbumTracks, openAlbum, selectSong } from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		ALBUM_COVER_ALT_TYPE,
@@ -116,10 +111,6 @@
 		expandAlbum(albumId);
 	}
 
-	function onLibraryTitleClick(): void {
-		void openLibraryFilter('albums');
-	}
-
 	// The row's label is the navigation target (ruled sentence 5 of #302: a
 	// list entry click goes directly into that album), the same openAlbum
 	// LibraryWall's own album cards already use -- not goto/pushState, and not
@@ -176,7 +167,6 @@
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albums.length}
 	expandTrigger={openAlbumId !== null || loadStatus === 'error'}
-	onTitleClick={onLibraryTitleClick}
 	{icon}
 >
 	<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
@@ -340,9 +330,6 @@
 		border-left: 3px solid transparent;
 	}
 
-	/* Mirrors RailGroup's own .disclose-row/.disclose/.group-title-action split:
-	   the chevron toggles only, the label navigates only -- see
-	   onAlbumLabelClick's own comment for why they must be two elements. */
 	.album-row {
 		display: flex;
 		align-items: center;
