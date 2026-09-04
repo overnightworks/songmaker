@@ -97,12 +97,16 @@ def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
     assert asyncio.run(_events("grok", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
 
 
-def test_cli_failure_never_falls_back_to_http(monkeypatch):
+def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, adapter: str) -> None:
     async def failing_cli(**_kwargs):
-        raise ProviderUnavailableError("grok", "raw CLI output")
+        raise ProviderUnavailableError(
+            provider,
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
         yield AssistantTextEvent(text="unreachable")
 
-    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", failing_cli)
+    monkeypatch.setattr(dispatch, adapter, failing_cli)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -110,9 +114,19 @@ def test_cli_failure_never_falls_back_to_http(monkeypatch):
     )
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events("grok", ProviderRoute.CLI))
+        asyncio.run(_events(provider, ProviderRoute.CLI))
 
-    assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
+
+
+@pytest.mark.acceptance("ACC-COWRITER-11")
+def test_grok_cli_failure_never_falls_back_to_http(monkeypatch):
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "stream_grok_cli_turn")
+
+
+@pytest.mark.acceptance("ACC-COWRITER-13")
+def test_codex_cli_failure_never_falls_back_to_http(monkeypatch):
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "codex", "stream_codex_cli_turn")
 
 
 def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):

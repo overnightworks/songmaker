@@ -219,6 +219,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
     from songmaker_cli.constants import COWRITER_PROVIDERS
     from songmaker_cli.cowriter.catalog import (
         ConfiguredProvider,
+        ProviderRoute,
         ProviderSetupMethod,
         provider_snapshot,
     )
@@ -230,11 +231,24 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         ),
     )
     refreshed = threading.Event()
-    refreshed_providers: set[str] = set()
+    refreshed_routes: set[tuple[str, ProviderRoute]] = set()
+    expected_routes = {
+        (provider, route)
+        for provider in COWRITER_PROVIDERS
+        for route in ProviderRoute
+    }
 
-    def list_provider_models(provider: str, _route: object) -> list[str]:
-        refreshed_providers.add(provider)
-        if refreshed_providers == COWRITER_PROVIDERS:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        lambda _provider: True,
+    )
+
+    def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
+        refreshed_routes.add((provider, route))
+        if refreshed_routes == expected_routes:
             refreshed.set()
         return [f"{provider}-model"]
 
@@ -252,6 +266,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         health = client.get("/health").json()["background_loops"]
 
     assert all(provider_snapshot(provider) is not None for provider in COWRITER_PROVIDERS)
+    assert refreshed_routes == expected_routes
     assert health[BackgroundLoopName.PROVIDER_STATUS_REFRESH]["state"] == BackgroundLoopStatus.OK
 
 

@@ -66,6 +66,7 @@ def _recorded_stream_lines() -> list[bytes]:
     return [json.dumps(event).encode() + b"\n" for event in events]
 
 
+@pytest.mark.acceptance("ACC-COWRITER-12")
 def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch) -> None:
     calls: list = []
     observed_cwd_modes: list[int] = []
@@ -179,9 +180,10 @@ def test_codex_cli_names_unknown_stream_events_in_the_log(monkeypatch, caplog) -
     ], _outcome(), calls))
     caplog.set_level("WARNING")
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
 
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
     assert "event_type=turn.unknown" in caplog.text
 
 
@@ -194,9 +196,10 @@ def test_codex_cli_names_unknown_item_types_without_logging_item_content(
     ], _outcome(), calls))
     caplog.set_level("WARNING")
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
 
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
     assert "event_type=item.completed" in caplog.text
     assert "item_type=future_item" in caplog.text
     assert "secret" not in caplog.text
@@ -230,14 +233,14 @@ def test_codex_cli_delivers_a_completed_turn_after_logging_an_error_item(
 
 
 @pytest.mark.parametrize(
-    ("message", "code"),
+    ("message", "reason"),
     (
-        ("Code Mode is unavailable", "codex_cli_error"),
-        ("Request failed with 401 Unauthorized", "cli_login_expired"),
+        ("Code Mode is unavailable", SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        ("Request failed with 401 Unauthorized", SafeRouteReasonCode.CLI_AUTH_REJECTED),
     ),
 )
 def test_codex_cli_classifies_an_error_item_without_a_completed_turn(
-    monkeypatch, message, code,
+    monkeypatch, message, reason,
 ) -> None:
     calls: list = []
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
@@ -246,8 +249,10 @@ def test_codex_cli_classifies_an_error_item_without_a_completed_turn(
         }}).encode() + b"\n",
     ], _outcome(), calls))
 
-    with pytest.raises(ProviderUnavailableError, match=code):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
+
+    assert raised.value.reason.code is reason
 
 
 @pytest.mark.parametrize("event_type", ("item.started", "item.updated"))
@@ -261,8 +266,10 @@ def test_codex_cli_rejects_nonterminal_error_items_as_protocol_errors(
         }}).encode() + b"\n",
     ], _outcome(), calls))
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 @pytest.mark.parametrize(
