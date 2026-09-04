@@ -21,11 +21,13 @@ from songmaker_cli.constants import (
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
 from songmaker_cli.cowriter.catalog import ProviderSetupMethod
 from songmaker_cli.cowriter.codex_cli_adapter import (
+    CodexImageCliError,
     CodexImageLoginError,
     CodexImageTimeoutError,
     generate_codex_cover_image,
 )
 from songmaker_cli.cowriter.dispatch import cover_image_provider_method
+from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.db.models import AlbumCoverSuggestion
 from songmaker_cli.db.queries import get_album, get_job, list_songs
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
@@ -53,7 +55,11 @@ async def run_cover_suggestion_job(
     staging_dir: Path | None = None
     try:
         prompt, album_id = _load_cover_prompt(db_factory, job_id)
-        if cover_image_provider_method() is not ProviderSetupMethod.CODEX_CLI:
+        try:
+            provider_method = cover_image_provider_method()
+        except ProviderUnavailableError as exc:
+            raise CodexImageCliError() from exc
+        if provider_method is not ProviderSetupMethod.CODEX_CLI:
             raise CodexImageLoginError()
         suggestion_ids = [str(uuid.uuid4()) for _ in range(3)]
         staging_dir = _staging_directory(audio_dir, album_id, job_id)

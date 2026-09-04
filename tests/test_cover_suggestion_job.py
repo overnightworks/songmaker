@@ -23,6 +23,11 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.catalog import ProviderSetupMethod
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs.cover_suggestions import build_cover_prompt, run_cover_suggestion_job
@@ -206,6 +211,27 @@ def test_cover_job_leaves_no_group_for_named_image_failures(
         assert job.error == expected_error
         assert not job.album.cover_suggestions
     assert not (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "album").exists()
+
+
+def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
+    cover_job, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    monkeypatch.setattr(
+        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
+        lambda: (_ for _ in ()).throw(ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE),
+        )),
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == JOB_ERROR_COVER_IMAGE_FAILED
 
 
 def test_codex_image_rejects_an_artifact_outside_its_private_home(

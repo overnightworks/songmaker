@@ -177,8 +177,12 @@ def _require_secret(provider: str, route: ProviderRoute, secret) -> str:
 def _codex_cli_access_token_is_present() -> bool:
     try:
         return codex_cli_access_token_is_present()
-    except AgentCliUnavailableError:
-        return False
+    except AgentCliUnavailableError as exc:
+        raise _unavailable(
+            "codex",
+            ProviderRoute.CLI,
+            SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE,
+        ) from exc
 
 
 def cover_image_provider_method() -> ProviderSetupMethod | None:

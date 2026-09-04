@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from songmaker_cli.agent_cli import AgentCliUnavailableError
 from songmaker_cli.claude.provider import (
     AssistantTextEvent,
     CliBinaryUnavailableError,
@@ -95,6 +96,19 @@ def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
     )
 
     assert asyncio.run(_events("grok", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
+
+
+def test_codex_cover_route_reports_an_unavailable_cli_probe(monkeypatch) -> None:
+    monkeypatch.setattr(
+        dispatch,
+        "codex_cli_access_token_is_present",
+        lambda: (_ for _ in ()).throw(AgentCliUnavailableError("unreadable mirror")),
+    )
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        dispatch.cover_image_provider_method()
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
 
 
 def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, adapter: str) -> None:
