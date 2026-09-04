@@ -345,7 +345,9 @@ async def _post_to_worker(
     headers = {INTERNAL_TOKEN_HEADER: token}
     async with httpx.AsyncClient(timeout=30) as client:
         return await client.post(
-            f"http://{host}:{port}{path}", json=json_body, headers=headers,
+            f"http://{host}:{port}{path}",  # NOSONAR Private traffic uses an internal token.
+            json=json_body,
+            headers=headers,
         )
 
 

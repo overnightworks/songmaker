@@ -383,8 +383,7 @@ async def api_repaint_generation(
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
     )
     session.commit()
-    log.info("Repaint: gen=%s, range=%.2f-%.2f, job=%s",
-             gen_id, req.repainting_start, req.repainting_end, job.id)
+    log.info("Repaint generation job enqueued")
 
     try:
         pool = get_arq_pool()
@@ -457,8 +456,7 @@ async def api_cover_generation(
         f"strength={req.audio_cover_strength:.2f}",
     )
     session.commit()
-    log.info("Cover: gen=%s, strength=%.2f, job=%s",
-             gen_id, req.audio_cover_strength, job.id)
+    log.info("Cover generation job enqueued")
 
     try:
         pool = get_arq_pool()

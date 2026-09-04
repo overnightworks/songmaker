@@ -123,7 +123,7 @@ def run_demucs(src: Path, out_dir: Path) -> dict[str, Path]:
         log.info("demucs cache hit for %s", name)
         return {s: cached / f"{s}.wav" for s in STEM_NAMES}
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)  # NOSONAR: S8707 -- user-selected local cache path.
     log.info("running demucs on %s", src.name)
     cmd = [
         sys.executable, "-m", "demucs.separate",
@@ -132,7 +132,7 @@ def run_demucs(src: Path, out_dir: Path) -> dict[str, Path]:
         "--filename", "{stem}.{ext}",
         str(src),
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)  # NOSONAR: fixed executable and shell-free CLI paths
     return {s: cached / f"{s}.wav" for s in STEM_NAMES}
 
 
@@ -241,7 +241,7 @@ def loudnorm_via_ffmpeg(in_path: Path, out_path: Path) -> None:
         "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le",
         str(out_path),
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)  # NOSONAR: fixed executable and shell-free CLI paths
 
 
 def main() -> None:

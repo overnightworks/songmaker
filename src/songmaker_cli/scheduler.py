@@ -123,7 +123,7 @@ class _PickedWorker:
 
     @property
     def base_url(self) -> str:
-        return f"http://{self.host}:{self.port}"
+        return f"http://{self.host}:{self.port}"  # NOSONAR Private traffic uses an internal token.
 
 
 @dataclass
