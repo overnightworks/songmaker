@@ -78,7 +78,8 @@ def test_codex_cli_streams_text_then_one_final_and_pins_its_command(monkeypatch)
     command, kwargs = calls[0]
     assert command == (
         "codex", "exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check",
-        "--ignore-user-config", "--ignore-rules", "--ephemeral", "-c", 'approval_policy="never"',
+        "--ignore-user-config", "--ignore-rules", "--ephemeral", "--disable", "code_mode_host",
+        "--disable", "code_mode", "--disable", "code_mode_only", "-c", 'approval_policy="never"',
         "-c", "mcp_servers={}", "--model", "codex-test", "-",
     )
     assert kwargs["stdin_payload"] == b"system\n\nUser: hello"

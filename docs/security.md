@@ -340,7 +340,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 `POST /api/albums/{album_id}/cover` and `POST /api/songs/{song_id}/cover` accept JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Album files live at `{audio_dir}/covers/{album_id}/`; song files live at `{audio_dir}/song-covers/{song_id}/`. Authenticated GET/POST/DELETE use `check_album_access` / `check_song_access` (foreign resources 404). Authenticated and public song cover endpoints stream only that song's files — 404 when the song has no own cover, even if the parent album has one. Public bytes use the matching share slug. The song-cover body budget is the cover ceiling; it is not the `/api/songs/{id}/reimport` ceiling.
 
-Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The music worker selects the Codex CLI path only through the co-writer dispatch owner and never falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. Pillow rewrites it as a metadata-free 1024×1024 RGB PNG. JSON event gating allows `image_gen` and lifecycle/text events only; every other tool event fails the job with the fixed image-tool message. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
+Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The music worker selects the Codex CLI path only through the co-writer dispatch owner and never falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. The image command disables `code_mode_host`, `code_mode`, and `code_mode_only`; it cannot start the native Code Mode companion. Pillow rewrites its exactly one accepted PNG as a metadata-free 1024×1024 RGB PNG. JSON event gating allows `image_gen` and lifecycle/text events only; without a completed turn, a completed `error` item becomes the named Codex login or image failure without recording its message, while every other tool event fails the job with the fixed image-tool message. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
@@ -400,9 +400,10 @@ being in place.
 ## Agent-CLI Mounts
 
 `songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
-credential mirrors read-only (`docker-compose.yml:98-133`). The scoring worker
-mounts only Claude's binary and credential mirror; it does not mount Grok or
-Codex (`docker-compose.yml:246-259`).
+credential mirrors read-only. The music worker mounts the Codex binary and
+redacted credential mirror read-only because it executes private cover jobs.
+The scoring worker mounts only Claude's binary and credential mirror; it does
+not mount Grok or Codex.
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
@@ -432,9 +433,12 @@ The host remains the only refresh owner: the mounted Codex document keeps
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
-The one-turn Codex command is `codex exec --json --sandbox read-only` with
-`--skip-git-repo-check`, `--ignore-user-config`, `--ignore-rules`,
-`--ephemeral`, `approval_policy="never"`, and `mcp_servers={}`. It receives a
+The one-turn Codex command is `codex exec --json` with `--skip-git-repo-check`,
+`--ignore-user-config`, `--ignore-rules`, `--ephemeral`,
+`--disable code_mode_host`, `--disable code_mode`, `--disable code_mode_only`,
+`approval_policy="never"`, and `mcp_servers={}`. Co-writer turns use the
+read-only sandbox; cover suggestions use a private workspace-write sandbox for
+their generated artifact. Each receives a
 private temporary working directory (which is deliberately not a Git
 repository), a stdin prompt rather than a prompt file, and the runner's
 secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited. Its JSONL

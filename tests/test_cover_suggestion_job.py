@@ -131,6 +131,13 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
     assert all(len(call["stdin_payload"].decode()) <= COVER_PROMPT_MAX_CHARS for call in calls)
     assert all("--sandbox" in call["command"] for call in calls)
     assert all("workspace-write" in call["command"] for call in calls)
+    assert all(call["command"] == (
+        "codex", "exec", "--json", "--sandbox", "workspace-write",
+        "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
+        "--ephemeral", "--disable", "code_mode_host", "--disable", "code_mode",
+        "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c",
+        "mcp_servers={}", "-",
+    ) for call in calls)
     assert all(call["auth"] == '{"tokens": {"access_token": "token"}}' for call in calls)
     for path in paths:
         with Image.open(audio_dir / path) as image:
@@ -162,6 +169,21 @@ def test_cover_prompt_quotes_and_bounds_song_data(cover_job) -> None:
             JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
         ),
         (_outcome(stderr="401 unauthorized"), JOB_ERROR_COVER_CLI_LOGIN),
+        (
+            _outcome(stdout=(
+                '{"type":"item.completed","item":{"type":"error",'
+                '"message":"401 Unauthorized"}}\n'
+            )),
+            JOB_ERROR_COVER_CLI_LOGIN,
+        ),
+        (
+            _outcome(stdout=(
+                '{"type":"item.completed","item":{"type":"error",'
+                '"message":"internal CLI failure"}}\n'
+            )),
+            JOB_ERROR_COVER_IMAGE_FAILED,
+        ),
+        (_outcome(stdout="not json\n"), JOB_ERROR_COVER_IMAGE_FAILED),
         (_outcome(stdout='{"type":"thread.started"}\n'), JOB_ERROR_COVER_IMAGE_FAILED),
     ],
 )

@@ -86,10 +86,10 @@ problem() {
 }
 
 check_binary() {
-    local label="$1" path="$2"
+    local label="$1" path="$2" environment_name="$3"
     if [ ! -e "$path" ]; then
         problem "$label CLI '$path' is missing. Install the CLI, or point" \
-            "SONGMAKER_${label^^}_CLI at where it really lives."
+            "$environment_name at where it really lives."
         return
     fi
     local resolved
@@ -222,9 +222,9 @@ fi
 
 check_mirror_is_running
 
-check_binary claude "$CLAUDE_CLI"
-check_binary grok "$GROK_CLI"
-check_binary codex "$CODEX_CLI"
+check_binary claude "$CLAUDE_CLI" SONGMAKER_CLAUDE_CLI
+check_binary grok "$GROK_CLI" SONGMAKER_GROK_CLI
+check_binary codex "$CODEX_CLI" SONGMAKER_CODEX_CLI
 
 if [ "$problems" -gt 0 ]; then
     echo >&2

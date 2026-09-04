@@ -308,6 +308,17 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     assert foreign.json() == {"detail": "Not Found"}
 
 
+def test_cover_suggestions_have_no_public_share_route(
+    alice_app: tuple[TestClient, object],
+) -> None:
+    client, _ = alice_app
+
+    response = client.get("/shared/album-slug/cover-suggestions")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
+
+
 def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
     alice_app: tuple[TestClient, object],
 ) -> None:

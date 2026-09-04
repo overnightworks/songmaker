@@ -43,6 +43,22 @@ _BLOCKED_ITEM_TYPES: Final = frozenset({
     "command_execution", "mcp_tool_call", "web_search", "file_change",
 })
 _IMAGE_TEXT_ITEM_TYPES: Final = frozenset({"agent_message", "reasoning"})
+_CODEX_CLI_ISOLATION_ARGS: Final = (
+    "--skip-git-repo-check",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--ephemeral",
+    "--disable",
+    "code_mode_host",
+    "--disable",
+    "code_mode",
+    "--disable",
+    "code_mode_only",
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    "mcp_servers={}",
+)
 
 log = logging.getLogger(__name__)
 
@@ -209,20 +225,19 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
 
 def _build_codex_image_command() -> tuple[str, ...]:
     """Return the fixed command for the image-only Codex route."""
+    return _build_codex_command(sandbox="workspace-write")
+
+
+def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str, ...]:
+    """Build one isolated Codex command for the selected sandbox and model."""
     return (
         CODEX_CLI_BINARY,
         "exec",
         "--json",
         "--sandbox",
-        "workspace-write",
-        "--skip-git-repo-check",
-        "--ignore-user-config",
-        "--ignore-rules",
-        "--ephemeral",
-        "-c",
-        'approval_policy="never"',
-        "-c",
-        "mcp_servers={}",
+        sandbox,
+        *_CODEX_CLI_ISOLATION_ARGS,
+        *(("--model", model) if model is not None else ()),
         "-",
     )
 
@@ -243,25 +258,46 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
 
 def _validate_codex_image_events(output: str) -> None:
     saw_completed_turn = False
-    for line in output.splitlines():
-        event_type, event = _parse_codex_line(line.encode("utf-8"))
-        if event_type in {"thread.started", "turn.started"}:
-            continue
-        if event_type == "turn.completed":
-            if saw_completed_turn or not isinstance(event.get("usage"), dict):
-                raise CodexImageCliError()
-            saw_completed_turn = True
-            continue
-        if event_type in {"error", "turn.failed"}:
-            raise CodexImageCliError()
-        if event_type.startswith("item."):
-            item_type = _item_type(event)
-            if item_type in _IMAGE_TEXT_ITEM_TYPES or item_type == "image_gen":
+    completed_error_item_message: str | None = None
+    try:
+        for line in output.splitlines():
+            event_type, event = _parse_codex_line(line.encode("utf-8"))
+            if event_type in {"thread.started", "turn.started"}:
                 continue
-            raise ImageToolBlockedError()
+            if event_type == "turn.completed":
+                if saw_completed_turn or not isinstance(event.get("usage"), dict):
+                    raise CodexImageCliError()
+                saw_completed_turn = True
+                continue
+            if event_type in {"error", "turn.failed"}:
+                raise CodexImageCliError()
+            if event_type.startswith("item."):
+                item_type = _item_type(event)
+                if event_type == "item.completed" and item_type == "error":
+                    completed_error_item_message = _completed_error_item_message(event)
+                    continue
+                if item_type in _IMAGE_TEXT_ITEM_TYPES or item_type == "image_gen":
+                    continue
+                if item_type in _BLOCKED_ITEM_TYPES:
+                    raise ImageToolBlockedError()
+                raise CodexImageCliError()
+            raise CodexImageCliError()
+    except _CodexCliStreamFailure as exc:
+        raise CodexImageCliError() from exc
+    if saw_completed_turn:
+        return
+    if completed_error_item_message is not None:
+        if _contains_auth_failure(completed_error_item_message):
+            raise CodexImageLoginError()
         raise CodexImageCliError()
-    if not saw_completed_turn:
-        raise CodexImageCliError()
+    raise CodexImageCliError()
+
+
+def _completed_error_item_message(event: dict[str, object]) -> str:
+    message = _item(event).get("message")
+    if not isinstance(message, str):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return message
 
 
 def _find_only_generated_png(codex_home: Path) -> Path:
@@ -298,24 +334,7 @@ def _normalize_generated_png(source: Path) -> bytes:
 
 def _build_codex_cli_command(model: str) -> tuple[str, ...]:
     """Return the fixed, tool-free Codex command for a single streamed turn."""
-    return (
-        CODEX_CLI_BINARY,
-        "exec",
-        "--json",
-        "--sandbox",
-        "read-only",
-        "--skip-git-repo-check",
-        "--ignore-user-config",
-        "--ignore-rules",
-        "--ephemeral",
-        "-c",
-        'approval_policy="never"',
-        "-c",
-        "mcp_servers={}",
-        "--model",
-        model,
-        "-",
-    )
+    return _build_codex_command(sandbox="read-only", model=model)
 
 
 def _parse_codex_line(line: bytes) -> tuple[str, dict[str, object]]:
