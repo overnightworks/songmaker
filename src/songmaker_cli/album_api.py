@@ -44,7 +44,6 @@ from songmaker_cli.constants import (
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
-    JobType,
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
@@ -70,7 +69,6 @@ from songmaker_cli.db.queries import (
     count_picked_songs_by_album,
     count_songs_by_album,
     create_album,
-    create_job,
     delete_album_cover_suggestions,
     disable_album_sharing,
     enable_album_sharing,
@@ -403,12 +401,10 @@ def api_create_cover_suggestions(
         used_today = count_cover_jobs_since(session, album_id, _utc_day_start())
         if used_today >= settings.cover_suggestions_daily_limit:
             raise HTTPException(429, "Daily cover suggestion limit reached")
-        job = create_job(session, JobType.COVER, user_id=user.id, album_id=album_id)
-        session.commit()
+        raise HTTPException(503, "Cover suggestions are not available yet")
     except HTTPException:
         session.rollback()
         raise
-    return JobResponse.from_orm(job)
 
 
 @router.get("/albums/{album_id}/cover-suggestions")
