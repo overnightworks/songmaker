@@ -256,6 +256,26 @@ def test_cross_user_access_is_404(tmp_path: Path) -> None:
     assert client_b.get("/api/loras").json()["loras"] == []
 
 
+def test_admin_cannot_access_another_users_lora(tmp_path: Path) -> None:
+    _, ctx = _build_app(tmp_path, USER_A)
+    lora_id = _make_lora(ctx, USER_A)
+    with ctx.db() as session:
+        sample = add_user_lora_sample(
+            session, lora_id, "alice/sample.wav", caption="c", lyrics="l",
+        )
+        session.commit()
+        sample_id = sample.id
+    admin = _client_for_user(ctx, "u-admin", role="admin")
+
+    assert admin.get(f"/api/loras/{lora_id}").status_code == 404
+    assert admin.delete(f"/api/loras/{lora_id}").status_code == 404
+    assert admin.post(f"/api/loras/{lora_id}/train").status_code == 404
+    assert admin.patch(
+        f"/api/loras/{lora_id}/samples/{sample_id}", json={"caption": "x"},
+    ).status_code == 404
+    assert admin.delete(f"/api/loras/{lora_id}/samples/{sample_id}").status_code == 404
+
+
 # ── Delete ────────────────────────────────────────────────────────────
 
 
