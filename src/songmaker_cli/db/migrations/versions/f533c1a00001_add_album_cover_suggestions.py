@@ -17,15 +17,15 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "jobs",
-        sa.Column("album_id", sa.String(length=64), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_jobs_album_id_albums", "jobs", "albums", ["album_id"], ["id"],
-        ondelete="CASCADE",
-    )
-    op.create_index("ix_jobs_album_id", "jobs", ["album_id"])
+    with op.batch_alter_table("jobs") as batch_op:
+        batch_op.add_column(
+            sa.Column("album_id", sa.String(length=64), nullable=True),
+        )
+        batch_op.create_foreign_key(
+            "fk_jobs_album_id_albums", "albums", ["album_id"], ["id"],
+            ondelete="CASCADE",
+        )
+        batch_op.create_index("ix_jobs_album_id", ["album_id"])
     op.create_table(
         "album_cover_suggestions",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -49,6 +49,7 @@ def downgrade() -> None:
     op.drop_index("ix_album_cover_suggestions_job_id", table_name="album_cover_suggestions")
     op.drop_index("ix_album_cover_suggestions_album_id", table_name="album_cover_suggestions")
     op.drop_table("album_cover_suggestions")
-    op.drop_index("ix_jobs_album_id", table_name="jobs")
-    op.drop_constraint("fk_jobs_album_id_albums", "jobs", type_="foreignkey")
-    op.drop_column("jobs", "album_id")
+    with op.batch_alter_table("jobs") as batch_op:
+        batch_op.drop_index("ix_jobs_album_id")
+        batch_op.drop_constraint("fk_jobs_album_id_albums", type_="foreignkey")
+        batch_op.drop_column("album_id")
