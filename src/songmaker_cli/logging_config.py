@@ -13,6 +13,19 @@ class _SongmakerLogHandler(logging.StreamHandler):
     """The root handler installed by :func:`configure_logging`."""
 
 
+class _SongmakerCliLogHandler(logging.StreamHandler):
+    """The temporary root handler installed before a CLI command runs."""
+
+
+def configure_cli_logging(level: int) -> None:
+    """Configure the CLI's plain logging until a command selects another format."""
+    logging.basicConfig(
+        level=level,
+        format="%(name)s: %(message)s",
+        handlers=[_SongmakerCliLogHandler()],
+    )
+
+
 def configure_logging() -> None:
     """Configure structlog as a processor pipeline over stdlib logging.
 
@@ -55,7 +68,7 @@ def configure_logging() -> None:
     handler.setFormatter(formatter)
     root = logging.getLogger()
     for existing_handler in root.handlers[:]:
-        if isinstance(existing_handler, _SongmakerLogHandler):
+        if isinstance(existing_handler, (_SongmakerCliLogHandler, _SongmakerLogHandler)):
             root.removeHandler(existing_handler)
     root.addHandler(handler)
     root.setLevel(logging.INFO)

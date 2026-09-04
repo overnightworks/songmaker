@@ -1113,9 +1113,20 @@ class TestConfigureLogging:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
-        from songmaker_cli.logging_config import configure_logging
+        from songmaker_cli.logging_config import (
+            _SongmakerCliLogHandler,
+            configure_logging,
+        )
+
+        root = logging.getLogger()
+        cli_handler = _SongmakerCliLogHandler()
+        root.addHandler(cli_handler)
+
         configure_logging()
         logging.getLogger("songmaker.test").info("text mode")
+
+        assert cli_handler not in root.handlers
+        assert caplog.handler in root.handlers
         assert "text mode" in capsys.readouterr().err
         assert "text mode" in caplog.text
 
