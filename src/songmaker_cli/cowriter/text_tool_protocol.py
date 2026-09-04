@@ -94,49 +94,50 @@ def parse_text_tool_response(response: str) -> ParsedTextToolResponse:
 
 
 class TextToolStreamParser:
-    """Recognize a leading call while preserving normal text streaming.
+    """Recognize a line-delimited call while preserving normal text streaming.
 
-    ``feed`` returns text that can be immediately forwarded to the user. Once
-    a leading call is recognized, it returns no text and buffers that call.
-    ``finish`` returns the validated call or a final text tail.  Normal text
-    has already been returned by ``feed``; only all-whitespace text remains
-    buffered until the stream proves it is not a call prefix.
+    ``feed`` returns text that can be immediately forwarded to the user. It
+    retains only a possible opening-tag prefix so a tag split across provider
+    events is never exposed. Once it recognizes a call on its own line, it
+    returns the preceding prose and buffers the protocol block. ``finish``
+    returns the validated call or the final text tail.
     """
 
     def __init__(self) -> None:
         self._candidate = ""
         self._call_buffer: str | None = None
-        self._ordinary_text = False
 
     def feed(self, text: str) -> str:
         """Accept one provider text event and return any safe text delta."""
-        if self._ordinary_text:
-            return text
         if self._call_buffer is not None:
             self._call_buffer += text
             return ""
 
         self._candidate += text
-        leading_whitespace_length = len(self._candidate) - len(self._candidate.lstrip())
-        candidate = self._candidate[leading_whitespace_length:]
-        if _has_opening_line(candidate):
-            self._call_buffer = candidate
+        opening_start = _opening_line_start(self._candidate)
+        if opening_start is not None:
+            emitted = self._candidate[:opening_start]
+            self._call_buffer = (
+                self._candidate if emitted.isspace() else self._candidate[opening_start:]
+            )
             self._candidate = ""
+            return "" if emitted.isspace() else emitted
+        possible_opening_start = _opening_line_prefix_start(self._candidate)
+        if possible_opening_start is None:
+            if self._candidate.isspace():
+                return ""
+            emitted = self._candidate
+            self._candidate = ""
+            return emitted
+        emitted = self._candidate[:possible_opening_start]
+        if emitted.isspace():
             return ""
-        if _is_opening_line_prefix(candidate):
-            return ""
-
-        self._ordinary_text = True
-        emitted = self._candidate
-        self._candidate = ""
+        self._candidate = self._candidate[possible_opening_start:]
         return emitted
 
     def finish(self) -> TextToolCall | FinalText:
         """Return the call or the final ordinary-text tail at stream completion."""
-        if self._ordinary_text:
-            return FinalText("")
         if self._call_buffer is None:
-            self._ordinary_text = True
             return FinalText(self._candidate)
         return _parse_call(self._call_buffer, self._call_buffer)
 
@@ -147,6 +148,28 @@ def _has_opening_line(value: str) -> bool:
 
 def _is_opening_line_prefix(value: str) -> bool:
     return _OPENING_LINE_LF.startswith(value) or _OPENING_LINE_CRLF.startswith(value)
+
+
+def _opening_line_start(value: str) -> int | None:
+    """Return a complete call tag that begins a line, if one is present."""
+    starts = (
+        value.find(opening)
+        for opening in (_OPENING_LINE_LF, _OPENING_LINE_CRLF)
+    )
+    positions = [start for start in starts if start >= 0 and _is_line_start(value, start)]
+    return min(positions) if positions else None
+
+
+def _opening_line_prefix_start(value: str) -> int | None:
+    """Keep only a line-start suffix that could become an opening tag."""
+    for start in range(len(value)):
+        if _is_line_start(value, start) and _is_opening_line_prefix(value[start:]):
+            return start
+    return None
+
+
+def _is_line_start(value: str, start: int) -> bool:
+    return start == 0 or value[start - 1] == "\n"
 
 
 def _parse_call(candidate: str, original_response: str) -> TextToolCall:

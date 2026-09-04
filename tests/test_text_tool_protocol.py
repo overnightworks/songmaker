@@ -72,6 +72,16 @@ def test_stream_parser_buffers_a_call_split_across_text_events(chunks, expected)
     assert parser.finish() == expected
 
 
+def test_stream_parser_executes_a_line_delimited_call_after_streamed_prose():
+    parser = TextToolStreamParser()
+
+    assert parser.feed("I'll look that up.\n<songmaker_to") == "I'll look that up.\n"
+    assert parser.feed("ol_call>\n{\"name\":\"get_song\",") == ""
+    assert parser.feed("\"arguments\":{\"song_id\":\"song-1\"}}\n</songmaker_tool_call>") == ""
+
+    assert parser.finish() == TextToolCall("get_song", {"song_id": "song-1"})
+
+
 @pytest.mark.parametrize(
     "response",
     [
