@@ -38,6 +38,7 @@ from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
+    AuditLog,
     AvailableModel,
     ChatMessage,
     Job,
@@ -376,6 +377,7 @@ def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatc
         "/api/settings/cowriter", json={"provider": "codex", "model": codex_models[0]},
     )
     assert saved.status_code == 200
+
     assert saved.json()["provider"] == "codex"
     rejected = client.put(
         "/api/settings/cowriter", json={"provider": "codex", "model": "not-a-model"},
@@ -435,11 +437,83 @@ def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
     assert settings.json()["models_by_provider"]["claude"] == [
         "haiku", "opus", "sonnet", "claude-opus-4-6",
     ]
+    assert settings.json()["current_models_not_in_catalog"] == {
+        "claude": "claude-opus-4-6",
+    }
     saved = client.put(
         "/api/settings/cowriter",
         json={"provider": "claude", "model": "claude-opus-4-6"},
     )
     assert saved.status_code == 200
+
+
+def test_claude_api_catalog_stays_available_to_the_judge_while_cowriter_is_pending(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    with factory() as session:
+        set_provider_routes(
+            session,
+            {"claude": "api", "grok": "api", "codex": "api"},
+        )
+        session.commit()
+
+    refresh_provider_snapshots()
+    cowriter = client.get("/api/settings/cowriter").json()
+    claude_api = cowriter["provider_routes_status"]["claude"]["api"]
+    assert claude_api["models"] == LIVE_CATALOG["claude"]
+    assert claude_api["readiness"]["state"] == "not_configured"
+    assert claude_api["readiness"]["reason"]["code"] == "claude_api_tool_loop_pending"
+
+    judge = client.get("/api/settings/judge").json()
+    assert judge["models_by_provider"]["claude"] == LIVE_CATALOG["claude"]
+    saved = client.put(
+        "/api/settings/judge",
+        json={"provider": "claude", "model": "claude-sonnet-4-6"},
+    )
+    assert saved.status_code == 200
+
+    providers = {
+        item["provider"]: item
+        for item in client.get("/api/settings/providers").json()
+    }
+    assert providers["claude"]["cowriter"]["state"] == "unconfigured"
+    assert providers["claude"]["judge"]["state"] == "configured"
+
+
+def test_cowriter_put_without_routes_preserves_the_stored_route_map(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    routes = {"claude": "cli", "grok": "api", "codex": "cli"}
+    with factory() as session:
+        set_provider_routes(session, routes)
+        session.commit()
+
+    saved = client.put(
+        "/api/settings/cowriter",
+        json={"provider": "grok", "model": "grok-4.6"},
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["provider_routes"] == routes
+    with factory() as session:
+        audit = session.query(AuditLog).one()
+    assert audit.detail.endswith("routes=claude=cli,codex=cli,grok=api")
+
+
+def test_cowriter_put_requires_an_admin(admin_client):
+    client, _ = admin_client
+    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    try:
+        response = client.put(
+            "/api/settings/cowriter",
+            json={"provider": "grok", "model": "grok-4.6"},
+        )
+    finally:
+        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+
+    assert response.status_code == 403
 
 
 def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_configured):
@@ -1009,7 +1083,6 @@ def test_settings_responses_project_one_snapshot_generation_per_provider(
 ):
     from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
 
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._refresh_cli_login", lambda _provider: None)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.get_provider_configuration",
         lambda provider, _surface: ConfiguredProvider(
@@ -1450,7 +1523,7 @@ def test_judge_save_with_a_persisted_pair_always_checks_surface_and_catalog(
 
 
 def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():
-    with pytest.raises(ProviderUnavailableError, match="invalid tool arguments"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         _parse_tool_call(
             {
                 "id": "call-1",
@@ -1458,3 +1531,5 @@ def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():
             },
             "grok",
         )
+
+    assert raised.value.reason.code.value == "tool_protocol_error"

@@ -17,7 +17,11 @@ from songmaker_cli.claude.provider import (
     ToolResultEvent,
 )
 from songmaker_cli.constants import COWRITER_CLI_TIMEOUT_SECONDS, COWRITER_MAX_TOOL_ROUNDS
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from songmaker_cli.middleware import AuthenticatedUser
 
 
@@ -52,16 +56,22 @@ async def stream_openai_compatible_turn(
                 tool_calls = message.get("tool_calls") or []
                 if not isinstance(tool_calls, list):
                     raise ProviderUnavailableError(
-                        provider, f"{provider} returned an invalid response",
+                        provider,
+                        "api",
+                        normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
                     )
                 if tool_calls and round_index == COWRITER_MAX_TOOL_ROUNDS:
                     raise ProviderUnavailableError(
-                        provider, f"{provider} exceeded the tool-call limit",
+                        provider,
+                        "api",
+                        normalize_route_failure(SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED),
                     )
                 content = message.get("content") or ""
                 if not isinstance(content, str):
                     raise ProviderUnavailableError(
-                        provider, f"{provider} returned an invalid response",
+                        provider,
+                        "api",
+                        normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
                     )
                 if content:
                     text_chunks.append(content)
@@ -92,7 +102,15 @@ async def stream_openai_compatible_turn(
         raise
     except httpx.HTTPError as exc:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
+        ) from exc
+    except Exception as exc:
+        raise ProviderUnavailableError(
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_EXECUTION_FAILED),
         ) from exc
     raise AssertionError("unreachable")
 
@@ -121,21 +139,29 @@ async def _post_chat(
         )
     except httpx.HTTPError as exc:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         ) from exc
     if response.status_code >= 400:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         )
     try:
         payload = response.json()
     except ValueError as exc:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         ) from exc
     if not isinstance(payload, dict):
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         )
     return payload
 
@@ -146,12 +172,16 @@ def _assistant_message(
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         )
     message = choices[0].get("message") if isinstance(choices[0], dict) else None
     if not isinstance(message, dict):
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         )
     return message
 
@@ -189,27 +219,37 @@ def call_openai_compatible_once(
         )
     except httpx.HTTPError as exc:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         ) from exc
     if response.status_code >= 400:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         )
     try:
         payload = response.json()
     except ValueError as exc:
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         ) from exc
     if not isinstance(payload, dict):
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         )
     message = _assistant_message(payload, provider)
     content = message.get("content")
     if not isinstance(content, str) or not content:
         raise ProviderUnavailableError(
-            provider, f"{provider} returned an invalid response",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
         )
     return content
 
@@ -217,18 +257,24 @@ def call_openai_compatible_once(
 def _parse_tool_call(call: object, provider: str) -> tuple[str, str, dict[str, Any]]:
     if not isinstance(call, dict):
         raise ProviderUnavailableError(
-            provider, f"{provider} is currently unavailable",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
         )
     function = call.get("function") if isinstance(call.get("function"), dict) else None
     if function is None:
         raise ProviderUnavailableError(
-            provider, f"{provider} returned an invalid tool call",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
         )
     call_id = call.get("id")
     name = function.get("name")
     if not isinstance(call_id, str) or not call_id or not isinstance(name, str) or not name:
         raise ProviderUnavailableError(
-            provider, f"{provider} returned an invalid tool call",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
         )
     raw_args = function.get("arguments") or "{}"
     if isinstance(raw_args, str):
@@ -236,16 +282,22 @@ def _parse_tool_call(call: object, provider: str) -> tuple[str, str, dict[str, A
             arguments = json.loads(raw_args)
         except json.JSONDecodeError as exc:
             raise ProviderUnavailableError(
-                provider, f"{provider} returned invalid tool arguments",
+                provider,
+                "api",
+                normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
             ) from exc
     elif isinstance(raw_args, dict):
         arguments = raw_args
     else:
         raise ProviderUnavailableError(
-            provider, f"{provider} returned invalid tool arguments",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
         )
     if not isinstance(arguments, dict):
         raise ProviderUnavailableError(
-            provider, f"{provider} returned invalid tool arguments",
+            provider,
+            "api",
+            normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
         )
     return call_id, name, arguments

@@ -6,12 +6,23 @@ import asyncio
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
-from songmaker_cli.claude.provider import AssistantTextEvent, StreamEvent
-from songmaker_cli.cowriter import dispatch
+from songmaker_cli.claude.provider import (
+    AssistantTextEvent,
+    CliBinaryUnavailableError,
+    CliToolSurfaceError,
+    StreamEvent,
+    UnavailableError,
+)
+from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 
 
 class _Stream(AsyncIterator[StreamEvent]):
@@ -102,6 +113,128 @@ def test_cli_failure_never_falls_back_to_http(monkeypatch):
         asyncio.run(_events("grok", ProviderRoute.CLI))
 
     assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
+
+
+def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):
+    async def failing_cli(**_kwargs):
+        raise ProviderUnavailableError(
+            "grok",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
+        yield AssistantTextEvent(text="unreachable")
+
+    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", failing_cli)
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_events("grok", ProviderRoute.CLI))
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
+
+
+@pytest.mark.parametrize(
+    ("source_error", "reason"),
+    [
+        (CliBinaryUnavailableError("missing binary"), SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE),
+        (CliToolSurfaceError("unexpected tool"), SafeRouteReasonCode.TOOL_EXECUTION_FAILED),
+        (UnavailableError("invalid stream"), SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+    ],
+)
+def test_claude_adapter_maps_typed_cli_failure_sources(monkeypatch, source_error, reason):
+    async def failing_stream(**_kwargs):
+        raise source_error
+        yield AssistantTextEvent(text="unreachable")
+
+    monkeypatch.setattr(claude_adapter, "acall_claude_with_mcp_stream", failing_stream)
+
+    async def collect():
+        return [
+            event async for event in claude_adapter.stream_claude_turn(
+                user_id="user", system="system", model="model", messages=[],
+            )
+        ]
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(collect())
+
+    assert raised.value.reason.code is reason
+
+
+class _AsyncClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+@pytest.mark.parametrize(
+    ("post", "reason"),
+    [
+        (
+            lambda: (_ for _ in ()).throw(httpx.ConnectError("offline")),
+            SafeRouteReasonCode.API_HTTP_ERROR,
+        ),
+        (
+            lambda: MagicMock(status_code=200, json=lambda: []),
+            SafeRouteReasonCode.API_PROTOCOL_ERROR,
+        ),
+    ],
+)
+def test_openai_adapter_maps_http_and_protocol_sources(post, reason):
+    class Client:
+        async def post(self, *_args, **_kwargs):
+            return post()
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(
+            openai_adapter._post_chat(
+                Client(), "grok", "https://provider.example/chat", "key", "model", [], [],
+            ),
+        )
+
+    assert raised.value.reason.code is reason
+
+
+def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
+    tool_call = {
+        "id": "call-1",
+        "function": {"name": "list_albums", "arguments": "{}"},
+    }
+
+    async def tool_response(*_args, **_kwargs):
+        return {"choices": [{"message": {"content": "", "tool_calls": [tool_call]}}]}
+
+    monkeypatch.setattr(openai_adapter, "_post_chat", tool_response)
+    monkeypatch.setattr(openai_adapter.httpx, "AsyncClient", lambda **_kwargs: _AsyncClient())
+
+    async def collect():
+        return [
+            event async for event in openai_adapter.stream_openai_compatible_turn(
+                provider="grok",
+                api_url="https://provider.example/chat",
+                api_key="key",
+                model="model",
+                system="system",
+                messages=[],
+                session=MagicMock(),
+                user=MagicMock(),
+            )
+        ]
+
+    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    with pytest.raises(ProviderUnavailableError) as limited:
+        asyncio.run(collect())
+    assert limited.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
+
+    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.tools.execute_cowriter_tool",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tool exploded")),
+    )
+    with pytest.raises(ProviderUnavailableError) as failed:
+        asyncio.run(collect())
+    assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
 
 
 def test_claude_api_is_the_pending_route_without_an_adapter_attempt(monkeypatch):

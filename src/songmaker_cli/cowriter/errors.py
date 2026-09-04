@@ -73,4 +73,11 @@ class ProviderUnavailableError(ProviderError):
 
 
 class ProviderModelCatalogUnavailableError(ProviderError):
-    pass
+    def __init__(
+        self,
+        provider: str,
+        message: str,
+        reason: SafeRouteReason | None = None,
+    ):
+        self.reason = reason
+        super().__init__(provider, reason.message if reason is not None else message)

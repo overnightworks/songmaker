@@ -148,8 +148,10 @@ class CowriterSettingsResponse(BaseModel):
     current_models_not_in_catalog: dict[str, str] = Field(default_factory=dict)
     probed_at: dict[str, ComputedTimestamp]
     tail_token_budget: int
-    provider_routes: dict[str, Literal["cli", "api"]]
-    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]]
+    provider_routes: dict[str, Literal["cli", "api"]] = Field(default=None)
+    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]] = (
+        Field(default=None)
+    )
 
 
 class JudgeSettingsRequest(BaseModel):
@@ -196,7 +198,7 @@ class ProviderStatusResponse(BaseModel):
     cowriter: ProviderSurfaceStatus
     judge: ProviderSurfaceStatus
     cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse] = Field(
-        default_factory=dict,
+        default=None,
     )
 
 

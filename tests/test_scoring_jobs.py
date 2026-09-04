@@ -151,7 +151,7 @@ def _fake_user(user_id: str, role: str = "admin"):
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
-        lambda provider: list(LIVE_CATALOG[provider]),
+        lambda provider, _route: list(LIVE_CATALOG[provider]),
     )
     factory = init_db(tmp_path / "judge_api.db")
     with factory() as session:
@@ -207,7 +207,7 @@ def test_default_judge_model_is_available_for_get_and_first_save(
     }
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
-        lambda provider: aliases[provider],
+        lambda provider, _route: aliases[provider],
     )
     refresh_provider_snapshots()
 

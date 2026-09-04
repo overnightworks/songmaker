@@ -13,7 +13,7 @@ import pytest
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.cowriter import codex_cli_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 
 
 def _outcome(
@@ -98,9 +98,10 @@ def test_codex_cli_blocks_tool_items_without_emitting_a_final(monkeypatch, item_
         json.dumps({"type": "item.started", "item": {"type": item_type}}).encode() + b"\n",
     ], _outcome(), calls))
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_tool_call_blocked"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
 
+    assert raised.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
     assert calls
 
 
@@ -119,8 +120,10 @@ def test_codex_cli_rejects_malformed_and_unknown_stream_items(monkeypatch, line)
         codex_cli_adapter, "run_cli_bounded", _runner([line], _outcome(), calls),
     )
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 @pytest.mark.parametrize(
@@ -136,8 +139,10 @@ def test_codex_cli_requires_exactly_one_successful_completed_turn(monkeypatch, l
         codex_cli_adapter, "run_cli_bounded", _runner(lines, _outcome(), calls),
     )
 
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 @pytest.mark.parametrize(
@@ -146,14 +151,18 @@ def test_codex_cli_requires_exactly_one_successful_completed_turn(monkeypatch, l
         (
             b'{"type":"error","message":"Reconnecting after 401 Unauthorized"}\n',
             _outcome(),
-            "cli_login_expired",
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
         ),
         (
             b'{"type":"turn.failed","error":{"message":"failed"}}\n',
             _outcome(stderr="unauthenticated"),
-            "cli_login_expired",
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
         ),
-        (b'{"type":"error","message":"internal diagnostic"}\n', _outcome(), "codex_cli_error"),
+        (
+            b'{"type":"error","message":"internal diagnostic"}\n',
+            _outcome(),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
     ),
 )
 def test_codex_cli_classifies_errors_without_logging_payloads(
@@ -165,9 +174,10 @@ def test_codex_cli_classifies_errors_without_logging_payloads(
     )
     caplog.set_level("WARNING")
 
-    with pytest.raises(ProviderUnavailableError, match=code):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
 
+    assert raised.value.reason.code is code
     assert "internal diagnostic" not in caplog.text
     assert "unauthenticated" not in caplog.text
 
@@ -175,10 +185,18 @@ def test_codex_cli_classifies_errors_without_logging_payloads(
 @pytest.mark.parametrize(
     ("lines", "outcome", "code"),
     (
-        ([], _outcome(complete=False, stderr="401"), "cli_login_expired"),
-        ([], _outcome(complete=False), "codex_cli_error"),
-        ([b'{"type":"turn.completed","usage":{}}\n'], _outcome(returncode=1), "codex_cli_error"),
-        ([], _outcome(complete=False, reason=CliRunReason.OUTPUT_LIMIT_REACHED), "codex_cli_error"),
+        ([], _outcome(complete=False, stderr="401"), SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        ([], _outcome(complete=False), SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        (
+            [b'{"type":"turn.completed","usage":{}}\n'],
+            _outcome(returncode=1),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
+        (
+            [],
+            _outcome(complete=False, reason=CliRunReason.OUTPUT_LIMIT_REACHED),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
     ),
 )
 def test_codex_cli_classifies_runner_failures(monkeypatch, lines, outcome, code) -> None:
@@ -187,8 +205,10 @@ def test_codex_cli_classifies_runner_failures(monkeypatch, lines, outcome, code)
         codex_cli_adapter, "run_cli_bounded", _runner(lines, outcome, calls),
     )
 
-    with pytest.raises(ProviderUnavailableError, match=code):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(_collect())
+
+    assert raised.value.reason.code is code
 
 
 def test_closing_a_codex_stream_requests_runner_cancellation_and_waits_for_reap(

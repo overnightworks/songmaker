@@ -730,13 +730,17 @@ def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
 
 def test_chat_turn_unavailable_emits_503_error_frame(client):
     c, factory = client
+    secret_sentinel = "do-not-expose-route-secret"
 
     async def _down(*_args, **_kwargs):
-        raise ProviderUnavailableError(
-            "claude",
-            "cli",
-            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
-        )
+        try:
+            raise RuntimeError(secret_sentinel)
+        except RuntimeError as cause:
+            raise ProviderUnavailableError(
+                "claude",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+            ) from cause
         yield
 
     with patch(
@@ -758,6 +762,7 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
             "message": "CLI login was rejected or has expired.",
         },
     }
+    assert secret_sentinel not in resp.text
 
     with factory() as session:
         assert session.query(Conversation).count() == 0

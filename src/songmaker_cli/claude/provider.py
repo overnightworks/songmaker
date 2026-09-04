@@ -128,6 +128,10 @@ class UnavailableError(Exception):
     """Raised when no Claude backend is available."""
 
 
+class CliBinaryUnavailableError(UnavailableError):
+    """Raised when the Claude CLI executable cannot be found or started."""
+
+
 class CliToolSurfaceError(UnavailableError):
     """Raised when the mounted CLI's announced tool surface does not match
     what a given call line expects — extra tools, missing ones, or a
@@ -277,7 +281,7 @@ async def acall_claude_with_mcp(
                 start_new_session=True,
             )
         except FileNotFoundError:
-            raise UnavailableError("Claude CLI binary not found")
+            raise CliBinaryUnavailableError("Claude CLI binary not found")
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(stdin_body.encode()), timeout=timeout_seconds,
@@ -349,7 +353,7 @@ async def acall_claude_with_mcp_stream(
                 limit=_STREAM_BUFFER_LIMIT,
             )
         except FileNotFoundError:
-            raise UnavailableError("Claude CLI binary not found")
+            raise CliBinaryUnavailableError("Claude CLI binary not found")
         try:
             if proc.stdin is not None:
                 proc.stdin.write(stdin_body.encode())
@@ -1683,7 +1687,7 @@ def _parse_cli_output(stdout: str) -> str:
 def _require_claude_binary() -> str:
     binary = _find_claude_binary()
     if not binary:
-        raise UnavailableError(
+        raise CliBinaryUnavailableError(
             "Claude CLI not found. Install Claude Code or provide an API key."
         )
     return binary

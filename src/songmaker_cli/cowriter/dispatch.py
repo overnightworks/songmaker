@@ -7,7 +7,12 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.orm import Session
 
-from songmaker_cli.claude.provider import StreamEvent
+from songmaker_cli.claude.provider import (
+    StreamEvent,
+)
+from songmaker_cli.claude.provider import (
+    UnavailableError as ClaudeUnavailableError,
+)
 from songmaker_cli.constants import (
     COWRITER_GROK_CHAT_URL,
     COWRITER_OPENAI_CHAT_URL,
@@ -127,6 +132,8 @@ def call_provider_once(
             provider=provider, api_url=api_url, api_key=api_key, model=model,
             prompt=prompt, timeout=timeout, system=system,
         )
+    except ClaudeUnavailableError:
+        raise
     except ProviderUnavailableError as exc:
         if exc.reason is not None:
             raise

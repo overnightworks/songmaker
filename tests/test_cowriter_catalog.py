@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
+import httpx
 
 from songmaker_cli.cowriter.catalog import (
     ProviderRoute,
@@ -13,7 +13,10 @@ from songmaker_cli.cowriter.catalog import (
     models_with_active_model,
     refresh_provider_snapshot,
 )
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from songmaker_cli.cowriter.errors import (
+    ProviderModelCatalogUnavailableError,
+    SafeRouteReasonCode,
+)
 
 
 def _models_payload(*model_ids: str) -> dict:
@@ -41,14 +44,47 @@ def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
     assert list_provider_models("claude", ProviderRoute.CLI) == ["opus", "sonnet"]
 
 
-def test_claude_api_catalog_is_unavailable_until_the_tool_loop_exists():
-    with pytest.raises(ProviderUnavailableError) as raised:
-        list_provider_models("claude", ProviderRoute.API)
+def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    response = MagicMock(status_code=200)
+    response.json.return_value = _models_payload("claude-sonnet-4-6")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.httpx.get",
+        lambda *_args, **_kwargs: response,
+    )
 
-    assert raised.value.reason.code is SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING
+    assert list_provider_models("claude", ProviderRoute.API) == ["claude-sonnet-4-6"]
 
 
-def test_snapshot_refreshes_both_routes_and_keeps_the_claude_api_pending(monkeypatch):
+def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+
+    def unavailable(*_args, **_kwargs):
+        raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", unavailable)
+    try:
+        list_provider_models("grok", ProviderRoute.API)
+    except ProviderModelCatalogUnavailableError as error:
+        assert error.reason.code is SafeRouteReasonCode.CATALOGUE_HTTP_ERROR
+    else:  # pragma: no cover - the assertion above must receive the failure
+        raise AssertionError("expected the unavailable model catalogue")
+
+    malformed = MagicMock(status_code=200)
+    malformed.json.return_value = {"unexpected": []}
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.httpx.get",
+        lambda *_args, **_kwargs: malformed,
+    )
+    try:
+        list_provider_models("grok", ProviderRoute.API)
+    except ProviderModelCatalogUnavailableError as error:
+        assert error.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
+    else:  # pragma: no cover - the assertion above must receive the failure
+        raise AssertionError("expected the malformed model catalogue")
+
+
+def test_snapshot_refreshes_both_routes(monkeypatch):
     monkeypatch.setenv("XAI_API_KEY", "test-key")
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(

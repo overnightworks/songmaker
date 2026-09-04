@@ -150,9 +150,6 @@ type ProviderConfiguration = (
 class ProviderSnapshot:
     cowriter: ProviderConfiguration
     judge: ProviderConfiguration
-    models: tuple[str, ...]
-    models_error: str | None
-    models_source: str | None
     probed_at: datetime
     routes: dict[ProviderRoute, "ProviderRouteSnapshot"]
 
@@ -203,13 +200,9 @@ def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
     }
     cowriter = get_provider_configuration(provider, ProviderSurface.CO_WRITER)
     judge = get_provider_configuration(provider, ProviderSurface.JUDGE)
-    selected = routes[ProviderRoute.CLI]
     snapshot = ProviderSnapshot(
         cowriter=cowriter,
         judge=judge,
-        models=selected.models,
-        models_error=selected.catalogue_failure.message if selected.catalogue_failure else None,
-        models_source=selected.catalog_source,
         probed_at=datetime.now(timezone.utc),
         routes=routes,
     )
@@ -224,12 +217,6 @@ def _refresh_provider_route(
     settings: Settings,
 ) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
-    if provider == _CLAUDE_PROVIDER and route is ProviderRoute.API:
-        reason = normalize_route_failure(SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING)
-        return ProviderRouteSnapshot(
-            (), reason, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-            reason, now, "API key",
-        )
     credential = _provider_api_credential(provider, settings)
     if route is ProviderRoute.API and not _secret(credential.secret):
         reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
@@ -254,7 +241,7 @@ def _refresh_provider_route(
     try:
         models = tuple(list_provider_models(provider, route))
     except ProviderModelCatalogUnavailableError as exc:
-        reason = getattr(exc, "reason", None) or normalize_route_failure(
+        reason = exc.reason or normalize_route_failure(
             SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR,
         )
         return ProviderRouteSnapshot(
@@ -262,7 +249,7 @@ def _refresh_provider_route(
             reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
         )
     except ProviderUnavailableError as exc:
-        reason = getattr(exc, "reason", None) or normalize_route_failure(
+        reason = exc.reason or normalize_route_failure(
             SafeRouteReasonCode.ROUTE_FAILED,
         )
         return ProviderRouteSnapshot(
@@ -288,45 +275,15 @@ def _cli_is_logged_in(provider: str) -> bool:
     raise ValueError(f"Unknown co-writer provider '{provider}'")
 
 
-def _model_catalog_source(
-    provider: str,
-    cowriter: ProviderConfiguration,
-    models_error: str | None,
-) -> str | None:
-    if models_error is not None:
-        return None
-    if provider == _CODEX_PROVIDER and isinstance(cowriter, ConfiguredProvider):
-        if cowriter.method is ProviderSetupMethod.CODEX_CLI:
-            return _CODEX_CLI_KNOWN_MODELS_SOURCE
-    return None
-
-
 def clear_provider_snapshots() -> None:
     with _provider_snapshots_lock:
         _provider_snapshots.clear()
-
-
-def _refresh_cli_login(provider: str) -> None:
-    if provider == _CLAUDE_PROVIDER:
-        from songmaker_cli.claude.provider import cli_login_status
-
-        cli_login_status()
-    elif provider == _GROK_PROVIDER:
-        grok_cli_status()
-    elif provider == _CODEX_PROVIDER:
-        codex_cli_login()
 
 
 def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
     settings = get_settings()
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(provider, f"Unknown co-writer provider '{provider}'")
-    if provider == _CLAUDE_PROVIDER and route is ProviderRoute.API:
-        raise ProviderUnavailableError(
-            provider,
-            route.value,
-            normalize_route_failure(SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING),
-        )
     if route is ProviderRoute.CLI:
         return _models_for_setup_method(provider, _cli_setup_method_for(provider), settings)
     key = _secret(_provider_api_credential(provider, settings).secret)
@@ -447,7 +404,7 @@ def _cli_setup_method(provider: str) -> ProviderSetupMethod | None:
         if provider == _CODEX_PROVIDER and codex_cli_access_token_is_present():
             return ProviderSetupMethod.CODEX_CLI
     except AgentCliUnavailableError as exc:
-        log.warning("%s CLI probe unavailable: %s: %s", provider, type(exc).__name__, exc)
+        log.warning("%s CLI probe unavailable: %s", provider, type(exc).__name__)
     return None
 
 
@@ -495,22 +452,30 @@ def _http_model_ids(url: str, headers: dict[str, str], provider: str) -> list[st
         )
     except httpx.HTTPError as exc:
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_HTTP_ERROR),
         ) from exc
     if response.status_code >= 400:
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_HTTP_ERROR),
         )
     try:
         payload = response.json()
     except ValueError as exc:
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         ) from exc
     rows = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
+            provider,
+            f"could not list {provider} models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     ids: list[str] = []
     for row in rows:
@@ -531,7 +496,9 @@ def _list_grok_models(key: str) -> list[str]:
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER, "no chat models returned by grok",
+            _GROK_PROVIDER,
+            "no chat models returned by grok",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(chat)
 
@@ -541,7 +508,9 @@ def _list_grok_cli_models() -> list[str]:
         model_names = grok_cli_status().model_names
     except AgentCliUnavailableError as exc:
         raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER, "could not list grok CLI models",
+            _GROK_PROVIDER,
+            "could not list grok CLI models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         ) from exc
     chat = [
         model_id for model_id in model_names
@@ -549,7 +518,9 @@ def _list_grok_cli_models() -> list[str]:
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _GROK_PROVIDER, "no chat models returned by grok CLI",
+            _GROK_PROVIDER,
+            "no chat models returned by grok CLI",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(chat)
 
@@ -566,7 +537,9 @@ def _list_openai_models(key: str) -> list[str]:
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _CODEX_PROVIDER, "no chat models returned by codex",
+            _CODEX_PROVIDER,
+            "no chat models returned by codex",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(chat)
 
@@ -576,11 +549,15 @@ def _list_claude_cli_models() -> list[str]:
         aliases = list_cli_model_aliases()
     except ClaudeCliUnavailableError as exc:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER, CLAUDE_CLI_MODEL_CATALOG_ERROR,
+            _CLAUDE_PROVIDER,
+            CLAUDE_CLI_MODEL_CATALOG_ERROR,
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         ) from exc
     if not aliases:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER, "no chat models returned by claude CLI",
+            _CLAUDE_PROVIDER,
+            "no chat models returned by claude CLI",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(aliases)
 
@@ -600,7 +577,9 @@ def _list_claude_models(key: str) -> list[str]:
     ]
     if not chat:
         raise ProviderModelCatalogUnavailableError(
-            _CLAUDE_PROVIDER, "no chat models returned by claude",
+            _CLAUDE_PROVIDER,
+            "no chat models returned by claude",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(chat)
 

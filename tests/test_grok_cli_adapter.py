@@ -13,7 +13,7 @@ import pytest
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.cowriter import grok_cli_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 
 
 def _outcome(*, returncode: int = 0, complete: bool = True, stderr: str = "") -> CliRunOutcome:
@@ -125,9 +125,10 @@ def test_grok_cli_logs_the_length_of_an_unknown_event_type_before_rejecting_it(
     async def collect():
         return [event async for event in _stream()]
 
-    with pytest.raises(ProviderUnavailableError, match="grok_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(collect())
 
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
     assert f"type_length={len(event_type)}" in caplog.text
 
 
@@ -144,9 +145,10 @@ def test_grok_cli_rejects_any_tool_call_and_never_emits_a_final(monkeypatch, eve
     async def collect():
         return [event async for event in _stream()]
 
-    with pytest.raises(ProviderUnavailableError, match="grok_cli_tool_call_blocked"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(collect())
 
+    assert raised.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
     assert calls
 
 
@@ -192,8 +194,10 @@ def test_grok_cli_rejects_an_invalid_or_unfinished_stream(monkeypatch, lines) ->
     async def collect():
         return [event async for event in _stream()]
 
-    with pytest.raises(ProviderUnavailableError, match="grok_cli_stream_protocol_error"):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(collect())
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 @pytest.mark.parametrize(
@@ -202,25 +206,33 @@ def test_grok_cli_rejects_an_invalid_or_unfinished_stream(monkeypatch, lines) ->
         (
             [b'{"type":"error","message":"login problem"}\n'],
             _outcome(stderr="OIDC 401"),
-            "cli_login_expired",
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
         ),
         (
             [b'{"type":"error","message":"unauthenticated"}\n'],
             _outcome(),
-            "cli_login_expired",
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
         ),
         (
             [b'{"type":"text","data":"partial"}\n'],
             _outcome(complete=False, stderr="OIDC 401"),
-            "cli_login_expired",
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
         ),
         (
             [],
             _outcome(complete=False),
-            "grok_cli_error",
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
         ),
-        ([b'{"type":"text","data":"partial"}\n'], _outcome(complete=False), "grok_cli_error"),
-        ([b'{"type":"end","stopReason":"stop"}\n'], _outcome(returncode=1), "grok_cli_error"),
+        (
+            [b'{"type":"text","data":"partial"}\n'],
+            _outcome(complete=False),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
+        (
+            [b'{"type":"end","stopReason":"stop"}\n'],
+            _outcome(returncode=1),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
     ),
 )
 def test_grok_cli_names_failed_or_incomplete_runs_without_leaking_stderr(
@@ -237,9 +249,10 @@ def test_grok_cli_names_failed_or_incomplete_runs_without_leaking_stderr(
     async def collect():
         return [event async for event in _stream()]
 
-    with pytest.raises(ProviderUnavailableError, match=code):
+    with pytest.raises(ProviderUnavailableError) as raised:
         asyncio.run(collect())
 
+    assert raised.value.reason.code is code
     assert "OIDC 401" not in caplog.text
 
 

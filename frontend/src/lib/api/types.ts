@@ -238,8 +238,8 @@ export interface CowriterSettings {
 	current_models_not_in_catalog: Record<string, string>;
 	probed_at: Record<string, string | null>;
 	tail_token_budget: number;
-	provider_routes: Record<string, 'cli' | 'api'>;
-	provider_routes_status: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
+	provider_routes?: Record<string, 'cli' | 'api'>;
+	provider_routes_status?: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
 }
 
 export interface CowriterSettingsRequest {
@@ -603,7 +603,7 @@ export interface ProviderStatus {
 	provider: string;
 	cowriter: ProviderSurfaceStatus;
 	judge: ProviderSurfaceStatus;
-	cowriter_routes: Record<'cli' | 'api', ProviderRouteStatusResponse>;
+	cowriter_routes?: Record<'cli' | 'api', ProviderRouteStatusResponse>;
 }
 
 export interface ProviderSurfaceStatus {
