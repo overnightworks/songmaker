@@ -78,6 +78,7 @@ _SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
 COVER_SUGGESTIONS_LOCK_ID = 7
+_LORA_CAPACITY_LOCK_ID = 8
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
@@ -109,6 +110,23 @@ def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> No
         session.execute(text("BEGIN IMMEDIATE"))
     else:
         session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
+
+
+def lock_lora_capacity(session: Session) -> None:
+    """Start the transaction that serializes voice creation and training enqueueing.
+
+    Both capacity checks share one transaction-scoped advisory lock on
+    PostgreSQL (and SQLite's test-only ``BEGIN IMMEDIATE`` fallback).  Like
+    ``create_job_with_rate_limit``, commit the auth dependency's possible
+    renewal/audit mutations before taking the lock; callers must not have
+    made application mutations yet.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "lock_lora_capacity: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    session.commit()
+    _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
 def check_redis_health(request) -> None:
@@ -355,6 +373,28 @@ def unique_lora_slug(session: Session, user_id: str, name: str) -> str:
     return _acquire_unique_slug(
         session, "unique_lora_slug", _LORA_SLUG_LOCK_ID, base_slug, is_taken,
     )
+
+
+def unique_lora_slug_under_capacity_lock(
+    session: Session, user_id: str, name: str,
+) -> str:
+    """Find a free LoRA slug while ``lock_lora_capacity`` is held.
+
+    This deliberately does not acquire another lock or commit: creation must
+    keep its slug choice and per-musician capacity check in one transaction.
+    """
+    base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
+    candidate = base_slug
+    counter = 1
+    while (
+        session.query(UserLora)
+        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+        .first()
+        is not None
+    ):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
 
 
 def unique_song_slug(
