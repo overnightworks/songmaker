@@ -165,6 +165,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     rather than an indefinitely blocked CI worker.
     """
     monkeypatch.setenv("MAX_USER_LORAS", "1")
+    get_settings.cache_clear()
     with pg_factory() as session:
         session.add(User(id="lora-user", username="lora-user", password_hash="x"))
         session.commit()
