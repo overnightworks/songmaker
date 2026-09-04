@@ -9,6 +9,10 @@ import structlog
 from songmaker_cli.settings import get_settings
 
 
+class _SongmakerLogHandler(logging.StreamHandler):
+    """The root handler installed by :func:`configure_logging`."""
+
+
 def configure_logging() -> None:
     """Configure structlog as a processor pipeline over stdlib logging.
 
@@ -47,9 +51,11 @@ def configure_logging() -> None:
         foreign_pre_chain=shared_processors,
     )
 
-    handler = logging.StreamHandler()
+    handler = _SongmakerLogHandler()
     handler.setFormatter(formatter)
     root = logging.getLogger()
-    root.handlers.clear()
+    for existing_handler in root.handlers[:]:
+        if isinstance(existing_handler, _SongmakerLogHandler):
+            root.removeHandler(existing_handler)
     root.addHandler(handler)
     root.setLevel(logging.INFO)

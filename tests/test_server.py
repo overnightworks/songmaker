@@ -1107,13 +1107,17 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
 
 class TestConfigureLogging:
     def test_text_mode_default(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
         from songmaker_cli.logging_config import configure_logging
         configure_logging()
         logging.getLogger("songmaker.test").info("text mode")
         assert "text mode" in capsys.readouterr().err
+        assert "text mode" in caplog.text
 
     def test_json_mode(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
