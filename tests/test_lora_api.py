@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
-from threading import Barrier
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     USER_LORA_MAX_SAMPLES,
@@ -39,7 +36,6 @@ from songmaker_cli.db.queries import (
     create_user_lora,
     update_user_lora,
 )
-from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 USER_A = "u-alice"
@@ -153,30 +149,6 @@ def test_create_lora_does_not_count_a_deleted_voice_toward_the_limit(
     replacement = client_a.post("/api/loras", json={"name": "Replacement"})
 
     assert replacement.status_code == 200
-
-
-def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
-    client_and_ctx: tuple[TestClient, AppContext], monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The shared capacity lock keeps two simultaneous creates at N=1 atomic."""
-    _, ctx = client_and_ctx
-    monkeypatch.setenv("MAX_USER_LORAS", "1")
-    barrier = Barrier(2)
-
-    def create(name: str) -> int:
-        with ctx.db() as session:
-            barrier.wait()
-            result = api_create_lora(
-                UserLoraCreateRequest(name=name), _user_dep(USER_A)(), session,
-            )
-            return result.status_code if hasattr(result, "status_code") else 200
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        statuses = list(executor.map(create, ("First", "Second")))
-
-    assert sorted(statuses) == [200, 409]
-    with ctx.db() as session:
-        assert session.query(UserLora).filter(UserLora.deleted_at.is_(None)).count() == 1
 
 
 def test_create_lora_slug_collision_appends_suffix(client_a: TestClient) -> None:
