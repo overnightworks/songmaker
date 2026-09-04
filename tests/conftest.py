@@ -123,6 +123,21 @@ def _no_claude_cli_tool_surface_probe():
 
 
 @pytest.fixture(autouse=True)
+def _no_codex_cover_sandbox_runtime_probe():
+    """Keep ordinary app-lifecycle tests independent of the host sandbox.
+
+    The cover path itself verifies its fail-closed sandbox requirement. Tests
+    that enter the web lifespan only need the boot contract, so they must not
+    depend on bubblewrap or user namespaces being available in their runner.
+    """
+    with patch(
+        "songmaker_cli.server.report_codex_image_sandbox_runtime",
+        return_value="ready",
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _no_provider_status_probe():
     """Keep TestClient lifespans from probing installed provider CLIs or APIs.
 
