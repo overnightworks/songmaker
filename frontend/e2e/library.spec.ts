@@ -469,7 +469,7 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 	function firstAlbumSong(): Locator {
 		return firstAlbumRow().getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
 	}
-	// Entering an album force-expands its own row without a chevron click,
+	// Entering an album force-expands its own row without a row click,
 	// and that force-expand is what pulled the whole LIBRARY group open too.
 	await expectRailRowExpanded(firstAlbumRow(), firstAlbumSong());
 

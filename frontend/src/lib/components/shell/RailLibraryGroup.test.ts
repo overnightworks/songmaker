@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_RETRY_LABEL, RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
+import {
+	LIBRARY_RETRY_LABEL,
+	RAIL_ALL_ALBUMS_LABEL,
+	RAIL_PLAYING_MARKER_LABEL
+} from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import {
 	libraryFilter,
@@ -127,7 +131,7 @@ describe('RailLibraryGroup', () => {
 			'.album-list > li:first-child button'
 		);
 		expect(allAlbums.classList.contains('all-albums')).toBe(true);
-		expect(allAlbums.textContent).toContain('All albums');
+		expect(allAlbums.textContent).toContain(RAIL_ALL_ALBUMS_LABEL);
 		expect(allAlbums.textContent).toContain('1');
 
 		allAlbums.click();

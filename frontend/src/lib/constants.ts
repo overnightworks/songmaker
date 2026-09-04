@@ -356,6 +356,7 @@ export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 // every private route, settings included (issue #263).
 export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_LIBRARY_LABEL = 'Library';
+export const RAIL_ALL_ALBUMS_LABEL = 'All albums';
 export const RAIL_PLAYLISTS_LABEL = 'Playlists';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 // The drawer the compact shell puts the rail in — its accessible name, which

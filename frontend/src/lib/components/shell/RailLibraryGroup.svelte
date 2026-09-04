@@ -20,6 +20,7 @@
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
+		RAIL_ALL_ALBUMS_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
 		RAIL_LIBRARY_LOAD_ERROR,
@@ -71,7 +72,7 @@
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
 	// letting every once-opened row accumulate would stop showing where the
-	// viewer IS. Opening an album -- by its label or its own chevron -- closes
+	// viewer IS. Opening an album row closes
 	// whichever other album was open; this is local to the LIBRARY group, so
 	// an open playlist in the sibling PLAYLISTS group is never affected (the
 	// two groups do not share a slot).
@@ -214,7 +215,7 @@
 						>
 							<polyline points="9 6 15 12 9 18" />
 						</svg>
-						<span class="row-title">All albums</span>
+						<span class="row-title">{RAIL_ALL_ALBUMS_LABEL}</span>
 						<span class="row-meta">{albums.length}</span>
 					</button>
 				</li>
@@ -394,8 +395,9 @@
 		padding: 8px 16px 8px 32px;
 		background: none;
 		border: none;
-		color: inherit;
+		color: var(--text-muted);
 		font: inherit;
+		font-size: 0.8rem;
 		text-align: left;
 		cursor: pointer;
 	}
