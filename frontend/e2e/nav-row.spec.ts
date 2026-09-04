@@ -34,14 +34,17 @@ test('the album row and its instant filter stay above a song and take on desktop
 
 	const filter = surface.getByLabel('Filter albums by name');
 	await expect(filter).toBeVisible();
+	const libraryRowBar = surface.locator('.library-row-bar');
+	const collapseAlbums = surface.getByRole('button', { name: 'Collapse albums' });
+	await expect(libraryRowBar).toBeInViewport();
+	await expect(collapseAlbums).toBeVisible();
+	await expect(collapseAlbums).toBeInViewport();
+
 	await filter.fill(library.albumTitle);
 	await expect(
 		surface.getByRole('button', { name: nameStartingWith(library.albumTitle) })
 	).toBeVisible();
 
-	const collapseAlbums = surface.getByRole('button', { name: 'Collapse albums' });
-	await expect(collapseAlbums).toBeVisible();
-	await expect(collapseAlbums).toBeInViewport();
 	await collapseAlbums.click();
 	await expect(filter).toHaveCount(0);
 	const collapsedSummary = surface.getByText(collapsedSummaryLabel, { exact: true });
