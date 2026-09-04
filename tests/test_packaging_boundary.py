@@ -334,6 +334,16 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
             "/codex.json"
         ),
+        "/usr/local/bin/codex-code-mode-host": (
+            "${SONGMAKER_CODEX_CODE_MODE_HOST:-~/.local/node/lib/node_modules/"
+            "@openai/codex/node_modules/@openai/codex-linux-x64/vendor/"
+            "x86_64-unknown-linux-musl/bin/codex-code-mode-host}"
+        ),
+        "/usr/local/codex-resources": (
+            "${SONGMAKER_CODEX_RESOURCES:-~/.local/node/lib/node_modules/"
+            "@openai/codex/node_modules/@openai/codex-linux-x64/vendor/"
+            "x86_64-unknown-linux-musl/codex-resources}"
+        ),
     }
     expected_sources_by_service = {
         "songmaker-web": expected_web_sources_by_target,
@@ -360,6 +370,7 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
         REPOSITORY_ROOT / CONTAINERS["music-worker"].dockerfile
     ).read_text()
     assert "mkdir -p /home/songmaker/.codex" in music_worker_dockerfile
+    assert "bubblewrap" in (REPOSITORY_ROOT / "Dockerfile").read_text()
 
     for service_name, expected_sources_by_target in expected_sources_by_service.items():
         service = services[service_name]
@@ -410,6 +421,7 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             assert isinstance(source, str)
             assert "~/.claude" not in source
             assert "~/.claude.json" not in source
+            assert "~/.codex" not in source
             assert source == expected_sources_by_target[target]
             assert mount.get("read_only") is True
             bind_options = mount.get("bind")

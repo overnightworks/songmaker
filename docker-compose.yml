@@ -144,6 +144,21 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # Cover generation will use Codex code mode in this container. Its
+      # executable companion and resource bundle are mounted separately from
+      # the private profile, which remains container-owned.
+      - type: bind
+        source: ${SONGMAKER_CODEX_CODE_MODE_HOST:-~/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex-code-mode-host}
+        target: /usr/local/bin/codex-code-mode-host
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SONGMAKER_CODEX_RESOURCES:-~/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources}
+        target: /usr/local/codex-resources
+        read_only: true
+        bind:
+          create_host_path: false
     cap_drop:
       - ALL
 
