@@ -126,8 +126,6 @@ class HttpsGitHubClient:
         self._connection_factory = connection_factory
         self._clock = clock
         self._context = ssl.create_default_context()
-        self._context.check_hostname = True
-        self._context.verify_mode = ssl.CERT_REQUIRED
 
     @classmethod
     def from_environment(cls) -> HttpsGitHubClient:

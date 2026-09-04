@@ -123,7 +123,7 @@ def run_demucs(src: Path, out_dir: Path) -> dict[str, Path]:
         log.info("demucs cache hit for %s", name)
         return {s: cached / f"{s}.wav" for s in STEM_NAMES}
 
-    out_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)  # NOSONAR: S8707 -- user-selected local cache path.
     log.info("running demucs on %s", src.name)
     cmd = [
         sys.executable, "-m", "demucs.separate",
