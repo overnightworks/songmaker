@@ -23,7 +23,6 @@ interface RenderOverrides {
 	icon?: Snippet;
 	count?: number;
 	expandTrigger?: boolean;
-	onTitleClick?: () => void;
 }
 
 async function render(overrides: RenderOverrides = {}) {
@@ -142,31 +141,23 @@ describe('RailGroup', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('renders onTitleClick as a button sibling of the toggle, which still expands and collapses on its own', async () => {
-		const onTitleClick = vi.fn();
-		const { target } = await render({ onTitleClick });
+	it('uses one full-width button: caret, label, and count all toggle the same disclosure', async () => {
+		const { target } = await render({ label: 'Library', count: 42 });
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		const titleButton = requireElement<HTMLButtonElement>(
-			target,
-			'.disclose-row > button.group-title'
-		);
-		expect(toggle.querySelector('.group-title')).toBeNull();
-
-		titleButton.click();
-		expect(onTitleClick).toHaveBeenCalledOnce();
+		const caret = requireElement<SVGElement>(toggle, '.caret');
+		const label = requireElement<HTMLSpanElement>(toggle, '.group-title');
+		const count = requireElement<HTMLSpanElement>(toggle, '.meta');
+		expect(target.querySelectorAll('.disclose-row > button')).toHaveLength(1);
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 
-		toggle.click();
+		label.click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		toggle.click();
+		caret.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-	});
-
-	it('renders the title as plain text inside the toggle when no onTitleClick is given', async () => {
-		const { target } = await render();
-		expect(target.querySelector('.disclose-row > button.group-title')).toBeNull();
-		expect(requireElement(target, 'button.disclose span.group-title').tagName).toBe('SPAN');
+		count.click();
+		await tick();
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	});
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { openLibraryFilter, openPlaylist } from '$lib/stores/navigation';
+	import { openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
@@ -45,10 +45,6 @@
 		void openPlaylist(playlistId);
 	}
 
-	function onPlaylistsTitleClick(): void {
-		void openLibraryFilter('playlists');
-	}
-
 	function onEntryClick(index: number): void {
 		if (!openPlaylistDetail) return;
 		void playPlaylistEntryAndShowNowPlaying(openPlaylistDetail, index);
@@ -79,7 +75,6 @@
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlists.length}
 	expandTrigger={openPlaylistId !== null}
-	onTitleClick={onPlaylistsTitleClick}
 	{icon}
 >
 	<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
