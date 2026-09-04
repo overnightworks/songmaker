@@ -1,359 +1,127 @@
-"""Live model catalogs for Claude, Grok, and Codex."""
+"""Route-keyed co-writer readiness and model catalogues."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
 import httpx
-import pytest
 
-from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
-from songmaker_cli.claude.provider import UnavailableError as ClaudeCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
-    ApiKeyNeedsCliLoginProvider,
-    CliLoginNeedsApiKeyProvider,
-    ConfiguredProvider,
-    DependencyUnavailableProvider,
-    ProviderNeed,
-    ProviderSetupMethod,
-    ProviderSurface,
-    UnconfiguredProvider,
-    get_provider_configuration,
+    ProviderRoute,
+    ProviderRouteReadinessState,
     list_provider_models,
     models_with_active_model,
+    refresh_provider_snapshot,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderModelCatalogUnavailableError,
-    ProviderUnavailableError,
+    SafeRouteReasonCode,
 )
 
 
-def _models_payload(*ids: str) -> dict:
-    return {"data": [{"id": model_id} for model_id in ids]}
+def _models_payload(*model_ids: str) -> dict:
+    return {"data": [{"id": model_id} for model_id in model_ids]}
 
 
-def test_grok_catalog_uses_live_xai_ids(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", "xai-test")
-
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = _models_payload(
-        "grok-4.6", "grok-4.5", "grok-imagine-image",
-    )
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", lambda *a, **k: response)
-
-    assert list_provider_models("grok") == ["grok-4.5", "grok-4.6"]
-
-
-def test_claude_catalog_uses_live_anthropic_ids(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+def test_api_catalog_uses_only_the_explicit_provider_endpoint(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    response = MagicMock(status_code=200)
+    response.json.return_value = _models_payload("grok-4.6", "grok-imagine-image")
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: object(),
+        "songmaker_cli.cowriter.catalog.httpx.get",
+        lambda *_args, **_kwargs: response,
     )
 
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = _models_payload(
-        "claude-opus-4-6", "claude-sonnet-4-6",
-    )
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", lambda *a, **k: response)
-
-    assert list_provider_models("claude") == ["claude-opus-4-6", "claude-sonnet-4-6"]
+    assert list_provider_models("grok", ProviderRoute.API) == ["grok-4.6"]
 
 
-def test_codex_catalog_uses_live_openai_ids(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "oa-test")
-
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = _models_payload(
-        "gpt-5.4", "whisper-1", "gpt-4o", "gpt-image-1", "gpt-4o-search-preview",
-    )
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", lambda *a, **k: response)
-
-    assert list_provider_models("codex") == ["gpt-4o", "gpt-5.4"]
-
-
-def test_failed_catalog_fetch_is_named_error(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", "xai-test")
-
-    def _boom(*_a, **_k):
-        raise httpx.ConnectError("down")
-
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", _boom)
-    with pytest.raises(
-        ProviderModelCatalogUnavailableError, match="grok",
-    ) as raised:
-        list_provider_models("grok")
-    assert type(raised.value) is ProviderModelCatalogUnavailableError
-
-
-def test_invalid_catalog_json_is_named_error(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "oa-test")
-
-    response = MagicMock()
-    response.status_code = 200
-    response.json.side_effect = ValueError("bad json")
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", lambda *a, **k: response)
-
-    with pytest.raises(
-        ProviderModelCatalogUnavailableError, match="codex",
-    ) as raised:
-        list_provider_models("codex")
-    assert type(raised.value) is ProviderModelCatalogUnavailableError
-
-
-def test_api_key_marks_provider_as_configured(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: object(),
-    )
-
-    assert get_provider_configuration("claude", ProviderSurface.JUDGE) == ConfiguredProvider(
-        "claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY",
-    )
-
-
-def test_claude_key_without_sdk_is_a_named_unavailable_dependency(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec", lambda _name: None,
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
-    )
-
-    assert get_provider_configuration(
-        "claude", ProviderSurface.JUDGE,
-    ) == DependencyUnavailableProvider(
-        "claude", "anthropic",
-    )
-    with pytest.raises(ProviderUnavailableError, match="required dependency 'anthropic'"):
-        list_provider_models("claude")
-
-
-def test_claude_key_without_sdk_handles_a_blocked_import(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-
-    def _blocked(_name):
-        raise ModuleNotFoundError("blocked")
-
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.find_spec", _blocked)
-
-    assert get_provider_configuration(
-        "claude", ProviderSurface.JUDGE,
-    ) == DependencyUnavailableProvider(
-        "claude", "anthropic",
-    )
-
-
-def test_claude_cli_login_marks_provider_as_configured(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
-    )
-
-    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == ConfiguredProvider(
-        "claude", ProviderSetupMethod.CLAUDE_CLI,
-    )
-
-
-def test_claude_cli_not_logged_in_is_unconfigured(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLogin(logged_in=False, auth_method=None),
-    )
-
-    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == UnconfiguredProvider(
-        "claude", ProviderNeed.CLI_LOGIN,
-    )
-
-
-@pytest.mark.parametrize(
-    ("provider", "environment_key"),
-    [
-        ("grok", "XAI_API_KEY"),
-        ("codex", "OPENAI_API_KEY"),
-    ],
-)
-def test_unconfigured_provider_names_missing_environment_key(
-    monkeypatch, provider, environment_key,
-):
-    monkeypatch.delenv(environment_key, raising=False)
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.grok_cli_status",
-        lambda: GrokCliStatus(login=LOGGED_OUT, model_names=()),
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present",
-        lambda: False,
-    )
-
-    assert get_provider_configuration(provider, ProviderSurface.JUDGE) == UnconfiguredProvider(
-        provider, ProviderNeed.API_KEY, environment_key,
-    )
-
-
-def test_claude_cli_catalog_uses_cli_model_aliases(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
-    )
+def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_cli_model_aliases",
-        lambda: ["sonnet", "opus", "haiku"],
+        lambda: ("sonnet", "opus"),
     )
 
-    assert list_provider_models("claude") == ["haiku", "opus", "sonnet"]
+    assert list_provider_models("claude", ProviderRoute.CLI) == ["opus", "sonnet"]
 
 
-def test_catalog_adds_an_active_claude_model_id_once():
-    assert models_with_active_model(
-        "claude",
-        ["haiku", "claude-opus-4-6", "opus"],
-        "claude-opus-4-6",
-    ) == ["haiku", "claude-opus-4-6", "opus"]
-
-
-def test_catalog_preserves_provider_order_when_appending_an_active_model():
-    assert models_with_active_model(
-        "grok",
-        ["grok-4.6", "grok-4.5"],
-        "grok-4.7",
-    ) == ["grok-4.6", "grok-4.5", "grok-4.7"]
-
-
-def test_catalog_ignores_an_empty_active_model():
-    assert models_with_active_model("claude", ["haiku", "opus"], "") == ["haiku", "opus"]
-
-
-def test_catalog_rejects_an_active_model_id_from_another_provider():
-    assert models_with_active_model(
-        "claude",
-        ["haiku", "opus"],
-        "grok-4.6",
-    ) == ["haiku", "opus"]
-
-
-def test_claude_cli_catalog_failure_is_named_error(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    response = MagicMock(status_code=200)
+    response.json.return_value = _models_payload("claude-sonnet-4-6")
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status",
-        lambda: CliLogin(logged_in=True, auth_method="claude.ai"),
+        "songmaker_cli.cowriter.catalog.httpx.get",
+        lambda *_args, **_kwargs: response,
     )
 
-    def _boom():
-        raise ClaudeCliUnavailableError(
-            "Claude CLI /model output did not contain a parseable model list",
-        )
+    assert list_provider_models("claude", ProviderRoute.API) == ["claude-sonnet-4-6"]
 
+
+def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+
+    def unavailable(*_args, **_kwargs):
+        raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", unavailable)
+    try:
+        list_provider_models("grok", ProviderRoute.API)
+    except ProviderModelCatalogUnavailableError as error:
+        assert error.reason.code is SafeRouteReasonCode.CATALOGUE_HTTP_ERROR
+    else:  # pragma: no cover - the assertion above must receive the failure
+        raise AssertionError("expected the unavailable model catalogue")
+
+    malformed = MagicMock(status_code=200)
+    malformed.json.return_value = {"unexpected": []}
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_cli_model_aliases", _boom,
+        "songmaker_cli.cowriter.catalog.httpx.get",
+        lambda *_args, **_kwargs: malformed,
     )
-
-    with pytest.raises(
-        ProviderModelCatalogUnavailableError,
-        match="Claude CLI could not list models",
-    ) as raised:
-        list_provider_models("claude")
-    assert type(raised.value) is ProviderModelCatalogUnavailableError
-    assert raised.value.provider == "claude"
+    try:
+        list_provider_models("grok", ProviderRoute.API)
+    except ProviderModelCatalogUnavailableError as error:
+        assert error.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
+    else:  # pragma: no cover - the assertion above must receive the failure
+        raise AssertionError("expected the malformed model catalogue")
 
 
-def test_catalog_without_api_credentials_names_missing_key(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_snapshot_refreshes_both_routes(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present",
-        lambda: False,
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda provider, route: [f"{provider}-{route.value}"],
     )
 
-    with pytest.raises(ProviderUnavailableError, match="OPENAI_API_KEY"):
-        list_provider_models("codex")
+    snapshot = refresh_provider_snapshot("grok")
+
+    assert set(snapshot.routes) == {ProviderRoute.CLI, ProviderRoute.API}
+    assert all(
+        item.readiness is ProviderRouteReadinessState.READY
+        for item in snapshot.routes.values()
+    )
 
 
-def test_grok_cli_token_configures_turns_and_supplies_its_model_catalog(monkeypatch):
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
+def test_cli_probe_failure_is_isolated_to_its_provider_route(monkeypatch):
+    from songmaker_cli.agent_cli import AgentCliUnavailableError
+
+    def failing_login(provider: str) -> bool:
+        if provider == "grok":
+            raise AgentCliUnavailableError("broken credentials")
+        return True
+
+    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", failing_login)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.grok_cli_token_is_present", lambda: True,
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.grok_cli_status",
-        lambda: GrokCliStatus(
-            login=CliLogin(logged_in=True, auth_method="grok"),
-            model_names=("grok-4.6",),
-        ),
+        "songmaker_cli.cowriter.catalog.list_provider_models",
+        lambda provider, route: [f"{provider}-{route.value}"],
     )
 
-    assert get_provider_configuration("grok", ProviderSurface.CO_WRITER) == (
-        ConfiguredProvider("grok", ProviderSetupMethod.GROK_CLI)
-    )
-    assert get_provider_configuration("grok", ProviderSurface.JUDGE) == (
-        CliLoginNeedsApiKeyProvider(
-            "grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY",
-        )
-    )
-    assert list_provider_models("grok") == ["grok-4.6"]
+    grok = refresh_provider_snapshot("grok")
+    codex = refresh_provider_snapshot("codex")
+
+    assert grok.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.DISTURBED
+    assert codex.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.READY
 
 
-def test_codex_cli_token_configures_turns_and_supplies_known_cli_models(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present",
-        lambda: True,
-    )
-
-    assert get_provider_configuration("codex", ProviderSurface.CO_WRITER) == (
-        ConfiguredProvider("codex", ProviderSetupMethod.CODEX_CLI)
-    )
-    assert get_provider_configuration("codex", ProviderSurface.JUDGE) == (
-        CliLoginNeedsApiKeyProvider(
-            "codex", ProviderSetupMethod.CODEX_CLI, "OPENAI_API_KEY",
-        )
-    )
-    assert list_provider_models("codex") == [
-        "gpt-5.6",
-        "gpt-5.6-terra",
-        "gpt-5.6-sol",
-        "gpt-5.6-luna",
-        "gpt-6-astra",
-    ]
-
-
-def test_claude_key_needs_a_cli_login_for_the_co_writer(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.cli_login_status", lambda: LOGGED_OUT,
-    )
-
-    assert get_provider_configuration("claude", ProviderSurface.CO_WRITER) == (
-        ApiKeyNeedsCliLoginProvider("claude")
-    )
-
-
-@pytest.mark.parametrize(
-    ("configuration", "message"),
-    [
-        (
-            ApiKeyNeedsCliLoginProvider("claude"),
-            "claude cannot list models until its CLI login is available",
-        ),
-        (
-            UnconfiguredProvider("claude", ProviderNeed.CLI_LOGIN),
-            "claude cannot list models until cli_login is configured",
-        ),
-    ],
-)
-def test_catalog_reports_every_configuration_without_an_attribute_error(
-    monkeypatch, configuration, message,
-):
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._provider_configuration",
-        lambda *_args: configuration,
-    )
-
-    with pytest.raises(ProviderUnavailableError, match=message):
-        list_provider_models("claude")
+def test_retained_alias_is_appended_once_without_a_provider_prefix():
+    assert models_with_active_model("claude", ["opus"], "sonnet") == ["opus", "sonnet"]
+    assert models_with_active_model("claude", ["sonnet"], "sonnet") == ["sonnet"]

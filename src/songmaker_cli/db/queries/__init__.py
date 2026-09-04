@@ -338,6 +338,9 @@ from songmaker_cli.db.queries.settings import (
     get_cowriter_tail_token_budget as get_cowriter_tail_token_budget,
 )
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
+from songmaker_cli.db.queries.settings import (
+    get_effective_provider_routes as get_effective_provider_routes,
+)
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
 from songmaker_cli.db.queries.settings import (
     get_judge_model as get_judge_model,
@@ -369,6 +372,7 @@ from songmaker_cli.db.queries.settings import set_default_preset as set_default_
 from songmaker_cli.db.queries.settings import (
     set_judge_settings as set_judge_settings,
 )
+from songmaker_cli.db.queries.settings import set_provider_routes as set_provider_routes
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset
 from songmaker_cli.db.queries.sharing import (

@@ -34,7 +34,11 @@ from songmaker_cli.constants import (
     COVER_PNG_MAGIC,
     COWRITER_CLI_TIMEOUT_SECONDS,
 )
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
@@ -66,9 +70,6 @@ _ITEM_EVENT_TYPES: Final = frozenset({
     "item.started", "item.updated", "item.completed",
 })
 _INFORMATIONAL_EVENT_TYPES: Final = frozenset({"thread.started", "turn.started"})
-_CLI_LOGIN_EXPIRED: Final = "cli_login_expired"
-_CODEX_CLI_ERROR: Final = "codex_cli_error"
-
 log = logging.getLogger(__name__)
 
 
@@ -175,7 +176,16 @@ async def stream_codex_cli_turn(
     except _CodexCliStreamFailure as exc:
         channel.request_abort()
         await asyncio.shield(runner)
-        raise ProviderUnavailableError("codex", exc.code) from exc
+        reason = (
+            SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+            if exc.code == "codex_cli_tool_call_blocked"
+            else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        )
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(reason),
+        ) from exc
     finally:
         channel.request_abort()
         try:
@@ -257,7 +267,7 @@ def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str
 
 
 def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
-    if _codex_cli_failure_code(outcome.stderr) == _CLI_LOGIN_EXPIRED:
+    if _codex_cli_failure_reason(outcome.stderr) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
         raise CodexImageLoginError()
     if outcome.reason in {
         CliRunReason.DEADLINE_BEFORE_SPAWN,
@@ -301,7 +311,9 @@ def _validate_codex_image_events(output: str) -> None:
     if saw_completed_turn:
         return
     if completed_error_item_message is not None:
-        if _codex_cli_failure_code(completed_error_item_message) == _CLI_LOGIN_EXPIRED:
+        if _codex_cli_failure_reason(
+            completed_error_item_message,
+        ) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
             raise CodexImageLoginError()
         raise CodexImageCliError()
     raise CodexImageCliError()
@@ -457,26 +469,31 @@ def _raise_for_codex_outcome(
     if not outcome.complete or outcome.returncode != 0:
         _raise_codex_cli_failure(outcome, None)
     if not saw_success:
-        raise ProviderUnavailableError("codex", "codex_cli_stream_protocol_error")
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        )
 
 
 def _raise_codex_cli_failure(outcome: CliRunOutcome, error_message: str | None) -> None:
-    code = _codex_cli_failure_code(error_message, outcome.stderr)
-    if code == _CLI_LOGIN_EXPIRED:
-        raise ProviderUnavailableError("codex", code)
     log.warning(
         "Codex CLI failed (rc=%s, stderr_bytes=%d)",
         outcome.returncode,
         len(outcome.stderr.encode()),
     )
-    raise ProviderUnavailableError("codex", code)
+    raise ProviderUnavailableError(
+        "codex",
+        "cli",
+        normalize_route_failure(_codex_cli_failure_reason(error_message, outcome.stderr)),
+    )
 
 
-def _codex_cli_failure_code(*messages: str | None) -> str:
-    """Classify the shared Codex CLI error surface without exposing its payload."""
+def _codex_cli_failure_reason(*messages: str | None) -> SafeRouteReasonCode:
+    """Classify a Codex CLI failure without retaining its payload."""
     if any(_contains_auth_failure(message) for message in messages):
-        return _CLI_LOGIN_EXPIRED
-    return _CODEX_CLI_ERROR
+        return SafeRouteReasonCode.CLI_AUTH_REJECTED
+    return SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 def _contains_auth_failure(value: str | None) -> bool:

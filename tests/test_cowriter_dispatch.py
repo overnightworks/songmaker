@@ -1,214 +1,234 @@
-"""Cancellation behavior of the co-writer provider dispatcher."""
+"""Explicit co-writer transport dispatch."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
-from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
-from songmaker_cli import agent_cli
-from songmaker_cli.claude.provider import AssistantTextEvent, StreamEvent
-from songmaker_cli.cowriter import claude_adapter, dispatch
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.claude.provider import (
+    AssistantTextEvent,
+    CliBinaryUnavailableError,
+    CliToolSurfaceError,
+    StreamEvent,
+    UnavailableError,
+)
+from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
+from songmaker_cli.cowriter.catalog import ProviderRoute
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 
 
-class _TrackingStream(AsyncIterator[StreamEvent]):
+class _Stream(AsyncIterator[StreamEvent]):
     def __init__(self) -> None:
-        self.aclose_calls = 0
-        self._has_yielded = False
+        self.closed = False
+        self.sent = False
 
-    def __aiter__(self) -> _TrackingStream:
+    def __aiter__(self) -> _Stream:
         return self
 
     async def __anext__(self) -> StreamEvent:
-        if not self._has_yielded:
-            self._has_yielded = True
-            return AssistantTextEvent(text="partial")
-        await asyncio.Future()
+        if self.sent:
+            raise StopAsyncIteration
+        self.sent = True
+        return AssistantTextEvent(text="route")
 
     async def aclose(self) -> None:
-        self.aclose_calls += 1
+        self.closed = True
 
 
-async def _collect_codex_turn() -> list[StreamEvent]:
-    return [event async for event in dispatch.stream_cowriter_turn(
-        provider="codex",
-        model="codex-test",
-        user_id="user-1",
-        system="system",
-        messages=[],
-        session=MagicMock(),
-        user=MagicMock(),
-    )]
-
-
-def test_closing_claude_dispatch_stream_closes_provider_stream(monkeypatch) -> None:
-    provider_stream = _TrackingStream()
-    monkeypatch.setattr(
-        claude_adapter,
-        "acall_claude_with_mcp_stream",
-        lambda **_kwargs: provider_stream,
-    )
-
-    async def _close_stream() -> None:
-        stream = dispatch.stream_cowriter_turn(
-            provider="claude",
-            model="claude-test",
-            user_id="user-1",
+async def _events(provider: str, route: ProviderRoute) -> list[StreamEvent]:
+    return [
+        event async for event in dispatch.stream_cowriter_turn(
+            provider=provider,
+            route=route,
+            model="model",
+            user_id="user",
             system="system",
             messages=[],
             session=MagicMock(),
             user=MagicMock(),
         )
-        assert await anext(stream) == AssistantTextEvent(text="partial")
-        await stream.aclose()
-
-    asyncio.run(_close_stream())
-
-    assert provider_stream.aclose_calls == 1
+    ]
 
 
-def test_grok_dispatch_prefers_a_mirrored_cli_token_over_an_api_key(monkeypatch) -> None:
-    provider_stream = _TrackingStream()
-    monkeypatch.setattr(dispatch, "_grok_cli_token_is_present", lambda: True)
-    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", lambda **_kwargs: provider_stream)
+@pytest.mark.parametrize(
+    ("provider", "route", "adapter"),
+    [
+        ("claude", ProviderRoute.CLI, "stream_claude_turn"),
+        ("grok", ProviderRoute.CLI, "stream_grok_cli_turn"),
+        ("codex", ProviderRoute.CLI, "stream_codex_cli_turn"),
+    ],
+)
+def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
+    monkeypatch,
+    provider,
+    route,
+    adapter,
+):
+    stream = _Stream()
+    monkeypatch.setattr(dispatch, adapter, lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
     )
 
-    async def collect() -> list[StreamEvent]:
-        stream = dispatch.stream_cowriter_turn(
-            provider="grok",
-            model="grok-test",
-            user_id="user-1",
-            system="system",
-            messages=[],
-            session=MagicMock(),
-            user=MagicMock(),
-        )
-        event = await anext(stream)
-        await stream.aclose()
-        return [event]
-
-    assert asyncio.run(collect()) == [AssistantTextEvent(text="partial")]
-    assert provider_stream.aclose_calls == 1
+    assert asyncio.run(_events(provider, route)) == [AssistantTextEvent(text="route")]
+    assert stream.closed
 
 
-def test_grok_dispatch_uses_the_api_only_when_the_mirror_has_no_token(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "_grok_cli_token_is_present", lambda: False)
-    monkeypatch.setenv("XAI_API_KEY", "api-key")
-    dispatched = []
-
-    async def api_stream(**kwargs):
-        dispatched.append(kwargs)
-        yield AssistantTextEvent(text="API")
-
-    monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", api_stream)
-
-    async def collect() -> list[StreamEvent]:
-        return [event async for event in dispatch.stream_cowriter_turn(
-            provider="grok",
-            model="grok-test",
-            user_id="user-1",
-            system="system",
-            messages=[],
-            session=MagicMock(),
-            user=MagicMock(),
-        )]
-
-    assert asyncio.run(collect()) == [AssistantTextEvent(text="API")]
-    assert dispatched[0]["api_key"] == "api-key"
-
-
-@pytest.mark.parametrize("mirror_document", (None, {}, {"realm": {}}))
-def test_grok_dispatch_uses_the_api_for_a_missing_or_tokenless_mirror(
-    monkeypatch,
-    tmp_path: Path,
-    mirror_document,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr("songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(auth_file))
-    if mirror_document is not None:
-        auth_file.write_text(json.dumps(mirror_document))
-    monkeypatch.setenv("XAI_API_KEY", "api-key")
-    dispatched = []
-
-    async def api_stream(**kwargs):
-        dispatched.append(kwargs)
-        yield AssistantTextEvent(text="API")
-
-    monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", api_stream)
-
-    async def collect() -> list[StreamEvent]:
-        return [event async for event in dispatch.stream_cowriter_turn(
-            provider="grok",
-            model="grok-test",
-            user_id="user-1",
-            system="system",
-            messages=[],
-            session=MagicMock(),
-            user=MagicMock(),
-        )]
-
-    assert asyncio.run(collect()) == [AssistantTextEvent(text="API")]
-    assert dispatched[0]["api_key"] == "api-key"
-
-
-def test_grok_dispatch_names_the_missing_api_credential_when_no_mirror_exists(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
+def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
+    stream = _Stream()
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(tmp_path / "auth.json"),
+        dispatch,
+        "stream_grok_cli_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("CLI must not run")),
     )
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
 
-    async def collect() -> list[StreamEvent]:
-        return [
-            event
-            async for event in dispatch.stream_cowriter_turn(
-                provider="grok",
-                model="grok-test",
-                user_id="user-1",
-                system="system",
-                messages=[],
-                session=MagicMock(),
-                user=MagicMock(),
-            )
-        ]
+    assert asyncio.run(_events("grok", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
 
-    with pytest.raises(ProviderUnavailableError, match="XAI_API_KEY"):
-        asyncio.run(collect())
+
+def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, adapter: str) -> None:
+    async def failing_cli(**_kwargs):
+        raise ProviderUnavailableError(
+            provider,
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
+        yield AssistantTextEvent(text="unreachable")
+
+    monkeypatch.setattr(dispatch, adapter, failing_cli)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
+    )
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_events(provider, ProviderRoute.CLI))
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
 
 
 @pytest.mark.acceptance("ACC-COWRITER-11")
-def test_grok_dispatch_does_not_fall_back_to_http_after_a_cli_error(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "_grok_cli_token_is_present", lambda: True)
+def test_grok_cli_failure_never_falls_back_to_http(monkeypatch):
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "stream_grok_cli_turn")
 
-    async def cli_stream(**_kwargs):
-        raise ProviderUnavailableError("grok", "cli_login_expired")
+
+@pytest.mark.acceptance("ACC-COWRITER-13")
+def test_codex_cli_failure_never_falls_back_to_http(monkeypatch):
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "codex", "stream_codex_cli_turn")
+
+
+def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):
+    async def failing_cli(**_kwargs):
+        raise ProviderUnavailableError(
+            "grok",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+        )
         yield AssistantTextEvent(text="unreachable")
 
-    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", cli_stream)
-    monkeypatch.setattr(
-        dispatch,
-        "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
-    )
+    monkeypatch.setattr(dispatch, "stream_grok_cli_turn", failing_cli)
 
-    async def collect() -> list[StreamEvent]:
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_events("grok", ProviderRoute.CLI))
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
+
+
+@pytest.mark.parametrize(
+    ("source_error", "reason"),
+    [
+        (CliBinaryUnavailableError("missing binary"), SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE),
+        (CliToolSurfaceError("unexpected tool"), SafeRouteReasonCode.TOOL_EXECUTION_FAILED),
+        (UnavailableError("invalid stream"), SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+    ],
+)
+def test_claude_adapter_maps_typed_cli_failure_sources(monkeypatch, source_error, reason):
+    async def failing_stream(**_kwargs):
+        raise source_error
+        yield AssistantTextEvent(text="unreachable")
+
+    monkeypatch.setattr(claude_adapter, "acall_claude_with_mcp_stream", failing_stream)
+
+    async def collect():
         return [
-            event
-            async for event in dispatch.stream_cowriter_turn(
+            event async for event in claude_adapter.stream_claude_turn(
+                user_id="user", system="system", model="model", messages=[],
+            )
+        ]
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(collect())
+
+    assert raised.value.reason.code is reason
+
+
+class _AsyncClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+@pytest.mark.parametrize(
+    ("post", "reason"),
+    [
+        (
+            lambda: (_ for _ in ()).throw(httpx.ConnectError("offline")),
+            SafeRouteReasonCode.API_HTTP_ERROR,
+        ),
+        (
+            lambda: MagicMock(status_code=200, json=lambda: []),
+            SafeRouteReasonCode.API_PROTOCOL_ERROR,
+        ),
+    ],
+)
+def test_openai_adapter_maps_http_and_protocol_sources(post, reason):
+    class Client:
+        async def post(self, *_args, **_kwargs):
+            return post()
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(
+            openai_adapter._post_chat(
+                Client(), "grok", "https://provider.example/chat", "key", "model", [], [],
+            ),
+        )
+
+    assert raised.value.reason.code is reason
+
+
+def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
+    tool_call = {
+        "id": "call-1",
+        "function": {"name": "list_albums", "arguments": "{}"},
+    }
+
+    async def tool_response(*_args, **_kwargs):
+        return {"choices": [{"message": {"content": "", "tool_calls": [tool_call]}}]}
+
+    monkeypatch.setattr(openai_adapter, "_post_chat", tool_response)
+    monkeypatch.setattr(openai_adapter.httpx, "AsyncClient", lambda **_kwargs: _AsyncClient())
+
+    async def collect():
+        return [
+            event async for event in openai_adapter.stream_openai_compatible_turn(
                 provider="grok",
-                model="grok-test",
-                user_id="user-1",
+                api_url="https://provider.example/chat",
+                api_key="key",
+                model="model",
                 system="system",
                 messages=[],
                 session=MagicMock(),
@@ -216,165 +236,29 @@ def test_grok_dispatch_does_not_fall_back_to_http_after_a_cli_error(monkeypatch)
             )
         ]
 
-    with pytest.raises(ProviderUnavailableError, match="cli_login_expired"):
+    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    with pytest.raises(ProviderUnavailableError) as limited:
         asyncio.run(collect())
+    assert limited.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
+
+    monkeypatch.setattr(openai_adapter, "COWRITER_MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.tools.execute_cowriter_tool",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("tool exploded")),
+    )
+    with pytest.raises(ProviderUnavailableError) as failed:
+        asyncio.run(collect())
+    assert failed.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
 
 
-def test_grok_cli_token_discriminator_accepts_only_a_nonempty_string_key(
-    monkeypatch, tmp_path: Path,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr("songmaker_cli.agent_cli.GROK_CLI_AUTH_FILE", str(auth_file))
-
-    auth_file.write_text(json.dumps({"realm": {"key": "subscription-token"}}))
-    assert dispatch._grok_cli_token_is_present() is True
-
-    auth_file.write_text(json.dumps({"realm": {}}))
-    assert dispatch._grok_cli_token_is_present() is False
-
-
-@pytest.mark.acceptance("ACC-COWRITER-12")
-def test_codex_dispatch_prefers_a_mirrored_cli_access_token_over_an_api_key(
-    monkeypatch,
-) -> None:
-    provider_stream = _TrackingStream()
-    monkeypatch.setattr(dispatch, "_codex_cli_access_token_is_present", lambda: True)
-    monkeypatch.setattr(dispatch, "stream_codex_cli_turn", lambda **_kwargs: provider_stream)
+def test_claude_api_is_the_pending_route_without_an_adapter_attempt(monkeypatch):
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
     )
 
-    async def collect() -> list[StreamEvent]:
-        stream = dispatch.stream_cowriter_turn(
-            provider="codex",
-            model="codex-test",
-            user_id="user-1",
-            system="system",
-            messages=[],
-            session=MagicMock(),
-            user=MagicMock(),
-        )
-        event = await anext(stream)
-        await stream.aclose()
-        return [event]
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_events("claude", ProviderRoute.API))
 
-    assert asyncio.run(collect()) == [AssistantTextEvent(text="partial")]
-    assert provider_stream.aclose_calls == 1
-
-
-@pytest.mark.parametrize(
-    "mirror_document",
-    (None, {}, {"tokens": {}}, {"tokens": {"access_token": ""}}),
-)
-def test_codex_dispatch_uses_the_api_for_a_missing_or_tokenless_mirror(
-    monkeypatch,
-    tmp_path: Path,
-    mirror_document,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
-    if mirror_document is not None:
-        auth_file.write_text(json.dumps(mirror_document))
-    monkeypatch.setenv("OPENAI_API_KEY", "api-key")
-    dispatched = []
-
-    async def api_stream(**kwargs):
-        dispatched.append(kwargs)
-        yield AssistantTextEvent(text="API")
-
-    monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", api_stream)
-
-    assert asyncio.run(_collect_codex_turn()) == [AssistantTextEvent(text="API")]
-    assert dispatched[0]["api_key"] == "api-key"
-
-
-@pytest.mark.parametrize(
-    "mirror_document",
-    (
-        [],
-        {"tokens": None},
-        {"tokens": []},
-        {"tokens": {"access_token": None}},
-        {"tokens": {"access_token": 1}},
-    ),
-)
-def test_codex_dispatch_rejects_invalid_mirror_without_http_fallback(
-    monkeypatch,
-    tmp_path: Path,
-    mirror_document,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    auth_file.write_text(json.dumps(mirror_document))
-    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
-    monkeypatch.setattr(
-        dispatch,
-        "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
-    )
-
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
-        asyncio.run(_collect_codex_turn())
-
-
-def test_codex_dispatch_rejects_invalid_json_without_http_fallback(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    auth_file.write_text("{")
-    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
-    monkeypatch.setattr(
-        dispatch,
-        "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
-    )
-
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
-        asyncio.run(_collect_codex_turn())
-
-
-def test_codex_cli_access_token_discriminator_reports_an_unreadable_mirror(
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr(
-        agent_cli.Path,
-        "read_text",
-        lambda _path: (_ for _ in ()).throw(OSError("unreadable")),
-    )
-
-    with pytest.raises(ProviderUnavailableError, match="codex_cli_error"):
-        dispatch._codex_cli_access_token_is_present()
-
-
-@pytest.mark.acceptance("ACC-COWRITER-13")
-def test_codex_dispatch_does_not_fall_back_to_http_after_a_cli_error(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "_codex_cli_access_token_is_present", lambda: True)
-
-    async def cli_stream(**_kwargs):
-        raise ProviderUnavailableError("codex", "cli_login_expired")
-        yield AssistantTextEvent(text="unreachable")
-
-    monkeypatch.setattr(dispatch, "stream_codex_cli_turn", cli_stream)
-    monkeypatch.setattr(
-        dispatch,
-        "stream_openai_compatible_turn",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP path must not run")),
-    )
-
-    with pytest.raises(ProviderUnavailableError, match="cli_login_expired"):
-        asyncio.run(_collect_codex_turn())
-
-
-def test_codex_cli_access_token_discriminator_accepts_only_a_nonempty_string(
-    monkeypatch, tmp_path: Path,
-) -> None:
-    auth_file = tmp_path / "auth.json"
-    monkeypatch.setattr("songmaker_cli.agent_cli.CODEX_CLI_AUTH_FILE", str(auth_file))
-
-    auth_file.write_text(json.dumps({"tokens": {"access_token": "subscription-token"}}))
-    assert dispatch._codex_cli_access_token_is_present() is True
-
-    auth_file.write_text(json.dumps({"tokens": {"access_token": ""}}))
-    assert dispatch._codex_cli_access_token_is_present() is False
+    assert raised.value.reason.code is SafeRouteReasonCode.CLAUDE_API_TOOL_LOOP_PENDING

@@ -67,7 +67,11 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
@@ -82,6 +86,7 @@ from songmaker_cli.db.queries import (
     get_cowriter_model,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
+    get_effective_provider_routes,
     get_or_create_active_conversation,
     get_song_memory,
     get_user_memory,
@@ -459,6 +464,9 @@ async def api_chat_turn(
     try:
         provider = get_cowriter_provider(session)
         cowriter_model = get_cowriter_model(session, provider)
+        from songmaker_cli.cowriter.catalog import ProviderRoute
+
+        route = ProviderRoute(get_effective_provider_routes(session)[provider])
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     if not cowriter_model:
@@ -532,6 +540,7 @@ async def api_chat_turn(
         started = time.monotonic()
         stream = stream_cowriter_turn(
             provider=provider,
+            route=route,
             model=cowriter_model,
             user_id=user.id,
             system=COWRITER_SYSTEM_PROMPT,
@@ -554,13 +563,22 @@ async def api_chat_turn(
                     tail_budget,
                 )
             except ProviderUnavailableError as e:
-                log.warning("Co-writer %s unavailable: %s", e.provider, e)
+                log.warning(
+                    "Co-writer unavailable provider=%s route=%s reason=%s",
+                    e.provider,
+                    e.route,
+                    e.reason.code if e.reason is not None else "route_failed",
+                )
                 _fail_chat_job(session, job_id, f"{e.provider} unavailable", "unavailable")
                 turn_has_terminal_status = True
                 yield _sse_format({
                     "type": "error",
                     "status": 503,
-                    "message": f"{e.provider} is currently unavailable",
+                    "provider": e.provider,
+                    "route": e.route,
+                    "reason": (e.reason or normalize_route_failure(
+                        SafeRouteReasonCode.ROUTE_FAILED,
+                    )).model_dump(mode="json"),
                 })
                 return
             except Exception as exc:

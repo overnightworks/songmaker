@@ -411,4 +411,11 @@ def every_provider_is_configured(monkeypatch):
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        lambda _provider: True,
+    )
     refresh_provider_snapshots()

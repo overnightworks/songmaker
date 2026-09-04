@@ -5,13 +5,19 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from songmaker_cli.claude.provider import (
+    CliBinaryUnavailableError,
+    CliToolSurfaceError,
     StreamEvent,
     UnavailableError,
     acall_claude_with_mcp_stream,
     call_claude,
 )
 from songmaker_cli.constants import COWRITER_CLI_TIMEOUT_SECONDS
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from songmaker_cli.settings import get_settings
 
 
@@ -34,9 +40,22 @@ async def stream_claude_turn(
         async for event in stream:
             yield event
     except UnavailableError as exc:
-        raise ProviderUnavailableError("claude", str(exc)) from exc
+        raise ProviderUnavailableError(
+            "claude",
+            "cli",
+            normalize_route_failure(_claude_cli_failure_reason(exc)),
+        ) from exc
     finally:
         await stream.aclose()
+
+
+def _claude_cli_failure_reason(error: UnavailableError) -> SafeRouteReasonCode:
+    """Map typed Claude CLI failures without exposing their diagnostics."""
+    if isinstance(error, CliBinaryUnavailableError):
+        return SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
+    if isinstance(error, CliToolSurfaceError):
+        return SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+    return SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 
 
 def call_claude_once(
@@ -61,6 +80,8 @@ def call_claude_once(
             model=model,
             timeout_seconds=timeout,
         )
-    except UnavailableError as exc:
-        raise ProviderUnavailableError("claude", str(exc)) from exc
+    except UnavailableError:
+        # The API-only judge owns its established failure detail (for example
+        # ``judge_timeout``); the co-writer route never calls this adapter.
+        raise
     return response.text

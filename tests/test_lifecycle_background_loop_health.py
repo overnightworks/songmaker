@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -218,20 +219,42 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
     from songmaker_cli.constants import COWRITER_PROVIDERS
     from songmaker_cli.cowriter.catalog import (
         ConfiguredProvider,
+        ProviderRoute,
         ProviderSetupMethod,
         provider_snapshot,
     )
 
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._refresh_cli_login", lambda _provider: None)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.get_provider_configuration",
         lambda provider, _surface: ConfiguredProvider(
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
+    refreshed = threading.Event()
+    refreshed_routes: set[tuple[str, ProviderRoute]] = set()
+    expected_routes = {
+        (provider, route)
+        for provider in COWRITER_PROVIDERS
+        for route in ProviderRoute
+    }
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        lambda _provider: True,
+    )
+
+    def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
+        refreshed_routes.add((provider, route))
+        if refreshed_routes == expected_routes:
+            refreshed.set()
+        return [f"{provider}-model"]
+
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
-        lambda provider: [f"{provider}-model"],
+        list_provider_models,
     )
     monkeypatch.setattr(
         server, "provider_status_refresh_loop", lifecycle.provider_status_refresh_loop,
@@ -239,10 +262,11 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
     client, _ = make_test_app(tmp_path)
 
     with client:
-        client.portal.call(asyncio.sleep, 0)
+        assert client.portal.call(asyncio.to_thread, refreshed.wait, 1)
         health = client.get("/health").json()["background_loops"]
 
     assert all(provider_snapshot(provider) is not None for provider in COWRITER_PROVIDERS)
+    assert refreshed_routes == expected_routes
     assert health[BackgroundLoopName.PROVIDER_STATUS_REFRESH]["state"] == BackgroundLoopStatus.OK
 
 
