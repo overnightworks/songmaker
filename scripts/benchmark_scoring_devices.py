@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 
-def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> None:
+def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> tuple[float, float, str]:
     from faster_whisper import WhisperModel
 
     print(f"\n{'='*60}")
@@ -70,7 +70,9 @@ def benchmark_whisper(mp3_path: Path, device: str, rounds: int) -> None:
     return avg, load_time, transcript
 
 
-def benchmark_audiobox(mp3_path: Path, device: str, rounds: int) -> None:
+def benchmark_audiobox(
+    mp3_path: Path, device: str, rounds: int,
+) -> tuple[float, float, dict[str, float]]:
     print(f"\n{'='*60}")
     print(f"AUDIOBOX AESTHETICS on {device.upper()}")
     print(f"{'='*60}")
