@@ -1027,6 +1027,15 @@ def test_a_spawned_cli_never_sees_our_secrets(monkeypatch) -> None:
     assert not [key for key in SECRET_ENV_KEYS if key in env]
 
 
+def test_child_environment_additions_are_local_to_the_spawned_cli(monkeypatch) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+
+    child_env = agent_cli._child_env({"CODEX_HOME": "/private/codex-home"})
+
+    assert child_env["CODEX_HOME"] == "/private/codex-home"
+    assert "CODEX_HOME" not in os.environ
+
+
 def test_bounded_runner_does_not_pass_secrets_to_the_spawned_cli(monkeypatch) -> None:
     for key in SECRET_ENV_KEYS:
         monkeypatch.setenv(key, "leaked-value")

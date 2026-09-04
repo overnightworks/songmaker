@@ -313,7 +313,7 @@ def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
     assert not CONTAINERS["music-worker"].extras & owns_the_sdk
 
 
-def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
+def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
     expected_web_sources_by_target = {
         "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
         "/home/songmaker/.claude/.credentials.json": (
@@ -345,9 +345,21 @@ def test_agent_cli_mounts_reject_short_syntax_and_host_profiles() -> None:
                 "/home/songmaker/.claude/.credentials.json",
             }
         },
+        "songmaker-music-worker": {
+            target: source
+            for target, source in expected_web_sources_by_target.items()
+            if target in {
+                "/usr/local/bin/codex",
+                "/home/songmaker/.codex/auth.json",
+            }
+        },
     }
     services = _raw_compose_services()
     declared_named_volumes = _declared_named_volumes()
+    music_worker_dockerfile = (
+        REPOSITORY_ROOT / CONTAINERS["music-worker"].dockerfile
+    ).read_text()
+    assert "mkdir -p /home/songmaker/.codex" in music_worker_dockerfile
 
     for service_name, expected_sources_by_target in expected_sources_by_service.items():
         service = services[service_name]

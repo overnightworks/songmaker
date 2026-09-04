@@ -218,6 +218,22 @@ export interface CoverRequest {
 	seed?: number | null;
 }
 
+export interface CoverSuggestionResponse {
+	id: string;
+	url: string;
+}
+
+export interface CoverSuggestionSelectionRequest {
+	suggestion_id: string;
+}
+
+export interface CoverSuggestionsResponse {
+	job?: JobItem | null;
+	suggestions: CoverSuggestionResponse[];
+	used_today: number;
+	daily_limit: number;
+}
+
 export interface CoverTaskParams {
 	src_wav_path: string;
 	src_generation_id: string;
@@ -585,6 +601,7 @@ export interface ProviderNotConfiguredDetail {
 
 export interface ProviderRouteReadiness {
 	state: 'ready' | 'not_configured' | 'disturbed' | 'unverified';
+	capability: 'tools_available' | 'text_only';
 	reason?: SafeRouteReason | null;
 	probed_at?: string | null;
 	setup_label: string;
@@ -758,7 +775,7 @@ export interface ResourceResyncEvent {
 }
 
 export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'claude_api_tool_loop_pending' | 'route_failed';
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_text_only' | 'claude_api_tool_loop_pending' | 'route_failed';
 	message: string;
 }
 

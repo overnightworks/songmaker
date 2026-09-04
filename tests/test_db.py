@@ -2264,6 +2264,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
 
     expected = {
         "albums",
+        "album_cover_suggestions",
         "songs",
         "versions",
         "generations",

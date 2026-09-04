@@ -58,6 +58,20 @@ def test_generate_runs_queued_job() -> None:
     assert kwargs["redis"] is ctx["redis"]
 
 
+def test_cover_suggestion_job_runs_on_the_music_worker() -> None:
+    worker = _make_worker()
+
+    with patch(
+        "songmaker_cli.music_worker.run_cover_suggestion_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.generate_cover_suggestions(_mock_ctx(), "cover-job"))
+
+    mock_run.assert_awaited_once()
+    assert mock_run.await_args.args == ("cover-job",)
+    assert mock_run.await_args.kwargs["audio_dir"] == "audio"
+    assert mock_run.await_args.kwargs["settings"] is worker._settings
+
+
 def test_generate_passes_seed_and_target_model() -> None:
     worker = _make_worker()
     with patch(
@@ -189,6 +203,10 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         session.add(User(id="u1", username="u1", password_hash="x"))
         session.add_all([
             Job(
+                id="cover-1", type=JobType.COVER,
+                status=JobStatus.RUNNING,
+            ),
+            Job(
                 id="generate-1", type=JobType.GENERATE,
                 status=JobStatus.RUNNING,
             ),
@@ -221,6 +239,7 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         _run(worker.on_startup({"redis": redis}))
 
     with factory() as session:
+        cover = session.query(Job).filter_by(id="cover-1").one()
         generate = session.query(Job).filter_by(id="generate-1").one()
         lora_job = session.query(Job).filter_by(id="lora-job-1").one()
         load_model = session.query(Job).filter_by(id="load-model-1").one()
@@ -231,12 +250,13 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         ).all()
 
     assert worker.job_types == (
+        JobType.COVER,
         JobType.GENERATE,
         JobType.LORA_TRAINING,
         JobType.LOAD_MODEL_ON_WORKER,
         JobType.DOWNLOAD_MODEL_ON_WORKER,
     )
-    for job in (generate, lora_job, load_model, download_model):
+    for job in (cover, generate, lora_job, load_model, download_model):
         assert job.status == JobStatus.FAILED
         assert job.error_type == "server_restart"
     assert lora.status == LoraStatus.FAILED
@@ -332,10 +352,11 @@ def test_music_worker_settings_functions() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
     func_names = {f.name for f in MusicWorkerSettings.functions}
     assert JobFunction.GENERATE in func_names
+    assert JobFunction.COVER in func_names
     assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.LORA_TRAINING in func_names
-    assert len(MusicWorkerSettings.functions) == 4
+    assert len(MusicWorkerSettings.functions) == 5
 
 
 def test_music_worker_settings_uses_singleton_methods() -> None:
@@ -365,6 +386,7 @@ def test_music_worker_functions_registered_under_job_function_names() -> None:
         return set(worker.functions.keys())
 
     registered = asyncio.run(_build_and_inspect())
+    assert JobFunction.COVER in registered
     assert JobFunction.GENERATE in registered
     assert JobFunction.LOAD_MODEL_ON_WORKER in registered
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in registered

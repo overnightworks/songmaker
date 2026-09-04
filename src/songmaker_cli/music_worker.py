@@ -25,6 +25,7 @@ from songmaker_cli.jobs import (
     load_model_on_worker as _load_model_on_worker_impl,
 )
 from songmaker_cli.jobs import (
+    run_cover_suggestion_job,
     run_generation_job,
     run_lora_training_job,
 )
@@ -37,6 +38,7 @@ log = logging.getLogger(__name__)
 
 class MusicWorker(WorkerBase):
     job_types = (
+        JobType.COVER,
         JobType.GENERATE,
         JobType.LORA_TRAINING,
         JobType.LOAD_MODEL_ON_WORKER,
@@ -82,6 +84,20 @@ class MusicWorker(WorkerBase):
             cover_params=typed_cover,
             target_model=requested_model,
             redis=ctx["redis"],
+        )
+
+    async def generate_cover_suggestions(self, ctx, job_id: str) -> None:
+        if not self.check_job_still_valid(job_id):
+            return
+
+        import structlog
+        structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.COVER)
+
+        await run_cover_suggestion_job(
+            job_id,
+            db_factory=self.get_db_factory(),
+            audio_dir=self.audio_dir(),
+            settings=self._settings,
         )
 
     async def train_lora(
@@ -138,6 +154,11 @@ _music_worker = MusicWorker(_settings)
 
 class MusicWorkerSettings:
     functions = [
+        func(
+            _music_worker.generate_cover_suggestions,
+            name=JobFunction.COVER,
+            timeout=_settings.cover_job_budget_seconds,
+        ),
         func(_music_worker.generate, name=JobFunction.GENERATE),
         func(_music_worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
         func(_music_worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),

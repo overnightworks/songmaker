@@ -282,6 +282,48 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 # ── /api/chat/turn ────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    ("route", "tools_available"),
+    [
+        ("cli", False),
+        ("api", True),
+    ],
+)
+def test_chat_turn_uses_the_selected_grok_route_capability(
+    client, route, tools_available,
+):
+    from songmaker_cli.conversation_api import (
+        COWRITER_TEXT_ONLY_INSTRUCTIONS,
+        COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS,
+    )
+    from songmaker_cli.db.queries.settings import set_cowriter_settings
+
+    c, factory = client
+    with factory() as session:
+        set_cowriter_settings(
+            session,
+            "grok",
+            "grok-4.6",
+            routes={"claude": "cli", "grok": route, "codex": "cli"},
+        )
+        session.commit()
+
+    captured: dict[str, object] = {}
+
+    async def _capture(**kwargs) -> AsyncIterator[StreamEvent]:
+        captured.update(kwargs)
+        yield FinalEvent(text="ok")
+
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _capture):
+        response = c.post("/api/chat/turn", json={"message": "hey"})
+
+    assert response.status_code == 200
+    prompt = captured["system"]
+    assert isinstance(prompt, str)
+    assert (COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS in prompt) is tools_available
+    assert (COWRITER_TEXT_ONLY_INSTRUCTIONS in prompt) is (not tools_available)
+
+
 def test_chat_turn_streams_sse_and_stores_messages(client):
     c, factory = client
     mock_stream = _mock_claude("ok")
