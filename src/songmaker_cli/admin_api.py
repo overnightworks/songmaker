@@ -59,6 +59,7 @@ from songmaker_cli.constants import (
     JobStatus,
     ResourceType,
 )
+from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
@@ -230,6 +231,7 @@ def hard_delete_user_endpoint(
     cleanup_generation_files(ctx.audio_dir, paths)
     for album_id in album_ids:
         remove_album_cover_files(ctx.audio_dir, album_id)
+        remove_album_cover_suggestion_files(ctx.audio_dir, album_id)
     for song_id in song_ids:
         remove_song_cover_files(ctx.audio_dir, song_id)
     user_dir = ctx.audio_dir / user_id

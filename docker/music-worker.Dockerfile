@@ -12,6 +12,7 @@ WORKDIR /app
 RUN useradd --create-home --shell /bin/bash songmaker
 RUN chown songmaker:songmaker /app
 USER songmaker
+RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \

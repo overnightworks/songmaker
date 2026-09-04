@@ -7,6 +7,10 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.orm import Session
 
+from songmaker_cli.agent_cli import (
+    AgentCliUnavailableError,
+    codex_cli_access_token_is_present,
+)
 from songmaker_cli.claude.provider import (
     StreamEvent,
 )
@@ -20,6 +24,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.catalog import (
     ProviderRoute,
+    ProviderSetupMethod,
 )
 from songmaker_cli.cowriter.claude_adapter import call_claude_once, stream_claude_turn
 from songmaker_cli.cowriter.codex_cli_adapter import stream_codex_cli_turn
@@ -167,6 +172,28 @@ def _require_secret(provider: str, route: ProviderRoute, secret) -> str:
     if not value:
         raise _unavailable(provider, route, SafeRouteReasonCode.API_KEY_NOT_SET)
     return value
+
+
+def _codex_cli_access_token_is_present() -> bool:
+    try:
+        return codex_cli_access_token_is_present()
+    except AgentCliUnavailableError as exc:
+        raise _unavailable(
+            "codex",
+            ProviderRoute.CLI,
+            SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE,
+        ) from exc
+
+
+def cover_image_provider_method() -> ProviderSetupMethod | None:
+    """Choose the one configured route for a generated cover image.
+
+    Cover generation intentionally has no HTTP/API fallback.  The image
+    adapter receives only this selected method and never reads credentials.
+    """
+    if _codex_cli_access_token_is_present():
+        return ProviderSetupMethod.CODEX_CLI
+    return None
 
 
 def _unavailable(

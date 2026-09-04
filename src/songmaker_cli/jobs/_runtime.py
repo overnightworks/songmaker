@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
+    JOB_ERROR_COVER_CLI_LOGIN,
+    JOB_ERROR_COVER_IMAGE_FAILED,
+    JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
     JOB_ERROR_GENERATION_TIMED_OUT,
     JOB_ERROR_INTERNAL,
     JOB_ERROR_JUDGE_FAILED,
@@ -26,6 +29,11 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     JUDGE_FAILURE_TIMEOUT,
     JobStatus,
+)
+from songmaker_cli.cowriter.codex_cli_adapter import (
+    CodexImageError,
+    CodexImageLoginError,
+    ImageToolBlockedError,
 )
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
@@ -72,6 +80,12 @@ def _sanitize_error(exc: Exception, job_id: str) -> str:
         return JOB_ERROR_JUDGE_FAILED
     if isinstance(exc, WorkerTaskFailed) and str(exc) == JOB_ERROR_WORKER_STREAM_SILENT:
         return JOB_ERROR_WORKER_STREAM_SILENT
+    if isinstance(exc, CodexImageLoginError):
+        return JOB_ERROR_COVER_CLI_LOGIN
+    if isinstance(exc, ImageToolBlockedError):
+        return JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED
+    if isinstance(exc, CodexImageError):
+        return JOB_ERROR_COVER_IMAGE_FAILED
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return message

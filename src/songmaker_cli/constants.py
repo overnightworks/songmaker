@@ -23,6 +23,13 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
+JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
+    "Codex CLI is not logged in. Sign in on the operator host, then try again."
+)
+JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
+    "Image tool blocked. Ask an administrator to enable the image tool."
+)
+JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -447,7 +454,12 @@ ACESTEP_SSE_READ_TIMEOUT_SECONDS: Final[int] = acestep_sse_read_timeout_seconds(
 QUEUED_JOB_STALE_THRESHOLD_SECONDS: Final[int] = 900
 WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
+COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
+COVER_CLI_DEADLINE_SECONDS: Final[int] = 88
+COVER_JOB_BUDGET_SECONDS: Final[int] = 300
+COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
+COVER_PROMPT_MAX_CHARS: Final[int] = 6000
 # These are not independently configurable timeouts. They document the
 # measured/provisioned liveness bounds that feed STALE_JOB_THRESHOLDS below.
 LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 300
@@ -518,6 +530,7 @@ AUDIO_UPLOAD_BODY_MAX_BYTES = AUDIO_UPLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_M
 REIMPORT_BODY_MAX_BYTES = (2 * AUDIO_UPLOAD_FILE_MAX_BYTES) + MULTIPART_ENVELOPE_MAX_BYTES
 
 COVER_DIRNAME: Final[str] = "covers"
+ALBUM_COVER_SUGGESTIONS_DIRNAME: Final[str] = "cover-suggestions"
 SONG_COVER_DIRNAME: Final[str] = "song-covers"
 COVER_MAX_BYTES: Final[int] = 8 * 1024 * 1024
 COVER_MAX_PIXELS: Final[int] = 20_000_000
@@ -551,6 +564,7 @@ COVER_TOO_LARGE: Final[str] = "Cover file is too large"
 COVER_TOO_MANY_PIXELS: Final[str] = "Cover image is too large"
 COVER_UNREADABLE: Final[str] = "Cover image could not be read"
 COVER_NOT_FOUND: Final[str] = "Cover not found"
+COVER_SUGGESTION_NOT_FOUND: Final[str] = "Album not found"
 COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
 COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
 COVER_INVALID_SONG_ID: Final[str] = "Invalid song id for cover storage"
@@ -588,6 +602,7 @@ JOB_TERMINAL_STATUSES = frozenset({
 
 
 class JobType(StrEnum):
+    COVER = "cover"
     GENERATE = "generate"
     SCORE = "score"
     CHAT = "chat"
@@ -603,6 +618,7 @@ class WorkerLivenessSignal(StrEnum):
 
 
 class JobFunction(StrEnum):
+    COVER = "cover"
     GENERATE = "generate"
     SCORE = "score"
     LOAD_MODEL_ON_WORKER = "load_model_on_worker"
@@ -636,6 +652,12 @@ class JobStaleThresholds:
 # The one stale-job policy. Each heartbeat threshold is derived from the
 # slowest measured or provisioned progress signal for that type; see #331 F20.
 STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
+    JobType.COVER: JobStaleThresholds(
+        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        heartbeat_seconds=COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+        liveness_signal=WorkerLivenessSignal.MUSIC,
+        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
+    ),
     JobType.CHAT: JobStaleThresholds(
         queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,

@@ -11,7 +11,7 @@ class _BodyTooLarge(Exception):
     pass
 
 
-def is_large_upload_path(path: str) -> bool:
+def is_large_upload_path(path: str, method: str = "POST") -> bool:
     if path == "/api/audio/upload":
         return True
     parts = path.split("/")
@@ -23,16 +23,16 @@ def is_large_upload_path(path: str) -> bool:
         return True
     if resource == "songs" and action == "reimport":
         return True
-    if resource == "albums" and action == "cover":
+    if resource == "albums" and action == "cover" and method.upper() == "POST":
         return True
     if resource == "songs" and action == "cover":
         return True
     return False
 
 
-def body_limit_for_path(path: str) -> int:
+def body_limit_for_path(path: str, method: str = "POST") -> int:
     settings = get_settings()
-    if not is_large_upload_path(path):
+    if not is_large_upload_path(path, method):
         return settings.max_request_body_bytes
     parts = path.split("/")
     action = parts[4] if len(parts) > 4 else ""
@@ -53,7 +53,7 @@ class BodySizeLimitMiddleware:
             return
 
         path = scope.get("path", "")
-        limit = body_limit_for_path(path)
+        limit = body_limit_for_path(path, scope.get("method", ""))
 
         headers = {k.lower(): v for k, v in (
             (k.decode("latin-1"), v.decode("latin-1"))
