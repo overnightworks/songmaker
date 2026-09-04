@@ -20,6 +20,12 @@ pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_en
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
+## Static analysis (SonarCloud)
+
+SonarCloud Automatic Analysis reads the repository-root [`.sonarcloud.properties`](../.sonarcloud.properties) file. Product sources are `src`, `frontend/src`, `scripts`, `docker`, and `.github`; `tests` and frontend test files are declared as test scope so test rules are applied correctly. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=FlexOr2_songmaker) shows the analysis results.
+
+The scope excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+
 ### Parallel Execution
 
 Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
