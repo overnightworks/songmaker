@@ -512,7 +512,8 @@ in `.env`: the preflight reads its values from the exported environment and
 does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
 mounts `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and
-`SONGMAKER_CODEX_CLI` into `songmaker-web`.
+`SONGMAKER_CODEX_CLI` into `songmaker-web`; the Codex binary and redacted
+`codex.json` mirror are also mounted read-only into `songmaker-music-worker`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -586,24 +587,27 @@ refusals above, each of which turns it red when removed.
 
 ### What each service mounts
 
-`songmaker-web` receives these host files read-only:
+These host files are received read-only:
 
-| Host path | Container path |
-|---|---|
-| `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
-| `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
-| `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
-| `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
-| `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
-| `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
+| Service | Host path | Container path |
+|---|---|---|
+| `songmaker-web` | `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
+| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
+| `songmaker-web` | `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
+| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
+| `songmaker-web` | `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
+| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
+| `songmaker-music-worker` | `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
+| `songmaker-music-worker` | `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
 
 `songmaker-scoring-worker` owns only `.claude` and mounts only the Claude
 binary and `claude.json` mirror. Its Grok and Codex judge calls use
 `XAI_API_KEY` and `OPENAI_API_KEY`; mounting their subscription logins would
 only widen the blast radius.
 
-Grok and Codex mirrors are mounted only into their `songmaker-web` consumer,
-not into the scoring worker.
+The Grok mirror is mounted only into its `songmaker-web` consumer. The Codex
+binary and mirror are also mounted into `songmaker-music-worker`, not into the
+scoring worker.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
