@@ -153,20 +153,20 @@ def main() -> None:
 
     if not args.audiobox_only:
         # Whisper CPU
-        cpu_avg, cpu_load, cpu_text = benchmark_whisper(args.mp3_path, "cpu", args.rounds)
+        cpu_avg, cpu_load, _ = benchmark_whisper(args.mp3_path, "cpu", args.rounds)
         results["whisper_cpu"] = {"avg": cpu_avg, "load": cpu_load}
 
         if has_gpu:
-            gpu_avg, gpu_load, gpu_text = benchmark_whisper(args.mp3_path, "cuda", args.rounds)
+            gpu_avg, gpu_load, _ = benchmark_whisper(args.mp3_path, "cuda", args.rounds)
             results["whisper_gpu"] = {"avg": gpu_avg, "load": gpu_load}
 
     if not args.whisper_only:
         # AudioBox CPU
-        cpu_avg, cpu_load, cpu_scores = benchmark_audiobox(args.mp3_path, "cpu", args.rounds)
+        cpu_avg, cpu_load, _ = benchmark_audiobox(args.mp3_path, "cpu", args.rounds)
         results["audiobox_cpu"] = {"avg": cpu_avg, "load": cpu_load}
 
         if has_gpu:
-            gpu_avg, gpu_load, gpu_scores = benchmark_audiobox(args.mp3_path, "cuda", args.rounds)
+            gpu_avg, gpu_load, _ = benchmark_audiobox(args.mp3_path, "cuda", args.rounds)
             results["audiobox_gpu"] = {"avg": gpu_avg, "load": gpu_load}
 
     # Summary
