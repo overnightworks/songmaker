@@ -103,7 +103,7 @@ describe('CollectionHeader', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Delete album']);
+		expect(items).toEqual(['Upload…', 'Rename', 'Add to playlist', 'Delete album']);
 	});
 
 	it('adds Remove cover once a cover exists and wires it to onremovecover', async () => {
@@ -113,7 +113,7 @@ describe('CollectionHeader', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Cover…', 'Remove cover', 'Rename', 'Add to playlist', 'Delete album']);
+		expect(items).toEqual(['Upload…', 'Remove cover', 'Rename', 'Add to playlist', 'Delete album']);
 		const removeItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
 			(el) => el.textContent?.trim() === 'Remove cover'
 		);

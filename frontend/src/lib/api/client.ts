@@ -13,7 +13,11 @@ export {
 	restoreAlbum,
 	archiveAlbum,
 	unarchiveAlbum,
-	cleanupAlbum
+	cleanupAlbum,
+	createAlbumCoverSuggestions,
+	fetchAlbumCoverSuggestions,
+	selectAlbumCoverSuggestion,
+	discardAlbumCoverSuggestions
 } from './albums';
 export {
 	fetchLibraryPoolQueue,
