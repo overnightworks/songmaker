@@ -20,19 +20,19 @@ jobs:
         python-version: ["3.12"]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Check uv.lock is in sync with pyproject.toml
         run: uv lock --check
 
       - name: Cache uv packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.x
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
@@ -42,28 +42,24 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp
+        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
 
       - name: Ruff lint
-        run: uv run ruff check src/ tests/
+        run: uv run --no-sync --frozen --no-build ruff check src/ tests/
 
       - name: No silent-fallback smell check
-        run: uv run python scripts/check_no_silent_fallbacks.py src/
+        run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
 
       - name: Check TypeScript types in sync
-        run: uv run python scripts/generate_types.py --check
+        run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
       - name: Run tests with coverage
         run: |
           set -o pipefail
-          uv run pytest tests/ -n auto -q --tb=short \
-            --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker \
-            --cov-report=term-missing \
-            --cov-fail-under=90 \
-            --cov-config=.coveragerc-ci | tee pytest-output.txt
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci | tee pytest-output.txt
 
       - name: Coverage summary
         if: always()
@@ -79,19 +75,19 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp
+        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
 
       - name: Run acceptance evidence pilot
         id: evidence
@@ -99,7 +95,7 @@ jobs:
           report=artifacts/acceptance-evidence.json
           rm -f "$report"
           set +e
-          uv run python scripts/acceptance_evidence.py run --output "$report"
+          uv run --no-sync --frozen --no-build python scripts/acceptance_evidence.py run --output "$report"
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -115,7 +111,7 @@ jobs:
 
       - name: Upload acceptance evidence report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
         with:
           name: acceptance-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/acceptance-evidence.json
@@ -126,7 +122,7 @@ jobs:
     name: Alert rules (promtool)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
       # The rules are Prometheus' own schema, so Prometheus' own tool is
       # the only honest checker — and it comes in the same image the
@@ -152,7 +148,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: songmaker
-          POSTGRES_PASSWORD: songmaker
+          POSTGRES_PASSWORD: songmaker # NOSONAR: disposable password for this isolated GitHub Actions service container.
           POSTGRES_DB: songmaker_test
         ports:
           - 5432:5432
@@ -162,19 +158,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test
+      TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # NOSONAR: disposable password for this isolated GitHub Actions service container.
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev
+        run: uv sync --frozen --extra server --extra dev # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run pytest tests/test_postgresql.py -n 0 -q --tb=short
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py -n 0 -q --tb=short
 
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
@@ -188,13 +184,13 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
         with:
           version: 10
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.x
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
