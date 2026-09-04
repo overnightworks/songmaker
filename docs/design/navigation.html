@@ -1,826 +1,123 @@
-<!DOCTYPE html>
-<html lang="de">
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eine Navigation statt zwei — Fassung 4</title>
+<title>Navigation — album row stays on song and take (#545)</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-	:root {
-		--paper: #f6f5f8;
-		--panel: #ffffff;
-		--panel-sunk: #f1eff4;
-		--ink: #1b1a20;
-		--ink-soft: #56525f;
-		--muted: #8b8794;
-		--rule: #e2dfe8;
-		--rule-strong: #cbc6d4;
-		--violet: #4b2fd1;
-		--crimson: #a81e2e;
-		--good: #1f7a4d;
-		--warn-bg: #fdf3e3;
-		--warn-ink: #7a5312;
-		--shadow: 0 1px 2px rgba(27, 26, 32, .06), 0 8px 24px rgba(27, 26, 32, .05);
-	}
+:root { --paper:#f6f5f8; --panel:#fff; --panel-sunk:#f1eff4; --ink:#1b1a20; --ink-soft:#56525f; --muted:#8b8794; --rule:#e2dfe8; --rule-strong:#cbc6d4; --violet:#4b2fd1; --crimson:#a81e2e; --good:#1f7a4d; --shadow:0 1px 2px rgba(27,26,32,.06),0 8px 24px rgba(27,26,32,.05); }
+@media (prefers-color-scheme:dark) { :root:not([data-theme=light]) { --paper:#131218; --panel:#1c1a22; --panel-sunk:#232029; --ink:#eeecf2; --ink-soft:#b3aebe; --muted:#857f92; --rule:#302c3a; --rule-strong:#443e52; --violet:#a794ff; --crimson:#ef8090; --good:#5fc994; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3); } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:1rem/1.55 "IBM Plex Sans",system-ui,sans-serif; }
+.wrap { max-width:1240px; margin:auto; padding:3rem 1.5rem 5rem; display:flex; flex-direction:column; gap:2.2rem; }
+.eyebrow,h1,h2,.brand,.nav-row,.frame-label { font-family:"Barlow Condensed",system-ui,sans-serif; }
+.eyebrow { color:var(--violet); font-size:.82rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+h1 { margin:.35rem 0 0; font-size:clamp(2.1rem,5vw,3rem); font-weight:600; letter-spacing:.01em; }
+.lede,.state-note { color:var(--ink-soft); }
+.lede { max-width:68ch; margin:.85rem 0 0; }
+h2 { margin:0; font-size:1.05rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+.states { display:grid; grid-template-columns:repeat(auto-fit,minmax(390px,1fr)); gap:2rem 1.5rem; align-items:start; }
+.state { display:flex; flex-direction:column; gap:.85rem; min-width:0; }
+.state-head { display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; }
+.tag { padding:.1rem .5rem; border-radius:2px; color:var(--violet); background:color-mix(in srgb,var(--violet) 14%,transparent); font:600 .74rem "Barlow Condensed"; letter-spacing:.1em; text-transform:uppercase; }
+.state-note { min-height:2.9em; margin:0; font-size:.92rem; }
+.rule { border:0; border-top:1px solid var(--rule); width:100%; }
+.decision { border:1px solid var(--rule); border-left:3px solid var(--violet); border-radius:3px; background:var(--panel); padding:1rem 1.15rem; color:var(--ink-soft); }
+.decision p { margin:0; font-size:.94rem; } .decision p+p { margin-top:.5rem; } .decision strong { color:var(--ink); }
+.foot-note { color:var(--muted); font-size:.86rem; max-width:70ch; }
 
-	@media (prefers-color-scheme: dark) {
-		:root:not([data-theme="light"]) {
-			--paper: #131218;
-			--panel: #1c1a22;
-			--panel-sunk: #232029;
-			--ink: #eeecf2;
-			--ink-soft: #b3aebe;
-			--muted: #857f92;
-			--rule: #302c3a;
-			--rule-strong: #443e52;
-			--violet: #a794ff;
-			--crimson: #ef8090;
-			--good: #5fc994;
-			--warn-bg: #2e2416;
-			--warn-ink: #e2bb70;
-			--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-		}
-	}
-
-	:root[data-theme="dark"] {
-		--paper: #131218;
-		--panel: #1c1a22;
-		--panel-sunk: #232029;
-		--ink: #eeecf2;
-		--ink-soft: #b3aebe;
-		--muted: #857f92;
-		--rule: #302c3a;
-		--rule-strong: #443e52;
-		--violet: #a794ff;
-		--crimson: #ef8090;
-		--good: #5fc994;
-		--warn-bg: #2e2416;
-		--warn-ink: #e2bb70;
-		--shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-	}
-
-	body {
-		background: var(--paper);
-		color: var(--ink);
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
-		line-height: 1.55;
-	}
-
-	.wrap {
-		max-width: 1140px;
-		margin: 0 auto;
-		padding: 3rem 1.5rem 5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 3rem;
-	}
-
-	.eyebrow {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .14em;
-		font-size: .82rem;
-		font-weight: 600;
-		color: var(--violet);
-	}
-
-	h1 {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		font-size: clamp(2.1rem, 5vw, 3rem);
-		font-weight: 600;
-		letter-spacing: .01em;
-		margin: .35rem 0 0;
-		text-wrap: balance;
-	}
-
-	.lede {
-		max-width: 62ch;
-		color: var(--ink-soft);
-		margin: .85rem 0 0;
-	}
-
-	h2 {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .1em;
-		font-size: 1.05rem;
-		font-weight: 600;
-		margin: 0;
-		color: var(--ink);
-	}
-
-	.states {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-		gap: 1.5rem;
-		align-items: start;
-	}
-
-	.state {
-		display: flex;
-		flex-direction: column;
-		gap: .9rem;
-	}
-
-	.state-head {
-		display: flex;
-		align-items: baseline;
-		gap: .6rem;
-		flex-wrap: wrap;
-	}
-
-	.tag {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .1em;
-		font-size: .74rem;
-		font-weight: 600;
-		padding: .1rem .5rem;
-		border-radius: 2px;
-	}
-
-	.tag-now { background: var(--warn-bg); color: var(--warn-ink); }
-	.tag-next { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
-	.tag-state { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
-
-	.state-note {
-		color: var(--ink-soft);
-		font-size: .92rem;
-		min-height: 3.1em;
-		margin: 0;
-	}
-
-	/* ── the schematic app window ───────────────────────────── */
-	.app {
-		background: var(--panel);
-		border: 1px solid var(--rule);
-		border-radius: 4px;
-		box-shadow: var(--shadow);
-		overflow: hidden;
-		display: grid;
-		height: 430px;
-	}
-
-	.app-now { grid-template-columns: 148px 118px 1fr; }
-	.app-next { grid-template-columns: 172px 1fr; }
-
-	.col {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		border-right: 1px solid var(--rule);
-	}
-
-	.col:last-child { border-right: 0; }
-	.col-nav { background: var(--panel); }
-	.col-subnav { background: var(--panel-sunk); }
-	.col-body { background: var(--panel); padding: 1rem .9rem; overflow: hidden; }
-
-	.addr {
-		font-family: ui-monospace, monospace;
-		font-size: .62rem;
-		color: var(--muted);
-		padding: 0 .75rem .45rem;
-		border-bottom: 1px solid var(--rule);
-		margin-bottom: .3rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.addr span { color: var(--violet); }
-
-	.brand {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .22em;
-		font-size: .78rem;
-		font-weight: 600;
-		color: var(--violet);
-		padding: .8rem .75rem .6rem;
-	}
-
-	.nav-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.row {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .09em;
-		font-size: .78rem;
-		font-weight: 500;
-		color: var(--ink-soft);
-		padding: .42rem .75rem;
-		display: flex;
-		align-items: center;
-		gap: .4rem;
-		border: 0;
-		background: none;
-		width: 100%;
-		text-align: left;
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-	}
-
-	.row-sub {
-		padding-left: 1.55rem;
-		font-size: .74rem;
-		text-transform: none;
-		letter-spacing: .02em;
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
-		color: var(--muted);
-	}
-
-	.row-sub2 {
-		padding-left: 2.35rem;
-	}
-
-	.row-active {
-		color: var(--crimson);
-		box-shadow: inset 2px 0 0 var(--crimson);
-		background: color-mix(in srgb, var(--crimson) 6%, transparent);
-	}
-
-	.meta {
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
-		font-size: .68rem;
-		color: var(--muted);
-		text-transform: none;
-		letter-spacing: 0;
-		margin-left: auto;
-	}
-
-	.spacer { flex: 1; }
-
-	.foot {
-		border-top: 1px solid var(--rule);
-		padding: .5rem .75rem;
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
-		font-size: .7rem;
-		color: var(--muted);
-		display: flex;
-		justify-content: space-between;
-		gap: .5rem;
-	}
-
-	.body-title {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .08em;
-		font-size: 1.15rem;
-		font-weight: 600;
-		color: var(--crimson);
-		margin: 0 0 .7rem;
-	}
-
-	.ghost {
-		height: 8px;
-		border-radius: 2px;
-		background: var(--panel-sunk);
-		margin-bottom: .5rem;
-	}
-
-	:root[data-theme="dark"] .ghost,
-	:root:not([data-theme="light"]) .ghost { background: var(--panel-sunk); }
-
-	.ghost-60 { width: 60%; }
-	.ghost-80 { width: 80%; }
-	.ghost-40 { width: 40%; }
-
-	.ghost-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: .5rem;
-	}
-
-	.ghost-grid .ghost {
-		height: 52px;
-		width: 100%;
-		margin-bottom: 0;
-		border-radius: 3px;
-	}
-
-	/* interactive settings disclosure in the proposal — now shared by every group row */
-	.disclose {
-		cursor: pointer;
-		transition: background .12s ease;
-	}
-
-	.disclose:hover { background: color-mix(in srgb, var(--violet) 8%, transparent); }
-	.disclose:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
-
-	.caret {
-		display: inline-block;
-		transition: transform .16s ease;
-		font-size: .6rem;
-		color: var(--muted);
-		flex-shrink: 0;
-	}
-
-	.disclose[aria-expanded="true"] .caret { transform: rotate(90deg); }
-
-	.icon {
-		width: 14px;
-		height: 14px;
-		flex-shrink: 0;
-		stroke: currentColor;
-	}
-
-	.sub-group {
-		display: grid;
-		grid-template-rows: 0fr;
-		transition: grid-template-rows .2s ease;
-	}
-
-	.sub-group[data-open="true"] { grid-template-rows: 1fr; }
-	.sub-group > div { overflow: hidden; }
-
-	@media (prefers-reduced-motion: reduce) {
-		.caret, .sub-group { transition: none; }
-	}
-
-	.nav-scroll {
-		flex: 1;
-		min-height: 0;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.hint {
-		font-size: .78rem;
-		color: var(--muted);
-		margin: .2rem 0 0;
-		font-style: italic;
-	}
-
-	/* ── decisions ──────────────────────────────────────────── */
-	.decisions {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.decision {
-		background: var(--panel);
-		border: 1px solid var(--rule);
-		border-left: 3px solid var(--violet);
-		border-radius: 3px;
-		padding: 1rem 1.15rem;
-	}
-
-	.decision h3 {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .08em;
-		font-size: .92rem;
-		font-weight: 600;
-		margin: 0 0 .35rem;
-	}
-
-	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
-	.decision p + p { margin-top: .5rem; }
-	.rec { color: var(--ink); }
-	.rec strong { color: var(--violet); }
-
-	.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
-
-	.foot-note {
-		font-size: .86rem;
-		color: var(--muted);
-		max-width: 62ch;
-	}
-
-	.freeze-note {
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
-		font-size: .86rem;
-		color: var(--muted);
-		max-width: 62ch;
-		margin: 0 auto;
-		padding: .75rem 1.5rem 0;
-	}
+/* Schematic app frame. Album row tokens mirror album-browsing.html. */
+.app { overflow:hidden; border:1px solid #000; border-radius:8px; background:#0d0d0d; color:#e0e0e0; box-shadow:var(--shadow); font-family:Arial,sans-serif; }
+.app.desktop { min-height:385px; }
+.app.phone { width:375px; max-width:100%; min-height:470px; }
+.chrome { display:grid; grid-template-columns:150px 1fr; min-height:inherit; }
+.sidebar { border-right:1px solid #333; background:#111; padding:1rem .8rem; }
+.brand { color:#ff3220; font-size:.82rem; letter-spacing:.2em; text-transform:uppercase; }
+.side-row { display:flex; align-items:center; gap:.45rem; margin-top:1.2rem; color:#aaa; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; }
+.side-row.active { color:#ff3220; }
+.side-icon { width:13px; height:13px; border:1px solid currentColor; border-radius:2px; }
+.main { min-width:0; background:#0d0d0d; }
+.frame-label { display:flex; justify-content:space-between; align-items:center; padding:.7rem .9rem; border-bottom:1px solid #333; color:#888; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; }
+.now-playing { color:#e0e0e0; }
+.now-playing::before { content:'▶'; margin-right:.35rem; color:#ff3220; font-size:.58rem; }
+.album-row { border-bottom:1px solid #333; background:#111; }
+.album-row.collapsed { padding:.55rem .9rem; }
+.album-row.collapsed .album-strip { display:none; }
+.album-bar { display:flex; align-items:center; gap:.55rem; min-width:0; padding:.55rem .9rem .35rem; }
+.album-bar .caret { color:#888; font-size:.6rem; }
+.album-bar strong { font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; }
+.album-bar .album-name { color:#ff3220; font-size:.72rem; margin-left:auto; white-space:nowrap; }
+.album-bar button { border:0; background:transparent; color:#888; cursor:pointer; font-size:.62rem; padding:0; }
+.album-strip { display:flex; align-items:center; gap:.4rem; overflow:hidden; padding:.25rem .9rem .7rem; }
+.strip-filter-wrap { position:relative; flex:0 0 126px; }
+.strip-filter { width:100%; border:1px solid #333; border-radius:4px; background:#0d0d0d; color:#e0e0e0; padding:.35rem .45rem; font: .65rem Arial,sans-serif; }
+.strip-filter::placeholder { color:#888; }
+.strip-filter:focus-visible { outline:2px solid #a020f0; outline-offset:1px; }
+.album-tile { display:flex; align-items:center; gap:.35rem; flex:0 0 auto; min-width:92px; border:1px solid #333; border-radius:4px; color:#aaa; padding:.25rem .38rem; font-size:.65rem; }
+.album-tile.open { border-color:#ff3220; color:#fff; }
+.cover { width:20px; height:20px; flex:0 0 20px; border-radius:2px; background:#2b6e8a; color:#fff; display:grid; place-items:center; font:bold .62rem Arial; }
+.album-tile:nth-child(3) .cover { background:#a020f0; } .album-tile:nth-child(4) .cover { background:#a86d29; }
+.editor { padding:1.2rem 1.1rem; }
+.editor h3 { margin:0 0 .8rem; color:#ff3220; font:600 1.1rem "Barlow Condensed"; letter-spacing:.08em; text-transform:uppercase; }
+.ghost { height:8px; margin:.65rem 0; border-radius:2px; background:#222; } .w80{width:80%}.w60{width:60%}.w40{width:40%}
+.take-bar { margin-top:1.2rem; border-top:1px solid #333; padding-top:.65rem; }
+.take-title { color:#888; font: .68rem "Barlow Condensed"; letter-spacing:.08em; text-transform:uppercase; }
+.take { display:flex; justify-content:space-between; gap:.5rem; margin-top:.4rem; border:1px solid #333; border-radius:4px; padding:.55rem .6rem; font-size:.68rem; }
+.take small { display:block; color:#888; margin-top:.15rem; } .take button { align-self:center; border:1px solid #444; border-radius:4px; background:transparent; color:#e0e0e0; padding:.25rem .4rem; font-size:.62rem; }
+.settings-hint { margin:.8rem .9rem 0; border:1px dashed #333; color:#888; padding:.5rem .6rem; font-size:.68rem; }
+.phone .chrome { display:block; } .phone .sidebar { display:none; } .phone .frame-label { padding:.65rem .75rem; }
+.phone .album-bar { padding:.55rem .75rem; } .phone .album-strip { padding:.25rem .75rem .65rem; }
+.phone .album-tile { min-width:82px; } .phone .editor { padding:1rem .75rem; } .phone .take-bar { margin-top:1rem; }
+.phone.collapsed .album-row { padding:0; } .phone.collapsed .album-bar { padding:.55rem .75rem; }
+@media (max-width:700px) { .wrap { padding:2rem 1rem 4rem; gap:1.7rem; } .states { grid-template-columns:1fr; } .state-note { min-height:0; } }
+@media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; } }
 </style>
 </head>
 <body>
-<p class="freeze-note">
-	Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, vierte Fassung
-	(Konsistenz-Befund zwischen Library und Settings behoben), Issue #302. Änderungen an dieser
-	Datei brauchen eine neue Freigabe.
-</p>
 <div class="wrap">
 	<header>
-		<div class="eyebrow">Songmaker · Target UI · Eingefroren</div>
-		<h1>Eine Navigation statt zwei</h1>
-		<p class="lede">
-			Heute stehen zwei senkrechte Navigationsleisten nebeneinander, sobald die Einstellungen offen
-			sind. Beide führen, beide sind gleichzeitig sichtbar — die zweite existiert nur, weil man sich
-			gerade in den Einstellungen befindet. Genau der Modus, den diese Milestone abschaffen will.
-			<br><br>
-			<strong>Stand nach #265:</strong> Jede Zeile der Leiste ist inzwischen eine echte Adresse —
-			Anfield ist <code>/album/anfield</code>, ein Song ist <code>/album/anfield/stadion-lauf-a</code>,
-			und die Einstellungen waren es schon immer (<code>/settings/voices</code>). Ein Klick in der
-			Leiste ist damit eine Navigation, kein Zustandswechsel. Fassung 3 ist gegen diese Realität
-			gehalten und eingefroren.
-		</p>
+		<div class="eyebrow">Songmaker · Target UI · Picture owner</div>
+		<h1>One frame from album to song to take</h1>
+		<p class="lede">The album row stays above the editor when a person opens a song or take. It uses the same instant filter, album tiles, open marking, and collapse control as the album view. On a 375 px screen it starts collapsed, leaving the Takes bar clear.</p>
 	</header>
 
-	<div class="decision">
-		<h3>Fassung 4 — was sich gegenüber Fassung 3 ändert</h3>
-		<p>
-			Operator-Befund vom 01.09.2026, mit Screenshots: Library thronte oben als großer Sonderfall,
-			darunter nur das gerade offene Album, dann ein riesiges leeres Mittelstück, unten isoliert die
-			Settings-Gruppe. Wörtlich: „es fehlt die konsistenz … library sollte wie settings sein? ggf
-			sollte setting dann auch ein symbol haben".
-		</p>
-		<p class="rec">
-			<strong>Neu:</strong> Spotify-/claude.ai-Muster — die Leiste IST die Library, nicht ihr Zitat.
-			Library, Playlists und Settings sind jetzt drei gleich gebaute, aufklappbare Gruppen (Chevron +
-			Symbol + Titel + Zahl), exakt der Zeilenbau, den Settings in Fassung 3 schon vorgemacht hat —
-			nur jetzt für alle drei statt nur für eine. Settings bekommt dafür sein Zahnrad-Symbol. Das
-			gerade offene Album klappt innerhalb von Library eine Ebene tiefer auf, statt privilegiert über
-			allem zu stehen.
-		</p>
-	</div>
+	<div class="decision"><strong>Ruling #545:</strong> the row remembers its collapsed state per browser, like Now Playing. Settings is the one exception: it keeps the shared frame but has no album row.</div>
 
 	<section class="states">
 		<div class="state">
-			<div class="state-head">
-				<h2>Bibliothek offen</h2>
-				<span class="tag tag-state">Album-Route</span>
-			</div>
-			<p class="state-note">
-				Auf <code>/album/open-windows/…</code>: Library ist offen, „Open Windows" darin selbst
-				aufgeklappt mit seinen 8 Songs, einer aktiv. Playlists und Settings liegen als gleich
-				gebaute Zeilen darunter, nur zu.
-			</p>
-
-			<div class="app app-next">
-				<div class="col col-nav">
-					<div class="brand">Hallucinai</div>
-					<div class="addr" aria-hidden="true">hallucinai.de<span>/album/open-windows/offene-tueren</span></div>
-
-					<div class="nav-scroll">
-						<button class="row disclose" aria-expanded="true">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-							Library <span class="meta">42</span>
-						</button>
-						<div class="sub-group" data-open="true"><div>
-							<ul class="nav-list">
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Anfield <span class="meta">2</span></button></li>
-								<li>
-									<button class="row row-sub disclose" aria-expanded="true"><span class="caret">▶</span> Open Windows <span class="meta">8</span></button>
-									<div class="sub-group" data-open="true"><div>
-										<ul class="nav-list">
-											<li class="row row-sub row-sub2">Morgenluft</li>
-											<li class="row row-sub row-sub2">Fenster auf</li>
-											<li class="row row-sub row-sub2">Regen am Fenster</li>
-											<li class="row row-sub row-sub2">Kalter Tee</li>
-											<li class="row row-sub row-sub2 row-active">Offene Türen</li>
-											<li class="row row-sub row-sub2">Balkonlicht</li>
-											<li class="row row-sub row-sub2">Nachbarn</li>
-											<li class="row row-sub row-sub2">Letzter Sommer</li>
-										</ul>
-									</div></div>
-								</li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerluft <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Balcony Disco <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Nachtstrom <span class="meta">26</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Zuhause <span class="meta">5</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerlicht <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Vernissage <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Werkstattnacht <span class="meta">3</span></button></li>
-							</ul>
-						</div></div>
-
-						<button class="row disclose" aria-expanded="false">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-							Playlists <span class="meta">4</span>
-						</button>
-						<div class="sub-group" data-open="false"><div>
-							<ul class="nav-list">
-								<li class="row row-sub">Favoriten <span class="meta">12</span></li>
-								<li class="row row-sub">Sommer 2026 <span class="meta">8</span></li>
-								<li class="row row-sub">Für Thomas <span class="meta">5</span></li>
-								<li class="row row-sub">Demos <span class="meta">21</span></li>
-							</ul>
-						</div></div>
-					</div>
-
-					<button class="row disclose" aria-expanded="false">
-						<span class="caret">▶</span>
-						<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-						Settings
-					</button>
-					<div class="sub-group" data-open="false"><div>
-						<ul class="nav-list">
-							<li class="row row-sub">Generation</li>
-							<li class="row row-sub">Playback</li>
-							<li class="row row-sub">Voices</li>
-							<li class="row row-sub">Account</li>
-							<li class="row row-sub">Admin</li>
-							<li class="row row-sub">Cleanup</li>
-							<li class="row row-sub">Legal</li>
-						</ul>
-					</div></div>
-
-					<div class="foot"><span>felix</span><span>Logout</span></div>
-				</div>
-
-				<div class="col col-body">
-					<p class="body-title">Offene Türen</p>
-					<div class="ghost ghost-80"></div>
-					<div class="ghost ghost-60"></div>
-					<div class="ghost ghost-40"></div>
-				</div>
-			</div>
+			<div class="state-head"><h2>Song · row open</h2><span class="tag">Desktop</span></div>
+			<p class="state-note">The open album is marked in the row; the filter sits at its left edge and the collapse caret matches Now Playing.</p>
+			<div class="app desktop"><div class="chrome"><aside class="sidebar"><div class="brand">Hallucinai</div><div class="side-row active"><span class="side-icon"></span>Library</div><div class="side-row"><span class="side-icon"></span>Playlists</div><div class="side-row"><span class="side-icon"></span>Settings</div></aside><main class="main"><div class="frame-label"><span>hallucinai.de /album/anfield/stadion-lauf-a</span><span class="now-playing">Now Playing</span></div><section class="album-row"><div class="album-bar"><span class="caret">▼</span><strong>Albums</strong><span class="album-name">Anfield · 2 songs</span><button aria-label="Collapse albums">⌃</button></div><div class="album-strip"><div class="strip-filter-wrap"><input class="strip-filter" placeholder="Filter albums…" aria-label="Filter albums"></div><div class="album-tile open"><span class="cover">A</span>Anfield</div><div class="album-tile"><span class="cover">O</span>Open Windows</div><div class="album-tile"><span class="cover">S</span>Sommerluft</div></div></section><div class="editor"><h3>Stadionlauf A</h3><div class="ghost w80"></div><div class="ghost w60"></div><div class="ghost w40"></div><div class="take-bar"><div class="take-title">Takes</div><div class="take"><span>v2 · take 3<small>turbo · 3:24 · BPM 118</small></span><button>Repaint</button></div></div></div></main></div></div>
 		</div>
 
 		<div class="state">
-			<div class="state-head">
-				<h2>Settings-Route</h2>
-				<span class="tag tag-state">Settings</span>
-			</div>
-			<p class="state-note">
-				Auf <code>/settings/account</code>: Settings ist offen, „Account" aktiv — genau die gleiche
-				Zeile, die in Fassung 3 schon existierte. Library und Playlists liegen zugeklappt daneben,
-				nicht mehr in einer eigenen Spalte, sondern als gleichrangige Gruppen.
-			</p>
-
-			<div class="app app-next">
-				<div class="col col-nav">
-					<div class="brand">Hallucinai</div>
-					<div class="addr" aria-hidden="true">hallucinai.de<span>/settings/account</span></div>
-
-					<div class="nav-scroll">
-						<button class="row disclose" aria-expanded="false">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-							Library <span class="meta">42</span>
-						</button>
-						<div class="sub-group" data-open="false"><div>
-							<ul class="nav-list">
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Anfield <span class="meta">2</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Open Windows <span class="meta">8</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerluft <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Balcony Disco <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Nachtstrom <span class="meta">26</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Zuhause <span class="meta">5</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerlicht <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Vernissage <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Werkstattnacht <span class="meta">3</span></button></li>
-							</ul>
-						</div></div>
-
-						<button class="row disclose" aria-expanded="false">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-							Playlists <span class="meta">4</span>
-						</button>
-						<div class="sub-group" data-open="false"><div>
-							<ul class="nav-list">
-								<li class="row row-sub">Favoriten <span class="meta">12</span></li>
-								<li class="row row-sub">Sommer 2026 <span class="meta">8</span></li>
-								<li class="row row-sub">Für Thomas <span class="meta">5</span></li>
-								<li class="row row-sub">Demos <span class="meta">21</span></li>
-							</ul>
-						</div></div>
-					</div>
-
-					<button class="row disclose" aria-expanded="true">
-						<span class="caret">▶</span>
-						<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-						Settings
-					</button>
-					<div class="sub-group" data-open="true"><div>
-						<ul class="nav-list">
-							<li class="row row-sub">Generation</li>
-							<li class="row row-sub">Playback</li>
-							<li class="row row-sub">Voices</li>
-							<li class="row row-sub row-active">Account</li>
-							<li class="row row-sub">Admin</li>
-							<li class="row row-sub">Cleanup</li>
-							<li class="row row-sub">Legal</li>
-						</ul>
-					</div></div>
-
-					<div class="foot"><span>felix</span><span>Logout</span></div>
-				</div>
-
-				<div class="col col-body">
-					<p class="body-title">Account</p>
-					<div class="ghost ghost-80"></div>
-					<div class="ghost ghost-60"></div>
-					<div class="ghost ghost-40"></div>
-				</div>
-			</div>
+			<div class="state-head"><h2>Song · row collapsed</h2><span class="tag">Desktop</span></div>
+			<p class="state-note">The editor keeps its vertical space; one album line and its caret remain visible above it.</p>
+			<div class="app desktop"><div class="chrome"><aside class="sidebar"><div class="brand">Hallucinai</div><div class="side-row active"><span class="side-icon"></span>Library</div><div class="side-row"><span class="side-icon"></span>Playlists</div><div class="side-row"><span class="side-icon"></span>Settings</div></aside><main class="main"><div class="frame-label"><span>hallucinai.de /album/anfield/stadion-lauf-a</span><span class="now-playing">Now Playing</span></div><section class="album-row collapsed"><div class="album-bar"><span class="caret">▶</span><strong>Albums</strong><span class="album-name">Anfield · 2 songs</span><button aria-label="Expand albums">⌄</button></div></section><div class="editor"><h3>Stadionlauf A</h3><div class="ghost w80"></div><div class="ghost w60"></div><div class="ghost w40"></div><div class="take-bar"><div class="take-title">Takes</div><div class="take"><span>v2 · take 3<small>turbo · 3:24 · BPM 118</small></span><button>Repaint</button></div></div></div></main></div></div>
 		</div>
 
 		<div class="state">
-			<div class="state-head">
-				<h2>Alles zu</h2>
-				<span class="tag tag-state">Minimalzustand</span>
-			</div>
-			<p class="state-note">
-				Auf der Wurzel <code>/</code>, keine Gruppe aufgeklappt: drei gleich gebaute Kopfzeilen,
-				kein Sonderfall mehr. Der Inhalt (Alben-Grid) bleibt unverändert — dieser Entwurf zeigt den
-				Leisten-Umbau, nicht das Grid.
-			</p>
+			<div class="state-head"><h2>Song · collapsed by default</h2><span class="tag">375 px</span></div>
+			<p class="state-note">The album line sits above Takes without creating two competing horizontal strips.</p>
+			<div class="app phone collapsed"><div class="chrome"><main class="main"><div class="frame-label"><span>song / stadionlauf-a</span><span class="now-playing">Now Playing</span></div><section class="album-row collapsed"><div class="album-bar"><span class="caret">▶</span><strong>Albums</strong><span class="album-name">Anfield · 2 songs</span><button aria-label="Expand albums">⌄</button></div></section><div class="editor"><h3>Stadionlauf A</h3><div class="ghost w80"></div><div class="ghost w60"></div><div class="take-bar"><div class="take-title">Takes</div><div class="take"><span>v2 · take 3<small>turbo · 3:24</small></span><button>Repaint</button></div></div></div></main></div></div>
+		</div>
 
-			<div class="app app-next">
-				<div class="col col-nav">
-					<div class="brand">Hallucinai</div>
-					<div class="addr" aria-hidden="true">hallucinai.de<span>/</span></div>
+		<div class="state">
+			<div class="state-head"><h2>Song · row expanded</h2><span class="tag">375 px</span></div>
+			<p class="state-note">The same row can be opened on the phone; filter and album tiles remain the album-view mechanism.</p>
+			<div class="app phone"><div class="chrome"><main class="main"><div class="frame-label"><span>song / stadionlauf-a</span><span class="now-playing">Now Playing</span></div><section class="album-row"><div class="album-bar"><span class="caret">▼</span><strong>Albums</strong><span class="album-name">Anfield · 2 songs</span><button aria-label="Collapse albums">⌃</button></div><div class="album-strip"><div class="strip-filter-wrap"><input class="strip-filter" placeholder="Filter albums…" aria-label="Filter albums"></div><div class="album-tile open"><span class="cover">A</span>Anfield</div><div class="album-tile"><span class="cover">O</span>Open Windows</div></div></section><div class="editor"><h3>Stadionlauf A</h3><div class="ghost w80"></div><div class="ghost w60"></div><div class="take-bar"><div class="take-title">Takes</div><div class="take"><span>v2 · take 3<small>turbo · 3:24</small></span><button>Repaint</button></div></div></div></main></div></div>
+		</div>
 
-					<div class="nav-scroll">
-						<button class="row disclose" aria-expanded="false">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-							Library <span class="meta">42</span>
-						</button>
-						<div class="sub-group" data-open="false"><div>
-							<ul class="nav-list">
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Anfield <span class="meta">2</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Open Windows <span class="meta">8</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerluft <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Balcony Disco <span class="meta">1</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Nachtstrom <span class="meta">26</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Zuhause <span class="meta">5</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Sommerlicht <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Vernissage <span class="meta">6</span></button></li>
-								<li><button class="row row-sub disclose" aria-expanded="false"><span class="caret">▶</span> Werkstattnacht <span class="meta">3</span></button></li>
-							</ul>
-						</div></div>
-
-						<button class="row disclose" aria-expanded="false">
-							<span class="caret">▶</span>
-							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-							Playlists <span class="meta">4</span>
-						</button>
-						<div class="sub-group" data-open="false"><div>
-							<ul class="nav-list">
-								<li class="row row-sub">Favoriten <span class="meta">12</span></li>
-								<li class="row row-sub">Sommer 2026 <span class="meta">8</span></li>
-								<li class="row row-sub">Für Thomas <span class="meta">5</span></li>
-								<li class="row row-sub">Demos <span class="meta">21</span></li>
-							</ul>
-						</div></div>
-					</div>
-
-					<button class="row disclose" aria-expanded="false">
-						<span class="caret">▶</span>
-						<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-						Settings
-					</button>
-					<div class="sub-group" data-open="false"><div>
-						<ul class="nav-list">
-							<li class="row row-sub">Generation</li>
-							<li class="row row-sub">Playback</li>
-							<li class="row row-sub">Voices</li>
-							<li class="row row-sub">Account</li>
-							<li class="row row-sub">Admin</li>
-							<li class="row row-sub">Cleanup</li>
-							<li class="row row-sub">Legal</li>
-						</ul>
-					</div></div>
-
-					<div class="foot"><span>felix</span><span>Logout</span></div>
-				</div>
-
-				<div class="col col-body">
-					<p class="body-title">Bibliothek</p>
-					<div class="ghost-grid">
-						<div class="ghost"></div>
-						<div class="ghost"></div>
-						<div class="ghost"></div>
-						<div class="ghost"></div>
-						<div class="ghost"></div>
-						<div class="ghost"></div>
-					</div>
-				</div>
-			</div>
+		<div class="state">
+			<div class="state-head"><h2>Settings · no album row</h2><span class="tag">Exception</span></div>
+			<p class="state-note">Settings keeps the frame and Now Playing position, but the album row is absent because it is not an album or song route.</p>
+			<div class="app desktop"><div class="chrome"><aside class="sidebar"><div class="brand">Hallucinai</div><div class="side-row"><span class="side-icon"></span>Library</div><div class="side-row"><span class="side-icon"></span>Playlists</div><div class="side-row active"><span class="side-icon"></span>Settings</div></aside><main class="main"><div class="frame-label"><span>hallucinai.de /settings/voices</span><span class="now-playing">Now Playing</span></div><div class="settings-hint">No album row on Settings</div><div class="editor"><h3>Voices</h3><div class="ghost w80"></div><div class="ghost w60"></div><div class="ghost w40"></div></div></main></div></div>
 		</div>
 	</section>
 
 	<hr class="rule">
-
-	<section class="decisions">
-		<h2>Wie es die Profis machen — und wem wir folgen</h2>
-		<div class="decision">
-			<h3>Spotify &amp; claude.ai: die Leiste IST die Bibliothek</h3>
-			<p>
-				Spotifys linke Leiste hat keinen Sonderfall „Library oben, Rest unten" — sie ist eine
-				Liste gleich gebauter, aufklappbarer Bereiche (Playlists, Alben, Künstler), jeder mit
-				derselben Kopfzeile. claude.ai hält Projekte und Chats nach demselben Muster.
-			</p>
-			<p class="rec"><strong>Dem folgen wir in Fassung 4</strong> — Library verliert ihren
-			Sonderstatus als große Überschrift und wird eine Gruppe unter gleichrangigen Gruppen.</p>
-		</div>
-		<div class="decision">
-			<h3>GitLab: genau dieses Muster für Settings</h3>
-			<p>
-				Settings ist der unterste Eintrag der einen linken Leiste und klappt an Ort und
-				Stelle auf (General, Members, …). Keine zweite Spalte, kein Kontextwechsel.
-			</p>
-			<p class="rec"><strong>Dem folgen wir</strong> — deine Leiste steht ohnehin dauerhaft,
-			also gehört Settings hinein: unten, wo es heute ist, nur aufklappend, jetzt mit Zahnrad-Symbol
-			wie seine Geschwister-Gruppen.</p>
-		</div>
-		<div class="decision">
-			<h3>GitHub &amp; claude.ai: Settings hinterm Avatar</h3>
-			<p>
-				Beide verstecken Settings im Avatar-Menü und öffnen eine eigene Seite. Legitim —
-				aber zwei Klicks, und die Hauptnavigation dieser Seiten ist horizontal oder minimal.
-				Für eine dauerhaft stehende Seitenleiste ist GitLabs Form die ehrlichere.
-			</p>
-		</div>
-		<div class="decision">
-			<h3>Und „Library" ist bereits eine Seite</h3>
-			<p>
-				Sie ist <code>/</code> — die Wurzeladresse, die Album-Wand. Genau wie GitHubs
-				Dashboard auf <code>/</code> liegt. Der Library-Eintrag der Leiste ist ihr Link;
-				eine separate <code>/library</code>-Adresse wäre eine zweite Tür zum selben Raum.
-			</p>
-		</div>
-	</section>
-
-	<hr class="rule">
-
-	<section class="decisions">
-		<h2>Die vier Entscheidungen — gegen Fassung 4 gehalten</h2>
-		<p class="state-note" style="min-height:auto">
-			Die ersten drei sind am 30.08. gesegnet und unverändert; die vierte ist neu und macht die
-			Leiste konsistent.
-		</p>
-
-		<div class="decision">
-			<h3>Warum ist Library kein Sonderfall mehr?</h3>
-			<p>
-				Fassung 3 zeigte Library als große Überschrift mit dem offenen Album direkt darunter und
-				ließ dazwischen und bis zu Settings viel Leerraum — eine Zeile, die anders gebaut war als
-				jede andere in der Leiste.
-			</p>
-			<p class="rec">
-				<strong>Gesegnet (Operator, 01.09.2026):</strong> Library, Playlists und Settings sind jetzt
-				drei Gruppen mit identischem Zeilenbau (Chevron, Symbol, Titel, Zahl). Das offene Album
-				klappt als zweite Ebene innerhalb von Library auf, statt privilegiert über der Leiste zu
-				stehen.
-			</p>
-		</div>
-
-		<div class="decision">
-			<h3>Aufklappen oder Leiste wechseln?</h3>
-			<p>
-				Der Entwurf zeigt das Aufklappen an der heutigen Position (links unten), nach dem
-				GitLab-Muster. Verworfen wurden: die zweite Spalte (der heutige Modus), der
-				Leisten-Tausch (bräuchte einen Zurück-Weg) und Settings oben neben Library
-				(Fassung 2 — vom Operator zurecht als deplatziert unter den Alben empfunden).
-			</p>
-			<p class="rec">
-				<strong>Gesegnet: Aufklappen.</strong> Durch #265 geklärt: Das Aufklappen ist reine
-				Darstellung — die Unterpunkte behalten ihre echten Adressen (<code>/settings/…</code>),
-				ein Klick ist ein normaler Routenwechsel. Fassung 4 wendet dasselbe Prinzip jetzt auch
-				auf Library und Playlists an.
-			</p>
-		</div>
-
-		<div class="decision">
-			<h3>Wohin mit Konto und Logout?</h3>
-			<p>
-				Heute stehen „Settings", der Benutzername und „Logout" gemeinsam am unteren Rand.
-				Klappen die Einstellungen dort auf, drängen sieben Zeilen gegen diese Leiste.
-			</p>
-			<p class="rec">
-				<strong>Gesegnet und jetzt exakt umgesetzt:</strong> Settings-Gruppe und Name/Logout-Zeile
-				bleiben zusammen unten gepinnt und klappen nach oben hin auf; Library und Playlists
-				scrollen darüber in der Mitte — GitLab-/claude.ai-Muster. Logout bleibt die einzige Zeile
-				ohne eigene Adresse und deshalb außerhalb der Navigation.
-			</p>
-		</div>
-
-		<div class="decision">
-			<h3>Was passiert auf dem Telefon?</h3>
-			<p>
-				Auf schmalen Fenstern ist die Leiste heute ausgeblendet und die Einstellungen zeigen
-				stattdessen ein Auswahlmenü. Das ist bereits eine dritte Form derselben Navigation.
-			</p>
-			<p class="rec">
-				<strong>Gesegnet:</strong> Dieselbe aufklappende Liste auf allen Breiten. Durch #265
-				leichter geworden: Weil jede Zeile eine Adresse ist, ist die mobile Leiste nur noch
-				dieselbe Linkliste in schmal — das heutige Auswahlmenü der Einstellungen entfällt.
-			</p>
-		</div>
-	</section>
-
-	<p class="foot-note">
-		Vierte Fassung, gesegnet 01.09.2026: Operator-Befund zur fehlenden Konsistenz zwischen Library
-		und Settings behoben, Spotify-/claude.ai-Muster übernommen. Diese Fassung ist jetzt als
-		<code>docs/design/navigation.html</code> eingefroren; der Bau wird gegen Issue #302 gehalten.
-	</p>
+	<p class="foot-note">Picture owner: <code>docs/design/navigation.html</code> · Issue #545 · Uses the album-row language established by <code>album-browsing.html</code> and the Song/Take spacing established by <code>song-editor-take.html</code>.</p>
 </div>
 </body>
 </html>
