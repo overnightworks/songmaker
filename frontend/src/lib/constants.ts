@@ -357,7 +357,10 @@ export const LIBRARY_ROW_FILTER_CLEAR_GLYPH = '×';
 export const LIBRARY_ROW_FILTER_EMPTY = 'Nothing matches';
 export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
 export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';
-export const LIBRARY_ROW_COMPACT_MEDIA = '(max-width: 375px)';
+// Match the mobile shell: without a stored choice, its song and take row
+// starts collapsed so the editor remains the first surface to read.
+export const LIBRARY_ROW_COMPACT_MAX_PX = 390;
+export const LIBRARY_ROW_COMPACT_MEDIA = `(max-width: ${LIBRARY_ROW_COMPACT_MAX_PX}px)`;
 
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';

@@ -179,7 +179,7 @@ async function render(collection: {
 	return target;
 }
 
-async function renderCollapsibleRow(compact: boolean): Promise<HTMLElement> {
+function renderCollapsibleRow(compact: boolean): HTMLElement {
 	vi.stubGlobal('matchMedia', () => ({
 		matches: compact,
 		addEventListener: vi.fn(),
@@ -193,13 +193,13 @@ async function renderCollapsibleRow(compact: boolean): Promise<HTMLElement> {
 			props: { collection: { kind: 'album', id: 'a-1' }, collapsible: true }
 		})
 	);
-	await tick();
 	return target;
 }
 
 describe('LibraryRow', () => {
 	it('keeps the same row owner collapsible on song and take surfaces', async () => {
-		const root = await renderCollapsibleRow(false);
+		const root = renderCollapsibleRow(false);
+		await tick();
 
 		expect(root.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
 		expect(root.querySelector('.library-row-filter-input')).not.toBeNull();
@@ -213,8 +213,8 @@ describe('LibraryRow', () => {
 		expect(localStorage.getItem('libraryRowOpen')).toBe('false');
 	});
 
-	it('starts a song or take row collapsed at 375 px until the browser has a preference', async () => {
-		const root = await renderCollapsibleRow(true);
+	it('starts a mobile song or take row collapsed before its first settled frame', () => {
+		const root = renderCollapsibleRow(true);
 
 		expect(root.querySelector('[aria-label="Expand albums"]')).not.toBeNull();
 		expect(root.querySelector('.library-row-filter-input')).toBeNull();

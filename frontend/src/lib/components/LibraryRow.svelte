@@ -82,11 +82,20 @@
 		return album ? `${album.title} · ${songCountLabel(album.song_count)}` : '';
 	});
 
+	function matchesCompactLibraryRow(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			typeof window.matchMedia === 'function' &&
+			window.matchMedia(LIBRARY_ROW_COMPACT_MEDIA).matches
+		);
+	}
+
 	// A narrow song/take surface starts closed only until the person expresses
-	// a preference. The preference itself belongs in playbackSettings, alongside
-	// Now Playing's browser-local choice, rather than following a route or a
-	// particular album.
-	let compact = $state(false);
+	// a preference. Reading the media query during initialization means a
+	// client-side album → song remount never paints the open row first. The
+	// preference itself belongs in playbackSettings, alongside Now Playing's
+	// browser-local choice, rather than following a route or a particular album.
+	let compact = $state(matchesCompactLibraryRow());
 	const rowOpen = $derived(!collapsible || ($libraryRowOpenPreference ?? !compact));
 
 	onMount(() => {
@@ -237,7 +246,12 @@
 	});
 </script>
 
-<div class="library-row-scrim" class:has-overflow={hasMoreToTheRight} class:collapsed={!rowOpen}>
+<div
+	class="library-row-scrim"
+	class:collapsible
+	class:has-overflow={hasMoreToTheRight}
+	class:collapsed={!rowOpen}
+>
 	{#if collapsible}
 		<div class="library-row-bar">
 			<span class="library-row-label">{rowLabel}</span>
@@ -364,6 +378,12 @@
 
 	.library-row-scrim.has-overflow::after {
 		opacity: 1;
+	}
+
+	/* The scroll cue belongs to the tile strip. Keeping it below the control
+	   bar stops its fade from washing out the collapse/expand affordance. */
+	.library-row-scrim.collapsible::after {
+		top: 2.5rem;
 	}
 
 	.library-row {
