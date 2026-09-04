@@ -84,14 +84,16 @@ describe('RailLibraryGroup', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('opens the library grid on the Albums tab when the LIBRARY title is clicked', async () => {
+	it('toggles the LIBRARY group without navigating when its label is clicked', async () => {
 		librarySurface.set('detail');
 		libraryFilter.set('playlists');
 		const target = await render();
-		const titleButton = requireElement<HTMLButtonElement>(target, 'button.group-title');
-		titleButton.click();
-		await vi.waitFor(() => expect(get(libraryFilter)).toBe('albums'));
-		expect(get(librarySurface)).toBe('browse');
+		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		requireElement<HTMLSpanElement>(toggle, '.group-title').click();
+		await tick();
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(get(libraryFilter)).toBe('playlists');
+		expect(get(librarySurface)).toBe('detail');
 	});
 
 	it('loads every album on mount regardless of the current route', async () => {
