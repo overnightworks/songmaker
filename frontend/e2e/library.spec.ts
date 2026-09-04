@@ -512,6 +512,18 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 	expect(page.url()).toBe(selectedAlbumUrl);
 
+	// SETTINGS is the same kind of group header: both its visible text and
+	// caret only disclose its children. Neither can choose an admin page.
+	rail = await openRailNav(page, shell);
+	const settingsGroupToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
+	const settingsUrl = page.url();
+	await settingsGroupToggle.locator('.group-title').click();
+	await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'true');
+	expect(page.url()).toBe(settingsUrl);
+	await settingsGroupToggle.locator('.caret').click();
+	await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'false');
+	expect(page.url()).toBe(settingsUrl);
+
 	// "Settings stays pinned below LIBRARY and PLAYLISTS" (#326 finding 6) as
 	// a promise, not a CSS class assertion: seed.ts adds enough filler albums
 	// that the rail's own list genuinely overflows, so this really scrolls

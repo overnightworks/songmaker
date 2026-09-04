@@ -30,7 +30,7 @@
 	import type { SongItem } from '$lib/api/types';
 	import { titleInitials } from '$lib/utils/format';
 	import RailGroup from './RailGroup.svelte';
-	import { RAIL_ALBUM_ITEM_CLASS } from './rail-item-selector';
+	import { RAIL_ALBUM_ITEM_CLASS, RAIL_ALL_ALBUMS_ITEM_CLASS } from './rail-item-selector';
 
 	// Local to this component rather than promoted to constants.ts: nothing
 	// else reads this key, matching how RailGroup's own groupId is already
@@ -200,7 +200,7 @@
 			{/if}
 			<ul class="album-list">
 				<li>
-					<button type="button" class="all-albums" onclick={openAllAlbums}>
+					<button type="button" class={RAIL_ALL_ALBUMS_ITEM_CLASS} onclick={openAllAlbums}>
 						<svg
 							class="caret"
 							width="10"

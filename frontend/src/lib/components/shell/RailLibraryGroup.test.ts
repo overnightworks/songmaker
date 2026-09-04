@@ -47,6 +47,7 @@ vi.mock('$lib/api/client', async () => {
 });
 
 import RailLibraryGroup from './RailLibraryGroup.svelte';
+import { RAIL_ALL_ALBUMS_ITEM_CLASS, RAIL_ITEM_SELECTOR } from './rail-item-selector';
 
 const { render, cleanup } = createComponentMount(RailLibraryGroup);
 
@@ -130,7 +131,8 @@ describe('RailLibraryGroup', () => {
 			target,
 			'.album-list > li:first-child button'
 		);
-		expect(allAlbums.classList.contains('all-albums')).toBe(true);
+		expect(allAlbums.classList.contains(RAIL_ALL_ALBUMS_ITEM_CLASS)).toBe(true);
+		expect(RAIL_ITEM_SELECTOR).toContain(`.${RAIL_ALL_ALBUMS_ITEM_CLASS}`);
 		expect(allAlbums.textContent).toContain(RAIL_ALL_ALBUMS_LABEL);
 		expect(allAlbums.textContent).toContain('1');
 
