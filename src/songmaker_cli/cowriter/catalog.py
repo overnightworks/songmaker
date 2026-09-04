@@ -231,6 +231,16 @@ def _refresh_provider_route(
             (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
             capability, reason, now, "API key",
         )
+    if (
+        route is ProviderRoute.API
+        and provider == _CLAUDE_PROVIDER
+        and not _anthropic_sdk_available()
+    ):
+        reason = normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR)
+        return ProviderRouteSnapshot(
+            (), None, None, None, ProviderRouteReadinessState.DISTURBED,
+            capability, reason, now, "API key",
+        )
     if route is ProviderRoute.CLI:
         try:
             if not _cli_is_logged_in(provider):
@@ -371,7 +381,7 @@ def _provider_configuration(
     credential = _provider_api_credential(provider, settings)
     key_is_set = bool(_secret(credential.secret))
     cli_method = _cli_setup_method(provider)
-    if key_is_set and _api_key_carries(provider, surface):
+    if key_is_set:
         if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
             return DependencyUnavailableProvider(
                 provider,
@@ -392,7 +402,7 @@ def _provider_configuration(
         )
     if key_is_set:
         return ApiKeyNeedsCliLoginProvider(provider)
-    need = _needed_setup(provider, surface)
+    need = ProviderNeed.API_KEY
     return UnconfiguredProvider(
         provider,
         need,
@@ -400,21 +410,11 @@ def _provider_configuration(
     )
 
 
-def _api_key_carries(provider: str, surface: ProviderSurface) -> bool:
-    return not (provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER)
-
-
 def _cli_carries(method: ProviderSetupMethod, surface: ProviderSurface) -> bool:
     return method is ProviderSetupMethod.CLAUDE_CLI or (
         method in {ProviderSetupMethod.GROK_CLI, ProviderSetupMethod.CODEX_CLI}
         and surface is ProviderSurface.CO_WRITER
     )
-
-
-def _needed_setup(provider: str, surface: ProviderSurface) -> ProviderNeed:
-    if provider == _CLAUDE_PROVIDER and surface is ProviderSurface.CO_WRITER:
-        return ProviderNeed.CLI_LOGIN
-    return ProviderNeed.API_KEY
 
 
 def _cli_setup_method(provider: str) -> ProviderSetupMethod | None:

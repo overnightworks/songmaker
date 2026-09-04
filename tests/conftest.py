@@ -418,4 +418,8 @@ def every_provider_is_configured(monkeypatch):
         "songmaker_cli.cowriter.catalog._cli_is_logged_in",
         lambda _provider: True,
     )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog._anthropic_sdk_available",
+        lambda: True,
+    )
     refresh_provider_snapshots()

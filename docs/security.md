@@ -625,15 +625,14 @@ mounted; a compromised container cannot add host-side profile settings or hooks.
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
 through the deployment `.env` and become `Settings` secrets. Both
 provider-facing images install the `claude` extra, so `ANTHROPIC_API_KEY`
-serves the Claude judge and model catalog. It does not replace the web
-container's Claude CLI mirror: the co-writer needs the CLI with Songmaker's
-MCP tools, and the SDK has no equivalent tool path. The API and DOM expose
-only safe readiness metadata (`set`/`not set` through route state), never a
-key value, raw provider body, command output, or a secret-derived value. A
-Co-Writer route is administrator-selected; a failed selected route returns
-its fixed safe reason and never retries the sibling CLI/API route. Claude's
-API route remains explicitly unavailable until its native tool loop lands;
-the Judge remains API-only.
+serves the Claude judge, model catalog, and API co-writer tool loop. It does
+not replace the web container's Claude CLI mirror: the selected CLI route
+still uses Songmaker's MCP tools. The API and DOM expose only safe readiness
+metadata (`set`/`not set` through route state), never a key value, raw
+provider body, command output, or a secret-derived value. A Co-Writer route
+is administrator-selected; a failed selected route returns its fixed safe
+reason and never retries the sibling CLI/API route. The Judge remains
+API-only.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
 request. `provider_status_refresh` owns those probes; an empty snapshot is reported
