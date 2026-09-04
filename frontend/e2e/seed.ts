@@ -37,6 +37,7 @@ const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
 const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
+const KINETIC_STRIP_ALBUM_TITLE_PREFIX = 'E2E Kinetic Strip Album';
 // A second, sibling album: the rail's one-open-album rule (#323) and its
 // real CSS visibility (#326) only show up with two albums that can each be
 // opened in turn. No take is imported for it -- the rail only needs the
@@ -81,6 +82,8 @@ export interface SeededLibrary {
 	secondAlbumTitle: string;
 	/** One of the second album's own songs, for the visibility assertion. */
 	secondAlbumSongTitle: string;
+	/** Dedicated album the kinetic-strip flow can mutate without changing the base library. */
+	kineticStripAlbumId: string;
 }
 
 /** Seeded per attempt, because the flow reorders and prunes it. */
@@ -265,6 +268,11 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		});
 	}
 
+	const kineticStripAlbum = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `${KINETIC_STRIP_ALBUM_TITLE_PREFIX} ${runMarker()}`,
+		artist: ALBUM_ARTIST
+	});
+
 	await seedFillerAlbums(`${RAIL_FILLER_ALBUM_TITLE_PREFIX} ${runMarker()}`);
 
 	return {
@@ -274,6 +282,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		pickedSongTitle,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
+		kineticStripAlbumId: kineticStripAlbum.id,
 		playlistTakes: playlistSongTitles.map((songTitle) => ({
 			songTitle,
 			takeId: takeId(takeBySongTitle, songTitle)
