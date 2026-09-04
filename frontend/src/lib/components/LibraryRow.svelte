@@ -336,6 +336,7 @@
 		--row-tile-width: 84px;
 
 		position: relative;
+		min-width: 0;
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--border);
 		background: var(--surface-hover);

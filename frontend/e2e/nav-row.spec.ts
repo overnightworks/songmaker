@@ -16,6 +16,7 @@ test('the album row and its instant filter stay above a song and take on desktop
 	const library = readSeededLibrary();
 	const albumAddress = `/album/${library.albumId}`;
 	const songAddress = `${albumAddress}/${expectedSongSlug(library.pickedSongTitle)}`;
+	const collapsedSummaryLabel = `${library.albumTitle} · ${library.albumSongCount} songs`;
 	const surface = workspace(page);
 
 	await page.goto(albumAddress);
@@ -38,9 +39,12 @@ test('the album row and its instant filter stay above a song and take on desktop
 		surface.getByRole('button', { name: nameStartingWith(library.albumTitle) })
 	).toBeVisible();
 
-	await surface.getByRole('button', { name: 'Collapse albums' }).click();
+	const collapseAlbums = surface.getByRole('button', { name: 'Collapse albums' });
+	await expect(collapseAlbums).toBeVisible();
+	await expect(collapseAlbums).toBeInViewport();
+	await collapseAlbums.click();
 	await expect(filter).toHaveCount(0);
-	const collapsedSummary = surface.getByText(`${library.albumTitle} · 3 songs`, { exact: true });
+	const collapsedSummary = surface.getByText(collapsedSummaryLabel, { exact: true });
 	const expandAlbums = surface.getByRole('button', { name: 'Expand albums' });
 	await expect(collapsedSummary).toBeVisible();
 	await expect(expandAlbums).toBeVisible();
@@ -53,7 +57,7 @@ test('the album row and its instant filter stay above a song and take on desktop
 	expect(takeRowBox.x).toBeCloseTo(songRowBox.x, 1);
 	expect(takeRowBox.y).toBeCloseTo(songRowBox.y, 1);
 	expect(takeRowBox.width).toBeCloseTo(songRowBox.width, 1);
-	await expect(takeRow.getByText(`${library.albumTitle} · 3 songs`, { exact: true })).toBeVisible();
+	await expect(takeRow.getByText(collapsedSummaryLabel, { exact: true })).toBeVisible();
 	await expect(takeRow.getByRole('button', { name: 'Expand albums' })).toBeInViewport();
 	guard.assertClean();
 });
@@ -76,12 +80,13 @@ test('a mobile song or take starts with its album row collapsed until expanded',
 	const library = readSeededLibrary();
 	const albumAddress = `/album/${library.albumId}`;
 	const songAddress = `${albumAddress}/${expectedSongSlug(library.pickedSongTitle)}`;
+	const collapsedSummaryLabel = `${library.albumTitle} · ${library.albumSongCount} songs`;
 	const surface = workspace(page);
 
 	await page.goto(albumAddress);
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
-	const collapsedSummary = surface.getByText(`${library.albumTitle} · 3 songs`, { exact: true });
+	const collapsedSummary = surface.getByText(collapsedSummaryLabel, { exact: true });
 	const expandAlbums = surface.getByRole('button', { name: 'Expand albums' });
 	await expect(collapsedSummary).toBeVisible();
 	await expect(expandAlbums).toBeVisible();
@@ -94,7 +99,7 @@ test('a mobile song or take starts with its album row collapsed until expanded',
 	await expect(collapseAlbums).toBeInViewport();
 
 	await page.goto(`${songAddress}/take/1`);
-	await expect(surface.getByText(`${library.albumTitle} · 3 songs`, { exact: true })).toBeVisible();
+	await expect(surface.getByText(collapsedSummaryLabel, { exact: true })).toBeVisible();
 	await expect(collapseAlbums).toBeVisible();
 	await expect(collapseAlbums).toBeInViewport();
 	guard.assertClean();
