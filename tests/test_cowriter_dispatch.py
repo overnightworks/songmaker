@@ -92,7 +92,8 @@ def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
     assert stream.closed
 
 
-def test_grok_cli_dispatches_its_text_transport_through_the_shared_tool_loop(monkeypatch):
+@pytest.mark.acceptance("ACC-COWRITER-09")
+def test_grok_cli_turn_uses_its_transport_through_the_shared_tool_loop(monkeypatch):
     class Transport:
         closed = False
 
@@ -114,6 +115,11 @@ def test_grok_cli_dispatches_its_text_transport_through_the_shared_tool_loop(mon
 
     transport = Transport()
     monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    monkeypatch.setattr(
+        dispatch,
+        "stream_openai_compatible_turn",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
+    )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
         lambda _session, _user, name, arguments: (
