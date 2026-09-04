@@ -32,7 +32,11 @@ REGISTRY_SCHEMA_VERSION = 2
 ACCEPTANCE_SCHEMA_VERSION = 1
 WITNESS_SCHEMA_VERSION = 1
 EXPECTED_REPOSITORY_ID = 1163644113
-EXPECTED_REPOSITORY_FULL_NAME = "FlexOr2/songmaker"
+EXPECTED_REPOSITORY_FULL_NAME = "overnightworks/songmaker"
+HISTORICAL_REPOSITORY_FULL_NAMES = frozenset({"FlexOr2/songmaker"})
+TRUSTED_REPOSITORY_FULL_NAMES = frozenset(
+    {EXPECTED_REPOSITORY_FULL_NAME, *HISTORICAL_REPOSITORY_FULL_NAMES}
+)
 EXPECTED_OPERATOR_ID = 44832414
 MAX_REGISTRY_BYTES = 1024 * 1024
 MAX_REVISIONS = 256
@@ -239,7 +243,7 @@ def read_approval_witness(project_root: Path, revision: Revision) -> ApprovalWit
             f"{EXPECTED_REPOSITORY_ID}"
         )
     repository_name = raw.get("repository_full_name")
-    if repository_name != EXPECTED_REPOSITORY_FULL_NAME:
+    if repository_name not in TRUSTED_REPOSITORY_FULL_NAMES:
         raise RequirementContractError(
             f"{revision.witness_location} has repository_full_name {repository_name!r}"
         )

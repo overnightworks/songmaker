@@ -8,7 +8,7 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + Postgr
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
-**Backlog:** GitHub Issues + Milestones at [FlexOr2/songmaker](https://github.com/FlexOr2/songmaker/issues). Always query live (`gh issue list --repo FlexOr2/songmaker --state open --json number,title,milestone,labels`) when the user asks "what should we do next?", "what's on the roadmap?", or "anything in the queue?" — don't assume `plans/` is the full picture. New work is filed as a GitHub issue **with a milestone** before it is built. `plans/` holds per-task concept notes only while work is in flight.
+**Backlog:** GitHub Issues + Milestones at [overnightworks/songmaker](https://github.com/overnightworks/songmaker/issues). Always query live (`gh issue list --repo overnightworks/songmaker --state open --json number,title,milestone,labels`) when the user asks "what should we do next?", "what's on the roadmap?", or "anything in the queue?" — don't assume `plans/` is the full picture. New work is filed as a GitHub issue **with a milestone** before it is built. `plans/` holds per-task concept notes only while work is in flight.
 
 **Agent policy:** [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint. Use the globally installed `agent-claim` CLI for repository claims; it owns the coordination protocol.
 
@@ -102,7 +102,7 @@ alembic upgrade head
 | Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models/` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
-| Work item | GitHub issue **with a milestone** (`gh issue create --milestone …`). Concept notes for in-flight work may live in `plans/{name}.md` until the issue closes, then delete the plan. | [issues](https://github.com/FlexOr2/songmaker/issues) |
+| Work item | GitHub issue **with a milestone** (`gh issue create --milestone …`). Concept notes for in-flight work may live in `plans/{name}.md` until the issue closes, then delete the plan. | [issues](https://github.com/overnightworks/songmaker/issues) |
 
 ## Plan-writing convention
 
