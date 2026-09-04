@@ -173,7 +173,10 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 /** Back to the wall — on mobile the rail is a drawer the header opens. */
 async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'desktop') {
-		await workspace(page).getByRole('button', { name: APP_NAME, exact: true }).click();
+		await page
+			.getByRole('navigation', { name: RAIL_NAV_LABEL })
+			.getByRole('button', { name: APP_NAME, exact: true })
+			.click();
 		return;
 	}
 	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
@@ -512,12 +515,20 @@ test('the rail disclosure and pin promises hold in a real browser', async ({ pag
 		.click();
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
-	// The group header now only changes the tree. The wordmark remains the
-	// Library-wall shortcut until 1B adds the "All albums" child target.
+	// The group header changes only the tree, and native keyboard activation
+	// works in the real browser. The surface remains the selected album.
+	const selectedAlbumUrl = page.url();
 	rail = await openRailNav(page, shell);
-	await rail.getByRole('button', { name: APP_NAME, exact: true }).click();
-	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
-	await expect(page).toHaveURL('/');
+	const libraryGroupToggle = rail.getByRole('button', {
+		name: nameStartingWith(RAIL_LIBRARY_LABEL)
+	});
+	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
+	await libraryGroupToggle.press('Enter');
+	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'false');
+	await libraryGroupToggle.press(' ');
+	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
+	expect(page.url()).toBe(selectedAlbumUrl);
 
 	// "Settings stays pinned below LIBRARY and PLAYLISTS" (#326 finding 6) as
 	// a promise, not a CSS class assertion: seed.ts adds enough filler albums

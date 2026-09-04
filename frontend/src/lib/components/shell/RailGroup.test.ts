@@ -160,17 +160,4 @@ describe('RailGroup', () => {
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	});
-
-	it.each(['Enter', ' '])('uses the native button activation for %s', async (key) => {
-		const { target } = await render();
-		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		toggle.focus();
-		expect(document.activeElement).toBe(toggle);
-		toggle.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-		// Native button keyboard activation dispatches click in the browser; jsdom
-		// does not model that default action, so trigger the resulting click here.
-		toggle.click();
-		await tick();
-		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-	});
 });

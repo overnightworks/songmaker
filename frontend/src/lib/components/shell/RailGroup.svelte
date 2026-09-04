@@ -160,7 +160,6 @@
 
 	.meta {
 		margin-left: auto;
-		padding-right: 16px;
 		font-size: 0.75rem;
 		color: var(--text-subtle);
 	}
