@@ -224,6 +224,51 @@ def test_grok_tool_transport_rejects_unknown_events_without_logging_the_protocol
     assert event_type not in caplog.text
 
 
+@pytest.mark.parametrize("event_type", ("thought", "usage", "available_commands", "plan"))
+def test_grok_tool_transport_accepts_ignored_observations_without_data(
+    monkeypatch, event_type,
+) -> None:
+    calls = []
+    lines = [
+        json.dumps({"type": event_type}).encode() + b"\n",
+        *_tool_round_lines("done"),
+    ]
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner(lines, _outcome(), calls),
+    )
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        assert await _collect_transport_responses(transport) == [
+            grok_cli_adapter.TextDelta("done"),
+            grok_cli_adapter.FinalText(""),
+        ]
+        await transport.aclose()
+
+    asyncio.run(collect())
+
+
+def test_grok_tool_transport_rejects_a_second_end_event(monkeypatch) -> None:
+    calls = []
+    lines = [*_tool_round_lines("done"), _tool_round_lines("ignored")[1]]
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner(lines, _outcome(), calls),
+    )
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            await _collect_transport_responses(transport)
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        await transport.aclose()
+
+    asyncio.run(collect())
+
+
 @pytest.mark.parametrize(
     ("lines", "outcome", "code"),
     (
