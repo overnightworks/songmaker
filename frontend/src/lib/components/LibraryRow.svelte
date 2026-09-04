@@ -156,6 +156,11 @@
 		const index = activeIndex;
 		const visibleKey = visibleTileKey;
 		if (!row || index === -1) return;
+		// The end inset changes the scrollable coordinate space. Set it before
+		// asking the browser to centre the open tile, otherwise a visible-key
+		// change can centre against the old edge and then shift the tile when
+		// the inset is applied.
+		updateEndInset(row);
 		const active = row.querySelector<HTMLElement>('.row-tile.active');
 		if (!active || typeof active.scrollIntoView !== 'function') return;
 		active.scrollIntoView({

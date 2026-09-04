@@ -110,6 +110,7 @@ function findTileByName(root: ParentNode, name: string): HTMLButtonElement {
 interface ScrollIntoViewCall {
 	receiver: Element;
 	options: ScrollIntoViewOptions;
+	edgeInset: string | undefined;
 }
 
 // jsdom ships no scrollIntoView at all (confirmed against a fresh JSDOM
@@ -123,7 +124,11 @@ function stubScrollIntoView(): ScrollIntoViewCall[] {
 		this: HTMLElement,
 		options?: boolean | ScrollIntoViewOptions
 	) {
-		calls.push({ receiver: this, options: (options ?? {}) as ScrollIntoViewOptions });
+		calls.push({
+			receiver: this,
+			options: (options ?? {}) as ScrollIntoViewOptions,
+			edgeInset: this.parentElement?.style.getPropertyValue('--row-edge-inset')
+		});
 	};
 	return calls;
 }
@@ -291,9 +296,7 @@ describe('LibraryRow', () => {
 	it('adds exactly the inset needed to centre edge tiles once the row overflows', async () => {
 		const resize = stubResizeObserver();
 		albumList.set(
-			Array.from({ length: 12 }, (_, index) =>
-				album({ id: `a-${index}`, title: `Album ${index}` })
-			)
+			Array.from({ length: 12 }, (_, index) => album({ id: `a-${index}`, title: `Album ${index}` }))
 		);
 		const root = await render({ kind: 'album', id: 'a-6' });
 		const row = root.querySelector<HTMLElement>('.library-row');
@@ -302,6 +305,32 @@ describe('LibraryRow', () => {
 		resize();
 
 		expect(row.style.getPropertyValue('--row-edge-inset')).toBe('158px');
+	});
+
+	it('sets the overflow inset before centring an open middle tile', async () => {
+		const calls = stubScrollIntoView();
+		try {
+			albumList.set(
+				Array.from({ length: 12 }, (_, index) =>
+					album({ id: `a-${index}`, title: `Album ${index}` })
+				)
+			);
+			const root = await render({ kind: 'album', id: 'a-6' });
+			const row = root.querySelector<HTMLElement>('.library-row');
+			if (!row) throw new Error('Expected .library-row to be rendered');
+			setRowLayout(row, 12, 400);
+			calls.length = 0;
+
+			// A newly visible tile makes the row reflow. The open tile must be
+			// centred in the padded coordinate space, not before that space exists.
+			albumList.update((albums) => [...albums, album({ id: 'a-12', title: 'Album 12' })]);
+			await tick();
+
+			expect(calls.at(-1)?.receiver).toBe(findTileByName(root, 'Album 6'));
+			expect(calls.at(-1)?.edgeInset).toBe('158px');
+		} finally {
+			restoreScrollIntoView();
+		}
 	});
 
 	it('shows the overflow scrim once the row genuinely has more to scroll to', async () => {
