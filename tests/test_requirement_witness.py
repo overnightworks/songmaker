@@ -31,12 +31,15 @@ def document_bytes() -> bytes:
     ).encode()
 
 
-def witness_bytes(content_digest: str) -> bytes:
+def witness_bytes(
+    content_digest: str,
+    repository_full_name: str = contract.EXPECTED_REPOSITORY_FULL_NAME,
+) -> bytes:
     body = contract.approval_bytes("0001", content_digest)
     payload = {
         "schema_version": 1,
         "repository_id": contract.EXPECTED_REPOSITORY_ID,
-        "repository_full_name": contract.EXPECTED_REPOSITORY_FULL_NAME,
+        "repository_full_name": repository_full_name,
         "issue_id": 2001,
         "issue_number": 41,
         "comment_id": 1001,
@@ -49,7 +52,10 @@ def witness_bytes(content_digest: str) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def project_with_witness(tmp_path: Path) -> Path:
+def project_with_witness(
+    tmp_path: Path,
+    repository_full_name: str = contract.EXPECTED_REPOSITORY_FULL_NAME,
+) -> Path:
     project = tmp_path / "project"
     requirements = project / "docs/requirements"
     witnesses = requirements / "witnesses"
@@ -58,7 +64,7 @@ def project_with_witness(tmp_path: Path) -> Path:
     acceptance.mkdir(parents=True)
     content = document_bytes()
     content_digest = digest(content)
-    witness = witness_bytes(content_digest)
+    witness = witness_bytes(content_digest, repository_full_name)
     (requirements / "0001-albums.md").write_bytes(content)
     (witnesses / "1001.json").write_bytes(witness)
     (requirements / "revisions.toml").write_text(
@@ -97,8 +103,8 @@ class FakeClient:
         result = {
             "id": contract.EXPECTED_REPOSITORY_ID,
             "full_name": contract.EXPECTED_REPOSITORY_FULL_NAME,
-            "url": "https://api.github.com/repos/FlexOr2/songmaker",
-            "html_url": "https://github.com/FlexOr2/songmaker",
+            "url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
+            "html_url": f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
         }
         return self._result("repository", result)
 
@@ -107,9 +113,9 @@ class FakeClient:
         result = {
             "id": 2001,
             "number": 41,
-            "repository_url": "https://api.github.com/repos/FlexOr2/songmaker",
-            "url": "https://api.github.com/repos/FlexOr2/songmaker/issues/41",
-            "html_url": "https://github.com/FlexOr2/songmaker/issues/41",
+            "repository_url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}",
+            "url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/41",
+            "html_url": f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/41",
         }
         return self._result("issue", result)
 
@@ -119,13 +125,13 @@ class FakeClient:
         result = {
             "id": comment_id,
             "user": {"id": contract.EXPECTED_OPERATOR_ID},
-            "issue_url": "https://api.github.com/repos/FlexOr2/songmaker/issues/41",
+            "issue_url": f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/41",
             "url": (
-                "https://api.github.com/repos/FlexOr2/songmaker/issues/comments/"
+                f"https://api.github.com/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/comments/"
                 f"{comment_id}"
             ),
             "html_url": (
-                "https://github.com/FlexOr2/songmaker/issues/41#issuecomment-"
+                f"https://github.com/{contract.EXPECTED_REPOSITORY_FULL_NAME}/issues/41#issuecomment-"
                 f"{comment_id}"
             ),
             "body": body,
@@ -146,6 +152,16 @@ def test_live_verifier_checks_the_complete_identity_chain(tmp_path: Path) -> Non
 
     assert live.verify_live_witnesses(project, client) == 1
     assert client.calls == [("repository", None), ("issue", 41), ("comment", 1001)]
+
+
+def test_live_verifier_accepts_a_witness_captured_before_the_organization_rename(
+    tmp_path: Path,
+) -> None:
+    historical_name = next(iter(contract.HISTORICAL_REPOSITORY_FULL_NAMES))
+
+    assert live.verify_live_witnesses(
+        project_with_witness(tmp_path, historical_name), FakeClient()
+    ) == 1
 
 
 def test_shared_capture_fetches_repository_once_and_caches_each_issue() -> None:
@@ -297,7 +313,7 @@ def test_https_client_uses_only_the_fixed_origin_route_and_headers() -> None:
     assert connection.request_args is not None
     method, route, kwargs = connection.request_args
     assert method == "GET"
-    assert route == "/repos/FlexOr2/songmaker"
+    assert route == f"/repos/{contract.EXPECTED_REPOSITORY_FULL_NAME}"
     assert kwargs["headers"]["Authorization"] == "Bearer secret-token"
     assert connection.closed is True
 
@@ -385,7 +401,7 @@ def test_canonical_witness_has_fixed_golden_bytes_and_digest() -> None:
         b'TiAwMDAxIHNoYTI1NjphMjM3YWM5YzA0MTEzNDI0NjRiZjYwMDI3MmM2OWYyNjJkZDZjYzlj'
         b'M2JlZDg1Y2ZhNjk4YTk0NDBhZjZiOTc3","body_sha256":"a4cf4e6ad66c970dbff8a0fbde0'
         b'dc929aed790c54de4d8afecfd3c75cb73a354","comment_id":1001,"created_at":"2026-08-'
-        b'21T12:00:00Z","issue_id":2001,"issue_number":41,"repository_full_name":"FlexOr2/'
+        b'21T12:00:00Z","issue_id":2001,"issue_number":41,"repository_full_name":"overnightworks/'
         b'songmaker","repository_id":1163644113,"schema_version":1,"updated_at":"2026-08-'
         b'21T12:00:00Z"}\n'
     )
@@ -393,7 +409,7 @@ def test_canonical_witness_has_fixed_golden_bytes_and_digest() -> None:
     rendered = live.canonical_witness_bytes(captured)
 
     assert rendered == expected
-    assert digest(rendered) == "76a2139685c08df08273d96cc6aed6d15e8c05a02a080856fb71482da4cfa2a3"
+    assert digest(rendered) == "f09355d6f4acbd7204f11f6864c39bd9b5398617a50e5bd5c1c34c9aaee63639"
     assert live.canonical_witness_bytes(captured) == rendered
 
 
