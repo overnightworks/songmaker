@@ -131,6 +131,21 @@ describe('jobs store', () => {
 		expect(jobs[0].job.type).toBe('load_model_on_worker');
 	});
 
+	it('tracks a rehydrated job id once while enriching its context', () => {
+		trackJob(makeJob({ type: 'cover' }), {});
+		trackJob(makeJob({ type: 'cover', status: 'running', progress: 0.5 }), {
+			albumId: 'a-local'
+		});
+
+		expect(get(activeJobs)).toEqual([
+			{
+				job: makeJob({ type: 'cover', status: 'running', progress: 0.5 }),
+				albumId: 'a-local'
+			}
+		]);
+		expect(MockEventSource.instances).toHaveLength(1);
+	});
+
 	it('updates job on SSE message', () => {
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.5 }));

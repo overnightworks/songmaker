@@ -404,6 +404,7 @@ async def api_create_cover_suggestions(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
@@ -418,11 +419,13 @@ async def api_create_cover_suggestions(
             raise HTTPException(429, "Daily cover suggestion limit reached")
         if not await is_music_worker_healthy():
             raise HTTPException(503, "Worker not running")
+        stale_suggestion_paths = delete_album_cover_suggestions(session, album.id)
         job = create_job(session, JobType.COVER, user_id=user.id, album_id=album.id)
         session.commit()
     except HTTPException:
         session.rollback()
         raise
+    remove_cover_suggestion_files(ctx.audio_dir, stale_suggestion_paths)
     try:
         await get_arq_pool().enqueue_job(
             JobFunction.COVER,

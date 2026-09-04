@@ -1,4 +1,12 @@
-import type { AlbumItem, CleanupResult, PaginatedResponse, ShareResult } from './types';
+import type {
+	AlbumItem,
+	CleanupResult,
+	CoverSuggestionSelectionRequest,
+	CoverSuggestionsResponse,
+	JobItem,
+	PaginatedResponse,
+	ShareResult
+} from './types';
 import { apiFetch } from './fetch';
 import type { LibraryListOptions } from './library';
 
@@ -68,4 +76,29 @@ export async function unarchiveAlbum(albumId: string): Promise<AlbumItem> {
 
 export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
 	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
+}
+
+export async function createAlbumCoverSuggestions(albumId: string): Promise<JobItem> {
+	return apiFetch<JobItem>(`/api/albums/${albumId}/cover-suggestions`, { method: 'POST' });
+}
+
+export async function fetchAlbumCoverSuggestions(
+	albumId: string
+): Promise<CoverSuggestionsResponse> {
+	return apiFetch<CoverSuggestionsResponse>(`/api/albums/${albumId}/cover-suggestions`);
+}
+
+export async function selectAlbumCoverSuggestion(
+	albumId: string,
+	selection: CoverSuggestionSelectionRequest
+): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/cover`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(selection)
+	});
+}
+
+export async function discardAlbumCoverSuggestions(albumId: string): Promise<void> {
+	await apiFetch(`/api/albums/${albumId}/cover-suggestions`, { method: 'DELETE' });
 }
