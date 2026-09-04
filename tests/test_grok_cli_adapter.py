@@ -78,6 +78,10 @@ def _tool_transport_events(transport, executor):
     )
 
 
+async def _collect_transport_responses(transport) -> list[object]:
+    return [item async for item in transport.stream(InitialTurn("system", []))]
+
+
 def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypatch) -> None:
     calls = []
     rounds = iter([_tool_round_lines(_tool_call_text()), _tool_round_lines("done")])
@@ -173,6 +177,105 @@ def test_grok_tool_transport_rejects_missing_or_invalid_session_id(
         await transport.aclose()
 
     asyncio.run(collect())
+
+
+def test_grok_tool_transport_normalizes_malformed_json_without_its_document(monkeypatch) -> None:
+    document = '{"type":"text","data":"private lyrics"'
+    calls = []
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner([document.encode() + b"\n"], _outcome(), calls),
+    )
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            await _collect_transport_responses(transport)
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        assert raised.value.__cause__ is None
+        assert not hasattr(raised.value.__context__, "doc")
+        assert document not in str(raised.value)
+        await transport.aclose()
+
+    asyncio.run(collect())
+
+
+def test_grok_tool_transport_rejects_unknown_events_without_logging_the_protocol(
+    monkeypatch, caplog,
+) -> None:
+    calls = []
+    event_type = "unexpected"
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner([json.dumps({"type": event_type}).encode() + b"\n"], _outcome(), calls),
+    )
+    caplog.set_level("WARNING")
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            await _collect_transport_responses(transport)
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+        await transport.aclose()
+
+    asyncio.run(collect())
+    assert event_type not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("lines", "outcome", "code"),
+    (
+        (
+            [b'{"type":"error","message":"login problem"}\n'],
+            _outcome(stderr="OIDC 401"),
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
+        ),
+        (
+            [b'{"type":"error","message":"unauthenticated"}\n'],
+            _outcome(),
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
+        ),
+        (
+            [b'{"type":"text","data":"partial"}\n'],
+            _outcome(complete=False, stderr="OIDC 401"),
+            SafeRouteReasonCode.CLI_AUTH_REJECTED,
+        ),
+        ([], _outcome(complete=False), SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+        (
+            [b'{"type":"text","data":"partial"}\n'],
+            _outcome(complete=False),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
+        (
+            [b'{"type":"end","stopReason":"stop","sessionId":"' + _SESSION_ID.encode()
+             + b'"}\n'],
+            _outcome(returncode=1),
+            SafeRouteReasonCode.CLI_PROTOCOL_ERROR,
+        ),
+    ),
+)
+def test_grok_tool_transport_names_failed_or_incomplete_runs_without_leaking_stderr(
+    monkeypatch, caplog, lines, outcome, code,
+) -> None:
+    calls = []
+    monkeypatch.setattr(
+        grok_cli_adapter,
+        "run_cli_bounded",
+        _runner(lines, outcome, calls),
+    )
+    caplog.set_level("WARNING")
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            await _collect_transport_responses(transport)
+        assert raised.value.reason.code is code
+        await transport.aclose()
+
+    asyncio.run(collect())
+    assert "OIDC 401" not in caplog.text
 
 
 def test_grok_tool_transport_rejects_a_changed_resume_session_id(monkeypatch) -> None:

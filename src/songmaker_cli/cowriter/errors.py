@@ -20,7 +20,6 @@ class SafeRouteReasonCode(StrEnum):
     TOOL_EXECUTION_FAILED = "tool_execution_failed"
     TOOL_PROTOCOL_ERROR = "tool_protocol_error"
     TOOL_LIMIT_EXCEEDED = "tool_limit_exceeded"
-    ROUTE_TEXT_ONLY = "route_text_only"
     ROUTE_FAILED = "route_failed"
 
 
@@ -37,9 +36,6 @@ _SAFE_MESSAGES: dict[SafeRouteReasonCode, str] = {
     SafeRouteReasonCode.TOOL_EXECUTION_FAILED: "Co-Writer tool failed.",
     SafeRouteReasonCode.TOOL_PROTOCOL_ERROR: "Co-Writer tool response was invalid.",
     SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED: "Co-Writer tool-call limit was reached.",
-    SafeRouteReasonCode.ROUTE_TEXT_ONLY: (
-        "Song tools are not available over the Grok CLI today."
-    ),
     SafeRouteReasonCode.ROUTE_FAILED: "Selected route failed.",
 }
 

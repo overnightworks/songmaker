@@ -191,7 +191,11 @@ def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
                     "write-owned", "update_song_lyrics",
                     {"song_id": "owned-song", "lyrics": "new lyrics"},
                 ),
-                ToolCall("read-foreign", "get_song", {"song_id": "other-song"}),
+                ToolCall(
+                    "write-foreign",
+                    "update_song_lyrics",
+                    {"song_id": "other-song", "lyrics": "stolen lyrics"},
+                ),
             )
             if self.round < len(calls):
                 call = calls[self.round]

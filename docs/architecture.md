@@ -594,8 +594,9 @@ also returning the route-keyed readiness and catalogue snapshots. The Judge
 remains API-only. Claude's API route and Grok's CLI route own the same shared
 co-writer tool loop; Grok carries calls and results in its strict text
 protocol, while the CLI itself remains denied all built-in tools. Claude's CLI
-route continues to use the MCP transport. The selected-route gate still owns
-authorization and emits the normalized SSE tool-call and tool-result events.
+route continues to use the MCP transport. The shared loop delegates each call
+to the authorized tool executor and emits normalized SSE tool-call and
+tool-result events.
 
 ### Engine packages (`src/`)
 
