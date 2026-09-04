@@ -45,6 +45,8 @@ from songmaker_cli.api_models.library import (
     ShareInventoryType,
 )
 from songmaker_cli.api_models.loras import (
+    LoraCapacityErrorResponse,
+    LoraCapacityReason,
     OwnPlayableTakeListResponse,
     OwnPlayableTakeResponse,
     UserLoraCreateRequest,
@@ -271,6 +273,8 @@ __all__ = [
     "JobResponse",
     "JudgeSettingsRequest",
     "JudgeSettingsResponse",
+    "LoraCapacityErrorResponse",
+    "LoraCapacityReason",
     "LIBRARY_SORT_VALUES",
     "LastFailedGenerationResponse",
     "LibraryAlbumHit",

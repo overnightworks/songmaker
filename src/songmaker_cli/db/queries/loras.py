@@ -46,6 +46,15 @@ def list_user_loras_for_user(
     return query.order_by(UserLora.created_at.desc()).all()
 
 
+def count_active_user_loras(session: Session, user_id: str) -> int:
+    """Count a musician's voices that have not been soft-deleted."""
+    return (
+        session.query(UserLora)
+        .filter(UserLora.user_id == user_id, UserLora.deleted_at.is_(None))
+        .count()
+    )
+
+
 def update_user_lora(
     session: Session, lora_id: str,
     *,

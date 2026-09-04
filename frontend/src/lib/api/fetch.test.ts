@@ -130,6 +130,36 @@ describe('ApiError', () => {
 });
 
 describe('apiFetch error detail', () => {
+	it.each([
+		[
+			'voice limit',
+			{
+				detail:
+					'Could not create voice\nYou have reached the limit of 10 voices. Delete a voice before creating another.',
+				reason: 'voice_limit'
+			}
+		],
+		[
+			'training queue limit',
+			{
+				detail:
+					'Training queue is full\n2 trainings are already waiting. Try again when one training starts or finishes.',
+				reason: 'training_queue_full'
+			}
+		]
+	])('preserves the server %s sentence in ApiError.detail', async (_name, body) => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 409,
+			headers: { get: () => null },
+			json: () => Promise.resolve(body)
+		});
+
+		const err = await apiFetch('/api/loras').catch((e: unknown) => e);
+
+		expect((err as ApiError).detail).toBe(body.detail);
+	});
+
 	it('surfaces a readable sentence, not the raw status line, for a non-JSON error body', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: false,

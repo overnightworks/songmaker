@@ -489,6 +489,11 @@ export interface LoginRequest {
 	password: string;
 }
 
+export interface LoraCapacityErrorResponse {
+	detail: string;
+	reason: 'voice_limit' | 'training_queue_full';
+}
+
 export interface MemoryBundle {
 	user: MemoryScopeItem;
 	song?: MemoryScopeItem | null;

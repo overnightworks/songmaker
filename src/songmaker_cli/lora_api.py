@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,10 +15,13 @@ from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
     check_own_generation_access,
+    lock_lora_capacity,
     raise_audio_file_http_error,
-    unique_lora_slug,
+    unique_lora_slug_under_capacity_lock,
 )
 from songmaker_cli.api_models import (
+    LoraCapacityErrorResponse,
+    LoraCapacityReason,
     OwnPlayableTakeListResponse,
     OwnPlayableTakeResponse,
     StatusResponse,
@@ -48,6 +52,8 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.queries import (
     add_user_lora_sample,
+    count_active_user_loras,
+    count_queued_lora_training_jobs,
     count_user_lora_samples,
     create_job,
     create_user_lora,
@@ -64,10 +70,18 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _lora_capacity_error(
+    detail: str, reason: LoraCapacityReason,
+) -> JSONResponse:
+    response = LoraCapacityErrorResponse(detail=detail, reason=reason)
+    return JSONResponse(status_code=409, content=response.model_dump(mode="json"))
 
 
 def _sample_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
@@ -87,16 +101,31 @@ def _reject_if_active_or_deleted(lora) -> None:
         raise HTTPException(409, f"LoRA is {lora.status} — cannot modify during training")
 
 
-@router.post("/loras")
+@router.post(
+    "/loras",
+    response_model=UserLoraResponse,
+    responses={409: {"model": LoraCapacityErrorResponse}},
+)
 def api_create_lora(
     data: UserLoraCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> UserLoraResponse:
+) -> UserLoraResponse | JSONResponse:
     name = data.name.strip()
     if not name:
         raise HTTPException(422, "Name is required")
-    slug = unique_lora_slug(session, user.id, name)
+    lock_lora_capacity(session)
+    max_user_loras = get_settings().max_user_loras
+    if count_active_user_loras(session, user.id) >= max_user_loras:
+        session.rollback()
+        return _lora_capacity_error(
+            "Could not create voice\n"
+            f"You have reached the limit of {max_user_loras} voices. "
+            "Delete a voice before creating another.",
+            LoraCapacityReason.VOICE_LIMIT,
+        )
+
+    slug = unique_lora_slug_under_capacity_lock(session, user.id, name)
     try:
         lora = create_user_lora(session, user.id, name, slug)
         record_audit(session, user.id, AuditAction.CREATE, ResourceType.LORA, lora.id)
@@ -342,13 +371,21 @@ def api_delete_sample(
     return StatusResponse()
 
 
-@router.post("/loras/{lora_id}/train")
+@router.post(
+    "/loras/{lora_id}/train",
+    response_model=UserLoraResponse,
+    responses={409: {"model": LoraCapacityErrorResponse}},
+)
 async def api_train_lora(
     lora_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> UserLoraResponse:
+) -> UserLoraResponse | JSONResponse:
+    lora = get_user_lora(session, lora_id)
+    check_lora_access(lora, user)
+
+    lock_lora_capacity(session)
     lora = get_user_lora(session, lora_id)
     check_lora_access(lora, user)
 
@@ -370,6 +407,16 @@ async def api_train_lora(
                 422,
                 "All samples must have non-empty caption and lyrics before training",
             )
+
+    max_queued_lora_training_jobs = get_settings().max_queued_lora_training_jobs
+    if count_queued_lora_training_jobs(session) >= max_queued_lora_training_jobs:
+        session.rollback()
+        return _lora_capacity_error(
+            "Training queue is full\n"
+            f"{max_queued_lora_training_jobs} trainings are already waiting. "
+            "Try again when one training starts or finishes.",
+            LoraCapacityReason.TRAINING_QUEUE_FULL,
+        )
 
     job = create_job(session, JobType.LORA_TRAINING, user_id=user.id)
     update_user_lora(
