@@ -276,14 +276,9 @@ def _refresh_provider_route(
     source = _CODEX_CLI_KNOWN_MODELS_SOURCE if (
         provider == _CODEX_PROVIDER and route is ProviderRoute.CLI
     ) else "provider API" if route is ProviderRoute.API else "provider CLI"
-    reason = (
-        normalize_route_failure(SafeRouteReasonCode.ROUTE_TEXT_ONLY)
-        if capability is ProviderRouteCapability.TEXT_ONLY
-        else None
-    )
     return ProviderRouteSnapshot(
         models, None, source, None, ProviderRouteReadinessState.READY,
-        capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+        capability, None, now, "CLI login" if route is ProviderRoute.CLI else "API key",
     )
 
 
@@ -292,8 +287,6 @@ def provider_route_capability(
     route: ProviderRoute,
 ) -> ProviderRouteCapability:
     """Return the fixed feature capability of a provider transport route."""
-    if provider == _GROK_PROVIDER and route is ProviderRoute.CLI:
-        return ProviderRouteCapability.TEXT_ONLY
     return ProviderRouteCapability.TOOLS_AVAILABLE
 
 

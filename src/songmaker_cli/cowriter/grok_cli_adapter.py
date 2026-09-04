@@ -1,4 +1,4 @@
-"""Grok subscription CLI transport for one tool-free co-writer turn."""
+"""Grok subscription CLI transport for one co-writer tool-loop turn."""
 
 from __future__ import annotations
 
@@ -22,9 +22,6 @@ from songmaker_cli.agent_cli import (
     scrubbed_env,
 )
 from songmaker_cli.claude.provider import (
-    AssistantTextEvent,
-    FinalEvent,
-    StreamEvent,
     _flatten_messages,
     _stdin_prompt,
 )
@@ -219,87 +216,6 @@ class GrokCliToolTransport:
             self._turn_directory.cleanup()
 
 
-async def stream_grok_cli_turn(
-    *, system: str, model: str, messages: list[dict[str, str]],
-) -> AsyncIterator[StreamEvent]:
-    """Yield Grok text events only after its subscription CLI accepts the turn."""
-    prompt = _stdin_prompt(system, _flatten_messages("", messages)).encode()
-    channel = CliLineChannel(COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY)
-    deadline = time.monotonic() + COWRITER_CLI_TIMEOUT_SECONDS
-    command = _build_grok_cli_command(model)
-    turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-grok-cli-")
-    os.chmod(turn_directory.name, 0o700)
-    runner = asyncio.create_task(asyncio.to_thread(
-        run_cli_bounded,
-        command,
-        stdin_payload=None,
-        read="all",
-        deadline=deadline,
-        output_read_limit_bytes=GROK_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
-        stdout_line_channel=channel,
-        prompt_file_bytes=prompt,
-        prompt_file_arg_index=_PROMPT_FILE_ARGUMENT_INDEX,
-        cwd=turn_directory.name,
-        extra_env=_grok_cli_env(),
-        unset_env=("GROK_HOME",),
-    ))
-    text_chunks: list[str] = []
-    saw_end = False
-    error_message: str | None = None
-    try:
-        while True:
-            item = await asyncio.to_thread(channel.receive)
-            if isinstance(item, CliRunOutcome):
-                outcome = item
-                break
-            event_type, event_data = _parse_grok_line(item)
-            if saw_end:
-                raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
-            if event_type in {"tool_call", "tool_call_update"}:
-                raise _GrokCliStreamFailure("grok_cli_tool_call_blocked")
-            if event_type == "text":
-                text = _text_event_data(event_data)
-                text_chunks.append(text)
-                yield AssistantTextEvent(text=text)
-                continue
-            if event_type == "end":
-                _end_event_data(event_data)
-                saw_end = True
-                continue
-            if event_type == "error":
-                error_message = _error_event_data(event_data)
-                channel.request_abort()
-                continue
-            if event_type in _IGNORED_EVENT_TYPES:
-                continue
-            raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
-        await asyncio.shield(runner)
-        _raise_for_grok_outcome(outcome, saw_end, error_message)
-        yield FinalEvent(text="".join(text_chunks))
-    except _GrokCliStreamFailure as exc:
-        channel.request_abort()
-        await asyncio.shield(runner)
-        reason = (
-            SafeRouteReasonCode.ROUTE_TEXT_ONLY
-            if exc.code == "grok_cli_tool_call_blocked"
-            else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
-        )
-        raise ProviderUnavailableError(
-            "grok",
-            "cli",
-            normalize_route_failure(reason),
-        ) from None
-    finally:
-        channel.request_abort()
-        try:
-            await asyncio.shield(runner)
-        finally:
-            try:
-                _remove_grok_sessions_for_cwd(turn_directory.name)
-            finally:
-                turn_directory.cleanup()
-
-
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     from songmaker_cli.cowriter.text_tool_protocol import (
         TextToolProtocolError,
@@ -385,24 +301,6 @@ def _log_tool_round(
         duration_ms,
         tool_name or "none",
         False,
-    )
-
-
-def _build_grok_cli_command(model: str) -> tuple[str, ...]:
-    return (
-        GROK_CLI_BINARY,
-        "--prompt-file",
-        GROK_CLI_PROMPT_FILE_PLACEHOLDER,
-        "--output-format",
-        GROK_CLI_STREAMING_OUTPUT_FORMAT,
-        "--deny",
-        "*",
-        "--max-turns",
-        "1",
-        "--no-subagents",
-        "--disable-web-search",
-        "--model",
-        model,
     )
 
 

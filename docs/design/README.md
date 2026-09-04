@@ -14,10 +14,13 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
 
 ## Inhalt
 
-- `navigation.html` — die Navigation (#263). Erste Fassung freigegeben am
-  30.08.2026, zweite Fassung freigegeben am 31.08.2026 — gegen die inzwischen
+- `navigation.html` — die Navigation (#263, #564). Erste Fassung freigegeben
+  am 30.08.2026, zweite Fassung freigegeben am 31.08.2026 — gegen die inzwischen
   gelandete Adressstruktur (#265) gehalten: jede Zeile der Leiste ist jetzt
-  eine echte Adresse, das Aufklappen ist reine Darstellung.
+  eine echte Adresse, das Aufklappen ist reine Darstellung. Neuzeichnung am
+  04.09.2026 für #564: Die Leiste ist die eine Albumliste mit Cover, Filter,
+  schaltbarem Detailgrad und ziehbarer Breite; die Reihe aus #545 ist als
+  eigene Fläche abgelöst.
 - `admin-models.html` — der Admin-Tab „Models" (#317). Erste Fassung
   freigegeben am 01.09.2026: Provider-Status oben, Co-Writer und Scoring als
   baugleiche Blöcke darunter, totes Chat-Model-Feld entfernt. Backend-
