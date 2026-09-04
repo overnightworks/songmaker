@@ -2054,11 +2054,46 @@ def test_async_probe_waits_for_cleanup_after_its_answer_budget_is_exhausted(
 
 @pytest.mark.parametrize("stdin_blocked", [False, True], ids=["read", "write"])
 def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
-    claude_binary, monkeypatch, stdin_blocked: bool,
+    claude_binary, monkeypatch, incrementing_monotonic_clock, stdin_blocked: bool,
 ) -> None:
     spawned = threading.Event()
+    pipe_stalled = threading.Event()
+    expire_probe = threading.Event()
     reaped = threading.Event()
     processes: list[MagicMock] = []
+    failures: list[BaseException] = []
+
+    class StalledPipeSelector:
+        """Drive the probe from pipe events instead of scheduler time."""
+
+        def __init__(self) -> None:
+            self._registrations: dict[object, SimpleNamespace] = {}
+
+        def __enter__(self) -> StalledPipeSelector:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def register(self, fileobj: object, _events: int, data: str) -> None:
+            self._registrations[fileobj] = SimpleNamespace(fileobj=fileobj, data=data)
+
+        def unregister(self, fileobj: object) -> None:
+            self._registrations.pop(fileobj)
+
+        def get_map(self) -> dict[object, SimpleNamespace]:
+            return self._registrations
+
+        def select(self, _timeout: float) -> list[tuple[SimpleNamespace, int]]:
+            stdin = next(
+                (item for item in self._registrations.values() if item.data == "stdin"),
+                None,
+            )
+            if stdin is not None and not stdin_blocked:
+                return [(stdin, 0)]
+            pipe_stalled.set()
+            expire_probe.wait()
+            return []
 
     def fake_popen(*_cmd, **_kw) -> MagicMock:
         proc = fake_cli_process(None, stdin_blocked=stdin_blocked)
@@ -2072,20 +2107,35 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
-    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(provider.agent_cli.selectors, "DefaultSelector", StalledPipeSelector)
+    monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
+    incrementing_monotonic_clock.step = 0
+
+    def probe() -> None:
+        try:
+            verify_no_builtin_cli_tools()
+        except BaseException as error:
+            failures.append(error)
 
     try:
-        started = time.monotonic()
-        with pytest.raises(UnavailableError, match="did not answer"):
-            verify_no_builtin_cli_tools()
-        assert time.monotonic() - started < 1
+        probe_thread = threading.Thread(target=probe)
+        probe_thread.start()
+        pipe_stalled.wait()
         assert spawned.is_set()
-        assert reaped.wait(timeout=1)
+        incrementing_monotonic_clock.now += provider.CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS
+        expire_probe.set()
+        probe_thread.join()
+
+        assert len(failures) == 1
+        assert isinstance(failures[0], UnavailableError)
+        assert "did not answer" in str(failures[0])
+        assert reaped.is_set()
         reservation = provider._reserve_zombie_admission()
         assert reservation is not None
         provider._release_zombie_reservation(reservation)
     finally:
+        expire_probe.set()
         for proc in processes:
             proc.stdout.close()
             proc._stdin_reader.close()
