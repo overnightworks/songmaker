@@ -239,7 +239,7 @@ def _refresh_provider_route(
         reason = normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR)
         return ProviderRouteSnapshot(
             (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-            reason, now, "API key",
+            capability, reason, now, "API key",
         )
     if route is ProviderRoute.CLI:
         try:
