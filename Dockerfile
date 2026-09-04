@@ -14,6 +14,7 @@ RUN pnpm build
 FROM python:3.12-slim AS backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    bubblewrap \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from unittest.mock import AsyncMock, patch
 
 from songmaker_cli.claude.provider import CliToolSurfaceError, UnavailableError
-from songmaker_cli.lifecycle import report_claude_cli_tool_surface
+from songmaker_cli.lifecycle import (
+    report_claude_cli_tool_surface,
+    report_codex_image_sandbox_runtime,
+)
 
 
 def _boot(caplog, verify: AsyncMock) -> tuple[str, str]:
@@ -57,3 +61,27 @@ def test_boot_log_confirms_a_clean_tool_surface(caplog) -> None:
     assert status == "ok"
     assert "verified" in text
     assert all(record.levelname != "ERROR" for record in caplog.records)
+
+
+def test_boot_marks_the_future_codex_cover_path_not_set_up_without_stopping(caplog) -> None:
+    caplog.set_level("INFO")
+    completed = subprocess.CompletedProcess(args=(), returncode=1)
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", return_value=completed,
+    ):
+        status = report_codex_image_sandbox_runtime()
+
+    assert status == "not_set_up"
+    assert "Codex cover image path not set up" in caplog.text
+
+
+def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
+    caplog.set_level("INFO")
+    completed = subprocess.CompletedProcess(args=(), returncode=0)
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", return_value=completed,
+    ):
+        status = report_codex_image_sandbox_runtime()
+
+    assert status == "ready"
+    assert "Codex cover image sandbox runtime verified" in caplog.text

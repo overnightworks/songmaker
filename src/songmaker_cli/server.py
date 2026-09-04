@@ -41,6 +41,7 @@ from songmaker_cli.lifecycle import (
     reap_stale_jobs,
     reconcile_crashed_loras,
     report_claude_cli_tool_surface,
+    report_codex_image_sandbox_runtime,
     resource_event_cleanup_loop,
     score_backfill_loop,
     session_sync_loop,
@@ -123,6 +124,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # provider.claude_cli_tool_surface_health() instead of this call's
     # return value, since a later co-writer turn can change it.
     await report_claude_cli_tool_surface()
+    report_codex_image_sandbox_runtime()
 
     await init_arq_pool()
     log.info("arq pool connected")

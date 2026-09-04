@@ -9,7 +9,7 @@ import re
 import ssl
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -19,6 +19,7 @@ from requirement_contract import (
     EXPECTED_OPERATOR_ID,
     EXPECTED_REPOSITORY_FULL_NAME,
     EXPECTED_REPOSITORY_ID,
+    HISTORICAL_REPOSITORY_FULL_NAMES,
     ApprovalWitness,
     RequirementShelf,
     approval_bytes,
@@ -35,7 +36,8 @@ READ_CHUNK_BYTES = 8192
 REQUEST_TIMEOUT_SECONDS = 15.0
 LIVE_DEADLINE_SECONDS = 120.0
 ROUTE = re.compile(
-    r"/repos/FlexOr2/songmaker(?:|/issues/[1-9][0-9]*|/issues/comments/[1-9][0-9]*)"
+    rf"/repos/{re.escape(EXPECTED_REPOSITORY_FULL_NAME)}"
+    r"(?:|/issues/[1-9][0-9]*|/issues/comments/[1-9][0-9]*)"
 )
 
 
@@ -132,15 +134,19 @@ class HttpsGitHubClient:
         return cls(os.environ.get("GITHUB_TOKEN", ""))
 
     def repository(self, deadline: float) -> dict[str, Any]:
-        return self._request("/repos/FlexOr2/songmaker", deadline)
+        return self._request(f"/repos/{EXPECTED_REPOSITORY_FULL_NAME}", deadline)
 
     def issue(self, issue_number: int, deadline: float) -> dict[str, Any]:
         _positive_identifier(issue_number, "issue number")
-        return self._request(f"/repos/FlexOr2/songmaker/issues/{issue_number}", deadline)
+        return self._request(
+            f"/repos/{EXPECTED_REPOSITORY_FULL_NAME}/issues/{issue_number}", deadline
+        )
 
     def comment(self, comment_id: int, deadline: float) -> dict[str, Any]:
         _positive_identifier(comment_id, "comment id")
-        return self._request(f"/repos/FlexOr2/songmaker/issues/comments/{comment_id}", deadline)
+        return self._request(
+            f"/repos/{EXPECTED_REPOSITORY_FULL_NAME}/issues/comments/{comment_id}", deadline
+        )
 
     def _request(self, route: str, deadline: float) -> dict[str, Any]:
         if ROUTE.fullmatch(route) is None:
@@ -255,7 +261,7 @@ def verify_live_witnesses(
             witness.comment_id,
         )
         observed = capture.capture(request)
-        if observed != _captured_witness(witness):
+        if not _matches_stored_witness(observed, _captured_witness(witness)):
             raise LiveWitnessError(
                 f"live approval {witness.comment_id} does not match its stored witness"
             )
@@ -347,6 +353,18 @@ def _captured_witness(witness: ApprovalWitness) -> CapturedApproval:
         witness.updated_at,
         witness.body,
         witness.body_sha256,
+    )
+
+
+def _matches_stored_witness(
+    observed: CapturedApproval, stored: CapturedApproval
+) -> bool:
+    if observed == stored:
+        return True
+    if stored.repository_full_name not in HISTORICAL_REPOSITORY_FULL_NAMES:
+        return False
+    return observed == replace(
+        stored, repository_full_name=EXPECTED_REPOSITORY_FULL_NAME
     )
 
 

@@ -67,6 +67,11 @@ def _tool_round_lines(text: str, session_id: str = _SESSION_ID) -> list[bytes]:
     ]
 
 
+def _recorded_grok_tool_round_lines() -> list[bytes]:
+    fixture = Path(__file__).with_name("fixtures") / "grok_cli_real_tool_stream.jsonl"
+    return [line.encode() + b"\n" for line in fixture.read_text().splitlines()]
+
+
 def _tool_transport_events(transport, executor):
     return stream_tool_loop(
         provider="grok",
@@ -124,6 +129,88 @@ def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypa
     )
     assert first_kwargs["deadline"] == second_kwargs["deadline"]
     assert not Path(first_kwargs["cwd"]).exists()
+
+
+def test_recorded_grok_tool_stream_executes_then_resumes_without_streaming_protocol(
+    monkeypatch,
+) -> None:
+    calls = []
+    rounds = iter([
+        _recorded_grok_tool_round_lines(),
+        _tool_round_lines("The fictional song is 68 BPM.", "01a06e35-a690-72b1-889d-804843d68226"),
+    ])
+
+    def run_cli_bounded(command, **kwargs):
+        calls.append((command, kwargs))
+        for line in next(rounds):
+            assert kwargs["stdout_line_channel"]._send(line)
+        outcome = _outcome()
+        kwargs["stdout_line_channel"]._close(outcome)
+        return outcome
+
+    monkeypatch.setattr(grok_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
+    executed: list[tuple[str, dict[str, object]]] = []
+
+    def executor(name: str, arguments: dict[str, object]) -> tuple[str, bool]:
+        executed.append((name, arguments))
+        return '{"song_id":"fixture-song-527","bpm":68}', False
+
+    events = asyncio.run(_collect_tool_events(_tool_transport_events(transport, executor)))
+
+    streamed_text = "".join(
+        event.text for event in events if isinstance(event, AssistantTextEvent)
+    )
+    assert executed == [("get_song", {"song_id": "fixture-song-527"})]
+    assert "<songmaker_tool_call>" not in streamed_text
+    assert events[-1] == FinalEvent(text="The fictional song is 68 BPM.")
+    assert calls[1][0][-2:] == ("--resume", "01a06e35-a690-72b1-889d-804843d68226")
+
+
+def test_grok_tool_stream_executes_a_write_after_prose_and_exposes_its_result_next_round(
+    monkeypatch,
+) -> None:
+    calls = []
+    state = {"bpm": 68}
+    tool_call = (
+        "I'll change the fictional song now.\n"
+        "<songmaker_tool_call>\n"
+        '{"name":"update_song_style","arguments":{"song_id":"fixture-song-527","bpm":69}}\n'
+        "</songmaker_tool_call>"
+    )
+
+    def run_cli_bounded(command, **kwargs):
+        calls.append((command, kwargs))
+        lines = (
+            _tool_round_lines(tool_call)
+            if len(calls) == 1
+            else _tool_round_lines(f"The fictional song is now {state['bpm']} BPM.")
+        )
+        for line in lines:
+            assert kwargs["stdout_line_channel"]._send(line)
+        outcome = _outcome()
+        kwargs["stdout_line_channel"]._close(outcome)
+        return outcome
+
+    def executor(name: str, arguments: dict[str, object]) -> tuple[str, bool]:
+        assert name == "update_song_style"
+        state["bpm"] = arguments["bpm"]
+        return '{"song_id":"fixture-song-527","bpm":69}', False
+
+    monkeypatch.setattr(grok_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    events = asyncio.run(_collect_tool_events(_tool_transport_events(
+        grok_cli_adapter.GrokCliToolTransport(model="grok-test"), executor,
+    )))
+
+    streamed_text = "".join(
+        event.text for event in events if isinstance(event, AssistantTextEvent)
+    )
+    assert state == {"bpm": 69}
+    assert "<songmaker_tool_call>" not in streamed_text
+    assert events[-1] == FinalEvent(
+        text="I'll change the fictional song now.\nThe fictional song is now 69 BPM.",
+    )
+    assert calls[1][0][-2:] == ("--resume", _SESSION_ID)
 
 
 def test_grok_tool_transport_rejects_a_multi_result_batch(monkeypatch) -> None:

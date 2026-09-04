@@ -12,15 +12,6 @@
 		// true. RailSettings' own onSettingsRoute is the first caller. See the
 		// effect below for why the previous value must NOT be `$state`.
 		expandTrigger?: boolean;
-		// The seam issue #305 opened for a group whose title itself navigates,
-		// now used by LIBRARY and PLAYLISTS (issue #323, ruled sentence 5 of
-		// #302): when set, the title renders as a button next to — not nested
-		// inside — the disclosure toggle, so the chevron/icon still just
-		// expand or collapse the group. A click handler rather than a plain
-		// href because the destination is a tab held in `history.state` (see
-		// selectLibraryFilter in stores/navigation.ts), not an address a link
-		// could point at.
-		onTitleClick?: () => void;
 		icon?: Snippet;
 		children: Snippet;
 	}
@@ -31,7 +22,6 @@
 		storageKey,
 		count,
 		expandTrigger = false,
-		onTitleClick,
 		icon,
 		children
 	}: Props = $props();
@@ -106,18 +96,11 @@
 			{#if icon}
 				<span class="group-icon" aria-hidden="true">{@render icon()}</span>
 			{/if}
-			{#if !onTitleClick}
-				<span class="group-title">{label}</span>
+			<span class="group-title">{label}</span>
+			{#if count !== undefined}
+				<span class="meta">{count}</span>
 			{/if}
 		</button>
-		{#if onTitleClick}
-			<button type="button" class="group-title group-title-action" onclick={onTitleClick}>
-				{label}
-			</button>
-		{/if}
-		{#if count !== undefined}
-			<span class="meta">{count}</span>
-		{/if}
 	</div>
 	<div class="rail-group-panel" data-open={open} id={groupId} inert={!open}>
 		<div class="rail-group-content">
@@ -175,23 +158,8 @@
 		letter-spacing: 0.5px;
 	}
 
-	.group-title-action {
-		flex-shrink: 0;
-		padding: 8px 16px 8px 0;
-		background: none;
-		border: none;
-		font: inherit;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-
-	.group-title-action:hover {
-		color: var(--text);
-	}
-
 	.meta {
 		margin-left: auto;
-		padding-right: 16px;
 		font-size: 0.75rem;
 		color: var(--text-subtle);
 	}
