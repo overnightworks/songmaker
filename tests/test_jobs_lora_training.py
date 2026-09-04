@@ -132,7 +132,7 @@ class _FakeWorker:
 async def _fake_events_ok(*args, **kwargs) -> AsyncIterator[tuple[str, dict]]:
     yield ("progress", {"progress": 0.05, "current_epoch": 0, "train_epochs": 500})
     yield ("progress", {"progress": 0.25, "current_epoch": 25, "train_epochs": 500})
-    yield ("progress", {"progress": 0.80, "current_epoch": 400, "train_epochs": 500})
+    yield ("progress", {"progress": 0.90, "current_epoch": 500, "train_epochs": 500})
     yield (
         "done",
         {
@@ -247,7 +247,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
 
         job = get_job(session, "job-1")
         assert job.status == JobStatus.COMPLETED
-        assert job.current_epoch == 400
+        assert job.current_epoch == 500
         assert job.train_epochs == 500
 
         audits = (
@@ -1019,12 +1019,49 @@ def test_lora_renews_repeatedly_while_model_load_outlasts_the_hold_ttl() -> None
                 worker=worker,
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         return renewals
 
     assert _run(exercise()) >= 4
+
+
+def test_lora_worker_progress_requires_training_epochs() -> None:
+    from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
+    from songmaker_cli.scheduler import WorkerProtocolError
+
+    async def exercise() -> None:
+        renew_task = asyncio.create_task(asyncio.Event().wait())
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = {"task_id": "task-1"}
+        client = MagicMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        client.post = AsyncMock(return_value=response)
+
+        async def events(*_args, **_kwargs):
+            yield ("progress", {"progress": 0.5})
+
+        with (
+            patch("httpx.AsyncClient", return_value=client),
+            patch("songmaker_cli.jobs.lora_training._iterate_task_events", events),
+            pytest.raises(WorkerProtocolError, match="invalid training epoch fields"),
+        ):
+            await _pick_and_call_worker(
+                target_mode="sft",
+                request_payload={},
+                worker=_WorkerHandle(base_url="http://fake", id="w0"),
+                hold_token="hold-token",
+                renew_task=renew_task,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                on_heartbeat=lambda: None,
+            )
+
+        assert renew_task.cancelled()
+
+    _run(exercise())
 
 
 def test_lora_starts_hold_renewal_before_marking_the_job_running(seeded, db_factory) -> None:
@@ -1291,7 +1328,7 @@ def test_cancel_before_handover_releases_the_job_hold() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()
@@ -1333,7 +1370,7 @@ def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()
@@ -1392,7 +1429,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         assert result.adapter_dir == "/tmp/adapter"
@@ -1457,7 +1494,7 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=job_renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         assert job_renew_task.cancelled()
@@ -1521,7 +1558,7 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
                 worker=_WorkerHandle(base_url="http://fake", id="w0"),
                 hold_token="hold-token",
                 renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs: None,
+                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
         assert renew_task.cancelled()

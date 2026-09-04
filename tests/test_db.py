@@ -724,9 +724,11 @@ def test_job_response_estimates_remaining_time_from_observed_epochs(
     seeded_session: Session,
 ) -> None:
     job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.status = JobStatus.RUNNING
     job.current_epoch = 100
     job.train_epochs = 500
     job.started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.training_started_at = datetime(2030, 1, 1, 0, 5, tzinfo=timezone.utc)
     seeded_session.commit()
 
     response = JobResponse.from_orm(
@@ -734,7 +736,37 @@ def test_job_response_estimates_remaining_time_from_observed_epochs(
         now=datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc),
     )
 
-    assert response.remaining_time_estimate == 2_400
+    assert response.remaining_time_estimate == 1_200
+
+
+@pytest.mark.parametrize(
+    ("status", "remaining_time_estimate"),
+    [
+        (JobStatus.QUEUED, "calculating"),
+        (JobStatus.COMPLETED, 0),
+        (JobStatus.FAILED, 0),
+        (JobStatus.PARTIAL, 0),
+        (JobStatus.CANCELLED, 0),
+    ],
+)
+def test_job_response_does_not_estimate_after_training_stops(
+    seeded_session: Session,
+    status: JobStatus,
+    remaining_time_estimate: int | str,
+) -> None:
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job.status = status
+    job.current_epoch = 400
+    job.train_epochs = 500
+    job.training_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(
+        job,
+        now=datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc),
+    )
+
+    assert response.remaining_time_estimate == remaining_time_estimate
 
 
 # ── Create generation + scores tests ─────────────────────────────────
@@ -2345,14 +2377,14 @@ def test_training_epoch_migration_up_and_down(tmp_path: Path) -> None:
 
     command.upgrade(config, migration.revision)
     engine = create_engine(f"sqlite:///{db_path}")
-    assert {"current_epoch", "train_epochs"} <= {
+    assert {"current_epoch", "train_epochs", "training_started_at"} <= {
         column["name"] for column in inspect(engine).get_columns("jobs")
     }
     engine.dispose()
 
     command.downgrade(config, migration.down_revision)
     engine = create_engine(f"sqlite:///{db_path}")
-    assert not {"current_epoch", "train_epochs"} & {
+    assert not {"current_epoch", "train_epochs", "training_started_at"} & {
         column["name"] for column in inspect(engine).get_columns("jobs")
     }
     engine.dispose()

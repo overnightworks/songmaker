@@ -87,8 +87,24 @@ class _LoraHandoverProbe:
     task_id: str | None = None
 
 
-ProgressCallback = Callable[[float, int, int], Awaitable[None] | None]
+ProgressCallback = Callable[[float, int, int, datetime | None], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
+
+
+def _worker_training_started_at(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise WorkerProtocolError("Worker progress event has invalid training start time")
+    try:
+        training_started_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise WorkerProtocolError(
+            "Worker progress event has invalid training start time",
+        ) from exc
+    if training_started_at.tzinfo is None:
+        raise WorkerProtocolError("Worker progress event has invalid training start time")
+    return training_started_at
 
 
 def _lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
@@ -228,7 +244,13 @@ async def _pick_and_call_worker(
                 raise WorkerProtocolError(
                     "Worker progress event has invalid training epoch fields",
                 )
-            maybe = on_progress(fraction, current_epoch, train_epochs)
+            training_started_at = _worker_training_started_at(data.get("training_started_at"))
+            maybe = on_progress(
+                fraction,
+                current_epoch,
+                train_epochs,
+                training_started_at,
+            )
             if asyncio.iscoroutine(maybe):
                 await maybe
         elif event_type == "done":
@@ -447,20 +469,28 @@ async def _prepare_and_submit_lora(
 
         last_update = 0.0
         last_epoch: int | None = None
+        last_training_started_at: datetime | None = None
         last_status_name: str = LoraStatus.PREPROCESSING
 
-        def on_progress(fraction: float, current_epoch: int, train_epochs: int) -> None:
-            nonlocal last_epoch, last_update, last_status_name
+        def on_progress(
+            fraction: float,
+            current_epoch: int,
+            train_epochs: int,
+            training_started_at: datetime | None,
+        ) -> None:
+            nonlocal last_epoch, last_training_started_at, last_update, last_status_name
             import time as _t
 
             now = _t.monotonic()
             if (
                 current_epoch == last_epoch
+                and training_started_at == last_training_started_at
                 and now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS
             ):
                 return
             last_update = now
             last_epoch = current_epoch
+            last_training_started_at = training_started_at
             new_status = LoraStatus.PREPROCESSING
             if fraction >= 0.90:
                 new_status = LoraStatus.EXPORTING
@@ -478,6 +508,7 @@ async def _prepare_and_submit_lora(
                 progress=fraction,
                 current_epoch=current_epoch,
                 train_epochs=train_epochs,
+                training_started_at=training_started_at,
             )
 
         def on_heartbeat() -> None:

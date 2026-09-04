@@ -396,7 +396,7 @@ export interface JobItem {
 	progress: number;
 	current_epoch?: number | null;
 	train_epochs?: number | null;
-	remaining_time_estimate: number | 'calculating';
+	remaining_time_estimate?: number | 'calculating' | null;
 	error?: string | null;
 	error_type?: string | null;
 	queue_reason?: string | null;

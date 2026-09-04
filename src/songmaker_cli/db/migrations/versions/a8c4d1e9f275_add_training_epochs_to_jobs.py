@@ -20,9 +20,13 @@ def upgrade() -> None:
     with op.batch_alter_table("jobs") as batch_op:
         batch_op.add_column(sa.Column("current_epoch", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("train_epochs", sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column("training_started_at", sa.DateTime(timezone=True), nullable=True),
+        )
 
 
 def downgrade() -> None:
     with op.batch_alter_table("jobs") as batch_op:
+        batch_op.drop_column("training_started_at")
         batch_op.drop_column("train_epochs")
         batch_op.drop_column("current_epoch")

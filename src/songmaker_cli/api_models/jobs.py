@@ -8,6 +8,8 @@ from typing import Final, Literal
 
 from pydantic import BaseModel
 
+from songmaker_cli.constants import JOB_TERMINAL_STATUSES, JobStatus
+
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
 
@@ -17,6 +19,11 @@ def _remaining_time_estimate(
     *,
     now: datetime,
 ) -> RemainingTimeEstimate:
+    if job.status in JOB_TERMINAL_STATUSES:
+        return 0
+    if job.status != JobStatus.RUNNING:
+        return REMAINING_TIME_ESTIMATE_CALCULATING
+
     current_epoch = job.current_epoch
     train_epochs = job.train_epochs
     if (
@@ -33,12 +40,12 @@ def _remaining_time_estimate(
             return 0
         return REMAINING_TIME_ESTIMATE_CALCULATING
 
-    started_at = job.started_at
-    if started_at is None:
+    training_started_at = job.training_started_at
+    if training_started_at is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
-    elapsed_seconds = (now - started_at).total_seconds()
+    if training_started_at.tzinfo is None:
+        training_started_at = training_started_at.replace(tzinfo=timezone.utc)
+    elapsed_seconds = (now - training_started_at).total_seconds()
     if elapsed_seconds <= 0:
         return REMAINING_TIME_ESTIMATE_CALCULATING
 
@@ -53,7 +60,7 @@ class JobResponse(BaseModel):
     progress: float = 0.0
     current_epoch: int | None = None
     train_epochs: int | None = None
-    remaining_time_estimate: RemainingTimeEstimate = REMAINING_TIME_ESTIMATE_CALCULATING
+    remaining_time_estimate: RemainingTimeEstimate | None = None
     error: str | None = None
     error_type: str | None = None
     queue_reason: str | None = None

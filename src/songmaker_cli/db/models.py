@@ -330,6 +330,7 @@ class Job(Base):
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     current_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     train_epochs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_started_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     queue_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -130,6 +130,7 @@ def update_job_status(
     worker_pid: int | None = None,
     current_epoch: int | None = None,
     train_epochs: int | None = None,
+    training_started_at: datetime | None = None,
 ) -> bool:
     job = (
         session.query(Job)
@@ -149,6 +150,8 @@ def update_job_status(
         job.current_epoch = current_epoch
     if train_epochs is not None:
         job.train_epochs = train_epochs
+    if training_started_at is not None:
+        job.training_started_at = training_started_at
     if worker_pid is not None:
         job.worker_pid = worker_pid
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):

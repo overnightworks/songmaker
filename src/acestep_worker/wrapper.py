@@ -677,6 +677,7 @@ async def default_train_lora_runner(
             training_seed=request.training_seed,
             gradient_checkpointing=request.gradient_checkpointing,
         )
+        await task_store.mark_training_started(task_id)
         await asyncio.to_thread(client.start_lokr, lokr_config)
         await task_store.update_progress(task_id, 0.20)
 

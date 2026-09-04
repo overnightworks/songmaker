@@ -30,6 +30,7 @@ class _Task:
     progress: float = 0.0
     current_epoch: int | None = None
     train_epochs: int | None = None
+    training_started_at: datetime | None = None
     result: TaskResult | None = None
     error: str | None = None
     created_at: datetime = field(default_factory=_now)
@@ -45,6 +46,7 @@ class _Task:
             progress=self.progress,
             current_epoch=self.current_epoch,
             train_epochs=self.train_epochs,
+            training_started_at=self.training_started_at,
             result=self.result,
             error=self.error,
             created_at=self.created_at,
@@ -82,6 +84,9 @@ class TaskStore:
     async def mark_running(self, task_id: str) -> None:
         await self._update(task_id, state="running")
 
+    async def mark_training_started(self, task_id: str) -> None:
+        await self._update(task_id, training_started_at=_now())
+
     async def update_progress(
         self,
         task_id: str,
@@ -110,6 +115,7 @@ class TaskStore:
         state: TaskState | None = None,
         progress: float | None = None,
         current_epoch: int | None = None,
+        training_started_at: datetime | None = None,
         result: TaskResult | None = None,
         error: str | None = None,
         terminal: bool = False,
@@ -124,6 +130,8 @@ class TaskStore:
                 task.progress = progress
             if current_epoch is not None:
                 task.current_epoch = current_epoch
+            if training_started_at is not None:
+                task.training_started_at = training_started_at
             if result is not None:
                 task.result = result
             if error is not None:

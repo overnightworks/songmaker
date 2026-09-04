@@ -2522,12 +2522,11 @@ def test_stream_job_initial_state(client: TestClient) -> None:
     assert events[0]["status"] == "completed"
 
 
-def test_stream_job_carries_training_epochs_and_calculating_eta(
+def test_stream_completed_job_carries_training_epochs_and_zero_eta(
     client: TestClient,
 ) -> None:
     import json
 
-    from songmaker_cli.api_models.jobs import REMAINING_TIME_ESTIMATE_CALCULATING
     from songmaker_cli.constants import JobStatus
     from songmaker_cli.db.queries import create_job
 
@@ -2550,7 +2549,7 @@ def test_stream_job_carries_training_epochs_and_calculating_eta(
 
     assert event["current_epoch"] == 0
     assert event["train_epochs"] == 500
-    assert event["remaining_time_estimate"] == REMAINING_TIME_ESTIMATE_CALCULATING
+    assert event["remaining_time_estimate"] == 0
 
 
 def test_stream_job_sends_updates(client: TestClient) -> None:

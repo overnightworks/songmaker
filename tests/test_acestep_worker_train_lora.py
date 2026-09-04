@@ -68,6 +68,7 @@ def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
         operation_events.append(f"train_lora:{request.mode}")
         train_events.append(f"start:{port}")
         await store.mark_running(task_id)
+        await store.mark_training_started(task_id)
         await store.update_progress(task_id, 0.1, current_epoch=0)
         await store.update_progress(
             task_id,
@@ -383,6 +384,7 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path) -> None:
     assert progress_events
     assert all(event["train_epochs"] == 500 for event in progress_events)
     assert any(event["current_epoch"] == 250 for event in progress_events)
+    assert any(event["training_started_at"] is not None for event in progress_events)
     assert deps._operation_events == [  # type: ignore[attr-defined]
         "load_model:sft",
         "train_lora:sft",
@@ -986,7 +988,7 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     )
 
     task_store = TaskStore()
-    task_id = _run(task_store.create("train_lora"))
+    task_id = _run(task_store.create("train_lora", train_epochs=1))
 
     output_dir = tmp_path / "shared" / "out"
     dataset_dir = tmp_path / "ds"
@@ -1095,6 +1097,9 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     snap = _run(task_store.get(task_id))
     assert snap is not None
     assert snap.state == "done"
+    assert snap.current_epoch == 1
+    assert snap.train_epochs == 1
+    assert snap.training_started_at is not None
     assert snap.result is not None
     assert snap.result.adapter_dir == str(output_dir)
     assert (output_dir / "lokr_weights.safetensors").read_bytes() == b"weights"
