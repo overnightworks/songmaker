@@ -42,24 +42,26 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
+        run: |
+          uv sync --frozen --no-build --no-install-project --extra server --extra dev --extra mcp
+          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
 
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')" # NOSONAR: uv sync above installs FastAPI from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
 
       - name: Ruff lint
-        run: uv run ruff check src/ tests/ # NOSONAR: uv sync above installs Ruff from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build ruff check src/ tests/
 
       - name: No silent-fallback smell check
-        run: uv run python scripts/check_no_silent_fallbacks.py src/ # NOSONAR: dependencies come from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
 
       - name: Check TypeScript types in sync
-        run: uv run python scripts/generate_types.py --check # NOSONAR: dependencies come from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
       - name: Run tests with coverage
         run: |
           set -o pipefail
-          uv run pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci | tee pytest-output.txt # NOSONAR: uv sync above installs Pytest and coverage tools from the committed uv.lock.
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci | tee pytest-output.txt
 
       - name: Coverage summary
         if: always()
@@ -84,10 +86,12 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
+        run: |
+          uv sync --frozen --no-build --no-install-project --extra server --extra dev --extra mcp
+          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
 
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')" # NOSONAR: uv sync above installs FastAPI from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
 
       - name: Run acceptance evidence pilot
         id: evidence
@@ -166,11 +170,13 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
+        run: |
+          uv sync --frozen --no-build --no-install-project --extra server --extra dev
+          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
       - name: Show installed FastAPI version
-        run: uv run python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')" # NOSONAR: uv sync above installs FastAPI from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run pytest tests/test_postgresql.py -n 0 -q --tb=short # NOSONAR: uv sync above installs Pytest from the committed uv.lock.
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py -n 0 -q --tb=short
 
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})

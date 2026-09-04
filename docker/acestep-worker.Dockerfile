@@ -11,11 +11,15 @@ WORKDIR /app
 # completely independent from /opt/acestep/.venv (different concerns: HTTP
 # wrapper vs ACE-Step model subprocess). The wrapper image stays small.
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project --extra acestep-worker # NOSONAR: uv.lock pins nvidia-ml-py3==7.352.0, which has no wheel and must be built from its source distribution.
+# The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source
+# distribution. Every other dependency must be an already-built wheel.
+RUN uv export --frozen --no-dev --no-emit-project --extra acestep-worker --format requirements.txt -o /tmp/requirements.txt && \
+    uv venv .venv && \
+    uv --no-config pip install --python .venv/bin/python --require-hashes --only-binary :all: --no-binary nvidia-ml-py3 -r /tmp/requirements.txt
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
-RUN uv sync --frozen --no-dev --extra acestep-worker # NOSONAR: the local Songmaker project is installed editable and has no wheel; third-party dependencies are frozen in uv.lock.
+RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable .
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
@@ -23,4 +27,4 @@ RUN uv sync --frozen --no-dev --extra acestep-worker # NOSONAR: the local Songma
 # image that mounts it must carry it, owned by songmaker.
 RUN mkdir -p /app/data/audio
 
-ENTRYPOINT ["uv", "run", "python", "-m", "acestep_worker"]
+ENTRYPOINT ["uv", "run", "--no-sync", "--frozen", "--no-build", "python", "-m", "acestep_worker"]

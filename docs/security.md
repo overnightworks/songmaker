@@ -755,8 +755,9 @@ release tag (with the release series recorded beside it), so a moved tag cannot
 change a workflow. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
-The only source builds are the repository's own editable project and
-`nvidia-ml-py3`, which has no published wheel.
+The repository itself is installed as the trusted local editable project. All
+third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
+hash-verified release has no published wheel.
 
 The local requirement binder now owns that write boundary. A parent process
 enforces a 120-second wall limit over one guarded private worker process group;
