@@ -67,6 +67,7 @@ async def stream_codex_cli_turn(
     text_chunks: list[str] = []
     saw_success = False
     error_message: str | None = None
+    completed_error_item_message: str | None = None
     try:
         while True:
             line_or_outcome = await asyncio.to_thread(channel.receive)
@@ -82,6 +83,10 @@ async def stream_codex_cli_turn(
                 item_type = _item_type(event)
                 if item_type in _BLOCKED_ITEM_TYPES:
                     raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
+                if event_type == "item.completed" and item_type == "error":
+                    completed_error_item_message = _completed_error_item_message(event)
+                    _log_completed_error_item(completed_error_item_message)
+                    continue
                 if item_type not in _INFORMATIONAL_ITEM_TYPES:
                     raise _unsupported_stream_event(event_type, item_type)
                 if event_type == "item.completed" and item_type == "agent_message":
@@ -103,7 +108,12 @@ async def stream_codex_cli_turn(
                 continue
             raise _unsupported_stream_event(event_type)
         await asyncio.shield(runner)
-        _raise_for_codex_outcome(outcome, saw_success, error_message)
+        _raise_for_codex_outcome(
+            outcome,
+            saw_success,
+            error_message,
+            completed_error_item_message,
+        )
         yield FinalEvent(text="".join(text_chunks))
     except _CodexCliStreamFailure as exc:
         channel.request_abort()
@@ -129,6 +139,12 @@ def _build_codex_cli_command(model: str) -> tuple[str, ...]:
         "--ignore-user-config",
         "--ignore-rules",
         "--ephemeral",
+        "--disable",
+        "code_mode_host",
+        "--disable",
+        "code_mode",
+        "--disable",
+        "code_mode_only",
         "-c",
         'approval_policy="never"',
         "-c",
@@ -158,6 +174,31 @@ def _completed_agent_message(event: dict[str, object]) -> str:
     if not isinstance(text, str):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return text
+
+
+def _completed_error_item_message(event: dict[str, object]) -> str:
+    message = _item(event).get("message")
+    if not isinstance(message, str):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return message
+
+
+def _log_completed_error_item(message: str) -> None:
+    log.warning(
+        "Codex CLI error item (message_class=%s)",
+        _error_message_class(message),
+    )
+
+
+def _error_message_class(message: str) -> str:
+    words: list[str] = []
+    for word in message.split():
+        if not word.isalpha() or len(word) > 24:
+            break
+        words.append(word.lower())
+        if len(words) == 4:
+            break
+    return "_".join(words) or "unclassified"
 
 
 def _item_type(event: dict[str, object]) -> str:
@@ -214,7 +255,14 @@ def _raise_for_codex_outcome(
     outcome: CliRunOutcome,
     saw_success: bool,
     error_message: str | None,
+    completed_error_item_message: str | None,
 ) -> None:
+    if saw_success:
+        if not outcome.complete or outcome.returncode != 0:
+            _raise_codex_cli_failure(outcome, None)
+        return
+    if completed_error_item_message is not None:
+        _raise_codex_cli_failure(outcome, completed_error_item_message)
     if error_message is not None:
         _raise_codex_cli_failure(outcome, error_message)
     if not outcome.complete or outcome.returncode != 0:
