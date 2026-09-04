@@ -583,6 +583,7 @@ def _route_statuses(
         ProviderRouteReadinessState,
         ProviderSurface,
         models_with_active_model,
+        provider_route_capability,
     )
     from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_failure
 
@@ -592,6 +593,7 @@ def _route_statuses(
                 models=[],
                 readiness=ProviderRouteReadiness(
                     state=ProviderRouteReadinessState.UNVERIFIED.value,
+                    capability=provider_route_capability(provider, route).value,
                     setup_label="CLI login" if route is ProviderRoute.CLI else "API key",
                 ),
             )
@@ -623,6 +625,7 @@ def _route_statuses(
             catalog_version=route_snapshot.catalog_version,
             readiness=ProviderRouteReadiness(
                 state=readiness_state,
+                capability=route_snapshot.capability.value,
                 reason=readiness_reason,
                 probed_at=route_snapshot.probed_at.isoformat(),
                 setup_label=route_snapshot.setup_label,

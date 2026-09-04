@@ -110,7 +110,7 @@ async def stream_grok_cli_turn(
         channel.request_abort()
         await asyncio.shield(runner)
         reason = (
-            SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+            SafeRouteReasonCode.ROUTE_TEXT_ONLY
             if exc.code == "grok_cli_tool_call_blocked"
             else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
         )
