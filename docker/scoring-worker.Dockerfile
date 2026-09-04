@@ -17,10 +17,8 @@ USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 # The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source
-# distribution. Every other dependency must be an already-built wheel.
-RUN uv export --frozen --no-dev --no-emit-project --extra server --extra scoring --extra whisper --extra claude --format requirements.txt -o /tmp/requirements.txt && \
-    uv venv .venv && \
-    uv --no-config pip install --python .venv/bin/python --require-hashes --only-binary :all: --no-binary nvidia-ml-py3 --torch-backend cu121 -r /tmp/requirements.txt
+# distribution, so this locked sync alone may build it.
+RUN uv sync --frozen --no-dev --no-install-project --extra server --extra scoring --extra whisper --extra claude # NOSONAR: nvidia-ml-py3 has no wheel in the lockfile; every dependency remains resolved from uv.lock.
 
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
 RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run --no-sync --frozen --no-build python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')"

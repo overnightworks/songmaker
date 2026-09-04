@@ -42,9 +42,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: |
-          uv sync --frozen --no-build --no-install-project --extra server --extra dev --extra mcp
-          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
+        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -86,9 +84,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Install dependencies
-        run: |
-          uv sync --frozen --no-build --no-install-project --extra server --extra dev --extra mcp
-          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
+        run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -170,9 +166,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install dependencies
-        run: |
-          uv sync --frozen --no-build --no-install-project --extra server --extra dev
-          uv pip install --python .venv/bin/python --no-deps --no-build --editable .
+        run: uv sync --frozen --extra server --extra dev # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially

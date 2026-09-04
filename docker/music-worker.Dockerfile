@@ -15,9 +15,7 @@ USER songmaker
 RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN uv export --frozen --no-dev --no-emit-project --extra server --format requirements.txt -o /tmp/requirements.txt && \
-    uv venv .venv && \
-    uv --no-config pip install --python .venv/bin/python --require-hashes --only-binary :all: -r /tmp/requirements.txt
+RUN uv sync --frozen --no-build --no-dev --no-install-project --extra server
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
