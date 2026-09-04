@@ -282,6 +282,35 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 # ── /api/chat/turn ────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    ("provider", "route", "tools_available"),
+    [
+        ("claude", "cli", True),
+        ("claude", "api", True),
+        ("grok", "cli", False),
+        ("grok", "api", True),
+        ("codex", "cli", True),
+        ("codex", "api", True),
+    ],
+)
+def test_cowriter_prompt_matches_each_route_tool_capability(
+    provider, route, tools_available,
+):
+    from songmaker_cli.conversation_api import (
+        COWRITER_ROUTE_TOOLS_AVAILABLE,
+        COWRITER_TEXT_ONLY_INSTRUCTIONS,
+        COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS,
+        build_cowriter_system_prompt,
+    )
+
+    prompt = build_cowriter_system_prompt(
+        tools_available=COWRITER_ROUTE_TOOLS_AVAILABLE[(provider, route)],
+    )
+
+    assert (COWRITER_TEXT_ONLY_INSTRUCTIONS in prompt) is (not tools_available)
+    assert (COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS in prompt) is tools_available
+
+
 def test_chat_turn_streams_sse_and_stores_messages(client):
     c, factory = client
     mock_stream = _mock_claude("ok")

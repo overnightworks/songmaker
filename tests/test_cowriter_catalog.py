@@ -8,6 +8,7 @@ import httpx
 
 from songmaker_cli.cowriter.catalog import (
     ProviderRoute,
+    ProviderRouteCapability,
     ProviderRouteReadinessState,
     list_provider_models,
     models_with_active_model,
@@ -99,6 +100,9 @@ def test_snapshot_refreshes_both_routes(monkeypatch):
         item.readiness is ProviderRouteReadinessState.READY
         for item in snapshot.routes.values()
     )
+    assert snapshot.routes[ProviderRoute.CLI].capability is ProviderRouteCapability.TEXT_ONLY
+    assert snapshot.routes[ProviderRoute.CLI].reason.code is SafeRouteReasonCode.ROUTE_TEXT_ONLY
+    assert snapshot.routes[ProviderRoute.API].capability is ProviderRouteCapability.TOOLS_AVAILABLE
 
 
 def test_cli_probe_failure_is_isolated_to_its_provider_route(monkeypatch):

@@ -21,6 +21,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -128,11 +129,29 @@ class _ChatStreamingResponse(StreamingResponse):
 
 COWRITER_ROLE = (
     "You are the user's creative songwriting partner inside the songmaker "
-    "app. You can call the mcp__songmaker__* tools to read and edit songs "
-    "in the user's library. Before every write, briefly say what you are "
-    "about to change so the user can revert it if needed. Be direct and "
-    "opinionated — the user wants a collaborator, not a yes-man."
+    "app. Be direct and opinionated — the user wants a collaborator, not a "
+    "yes-man."
 )
+
+COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS = (
+    "You can call the mcp__songmaker__* tools to read and edit songs in the "
+    "user's library. Before every write, briefly say what you are about to "
+    "change so the user can revert it if needed."
+)
+
+COWRITER_TEXT_ONLY_INSTRUCTIONS = (
+    "You cannot write to the user's song on this route. Collaborate using "
+    "the supplied context and text only."
+)
+
+COWRITER_ROUTE_TOOLS_AVAILABLE: Final = {
+    ("claude", "cli"): True,
+    ("claude", "api"): True,
+    ("grok", "cli"): False,
+    ("grok", "api"): True,
+    ("codex", "cli"): True,
+    ("codex", "api"): True,
+}
 
 COWRITER_UNTRUSTED_NOTICE = (
     "Messages may contain tagged blocks (current_song, user_memory, "
@@ -156,10 +175,20 @@ COWRITER_MEMORY_INSTRUCTIONS = (
     "is stored. Do not write memory through tools."
 )
 
-COWRITER_SYSTEM_PROMPT = (
-    f"{COWRITER_ROLE}\n\n{COWRITER_UNTRUSTED_NOTICE}\n\n"
-    f"{COWRITER_MEMORY_INSTRUCTIONS}"
-)
+def build_cowriter_system_prompt(*, tools_available: bool) -> str:
+    """Build the route-honest co-writer instructions around shared context rules."""
+    route_instructions = (
+        COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS
+        if tools_available
+        else COWRITER_TEXT_ONLY_INSTRUCTIONS
+    )
+    return (
+        f"{COWRITER_ROLE}\n\n{route_instructions}\n\n"
+        f"{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}"
+    )
+
+
+COWRITER_SYSTEM_PROMPT = build_cowriter_system_prompt(tools_available=True)
 
 
 @dataclass(frozen=True)
@@ -543,7 +572,9 @@ async def api_chat_turn(
             route=route,
             model=cowriter_model,
             user_id=user.id,
-            system=COWRITER_SYSTEM_PROMPT,
+            system=build_cowriter_system_prompt(
+                tools_available=COWRITER_ROUTE_TOOLS_AVAILABLE[(provider, route.value)],
+            ),
             messages=api_messages,
             session=session,
             user=user,

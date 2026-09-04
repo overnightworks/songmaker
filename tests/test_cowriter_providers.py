@@ -481,6 +481,24 @@ def test_claude_api_catalog_stays_available_to_the_judge_while_cowriter_is_pendi
     assert providers["claude"]["judge"]["state"] == "configured"
 
 
+def test_grok_cli_route_status_is_ready_but_text_only(
+    admin_client, every_provider_is_configured,
+):
+    client, _ = admin_client
+    refresh_provider_snapshots()
+
+    response = client.get("/api/settings/cowriter")
+
+    assert response.status_code == 200
+    readiness = response.json()["provider_routes_status"]["grok"]["cli"]["readiness"]
+    assert readiness["state"] == "ready"
+    assert readiness["capability"] == "text_only"
+    assert readiness["reason"] == {
+        "code": "route_text_only",
+        "message": "Song tools are not available over the Grok CLI today.",
+    }
+
+
 def test_cowriter_put_without_routes_preserves_the_stored_route_map(
     admin_client, every_provider_is_configured,
 ):
