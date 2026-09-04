@@ -113,6 +113,15 @@ def count_queued_generation_jobs(session: Session) -> int:
     )
 
 
+def count_queued_lora_training_jobs(session: Session) -> int:
+    """Count globally waiting LoRA trainings, excluding running jobs."""
+    return (
+        session.query(Job)
+        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.LORA_TRAINING)
+        .count()
+    )
+
+
 def update_job_status(
     session: Session, job_id: str, status: str,
     progress: float = 0.0, error: str | None = None,

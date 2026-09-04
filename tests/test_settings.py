@@ -47,3 +47,19 @@ def test_rejects_an_invalid_lora_training_timeout_order(
 
     with pytest.raises(ValidationError, match="progress poll < reaper < arq"):
         Settings(**_required_settings())
+
+
+def test_voice_capacity_defaults_are_configured() -> None:
+    settings = Settings(**_required_settings())
+
+    assert settings.max_user_loras == 10
+    assert settings.max_queued_lora_training_jobs == 2
+
+
+@pytest.mark.parametrize(
+    "setting",
+    ["max_user_loras", "max_queued_lora_training_jobs"],
+)
+def test_rejects_non_positive_voice_capacity(setting: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**_required_settings(), **{setting: 0})

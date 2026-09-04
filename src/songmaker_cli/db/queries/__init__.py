@@ -156,6 +156,9 @@ from songmaker_cli.db.queries.jobs import count_cover_jobs_since as count_cover_
 from songmaker_cli.db.queries.jobs import (
     count_queued_generation_jobs as count_queued_generation_jobs,
 )
+from songmaker_cli.db.queries.jobs import (
+    count_queued_lora_training_jobs as count_queued_lora_training_jobs,
+)
 from songmaker_cli.db.queries.jobs import count_total_queued_jobs as count_total_queued_jobs
 from songmaker_cli.db.queries.jobs import count_user_active_jobs as count_user_active_jobs
 from songmaker_cli.db.queries.jobs import (
@@ -191,6 +194,9 @@ from songmaker_cli.db.queries.library import search_library as search_library
 from songmaker_cli.db.queries.library import title_matches as title_matches
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample as add_user_lora_sample,
+)
+from songmaker_cli.db.queries.loras import (
+    count_active_user_loras as count_active_user_loras,
 )
 from songmaker_cli.db.queries.loras import (
     count_user_lora_samples as count_user_lora_samples,
