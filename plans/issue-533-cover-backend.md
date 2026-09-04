@@ -21,15 +21,28 @@ sie ist kein Auftrag, die dortige Verantwortung zu kopieren.
 - Eine neue AlbumCoverSuggestion-Tabelle gehört zum Album und enthält eine
   nicht erratbare ID, job_id, den **relativ zum Audio-Volume** gespeicherten
   PNG-Pfad und created_at; Job erhält für JobType.COVER ein indiziertes
-  album_id-FK mit ondelete=CASCADE. Die Tabelle ist das dauerhafte Ergebnis
-  einer Gruppe, nicht ein Ergebnis-JSON: drei Dateien müssen nach Reload
-  wählbar bleiben. Die Migration fügt Beziehungen und Indizes ohne Backfill
-  hinzu; beim endgültigen Album-Löschen löschen DB-Cascade und ein
-  Commit-nachgelagerter Datei-Cleanup die Vorschlagsdateien. **Code-Beleg:**
-  Job hat bisher nur user_id und song_id
-  (src/songmaker_cli/db/models.py:321-340), und create_job kann folglich
-  bislang kein Album verknüpfen
-  (src/songmaker_cli/db/queries/jobs.py:28-34).
+  album_id-FK mit ondelete=CASCADE. Jeder Pfad liegt ausschließlich als
+  `cover-suggestions/{album_id}/{suggestion_id}.png` unter dem Audio-Volume:
+  dieser Geschwisterbaum von `covers/` wird durch einen eigenen
+  Suggestion-Cleanup-Owner entfernt. Damit kann DELETE `/cover` mit seinem
+  bestehenden `covers/{album_id}`-Cleanup keine Vorschläge berühren. Der neue
+  Owner löst jeden gespeicherten Pfad über `canonical_audio_path` auf und
+  entfernt nur in diesem Baum eingeschlossene Dateien bzw. Album-Verzeichnisse.
+  Die Tabelle ist das dauerhafte Ergebnis einer Gruppe, nicht ein
+  Ergebnis-JSON: drei Dateien müssen nach Reload wählbar bleiben. Die Migration
+  fügt Beziehungen und Indizes ohne Backfill hinzu; beim endgültigen
+  Album-Löschen löschen DB-Cascade und ein Commit-nachgelagerter
+  Suggestion-Datei-Cleanup die Vorschlagsdateien — sowohl beim Retention-Reaper
+  als auch beim Hard-Delete eines Nutzers. **Code-Beleg:** Job hat bisher nur
+  user_id und song_id (src/songmaker_cli/db/models.py:321-340), und create_job
+  kann folglich bislang kein Album verknüpfen
+  (src/songmaker_cli/db/queries/jobs.py:28-34). Der bestehende
+  `remove_album_cover_files`-Owner löscht dagegen vollständig
+  `covers/{album_id}` (src/songmaker_cli/covers.py:226-228, 437-452); die zwei
+  Hard-Delete-Pfade rufen ihn nach Commit auf
+  (src/songmaker_cli/cleanup.py:80-85,
+  src/songmaker_cli/admin_api.py:226-233), und `canonical_audio_path` ist der
+  vorhandene Volume-Containment-Owner (src/songmaker_cli/audio_paths.py:67-76).
 - „Discard all“ löscht ausschließlich die Vorschlagszeilen und ihre Dateien
   erst nach Commit; es fasst nie das durch cover_key ausgewählte Bild an.
   DELETE /cover bleibt ausschließlich das Entfernen des gewählten Covers.
@@ -49,8 +62,9 @@ sie ist kein Auftrag, die dortige Verantwortung zu kopieren.
   bereits AlbumResponse.from_orm()
   (src/songmaker_cli/album_api.py:79-90).
 - POST /api/albums/{album_id}/cover-suggestions prüft erst check_album_access,
-  nimmt dann einen eigenen Album-Schlüssel unter BEGIN IMMEDIATE/
-  Postgres-Advisory-Lock, zählt JobType.COVER für dieses Album seit
+  committet danach — wie `unique_album_id` — die ausschließlich von Auth
+  veränderte Session, nimmt erst dann einen eigenen Album-Schlüssel unter BEGIN
+  IMMEDIATE/Postgres-Advisory-Lock, zählt JobType.COVER für dieses Album seit
   **UTC-Tagesbeginn** (auch fehlgeschlagene Versuche), erzeugt
   create_job(..., album_id=album.id), committet und startet danach die
   Hintergrund-Task. Bei zehn Versuchen ist der elfte 429; ein schon aktiver
@@ -59,7 +73,9 @@ sie ist kein Auftrag, die dortige Verantwortung zu kopieren.
   einstellbares Stundenlimit. **Code-Beleg:** check_album_access versteckt
   fremde Alben mit 404 (src/songmaker_cli/api_helpers.py:418-423),
   _begin_exclusive ist der bestehende transaktionale Lock-Owner
-  (src/songmaker_cli/api_helpers.py:99-110), aber
+  (src/songmaker_cli/api_helpers.py:99-110); `unique_album_id` committet vor
+  dem Lock, damit SQLite und Postgres dieselbe Check-then-act-Grenze erhalten
+  (src/songmaker_cli/api_helpers.py:308-324), aber
   create_job_with_rate_limit kennt nur Generate/Score/Chat und zählt pro
   Nutzer/Stunde (src/songmaker_cli/api_helpers.py:192-285). Daher wird
   dieser Helper bewusst nicht wiederverwendet.
@@ -136,9 +152,15 @@ modellgenannten Pfad noch CWD-Dateien aus diesem Versuch vertrauen.
 
 1. Ein eigenes Bild-Entry im Codex-Adapter besitzt die Spawn-Entscheidung und
    nutzt ausschließlich run_cli_bounded; es teilt keinen neuen Prozess-Owner.
-   **Code-Beleg:** Der Co-Writer ruft diesen begrenzten Runner schon aus
-   asyncio.to_thread auf
-   (src/songmaker_cli/cowriter/codex_cli_adapter.py:41-58).
+   `run_cli_bounded` erhält dafür einen expliziten, nur für den Kindprozess
+   geltenden `extra_env`-Parameter: Es baut `scrubbed_env()` und ergänzt allein
+   diese Werte, statt `os.environ` zu mutieren. Der Bildadapter übergibt daran
+   ausschließlich sein privates `CODEX_HOME`. **Code-Beleg:** Der Co-Writer
+   ruft diesen begrenzten Runner schon aus asyncio.to_thread auf
+   (src/songmaker_cli/cowriter/codex_cli_adapter.py:41-58), aber der Runner
+   übergibt heute fest `env=scrubbed_env()` an Popen
+   (src/songmaker_cli/agent_cli.py:306-321, 421-428); ohne diesen schmalen
+   Parameter wäre die geforderte Isolation nicht durchsetzbar.
 2. Das feste argv folgt _build_codex_cli_command, verwendet aber
    --sandbox workspace-write, --json, --ephemeral, leeres MCP und
    Stdin-Prompt. Der JSON-Gate akzeptiert nur image_gen sowie erwartete
@@ -150,7 +172,7 @@ modellgenannten Pfad noch CWD-Dateien aus diesem Versuch vertrauen.
    und blockiert unbekannte item.*-Typen bereits fail-closed
    (src/songmaker_cli/cowriter/codex_cli_adapter.py:70-101).
 3. Jeder Aufruf erhält ein privates temporäres Arbeitsverzeichnis und setzt
-   CODEX_HOME darauf; ausschließlich der nötige, redigierte
+   CODEX_HOME über `extra_env` darauf; ausschließlich der nötige, redigierte
    auth.json-Login-Mirror wird dorthin kopiert. Nach Reap sucht der Server per
    Glob **genau ein** PNG nur unter diesem privaten CODEX_HOME-Baum
    (einschließlich generated_images), niemals anhand eines JSONL-Pfads oder
@@ -162,7 +184,7 @@ modellgenannten Pfad noch CWD-Dateien aus diesem Versuch vertrauen.
    (src/songmaker_cli/cowriter/codex_cli_adapter.py:48-58); der reale
    Login-Mirror liegt jedoch global unter /home/songmaker/.codex/auth.json
    (docker-compose.yml:134-142), weshalb ein privates CODEX_HOME eine
-   explizite Kopie braucht.
+   explizite Kopie und die child-lokale Runner-Umgebung braucht.
 4. Erst **nach** erfolgreichem Reap normalisiert Pillow das einzig gefundene
    Artefakt zu einem quadratischen, metadatenfreien RGB/RGBA-PNG mit exakt
    1024×1024 Pixeln. Der Writer prüft Größe, PNG-Signatur, Dekodierbarkeit und
@@ -211,6 +233,10 @@ unverändert bleibt, PUT nur JSON-Suggestion akzeptiert,
 CoverSuggestionsResponse letzten Job/Vorschläge/used_today/Limit liefert, und
 Fremde inklusive Vorschlagsdatei 404 erhalten.
 
+Vor dem C1a-Dispatch berichtigt der Head außerdem den Körper von #533 auf
+denselben HTTP-Vertrag (POST ist und bleibt Upload; PUT nimmt ausschließlich
+`suggestion_id`), damit die Plan- und Issue-Verträge nicht auseinanderlaufen.
+
 **C1b – hängt an C1a:** Web-Background-Job, Prompt, Codex-Bildadapter,
 CODEX_HOME-Isolierung, Dateiübernahme, Heartbeats und Sanitizing. C1b ist
 fertig, wenn drei erfolgreiche Dateien vorhanden sind oder bei Fehler keine
@@ -227,11 +253,21 @@ Gruppe; #533 schließt erst mit beiden Slices und dem Live-Proof.
   liveness_signal=None, Reaper-Schwelle, vor/während/nach-Heartbeat,
   Deadline-Reaper-Budget-Reihenfolge, Reap vor Übernahme sowie die drei
   Vorschlags-Atomizität. Sie pinnen das feste argv inklusive workspace-write,
-  privaten CWD und CODEX_HOME, kopierten Login-Mirror, Stdin-Prompt mit
-  Einzel-/Gesamtlimits, Datenquotierung, erlaubtem image_gen-Gate und Fehler
-  für command_execution/Netz/MCP/Datei/unbekannt. Sie erzwingen außerdem
+  privaten CWD und child-lokalem `extra_env`-CODEX_HOME, kopierten Login-Mirror,
+  Stdin-Prompt mit
+  Einzel-/Gesamtlimits, Datenquotierung, optionalem `image_gen`- sowie den
+  erwarteten Lifecycle-/Text-Events und Fehler für command_execution/Netz/MCP/
+  Datei/unbekannt. Sie verlangen nicht, dass ein `image_gen`-Event erscheint:
+  der dokumentierte erfolgreiche Versuch enthielt nur agent_message und
+  command_execution. Sie erzwingen außerdem
   Server-Glob statt JSONL-Pfad sowie Ablehnung von fehlenden, mehreren,
   falschen, zu großen, nicht dekodierbaren und Traversal-Artefakten.
+- Persistenz-/Cleanup-Tests erzwingen den Geschwisterpfad
+  `cover-suggestions/{album_id}/…` außerhalb von `covers/`, seine kanonische
+  Volume-Containment-Prüfung, Discard-all nach Commit sowie die Entfernung
+  nach Commit aus beiden bestehenden Album-Hard-Delete-Pfaden (Retention und
+  Nutzer-Hard-Delete). Ein DELETE `/cover` darf die Vorschläge dabei nicht
+  entfernen.
 - Modell-/Schnitt-Tests erzwingen _sanitize_error für beide Musikertexte und
   alle Cover-Fehler, AlbumResponse.from_orm, CoverSuggestionsResponse.from_orm
   und generate_types.py --check.
