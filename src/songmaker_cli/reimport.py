@@ -92,5 +92,5 @@ def reimport_files(
         cleanup_reimported_files(audio_dir, user_id, generation_id)
         raise
 
-    log.info("Reimported %s as generation %s for song %s", mp3_file or wav_file, gen.id, song_id)
+    log.info("Audio reimport completed")
     return gen.id
