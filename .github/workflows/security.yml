@@ -26,11 +26,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-      - name: Install locked security tools
-        run: uv sync --frozen --extra dev # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
-
       - name: Run bandit
-        run: uv run bandit -r src/ -c pyproject.toml # NOSONAR: Bandit is installed from the committed uv.lock.
+        run: uvx --isolated --from 'bandit[toml]>=1.8,<2' bandit -r src/ -c pyproject.toml # NOSONAR: Bandit runs in its own tool environment so its resolution cannot change worker-image dependencies.
 
   pip-audit:
     name: pip-audit (Python dependencies)
@@ -44,11 +41,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-      - name: Install locked project and audit dependencies
+      - name: Install locked project dependencies
         run: uv sync --frozen --extra server --extra dev --extra mcp # NOSONAR: the local editable Songmaker project has no wheel; third-party dependencies are frozen in uv.lock.
 
       - name: Audit Python dependencies
-        run: uv run pip-audit --skip-editable --ignore-vuln CVE-2026-4539 # NOSONAR: pip-audit is installed from the committed uv.lock.
+        run: uvx --isolated --from 'pip-audit>=2.9,<3' pip-audit --path .venv/lib/python3.12/site-packages --skip-editable --ignore-vuln CVE-2026-4539 # NOSONAR: pip-audit runs in its own tool environment and audits the project environment created from uv.lock.
 
   npm-audit:
     name: npm audit (Frontend dependencies)

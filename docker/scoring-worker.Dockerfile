@@ -16,7 +16,7 @@ RUN chown songmaker:songmaker /app
 USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-build --no-dev --no-install-project --extra server --extra scoring --extra whisper --extra claude
+RUN uv sync --frozen --no-dev --no-install-project --extra server --extra scoring --extra whisper --extra claude # NOSONAR: nvidia-ml-py3 has no wheel, so this locked dependency graph must build its source distribution.
 
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
 RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')" # NOSONAR: loads model weights through faster-whisper, which uv.lock pins; it installs no Python dependency.

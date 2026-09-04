@@ -11,7 +11,7 @@ WORKDIR /app
 # completely independent from /opt/acestep/.venv (different concerns: HTTP
 # wrapper vs ACE-Step model subprocess). The wrapper image stays small.
 COPY --chown=songmaker pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-build --no-dev --no-install-project --extra acestep-worker
+RUN uv sync --frozen --no-dev --no-install-project --extra acestep-worker # NOSONAR: nvidia-ml-py3 has no wheel, so this locked dependency graph must build its source distribution.
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
