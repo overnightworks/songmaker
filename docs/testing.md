@@ -2,9 +2,10 @@
 
 ## Running Tests
 
-Agents and subagents run **only the tests that prove the change**. The full
-suite belongs to GitHub CI so it does not saturate this machine (atelier-2
-rule: local = targeted, land gate = CI).
+Agents and subagents run **only the tests that prove the change** and omit
+`-n auto`; GitHub CI explicitly sets `-n auto` for parallel test runs, while
+the full suite remains its responsibility (atelier-2 rule: local = targeted,
+land gate = CI).
 
 ```bash
 # Backend — targeted (local / agents)
@@ -32,7 +33,7 @@ The profile deliberately ignores two repository-wide smells. `python:S9100` is i
 
 ### Parallel Execution
 
-Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
+CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` and SQLite database
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
