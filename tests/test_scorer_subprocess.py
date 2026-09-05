@@ -355,11 +355,8 @@ def test_scorer_process_timeout_kills_child(tmp_path: Path) -> None:
         )
 
     assert not sp.alive
-    try:
+    with pytest.raises(OSError):
         os.kill(pid, 0)
-        pytest.fail("Child process should not exist")
-    except OSError:
-        pass
 
 
 def test_scorer_process_restarts_after_kill(tmp_path: Path) -> None:
@@ -483,11 +480,9 @@ def test_scorer_process_stops_after_the_replacement_child_also_crashes() -> None
         _FakeConnection(send_error=BrokenPipeError()),
         _FakeConnection(send_error=BrokenPipeError()),
     ))
-    with (
-        patch.object(sp, "_ensure_started", side_effect=lambda: next(connections)),
-        pytest.raises(RuntimeError, match="crashed twice"),
-    ):
-        sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
+    with patch.object(sp, "_ensure_started", side_effect=lambda: next(connections)):
+        with pytest.raises(RuntimeError, match="crashed twice"):
+            sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
 
 
 def test_scorer_process_propagates_a_child_pipeline_error() -> None:
@@ -495,11 +490,9 @@ def test_scorer_process_propagates_a_child_pipeline_error() -> None:
 
     conn = _FakeConnection(incoming=[ScoreResponse(scores=None, error="scorer failed")])
     sp = ScorerProcess()
-    with (
-        patch.object(sp, "_ensure_started", return_value=conn),
-        pytest.raises(RuntimeError, match="scorer failed"),
-    ):
-        sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
+    with patch.object(sp, "_ensure_started", return_value=conn):
+        with pytest.raises(RuntimeError, match="scorer failed"):
+            sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
 
 
 def test_scorer_process_delivers_progress_before_its_final_scores() -> None:
@@ -547,15 +540,13 @@ def test_scorer_process_times_out_before_waiting_for_a_child_response(
         "kill",
         lambda _pid, signal_number: signals.append(signal_number),
     )
-    with (
-        patch.object(sp, "_ensure_started", return_value=conn),
-        pytest.raises(TimeoutError, match="1s"),
-    ):
-        sp.score(
-            Path("song.mp3"),
-            scorers=["silence"],
-            config=PipelineConfig(device="cpu", pipeline_timeout=1),
-        )
+    with patch.object(sp, "_ensure_started", return_value=conn):
+        with pytest.raises(TimeoutError, match="1s"):
+            sp.score(
+                Path("song.mp3"),
+                scorers=["silence"],
+                config=PipelineConfig(device="cpu", pipeline_timeout=1),
+            )
 
     assert conn.sent
     assert signals == [signal.SIGTERM]

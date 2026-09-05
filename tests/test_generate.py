@@ -215,14 +215,12 @@ def test_write_output_stops_before_creating_files_when_mastering_fails(tmp_path:
     mp3_path = tmp_path / "song.mp3"
     wav_path = tmp_path / "song.wav"
 
-    with (
-        patch(
-            "songmaker_cli.generate.master_audio",
-            side_effect=MasteringError("mastering unavailable"),
-        ),
-        pytest.raises(GenerationError, match="mastering unavailable"),
+    with patch(
+        "songmaker_cli.generate.master_audio",
+        side_effect=MasteringError("mastering unavailable"),
     ):
-        _write_output(audio, 42, mp3_path, wav_path, _song_meta(), AlbumMeta(title="Album"))
+        with pytest.raises(GenerationError, match="mastering unavailable"):
+            _write_output(audio, 42, mp3_path, wav_path, _song_meta(), AlbumMeta(title="Album"))
 
     assert not wav_path.exists()
     assert not mp3_path.exists()
@@ -239,9 +237,9 @@ def test_write_output_keeps_wav_when_mp3_encoding_fails(tmp_path: Path) -> None:
             "songmaker_cli.generate.encode_mp3",
             side_effect=MasteringError("encoder unavailable"),
         ),
-        pytest.raises(GenerationError, match="encoder unavailable"),
     ):
-        _write_output(audio, 42, mp3_path, wav_path, _song_meta(), AlbumMeta(title="Album"))
+        with pytest.raises(GenerationError, match="encoder unavailable"):
+            _write_output(audio, 42, mp3_path, wav_path, _song_meta(), AlbumMeta(title="Album"))
 
     assert wav_path.exists()
     assert not mp3_path.exists()
