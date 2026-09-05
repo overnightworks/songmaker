@@ -238,15 +238,18 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await waitForReadyVoice(request, foreignVoice.id);
 		await setVoiceProofModelMode(foreignVoice.id, 'turbo');
 
-		const [adapterSong, baselineSong] = await Promise.all([
-			seedVoiceAdapterComparisonSong(request, createdVoice.id),
-			seedVoiceAdapterComparisonSong(request, null)
-		]);
+		const adapterSong = await seedVoiceAdapterComparisonSong(request, createdVoice.id);
+		const baselineSong = await seedVoiceAdapterComparisonSong(request, null);
 		const adapterGeneration = await queueVoiceAdapterComparison(
 			request,
 			adapterSong.songId,
 			adapterSong.versionId,
 			4242
+		);
+		const adapterTake = await waitForGeneratedTake(
+			request,
+			adapterSong.songId,
+			adapterGeneration.id
 		);
 		const baselineGeneration = await queueVoiceAdapterComparison(
 			request,
@@ -254,10 +257,11 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			baselineSong.versionId,
 			4242
 		);
-		const [adapterTake, baselineTake] = await Promise.all([
-			waitForGeneratedTake(request, adapterSong.songId, adapterGeneration.id),
-			waitForGeneratedTake(request, baselineSong.songId, baselineGeneration.id)
-		]);
+		const baselineTake = await waitForGeneratedTake(
+			request,
+			baselineSong.songId,
+			baselineGeneration.id
+		);
 		expect(await readGeneratedWav(request, adapterTake)).not.toEqual(
 			await readGeneratedWav(request, baselineTake)
 		);
