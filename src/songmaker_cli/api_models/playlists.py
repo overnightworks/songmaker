@@ -11,6 +11,7 @@ from songmaker_cli.api_models.songs import (
     AlbumCoverUrls,
     album_cover_urls,
     generation_version_lyrics,
+    share_pick_media,
 )
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.constants import (
@@ -33,6 +34,33 @@ def playlist_cover_urls(playlist_id: str, cover_key: str) -> AlbumCoverUrls:
         ),
         detail=(
             f"/api/playlists/{playlist_id}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
+def shared_playlist_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+    return _shared_playlist_cover_urls_at(
+        f"/shared/playlist/{slug}/cover", cover_key,
+    )
+
+
+def shared_playlist_album_cover_urls(
+    slug: str, album_id: str, cover_key: str,
+) -> AlbumCoverUrls:
+    return _shared_playlist_cover_urls_at(
+        f"/shared/playlist/{slug}/album-cover/{album_id}", cover_key,
+    )
+
+
+def _shared_playlist_cover_urls_at(path: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"{path}?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"{path}?variant={COVER_VARIANT_DETAIL}"
             f"&{COVER_VERSION_QUERY}={cover_key}"
         ),
     )
@@ -197,7 +225,47 @@ class SharedPlaylistEntryResponse(BaseModel):
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
+    @classmethod
+    def from_orm(
+        cls, entry: PlaylistEntry, *, audio_url: str | None,
+    ) -> SharedPlaylistEntryResponse:
+        generation = entry.generation
+        if generation is None:
+            raise ValueError("Shared playlist entries require a generation")
+        song = generation.song
+        album = song.album if song else None
+        media = share_pick_media(generation)
+        return cls(
+            entry_id=entry.id,
+            song_title=song.title if song else "",
+            artist=album.artist if album else "",
+            generation_number=generation.generation_number,
+            audio_url=audio_url,
+            generation_id=media.generation_id,
+            audio_duration=media.audio_duration,
+            lyrics=media.lyrics,
+            whisper_cues=media.whisper_cues,
+        )
+
 
 class SharedPlaylistResponse(BaseModel):
     title: str
     entries: list[SharedPlaylistEntryResponse]
+    cover: AlbumCoverUrls | None = None
+    album_covers: list[AlbumCoverUrls] = Field(default_factory=list)
+
+    @classmethod
+    def from_orm(
+        cls,
+        playlist: Playlist,
+        *,
+        entries: list[SharedPlaylistEntryResponse],
+        cover: AlbumCoverUrls | None,
+        album_covers: list[AlbumCoverUrls],
+    ) -> SharedPlaylistResponse:
+        return cls(
+            title=playlist.title,
+            entries=entries,
+            cover=cover,
+            album_covers=album_covers,
+        )

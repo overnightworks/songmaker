@@ -936,6 +936,8 @@ export interface SharedPlaylistEntryPayload {
 export interface SharedPlaylistPayload {
 	title: string;
 	entries: SharedPlaylistEntryPayload[];
+	cover?: AlbumCoverUrls | null;
+	album_covers: AlbumCoverUrls[];
 }
 
 export interface SharedSongPayload {

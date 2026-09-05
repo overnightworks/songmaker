@@ -23,6 +23,10 @@ from songmaker_cli.api_models import (
     SharedSongItem,
     SharedSongResponse,
 )
+from songmaker_cli.api_models.playlists import (
+    shared_playlist_album_cover_urls,
+    shared_playlist_cover_urls,
+)
 from songmaker_cli.api_models.songs import (
     public_album_cover_urls,
     public_album_cover_urls_at,
@@ -54,7 +58,9 @@ from songmaker_cli.covers import (
     CoverRejectedError,
     album_cover_file_exists,
     cover_media_type,
+    playlist_cover_file_exists,
     resolve_cover_file,
+    resolve_playlist_cover_file,
     resolve_song_cover_file,
     song_cover_file_exists,
 )
@@ -595,23 +601,103 @@ def get_shared_playlist(
     for e in entries:
         if e.generation is None:
             continue
-        gen = e.generation
-        media = share_pick_media(gen)
-        entry_items.append(SharedPlaylistEntryResponse(
-            entry_id=e.id,
-            song_title=gen.song.title if gen.song else "",
-            artist=gen.song.album.artist if gen.song and gen.song.album else "",
-            generation_number=gen.generation_number,
-            audio_url=_shared_audio_url(
-                f"/shared/playlist/{slug}/audio", gen,
-            ),
-            generation_id=media.generation_id,
-            audio_duration=media.audio_duration,
-            lyrics=media.lyrics,
-            whisper_cues=media.whisper_cues,
+        entry_items.append(SharedPlaylistEntryResponse.from_orm(
+            e,
+            audio_url=_shared_audio_url(f"/shared/playlist/{slug}/audio", e.generation),
         ))
-    response = SharedPlaylistResponse(title=playlist.title, entries=entry_items)
+    cover = None
+    if playlist_cover_file_exists(ctx.audio_dir, playlist.id, playlist.cover_key):
+        cover = shared_playlist_cover_urls(slug, playlist.cover_key)
+    album_covers = []
+    covered_album_ids = set()
+    if cover is None:
+        for entry in entries:
+            song = entry.generation.song if entry.generation else None
+            album = song.album if song else None
+            if (
+                album is None
+                or album.id in covered_album_ids
+                or not album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
+            ):
+                continue
+            covered_album_ids.add(album.id)
+            album_covers.append(shared_playlist_album_cover_urls(
+                slug, album.id, album.cover_key,
+            ))
+            if len(album_covers) == 4:
+                break
+    response = SharedPlaylistResponse.from_orm(
+        playlist,
+        entries=entry_items,
+        cover=cover,
+        album_covers=album_covers,
+    )
     return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/playlist/{slug}/cover")
+async def get_shared_playlist_cover(
+    slug: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+    if v is not None and v != playlist.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_playlist_cover_file(
+            ctx.audio_dir, playlist.id, playlist.cover_key, variant,
+        )
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, playlist.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.get("/shared/playlist/{slug}/album-cover/{album_id}")
+async def get_shared_playlist_album_cover(
+    slug: str,
+    album_id: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+    album = next((
+        entry.generation.song.album
+        for entry in playlist.entries
+        if entry.generation and entry.generation.song and entry.generation.song.album
+        and entry.generation.song.album.id == album_id
+    ), None)
+    if album is None or (v is not None and v != album.cover_key):
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, album.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
 
 
 @router.post("/shared/playlist/{slug}/stream")
