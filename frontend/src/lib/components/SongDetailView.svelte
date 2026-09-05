@@ -187,6 +187,10 @@
 		song ? albumTracks.findIndex((item) => item.id === song.id) + 1 : 0
 	);
 	const trackTotal = $derived(albumTracks.length);
+	const albumSongCount = $derived(parentAlbum?.song_count ?? trackTotal);
+	const albumCoverUrl = $derived(parentAlbum?.cover?.card ?? null);
+	const albumArtFill = $derived(parentAlbum ? usableAlbumPrimary(parentAlbum.colors) : null);
+	const albumInitials = $derived(titleInitials(parentAlbum?.title ?? song?.album_title ?? ''));
 	const collection = $derived($openCollection);
 	const breadcrumbItems = $derived(
 		song
@@ -714,6 +718,11 @@
 			oncovererror={() => (coverFailed = true)}
 			{breadcrumbItems}
 			{songRail}
+			albumTitle={song.album_title}
+			{albumSongCount}
+			{albumCoverUrl}
+			{albumArtFill}
+			{albumInitials}
 			previousDisabled={!neighbors.previous}
 			nextDisabled={!neighbors.next}
 			onselectprevious={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
