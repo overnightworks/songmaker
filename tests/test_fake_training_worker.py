@@ -62,7 +62,7 @@ def _events(stream: str) -> list[tuple[str, dict[str, object]]]:
     return events
 
 
-def test_fake_worker_registers_with_the_internal_api(tmp_path: Path) -> None:
+def test_fake_worker_registers_with_the_internal_api(tmp_path: Path, mock_arq_pool) -> None:
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
