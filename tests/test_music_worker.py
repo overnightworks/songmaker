@@ -5,14 +5,22 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import songmaker_cli.music_worker as mw_mod
-from songmaker_cli.constants import AuditAction, JobStatus, JobType, LoraStatus
+from songmaker_cli.constants import (
+    AuditAction,
+    CoverExecutor,
+    JobFunction,
+    JobStatus,
+    JobType,
+    LoraStatus,
+)
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AuditLog, Job, User, UserLora
 from songmaker_cli.music_worker import MusicWorker
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import Settings, get_settings
 
 
 def _run(coro):
@@ -31,6 +39,16 @@ def _make_worker() -> MusicWorker:
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
     return worker
+
+
+def _settings(cover_executor: CoverExecutor) -> Settings:
+    return Settings(
+        database_url="postgresql://example",
+        redis_url="redis://example",
+        session_secret="session-secret",
+        songmaker_internal_token="internal-token",
+        cover_executor=cover_executor,
+    )
 
 
 def test_generate_skips_completed_job() -> None:
@@ -70,6 +88,22 @@ def test_cover_suggestion_job_runs_on_the_music_worker() -> None:
     assert mock_run.await_args.args == ("cover-job",)
     assert mock_run.await_args.kwargs["audio_dir"] == "audio"
     assert mock_run.await_args.kwargs["settings"] is worker._settings
+
+
+def test_web_executor_leaves_cover_registration_and_recovery_to_the_web_runner() -> None:
+    worker = MusicWorker(_settings(CoverExecutor.WEB))
+    functions = mw_mod._music_worker_functions(worker, worker._settings)
+
+    assert JobType.COVER not in worker.job_types
+    assert JobFunction.COVER not in {function.name for function in functions}
+
+
+def test_music_executor_keeps_cover_registration_and_recovery_on_the_music_worker() -> None:
+    worker = MusicWorker(_settings(CoverExecutor.MUSIC))
+    functions = mw_mod._music_worker_functions(worker, worker._settings)
+
+    assert worker.recovery_statuses_by_type()[JobType.COVER] == frozenset({JobStatus.RUNNING})
+    assert JobFunction.COVER in {function.name for function in functions}
 
 
 def test_generate_passes_seed_and_target_model() -> None:
@@ -357,6 +391,18 @@ def test_music_worker_settings_functions() -> None:
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.LORA_TRAINING in func_names
     assert len(MusicWorkerSettings.functions) == 5
+
+
+def test_default_production_compose_keeps_the_music_cover_argv_and_mounts() -> None:
+    compose = (Path(__file__).parents[1] / "docker-compose.yml").read_text()
+    music_service = compose.split("  songmaker-music-worker:\n", maxsplit=1)[1].split(
+        "  songmaker-acestep-worker-0:\n", maxsplit=1,
+    )[0]
+
+    assert "command: [\"songmaker_cli.music_worker.MusicWorkerSettings\"]" in music_service
+    assert "COVER_EXECUTOR" not in music_service
+    assert "target: /usr/local/bin/codex" in music_service
+    assert "target: /home/songmaker/.codex/auth.json" in music_service
 
 
 def test_music_worker_settings_uses_singleton_methods() -> None:

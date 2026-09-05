@@ -6,7 +6,6 @@ import {
 	LIBRARY_TAKE_POOL_LABELS,
 	LIBRARY_TAKE_POOLS,
 	setDesktopNowPlayingSurface,
-	setLibraryRowOpen,
 	setLibraryTakePool
 } from './playbackSettings';
 
@@ -79,22 +78,14 @@ describe('remembered desktop Now Playing surface', () => {
 	});
 });
 
-describe('remembered library row state', () => {
-	it('uses the surface default until the browser has a stored choice', async () => {
-		vi.resetModules();
-		const fresh = await import('./playbackSettings');
-		expect(get(fresh.libraryRowOpenPreference)).toBeNull();
-	});
-
-	it('persists the row choice', () => {
-		setLibraryRowOpen(false);
-		expect(localStorage.getItem(LIBRARY_ROW_OPEN_STORAGE_KEY)).toBe('false');
-	});
-
-	it('reads the row choice on the next visit', async () => {
+describe('removed library row preference', () => {
+	it('ignores an old stored row value when loading playback settings', async () => {
 		localStorage.setItem(LIBRARY_ROW_OPEN_STORAGE_KEY, 'true');
 		vi.resetModules();
 		const fresh = await import('./playbackSettings');
-		expect(get(fresh.libraryRowOpenPreference)).toBe(true);
+
+		expect(get(fresh.queuePlaybackMode)).toBe('stream');
+		expect(get(fresh.desktopNowPlayingSurface)).toBe('docked');
+		expect(localStorage.getItem(LIBRARY_ROW_OPEN_STORAGE_KEY)).toBe('true');
 	});
 });
