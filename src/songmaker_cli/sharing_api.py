@@ -217,7 +217,10 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
     raise HTTPException(404, "Queue stream not found")
 
 
-@router.get("/audio/{owner_id}/{filename}")
+@router.get(
+    "/audio/{owner_id}/{filename}",
+    responses={404: {"description": "Audio file not found"}},
+)
 async def get_audio(
     owner_id: str, filename: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -234,7 +237,10 @@ async def get_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/{slug}")
+@router.get(
+    "/shared/{slug}",
+    responses={404: {"description": "Shared album not found"}},
+)
 def get_shared_album(
     slug: str,
     request: Request,
@@ -272,7 +278,10 @@ def get_shared_album(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/{slug}/cover")
+@router.get(
+    "/shared/{slug}/cover",
+    responses={404: {"description": "Shared album or cover not found"}},
+)
 async def get_shared_album_cover(
     slug: str,
     request: Request,
@@ -300,7 +309,10 @@ async def get_shared_album_cover(
     )
 
 
-@router.post("/shared/{slug}/stream")
+@router.post(
+    "/shared/{slug}/stream",
+    responses={404: {"description": "Shared album not found"}},
+)
 def get_shared_album_stream(
     slug: str,
     request: Request,
@@ -347,7 +359,10 @@ def get_shared_album_stream(
     return public_queue_stream_manifest(snapshot)
 
 
-@router.get("/shared/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_audio(
     slug: str,
     filename: str,
@@ -368,7 +383,10 @@ def get_shared_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/song/{slug}")
+@router.get(
+    "/shared/song/{slug}",
+    responses={404: {"description": "Shared song not found"}},
+)
 def get_shared_song(
     slug: str,
     request: Request,
@@ -409,7 +427,10 @@ def get_shared_song(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/song/{slug}/album-cover")
+@router.get(
+    "/shared/song/{slug}/album-cover",
+    responses={404: {"description": "Shared song, album, or cover not found"}},
+)
 async def get_shared_song_album_cover(
     slug: str,
     request: Request,
@@ -438,7 +459,10 @@ async def get_shared_song_album_cover(
     )
 
 
-@router.get("/shared/song/{slug}/cover")
+@router.get(
+    "/shared/song/{slug}/cover",
+    responses={404: {"description": "Shared song or cover not found"}},
+)
 async def get_shared_song_cover(
     slug: str,
     request: Request,
@@ -466,7 +490,10 @@ async def get_shared_song_cover(
     )
 
 
-@router.get("/shared/song/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/song/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_song_audio(
     slug: str,
     filename: str,
@@ -487,7 +514,10 @@ def get_shared_song_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/gen/{slug}")
+@router.get(
+    "/shared/gen/{slug}",
+    responses={404: {"description": "Shared generation not found"}},
+)
 def get_shared_generation(
     slug: str,
     request: Request,
@@ -530,7 +560,10 @@ def get_shared_generation(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/gen/{slug}/album-cover")
+@router.get(
+    "/shared/gen/{slug}/album-cover",
+    responses={404: {"description": "Shared generation, album, or cover not found"}},
+)
 async def get_shared_generation_album_cover(
     slug: str,
     request: Request,
@@ -559,7 +592,10 @@ async def get_shared_generation_album_cover(
     )
 
 
-@router.get("/shared/gen/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/gen/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_gen_audio(
     slug: str,
     filename: str,
@@ -585,7 +621,10 @@ def get_shared_gen_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/playlist/{slug}")
+@router.get(
+    "/shared/playlist/{slug}",
+    responses={404: {"description": "Shared playlist not found"}},
+)
 def get_shared_playlist(
     slug: str,
     request: Request,
@@ -635,7 +674,10 @@ def get_shared_playlist(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/playlist/{slug}/cover")
+@router.get(
+    "/shared/playlist/{slug}/cover",
+    responses={404: {"description": "Shared playlist or cover not found"}},
+)
 async def get_shared_playlist_cover(
     slug: str,
     request: Request,
@@ -665,7 +707,10 @@ async def get_shared_playlist_cover(
     )
 
 
-@router.get("/shared/playlist/{slug}/album-cover/{album_id}")
+@router.get(
+    "/shared/playlist/{slug}/album-cover/{album_id}",
+    responses={404: {"description": "Shared playlist, album, or cover not found"}},
+)
 async def get_shared_playlist_album_cover(
     slug: str,
     album_id: str,
@@ -700,7 +745,10 @@ async def get_shared_playlist_album_cover(
     )
 
 
-@router.post("/shared/playlist/{slug}/stream")
+@router.post(
+    "/shared/playlist/{slug}/stream",
+    responses={404: {"description": "Shared playlist not found"}},
+)
 def get_shared_playlist_stream(
     slug: str,
     request: Request,
@@ -749,7 +797,10 @@ def get_shared_playlist_stream(
     return public_queue_stream_manifest(snapshot)
 
 
-@router.get("/shared/playlist/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/playlist/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_playlist_audio(
     slug: str,
     filename: str,
@@ -770,7 +821,10 @@ def get_shared_playlist_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/queue-streams/{snapshot_id}/audio")
+@router.get(
+    "/shared/queue-streams/{snapshot_id}/audio",
+    responses={404: {"description": "Queue stream not found"}},
+)
 def get_shared_queue_stream_audio(
     snapshot_id: str,
     request: Request,

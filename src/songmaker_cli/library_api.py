@@ -59,7 +59,10 @@ def api_library_continue(
     )
 
 
-@router.get("/library/search")
+@router.get(
+    "/library/search",
+    responses={422: {"description": "Search cursor is invalid or does not match the query"}},
+)
 def api_library_search(
     q: str = Query(..., min_length=1),
     sort: LibrarySort = Query(LIBRARY_SORT_NEWEST),
