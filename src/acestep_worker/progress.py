@@ -1,7 +1,5 @@
 """Diffusion-step progress text parser shared by the worker runner."""
 
-from __future__ import annotations
-
 def parse_step_fraction(progress_text: str) -> float | None:
     """Extract a 0..1 fraction from diffusion step text like '8/50 [00:02<00:13]'.
 
