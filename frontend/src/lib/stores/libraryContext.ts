@@ -104,13 +104,19 @@ export function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
 }
 
-export function isLibraryHistoryState(value: unknown): value is LibraryHistoryState {
-	if (typeof value !== 'object' || value === null) return false;
-	const state = value as Record<string, unknown>;
+function isHistoryRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+function hasValidHistoryMetadata(state: Record<string, unknown>): boolean {
 	if (state.kind !== LIBRARY_HISTORY_KIND) return false;
 	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
 		return false;
 	}
+	return true;
+}
+
+function hasValidHistoryBrowseState(state: Record<string, unknown>): boolean {
 	if (!isLibraryFilter(state.filter)) return false;
 	if (!isLibrarySurface(state.surface)) return false;
 	if (typeof state.query !== 'string') return false;
@@ -118,12 +124,25 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (typeof state.albumOffset !== 'number' || typeof state.songOffset !== 'number') return false;
 	if (typeof state.searchLoadedCount !== 'number' || state.searchLoadedCount < 0) return false;
 	if (typeof state.scrollAnchor !== 'number') return false;
+	return true;
+}
+
+function hasValidHistorySelection(state: Record<string, unknown>): boolean {
 	if (!isIdOrNull(state.searchCursor)) return false;
 	if (!isCollectionSnapshot(state.collection)) return false;
 	if (!isIdOrNull(state.songId)) return false;
 	if (!isIdOrNull(state.generationId)) return false;
 	if (state.detailTab !== undefined && !isDetailTabToken(state.detailTab)) return false;
 	return true;
+}
+
+export function isLibraryHistoryState(value: unknown): value is LibraryHistoryState {
+	if (!isHistoryRecord(value)) return false;
+	return (
+		hasValidHistoryMetadata(value) &&
+		hasValidHistoryBrowseState(value) &&
+		hasValidHistorySelection(value)
+	);
 }
 
 export function libraryRootState(): LibraryHistoryState {
@@ -724,27 +743,34 @@ async function hydrateSelectedResources(
 	state: LibraryHistoryState,
 	generation: number
 ): Promise<void> {
-	if (
-		state.collection?.kind === 'album' &&
-		!get(albumList).some((album) => album.id === state.collection?.id)
-	) {
-		try {
-			const album = await fetchAlbum(state.collection.id);
-			if (generation !== historyApplyGeneration) return;
-			albumList.update((list) => upsertReplace(list, album));
-		} catch (err) {
-			if (generation !== historyApplyGeneration) return;
-			if (isNotFound(err)) setOpenCollection(null);
-		}
+	await hydrateMissingCollectionAlbum(state.collection, generation);
+	if (state.songId) await hydrateSelectedSong(state.songId, generation);
+}
+
+async function hydrateMissingCollectionAlbum(
+	collection: CollectionSnapshot,
+	generation: number
+): Promise<void> {
+	if (collection?.kind !== 'album') return;
+	if (get(albumList).some((album) => album.id === collection.id)) return;
+	try {
+		const album = await fetchAlbum(collection.id);
+		if (generation !== historyApplyGeneration) return;
+		albumList.update((list) => upsertReplace(list, album));
+	} catch (err) {
+		if (generation !== historyApplyGeneration) return;
+		if (isNotFound(err)) setOpenCollection(null);
 	}
-	if (!state.songId) return;
-	const listed = get(songList).find((song) => song.id === state.songId);
+}
+
+async function hydrateSelectedSong(songId: string, generation: number): Promise<void> {
+	const listed = get(songList).find((song) => song.id === songId);
 	if (listed && listed.generations.length >= listed.generation_count) {
 		await hydrateSongAlbum(listed.album_id, generation);
 		return;
 	}
 	try {
-		const song = await fetchSong(state.songId);
+		const song = await fetchSong(songId);
 		if (generation !== historyApplyGeneration) return;
 		songList.update((list) => upsertReplace(list, song));
 		await hydrateSongAlbum(song.album_id, generation);

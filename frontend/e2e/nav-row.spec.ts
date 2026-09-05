@@ -87,7 +87,7 @@ test('the 375 px album line skips songs without losing its URL or focus', async 
 	page,
 	isMobile
 }) => {
-	test.skip(!isMobile, 'The compact album line only renders on mobile.');
+	test.skip(!isMobile, 'The compact album line only renders on mobile.'); // NOSONAR S1607: desktop has no compact album line.
 	await page.setViewportSize({ width: 375, height: 812 });
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();

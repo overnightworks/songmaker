@@ -379,101 +379,12 @@ def _persist_generation_row(
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
     raw_wav_rel = f"{ctx.user_id}/{generation_id}.raw.wav"
-    is_repaint = ctx.ace_config.task_type == "repaint"
-    is_cover = ctx.ace_config.task_type == "cover"
-    stored = StoredGenerationParams(
-        acestep_model=ctx.model_name,
-        bpm=ctx.ace_config.bpm,
-        audio_duration=ctx.ace_config.audio_duration,
-        key_scale=ctx.meta.key_scale,
-        guidance_scale=ctx.ace_config.guidance_scale,
-        inference_steps=ctx.ace_config.inference_steps,
-        shift=ctx.ace_config.shift,
-        lm_temperature=ctx.ace_config.lm_temperature,
-        infer_method=ctx.ace_config.infer_method,
-        thinking=ctx.ace_config.thinking,
-        lm_repetition_penalty=(
-            ctx.ace_config.lm_repetition_penalty
-            if not math.isclose(ctx.ace_config.lm_repetition_penalty, 1.0)
-            else None
-        ),
-        use_cot_caption=False if not ctx.ace_config.use_cot_caption else None,
-        use_cot_language=False if not ctx.ace_config.use_cot_language else None,
-        use_adg=True if ctx.ace_config.use_adg else None,
-        cfg_interval_start=(
-            ctx.ace_config.cfg_interval_start if ctx.ace_config.cfg_interval_start > 0.0 else None
-        ),
-        cfg_interval_end=(
-            ctx.ace_config.cfg_interval_end if ctx.ace_config.cfg_interval_end < 1.0 else None
-        ),
-        constrained_decoding=True if ctx.ace_config.constrained_decoding else None,
-        sampler_mode=(
-            ctx.ace_config.sampler_mode if ctx.ace_config.sampler_mode != "euler" else None
-        ),
-        velocity_norm_threshold=(
-            ctx.ace_config.velocity_norm_threshold
-            if ctx.ace_config.velocity_norm_threshold > 0
-            else None
-        ),
-        velocity_ema_factor=(
-            ctx.ace_config.velocity_ema_factor if ctx.ace_config.velocity_ema_factor > 0 else None
-        ),
-        latent_shift=(ctx.ace_config.latent_shift if ctx.ace_config.latent_shift != 0 else None),
-        latent_rescale=(
-            ctx.ace_config.latent_rescale
-            if not math.isclose(ctx.ace_config.latent_rescale, 1.0)
-            else None
-        ),
-        timesteps=ctx.ace_config.timesteps or None,
-        task_type=(ctx.ace_config.task_type if ctx.ace_config.task_type != "text2music" else None),
-        repainting_start=ctx.ace_config.repainting_start if is_repaint else None,
-        repainting_end=ctx.ace_config.repainting_end if is_repaint else None,
-        repaint_mode=(ctx.ace_config.repaint_mode or None) if is_repaint else None,
-        repaint_strength=(
-            ctx.ace_config.repaint_strength if is_repaint and ctx.ace_config.repaint_mode else None
-        ),
-        repaint_latent_crossfade_frames=(
-            ctx.ace_config.repaint_latent_crossfade_frames
-            if is_repaint and ctx.ace_config.repaint_latent_crossfade_frames > 0
-            else None
-        ),
-        repaint_wav_crossfade_sec=(
-            ctx.ace_config.repaint_wav_crossfade_sec
-            if is_repaint and ctx.ace_config.repaint_wav_crossfade_sec > 0
-            else None
-        ),
-        audio_cover_strength=(
-            ctx.ace_config.audio_cover_strength
-            if not math.isclose(ctx.ace_config.audio_cover_strength, 1.0)
-            else None
-        ),
-        cover_noise_strength=(
-            ctx.ace_config.cover_noise_strength
-            if is_cover and ctx.ace_config.cover_noise_strength > 0
-            else None
-        ),
-        cot_caption=cot_caption or None,
-        cot_lyrics=cot_lyrics or None,
-        user_lora_id=_extract_user_lora_id(ctx.base_params),
-        batch_size=ctx.ace_config.batch_size if ctx.ace_config.batch_size != 1 else None,
-        delivered_batch_size=(
-            delivered_batch_size
-            if delivered_batch_size is not None
-            and delivered_batch_size != ctx.ace_config.batch_size
-            else None
-        ),
-    )
-    gen_params = stored.model_dump(exclude_none=True)
+    gen_params = _stored_generation_params(ctx, cot_caption, cot_lyrics, delivered_batch_size)
 
     try:
         with db_factory() as session:
             if lock_active_job(session, job_id) is None:
-                _cleanup_orphaned_files(
-                    ctx.audio_dir,
-                    mp3_rel,
-                    wav_rel,
-                    raw_wav_rel,
-                )
+                _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel, raw_wav_rel)
                 return None
             generation = create_generation(
                 session,
@@ -501,6 +412,96 @@ def _persist_generation_row(
 
     log.info("Generated: %s (seed=%s)", mp3_rel, seed)
     return persisted_id
+
+
+def _stored_generation_params(
+    ctx: GenerationContext,
+    cot_caption: str,
+    cot_lyrics: str,
+    delivered_batch_size: int | None,
+) -> dict:
+    config = ctx.ace_config
+    stored = StoredGenerationParams(
+        acestep_model=ctx.model_name,
+        bpm=config.bpm,
+        audio_duration=config.audio_duration,
+        key_scale=ctx.meta.key_scale,
+        guidance_scale=config.guidance_scale,
+        inference_steps=config.inference_steps,
+        shift=config.shift,
+        lm_temperature=config.lm_temperature,
+        infer_method=config.infer_method,
+        thinking=config.thinking,
+        **_stored_generation_options(config),
+        **_stored_task_options(config),
+        cot_caption=cot_caption or None,
+        cot_lyrics=cot_lyrics or None,
+        user_lora_id=_extract_user_lora_id(ctx.base_params),
+        **_stored_batch_options(config, delivered_batch_size),
+    )
+    return stored.model_dump(exclude_none=True)
+
+
+def _stored_generation_options(config: AceStepConfig) -> dict:
+    return {
+        "lm_repetition_penalty": _unless_close(config.lm_repetition_penalty, 1.0),
+        "use_cot_caption": False if not config.use_cot_caption else None,
+        "use_cot_language": False if not config.use_cot_language else None,
+        "use_adg": True if config.use_adg else None,
+        "cfg_interval_start": (
+            config.cfg_interval_start if config.cfg_interval_start > 0.0 else None
+        ),
+        "cfg_interval_end": config.cfg_interval_end if config.cfg_interval_end < 1.0 else None,
+        "constrained_decoding": True if config.constrained_decoding else None,
+        "sampler_mode": config.sampler_mode if config.sampler_mode != "euler" else None,
+        "velocity_norm_threshold": (
+            config.velocity_norm_threshold if config.velocity_norm_threshold > 0 else None
+        ),
+        "velocity_ema_factor": (
+            config.velocity_ema_factor if config.velocity_ema_factor > 0 else None
+        ),
+        "latent_shift": config.latent_shift if config.latent_shift != 0 else None,
+        "latent_rescale": _unless_close(config.latent_rescale, 1.0),
+        "timesteps": config.timesteps or None,
+        "task_type": config.task_type if config.task_type != "text2music" else None,
+        "audio_cover_strength": _unless_close(config.audio_cover_strength, 1.0),
+    }
+
+
+def _stored_task_options(config: AceStepConfig) -> dict:
+    if config.task_type == "repaint":
+        return {
+            "repainting_start": config.repainting_start,
+            "repainting_end": config.repainting_end,
+            "repaint_mode": config.repaint_mode or None,
+            "repaint_strength": config.repaint_strength if config.repaint_mode else None,
+            "repaint_latent_crossfade_frames": (
+                config.repaint_latent_crossfade_frames
+                if config.repaint_latent_crossfade_frames > 0
+                else None
+            ),
+            "repaint_wav_crossfade_sec": (
+                config.repaint_wav_crossfade_sec if config.repaint_wav_crossfade_sec > 0 else None
+            ),
+        }
+    if config.task_type == "cover" and config.cover_noise_strength > 0:
+        return {"cover_noise_strength": config.cover_noise_strength}
+    return {}
+
+
+def _stored_batch_options(config: AceStepConfig, delivered_batch_size: int | None) -> dict:
+    return {
+        "batch_size": config.batch_size if config.batch_size != 1 else None,
+        "delivered_batch_size": (
+            delivered_batch_size
+            if delivered_batch_size is not None and delivered_batch_size != config.batch_size
+            else None
+        ),
+    }
+
+
+def _unless_close(value: float, default: float) -> float | None:
+    return value if not math.isclose(value, default) else None
 
 
 def _finalize_generation_job(
@@ -761,8 +762,6 @@ async def run_generation_job(
     cover_params: CoverTaskParams | None = None,
 ) -> None:
 
-    import uuid
-
     import structlog
 
     structlog.contextvars.clear_contextvars()
@@ -775,67 +774,39 @@ async def run_generation_job(
     task_type = "cover" if cover_params else ("repaint" if repaint_params else "generate")
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
-    shared_tmp_prefix = str(audio_dir / WORKER_SHARED_TMP_DIRNAME)
     admitted_worker = None
 
     try:
-        if _job_is_terminal(db_factory, job_id):
-            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+        admitted_worker = await _admit_generation_worker_or_requeue(
+            redis,
+            db_factory,
+            job_id,
+            song_id,
+            version_id,
+            count,
+            user_id,
+            seed,
+            target_model,
+            repaint_params,
+            cover_params,
+        )
+        if admitted_worker is None:
             return
 
-        try:
-            admitted_worker = await jobs.admit_generation_worker(
-                target_mode=target_model,
-                redis=redis,
-                db_factory=db_factory,
-            )
-        except AllWorkersHeld:
-            _update_job(
-                db_factory,
-                job_id,
-                JobStatus.QUEUED,
-                queue_reason=GENERATION_WAITING_FOR_LORA_QUEUE_REASON,
-            )
-            await redis.enqueue_job(
-                JobFunction.GENERATE,
-                job_id,
-                song_id,
-                version_id,
-                count,
-                user_id,
-                seed,
-                target_model,
-                repaint_params.model_dump() if repaint_params is not None else None,
-                cover_params.model_dump() if cover_params is not None else None,
-                _queue_name=ARQ_MUSIC_QUEUE_NAME,
-                _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
-            )
-            return
-
-        try:
-            ctx = await asyncio.to_thread(
-                _build_generation_context,
-                song_id,
-                version_id,
-                db_factory,
-                audio_dir,
-                data_dir,
-                user_id=user_id,
-                seed=seed,
-                target_model=target_model,
-            )
-            if repaint_params is not None:
-                ctx = _apply_repaint_overrides(ctx, repaint_params)
-            elif cover_params is not None:
-                ctx = _apply_cover_overrides(ctx, cover_params)
-        except GenerationSetupError as exc:
-            _update_job(
-                db_factory,
-                job_id,
-                JobStatus.FAILED,
-                error=_sanitize_error(exc, job_id),
-                error_type="setup_error",
-            )
+        ctx = await _build_generation_job_context(
+            db_factory,
+            job_id,
+            song_id,
+            version_id,
+            audio_dir,
+            data_dir,
+            user_id,
+            seed,
+            target_model,
+            repaint_params,
+            cover_params,
+        )
+        if ctx is None:
             return
 
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -843,75 +814,19 @@ async def run_generation_job(
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
 
-        tmp_copies: list[str] = []
-        if ctx.ace_config.src_audio_path and ctx.ace_config.src_audio_path.startswith(
-            shared_tmp_prefix
-        ):
-            tmp_copies.append(ctx.ace_config.src_audio_path)
-        if ctx.raw_src_audio and ctx.raw_src_audio.startswith(shared_tmp_prefix):
-            tmp_copies.append(ctx.raw_src_audio)
-
+        tmp_copies = _temporary_generation_audio_paths(ctx)
         try:
-            completed = 0
-            last_error: Exception | None = None
-
-            for i in range(count):
-                if _job_is_terminal(db_factory, job_id):
-                    log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
-                    return
-                _update_job(db_factory, job_id, JobStatus.RUNNING, progress=i / count)
-                on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
-                on_heartbeat = _make_heartbeat_callback(db_factory, job_id)
-                try:
-                    gen_id = str(uuid.uuid4())
-                    worker_result = await jobs.dispatch_generation_on_worker(
-                        worker=admitted_worker,
-                        ace_config=ctx.ace_config,
-                        target_mode=ctx.model_name,
-                        on_progress=on_progress,
-                        on_heartbeat=on_heartbeat,
-                    )
-                    if _job_is_terminal(db_factory, job_id):
-                        _discard_worker_audio(worker_result.audio_path)
-                        log.info(
-                            GENERATION_JOB_TERMINAL_LOG,
-                            job_id,
-                        )
-                        return
-                    persisted_gen_id = await asyncio.to_thread(
-                        jobs.post_process_generation,
-                        worker_audio_path=worker_result.audio_path,
-                        worker_seed=worker_result.seed,
-                        worker_cot_caption=worker_result.cot_caption,
-                        worker_cot_lyrics=worker_result.cot_lyrics,
-                        worker_delivered_batch_size=worker_result.delivered_batch_size,
-                        ctx=ctx,
-                        generation_id=gen_id,
-                        db_factory=db_factory,
-                        job_id=job_id,
-                    )
-                    completed += 1
-                    if persisted_gen_id:
-                        await _auto_score_generation(
-                            redis,
-                            db_factory,
-                            persisted_gen_id,
-                            song_id,
-                        )
-                except (NoCapacityError, WorkerTaskFailed) as exc:
-                    log.warning("Generation %d/%d failed: %s", i + 1, count, exc)
-                    last_error = exc
-                except Exception as exc:
-                    log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
-                    last_error = exc
-
-            _finalize_generation_job(db_factory, job_id, count, completed, last_error)
+            await _generate_variants(
+                admitted_worker,
+                redis,
+                db_factory,
+                job_id,
+                song_id,
+                count,
+                ctx,
+            )
         finally:
-            for tmp in tmp_copies:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
+            _remove_temporary_generation_audio(tmp_copies)
 
     except asyncio.CancelledError:
         log.warning("Generation job %s cancelled (arq timeout or worker shutdown)", job_id)
@@ -935,6 +850,191 @@ async def run_generation_job(
     finally:
         if admitted_worker is not None:
             await decr_queue_depth(redis, admitted_worker.id)
+
+
+async def _admit_generation_worker_or_requeue(
+    redis: ArqRedis,
+    db_factory: sessionmaker[Session],
+    job_id: str,
+    song_id: str,
+    version_id: str,
+    count: int,
+    user_id: str,
+    seed: int | None,
+    target_model: str,
+    repaint_params: RepaintTaskParams | None,
+    cover_params: CoverTaskParams | None,
+):
+    if _job_is_terminal(db_factory, job_id):
+        log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+        return None
+    try:
+        return await jobs.admit_generation_worker(
+            target_mode=target_model,
+            redis=redis,
+            db_factory=db_factory,
+        )
+    except AllWorkersHeld:
+        _update_job(
+            db_factory,
+            job_id,
+            JobStatus.QUEUED,
+            queue_reason=GENERATION_WAITING_FOR_LORA_QUEUE_REASON,
+        )
+        await redis.enqueue_job(
+            JobFunction.GENERATE,
+            job_id,
+            song_id,
+            version_id,
+            count,
+            user_id,
+            seed,
+            target_model,
+            repaint_params.model_dump() if repaint_params is not None else None,
+            cover_params.model_dump() if cover_params is not None else None,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+            _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
+        )
+        return None
+
+
+async def _build_generation_job_context(
+    db_factory: sessionmaker[Session],
+    job_id: str,
+    song_id: str,
+    version_id: str,
+    audio_dir: Path,
+    data_dir: Path,
+    user_id: str,
+    seed: int | None,
+    target_model: str,
+    repaint_params: RepaintTaskParams | None,
+    cover_params: CoverTaskParams | None,
+) -> GenerationContext | None:
+    try:
+        ctx = await asyncio.to_thread(
+            _build_generation_context,
+            song_id,
+            version_id,
+            db_factory,
+            audio_dir,
+            data_dir,
+            user_id=user_id,
+            seed=seed,
+            target_model=target_model,
+        )
+        return _apply_generation_task_overrides(ctx, repaint_params, cover_params)
+    except GenerationSetupError as exc:
+        _update_job(
+            db_factory,
+            job_id,
+            JobStatus.FAILED,
+            error=_sanitize_error(exc, job_id),
+            error_type="setup_error",
+        )
+        return None
+
+
+def _apply_generation_task_overrides(
+    ctx: GenerationContext,
+    repaint_params: RepaintTaskParams | None,
+    cover_params: CoverTaskParams | None,
+) -> GenerationContext:
+    if repaint_params is not None:
+        return _apply_repaint_overrides(ctx, repaint_params)
+    if cover_params is not None:
+        return _apply_cover_overrides(ctx, cover_params)
+    return ctx
+
+
+def _temporary_generation_audio_paths(ctx: GenerationContext) -> list[str]:
+    shared_tmp_prefix = str(ctx.audio_dir / WORKER_SHARED_TMP_DIRNAME)
+    candidates = [ctx.ace_config.src_audio_path, ctx.raw_src_audio]
+    return [path for path in candidates if path and path.startswith(shared_tmp_prefix)]
+
+
+def _remove_temporary_generation_audio(paths: list[str]) -> None:
+    for path in paths:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+async def _generate_variants(
+    admitted_worker,
+    redis: ArqRedis,
+    db_factory: sessionmaker[Session],
+    job_id: str,
+    song_id: str,
+    count: int,
+    ctx: GenerationContext,
+) -> None:
+    completed = 0
+    last_error: Exception | None = None
+    for index in range(count):
+        if _job_is_terminal(db_factory, job_id):
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+            return
+        persisted_gen_id, error = await _generate_variant(
+            admitted_worker,
+            db_factory,
+            job_id,
+            index,
+            count,
+            ctx,
+        )
+        if error is not None:
+            last_error = error
+            continue
+        completed += 1
+        if persisted_gen_id:
+            await _auto_score_generation(redis, db_factory, persisted_gen_id, song_id)
+    _finalize_generation_job(db_factory, job_id, count, completed, last_error)
+
+
+async def _generate_variant(
+    admitted_worker,
+    db_factory: sessionmaker[Session],
+    job_id: str,
+    index: int,
+    count: int,
+    ctx: GenerationContext,
+) -> tuple[str | None, Exception | None]:
+    import uuid
+
+    _update_job(db_factory, job_id, JobStatus.RUNNING, progress=index / count)
+    try:
+        worker_result = await jobs.dispatch_generation_on_worker(
+            worker=admitted_worker,
+            ace_config=ctx.ace_config,
+            target_mode=ctx.model_name,
+            on_progress=_make_generation_progress_callback(db_factory, job_id, index, count),
+            on_heartbeat=_make_heartbeat_callback(db_factory, job_id),
+        )
+        if _job_is_terminal(db_factory, job_id):
+            _discard_worker_audio(worker_result.audio_path)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+            return None, None
+        persisted_gen_id = await asyncio.to_thread(
+            jobs.post_process_generation,
+            worker_audio_path=worker_result.audio_path,
+            worker_seed=worker_result.seed,
+            worker_cot_caption=worker_result.cot_caption,
+            worker_cot_lyrics=worker_result.cot_lyrics,
+            worker_delivered_batch_size=worker_result.delivered_batch_size,
+            ctx=ctx,
+            generation_id=str(uuid.uuid4()),
+            db_factory=db_factory,
+            job_id=job_id,
+        )
+        return persisted_gen_id, None
+    except (NoCapacityError, WorkerTaskFailed) as exc:
+        log.warning("Generation %d/%d failed: %s", index + 1, count, exc)
+        return None, exc
+    except Exception as exc:
+        log.exception("Generation %d/%d failed: %s", index + 1, count, exc)
+        return None, exc
 
 
 def _discard_worker_audio(audio_path: str) -> None:

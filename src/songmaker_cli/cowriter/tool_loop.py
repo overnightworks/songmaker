@@ -87,7 +87,8 @@ class ToolTransport(Protocol):
     """Stateful provider transport for one co-writer turn."""
 
     def stream(
-        self, message: InitialTurn | ToolResultBatch,
+        self,
+        message: InitialTurn | ToolResultBatch,
     ) -> AsyncIterator[TransportResponse]: ...
 
     def aclose(self) -> Awaitable[None]: ...
@@ -126,49 +127,117 @@ async def stream_tool_loop(
     try:
         while True:
             terminal: ToolCallBatch | FinalText | None = None
-            async for response in transport.stream(next_message):
-                if isinstance(response, TextDelta):
-                    if terminal is not None:
-                        raise ToolLoopProtocolError()
-                    if response.text:
-                        text_chunks.append(response.text)
-                        yield AssistantTextEvent(text=response.text)
-                    continue
-                if not isinstance(response, (ToolCallBatch, FinalText)) or terminal is not None:
-                    raise ToolLoopProtocolError()
-                if isinstance(response, ToolCallBatch) and not response.calls:
-                    raise ToolLoopProtocolError()
-                terminal = response
-            if terminal is None:
-                raise ToolLoopProtocolError()
+            async for response in _stream_response_events(transport, next_message, text_chunks):
+                if isinstance(response, AssistantTextEvent):
+                    yield response
+                else:
+                    terminal = response
             if isinstance(terminal, FinalText):
-                if terminal.text:
-                    text_chunks.append(terminal.text)
-                    yield AssistantTextEvent(text=terminal.text)
-                yield FinalEvent(text="".join(text_chunks).strip())
+                async for event in _final_events(terminal, text_chunks):
+                    yield event
                 return
-            if round_index == COWRITER_MAX_TOOL_ROUNDS:
-                raise ToolLoopLimitError()
-            round_index += 1
+            round_index = _next_round_index(round_index)
             results: list[ToolResult] = []
-            for call in terminal.calls:
-                yield ToolCallEvent(
-                    tool_use_id=call.tool_use_id,
-                    name=call.name,
-                    input=call.arguments,
-                )
-                result, is_error = _execute_tool(
-                    executor, provider, route, round_index, call,
-                )
-                yield ToolResultEvent(
-                    tool_use_id=call.tool_use_id,
-                    content=result,
-                    is_error=is_error,
-                )
-                results.append(ToolResult(call.tool_use_id, result, is_error))
+            async for event in _stream_tool_results(
+                terminal.calls,
+                executor,
+                provider,
+                route,
+                round_index,
+                results,
+            ):
+                yield event
             next_message = ToolResultBatch(tuple(results))
     finally:
         await transport.aclose()
+
+
+async def _stream_response_events(
+    transport: ToolTransport,
+    message: InitialTurn | ToolResultBatch,
+    text_chunks: list[str],
+) -> AsyncIterator[AssistantTextEvent | ToolCallBatch | FinalText]:
+    async for response in _stream_transport_response(transport, message, text_chunks):
+        yield response
+
+
+async def _final_events(
+    terminal: FinalText,
+    text_chunks: list[str],
+) -> AsyncIterator[AssistantTextEvent | FinalEvent]:
+    if terminal.text:
+        text_chunks.append(terminal.text)
+        yield AssistantTextEvent(text=terminal.text)
+    yield FinalEvent(text="".join(text_chunks).strip())
+
+
+def _next_round_index(round_index: int) -> int:
+    if round_index == COWRITER_MAX_TOOL_ROUNDS:
+        raise ToolLoopLimitError()
+    return round_index + 1
+
+
+async def _stream_transport_response(
+    transport: ToolTransport,
+    message: InitialTurn | ToolResultBatch,
+    text_chunks: list[str],
+) -> AsyncIterator[AssistantTextEvent | ToolCallBatch | FinalText]:
+    terminal: ToolCallBatch | FinalText | None = None
+    async for response in transport.stream(message):
+        if isinstance(response, TextDelta):
+            async for event in _text_delta_events(response, text_chunks, terminal):
+                yield event
+            continue
+        _validate_terminal_response(response, terminal)
+        terminal = response
+    if terminal is None:
+        raise ToolLoopProtocolError()
+    yield terminal
+
+
+async def _text_delta_events(
+    response: TextDelta,
+    text_chunks: list[str],
+    terminal: ToolCallBatch | FinalText | None,
+) -> AsyncIterator[AssistantTextEvent]:
+    if terminal is not None:
+        raise ToolLoopProtocolError()
+    if response.text:
+        text_chunks.append(response.text)
+        yield AssistantTextEvent(text=response.text)
+
+
+def _validate_terminal_response(
+    response: TransportResponse,
+    terminal: ToolCallBatch | FinalText | None,
+) -> None:
+    if terminal is not None or not isinstance(response, (ToolCallBatch, FinalText)):
+        raise ToolLoopProtocolError()
+    if isinstance(response, ToolCallBatch) and not response.calls:
+        raise ToolLoopProtocolError()
+
+
+async def _stream_tool_results(
+    calls: tuple[ToolCall, ...],
+    executor: ToolExecutor,
+    provider: str,
+    route: str,
+    round_index: int,
+    results: list[ToolResult],
+) -> AsyncIterator[ToolCallEvent | ToolResultEvent]:
+    for call in calls:
+        yield ToolCallEvent(
+            tool_use_id=call.tool_use_id,
+            name=call.name,
+            input=call.arguments,
+        )
+        result, is_error = _execute_tool(executor, provider, route, round_index, call)
+        yield ToolResultEvent(
+            tool_use_id=call.tool_use_id,
+            content=result,
+            is_error=is_error,
+        )
+        results.append(ToolResult(call.tool_use_id, result, is_error))
 
 
 def _execute_tool(

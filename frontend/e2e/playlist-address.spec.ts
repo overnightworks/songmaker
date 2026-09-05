@@ -55,7 +55,7 @@ test('a playlist address opens cold, in a tab that knows nothing else', async ({
 }) => {
 	// Same reasoning as the cold-opens in album-address.spec.ts: shell-
 	// independent router behaviour, so desktop alone proves it.
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
 
 	const playlist = await seedPlaylist(request, readSeededLibrary());
 	const playlistAddress = `/playlist/${playlist.slug}`;
@@ -74,7 +74,7 @@ test('an unknown playlist slug states the address names nothing, without a redir
 	page,
 	isMobile
 }) => {
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
 
 	await page.goto('/playlist/no-such-playlist-here');
 

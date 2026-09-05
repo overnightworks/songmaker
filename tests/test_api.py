@@ -1593,6 +1593,53 @@ def test_repaint_without_ffmpeg_is_unavailable(client: TestClient) -> None:
     assert resp.json()["detail"] == "ffmpeg is not available"
 
 
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/generations/g2/repaint",
+            {
+                "src_generation_id": "g2",
+                "repainting_start": 0.0,
+                "repainting_end": 0.5,
+                "model": "sft",
+            },
+        ),
+        (
+            "/api/generations/g2/cover",
+            {
+                "src_generation_id": "g2",
+                "audio_cover_strength": 0.5,
+                "model": "sft",
+            },
+        ),
+    ],
+)
+def test_repaint_and_cover_report_mp3_conversion_failure(
+    client: TestClient,
+    path: str,
+    payload: dict,
+) -> None:
+    from unittest.mock import patch
+
+    audio_dir = Path(client.app.state.ctx.audio_dir)
+    mp3_file = audio_dir / "u-test" / "g2.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3-data")
+
+    with (
+        patch("songmaker_cli.generation_api.shutil.which", return_value="/usr/bin/ffmpeg"),
+        patch(
+            "songmaker_cli.generation_api.subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "ffmpeg"),
+        ),
+    ):
+        resp = client.post(path, json=payload)
+
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Failed to convert MP3 to WAV"
+
+
 def test_repaint_not_found(client: TestClient) -> None:
     resp = client.post("/api/generations/nonexistent/repaint", json={
         "src_generation_id": "nonexistent",
@@ -3662,6 +3709,56 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
 
 
 # ── Default generation config ────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "error_statuses"),
+    [
+        pytest.param("/api/settings/presets", "post", {"400", "409"}, id="create-preset"),
+        pytest.param(
+            "/api/settings/presets/{preset_id}", "put", {"404", "409"}, id="update-preset",
+        ),
+        pytest.param(
+            "/api/settings/presets/{preset_id}", "delete", {"404"}, id="delete-preset",
+        ),
+        pytest.param(
+            "/api/settings/presets/{preset_id}/set-default", "post", {"404"},
+            id="set-default-preset",
+        ),
+        pytest.param("/api/settings/models/{model_id}", "put", {"404"}, id="toggle-model"),
+        pytest.param(
+            "/api/settings/default-config", "put", {"400", "404"}, id="set-default-config",
+        ),
+        pytest.param("/api/settings/claude-models", "put", {"400"}, id="set-claude-models"),
+        pytest.param("/api/settings/cowriter", "get", {"422"}, id="get-cowriter"),
+        pytest.param("/api/settings/cowriter", "put", {"422", "503"}, id="set-cowriter"),
+        pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
+        pytest.param("/api/settings/judge", "put", {"422", "503"}, id="set-judge"),
+        pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "get", {"404"},
+            id="get-user-rate-limits",
+        ),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "put", {"400", "404"},
+            id="set-user-rate-limits",
+        ),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "delete", {"404"},
+            id="delete-user-rate-limits",
+        ),
+    ],
+)
+def test_settings_api_documents_its_http_error_responses(
+    client: TestClient,
+    path: str,
+    method: str,
+    error_statuses: set[str],
+) -> None:
+    documented_responses = client.app.openapi()["paths"][path][method]["responses"]
+
+    assert error_statuses.issubset(documented_responses)
+    assert all(documented_responses[status]["description"] for status in error_statuses)
 
 
 def test_default_config_get_returns_null(client: TestClient) -> None:

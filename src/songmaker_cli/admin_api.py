@@ -427,43 +427,60 @@ async def get_registry_endpoint(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> RegistryResponse:
     workers = list_worker_identities(db)
-    states: dict[str, WorkerEphemeralState | None] = {}
-    for w in workers:
-        states[w.id] = _state_from_dict(await read_worker_state(pool, w.id), worker_id=w.id)
+    states = await _registry_worker_states(pool, workers)
+    return RegistryResponse(models=_registry_models(states))
 
-    any_worker_online = any(_derive_worker_status(st) != "offline" for st in states.values())
 
-    downloaded_union: set[str] = set()
-    for st in states.values():
-        if st is not None:
-            downloaded_union.update(st.available_modes)
-
-    models: list[RegistryModelResponse] = []
-    for mode in MODEL_CONFIG_PATHS:
-        loaded_on: list[str] = []
-        loading_on: list[str] = []
-        for worker_id, st in states.items():
-            if st is None:
-                continue
-            if mode in _loaded_modes(st):
-                loaded_on.append(worker_id)
-            if st.target_loading == mode:
-                loading_on.append(worker_id)
-        if not any_worker_online:
-            availability: ModelAvailability = "unknown_no_worker"
-        elif mode in downloaded_union:
-            availability = "downloaded"
-        else:
-            availability = "not_downloaded"
-        models.append(
-            RegistryModelResponse(
-                mode=mode,
-                availability=availability,
-                loaded_on=sorted(loaded_on),
-                loading_on=sorted(loading_on),
-            ),
+async def _registry_worker_states(
+    pool: ArqRedis,
+    workers: list,
+) -> dict[str, WorkerEphemeralState | None]:
+    return {
+        worker.id: _state_from_dict(
+            await read_worker_state(pool, worker.id), worker_id=worker.id,
         )
-    return RegistryResponse(models=models)
+        for worker in workers
+    }
+
+
+def _registry_models(
+    states: dict[str, WorkerEphemeralState | None],
+) -> list[RegistryModelResponse]:
+    any_worker_online = any(_derive_worker_status(state) != "offline" for state in states.values())
+    downloaded_modes = {
+        mode for state in states.values() if state is not None for mode in state.available_modes
+    }
+    return [
+        _registry_model(mode, states, any_worker_online, downloaded_modes)
+        for mode in MODEL_CONFIG_PATHS
+    ]
+
+
+def _registry_model(
+    mode: str,
+    states: dict[str, WorkerEphemeralState | None],
+    any_worker_online: bool,
+    downloaded_modes: set[str],
+) -> RegistryModelResponse:
+    loaded_on = sorted(
+        worker_id for worker_id, state in states.items()
+        if state is not None and mode in _loaded_modes(state)
+    )
+    loading_on = sorted(
+        worker_id for worker_id, state in states.items()
+        if state is not None and state.target_loading == mode
+    )
+    availability: ModelAvailability = (
+        "unknown_no_worker" if not any_worker_online
+        else "downloaded" if mode in downloaded_modes
+        else "not_downloaded"
+    )
+    return RegistryModelResponse(
+        mode=mode,
+        availability=availability,
+        loaded_on=loaded_on,
+        loading_on=loading_on,
+    )
 
 
 @router.post(

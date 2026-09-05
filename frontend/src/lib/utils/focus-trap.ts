@@ -24,7 +24,8 @@ function trapTabKey(container: HTMLElement, event: KeyboardEvent): void {
 		return;
 	}
 	const first = focusable[0];
-	const last = focusable[focusable.length - 1];
+	const last = focusable.at(-1);
+	if (!last) return;
 	const active = document.activeElement;
 	const outside = !container.contains(active);
 	if (event.shiftKey && (active === first || active === container || outside)) {
