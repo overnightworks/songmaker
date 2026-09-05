@@ -402,6 +402,16 @@ describe('event handling', () => {
 });
 
 describe('stream playback', () => {
+	it('leaves the current playback alone when an empty stream has no start track', () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		const current = audioPlayer.current;
+
+		audioPlayer.loadStream({ ...makeStreamManifest(), tracks: [] }, 0, { autoplay: false });
+
+		expect(audioPlayer.mode).toBe('classic');
+		expect(audioPlayer.current).toBe(current);
+	});
+
 	it('loads a queue stream at the requested track boundary', () => {
 		const manifest = makeStreamManifest();
 		audioPlayer.loadStream(manifest, 1, { autoplay: false });
@@ -413,6 +423,14 @@ describe('stream playback', () => {
 		expect(fakeAudio.currentTime).toBe(10);
 		expect(audioPlayer.current?.songTitle).toBe('Second');
 		expect(audioPlayer.duration).toBe(20);
+	});
+
+	it('keeps a stream paused when its caller disables autoplay', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('canplay');
+
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		expect(audioPlayer.status).toBe('ready');
 	});
 
 	it('maps absolute stream time to the active track time', () => {
@@ -453,6 +471,24 @@ describe('stream playback', () => {
 		expect(audioPlayer.prevStreamTrack()).toBe(true);
 		expect(fakeAudio.currentTime).toBe(0);
 		expect(audioPlayer.current?.songTitle).toBe('First');
+	});
+
+	it.each([
+		['before an audio element exists', () => audioPlayer.destroy()],
+		['while classic playback is active', () => audioPlayer.load(makeInfo(), { autoplay: false })]
+	])('rejects stream navigation %s', (_caseName, prepare) => {
+		prepare();
+
+		expect(audioPlayer.seekToStreamTrack(0)).toBe(false);
+		expect(audioPlayer.nextStreamTrack()).toBe(false);
+		expect(audioPlayer.prevStreamTrack()).toBe(false);
+	});
+
+	it('does not move to an invalid stream track', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+
+		expect(audioPlayer.seekToStreamTrack(99)).toBe(false);
+		expect(audioPlayer.current?.generation.id).toBe('g1');
 	});
 
 	it('advances and resumes when the stream audio element ends', () => {
@@ -854,6 +890,18 @@ describe('toggle / play / pause', () => {
 		expect(audioPlayer.status).toBe('loading');
 	});
 
+	it('retries a failed stream in stream mode', async () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		audioPlayer.status = 'error';
+
+		audioPlayer.play();
+		await vi.waitFor(() => expect(fakeAudio.src).toContain('recover=1'));
+
+		expect(audioPlayer.mode).toBe('stream');
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toContain('recover=1');
+	});
+
 	it('toggle with no current does nothing', () => {
 		audioPlayer.destroy();
 		expect(() => audioPlayer.toggle()).not.toThrow();
@@ -867,6 +915,29 @@ describe('toggle / play / pause', () => {
 	it('pause with no audio does nothing', () => {
 		audioPlayer.destroy();
 		expect(() => audioPlayer.pause()).not.toThrow();
+	});
+
+	it.each([
+		[
+			'an error',
+			() => {
+				audioPlayer.status = 'error';
+			}
+		],
+		[
+			'an ended track',
+			() => {
+				audioPlayer.status = 'playing';
+				fakeAudio.ended = true;
+			}
+		]
+	])('keeps the status when pausing after %s', (_caseName, arrange) => {
+		arrange();
+		const status = audioPlayer.status;
+
+		audioPlayer.pause();
+
+		expect(audioPlayer.status).toBe(status);
 	});
 
 	it('NotAllowedError on autoplay sets paused with helpful error', async () => {
@@ -928,6 +999,14 @@ describe('seek()', () => {
 		audioPlayer.destroy();
 		audioPlayer.seek(10);
 		expect(fakeAudio.currentTime).toBe(0);
+	});
+
+	it('seeks within the active stream track', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false });
+
+		audioPlayer.seek(5);
+
+		expect(fakeAudio.currentTime).toBe(15);
 	});
 });
 
