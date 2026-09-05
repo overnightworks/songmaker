@@ -6,7 +6,7 @@ import {
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL
 } from '../src/lib/constants';
-import { boundingBoxes, FlowGuard, MOBILE_VIEWPORT, nameStartingWith, workspace } from './helpers';
+import { FlowGuard, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 function expectedSongSlug(title: string): string {
@@ -54,83 +54,33 @@ test('the single rail search narrows the known tree and keeps the open album on 
 	guard.assertClean();
 });
 
-test('the album row stays above a song and take on desktop', async ({ page, isMobile }) => {
-	test.skip(Boolean(isMobile), 'This flow sets its own desktop-sized viewport');
-	await page.setViewportSize({ width: 1440, height: 900 });
-	const guard = new FlowGuard(page);
-	const library = readSeededLibrary();
-	const albumAddress = `/album/${library.albumId}`;
-	const songAddress = `${albumAddress}/${expectedSongSlug(library.pickedSongTitle)}`;
-	const collapsedSummaryLabel = `${library.albumTitle} · ${library.albumSongCount} songs`;
-	const surface = workspace(page);
-
-	await page.goto(albumAddress);
-	const albumRow = surface.locator('.library-row-scrim');
-	await expect(albumRow).toBeVisible();
-	const [albumRowBox] = await boundingBoxes(albumRow);
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
-	await expect(page).toHaveURL(songAddress);
-	const songRow = surface.locator('.library-row-scrim');
-	await expect(songRow).toBeVisible();
-	const [songRowBox] = await boundingBoxes(songRow);
-	expect(songRowBox.x).toBeCloseTo(albumRowBox.x, 1);
-	expect(songRowBox.y).toBeCloseTo(albumRowBox.y, 1);
-	expect(songRowBox.width).toBeCloseTo(albumRowBox.width, 1);
-
-	const collapseAlbums = surface.getByRole('button', { name: 'Collapse albums' });
-	await expect(collapseAlbums).toBeVisible();
-	await expect(collapseAlbums).toBeInViewport();
-	await collapseAlbums.click();
-	const collapsedSummary = surface.getByText(collapsedSummaryLabel, { exact: true });
-	const expandAlbums = surface.getByRole('button', { name: 'Expand albums' });
-	await expect(collapsedSummary).toBeVisible();
-	await expect(expandAlbums).toBeVisible();
-
-	await page.goto(`${songAddress}/take/1`);
-	const takeRow = surface.locator('.library-row-scrim');
-	await expect(takeRow).toBeVisible();
-	const [takeRowBox] = await boundingBoxes(takeRow);
-	expect(takeRowBox.x).toBeCloseTo(songRowBox.x, 1);
-	expect(takeRowBox.y).toBeCloseTo(songRowBox.y, 1);
-	expect(takeRowBox.width).toBeCloseTo(songRowBox.width, 1);
-	await expect(takeRow.getByText(collapsedSummaryLabel, { exact: true })).toBeVisible();
-	await expect(takeRow.getByRole('button', { name: 'Expand albums' })).toBeInViewport();
-	guard.assertClean();
-});
-
-test('a mobile song or take starts with its album row collapsed until expanded', async ({
+test('album, song, and take content begin at their breadcrumb headers on desktop and 375 px', async ({
 	page,
 	isMobile
 }) => {
-	test.skip(!isMobile, 'This flow belongs to the mobile shell');
-	await page.setViewportSize(MOBILE_VIEWPORT);
-	await page.addInitScript(() => {
-		if (sessionStorage.getItem('navRowPreferenceReset') === 'true') return;
-		localStorage.removeItem('libraryRowOpen');
-		sessionStorage.setItem('navRowPreferenceReset', 'true');
-	});
+	await page.setViewportSize(isMobile ? { width: 375, height: 812 } : { width: 1440, height: 900 });
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
 	const albumAddress = `/album/${library.albumId}`;
 	const songAddress = `${albumAddress}/${expectedSongSlug(library.pickedSongTitle)}`;
-	const collapsedSummaryLabel = `${library.albumTitle} · ${library.albumSongCount} songs`;
 	const surface = workspace(page);
 
 	await page.goto(albumAddress);
+	await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
+	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
+
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
-	const collapsedSummary = surface.getByText(collapsedSummaryLabel, { exact: true });
-	const expandAlbums = surface.getByRole('button', { name: 'Expand albums' });
-	await expect(collapsedSummary).toBeVisible();
-	await expect(expandAlbums).toBeVisible();
-	await expect(surface.getByLabel('Filter albums by name')).toHaveCount(0);
-
-	await expandAlbums.click();
-	await expect(surface.getByRole('button', { name: 'Collapse albums' })).toBeInViewport();
+	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
+	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
 	await page.goto(`${songAddress}/take/1`);
-	await expect(surface.getByText(collapsedSummaryLabel, { exact: true })).toBeVisible();
-	await expect(surface.getByRole('button', { name: 'Collapse albums' })).toBeInViewport();
+	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
+	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
+
 	guard.assertClean();
 });
 
