@@ -9,6 +9,10 @@ def test_parse_step_fraction_basic() -> None:
     assert parse_step_fraction("8/50 [00:02<00:13]") == 8 / 50
 
 
+def test_parse_step_fraction_accepts_whitespace_before_bracket() -> None:
+    assert parse_step_fraction("8/50\t [00:02<00:13]") == 8 / 50
+
+
 def test_parse_step_fraction_complete() -> None:
     assert parse_step_fraction("50/50 [00:13<00:00]") == 1.0
 
