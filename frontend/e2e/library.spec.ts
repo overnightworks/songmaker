@@ -11,7 +11,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	collectionRowPlayLabel,
 	HITBOX_FREQUENT_PX,
-	LIBRARY_FILTER_LABELS,
 	NOW_PLAYING_CLOSE,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
@@ -229,7 +228,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	const surface = workspace(page);
 
 	await page.goto('/');
-	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
+	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 
 	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
@@ -288,7 +287,6 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 		await openLibraryWall(page, shell);
-		await surface.getByRole('radio', { name: LIBRARY_FILTER_LABELS.playlists }).click();
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 		const entryRows = playlistEntryRows(page);

@@ -200,16 +200,6 @@ const INVENTORY = [
 		component: 'AlbumDetailView'
 	},
 	{
-		name: 'new-album',
-		selector: '[data-hitbox="frequent"][aria-label="New album"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'wall-tile-play',
-		selector: '.wall-tile-play[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
 		name: 'playlist-picker-add',
 		selector: '.picker-add[data-hitbox="frequent"]',
 		component: 'PlaylistPicker'
@@ -223,16 +213,6 @@ const INVENTORY = [
 		name: 'collection-menu',
 		selector: '.menu-trigger[data-hitbox="frequent"]',
 		component: 'CollectionMenu'
-	},
-	{
-		name: 'library-filter-chip',
-		selector: '.filter-chip[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'library-sort-select',
-		selector: '.sort-select[data-hitbox="frequent"]',
-		component: 'LibraryWall'
 	},
 	{
 		name: 'rail-search',
@@ -534,7 +514,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	// The album interior is asked for by id rather than by opening it, since the
 	// playlist interior above needs the open collection to stay its own.
 	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
-	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
+	mounted.push(mount(LibraryWall, { target: songTarget }));
 	mounted.push(
 		mount(PlaylistPicker, {
 			target: pickerTarget,
