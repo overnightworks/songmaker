@@ -438,8 +438,10 @@ failures retain the named Codex error.
 Codex has two fixed one-turn commands. The tool-free Co-Writer command is
 `codex exec --json` with `--skip-git-repo-check`, `--ignore-user-config`,
 `--ignore-rules`, `--ephemeral`, `--disable code_mode_host`, `--disable
-code_mode`, `--disable code_mode_only`, `approval_policy="never"`, and
-`mcp_servers={}` in a read-only sandbox. The cover-image command also uses a
+code_mode`, `--disable code_mode_only`, `approval_policy="never"`,
+`mcp_servers={}`, disabled shell, unified-exec, browser, computer, multi-agent,
+image-generation, plugin, and hook features, and disabled web search in a
+read-only sandbox. The cover-image command also uses a
 read-only sandbox, but enables `code_mode_host` only for that image run and
 adds `web_search="disabled"`; its only permitted Code Mode command is the
 measured read of the bundled image skill. Each receives a private temporary
@@ -455,8 +457,11 @@ remains a protocol failure. Event payloads, prompts, and stderr are not logged;
 failure logging contains only the return code and stderr length.
 `approval_policy="never"` means auto-approval within the sandbox, not that
 tools cannot run: the JSONL gate refuses a tool only after Codex reports the
-item, so these flags do not rule out execution or a web-search request before
-that event is observed.
+item, so these flags are defense in depth rather than the sole execution or
+network boundary. The resumable tool-loop transport uses the same isolation,
+requires a UUID from `thread.started` before it can resume, and runs from an
+empty `work/` sibling of its private `codex-home/`; prompts are passed only on
+stdin.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually

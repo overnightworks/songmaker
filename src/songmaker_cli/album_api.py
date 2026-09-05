@@ -11,9 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
-    COVER_SUGGESTIONS_LOCK_ID,
     Pagination,
-    _begin_exclusive,
     check_album_access,
     cleanup_generation_files,
     owner_filter,
@@ -48,11 +46,12 @@ from songmaker_cli.constants import (
     AuditAction,
     JobFunction,
     JobStatus,
-    JobType,
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
+    CoverSuggestionRequestError,
     remove_cover_suggestion_files,
+    request_cover_suggestions,
     resolve_suggestion_png,
 )
 from songmaker_cli.covers import (
@@ -74,14 +73,12 @@ from songmaker_cli.db.queries import (
     count_picked_songs_by_album,
     count_songs_by_album,
     create_album,
-    create_job,
     delete_album_cover_suggestions,
     disable_album_sharing,
     enable_album_sharing,
     get_album,
     get_album_cover_suggestion,
     get_last_cover_job_for_album,
-    has_active_cover_job,
     list_album_cover_suggestions,
     list_albums,
     record_audit,
@@ -406,43 +403,36 @@ async def api_create_cover_suggestions(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    album = get_album(session, album_id)
-    check_album_access(album, user)
     session.commit()
-    _begin_exclusive(session, COVER_SUGGESTIONS_LOCK_ID)
     try:
-        if has_active_cover_job(session, album_id):
-            raise HTTPException(409, "Cover suggestions are already being generated")
-        settings = get_settings()
-        used_today = count_cover_jobs_since(session, album_id, _utc_day_start())
-        if used_today >= settings.cover_suggestions_daily_limit:
-            raise HTTPException(429, "Daily cover suggestion limit reached")
+        request = request_cover_suggestions(session, album_id, user)
         if not await is_music_worker_healthy():
             raise HTTPException(503, "Worker not running")
-        stale_suggestion_paths = delete_album_cover_suggestions(session, album.id)
-        job = create_job(session, JobType.COVER, user_id=user.id, album_id=album.id)
         session.commit()
+    except CoverSuggestionRequestError as exc:
+        session.rollback()
+        raise HTTPException(exc.status_code, str(exc)) from exc
     except HTTPException:
         session.rollback()
         raise
-    remove_cover_suggestion_files(ctx.audio_dir, stale_suggestion_paths)
+    remove_cover_suggestion_files(ctx.audio_dir, request.stale_suggestion_paths)
     try:
         await get_arq_pool().enqueue_job(
             JobFunction.COVER,
-            job.id,
+            request.job.id,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except (ConnectionError, RuntimeError):
         update_job_status(
             session,
-            job.id,
+            request.job.id,
             JobStatus.FAILED,
             error="Job queue unavailable",
             error_type="queue_unavailable",
         )
         session.commit()
         raise HTTPException(503, "Job queue unavailable")
-    return JobResponse.from_orm(job)
+    return JobResponse.from_orm(request.job)
 
 
 @router.get("/albums/{album_id}/cover-suggestions")
