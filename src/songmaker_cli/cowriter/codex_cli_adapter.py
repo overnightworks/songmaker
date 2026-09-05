@@ -640,14 +640,12 @@ class _CodexImageEventGate:
             if self.command_id is not None and self.saw_completed_command:
                 return
             raise ImageToolBlockedError()
-        if self.completed_error_item_message is not None:
-            if (
-                _codex_cli_failure_reason(
-                    self.completed_error_item_message,
-                )
-                is SafeRouteReasonCode.CLI_AUTH_REJECTED
-            ):
-                raise CodexImageLoginError()
+        if (
+            self.completed_error_item_message is not None
+            and _codex_cli_failure_reason(self.completed_error_item_message)
+            is SafeRouteReasonCode.CLI_AUTH_REJECTED
+        ):
+            raise CodexImageLoginError()
         raise CodexImageCliError()
 
 
