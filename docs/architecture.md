@@ -703,7 +703,7 @@ stream.
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
-| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST submits one `cover` job to the music queue after the active-job and per-album UTC-day checks; an unavailable worker returns 503 without creating a job, while a queue failure leaves a terminal failed job rather than a queued one. GET inspects the latest job state and private suggestions; DELETE discards suggestions after the database commit. |
+| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST creates one `cover` job after the active-job and per-album UTC-day checks. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery and reports interrupted running jobs as `server_restart`. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE discards suggestions after the database commit. |
 | GET | `/api/albums/{id}/cover-suggestions/{suggestion_id}` | user | Stream one private suggestion after the same album ownership check; no share route exists. |
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |

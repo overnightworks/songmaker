@@ -171,8 +171,10 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
 
 
 def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(
-    alice_app: tuple[TestClient, object],
+    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
+    get_settings.cache_clear()
     client, factory = alice_app
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
@@ -191,6 +193,8 @@ def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_jo
 def test_create_cover_suggestions_enqueues_a_music_worker_job(
     alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
+    get_settings.cache_clear()
     client, factory = alice_app
     calls: list[tuple] = []
 
@@ -275,6 +279,8 @@ def test_create_cover_suggestions_replaces_stale_suggestions(
 def test_create_cover_suggestions_marks_a_queue_failure_terminal(
     alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
+    get_settings.cache_clear()
     client, factory = alice_app
 
     class Pool:

@@ -641,6 +641,10 @@ class CoverExecutor(StrEnum):
     WEB = "web"
 
 
+DEFAULT_COVER_EXECUTOR: Final[CoverExecutor] = CoverExecutor.WEB
+"""Production owner for cover jobs; ``music`` remains a temporary rollback switch."""
+
+
 @dataclass(frozen=True)
 class JobStaleThresholds:
     """Maximum inactive time for a queued or running job type.
