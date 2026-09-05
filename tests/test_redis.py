@@ -25,7 +25,7 @@ from songmaker_cli.redis_client import (
 from songmaker_cli.server import create_app
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_redis():
     return fakeredis.FakeRedis(decode_responses=True)
 
