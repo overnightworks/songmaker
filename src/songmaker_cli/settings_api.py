@@ -508,12 +508,11 @@ def _models_for_provider(
     from songmaker_cli.cowriter.catalog import provider_snapshot
 
     return _models_from_route_snapshot(
-        provider, active_model, provider_snapshot(provider), route,
+        active_model, provider_snapshot(provider), route,
     )
 
 
 def _models_from_route_snapshot(
-    provider: str,
     active_model: str | None,
     snapshot: "ProviderSnapshot | None",
     route: str,
@@ -786,7 +785,6 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
         models, error = _models_from_route_snapshot(
-            name,
             model if name == provider else None,
             snapshots.get(name),
             "api",
