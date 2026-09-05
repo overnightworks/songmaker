@@ -707,16 +707,17 @@ def test_chat_turn_provider_change_preserves_conversation_context(client):
 
     async def _capture(**kwargs) -> AsyncIterator[StreamEvent]:
         captured.append(kwargs)
-        yield FinalEvent(text="ok")
+        answers = ("first provider answer", "second provider answer")
+        yield FinalEvent(text=answers[len(captured) - 1])
 
-    turn_request = {
-        "message": "keep the context",
+    first_request = {
+        "message": "remember the verse",
         "current_song_id": "s1",
         "mentioned_version_ids": ["v1"],
         "current_generation_id": "gen1",
     }
     with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _capture):
-        first = c.post("/api/chat/turn", json=turn_request)
+        first = c.post("/api/chat/turn", json=first_request)
 
     first_final = _final_event(_stream_events(first))
     with factory() as session:
@@ -731,11 +732,16 @@ def test_chat_turn_provider_change_preserves_conversation_context(client):
         session.commit()
 
     with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _capture):
-        second = c.post("/api/chat/turn", json=turn_request)
+        second = c.post(
+            "/api/chat/turn",
+            json={**first_request, "message": "continue the verse"},
+        )
 
     second_final = _final_event(_stream_events(second))
     assert second_final["conversation_id"] == first_final["conversation_id"]
     assert len(captured) == 2
+    assert captured[0]["provider"] == "claude"
+    assert captured[1]["provider"] == "grok"
     second_context = "\n".join(
         str(message["content"])
         for message in captured[1]["messages"]
@@ -746,12 +752,20 @@ def test_chat_turn_provider_change_preserves_conversation_context(client):
     assert "album is nocturnal" in second_context
     assert "v1" in second_context
     assert "gen1" in second_context
+    second_messages = captured[1]["messages"]
+    assert [message["content"] for message in second_messages[:2]] == [
+        "remember the verse",
+        "first provider answer",
+    ]
+    assert "continue the verse" in second_messages[2]["content"]
 
     with factory() as session:
         messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
-        assert [message.content for message in messages[:2]] == [
-            "keep the context",
-            "ok",
+        assert [message.content for message in messages] == [
+            "remember the verse",
+            "first provider answer",
+            "continue the verse",
+            "second provider answer",
         ]
 
 
