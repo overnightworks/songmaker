@@ -70,6 +70,8 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-tool-*/codex-home/ -> /newroot/tmp/songmaker-codex-tool-*/codex-home/,
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-sandbox-probe/codex-home/ -> /newroot/tmp/songmaker-codex-sandbox-probe/codex-home/,
   mount options=(rw remount bind nosuid nodev) options in (silent relatime noatime nodiratime noexec) -> /newroot/tmp/{songmaker-cover-codex-*,songmaker-codex-tool-*,songmaker-codex-sandbox-probe}/codex-home/{,**},
+  # Codex overlays its protected home state with read-only nodev,nosuid tmpfs mounts.
+  mount fstype=tmpfs options=(rw nosuid nodev) options in (silent) tmpfs -> /newroot/tmp/{songmaker-cover-codex-*,songmaker-codex-tool-*,songmaker-codex-sandbox-probe}/codex-home/{.git,.agents,.codex}/,
 
   deny /sys/[^f]*/** wklx,
   deny /sys/f[^s]*/** wklx,
