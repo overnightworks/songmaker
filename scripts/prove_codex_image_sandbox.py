@@ -142,6 +142,8 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         "docker",
         "run",
         "--rm",
+        "--network",
+        "none",
         "--user",
         "songmaker",
         "--cap-drop=ALL",
