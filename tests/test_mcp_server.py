@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import JobStatus, JobType
@@ -522,7 +523,7 @@ def test_e2e_write_rolled_back_on_access_denied(e2e_setup, db_factory, monkeypat
         "update_song_lyrics",
         {"song_id": song_id, "lyrics": "hijack"},
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ToolError, match="not found"):
         asyncio.run(call_tool)
     # Ensure no change landed.
     with db_factory() as session:
@@ -534,7 +535,7 @@ def test_e2e_missing_env_var_fails(db_factory, monkeypatch):
     monkeypatch.delenv(auth.USER_ID_ENV, raising=False)
     srv = server.build_server(session_factory=db_factory)
     call_tool = srv.call_tool("list_albums", {})
-    with pytest.raises(Exception):
+    with pytest.raises(ToolError, match="not set"):
         asyncio.run(call_tool)
 
 
