@@ -297,51 +297,65 @@ async def _iterate_task_events(
     )
     while True:
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream(
-                    "GET",
-                    f"{worker.base_url}/tasks/{task_id}/stream",
-                    headers=_internal_headers(),
-                ) as resp:
-                    resp.raise_for_status()
-                    buffer = ""
-                    async for chunk in resp.aiter_text():
-                        buffer += chunk
-                        while "\n\n" in buffer:
-                            raw, buffer = buffer.split("\n\n", 1)
-                            parsed = _parse_sse_event(raw)
-                            if parsed is None:
-                                continue
-                            event_type, data = parsed
-                            yield event_type, data
-                            if event_type in ("done", "error"):
-                                return
+            async for event_type, data in _worker_task_events(worker, task_id, timeout):
+                yield event_type, data
+                if event_type in ("done", "error"):
+                    return
             return
         except httpx.ReadTimeout:
             raise
         except (httpx.TransportError, httpx.RemoteProtocolError) as exc:
             reconnects += 1
-            if reconnects > options.max_sse_reconnects:
-                log.error(
-                    "SSE reconnect budget exhausted for task %s on %s",
-                    task_id,
-                    worker.id,
-                )
-                raise
-            backoff = min(
-                options.initial_reconnect_backoff_seconds * (2 ** (reconnects - 1)),
-                options.max_reconnect_backoff_seconds,
-            )
-            log.warning(
-                "SSE drop on %s task %s (attempt %d/%d): %s — reconnecting in %.1fs",
-                worker.id,
-                task_id,
-                reconnects,
-                options.max_sse_reconnects,
-                exc,
-                backoff,
-            )
+            backoff = _sse_reconnect_delay(worker, task_id, reconnects, options, exc)
             await asyncio.sleep(backoff)
+
+
+async def _worker_task_events(
+    worker: _PickedWorker,
+    task_id: str,
+    timeout: httpx.Timeout,
+) -> AsyncIterator[tuple[str, dict]]:
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "GET",
+            f"{worker.base_url}/tasks/{task_id}/stream",
+            headers=_internal_headers(),
+        ) as response:
+            response.raise_for_status()
+            buffer = ""
+            async for chunk in response.aiter_text():
+                buffer += chunk
+                while "\n\n" in buffer:
+                    raw, buffer = buffer.split("\n\n", 1)
+                    parsed = _parse_sse_event(raw)
+                    if parsed is not None:
+                        yield parsed
+
+
+def _sse_reconnect_delay(
+    worker: _PickedWorker,
+    task_id: str,
+    reconnects: int,
+    options: DispatchOptions,
+    error: Exception,
+) -> float:
+    if reconnects > options.max_sse_reconnects:
+        log.error("SSE reconnect budget exhausted for task %s on %s", task_id, worker.id)
+        raise error
+    backoff = min(
+        options.initial_reconnect_backoff_seconds * (2 ** (reconnects - 1)),
+        options.max_reconnect_backoff_seconds,
+    )
+    log.warning(
+        "SSE drop on %s task %s (attempt %d/%d): %s — reconnecting in %.1fs",
+        worker.id,
+        task_id,
+        reconnects,
+        options.max_sse_reconnects,
+        error,
+        backoff,
+    )
+    return backoff
 
 
 async def _consume_task_stream(
