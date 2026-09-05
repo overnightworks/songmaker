@@ -437,7 +437,7 @@ def update_song(
         key_scale=new_key_scale,
         generation_params=new_gen_params,
     )
-    session.add(version)
+    song.versions.append(version)
     session.flush()
     log.info("Updated song %s → v%d", song_id, next_num)
     return version
