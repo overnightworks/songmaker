@@ -50,9 +50,12 @@ import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
 	probeResourceAuth,
+	requestSongRefresh,
 	resetResourceSyncForTests,
+	retryResourceSync,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
+	waitForResourceReady,
 	type ResourceAuthProbe,
 	type ResourceEventSource,
 	type ResourceSyncDeps,
@@ -377,12 +380,19 @@ describe('resource sync interleavings', () => {
 });
 
 describe('resource sync owner', () => {
-	it('keeps an unstarted owner idle and creates only one stream on repeated starts', async () => {
-		const { controller, sources, fetchCalls } = setup();
-
+	it('reports an unstarted owner as not ready', async () => {
+		const { controller } = setup();
 		expect(await controller.waitForReady()).toBe(false);
+	});
+
+	it('does not refresh songs before its owner starts', async () => {
+		const { controller, fetchCalls } = setup();
 		await controller.requestSongRefresh('s1');
 		expect(fetchCalls).toEqual([]);
+	});
+
+	it('creates one stream when start is called repeatedly', () => {
+		const { controller, sources } = setup();
 		controller.start();
 		controller.start();
 		expect(sources).toHaveLength(1);
@@ -404,35 +414,38 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['hello', { high_water_mark: 1 }],
-		['resync', { high_water_mark: 1 }],
-		['generation.created', { sequence: 1 }]
-	])('makes malformed %s events visibly retryable', async (type, data) => {
-		const { controller, sources, store } = setup();
-		controller.start();
+		['hello', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
+		['resync', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
+		['generation.created', { sequence: 1 }, 'Malformed resource event field: kind', false]
+	])(
+		'surfaces malformed %s events with their parse error',
+		async (type, data, error, closesSource) => {
+			const { controller, sources, store } = setup();
+			controller.start();
 
-		latestSource(sources).emit(type, data);
-		await flush();
+			latestSource(sources).emit(type, data);
+			await flush();
 
-		expect(get(store).status).toBe('error');
-		expect(get(store).error).toEqual(expect.any(String));
-	});
+			expect(get(store)).toMatchObject({ status: 'error', error, ready: false });
+			expect(latestSource(sources).closed).toBe(closesSource);
+		}
+	);
 
-	it('keeps the first bootstrap error when a later cleanup would use a generic fallback', async () => {
+	it('keeps a song refresh error when bootstrap would otherwise use its generic fallback', async () => {
 		const { controller, sources, store } = setup({
-			loadSnapshot: async () => {
-				throw new Error('snapshot unavailable');
-			}
+			fetchSong: async () => Promise.reject(new Error('song unavailable'))
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
 
 		expect(get(store)).toMatchObject({
 			status: 'error',
-			error: 'snapshot unavailable',
+			error: 'song unavailable',
 			ready: false
 		});
+		expect(latestSource(sources).closed).toBe(true);
 	});
 
 	it('bounds deferred events and remembered generation ids', async () => {
@@ -1085,6 +1098,23 @@ describe('probeResourceAuth', () => {
 });
 
 describe('library resource sync wiring', () => {
+	it('keeps wrapper calls inert until the library owner is started', async () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+
+		await requestSongRefresh('s1');
+		expect(MockEventSource.instances).toHaveLength(0);
+		expect(await waitForResourceReady()).toBe(false);
+		expect(MockEventSource.instances).toHaveLength(0);
+	});
+
+	it('starts the singleton owner when retry is requested while stopped', () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+
+		void retryResourceSync();
+
+		expect(MockEventSource.instances).toHaveLength(1);
+	});
+
 	it('starts a credentialed EventSource and stops it on demand', () => {
 		vi.stubGlobal('EventSource', MockEventSource);
 		startLibraryResourceSync();

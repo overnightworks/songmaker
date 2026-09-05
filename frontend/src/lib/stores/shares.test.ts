@@ -194,9 +194,9 @@ describe('share count', () => {
 
 		const first = refreshShareCount({ force: true });
 		const second = refreshShareCount({ force: true });
-		await second;
+		expect(await second).toBe(true);
 		resolveFirst?.(page({ total: 1 }));
-		await first;
+		expect(await first).toBe(false);
 
 		expect(fetchShares).toHaveBeenCalledTimes(2);
 		expect(get(shareCount).total).toBe(9);
@@ -280,9 +280,9 @@ describe('share inventory', () => {
 
 		const first = loadShareInventory({ reset: true, force: true });
 		const second = loadShareInventory({ reset: true, force: true });
-		await second;
+		expect(await second).toBe(true);
 		resolveFirst?.(page({ items: [item({ id: 'first' })], total: 1 }));
-		await first;
+		expect(await first).toBe(false);
 
 		expect(fetchShares).toHaveBeenCalledTimes(2);
 		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['second']);
@@ -444,8 +444,7 @@ describe('shares view and patches', () => {
 });
 
 describe('share watchers', () => {
-	it('refreshes the count for status watchers and releases the visibility listener after cleanup', async () => {
-		const removeListener = vi.spyOn(document, 'removeEventListener');
+	it('does not refresh after a stopped status watcher receives a visible-tab event', async () => {
 		const stop = watchShareStatus();
 		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
 
@@ -456,17 +455,29 @@ describe('share watchers', () => {
 
 		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
 		stop();
-		expect(removeListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+		document.dispatchEvent(new Event('visibilitychange'));
+		await Promise.resolve();
+		expect(fetchShares).toHaveBeenCalledTimes(1);
 	});
 
-	it('reloads the inventory for view watchers and mutation refreshes only an open inventory', async () => {
-		const stop = watchShareView();
-		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
-		await refreshSharesAfterMutation();
-		expect(fetchShares).toHaveBeenCalledTimes(3);
-		stop();
+	it.each([
+		['the inventory is open', () => openSharesInventory(), () => undefined],
+		['a view watcher is active', () => undefined, () => watchShareView()]
+	])(
+		'refreshes both count and inventory after a mutation when %s',
+		async (_caseName, prepareOpen, startWatcher) => {
+			prepareOpen();
+			const stop = startWatcher();
+			if (stop) await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
+			fetchShares.mockClear();
 
-		await refreshSharesAfterMutation();
-		expect(fetchShares).toHaveBeenCalledTimes(4);
-	});
+			await refreshSharesAfterMutation();
+
+			expect(fetchShares.mock.calls.map(([options]) => options)).toEqual([
+				{ offset: 0, limit: 1 },
+				{ offset: 0, limit: 50, type: null }
+			]);
+			stop?.();
+		}
+	);
 });
