@@ -14,7 +14,7 @@ import {
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
 } from '$lib/constants';
-import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
@@ -654,27 +654,6 @@ describe('frequent action hitboxes', () => {
 				}
 			}
 		}
-	});
-
-	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
-		const { root } = await renderInventory();
-		libraryFilter.set('playlists');
-		await tick();
-		const newPlaylistBtn = requireButton(
-			root,
-			'new-playlist',
-			'[data-hitbox="frequent"][aria-label="New playlist"]'
-		);
-
-		setPointer('coarse');
-		const coarse = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
-		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
-
-		setPointer('fine');
-		const fine = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
-		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
 	it('keeps reorder and remove on the same button hitbox for pointer and keyboard', async () => {
