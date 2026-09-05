@@ -48,7 +48,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		};
 	});
 
-	await openLibraryWall(page, shell);
+	await page.goto('/');
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
 	await expect(entries.first()).toBeVisible();
@@ -78,7 +78,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	).toBeVisible();
 	expect((await listenReport).status()).toBe(200);
 
-	await page.goto('/');
+	await openLibraryWall(page, shell);
 	await expect(entries.first()).toBeVisible();
 	expect(continueRequests).toBe(2);
 	const continueRequestsBeforeReload = continueRequests;
