@@ -450,8 +450,9 @@ def test_release_rejects_a_hold_claimed_by_a_training_task(tmp_path: Path) -> No
             for route in build_router(deps).routes
             if route.path == "/gpu_hold/release"
         )
+        request = GpuHoldTokenRequest(token="hold-token")
         with pytest.raises(HTTPException, match="owned by a training task") as exc_info:
-            await endpoint(GpuHoldTokenRequest(token="hold-token"))
+            await endpoint(request)
         assert exc_info.value.status_code == 409
         assert await deps.redis.get(gpu_hold_key(deps.worker_id)) == b"hold-token"
 
@@ -890,16 +891,15 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
             for route in build_router(deps).routes
             if route.path == "/tasks/train_lora"
         )
+        request = TrainLoraRequest(
+            mode="sft",
+            dataset_dir=str(dataset_dir),
+            output_dir=str(deps.shared_audio_root / "output"),
+            hold_token="hold-token",
+            **_training_request_payload(),
+        )
         with pytest.raises(HTTPException) as exc_info:
-            await endpoint(
-                TrainLoraRequest(
-                    mode="sft",
-                    dataset_dir=str(dataset_dir),
-                    output_dir=str(deps.shared_audio_root / "output"),
-                    hold_token="hold-token",
-                    **_training_request_payload(),
-                )
-            )
+            await endpoint(request)
         assert exc_info.value.status_code == 409
         assert not spawned
         assert await deps.task_store.size() == 0

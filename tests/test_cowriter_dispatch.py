@@ -168,8 +168,9 @@ def test_cli_dispatch_names_a_text_protocol_error(monkeypatch, provider, transpo
 
     monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: InvalidTransport())
 
+    events = _events(provider, ProviderRoute.CLI)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events(provider, ProviderRoute.CLI))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
@@ -365,8 +366,9 @@ def _assert_cli_failure_never_falls_back_to_http(
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("HTTP must not run")),
     )
 
+    events = _events(provider, ProviderRoute.CLI)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events(provider, ProviderRoute.CLI))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
 
@@ -404,8 +406,9 @@ def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):
 
     monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: FailingTransport())
 
+    events = _events("grok", ProviderRoute.CLI)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events("grok", ProviderRoute.CLI))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
 
@@ -432,8 +435,9 @@ def test_claude_adapter_maps_typed_cli_failure_sources(monkeypatch, source_error
             )
         ]
 
+    collection = collect()
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(collect())
+        asyncio.run(collection)
 
     assert raised.value.reason.code is reason
 
@@ -464,12 +468,12 @@ def test_openai_adapter_maps_http_and_protocol_sources(post, reason):
         async def post(self, *_args, **_kwargs):
             return post()
 
+    client = Client()
+    request = openai_adapter._post_chat(
+        client, "grok", "https://provider.example/chat", "key", "model", [], [],
+    )
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(
-            openai_adapter._post_chat(
-                Client(), "grok", "https://provider.example/chat", "key", "model", [], [],
-            ),
-        )
+        asyncio.run(request)
 
     assert raised.value.reason.code is reason
 
@@ -501,8 +505,9 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
         ]
 
     monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
+    collection = collect()
     with pytest.raises(ProviderUnavailableError) as limited:
-        asyncio.run(collect())
+        asyncio.run(collection)
     assert limited.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
 
     monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 1)
@@ -551,7 +556,8 @@ def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_atte
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("adapter must not run")),
     )
 
+    events = _events("claude", ProviderRoute.API)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events("claude", ProviderRoute.API))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.API_KEY_NOT_SET

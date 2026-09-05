@@ -23,7 +23,7 @@ from songmaker_cli.db.queries import get_user_lora
 from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(tmp_path: Path) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

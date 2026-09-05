@@ -56,7 +56,7 @@ def _seed_albums(session) -> None:
     ])
 
 
-@pytest.fixture()
+@pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     login_and_csrf(client, "alice", "alicepass1")
@@ -120,10 +120,11 @@ def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_p
     _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
 
     with factory() as session:
+        alice = _actor("alice")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "missing", _actor("alice"))
+            request_cover_suggestions(session, "missing", alice)
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "bob-album", _actor("alice"))
+            request_cover_suggestions(session, "bob-album", alice)
 
 
 def test_cover_suggestion_request_owner_creates_one_job_and_replaces_stale_suggestions(
@@ -155,8 +156,9 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     _add_cover_job(factory)
 
     with factory() as session:
+        owner = _album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
-            request_cover_suggestions(session, "alice-album", _album_owner(session))
+            request_cover_suggestions(session, "alice-album", owner)
         session.rollback()
 
     with factory() as session:
@@ -167,8 +169,9 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
+        owner = _album_owner(session)
         with pytest.raises(CoverSuggestionDailyLimitReachedError):
-            request_cover_suggestions(session, "alice-album", _album_owner(session))
+            request_cover_suggestions(session, "alice-album", owner)
 
 
 def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(

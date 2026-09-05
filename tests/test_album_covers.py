@@ -123,7 +123,7 @@ def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClien
     return client, factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
 
@@ -455,8 +455,9 @@ def test_write_album_cover_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    image = _png_bytes()
     with pytest.raises(CoverRejectedError, match=COVER_INVALID_ALBUM_ID):
-        write_album_cover(audio_dir, album_id, _png_bytes())
+        write_album_cover(audio_dir, album_id, image)
     _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
@@ -507,8 +508,9 @@ def test_write_album_cover_restores_live_dir_if_publish_rename_fails(
         return real_rename(self, target)
 
     monkeypatch.setattr(Path, "rename", rename_fails_staging_publish)
+    image = _jpeg_bytes()
     with pytest.raises(OSError, match="simulated publish failure"):
-        write_album_cover(audio_dir, "alice-album", _jpeg_bytes())
+        write_album_cover(audio_dir, "alice-album", image)
     assert album_dir.is_dir()
     assert (album_dir / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}").read_bytes() == original
     served = resolve_cover_file(
@@ -532,8 +534,9 @@ def test_write_album_cover_restores_orphaned_old_before_replace(
         raise OSError("simulated save failure")
 
     monkeypatch.setattr("songmaker_cli.covers._save_variants", boom)
+    image = _jpeg_bytes()
     with pytest.raises(OSError, match="simulated save failure"):
-        write_album_cover(audio_dir, "alice-album", _jpeg_bytes())
+        write_album_cover(audio_dir, "alice-album", image)
     assert final.is_dir()
     assert (final / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}").read_bytes() == original
 

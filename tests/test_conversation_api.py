@@ -65,7 +65,7 @@ def _seed_owned(session, user_id: str) -> None:
     session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "conv_api.db")
     with factory() as session:
@@ -86,7 +86,7 @@ def client(tmp_path: Path) -> TestClient:
     yield TestClient(app), factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def stranger_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "conv_api2.db")
     with factory() as session:
@@ -226,10 +226,9 @@ def test_acall_claude_with_mcp_returns_unavailable_on_failure(monkeypatch):
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
+    call = provider.acall_claude_with_mcp(prompt="hi", user_id="u-1")
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(provider.acall_claude_with_mcp(
-            prompt="hi", user_id="u-1",
-        ))
+        asyncio.run(call)
 
 
 def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
@@ -244,10 +243,9 @@ def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
+    call = provider.acall_claude_with_mcp(prompt="hi", user_id="u-1")
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(provider.acall_claude_with_mcp(
-            prompt="hi", user_id="u-1",
-        ))
+        asyncio.run(call)
 
 
 def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
@@ -273,10 +271,11 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
     monkeypatch.setattr(provider.os, "killpg", _killpg)
 
+    call = provider.acall_claude_with_mcp(
+        prompt="hi", user_id="u-1", timeout_seconds=1,
+    )
     with pytest.raises(provider.UnavailableError):
-        asyncio.run(provider.acall_claude_with_mcp(
-            prompt="hi", user_id="u-1", timeout_seconds=1,
-        ))
+        asyncio.run(call)
     assert killed["value"] is True
 
 
