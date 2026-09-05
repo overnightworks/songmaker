@@ -26,6 +26,15 @@ export const LORA_MIN_SAMPLES_FOR_TRAINING = 3;
 
 export const LORA_MAX_SAMPLES = 20;
 
+export const ADMIN_VOICES_TAB_LABEL = 'Voices';
+export const ADMIN_VOICES_HEADING = 'Voice operations';
+export const ADMIN_VOICES_LOADING = 'Loading voices...';
+export const ADMIN_VOICES_EMPTY = 'No voices have been created.';
+export const ADMIN_VOICES_LOAD_FAILED = 'Failed to load voices';
+export const ADMIN_VOICES_NAME_LABEL = 'Voice';
+export const ADMIN_VOICES_OWNER_LABEL = 'Owner';
+export const ADMIN_VOICES_STATUS_LABEL = 'Status';
+
 export const LORA_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac'] as const;
 
 export const LORA_OWN_TAKES_LABEL = 'Your takes';
@@ -42,6 +51,9 @@ export const LORA_SAMPLE_UPLOAD_FAILED = 'Upload failed';
 export const LORA_CREATE_FAILED = 'Could not create voice';
 export const LORA_TRAINING_QUEUED_TOAST = 'Training queued';
 export const LORA_TRAINING_STARTING = 'Starting...';
+export const LORA_TRAINING_FAILED_LABEL = 'Training failed';
+export const LORA_TRAINING_RETRY_LABEL = 'Train again';
+export const LORA_TRAINING_START_FAILED = 'Training failed to start';
 export const LORA_TRAINING_CANCEL_LABEL = 'Cancel';
 export const LORA_TRAINING_CANCELLED = 'Training cancelled';
 export const LORA_TRAINING_CANCEL_FAILED = 'Could not cancel training';

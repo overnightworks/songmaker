@@ -16,6 +16,7 @@ import { currentUser } from '$lib/stores/auth';
 
 const api = vi.hoisted(() => ({
 	fetchUsers: vi.fn(),
+	fetchAdminVoices: vi.fn(),
 	createUser: vi.fn(),
 	updateUser: vi.fn(),
 	hardDeleteUser: vi.fn(),
@@ -63,6 +64,10 @@ const OTHER_USER: UserItem = {
 	is_active: true,
 	created_at: '2026-01-02T00:00:00Z'
 };
+const VOICES = [
+	{ id: 'voice-1', name: 'Warm Tenor', owner_username: 'jane', status: 'training' },
+	{ id: 'voice-2', name: 'Dry Spoken Word', owner_username: 'jane', status: 'ready' }
+];
 const SESSION: SessionItem = {
 	id: 's1',
 	user_id: 'u2',
@@ -183,6 +188,7 @@ function routeAwareCowriterSettings(overrides: Record<string, unknown> = {}) {
 }
 const TAB_LABELS = [
 	'Users',
+	'Voices',
 	'Sessions',
 	'Login Attempts',
 	'Rate Limits',
@@ -280,6 +286,7 @@ function buttonNamed(section: HTMLElement, label: string): HTMLButtonElement {
 beforeEach(() => {
 	currentUser.set({ id: 'u1', username: 'felix', role: 'admin' });
 	api.fetchUsers.mockResolvedValue([ADMIN_USER, OTHER_USER]);
+	api.fetchAdminVoices.mockResolvedValue(VOICES);
 	api.fetchSessions.mockResolvedValue(pageOf([SESSION]));
 	api.fetchLoginAttempts.mockResolvedValue(pageOf([ATTEMPT]));
 	api.fetchRateLimits.mockResolvedValue({ settings: [] });
@@ -419,6 +426,32 @@ describe('admin settings compact layout', () => {
 		expect(target.textContent).toContain('Recent Login Attempts');
 		expect(target.textContent).toContain('Failed');
 		expect(target.querySelector('.tabs button')).toBeNull();
+	});
+
+	it('shows every voice as read-only operational state', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'voices');
+		const voices = sectionByHeading(target, 'Voice operations');
+
+		expect(api.fetchAdminVoices).toHaveBeenCalledOnce();
+		expect(voices.textContent).toContain('Warm Tenor');
+		expect(voices.textContent).toContain('jane');
+		expect(voices.textContent).toContain('training');
+		expect(voices.textContent).toContain('Dry Spoken Word');
+		expect(voices.textContent).toContain('ready');
+		expect(voices.querySelectorAll('button')).toHaveLength(0);
+		expect(voices.textContent).not.toContain('sft');
+		expect(voices.textContent).not.toContain('turbo');
+	});
+
+	it('names a voices loading failure instead of showing an empty state', async () => {
+		api.fetchAdminVoices.mockRejectedValueOnce(new Error('Failed to load voices'));
+		const target = await renderPage(true);
+		await selectTab(target, 'voices');
+		const voices = sectionByHeading(target, 'Voice operations');
+
+		expect(voices.textContent).toContain('Failed to load voices');
+		expect(voices.textContent).not.toContain('No voices have been created.');
 	});
 
 	it('still renders empty user, session, and attempt lists', async () => {

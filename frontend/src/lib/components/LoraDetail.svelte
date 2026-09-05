@@ -29,7 +29,10 @@
 		LORA_TRAINING_CANCEL_FAILED,
 		LORA_TRAINING_CANCEL_LABEL,
 		LORA_TRAINING_CANCELLED,
+		LORA_TRAINING_FAILED_LABEL,
 		LORA_TRAINING_PROGRESS_LOAD_FAILED,
+		LORA_TRAINING_RETRY_LABEL,
+		LORA_TRAINING_START_FAILED,
 		LORA_TRAINING_PROGRESS_LABEL,
 		LORA_TRAINING_QUEUED_TOAST,
 		LORA_TRAINING_REMAINING_CALCULATING,
@@ -63,6 +66,7 @@
 	let cancellingTraining = $state(false);
 	let cancelledTrainingJob = $state<JobItem | null>(null);
 	let fetchedTrainingJobId = $state<string | null>(null);
+	let trainingError = $state<string | null>(null);
 
 	const samples = $derived([...lora.samples].sort((a, b) => a.position - b.position));
 	const active = $derived(isLoraActive(lora.status));
@@ -251,6 +255,7 @@
 
 	async function startTraining() {
 		training = true;
+		trainingError = null;
 		try {
 			const updated = await trainLora(lora.id);
 			cancelledTrainingJob = null;
@@ -260,10 +265,10 @@
 			}
 			addToast(LORA_TRAINING_QUEUED_TOAST, 'success');
 		} catch (e) {
-			addToast(
-				e instanceof ApiError ? e.detail || 'Training failed to start' : 'Training failed',
-				'error'
-			);
+			const message =
+				e instanceof ApiError ? e.detail || LORA_TRAINING_START_FAILED : LORA_TRAINING_START_FAILED;
+			trainingError = message;
+			addToast(message, 'error');
 		} finally {
 			training = false;
 		}
@@ -298,7 +303,7 @@
 	{:else if active}
 		<p class="banner info">Voice is {lora.status} — editing is locked until training finishes.</p>
 	{:else if lora.status === 'failed' && lora.error}
-		<p class="banner error">Last training failed: {lora.error}</p>
+		<p class="banner error"><strong>{LORA_TRAINING_FAILED_LABEL}</strong><br />{lora.error}</p>
 	{/if}
 
 	<section class="samples-section">
@@ -495,8 +500,17 @@
 
 	<section class="train-section">
 		<button class="train-btn" disabled={!canTrain} onclick={startTraining}>
-			{training ? LORA_TRAINING_STARTING : active ? `Training (${lora.status})` : 'Train voice'}
+			{training
+				? LORA_TRAINING_STARTING
+				: active
+					? `Training (${lora.status})`
+					: lora.status === 'failed'
+						? LORA_TRAINING_RETRY_LABEL
+						: 'Train voice'}
 		</button>
+		{#if trainingError}
+			<p class="training-error" role="alert">{trainingError}</p>
+		{/if}
 		{#if sampleValidationProblems.length > 0 && !active && !deleted}
 			<ul class="problems">
 				{#each sampleValidationProblems as p (p)}
@@ -523,6 +537,7 @@
 		padding: 0.6rem 0.9rem;
 		border-radius: 4px;
 		font-size: 0.85rem;
+		overflow-wrap: anywhere;
 	}
 
 	.banner.info {
@@ -907,6 +922,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.training-error {
+		margin: 0;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--score-bad);
+		border-radius: 4px;
+		color: var(--score-bad);
+		font-size: 0.85rem;
+		overflow-wrap: anywhere;
+		white-space: pre-line;
 	}
 
 	.train-btn {

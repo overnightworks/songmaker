@@ -105,7 +105,7 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	// sync was stopped.
 	if (song && song.generations.length >= song.generation_count) return;
 	const inflight = songGenerationLoads.get(songId);
-	if (inflight) return inflight;
+	if (inflight !== undefined) return inflight;
 	const load = (async () => {
 		try {
 			const full = await fetchSong(songId);
@@ -288,7 +288,7 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	const start = items[startIndex] ?? items[0];
 	const rest = items.filter((_, index) => index !== startIndex);
 	for (let i = rest.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
+		const j = Math.floor(Math.random() * (i + 1)); // NOSONAR S2245: shuffle has no security context.
 		[rest[i], rest[j]] = [rest[j], rest[i]];
 	}
 	return { items: [start, ...rest], startIndex: 0 };
@@ -1012,7 +1012,7 @@ export async function playNextSong(): Promise<void> {
 	if (get(shuffleEnabled)) {
 		const candidates = songs.filter((s) => s.id !== cur.songId && s.generation_count > 0);
 		while (candidates.length > 0) {
-			const next = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+			const next = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0]; // NOSONAR S2245: shuffle has no security context.
 			await ensureGenerationsLoaded(next.id);
 			const fresh = get(songList).find((s) => s.id === next.id);
 			const gen = fresh ? bestGen(fresh) : undefined;
