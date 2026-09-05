@@ -27,7 +27,7 @@ _PREPARE_AND_EXECUTE_BWRAP = (
     'exec bwrap "$@"'
 )
 
-_SANDBOX_ASSERTIONS = """set -eu
+_SANDBOX_ASSERTIONS = f"""set -eu
 : > "$CODEX_HOME/allowed"
 if : > /app/songmaker-sandbox-write-probe; then
   echo 'sandbox wrote outside CODEX_HOME' >&2
@@ -37,8 +37,8 @@ if : > /tmp/outside-codex-home; then
   echo 'sandbox wrote outside CODEX_HOME' >&2
   exit 1
 fi
-test "$(awk '/^NoNewPrivs:/ { print $2 }' /proc/self/status)" = 1
-test "$(awk '/^CapEff:/ { print $2 }' /proc/self/status)" = "${EMPTY_CAPABILITY_MASK}"
+test "$(awk '/^NoNewPrivs:/ {{ print $2 }}' /proc/self/status)" = 1
+test "$(awk '/^CapEff:/ {{ print $2 }}' /proc/self/status)" = "{EMPTY_CAPABILITY_MASK}"
 """ + """/app/.venv/bin/python - <<'PY'
 import socket
 

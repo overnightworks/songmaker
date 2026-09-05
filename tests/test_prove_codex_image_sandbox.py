@@ -58,7 +58,8 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     assert "outside-codex-home" in assertions
     assert "NoNewPrivs:" in assertions
     assert "CapEff:" in assertions
-    assert '"${EMPTY_CAPABILITY_MASK}"' in assertions
+    assert f'"{proof.EMPTY_CAPABILITY_MASK}"' in assertions
+    assert "EMPTY_CAPABILITY_MASK" not in assertions
     assert "1.1.1.1" in assertions
 
 
