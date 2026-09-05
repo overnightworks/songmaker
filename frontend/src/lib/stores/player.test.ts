@@ -414,6 +414,17 @@ describe('browsing state', () => {
 		expect(get(selectedSong)?.generations.length).toBe(1);
 	});
 
+	it('allows a later generation load to retry after an earlier request fails', async () => {
+		const full = makeSong({ id: 's-retry', generation_count: 1 });
+		vi.mocked(fetchSong).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(full);
+
+		await expect(ensureGenerationsLoaded('s-retry')).rejects.toThrow('offline');
+		await ensureGenerationsLoaded('s-retry');
+
+		expect(fetchSong).toHaveBeenCalledTimes(2);
+		expect(get(songList)).toEqual([full]);
+	});
+
 	it('dedupes concurrent generation loads for the same song', async () => {
 		songList.set([]);
 		vi.mocked(fetchSong).mockResolvedValueOnce(makeSong({ id: 's-direct' }));
