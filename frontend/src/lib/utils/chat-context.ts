@@ -49,7 +49,11 @@ function findSongmakerBlocks(text: string): SongmakerBlock[] {
 
 		const closingStart = text.indexOf(CLOSING_FENCE, contentStart);
 		if (closingStart === -1) break;
-		blocks.push({ start, end: closingStart + CLOSING_FENCE.length, content: text.slice(contentStart, closingStart) });
+		blocks.push({
+			start,
+			end: closingStart + CLOSING_FENCE.length,
+			content: text.slice(contentStart, closingStart)
+		});
 		searchStart = closingStart + CLOSING_FENCE.length;
 	}
 	return blocks;
