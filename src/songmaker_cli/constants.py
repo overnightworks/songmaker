@@ -634,6 +634,13 @@ class JobFunction(StrEnum):
     LORA_TRAINING = "lora_training"
 
 
+class CoverExecutor(StrEnum):
+    """The one process class allowed to take queued cover jobs."""
+
+    MUSIC = "music"
+    WEB = "web"
+
+
 @dataclass(frozen=True)
 class JobStaleThresholds:
     """Maximum inactive time for a queued or running job type.
@@ -703,6 +710,25 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
         restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # worker polls download progress every 2 s; 180 s tolerates 90 misses
 }
+
+
+COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = QUEUED_JOB_STALE_THRESHOLD_SECONDS
+"""Web covers share the web process' queue-age guard, not ARQ's worker guard."""
+
+
+def stale_job_thresholds(cover_executor: CoverExecutor) -> dict[JobType, JobStaleThresholds]:
+    """Return the reaper policy for the configured cover execution owner."""
+    if cover_executor is CoverExecutor.MUSIC:
+        return STALE_JOB_THRESHOLDS
+    return {
+        **STALE_JOB_THRESHOLDS,
+        JobType.COVER: JobStaleThresholds(
+            queued_seconds=COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS,
+            heartbeat_seconds=COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+            liveness_signal=None,
+            restart_grace_seconds=None,
+        ),
+    }
 
 
 def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:

@@ -9,15 +9,18 @@ from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
     WORKER_RESTART_GRACE_SECONDS,
+    CoverExecutor,
     JobType,
     WorkerLivenessSignal,
 )
+from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
     MUSIC_LAST_ALIVE_KEY,
     WorkerLiveness,
     acestep_worker_liveness,
     arq_worker_liveness,
+    read_worker_liveness,
     worker_liveness_by_job_type,
 )
 
@@ -38,6 +41,30 @@ def test_worker_liveness_maps_each_job_type_to_its_real_execution_signal() -> No
         JobType.SCORE: WorkerLiveness.UNKNOWN,
         JobType.CHAT: WorkerLiveness.UNKNOWN,
     }
+
+
+def test_web_cover_executor_does_not_depend_on_the_music_worker() -> None:
+    liveness = worker_liveness_by_job_type(
+        acestep=WorkerLiveness.ALIVE,
+        music=WorkerLiveness.DEAD,
+        scoring=WorkerLiveness.UNKNOWN,
+        cover_executor=CoverExecutor.WEB,
+    )
+
+    assert liveness[JobType.COVER] is WorkerLiveness.UNKNOWN
+    assert liveness[JobType.GENERATE] is WorkerLiveness.DEAD
+
+
+def test_read_liveness_ignores_a_live_music_worker_for_web_covers(
+    fake_redis, monkeypatch,
+) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.WEB)
+    get_settings.cache_clear()
+    fake_redis.set(ARQ_MUSIC_HEALTH_KEY, "alive")
+
+    liveness = read_worker_liveness(fake_redis, [])
+
+    assert liveness[JobType.COVER] is WorkerLiveness.UNKNOWN
 
 
 def test_model_jobs_require_live_acestep_and_music_workers() -> None:
