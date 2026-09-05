@@ -375,6 +375,10 @@ def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatc
     codex_models = settings.json()["models_by_provider"]["codex"]
     assert codex_models == list_provider_models("codex", ProviderRoute.CLI)
     assert settings.json()["models_sources"]["codex"] == "known models for the CLI route"
+    readiness = settings.json()["provider_routes_status"]["codex"]["cli"]["readiness"]
+    assert readiness["state"] == "ready"
+    assert readiness["capability"] == "tools_available"
+    assert readiness["reason"] is None
     saved = client.put(
         "/api/settings/cowriter", json={"provider": "codex", "model": codex_models[0]},
     )

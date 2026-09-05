@@ -126,7 +126,7 @@ export async function refreshShareCount(options: { force?: boolean } = {}): Prom
 		// check below), so it can never clobber the fresh one.
 		countInflight = null;
 	} else {
-		if (countInflight) return countInflight;
+		if (countInflight !== null) return countInflight;
 		if (isCountFresh()) return true;
 	}
 	const generation = ++countGeneration;
@@ -171,7 +171,7 @@ export async function loadShareInventory(options: {
 		inventoryInflight.delete(key);
 	} else {
 		const inflight = inventoryInflight.get(key);
-		if (inflight) return inflight;
+		if (inflight !== undefined) return inflight;
 	}
 	const generation = ++inventoryGeneration;
 	shareInventory.update((state) => ({
