@@ -2517,6 +2517,106 @@ def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
     assert spawned == []
 
 
+class _StreamReader:
+    def __init__(self, lines: list[bytes]) -> None:
+        self._lines = list(lines)
+
+    async def readline(self) -> bytes:
+        return self._lines.pop(0) if self._lines else b""
+
+    async def read(self, size: int = -1) -> bytes:
+        if not self._lines:
+            return b""
+        payload = b"".join(self._lines)
+        if size >= 0:
+            self._lines = [payload[size:]] if len(payload) > size else []
+            return payload[:size]
+        self._lines = []
+        return payload
+
+
+def _streaming_cli_process(lines: list[bytes], *, returncode: int = 0) -> MagicMock:
+    process = MagicMock()
+    process.pid = 2468
+    process.returncode = returncode
+    process.stdout = _StreamReader(lines)
+    process.stderr = _StreamReader([])
+    process.stdin = MagicMock()
+
+    async def drain() -> None:
+        return None
+
+    async def wait() -> None:
+        return None
+
+    process.stdin.drain = drain
+    process.wait = wait
+    return process
+
+
+async def _collect_stream_events(stream) -> list[object]:
+    return [event async for event in stream]
+
+
+def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) -> None:
+    process = _streaming_cli_process([
+        b"not-json\n",
+        b'{"type":"assistant","message":{"content":[{"type":"text","text":"draft"}]}}\n',
+        b'{"type":"result","result":"final"}\n',
+    ])
+
+    async def spawn(*_command, **_kwargs):
+        return process
+
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+    caplog.set_level("WARNING", logger="songmaker_cli.claude.provider")
+
+    events = asyncio.run(_collect_stream_events(
+        acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
+    ))
+
+    assert events == [
+        provider.AssistantTextEvent(text="draft"),
+        provider.FinalEvent(text="final"),
+    ]
+    assert "malformed JSON" in caplog.text
+
+
+def test_public_claude_stream_names_a_nonzero_cli_exit(monkeypatch) -> None:
+    process = _streaming_cli_process([], returncode=2)
+
+    async def spawn(*_command, **_kwargs):
+        return process
+
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+
+    with pytest.raises(UnavailableError, match="unavailable"):
+        asyncio.run(_collect_stream_events(
+            acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
+        ))
+
+
+def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
+    async def spawn(*_command, **_kwargs):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+
+    with pytest.raises(provider.CliBinaryUnavailableError, match="not found"):
+        asyncio.run(_collect_stream_events(
+            acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
+        ))
+
+
 def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) -> None:
     """A disconnect may cancel an ASGI 2.3 stream while it is closing.
 

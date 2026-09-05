@@ -6,9 +6,12 @@ import asyncio
 import json
 import threading
 import time
+from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent, ToolCallEvent
@@ -83,14 +86,14 @@ def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _outcome(
-    *, returncode: int = 0, complete: bool = True, stderr: str = "",
+    *, returncode: int = 0, complete: bool = True, stdout: str = "", stderr: str = "",
     reason: CliRunReason = CliRunReason.COMPLETE,
 ) -> CliRunOutcome:
     return CliRunOutcome(
         started=True,
         spawn_error=None,
         returncode=returncode,
-        stdout="",
+        stdout=stdout,
         stderr=stderr,
         complete=complete,
         became_zombie=False,
@@ -114,6 +117,33 @@ def _runner(lines: list[bytes], outcome: CliRunOutcome, calls: list) -> object:
 
 def _fixture_lines(name: str) -> list[bytes]:
     return [line.encode() + b"\n" for line in (_FIXTURES / name).read_text().splitlines()]
+
+
+def _png_bytes() -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (300, 100), (20, 80, 160)).save(output, format="PNG")
+    return output.getvalue()
+
+
+def _image_event_stream(codex_home: Path) -> str:
+    return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text().replace(
+        "{CODEX_HOME}", str(codex_home.resolve()),
+    )
+
+
+def _image_runner(
+    outcome: CliRunOutcome,
+    create_artifacts: Callable[[Path], None] | None = None,
+):
+    def run_cli_bounded(_command, **kwargs):
+        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        if create_artifacts is not None:
+            create_artifacts(codex_home)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    return run_cli_bounded
 
 
 def _codex_tool_events(transport, executor):
@@ -466,3 +496,117 @@ def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch)
     callbacks["on_spawned"](41)
     callbacks["on_reaped"](41, True)
     assert process_pool.reservation_count() == 0
+
+
+def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> None:
+    def create_image(codex_home: Path) -> None:
+        artifact = codex_home / "generated_images" / "thread" / "cover.png"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(_png_bytes())
+
+    def run_cli_bounded(_command, **kwargs):
+        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        create_image(codex_home)
+        outcome = _outcome(stdout=_image_event_stream(codex_home))
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+
+    assert codex_cli_adapter.generate_codex_cover_image(
+        "prompt", deadline=10_000_000,
+    ).startswith(b"\x89PNG")
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_error"),
+    (
+        (_outcome(stderr="401 Unauthorized"), codex_cli_adapter.CodexImageLoginError),
+        (
+            _outcome(
+                complete=False,
+                reason=CliRunReason.DEADLINE_WHILE_READING,
+            ),
+            codex_cli_adapter.CodexImageTimeoutError,
+        ),
+        (_outcome(returncode=1, complete=False), codex_cli_adapter.CodexImageCliError),
+    ),
+    ids=("login", "timeout", "nonzero-exit"),
+)
+def test_codex_cover_image_names_terminal_cli_failures(
+    monkeypatch,
+    outcome: CliRunOutcome,
+    expected_error: type[Exception],
+) -> None:
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+
+    with pytest.raises(expected_error):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+
+@pytest.mark.parametrize(
+    ("artifact_count", "expected_error"),
+    (
+        (0, codex_cli_adapter.CodexImageNotCreatedError),
+        (
+            2,
+            codex_cli_adapter.CodexImageArtifactError,
+        ),
+    ),
+    ids=("missing-png", "ambiguous-pngs"),
+)
+def test_codex_cover_image_rejects_missing_or_ambiguous_generated_artifacts(
+    monkeypatch,
+    artifact_count: int,
+    expected_error: type[Exception],
+) -> None:
+    def run_cli_bounded(_command, **kwargs):
+        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        for index in range(artifact_count):
+            artifact = codex_home / "generated_images" / f"cover-{index}.png"
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_bytes(_png_bytes())
+        outcome = _outcome(stdout=_image_event_stream(codex_home))
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+
+    with pytest.raises(expected_error):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+
+def test_codex_cover_image_rejects_the_recorded_no_image_turn(monkeypatch) -> None:
+    outcome = _outcome(stdout=(_FIXTURES / "codex-cover-no-image-events.jsonl").read_text())
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+
+@pytest.mark.parametrize(
+    "document",
+    (
+        None,
+        {**_REDACTED_CODEX_LOGIN, "tokens": {"id_token": "id-token"}},
+    ),
+    ids=("missing", "incomplete"),
+)
+def test_codex_public_adapters_reject_unusable_login_mirrors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    document: dict | None,
+) -> None:
+    auth_file = tmp_path / "invalid-auth.json"
+    if document is not None:
+        auth_file.write_text(json.dumps(document))
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+
+    with pytest.raises(codex_cli_adapter.CodexImageLoginError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(ProviderUnavailableError) as raised:
+        codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
