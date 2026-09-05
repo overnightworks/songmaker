@@ -38,9 +38,16 @@ describe('PlaylistCover', () => {
 		'renders $coverCount covers and fills the remaining cells with initials',
 		async ({ coverCount, expectedImages, expectedInitials }) => {
 			const target = await render(coverCount);
+			const covers = Array.from(target.querySelectorAll('img'));
 
 			expect(target.querySelectorAll('.playlist-cover-cell')).toHaveLength(4);
-			expect(target.querySelectorAll('.playlist-cover-cell img')).toHaveLength(expectedImages);
+			expect(covers).toHaveLength(expectedImages);
+			expect(
+				covers.every(
+					(cover) =>
+						cover.getAttribute('loading') === 'lazy' && cover.getAttribute('decoding') === 'async'
+				)
+			).toBe(true);
 			expect(target.querySelectorAll('.playlist-cover-initials')).toHaveLength(expectedInitials);
 			expect(
 				Array.from(target.querySelectorAll('.playlist-cover-initials')).map(

@@ -27,6 +27,8 @@
 					src={cover.card}
 					alt=""
 					draggable="false"
+					loading="lazy"
+					decoding="async"
 					onerror={() => hideFailedCover(cover.card)}
 				/>
 			{:else}
