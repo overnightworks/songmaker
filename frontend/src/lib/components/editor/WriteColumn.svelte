@@ -198,7 +198,8 @@
 		   could be seen but not reached at 375px. Keep the usable default short;
 		   people can still grow it with the textarea's native resize handle. */
 		.write-mode .lyrics-area {
-			height: 200px;
+			min-height: 8rem;
+			height: 8rem;
 		}
 	}
 
