@@ -16,7 +16,6 @@
 	import { albumList } from '$lib/stores/libraryData';
 	import { selectedSong } from '$lib/stores/player';
 	import { librarySurface } from '$lib/stores/libraryContext';
-	import { openLibraryCreate } from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
@@ -84,7 +83,7 @@
 			{:else if surface === 'detail' && collection?.kind === 'playlist'}
 				<PlaylistDetailView />
 			{:else}
-				<LibraryWall oncreate={openLibraryCreate} />
+				<LibraryWall />
 			{/if}
 		</main>
 	</div>

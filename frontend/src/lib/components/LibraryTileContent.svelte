@@ -1,24 +1,32 @@
 <script lang="ts">
+	import type { AlbumCoverUrls } from '$lib/api/types';
 	import { titleInitials } from '$lib/utils/format';
+	import PlaylistCover from './PlaylistCover.svelte';
 
-	// The wall owns its outer tile button, selection marking and play
-	// affordance. This component owns only the shared cover/fill/initials
-	// fallback and title/subtitle block; callers supply sizing through CSS
-	// custom properties rather than a component mode.
 	interface Props {
 		title: string;
 		subtitle: string;
 		coverAlt: string;
 		coverUrl?: string | null;
 		fill?: string | null;
+		playlistCovers?: AlbumCoverUrls[] | null;
 	}
 
-	let { title, subtitle, coverAlt, coverUrl = null, fill = null }: Props = $props();
+	let {
+		title,
+		subtitle,
+		coverAlt,
+		coverUrl = null,
+		fill = null,
+		playlistCovers = null
+	}: Props = $props();
 </script>
 
 <span class="tile-cover">
 	{#if coverUrl}
-		<img src={coverUrl} alt={coverAlt} draggable="false" />
+		<img src={coverUrl} alt={coverAlt} draggable="false" loading="lazy" decoding="async" />
+	{:else if playlistCovers}
+		<PlaylistCover {title} covers={playlistCovers} size="100%" />
 	{:else if fill}
 		<span class="tile-cover-fill" style:background={fill} aria-hidden="true"></span>
 	{:else}
@@ -49,6 +57,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.tile-cover :global(.playlist-cover) {
+		width: 100%;
+		height: 100%;
+		border-radius: 0;
 	}
 
 	.tile-cover-initials {

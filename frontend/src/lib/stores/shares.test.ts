@@ -13,6 +13,7 @@ vi.mock('$lib/api/library', () => ({
 import {
 	closeSharesInventory,
 	loadShareInventory,
+	loadMoreShares,
 	openSharesInventory,
 	patchSharesFromSong,
 	refreshShareCount,
@@ -263,6 +264,24 @@ describe('share inventory', () => {
 		expect(get(shareCount).total).toBe(4);
 		expect(get(shareInventory).typeFilter).toBe('album');
 		expect(get(shareInventory).items).toHaveLength(1);
+	});
+
+	it('loads the next page at the current offset and retains earlier share rows', async () => {
+		fetchShares
+			.mockResolvedValueOnce(page({ items: [item({ id: 'first' })], total: 2, has_more: true }))
+			.mockResolvedValueOnce(page({ items: [item({ id: 'second' })], total: 2 }));
+
+		await loadShareInventory({ reset: true });
+		const loaded = await loadMoreShares();
+
+		expect(loaded).toBe(true);
+		expect(fetchShares).toHaveBeenLastCalledWith({ offset: 1, limit: 50, type: null });
+		expect(get(shareInventory)).toMatchObject({
+			status: 'ready',
+			offset: 2,
+			hasMore: false
+		});
+		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['first', 'second']);
 	});
 });
 
