@@ -438,21 +438,26 @@ within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
 The web service alone runs under the host profile `songmaker-web`. An operator
-loads it once with `sudo scripts/apparmor/install.sh` and then recreates the
-service with `docker compose up -d songmaker-web`; loading changes the host
-kernel policy, so the script deliberately requires root. The profile derives
+loads it for the current host boot with `sudo scripts/apparmor/install.sh` and
+then recreates the service with `docker compose up -d songmaker-web`; the script
+does not install the profile under `/etc/apparmor.d/`, so the operator must load
+it again after a host reboot. Loading changes the host kernel policy, so the
+script deliberately requires root. The profile derives
 Docker Engine 29.1.3's `docker-default` template (Moby
 `profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
 adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
-Bubblewrap 0.9.0's private-root setup mounts: recursive-slave propagation, its
-`/tmp` construction tmpfs, the read-only root bind/remount, fresh `proc`,
-minimal `dev`/`devpts`, and the sandbox `/tmp` tmpfs. Compose applies the
-profile only to `songmaker-web`, drops every container capability, and sets
-`no-new-privileges:true`.
+Bubblewrap 0.9.0's private-root setup operations: recursive-slave propagation,
+construction and sandbox tmpfs mounts, root and private-home binds and
+remounts, both `pivot_root` calls, fresh `proc`, writable-proc covers, and
+minimal `dev`/`devpts`. The profile matches Bubblewrap's required `silent`
+mount flag and preserves only its observed inherited mount flags during
+remounts. Compose applies the profile only to `songmaker-web`, drops every
+container capability, and sets `no-new-privileges:true`.
 
 `scripts/prove_codex_image_sandbox.py` is the post-rollout proof. It verifies
 the container label, starts Bubblewrap with `--unshare-user --unshare-all`,
-`--ro-bind / /`, `--proc`, `--dev`, and a private `CODEX_HOME` tmpfs, then
+`--ro-bind / /`, `--proc`, `--dev`, and a private `CODEX_HOME` bind under the
+sandbox's `/tmp` tmpfs, then
 checks that writes outside that home, network egress, new privileges, and
 effective capabilities are unavailable. The probe remounts the scratch tmpfs
 read-only after binding its private home, so no other scratch path is writable.

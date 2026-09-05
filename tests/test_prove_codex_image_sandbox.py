@@ -25,11 +25,13 @@ def test_bubblewrap_probe_has_the_required_isolation_and_negative_checks() -> No
     assert ("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp") == command[6:12]
     assert ("--bind", proof.SANDBOX_CODEX_HOME, proof.SANDBOX_CODEX_HOME) == command[14:17]
     assert ("--remount-ro", "/tmp") == command[17:19]
-    assert command[21] == proof.SANDBOX_CODEX_HOME
+    assert ("--setenv", "CODEX_HOME", proof.SANDBOX_CODEX_HOME) == command[19:22]
+    assert ("--setenv", "EMPTY_CAPABILITY_MASK", proof.EMPTY_CAPABILITY_MASK) == command[22:25]
     assert "songmaker-sandbox-write-probe" in shell_assertions
     assert "outside-codex-home" in shell_assertions
     assert "NoNewPrivs:" in shell_assertions
     assert "CapEff:" in shell_assertions
+    assert '"${EMPTY_CAPABILITY_MASK}"' in shell_assertions
     assert "1.1.1.1" in shell_assertions
 
 
