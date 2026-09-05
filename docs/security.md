@@ -226,7 +226,7 @@ Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LO
 The global IP limit is supplemented by a fail-closed per-user opening limit,
 `RESOURCE_EVENT_STREAM_OPEN_LIMIT` (default 12 streams per minute, unchanged
 in production); rejected attempts are not retained in the bounded Redis
-window. CI overrides it to 30 in `docker-compose.ci.yml`, the same shape as
+window. CI overrides it to 200 in `docker-compose.ci.yml`, the same shape as
 `IP_RATE_LIMIT`'s own override — the e2e suite reuses one seeded user across
 every browser context, so its stream opens are additive against this one
 per-user budget in a way real production traffic across many users never is.

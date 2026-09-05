@@ -32,7 +32,7 @@ services:
     # its 120/600 limits.
     environment:
       IP_RATE_LIMIT: "2000"
-      # The 2026-09-05 mobile library probe opened 36 streams; reserve room for the growing suite.
+      # The 2026-09-05 CI run opened 30 streams successfully; the 31st returned 429.
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "200"
     ports: !override
       - "${WEB_PORT:-8080}:8080"
