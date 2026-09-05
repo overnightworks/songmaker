@@ -413,12 +413,7 @@ def api_get_provider_status(
             judge=_surface_status_from_snapshot(
                 name, ProviderSurface.JUDGE, snapshots.get(name), None,
             ),
-            cowriter_routes=_route_statuses(
-                name,
-                snapshots.get(name),
-                None,
-                ProviderSurface.CO_WRITER,
-            ),
+            cowriter_routes=_route_statuses(snapshots.get(name), None),
         )
         for name in sorted(COWRITER_PROVIDERS)
     ]
@@ -448,12 +443,7 @@ def _surface_status_from_snapshot(
     if snapshot is None:
         return ProviderSurfaceStatus(state=ProviderSurfaceState.UNVERIFIED)
     if surface is ProviderSurface.CO_WRITER and selected_route is not None:
-        route_status = _route_statuses(
-            provider,
-            snapshot,
-            None,
-            ProviderSurface.CO_WRITER,
-        )[selected_route]
+        route_status = _route_statuses(snapshot, None)[selected_route]
         if route_status.readiness.state == "ready":
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.CONFIGURED,
@@ -518,12 +508,11 @@ def _models_for_provider(
     from songmaker_cli.cowriter.catalog import provider_snapshot
 
     return _models_from_route_snapshot(
-        provider, active_model, provider_snapshot(provider), route,
+        active_model, provider_snapshot(provider), route,
     )
 
 
 def _models_from_route_snapshot(
-    provider: str,
     active_model: str | None,
     snapshot: "ProviderSnapshot | None",
     route: str,
@@ -533,7 +522,7 @@ def _models_from_route_snapshot(
     if snapshot is None:
         return [], "Provider model catalog is unverified"
     route_snapshot = next(item for key, item in snapshot.routes.items() if key.value == route)
-    models = models_with_active_model(provider, list(route_snapshot.models), active_model)
+    models = models_with_active_model(list(route_snapshot.models), active_model)
     error = route_snapshot.catalogue_failure
     return models, error.message if error else None
 
@@ -550,7 +539,7 @@ def _provider_probe_times(
 
 
 def _cowriter_response(session) -> CowriterSettingsResponse:
-    from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshots
+    from songmaker_cli.cowriter.catalog import provider_snapshots
 
     provider = get_cowriter_provider(session)
     model = get_cowriter_model(session, provider)
@@ -565,12 +554,7 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
     route_statuses_by_provider: dict[str, dict[str, ProviderRouteStatusResponse]] = {}
     for name in sorted(COWRITER_PROVIDERS):
         snapshot = snapshots.get(name)
-        route_statuses = _route_statuses(
-            name,
-            snapshot,
-            saved_models[name] or None,
-            ProviderSurface.CO_WRITER,
-        )
+        route_statuses = _route_statuses(snapshot, saved_models[name] or None)
         route_statuses_by_provider[name] = route_statuses
         selected = route_statuses[routes[name]]
         catalog_models = selected.models
@@ -602,10 +586,8 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
 
 
 def _route_statuses(
-    provider: str,
     snapshot: "ProviderSnapshot | None",
     active_model: str | None,
-    surface: "ProviderSurface | None" = None,
 ) -> dict[str, ProviderRouteStatusResponse]:
     from songmaker_cli.cowriter.catalog import (
         ProviderRoute,
@@ -620,7 +602,7 @@ def _route_statuses(
                 models=[],
                 readiness=ProviderRouteReadiness(
                     state=ProviderRouteReadinessState.UNVERIFIED.value,
-                    capability=provider_route_capability(provider, route).value,
+                    capability=provider_route_capability().value,
                     setup_label="CLI login" if route is ProviderRoute.CLI else "API key",
                 ),
             )
@@ -628,7 +610,7 @@ def _route_statuses(
         }
     result: dict[str, ProviderRouteStatusResponse] = {}
     for route, route_snapshot in snapshot.routes.items():
-        models = models_with_active_model(provider, list(route_snapshot.models), active_model)
+        models = models_with_active_model(list(route_snapshot.models), active_model)
         retained = (
             active_model
             if active_model and active_model not in route_snapshot.models
@@ -759,15 +741,10 @@ def _validate_cowriter_selection(
     active_settings,
     routes: dict[str, str],
 ) -> None:
-    from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshot
+    from songmaker_cli.cowriter.catalog import provider_snapshot
 
     selected_route = routes[req.provider]
-    statuses = _route_statuses(
-        req.provider,
-        provider_snapshot(req.provider),
-        None,
-        ProviderSurface.CO_WRITER,
-    )
+    statuses = _route_statuses(provider_snapshot(req.provider), None)
     _require_ready_route(statuses[selected_route])
     current_model = (
         active_settings.model
@@ -808,7 +785,6 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
     errors: dict[str, str] = {}
     for name in sorted(COWRITER_PROVIDERS):
         models, error = _models_from_route_snapshot(
-            name,
             model if name == provider else None,
             snapshots.get(name),
             "api",

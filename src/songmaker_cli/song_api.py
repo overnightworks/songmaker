@@ -186,10 +186,13 @@ def api_update_song(
     check_song_access(session, song_id, user)
     if "generation_params" in req.model_fields_set:
         _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
-    kwargs: dict = dict(
-        lyrics=req.lyrics, prompt=req.prompt,
-        bpm=req.bpm, audio_duration=req.audio_duration, key_scale=req.key_scale,
-    )
+    kwargs: dict = {
+        "lyrics": req.lyrics,
+        "prompt": req.prompt,
+        "bpm": req.bpm,
+        "audio_duration": req.audio_duration,
+        "key_scale": req.key_scale,
+    }
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_json(req.generation_params)
     try:

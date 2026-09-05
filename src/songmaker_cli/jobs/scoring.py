@@ -177,7 +177,7 @@ def run_scoring_job(
         _finish_scoring_job(db_factory, job_id, scorer, song_scores, judge_failure)
 
     except TimeoutError as exc:
-        log.error("Scoring job timed out: %s", exc)
+        log.exception("Scoring job timed out: %s", exc)
         _update_job(
             db_factory,
             job_id,

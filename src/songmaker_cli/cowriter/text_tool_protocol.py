@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Final, TypeAlias
+from typing import Final
 
 from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_failure
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, CowriterTool
@@ -32,8 +32,8 @@ _TOOL_PROTOCOL_INSTRUCTIONS: Final = (
     "Available tools:\n"
 )
 
-JsonPrimitive: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonPrimitive = str | int | float | bool | None
+type JsonValue = JsonPrimitive | list[JsonValue] | dict[str, JsonValue]
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class FinalText:
     text: str
 
 
-ParsedTextToolResponse: TypeAlias = TextToolCall | FinalText
+type ParsedTextToolResponse = TextToolCall | FinalText
 
 
 class TextToolProtocolError(Exception):
@@ -260,7 +260,7 @@ def _parse_call(candidate: str, original_response: str) -> TextToolCall:
         raise TextToolProtocolError()
     try:
         payload = json.loads(json_text, parse_constant=_reject_non_json_constant)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         raise TextToolProtocolError() from None
     return _validated_call(payload)
 

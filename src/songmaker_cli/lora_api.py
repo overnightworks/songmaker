@@ -498,7 +498,7 @@ def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
             )
             session.commit()
     except Exception:
-        log.error(
+        log.exception(
             "Failed to mark LoRA training job %s as failed after enqueue error",
-            job_id, exc_info=True,
+            job_id,
         )

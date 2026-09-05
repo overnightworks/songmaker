@@ -470,11 +470,12 @@ def _registry_model(
         worker_id for worker_id, state in states.items()
         if state is not None and state.target_loading == mode
     )
-    availability: ModelAvailability = (
-        "unknown_no_worker" if not any_worker_online
-        else "downloaded" if mode in downloaded_modes
-        else "not_downloaded"
-    )
+    if not any_worker_online:
+        availability: ModelAvailability = "unknown_no_worker"
+    elif mode in downloaded_modes:
+        availability = "downloaded"
+    else:
+        availability = "not_downloaded"
     return RegistryModelResponse(
         mode=mode,
         availability=availability,

@@ -352,7 +352,7 @@ def _generation_scores(gen: Generation) -> dict[str, object]:
         _add_user_rating(scores, gen)
         return scores
     except (TypeError, AttributeError, KeyError):
-        log.error("Corrupted score data in generation %s", gen.id, exc_info=True)
+        log.exception("Corrupted score data in generation %s", gen.id)
         return {}
 
 

@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Final, NoReturn, TypeVar
+from typing import TYPE_CHECKING, Annotated, Final, NoReturn
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -613,14 +613,11 @@ def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
 
 # ── Rate limiting ────────────────────────────────────────────────────
 
-_LimiterT = TypeVar("_LimiterT")
-
-
-def get_cached_limiter(
+def get_cached_limiter[LimiterT](
     request: Request,
     state_attr: str,
-    build: Callable[[], _LimiterT],
-) -> _LimiterT:
+    build: Callable[[], LimiterT],
+) -> LimiterT:
     """Return the limiter cached on ``request.app.state``, building it via
     ``build`` on first use.
 

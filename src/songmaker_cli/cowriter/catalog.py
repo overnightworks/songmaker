@@ -225,7 +225,7 @@ def _refresh_provider_route(
     settings: Settings,
 ) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
-    capability = provider_route_capability(provider, route)
+    capability = provider_route_capability()
     credential = _provider_api_credential(provider, settings)
     preflight = _provider_route_preflight(provider, route, credential, capability, now)
     if preflight is not None:
@@ -250,9 +250,12 @@ def _refresh_provider_route(
             capability, reason, now,
             _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
         )
-    source = _CODEX_CLI_KNOWN_MODELS_SOURCE if (
-        provider == _CODEX_PROVIDER and route is ProviderRoute.CLI
-    ) else "provider API" if route is ProviderRoute.API else "provider CLI"
+    if provider == _CODEX_PROVIDER and route is ProviderRoute.CLI:
+        source = _CODEX_CLI_KNOWN_MODELS_SOURCE
+    elif route is ProviderRoute.API:
+        source = "provider API"
+    else:
+        source = "provider CLI"
     return ProviderRouteSnapshot(
         models, None, source, None, ProviderRouteReadinessState.READY,
         capability, None, now,
@@ -323,10 +326,7 @@ def _route_preflight_snapshot(
     )
 
 
-def provider_route_capability(
-    provider: str,
-    route: ProviderRoute,
-) -> ProviderRouteCapability:
+def provider_route_capability() -> ProviderRouteCapability:
     """Return the fixed feature capability of a provider transport route."""
     return ProviderRouteCapability.TOOLS_AVAILABLE
 
@@ -370,15 +370,10 @@ def _cli_setup_method_for(provider: str) -> ProviderSetupMethod:
     raise ValueError(f"Unknown co-writer provider '{provider}'")
 
 
-def models_with_active_model(
-    provider: str,
-    models: list[str],
-    active_model: str | None,
-) -> list[str]:
+def models_with_active_model(models: list[str], active_model: str | None) -> list[str]:
     catalog = list(models)
-    if active_model:
-        if active_model not in catalog:
-            catalog.append(active_model)
+    if active_model and active_model not in catalog:
+        catalog.append(active_model)
     return catalog
 
 
