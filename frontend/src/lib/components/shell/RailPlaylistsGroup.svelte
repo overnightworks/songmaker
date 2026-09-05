@@ -8,6 +8,7 @@
 	} from '$lib/stores/playlists';
 	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { railTreeQuery } from '$lib/stores/filter';
 	import {
 		RAIL_PLAYING_MARKER_LABEL,
 		RAIL_PLAYLISTS_LABEL,
@@ -29,6 +30,14 @@
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const playing = $derived(audioPlayer.status === 'playing');
+	const query = $derived($railTreeQuery.trim().toLowerCase());
+	const filtering = $derived(query.length > 0);
+	const visiblePlaylists = $derived(
+		playlists.filter(
+			(playlist) =>
+				!filtering || playlist.id === openPlaylistId || playlist.title.toLowerCase().includes(query)
+		)
+	);
 
 	// ensurePlaylistsLoaded is route-independent, mirroring
 	// ensureAllAlbumsLoaded in RailLibraryGroup -- the rail needs the complete
@@ -74,12 +83,12 @@
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlists.length}
-	expandTrigger={openPlaylistId !== null}
+	expandTrigger={openPlaylistId !== null || filtering}
 	{icon}
 >
 	<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
 		<ul class="playlist-list">
-			{#each playlists as playlist (playlist.id)}
+			{#each visiblePlaylists as playlist (playlist.id)}
 				{@const expanded = playlist.id === openPlaylistId}
 				{@const entries =
 					expanded && openPlaylistDetail?.id === playlist.id ? openPlaylistDetail.entries : []}

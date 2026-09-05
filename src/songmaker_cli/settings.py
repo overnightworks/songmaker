@@ -14,6 +14,7 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -81,6 +82,13 @@ class LoraTrainingJobConfig:
             "gradient_checkpointing": self.gradient_checkpointing,
             "poll_interval_seconds": self.poll_interval_seconds,
         }
+
+
+class CoverExecutor(StrEnum):
+    """The one process class allowed to take queued cover jobs."""
+
+    MUSIC = "music"
+    WEB = "web"
 
 
 def _find_env_file() -> Path | None:
@@ -216,6 +224,7 @@ class Settings(BaseSettings):
         default=CODEX_CLI_MAX_CONCURRENT_PROCESSES, ge=1,
     )
     cover_max_concurrent_runs: int = Field(default=COVER_MAX_CONCURRENT_RUNS, ge=1)
+    cover_executor: CoverExecutor = CoverExecutor.MUSIC
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120

@@ -79,6 +79,8 @@ class Checkout:
         self.docker_calls_file = tmp_path / "docker-calls.txt"
         self.curl_calls_file = tmp_path / "curl-calls.txt"
         self.check_runs_file = tmp_path / "check-runs.txt"
+        self.check_runs_directory = tmp_path / "check-runs"
+        self.check_runs_directory.mkdir()
         self.post_merge_marker = tmp_path / "post-merge-ran.txt"
         self._after_check_lookup_script: Path | None = None
         self._bin = tmp_path / "bin"
@@ -104,6 +106,7 @@ class Checkout:
         self.check_runs_stderr = ""
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
         self.check_run_appearance_grace_seconds = CHECK_RUN_APPEARANCE_GRACE_SECONDS
+        self.check_run_lookback_commits = 10
 
         _git(tmp_path, "init", "--bare", "--initial-branch=main", str(self.origin))
         _git(tmp_path, "clone", str(self.origin), str(self.root))
@@ -278,22 +281,37 @@ class Checkout:
         _write_executable(
             self._bin / "gh",
             "#!/bin/bash\n"
-            'expected_url="repos/FlexOr2/songmaker/commits/${GH_EXPECTED_COMMIT_SHA}/check-runs?per_page=100"\n'
+            'expected_prefix="repos/FlexOr2/songmaker/commits/"\n'
+            'expected_suffix="/check-runs?per_page=100"\n'
             'if [[ "$1" != "api" || "$2" != "--paginate" ]]; then\n'
             '    echo "unexpected gh api invocation: $*" >&2\n'
             "    exit 2\n"
             "fi\n"
-            'if [[ "$3" != "$expected_url" || "$4" != "--jq" ]]; then\n'
+            'if [[ "$3" != "$expected_prefix"*"$expected_suffix" || "$4" != "--jq" ]]; then\n'
             '    echo "unexpected gh api invocation: $*" >&2\n'
             "    exit 2\n"
             "fi\n"
+            'commit_sha="${3#"$expected_prefix"}"\n'
+            'commit_sha="${commit_sha%"$expected_suffix"}"\n'
             'if [[ -n "${GH_CHECK_RUNS_STDERR:-}" ]]; then\n'
             '    printf "%s\\n" "$GH_CHECK_RUNS_STDERR" >&2\n'
             "fi\n"
-            'cat "$GH_CHECK_RUNS_FILE"\n'
+            'response_file="${GH_CHECK_RUNS_DIRECTORY}/${commit_sha}"\n'
+            'if [[ -f "$response_file" ]]; then\n'
+            '    cat "$response_file"\n'
+            "else\n"
+            '    cat "$GH_CHECK_RUNS_FILE"\n'
+            "fi\n"
             'if [[ -n "${GH_AFTER_CHECK_LOOKUP_SCRIPT:-}" ]]; then\n'
             '    "$GH_AFTER_CHECK_LOOKUP_SCRIPT"\n'
             "fi\n",
+        )
+
+    def set_check_runs_for_commit(self, commit_sha: str, *runs: tuple[str, str]) -> None:
+        """Make GitHub report status/conclusion pairs for one commit only."""
+        (self.check_runs_directory / commit_sha).write_text(
+            f"envelope\t{len(runs)}\n"
+            + "".join(f"check\t{status}\t{conclusion}\n" for status, conclusion in runs),
         )
 
     def make_check_lookup_fail(self) -> None:
@@ -435,8 +453,8 @@ class Checkout:
                 "DOCKER_CALLS_FILE": str(self.docker_calls_file),
                 "CURL_CALLS_FILE": str(self.curl_calls_file),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
+                "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
-                "GH_EXPECTED_COMMIT_SHA": self.remote_main_sha(),
                 "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "2",
                 "GH_AFTER_CHECK_LOOKUP_SCRIPT": (
                     str(self._after_check_lookup_script)
@@ -451,6 +469,9 @@ class Checkout:
                 ),
                 "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS": str(
                     self.check_run_appearance_grace_seconds,
+                ),
+                "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS": str(
+                    self.check_run_lookback_commits,
                 ),
                 "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
                 "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
@@ -729,7 +750,7 @@ def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
     assert "compose build" in checkout.docker_calls
 
 
-def test_failed_checks_refuse_to_pull_and_increment_the_failure_streak(tmp_path: Path) -> None:
+def test_failed_checks_are_skipped_without_deploying_an_unverified_commit(tmp_path: Path) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -742,14 +763,83 @@ def test_failed_checks_refuse_to_pull_and_increment_the_failure_streak(tmp_path:
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "GitHub checks for origin/main" in checkout.journal
-    assert "failure count now 1" in checkout.journal
+    assert "skipping deploy candidate" in checkout.journal
+    assert "no fully green deploy candidate" in checkout.journal
+    assert "failure count now" not in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == local_head_before
     assert "compose build" not in checkout.docker_calls
     assert "image prune" not in checkout.docker_calls
     assert "builder prune" not in checkout.docker_calls
+
+
+def test_running_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    green_predecessor = checkout.remote_main_sha()
+    checkout.move_main_forward()
+    running_head = checkout.remote_main_sha()
+    checkout.set_check_runs_for_commit(running_head, ("in_progress", ""))
+    checkout.set_check_runs_for_commit(green_predecessor, ("completed", "success"))
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == green_predecessor
+    assert checkout.deployed_sha_file.read_text() == green_predecessor
+    assert f"skipping deploy candidate {running_head}: waiting" in checkout.journal
+    assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
+
+
+def test_failed_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    green_predecessor = checkout.remote_main_sha()
+    checkout.move_main_forward()
+    failed_head = checkout.remote_main_sha()
+    checkout.set_check_runs_for_commit(failed_head, ("completed", "failure"))
+    checkout.set_check_runs_for_commit(green_predecessor, ("completed", "success"))
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == green_predecessor
+    assert f"skipping deploy candidate {failed_head}: failed" in checkout.journal
+    assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
+
+
+def test_lookback_limit_does_not_deploy_a_green_commit_outside_the_window(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    local_head_before = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    checkout.move_main_forward()
+    green_predecessor = checkout.remote_main_sha()
+    checkout.move_main_forward()
+    failed_head = checkout.remote_main_sha()
+    checkout.check_run_lookback_commits = 1
+    checkout.set_check_runs_for_commit(failed_head, ("completed", "failure"))
+    checkout.set_check_runs_for_commit(green_predecessor, ("completed", "success"))
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == local_head_before
+    assert "no fully green deploy candidate among the newest 1 commits" in checkout.journal
+    assert "compose build" not in checkout.docker_calls
 
 
 def test_a_failed_container_recreate_does_not_prune(tmp_path: Path) -> None:
@@ -1158,7 +1248,8 @@ def test_running_checks_wait_without_incrementing_the_failure_streak(tmp_path: P
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "are not green yet: waiting" in checkout.journal
+    assert "skipping deploy candidate" in checkout.journal
+    assert "no fully green deploy candidate" in checkout.journal
     assert "failure count now" not in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
@@ -1205,10 +1296,8 @@ def test_future_commit_timestamp_cannot_starve_first_seen_grace_alarm(
 
     assert result.returncode == 0
     assert "has not reported a check run within 1800s of its commit" in checkout.journal
-    failure_reason = (
-        "failure count now 1 (this tick: no GitHub check runs reported within 1800s of commit)"
-    )
-    assert failure_reason in checkout.journal
+    assert "no fully green deploy candidate" in checkout.journal
+    assert "failure count now" not in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
 

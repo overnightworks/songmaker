@@ -15,12 +15,10 @@
 		LIBRARY_ROW_COLLAPSE_LABEL,
 		LIBRARY_ROW_COMPACT_MEDIA,
 		LIBRARY_ROW_EXPAND_LABEL,
-		LIBRARY_FILTER_LABELS,
-		LIBRARY_ROW_FILTER_EMPTY
+		LIBRARY_FILTER_LABELS
 	} from '$lib/constants';
 	import { libraryRowOpenPreference, setLibraryRowOpen } from '$lib/stores/playbackSettings';
 	import LibraryTileContent from './LibraryTileContent.svelte';
-	import LibraryRowFilter from './LibraryRowFilter.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -113,49 +111,7 @@
 		setLibraryRowOpen(!rowOpen);
 	}
 
-	// The row's own instant filter (#402) -- local component state only, not
-	// a store and not a URL param, so it never outlives this row and never
-	// touches the wall's grid search (LibraryWall.svelte's searchQuery),
-	// which is a different job: server-side, across the whole library.
-	let filterQuery = $state('');
-	const normalizedFilter = $derived(filterQuery.trim().toLowerCase());
-
-	function tileMatchesFilter(tile: RowTile): boolean {
-		return (
-			tile.title.toLowerCase().includes(normalizedFilter) ||
-			tile.subtitle.toLowerCase().includes(normalizedFilter)
-		);
-	}
-
-	// null means "no filter active" -- every tile renders. Once a query is
-	// typed, only its own matches render, except the open tile: it stays
-	// visible and marked no matter what (#348 ruling 6 / #402), so it alone
-	// is exempted from tileHidden below rather than folded into this set.
-	const matchingTileIds = $derived.by((): Set<string> | null => {
-		if (!normalizedFilter) return null;
-		return new Set(tiles.filter(tileMatchesFilter).map((tile) => tile.id));
-	});
-
-	function tileHidden(tile: RowTile): boolean {
-		if (matchingTileIds === null || matchingTileIds.has(tile.id)) return false;
-		return tile.id !== collection.id;
-	}
-
-	function tileFilteredOutButOpen(tile: RowTile): boolean {
-		return matchingTileIds !== null && !matchingTileIds.has(tile.id) && tile.id === collection.id;
-	}
-
-	const hasNoMatches = $derived(matchingTileIds !== null && matchingTileIds.size === 0);
-
-	// The row's actual on-screen layout in one comparable value: the ordered
-	// ids of the tiles that are not hidden. Centring and the overflow
-	// measurement below only need to redo their work when this changes --
-	// not on every keystroke (most keystrokes narrow the match set further
-	// without changing which tiles are currently shown) and not when a
-	// sibling's title or subtitle changes without moving in or out of view.
-	const visibleTileKey = $derived(
-		JSON.stringify(tiles.filter((tile) => !tileHidden(tile)).map((tile) => tile.id))
-	);
+	const visibleTileKey = $derived(JSON.stringify(tiles.map((tile) => tile.id)));
 
 	// Position, not the list contents, is what centring cares about: a
 	// metadata edit to some other tile (a title rename, a cover landing via
@@ -189,12 +145,8 @@
 	// that isn't. kineticScroll's own snap only runs after a drag/wheel
 	// gesture settles, so centring "whichever one is open" is this
 	// component's own job, on every mount and every change of what's open --
-	// and whenever a filter keystroke actually hides or reveals a neighbour
-	// (visibleTileKey), since that reflows the row and can shift the open
-	// tile off-centre even though it never moved in the underlying list. A
-	// keystroke that only narrows the match set further without changing
-	// what's currently shown -- or a sibling's title/subtitle changing while
-	// its visibility doesn't -- must not recentre.
+	// and whenever the set of tiles changes, which can shift the open tile
+	// off-centre even though it never moved in the underlying list.
 	$effect(() => {
 		const row = rowEl;
 		const openId = collection.id;
@@ -297,10 +249,6 @@
 		</div>
 	{/if}
 	{#if rowOpen}
-		<LibraryRowFilter bind:value={filterQuery} collectionLabel={rowLabel} />
-		{#if hasNoMatches}
-			<p class="library-row-filter-empty">{LIBRARY_ROW_FILTER_EMPTY}</p>
-		{/if}
 		<div
 			class="library-row"
 			aria-label={rowLabel}
@@ -312,11 +260,9 @@
 					type="button"
 					class="row-tile"
 					class:active={tile.id === collection.id}
-					class:filtered-out-but-open={tileFilteredOutButOpen(tile)}
 					data-tile-id={tile.id}
 					aria-current={tile.id === collection.id}
 					title={tile.title}
-					hidden={tileHidden(tile)}
 				>
 					<LibraryTileContent
 						title={tile.title}
@@ -459,39 +405,14 @@
 		cursor: pointer;
 	}
 
-	/* A hidden tile must actually leave the flex flow, not just go
-	   invisible-but-still-laid-out -- author-origin CSS always wins over the
-	   user-agent's own `[hidden] { display: none }`, regardless of selector
-	   specificity, so `.row-tile`'s own `display: flex` above silently
-	   overrode the browser's default the moment a real stylesheet cascade
-	   (not jsdom, which never computes layout) was in play. Confirmed live
-	   in Playwright against a real e2e stack (#402 review): 48 of 50 hidden
-	   tiles stayed visible with `display: flex` until this rule was added. */
-	.row-tile[hidden] {
-		display: none;
-	}
-
 	.row-tile.active {
 		opacity: 1;
 		transform: scale(1);
 		box-shadow: 0 0 0 2px var(--primary);
 	}
 
-	.row-tile.filtered-out-but-open {
-		opacity: 0.4;
-		outline: 1px dashed var(--border);
-		outline-offset: -1px;
-	}
-
 	.row-tile:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
-	}
-
-	.library-row-filter-empty {
-		margin: 0;
-		padding: 0.3rem 0.9rem 0;
-		font-size: 0.72rem;
-		color: var(--text-subtle);
 	}
 </style>

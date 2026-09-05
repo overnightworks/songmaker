@@ -2,6 +2,27 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/fetch';
 
+const jobStore = vi.hoisted(() => {
+	let value: { job: Record<string, unknown> }[] = [];
+	const subscribers = new Set<(jobs: typeof value) => void>();
+	return {
+		activeJobs: {
+			subscribe(run: (jobs: typeof value) => void) {
+				run(value);
+				subscribers.add(run);
+				return () => subscribers.delete(run);
+			},
+			set(next: typeof value) {
+				value = next;
+				for (const run of subscribers) run(value);
+			},
+			update(fn: (jobs: typeof value) => typeof value) {
+				this.set(fn(value));
+			}
+		}
+	};
+});
+
 const addLoraSample = vi.fn();
 const patchLoraSample = vi.fn();
 const deleteLoraSample = vi.fn();
@@ -10,6 +31,10 @@ const addLoraSampleFromGeneration = vi.fn();
 const refreshLora = vi.fn();
 const trainLora = vi.fn();
 const addToast = vi.fn();
+const fetchJob = vi.fn();
+const cancelJob = vi.fn();
+const trackJob = vi.fn();
+const removeJob = vi.fn();
 
 vi.mock('$lib/api/client', () => ({
 	ApiError,
@@ -26,7 +51,19 @@ vi.mock('$lib/api/loras', () => ({
 vi.mock('$lib/stores/loras', () => ({
 	refreshLora: (...args: unknown[]) => refreshLora(...args),
 	trainLora: (...args: unknown[]) => trainLora(...args),
-	isLoraActive: () => false
+	isLoraActive: (status: string) =>
+		['queued', 'preprocessing', 'training', 'exporting'].includes(status)
+}));
+
+vi.mock('$lib/api/jobs', () => ({
+	fetchJob: (...args: unknown[]) => fetchJob(...args),
+	cancelJob: (...args: unknown[]) => cancelJob(...args)
+}));
+
+vi.mock('$lib/stores/jobs', () => ({
+	activeJobs: jobStore.activeJobs,
+	trackJob: (...args: unknown[]) => trackJob(...args),
+	removeJob: (...args: unknown[]) => removeJob(...args)
 }));
 
 vi.mock('$lib/stores/toast', () => ({ addToast: (...args: unknown[]) => addToast(...args) }));
@@ -35,7 +72,7 @@ import LoraDetail from './LoraDetail.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
-function lora() {
+function lora(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'l1',
 		user_id: 'u1',
@@ -44,14 +81,34 @@ function lora() {
 		status: 'draft',
 		created_at: '2026-09-05T00:00:00Z',
 		deleted_at: null,
-		samples: []
+		samples: [],
+		...overrides
 	};
 }
 
-async function render(): Promise<HTMLElement> {
+function job(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 'training-job',
+		type: 'lora_training',
+		status: 'queued',
+		progress: 0,
+		current_epoch: null,
+		train_epochs: null,
+		remaining_time_estimate: null,
+		queue_reason: null,
+		queue_position: null,
+		error: null,
+		error_type: null,
+		started_at: null,
+		completed_at: null,
+		...overrides
+	};
+}
+
+async function render(loraItem = lora()): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(LoraDetail, { target, props: { lora: lora() } });
+	mounted = mount(LoraDetail, { target, props: { lora: loraItem } });
 	await tick();
 	return target;
 }
@@ -65,6 +122,14 @@ beforeEach(() => {
 	refreshLora.mockReset();
 	trainLora.mockReset();
 	addToast.mockReset();
+	fetchJob.mockReset();
+	cancelJob.mockReset();
+	trackJob.mockReset();
+	removeJob.mockReset();
+	jobStore.activeJobs.set([]);
+	removeJob.mockImplementation((jobId: string) =>
+		jobStore.activeJobs.update((jobs) => jobs.filter((entry) => entry.job.id !== jobId))
+	);
 });
 
 afterEach(async () => {
@@ -152,5 +217,89 @@ describe('LoraDetail', () => {
 		await vi.waitFor(() =>
 			expect(addLoraSample).toHaveBeenCalledWith('l1', file, 'warm tenor', 'A line')
 		);
+	});
+
+	it('renders worker waiting data received from the training job stream', async () => {
+		const queuedJob = job({
+			queue_reason: 'Waiting for queued generations on this GPU.',
+			queue_position: 2
+		});
+		fetchJob.mockResolvedValueOnce(queuedJob);
+		const target = await render(lora({ status: 'queued', training_job_id: queuedJob.id }));
+
+		jobStore.activeJobs.set([{ job: queuedJob }]);
+		await tick();
+
+		expect(target.textContent).toContain('Waiting');
+		expect(target.textContent).toContain('Waiting for queued generations on this GPU.');
+		expect(target.textContent).toContain('Position 2 in the queue');
+		await vi.waitFor(() => expect(trackJob).toHaveBeenCalledWith(queuedJob, {}));
+	});
+
+	it('renders epoch progress and the remaining estimate received from the training job stream', async () => {
+		const runningJob = job({
+			status: 'running',
+			current_epoch: 31,
+			train_epochs: 50,
+			remaining_time_estimate: 522
+		});
+		fetchJob.mockResolvedValueOnce(runningJob);
+		const target = await render(lora({ status: 'training', training_job_id: runningJob.id }));
+
+		jobStore.activeJobs.set([{ job: runningJob }]);
+		await tick();
+
+		expect(target.textContent).toContain('Epoch 31 of 50');
+		expect(target.textContent).toContain('~ 9m remaining');
+		expect(target.querySelector<HTMLElement>('.progress-track span')?.style.width).toBe('62%');
+	});
+
+	it('does not render sixty minutes after rounding a remaining training estimate', async () => {
+		const runningJob = job({
+			status: 'running',
+			current_epoch: 31,
+			train_epochs: 50,
+			remaining_time_estimate: 7199
+		});
+		fetchJob.mockResolvedValueOnce(runningJob);
+		const target = await render(lora({ status: 'training', training_job_id: runningJob.id }));
+
+		jobStore.activeJobs.set([{ job: runningJob }]);
+		await tick();
+
+		expect(target.textContent).toContain('~ 2h 0m remaining');
+		expect(target.textContent).not.toContain('60m');
+	});
+
+	it('names the calculating remaining-time state from the training job stream', async () => {
+		const runningJob = job({
+			status: 'running',
+			current_epoch: 0,
+			train_epochs: 50,
+			remaining_time_estimate: 'calculating'
+		});
+		fetchJob.mockResolvedValueOnce(runningJob);
+		const target = await render(lora({ status: 'training', training_job_id: runningJob.id }));
+
+		jobStore.activeJobs.set([{ job: runningJob }]);
+		await tick();
+
+		expect(target.textContent).toContain('Calculating remaining time...');
+	});
+
+	it('cancels the training job and names the cancelled state', async () => {
+		const runningJob = job({ status: 'running', current_epoch: 31, train_epochs: 50 });
+		const cancelledJob = job({ status: 'cancelled', completed_at: '2026-09-05T12:00:00Z' });
+		fetchJob.mockResolvedValueOnce(runningJob);
+		cancelJob.mockResolvedValueOnce(cancelledJob);
+		const target = await render(lora({ status: 'training', training_job_id: runningJob.id }));
+
+		jobStore.activeJobs.set([{ job: runningJob }]);
+		await tick();
+		target.querySelector<HTMLButtonElement>('.cancel-training-btn')?.click();
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith(runningJob.id));
+		await vi.waitFor(() => expect(removeJob).toHaveBeenCalledWith(runningJob.id));
+		expect(target.textContent).toContain('Training cancelled');
 	});
 });

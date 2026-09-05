@@ -116,7 +116,7 @@ async def run_download(
         progress_task.cancel()
         try:
             await progress_task
-        except asyncio.CancelledError:  # NOSONAR: The owner cancels this child during cleanup.
+        except asyncio.CancelledError:  # NOSONAR The owner cancels this child during cleanup.
             pass
 
 

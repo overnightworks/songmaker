@@ -1,4 +1,11 @@
-const FOCUSABLE_SELECTOR = 'a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE_SELECTOR = [
+	'a[href]',
+	'button:not(:disabled)',
+	'input:not(:disabled)',
+	'select:not(:disabled)',
+	'textarea:not(:disabled)',
+	'[tabindex]:not([tabindex="-1"])'
+].join(', ');
 
 export function focusableElements(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
@@ -39,6 +46,7 @@ export function handleFocusTrapKeydown(
 	event: KeyboardEvent,
 	onEscape: () => void
 ): void {
+	if (event.defaultPrevented) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
 		onEscape();
