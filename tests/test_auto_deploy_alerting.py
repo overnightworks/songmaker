@@ -44,6 +44,7 @@ prometheus_config_last_reload_successful 1
 """
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
+CHECK_RUN_FIELD_SEPARATOR = "\x1f"
 
 VALID_ALERT_ENV = """\
 ALERT_EMAIL_TO='operator@example.com'
@@ -52,6 +53,24 @@ SMTP_PORT='587'
 SMTP_USER='songmaker@example.com'
 SMTP_PASSWORD='correct-horse-battery-staple'
 """
+
+
+def _check_runs_response(*runs: tuple[str, ...]) -> str:
+    """Project GitHub check runs as the auto-deploy script's jq query does."""
+    records = []
+    for run in runs:
+        if len(run) == 2:
+            status, conclusion = run
+            app_slug = "github-actions"
+        elif len(run) == 3:
+            app_slug, status, conclusion = run
+        else:
+            raise ValueError("a check run needs status/conclusion or app/status/conclusion")
+        records.append(
+            f"check{CHECK_RUN_FIELD_SEPARATOR}{app_slug}{CHECK_RUN_FIELD_SEPARATOR}"
+            f"{status}{CHECK_RUN_FIELD_SEPARATOR}{conclusion}\n",
+        )
+    return f"envelope{CHECK_RUN_FIELD_SEPARATOR}{len(runs)}\n" + "".join(records)
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -79,6 +98,7 @@ class Checkout:
         self.docker_calls_file = tmp_path / "docker-calls.txt"
         self.curl_calls_file = tmp_path / "curl-calls.txt"
         self.check_runs_file = tmp_path / "check-runs.txt"
+        self.check_runs_raw_response_file = tmp_path / "check-runs-response.json"
         self.check_runs_directory = tmp_path / "check-runs"
         self.check_runs_directory.mkdir()
         self.post_merge_marker = tmp_path / "post-merge-ran.txt"
@@ -268,12 +288,9 @@ class Checkout:
             f"echo {self._active_job_count}\n",
         )
 
-    def set_check_runs(self, *runs: tuple[str, str]) -> None:
-        """Make GitHub report these status/conclusion pairs for the SHA."""
-        self.set_check_runs_response(
-            f"envelope\t{len(runs)}\n"
-            + "".join(f"check\t{status}\t{conclusion}\n" for status, conclusion in runs),
-        )
+    def set_check_runs(self, *runs: tuple[str, ...]) -> None:
+        """Make GitHub report these app/status/conclusion pairs for the SHA."""
+        self.set_check_runs_response(_check_runs_response(*runs))
 
     def set_check_runs_response(self, response: str) -> None:
         """Make the fake gh process return an already-projected API response."""
@@ -296,6 +313,10 @@ class Checkout:
             'if [[ -n "${GH_CHECK_RUNS_STDERR:-}" ]]; then\n'
             '    printf "%s\\n" "$GH_CHECK_RUNS_STDERR" >&2\n'
             "fi\n"
+            'if [[ -f "$GH_CHECK_RUNS_RAW_RESPONSE_FILE" ]]; then\n'
+            '    jq -r "$5" "$GH_CHECK_RUNS_RAW_RESPONSE_FILE"\n'
+            "    exit $?\n"
+            "fi\n"
             'response_file="${GH_CHECK_RUNS_DIRECTORY}/${commit_sha}"\n'
             'if [[ -f "$response_file" ]]; then\n'
             '    cat "$response_file"\n'
@@ -307,12 +328,13 @@ class Checkout:
             "fi\n",
         )
 
-    def set_check_runs_for_commit(self, commit_sha: str, *runs: tuple[str, str]) -> None:
-        """Make GitHub report status/conclusion pairs for one commit only."""
-        (self.check_runs_directory / commit_sha).write_text(
-            f"envelope\t{len(runs)}\n"
-            + "".join(f"check\t{status}\t{conclusion}\n" for status, conclusion in runs),
-        )
+    def set_check_runs_for_commit(self, commit_sha: str, *runs: tuple[str, ...]) -> None:
+        """Make GitHub report app/status/conclusion pairs for one commit only."""
+        (self.check_runs_directory / commit_sha).write_text(_check_runs_response(*runs))
+
+    def set_check_runs_raw_response(self, response: str) -> None:
+        """Make the fake gh process apply its jq filter to a raw API response."""
+        self.check_runs_raw_response_file.write_text(response)
 
     def make_check_lookup_fail(self) -> None:
         _write_executable(
@@ -454,6 +476,7 @@ class Checkout:
                 "CURL_CALLS_FILE": str(self.curl_calls_file),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
                 "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
+                "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
                 "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "2",
                 "GH_AFTER_CHECK_LOOKUP_SCRIPT": (
@@ -750,7 +773,11 @@ def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
     assert "compose build" in checkout.docker_calls
 
 
-def test_failed_checks_are_skipped_without_deploying_an_unverified_commit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("conclusion", ["failure", "cancelled"])
+def test_non_successful_github_actions_checks_are_skipped(
+    tmp_path: Path,
+    conclusion: str,
+) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -758,7 +785,7 @@ def test_failed_checks_are_skipped_without_deploying_an_unverified_commit(tmp_pa
     local_head_before = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
-    checkout.set_check_runs(("completed", "success"), ("completed", "failure"))
+    checkout.set_check_runs(("completed", "success"), ("completed", conclusion))
 
     result = checkout.tick()
 
@@ -772,6 +799,76 @@ def test_failed_checks_are_skipped_without_deploying_an_unverified_commit(tmp_pa
     assert "compose build" not in checkout.docker_calls
     assert "image prune" not in checkout.docker_calls
     assert "builder prune" not in checkout.docker_calls
+
+
+def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    expected_head = checkout.remote_main_sha()
+    checkout.set_check_runs(
+        ("github-actions", "completed", "success"),
+        ("sonarcloud", "completed", "failure"),
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.deployed_sha_file.read_text() == expected_head
+    assert "compose build" in checkout.docker_calls
+    assert "app 'sonarcloud' is advisory, ignored" in checkout.journal
+
+
+def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    local_head_before = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    checkout.set_check_runs_response(
+        f"envelope{CHECK_RUN_FIELD_SEPARATOR}1\n"
+        f"check{CHECK_RUN_FIELD_SEPARATOR}{CHECK_RUN_FIELD_SEPARATOR}completed"
+        f"{CHECK_RUN_FIELD_SEPARATOR}failure\n",
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "cannot determine GitHub check status" in checkout.journal
+    assert "incomplete check-run status" in checkout.journal
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == local_head_before
+    assert "compose build" not in checkout.docker_calls
+
+
+def test_a_nul_in_a_check_run_conclusion_refuses_to_deploy(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    local_head_before = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip()
+    checkout.set_check_runs_raw_response(
+        r'{"total_count":1,"check_runs":[{"app":{"slug":"github-actions"},'
+        r'"status":"completed","conclusion":"suc\u0000cess"}]}',
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "cannot determine GitHub check status" in checkout.journal
+    assert "GitHub returned malformed check-run record" in checkout.journal
+    assert subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
+    ).strip() == local_head_before
+    assert "compose build" not in checkout.docker_calls
 
 
 def test_running_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> None:
@@ -1267,7 +1364,7 @@ def test_no_check_runs_yet_waits_without_incrementing_the_failure_streak(tmp_pat
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "GitHub has not reported a check run yet" in checkout.journal
+    assert "GitHub Actions has not reported a check run yet" in checkout.journal
     assert "failure count now" not in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
@@ -1289,7 +1386,7 @@ def test_future_commit_timestamp_cannot_starve_first_seen_grace_alarm(
     first_tick = checkout.tick()
 
     assert first_tick.returncode == 0
-    assert "GitHub has not reported a check run yet" in checkout.journal
+    assert "GitHub Actions has not reported a check run yet" in checkout.journal
 
     checkout.advance_clock(CHECK_RUN_APPEARANCE_GRACE_SECONDS)
     result = checkout.tick()
@@ -1335,7 +1432,10 @@ def test_malformed_check_status_refuses_to_pull_with_a_named_failure(tmp_path: P
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.set_check_runs_response("check\tcompleted\tsuccess\n")
+    checkout.set_check_runs_response(
+        f"check{CHECK_RUN_FIELD_SEPARATOR}github-actions{CHECK_RUN_FIELD_SEPARATOR}"
+        f"completed{CHECK_RUN_FIELD_SEPARATOR}success\n",
+    )
 
     result = checkout.tick()
 

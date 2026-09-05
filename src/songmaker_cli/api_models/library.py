@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.api_models.songs import AlbumResponse, SongSummaryResponse
+from songmaker_cli.api_models.songs import AlbumCoverUrls, AlbumResponse, SongSummaryResponse
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_GENERATION,
@@ -23,6 +23,7 @@ from songmaker_cli.constants import (
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Generation, Playlist, Song
+    from songmaker_cli.db.queries.songs import ContinueCandidate
 
 LibrarySort = Literal[
     "newest",
@@ -109,6 +110,50 @@ class LibrarySearchResponse(BaseModel):
             else:
                 items.append(LibrarySongHit.from_orm(hit))
         return cls(items=items, next_cursor=next_cursor, has_more=has_more)
+
+
+class LibraryContinueItem(BaseModel):
+    """A compact, tagged candidate for the Library Continue row."""
+
+    type: Literal["album", "song"]
+    id: str
+    title: str
+    cover: AlbumCoverUrls | None = None
+    album_id: str | None = None
+    album_title: str | None = None
+
+    @classmethod
+    def from_orm(cls, item: Album | Song) -> LibraryContinueItem:
+        from songmaker_cli.api_models.songs import album_cover_urls, song_cover_urls
+        from songmaker_cli.db.models import Album as AlbumModel
+
+        if isinstance(item, AlbumModel):
+            return cls(
+                type=LIBRARY_ITEM_ALBUM,
+                id=item.id,
+                title=item.title,
+                cover=album_cover_urls(item.id, item.cover_key) if item.cover_key else None,
+            )
+        if item.album is None:
+            raise ValueError(f"Song {item.id} has no album")
+        return cls(
+            type=LIBRARY_ITEM_SONG,
+            id=item.id,
+            title=item.title,
+            cover=song_cover_urls(item.id, item.cover_key) if item.cover_key else None,
+            album_id=item.album_id,
+            album_title=item.album.title,
+        )
+
+
+class LibraryContinueResponse(BaseModel):
+    items: list[LibraryContinueItem]
+
+    @classmethod
+    def from_orm(cls, candidates: list[ContinueCandidate]) -> LibraryContinueResponse:
+        return cls(
+            items=[LibraryContinueItem.from_orm(candidate.item) for candidate in candidates],
+        )
 
 
 ShareInventoryType = Literal[

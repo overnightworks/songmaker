@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import Pagination, page_has_more, parse_required_search_query
 from songmaker_cli.api_models import (
     DEFAULT_LIBRARY_TAKE_POOL,
+    LibraryContinueResponse,
     LibraryPoolQueueResponse,
     LibrarySearchResponse,
     LibrarySort,
@@ -28,6 +29,7 @@ from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_picked_songs_by_album,
     count_songs_by_album,
+    list_continue_candidates,
     list_shared_inventory,
     search_library,
 )
@@ -45,6 +47,16 @@ from songmaker_cli.queue_stream_api import (
 )
 
 router = APIRouter()
+
+
+@router.get("/library/continue")
+def api_library_continue(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> LibraryContinueResponse:
+    return LibraryContinueResponse.from_orm(
+        list_continue_candidates(session, user_id=user.id),
+    )
 
 
 @router.get("/library/search")

@@ -36,6 +36,7 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.arq_pool import get_arq_pool
 from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
 from songmaker_cli.constants import (
+    ARQ_MUSIC_QUEUE_NAME,
     LORA_ACTIVE_STATUSES,
     USER_LORA_AUDIO_EXTENSIONS,
     USER_LORA_MAX_SAMPLES,
@@ -429,6 +430,7 @@ async def api_train_lora(
     try:
         await get_arq_pool().enqueue_job(
             JobFunction.LORA_TRAINING, job.id, lora_id, user.id,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
         _fail_training_job(ctx, job.id, lora_id)
