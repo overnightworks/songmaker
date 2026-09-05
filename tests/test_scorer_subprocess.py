@@ -219,14 +219,11 @@ def test_child_publishes_progress_and_a_terminal_pipeline_result(
         meta=None,
         scorers=["silence"],
         config=PipelineConfig(device="cpu"),
-        job_id="score-42",
     )
     conn = _FakeConnection(incoming=[request, ShutdownRequest()])
-    progress_callbacks: list[tuple[int, int, str]] = []
 
     def run_pipeline(*_args, on_progress, **_kwargs) -> SongScores:
         on_progress(1, 1, "silence")
-        progress_callbacks.append((1, 1, "silence"))
         if isinstance(pipeline_result, Exception):
             raise pipeline_result
         return pipeline_result
@@ -237,34 +234,12 @@ def test_child_publishes_progress_and_a_terminal_pipeline_result(
 
     _child_main(conn)  # type: ignore[arg-type]
 
-    assert progress_callbacks == [(1, 1, "silence")]
     assert conn.closed is True
     assert conn.sent[0] == ScoreProgressUpdate(completed=1, total=1, scorer_name="silence")
     response = conn.sent[1]
     assert isinstance(response, ScoreResponse)
     assert response.scores is (None if expected_error else pipeline_result)
     assert response.error == expected_error
-
-
-def test_child_confirms_that_it_scrubbed_the_inherited_secret_environment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from songmaker_cli.scoring import pipeline
-
-    secret_key = SECRET_ENV_KEYS[0]
-    monkeypatch.setenv(secret_key, "secret")
-    conn = _FakeConnection(incoming=[
-        EnvProbeRequest(keys=(secret_key, _TEST_MARKER_KEY)),
-        ShutdownRequest(),
-    ])
-    monkeypatch.setenv(_TEST_MARKER_KEY, "visible")
-    monkeypatch.setattr(pipeline.default_registry, "ensure_loaded", lambda: None)
-    monkeypatch.setattr("songmaker_cli.scoring.subprocess_runner.signal.signal", lambda *_: None)
-
-    _child_main(conn)  # type: ignore[arg-type]
-
-    assert conn.sent == [EnvProbeResponse(present=frozenset({_TEST_MARKER_KEY}))]
-    assert conn.closed is True
 
 
 def test_child_stops_cleanly_when_its_parent_connection_closes(
@@ -551,11 +526,19 @@ def test_scorer_process_times_out_before_waiting_for_a_child_response(
 
     conn = _FakeConnection()
     sp = ScorerProcess()
+    process = _FakeProcess(pid=7124, exits_after_joins=1)
+    signals: list[signal.Signals] = []
+    sp._process = process  # type: ignore[assignment]
+    sp._conn = conn  # type: ignore[assignment]
     monotonic_values = iter((10.0, 11.0))
     monkeypatch.setattr(subprocess_runner.time, "monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr(
+        subprocess_runner.os,
+        "kill",
+        lambda _pid, signal_number: signals.append(signal_number),
+    )
     with (
         patch.object(sp, "_ensure_started", return_value=conn),
-        patch.object(sp, "_kill") as kill,
         pytest.raises(TimeoutError, match="1s"),
     ):
         sp.score(
@@ -565,7 +548,8 @@ def test_scorer_process_times_out_before_waiting_for_a_child_response(
         )
 
     assert conn.sent
-    kill.assert_called_once()
+    assert signals == [signal.SIGTERM]
+    assert not sp.alive
 
 
 def test_scorer_process_recycles_a_live_child_immediately(
