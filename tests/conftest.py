@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 
 # Required env vars for Settings construction at module-import time.
@@ -28,12 +29,37 @@ from unittest.mock import MagicMock, patch  # noqa: E402
 import fakeredis  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
+import structlog  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 
 
 _fake_cli_processes: list[MagicMock] = []
+
+
+@pytest.fixture
+def isolated_logging():
+    managed_loggers = (
+        logging.getLogger(),
+        logging.getLogger("alembic"),
+        logging.getLogger("sqlalchemy.engine"),
+    )
+    logger_states = [
+        (logger, logger.handlers[:], logger.level, logger.disabled, logger.propagate)
+        for logger in managed_loggers
+    ]
+    structlog_state = structlog.get_config()
+    yield
+    for logger, handlers, level, disabled, propagate in logger_states:
+        for handler in logger.handlers:
+            if handler not in handlers:
+                handler.close()
+        logger.handlers[:] = handlers
+        logger.setLevel(level)
+        logger.disabled = disabled
+        logger.propagate = propagate
+    structlog.configure(**structlog_state)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -96,6 +122,16 @@ def _reset_settings_cache():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_codex_process_pool():
+    """Keep each test independent of Codex CLI process reservations."""
+    import songmaker_cli.cowriter.codex_process_pool as pool_mod
+
+    pool_mod._process_pool = None
+    yield
+    pool_mod._process_pool = None
+
+
+@pytest.fixture(autouse=True)
 def _no_claude_cli_tool_surface_probe():
     """Never let a test spawn the real Claude CLI to read its tool surface.
 
@@ -118,6 +154,21 @@ def _no_claude_cli_tool_surface_probe():
         patch(
             "songmaker_cli.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
         ),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _no_codex_cover_sandbox_runtime_probe():
+    """Keep ordinary app-lifecycle tests independent of the host sandbox.
+
+    The cover path itself verifies its fail-closed sandbox requirement. Tests
+    that enter the web lifespan only need the boot contract, so they must not
+    depend on bubblewrap or user namespaces being available in their runner.
+    """
+    with patch(
+        "songmaker_cli.server.report_codex_image_sandbox_runtime",
+        return_value="ready",
     ):
         yield
 

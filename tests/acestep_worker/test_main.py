@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from acestep_worker.__main__ import build_deps, configure_logging, main
+from acestep_worker.__main__ import (
+    _AcestepWorkerLogHandler,
+    build_deps,
+    configure_logging,
+    main,
+)
 from acestep_worker.gpu_util import GpuHealth
 
 
@@ -61,7 +66,7 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert deps.registration.vram_total_gb == 16.0
 
 
-def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) -> None:
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("WORKER_PORT", "8765")
@@ -82,11 +87,21 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
     assert kwargs["port"] == 8765
 
 
-def test_configure_logging_emits_common_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
+def test_configure_logging_emits_common_json_fields(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+    isolated_logging,
+) -> None:
+    configure_logging("INFO")
     configure_logging("INFO")
 
     logging.getLogger("acestep.worker").info("worker ready")
 
+    root = logging.getLogger()
+    assert caplog.handler in root.handlers
+    assert sum(
+        isinstance(handler, _AcestepWorkerLogHandler) for handler in root.handlers
+    ) == 1
     payload = json.loads(capsys.readouterr().err)
     assert payload == {
         "event": "worker ready",
@@ -99,6 +114,7 @@ def test_configure_logging_emits_common_json_fields(capsys: pytest.CaptureFixtur
 
 def test_configure_logging_includes_exception_traceback(
     capsys: pytest.CaptureFixture[str],
+    isolated_logging,
 ) -> None:
     configure_logging("INFO")
 

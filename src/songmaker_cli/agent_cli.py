@@ -313,6 +313,7 @@ def run_cli_bounded(
     output_read_limit_bytes: int | None = None,
     cleanup_margin_seconds: float | None = None,
     on_spawned: Callable[[int], None] | None = None,
+    on_spawn_failed: Callable[[], None] | None = None,
     on_reaped: Callable[[int, bool], None] | None = None,
     stdout_line_channel: CliLineChannel | None = None,
     prompt_file_bytes: bytes | None = None,
@@ -340,6 +341,7 @@ def run_cli_bounded(
             stderr,
             output_read_limit_bytes,
             on_spawned,
+            on_spawn_failed,
             on_reaped,
             stdout_line_channel,
             prompt_file_bytes,
@@ -403,6 +405,7 @@ def _run_cli_bounded(
     stderr: Literal["capture", "devnull"],
     output_read_limit_bytes: int,
     on_spawned: Callable[[int], None] | None,
+    on_spawn_failed: Callable[[], None] | None,
     on_reaped: Callable[[int, bool], None] | None,
     stdout_line_channel: CliLineChannel | None,
     prompt_file_bytes: bytes | None,
@@ -434,6 +437,7 @@ def _run_cli_bounded(
                 cwd=cwd,
             )
         except BaseException as error:
+            _notify_spawn_failed(on_spawn_failed)
             outcome = CliRunOutcome(
                 started=False,
                 spawn_error=error,
@@ -562,6 +566,11 @@ def _publish_bounded_outcome(state: _BoundedRunState, outcome: CliRunOutcome) ->
 def _notify_spawned(callback: Callable[[int], None] | None, process_id: int) -> None:
     if callback is not None:
         callback(process_id)
+
+
+def _notify_spawn_failed(callback: Callable[[], None] | None) -> None:
+    if callback is not None:
+        callback()
 
 
 def _notify_reaped(

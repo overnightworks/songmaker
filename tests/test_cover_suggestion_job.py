@@ -16,6 +16,7 @@ from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
+    JOB_ERROR_COVER_CLI_BUSY,
     JOB_ERROR_COVER_CLI_LOGIN,
     JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_ERROR_COVER_IMAGE_NOT_CREATED,
@@ -25,6 +26,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.catalog import ProviderSetupMethod
+from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -46,6 +48,21 @@ _REDACTED_CODEX_LOGIN = {
     },
 }
 _FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _reap_fake_codex_process(kwargs: dict) -> None:
+    kwargs["on_spawned"](1)
+    kwargs["on_reaped"](1, False)
+
+
+@pytest.fixture(autouse=True)
+def codex_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    monkeypatch.setattr(
+        codex_cli_adapter,
+        "get_codex_process_pool",
+        lambda: process_pool,
+    )
 
 
 def _png_bytes(*, size: tuple[int, int] = (300, 100)) -> bytes:
@@ -75,6 +92,16 @@ def _outcome(
         became_zombie=False,
         reason=reason,
     )
+
+
+def _image_event_stream(codex_home: Path, work_dir: Path) -> str:
+    return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text().replace(
+        "{CODEX_HOME}", str(codex_home.resolve()),
+    ).replace("{WORK_DIR}", str(work_dir.resolve()))
+
+
+def _image_event_records(codex_home: Path, work_dir: Path) -> list[dict]:
+    return [json.loads(line) for line in _image_event_stream(codex_home, work_dir).splitlines()]
 
 
 @pytest.fixture()
@@ -121,13 +148,19 @@ def _install_fake_codex_cli(
         calls.append({
             "command": command,
             "auth": (home / "auth.json").read_text(),
+            "auth_mode": (home / "auth.json").stat().st_mode & 0o777,
+            "home_contents": sorted(path.name for path in home.iterdir()),
+            "home_mode": home.stat().st_mode & 0o777,
+            "work_mode": Path(kwargs["cwd"]).stat().st_mode & 0o777,
             **kwargs,
         })
-        if creates_artifact:
-            artifact = home / "generated_images" / "cover.png"
-            artifact.parent.mkdir()
+        if creates_artifact and outcome is None:
+            artifact = home / "generated_images" / "thread" / "cover.png"
+            artifact.parent.mkdir(parents=True)
             artifact.write_bytes(_png_bytes())
-        return outcome or _outcome()
+        result = outcome or _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -158,17 +191,21 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
     assert all(call["stdin_payload"] is not None for call in calls)
     assert all(len(call["stdin_payload"].decode()) <= COVER_PROMPT_MAX_CHARS for call in calls)
     assert all("--sandbox" in call["command"] for call in calls)
-    assert all("workspace-write" in call["command"] for call in calls)
+    assert all("read-only" in call["command"] for call in calls)
     assert all(call["command"] == (
-        "codex", "exec", "--json", "--sandbox", "workspace-write",
+        "codex", "exec", "--json", "--sandbox", "read-only",
         "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
-        "--ephemeral", "--disable", "code_mode_host", "--disable", "code_mode",
-        "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c",
-        "mcp_servers={}", "-",
+        "--ephemeral", "--enable", "code_mode_host", "--disable", "code_mode",
+        "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c", "mcp_servers={}",
+        "-c", 'web_search="disabled"', "-",
     ) for call in calls)
     copied_logins = [json.loads(call["auth"]) for call in calls]
     assert all(login == _REDACTED_CODEX_LOGIN for login in copied_logins)
     assert all("renewal-secret" not in call["auth"] for call in calls)
+    assert all(call["home_contents"] == ["auth.json"] for call in calls)
+    assert all(call["auth_mode"] == 0o600 for call in calls)
+    assert all(call["home_mode"] == 0o700 for call in calls)
+    assert all(call["work_mode"] == 0o700 for call in calls)
     for path in paths:
         with Image.open(audio_dir / path) as image:
             assert image.size == (1024, 1024)
@@ -176,6 +213,146 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
             assert image.info == {}
     assert not list((audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(".*.staging"))
     assert all(not Path(call["cwd"]).exists() for call in calls)
+    assert all(Path(call["cwd"]).name == "work" for call in calls)
+    assert all(
+        Path(call["cwd"]).parent == Path(call["extra_env"]["CODEX_HOME"]).parent
+        for call in calls
+    )
+    assert all(
+        not Path(call["cwd"]).is_relative_to(Path(call["extra_env"]["CODEX_HOME"]))
+        for call in calls
+    )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda records: records[3]["item"].update(command="/bin/bash -lc \"id\""),
+        lambda records: records[3]["item"].update(cwd="/outside-the-private-root"),
+        lambda records: records[3]["item"].update(type="file_change"),
+        lambda records: records[3]["item"].update(type="mcp_tool_call"),
+        lambda records: records[3]["item"].update(type="web_search"),
+        lambda records: records[3]["item"].update(type="future_item"),
+    ),
+)
+def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
+    tmp_path: Path, mutate,
+) -> None:
+    codex_home = tmp_path / "codex-home"
+    work_dir = tmp_path / "work"
+    codex_home.mkdir()
+    work_dir.mkdir()
+    records = _image_event_records(codex_home, work_dir)
+    mutate(records)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter._validate_codex_image_events(
+            "\n".join(json.dumps(record) for record in records),
+            codex_home=codex_home,
+            work_dir=work_dir,
+        )
+
+
+def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    observed_abort = threading.Event()
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        records = _image_event_records(home, Path(kwargs["cwd"]))
+        records[3]["item"]["type"] = "web_search"
+        assert channel._send((json.dumps(records[3]) + "\n").encode())
+        if channel._abort_requested.wait(timeout=1):
+            observed_abort.set()
+        result = _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        _reap_fake_codex_process(kwargs)
+        return result
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert observed_abort.is_set()
+
+
+def test_codex_image_gate_accepts_the_real_stream_line_by_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    channels = []
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        channels.append(channel)
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        artifact = home / "generated_images" / "thread" / "cover.png"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(_png_bytes())
+        stream = _image_event_stream(home, Path(kwargs["cwd"]))
+        for line in stream.splitlines(keepends=True):
+            assert channel._send(line.encode())
+        result = _outcome(stdout=stream)
+        _reap_fake_codex_process(kwargs)
+        return result
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    assert codex_cli_adapter.generate_codex_cover_image(
+        "prompt", deadline=10_000_000,
+    ).startswith(b"\x89PNG")
+    assert channels and all(not channel.abort_requested() for channel in channels)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda records: records[3]["item"].update(type="collab_agent_tool_call"),
+        lambda records: records[4]["item"].update(exit_code=1),
+        lambda records: records[4]["item"].update(id="other-command"),
+        lambda records: records.insert(5, {
+            "type": "item.started",
+            "item": {**records[3]["item"], "id": "second-command"},
+        }),
+        lambda records: records[3].update(type="item.updated"),
+        lambda records: records[3].update(type="turn.unknown"),
+    ),
+)
+def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
+    observed_abort = threading.Event()
+
+    def fake_runner(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        records = _image_event_records(home, Path(kwargs["cwd"]))
+        mutate(records)
+        for record in records:
+            if not channel._send((json.dumps(record) + "\n").encode()):
+                break
+        if channel._abort_requested.wait(timeout=1):
+            observed_abort.set()
+        result = _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        _reap_fake_codex_process(kwargs)
+        return result
+
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert observed_abort.is_set()
 
 
 def test_cover_prompt_quotes_and_bounds_song_data(cover_job) -> None:
@@ -259,6 +436,27 @@ def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
         assert job.error == JOB_ERROR_COVER_IMAGE_FAILED
 
 
+def test_cover_job_names_a_busy_codex_process_pool(
+    cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
+    process_pool.reserve(CodexProcessKind.COVER)
+    _install_fake_codex_cli(monkeypatch, tmp_path)
+    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    monkeypatch.setattr(
+        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
+        lambda: ProviderSetupMethod.CODEX_CLI,
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == JOB_ERROR_COVER_CLI_BUSY
+
+
 def test_cover_job_names_a_completed_turn_that_creates_no_image(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -266,7 +464,6 @@ def test_cover_job_names_a_completed_turn_that_creates_no_image(
     _install_fake_codex_cli(
         monkeypatch,
         tmp_path,
-        outcome=_outcome(stdout=(_FIXTURES / "codex-cover-no-image-events.jsonl").read_text()),
         creates_artifact=False,
     )
     monkeypatch.setattr(
@@ -297,7 +494,9 @@ def test_codex_image_ignores_non_generated_png_assets(
         bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
         bundled_asset.parent.mkdir(parents=True)
         bundled_asset.write_bytes(_png_bytes())
-        return _outcome()
+        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -318,7 +517,11 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        return _outcome()
+        result = _outcome(stdout=_image_event_stream(
+            homes[-1], Path(kwargs["cwd"]),
+        ))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -344,7 +547,9 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
         homes.append(home)
         (home / "generated_images").symlink_to(outside, target_is_directory=True)
-        return _outcome()
+        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -365,10 +570,12 @@ def test_codex_image_timeout_cleans_its_private_directory(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        return _outcome(
+        result = _outcome(
             complete=False,
             reason=CliRunReason.DEADLINE_WHILE_READING,
         )
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)

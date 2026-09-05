@@ -394,6 +394,9 @@ export interface JobItem {
 	type: string;
 	status: string;
 	progress: number;
+	current_epoch?: number | null;
+	train_epochs?: number | null;
+	remaining_time_estimate?: number | 'calculating' | null;
 	error?: string | null;
 	error_type?: string | null;
 	queue_reason?: string | null;
@@ -793,7 +796,7 @@ export interface ResourceResyncEvent {
 }
 
 export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_failed';
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_capacity_exhausted' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_failed';
 	message: string;
 }
 

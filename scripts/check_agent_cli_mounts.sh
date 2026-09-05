@@ -77,6 +77,8 @@ fi
 CLAUDE_CLI="${SONGMAKER_CLAUDE_CLI:-$HOME_DIR/.local/bin/claude}"
 GROK_CLI="${SONGMAKER_GROK_CLI:-$HOME_DIR/.grok/bin/grok}"
 CODEX_CLI="${SONGMAKER_CODEX_CLI:-$HOME_DIR/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex}"
+CODEX_CODE_MODE_HOST="${SONGMAKER_CODEX_CODE_MODE_HOST:-$HOME_DIR/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex-code-mode-host}"
+CODEX_RESOURCES="${SONGMAKER_CODEX_RESOURCES:-$HOME_DIR/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources}"
 
 problems=0
 
@@ -104,6 +106,16 @@ check_binary() {
         return
     fi
     echo "ok: $label CLI at $path -> $resolved"
+}
+
+check_codex_resources() {
+    local path="$1" environment_name="$2"
+    if [ ! -d "$path" ]; then
+        problem "Codex resources '$path' are missing or not a directory. Install Codex, or point" \
+            "$environment_name at its resource directory."
+        return
+    fi
+    check_binary "Codex sandbox" "$path/bwrap" "$environment_name"
 }
 
 # Files alone are not enough. Old-but-valid copies pass every content check
@@ -225,6 +237,8 @@ check_mirror_is_running
 check_binary claude "$CLAUDE_CLI" SONGMAKER_CLAUDE_CLI
 check_binary grok "$GROK_CLI" SONGMAKER_GROK_CLI
 check_binary codex "$CODEX_CLI" SONGMAKER_CODEX_CLI
+check_binary codex-code-mode-host "$CODEX_CODE_MODE_HOST" SONGMAKER_CODEX_CODE_MODE_HOST
+check_codex_resources "$CODEX_RESOURCES" SONGMAKER_CODEX_RESOURCES
 
 if [ "$problems" -gt 0 ]; then
     echo >&2

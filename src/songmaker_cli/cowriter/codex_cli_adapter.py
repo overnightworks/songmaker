@@ -6,8 +6,10 @@ import asyncio
 import json
 import logging
 import tempfile
+import threading
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Final
@@ -34,7 +36,13 @@ from songmaker_cli.constants import (
     COVER_PNG_MAGIC,
     COWRITER_CLI_TIMEOUT_SECONDS,
 )
+from songmaker_cli.cowriter.codex_process_pool import (
+    CodexProcessKind,
+    CodexProcessReservation,
+    get_codex_process_pool,
+)
 from songmaker_cli.cowriter.errors import (
+    CodexProcessPoolSaturatedError,
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
@@ -62,6 +70,24 @@ _CODEX_CLI_ISOLATION_ARGS: Final = (
     'approval_policy="never"',
     "-c",
     "mcp_servers={}",
+)
+_CODEX_IMAGE_ISOLATION_ARGS: Final = (
+    "--skip-git-repo-check",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--ephemeral",
+    "--enable",
+    "code_mode_host",
+    "--disable",
+    "code_mode",
+    "--disable",
+    "code_mode_only",
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    "mcp_servers={}",
+    "-c",
+    'web_search="disabled"',
 )
 _INFORMATIONAL_ITEM_TYPES: Final = frozenset({
     "agent_message", "reasoning", "todo_list",
@@ -131,8 +157,18 @@ async def stream_codex_cli_turn(
             "cli",
             normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
         ) from exc
+    try:
+        reservation = get_codex_process_pool().reserve(CodexProcessKind.TEXT)
+    except CodexProcessPoolSaturatedError as exc:
+        turn_directory.cleanup()
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED),
+        ) from exc
     runner = asyncio.create_task(asyncio.to_thread(
-        run_cli_bounded,
+        _run_reserved_codex_cli,
+        reservation,
         _build_codex_cli_command(model),
         stdin_payload=prompt,
         read="all",
@@ -226,25 +262,105 @@ def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
         root = Path(directory)
         work_dir = root / "work"
         codex_home = root / "codex-home"
-        work_dir.mkdir()
-        codex_home.mkdir()
+        root.chmod(0o700)
+        work_dir.mkdir(mode=0o700)
+        codex_home.mkdir(mode=0o700)
         try:
             _copy_codex_login_mirror(codex_home)
         except _CodexLoginMirrorError as exc:
             raise CodexImageLoginError() from exc
-        outcome = run_cli_bounded(
+        outcome = _run_codex_image_cli(
+            prompt=prompt,
+            deadline=deadline,
+            codex_home=codex_home,
+            work_dir=work_dir,
+        )
+        _raise_for_codex_image_outcome(outcome)
+        _validate_codex_image_events(
+            outcome.stdout,
+            codex_home=codex_home,
+            work_dir=work_dir,
+        )
+        artifact = _find_only_generated_png(codex_home)
+        return _normalize_generated_png(artifact)
+
+
+def _run_codex_image_cli(
+    *, prompt: str, deadline: float, codex_home: Path, work_dir: Path,
+) -> CliRunOutcome:
+    """Reap the CLI promptly when its streamed events leave the image gate."""
+    channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
+    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    reservation = get_codex_process_pool().reserve(CodexProcessKind.COVER)
+
+    def run() -> None:
+        result = _run_reserved_codex_cli(
+            reservation,
             _build_codex_image_command(),
             stdin_payload=prompt.encode("utf-8"),
             read="all",
             deadline=deadline,
             output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
-            cwd=str(work_dir),
-            extra_env={"CODEX_HOME": str(codex_home)},
+            stdout_line_channel=channel,
+            cwd=str(work_dir.resolve()),
+            extra_env={"CODEX_HOME": str(codex_home.resolve())},
         )
-        _raise_for_codex_image_outcome(outcome)
-        _validate_codex_image_events(outcome.stdout)
-        artifact = _find_only_generated_png(codex_home)
-        return _normalize_generated_png(artifact)
+        channel._close(result)
+
+    runner = threading.Thread(target=run, daemon=True)
+    runner.start()
+    try:
+        while True:
+            line_or_outcome = channel.receive()
+            if isinstance(line_or_outcome, CliRunOutcome):
+                return line_or_outcome
+            try:
+                event_gate.accept(line_or_outcome)
+            except ImageToolBlockedError:
+                channel.request_abort()
+                runner.join()
+                raise
+            except CodexImageCliError:
+                # A valid partial stream has no completed turn yet. Its full
+                # transcript is checked below after the child has been reaped.
+                continue
+    finally:
+        if runner.is_alive():
+            channel.request_abort()
+            runner.join()
+
+
+def _run_reserved_codex_cli(
+    reservation: CodexProcessReservation,
+    command: tuple[str, ...],
+    **kwargs,
+) -> CliRunOutcome:
+    """Run one already-admitted CLI process through the bounded runner."""
+    process_pool = get_codex_process_pool()
+
+    def on_spawned(process_id: int) -> None:
+        process_pool.bind(reservation, process_id)
+
+    def on_spawn_failed() -> None:
+        process_pool.abandon_unspawned(reservation)
+
+    def on_reaped(process_id: int, _became_zombie: bool) -> None:
+        process_pool.reap(reservation, process_id)
+
+    try:
+        outcome = run_cli_bounded(
+            command,
+            on_spawned=on_spawned,
+            on_spawn_failed=on_spawn_failed,
+            on_reaped=on_reaped,
+            **kwargs,
+        )
+    except BaseException:
+        process_pool.abandon_unspawned(reservation)
+        raise
+    if outcome.reason is CliRunReason.SPAWN_FAILED:
+        process_pool.abandon_unspawned(reservation)
+    return outcome
 
 
 def _copy_codex_login_mirror(codex_home: Path) -> None:
@@ -298,7 +414,15 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
 
 def _build_codex_image_command() -> tuple[str, ...]:
     """Return the fixed command for the image-only Codex route."""
-    return _build_codex_command(sandbox="workspace-write")
+    return (
+        CODEX_CLI_BINARY,
+        "exec",
+        "--json",
+        "--sandbox",
+        "read-only",
+        *_CODEX_IMAGE_ISOLATION_ARGS,
+        "-",
+    )
 
 
 def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str, ...]:
@@ -329,43 +453,116 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
         raise CodexImageCliError()
 
 
-def _validate_codex_image_events(output: str) -> None:
-    saw_completed_turn = False
+def _validate_codex_image_events(
+    output: str, *, codex_home: Path, work_dir: Path,
+) -> None:
+    """Accept only image generation and its measured read-only bootstrap pair."""
+    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    for line in output.splitlines():
+        event_gate.accept(line.encode("utf-8"))
+    event_gate.finish()
+
+
+@dataclass
+class _CodexImageEventGate:
+    """Validate one image-run transcript, whether streamed or complete."""
+
+    codex_home: Path
+    work_dir: Path
+    saw_completed_turn: bool = False
     completed_error_item_message: str | None = None
-    try:
-        for line in output.splitlines():
-            event_type, event = _parse_codex_line(line.encode("utf-8"))
+    command_id: str | None = None
+    saw_completed_command: bool = False
+
+    def accept(self, line: bytes) -> None:
+        """Accept one event while preserving the command-pair state."""
+        try:
+            event_type, event = _parse_codex_line(line)
             if event_type in _INFORMATIONAL_EVENT_TYPES:
-                continue
+                return
             if event_type == "turn.completed":
-                if saw_completed_turn or not isinstance(event.get("usage"), dict):
+                if self.saw_completed_turn or not isinstance(event.get("usage"), dict):
                     raise CodexImageCliError()
-                saw_completed_turn = True
-                continue
+                self.saw_completed_turn = True
+                return
             if event_type in {"error", "turn.failed"}:
                 raise CodexImageCliError()
-            if event_type in _ITEM_EVENT_TYPES:
-                item_type = _item_type(event)
-                if event_type == "item.completed" and item_type == "error":
-                    completed_error_item_message = _completed_error_item_message(event)
-                    continue
-                if item_type in _BLOCKED_ITEM_TYPES:
-                    raise ImageToolBlockedError()
-                if item_type in _INFORMATIONAL_ITEM_TYPES or item_type == "image_gen":
-                    continue
-                raise CodexImageCliError()
-            raise CodexImageCliError()
-    except _CodexCliStreamFailure as exc:
-        raise CodexImageCliError() from exc
-    if saw_completed_turn:
-        return
-    if completed_error_item_message is not None:
-        if _codex_cli_failure_reason(
-            completed_error_item_message,
-        ) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
-            raise CodexImageLoginError()
+            if event_type not in _ITEM_EVENT_TYPES:
+                raise ImageToolBlockedError()
+            item_type = _item_type(event)
+            if event_type == "item.completed" and item_type == "error":
+                self.completed_error_item_message = _completed_error_item_message(event)
+                return
+            if item_type == "command_execution":
+                self.command_id, self.saw_completed_command = _validate_image_skill_command(
+                    event_type,
+                    event,
+                    command_id=self.command_id,
+                    saw_completed_command=self.saw_completed_command,
+                    expected_command=_expected_image_skill_command(self.codex_home),
+                    expected_cwd=str(self.work_dir.resolve()),
+                )
+                return
+            if item_type in _BLOCKED_ITEM_TYPES:
+                raise ImageToolBlockedError()
+            if item_type in _INFORMATIONAL_ITEM_TYPES or item_type == "image_gen":
+                return
+            raise ImageToolBlockedError()
+        except _CodexCliStreamFailure as exc:
+            raise CodexImageCliError() from exc
+
+    def finish(self) -> None:
+        """Require a completed turn and its sole measured bootstrap command."""
+        if self.saw_completed_turn:
+            if self.command_id is not None and self.saw_completed_command:
+                return
+            raise ImageToolBlockedError()
+        if self.completed_error_item_message is not None:
+            if _codex_cli_failure_reason(
+                self.completed_error_item_message,
+            ) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
+                raise CodexImageLoginError()
         raise CodexImageCliError()
-    raise CodexImageCliError()
+
+
+def _expected_image_skill_command(codex_home: Path) -> str:
+    skill_path = codex_home.resolve() / "skills" / ".system" / "imagegen" / "SKILL.md"
+    return f'/bin/bash -lc "sed -n \'1,240p\' {skill_path}"'
+
+
+def _validate_image_skill_command(
+    event_type: str,
+    event: dict[str, object],
+    *,
+    command_id: str | None,
+    saw_completed_command: bool,
+    expected_command: str,
+    expected_cwd: str,
+) -> tuple[str, bool]:
+    item = _item(event)
+    item_id = item.get("id")
+    if not isinstance(item_id, str) or item.get("command") != expected_command:
+        raise ImageToolBlockedError()
+    if item.get("cwd") != expected_cwd:
+        raise ImageToolBlockedError()
+    if event_type == "item.started":
+        if (
+            command_id is not None
+            or item.get("status") != "in_progress"
+            or item.get("exit_code") is not None
+        ):
+            raise ImageToolBlockedError()
+        return item_id, False
+    if event_type == "item.completed":
+        if (
+            command_id != item_id
+            or saw_completed_command
+            or item.get("status") != "completed"
+            or item.get("exit_code") != 0
+        ):
+            raise ImageToolBlockedError()
+        return command_id, True
+    raise ImageToolBlockedError()
 
 
 def _find_only_generated_png(codex_home: Path) -> Path:

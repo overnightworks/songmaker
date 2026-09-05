@@ -1107,16 +1107,58 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
 
 class TestConfigureLogging:
     def test_text_mode_default(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
+        isolated_logging,
     ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
-        from songmaker_cli.logging_config import configure_logging
+        from songmaker_cli.logging_config import (
+            _SongmakerCliLogHandler,
+            _SongmakerLogHandler,
+            configure_logging,
+        )
+
+        root = logging.getLogger()
+        cli_handler = _SongmakerCliLogHandler()
+        root.addHandler(cli_handler)
+
+        configure_logging()
         configure_logging()
         logging.getLogger("songmaker.test").info("text mode")
+
+        assert cli_handler not in root.handlers
+        assert caplog.handler in root.handlers
+        assert sum(isinstance(handler, _SongmakerLogHandler) for handler in root.handlers) == 1
         assert "text mode" in capsys.readouterr().err
+        assert "text mode" in caplog.text
+
+    def test_cli_logging_replaces_only_its_own_handler(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        isolated_logging,
+    ) -> None:
+        from songmaker_cli.logging_config import (
+            _SongmakerCliLogHandler,
+            configure_cli_logging,
+        )
+
+        root = logging.getLogger()
+        configure_cli_logging(logging.INFO)
+        configure_cli_logging(logging.DEBUG)
+
+        assert caplog.handler in root.handlers
+        assert sum(
+            isinstance(handler, _SongmakerCliLogHandler) for handler in root.handlers
+        ) == 1
+        assert root.level == logging.DEBUG
 
     def test_json_mode(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        isolated_logging,
     ) -> None:
         monkeypatch.setenv("LOG_FORMAT", "json")
         from songmaker_cli.logging_config import configure_logging
@@ -1125,7 +1167,10 @@ class TestConfigureLogging:
         assert json.loads(capsys.readouterr().err)["event"] == "json mode"
 
     def test_json_mode_emits_common_log_fields(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        isolated_logging,
     ) -> None:
         monkeypatch.setenv("LOG_FORMAT", "json")
         from songmaker_cli.logging_config import configure_logging

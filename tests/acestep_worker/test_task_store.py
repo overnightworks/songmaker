@@ -85,6 +85,22 @@ def test_update_progress() -> None:
     assert snap.progress == 0.42
 
 
+def test_training_progress_carries_real_epochs() -> None:
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("train_lora", train_epochs=500)
+        await store.update_progress(task_id, 0.34, current_epoch=100)
+        await store.mark_training_started(task_id)
+        return await store.get(task_id)
+
+    snapshot = _run(go())
+
+    assert snapshot is not None
+    assert snapshot.current_epoch == 100
+    assert snapshot.train_epochs == 500
+    assert snapshot.training_started_at is not None
+
+
 def test_complete_terminal() -> None:
     async def go():
         store = TaskStore()
