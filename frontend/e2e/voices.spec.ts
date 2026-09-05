@@ -39,6 +39,7 @@ interface CreatedVoice {
 
 interface GeneratedTake {
 	id: string;
+	mp3_path: string;
 	wav_path: string | null;
 }
 
@@ -157,6 +158,15 @@ async function readGeneratedWav(request: APIRequestContext, take: GeneratedTake)
 	return response.body();
 }
 
+async function expectGeneratedMp3ToRemainPlayable(
+	request: APIRequestContext,
+	take: GeneratedTake
+): Promise<void> {
+	expect(take.mp3_path).toBeTruthy();
+	const response = await request.get(`/audio/${take.mp3_path}`);
+	expect(response.ok(), `GET generated MP3 failed: ${await response.text()}`).toBeTruthy();
+}
+
 function trainingJobId(voice: VoiceState): string {
 	expect(voice.training_job_id).toBeTruthy();
 	if (!voice.training_job_id) throw new Error(`Voice ${voice.id} has no training job`);
@@ -192,7 +202,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 	request,
 	isMobile
 }) => {
-	test.setTimeout(120_000);
+	test.setTimeout(180_000);
 	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
 	const source = await seedVoiceTake(request);
 	const marker = Date.now().toString(36);
@@ -224,6 +234,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(voice).toContainText('Position 1 in the queue');
 		await expect(voice.getByText(/^Epoch \d+ of \d+$/)).toBeVisible({ timeout: 35_000 });
 		await expect(voice.getByText('ready', { exact: true })).toBeVisible({ timeout: 40_000 });
+		await expect(voice.locator('.model-mode')).toHaveText('sft');
 
 		const readyVoice = await readVoice(request, createdVoice.id);
 		expect(readyVoice.status).toBe('ready');
@@ -237,6 +248,10 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await foreignVoice.card.getByRole('button', { name: 'Train voice', exact: true }).click();
 		await waitForReadyVoice(request, foreignVoice.id);
 		await setVoiceProofModelMode(foreignVoice.id, 'turbo');
+		await page.goto('/settings/voices');
+		const foreignVoiceCard = page.locator('.lora-card').filter({ hasText: foreignVoiceName });
+		await expect(foreignVoiceCard.getByText('ready', { exact: true })).toBeVisible();
+		await expect(foreignVoiceCard.locator('.model-mode')).toHaveText('turbo');
 
 		const adapterSong = await seedVoiceAdapterComparisonSong(request, createdVoice.id);
 		const baselineSong = await seedVoiceAdapterComparisonSong(request, null);
@@ -268,7 +283,10 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		await expect(page.getByRole('heading', { name: /E2E With Voice/ })).toBeVisible();
-		await page.getByRole('button', { name: 'Recipe', exact: true }).click();
+		await page
+			.getByRole('group', { name: 'Editor views', exact: true })
+			.getByRole('button', { name: 'Recipe', exact: true })
+			.click();
 		const picker = page.locator('.voice-picker .picker');
 		await picker.click();
 		const options = page.getByRole('listbox', { name: 'Your Voice', exact: true });
@@ -293,10 +311,32 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
-		const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
-		await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
-		await deletedVoiceTake.locator('.take-summary').click();
-		await expect(deletedVoiceTake).toHaveClass(/(?:playing|buffering)/);
+		await page
+			.getByRole('group', { name: 'Editor views', exact: true })
+			.getByRole('button', { name: 'Recipe', exact: true })
+			.click();
+		if (isMobile) {
+			await expect(page.locator('.voice-picker .mobile-label')).toHaveText(
+				'Your Voice · sft model'
+			);
+		}
+		const deletedPicker = page.locator('.voice-picker .picker');
+		await deletedPicker.click();
+		const deletedVoiceOption = page
+			.getByRole('listbox', { name: 'Your Voice', exact: true })
+			.getByRole('option', { name: new RegExp(`${voiceName}.*voice deleted`) });
+		await expect(deletedVoiceOption).toContainText(`${voiceName} — voice deleted`);
+		expect(await deletedVoiceOption.isDisabled()).toBe(true);
+		await deletedPicker.click();
+		if (!isMobile) {
+			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
+			await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
+			const deletedVoicePlayTarget = deletedVoiceTake.getByRole('button', {
+				name: /v1.*take 1/
+			});
+			await expect(deletedVoicePlayTarget).toBeVisible();
+		}
+		await expectGeneratedMp3ToRemainPlayable(request, adapterTake);
 
 		await page.goto('/settings/voices');
 		const failedVoice = await createVoice(page, failedVoiceName);

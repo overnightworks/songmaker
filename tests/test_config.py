@@ -64,6 +64,19 @@ def test_build_ace_config_cli_overrides_typed() -> None:
     assert config.seed == 99
 
 
+def test_build_ace_config_keeps_voice_selection_out_of_engine_config() -> None:
+    meta = SongMeta(
+        prompt="test",
+        lyrics="test",
+        generation_params={"user_lora_id": "voice-123"},
+    )
+
+    config = build_ace_config(meta)
+
+    assert config.lora_path == ""
+    assert meta.generation_params.user_lora_id == "voice-123"
+
+
 def test_build_ace_config_zero_duration_propagates_for_auto() -> None:
     meta = SongMeta(prompt="test", lyrics="test", bpm=120, audio_duration=0)
     config = build_ace_config(meta)
