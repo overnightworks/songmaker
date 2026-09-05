@@ -279,12 +279,12 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 			suppressNextClick = false;
 			event.preventDefault();
 			event.stopPropagation();
+			return;
 		}
 		if (caughtMomentumOnDown) {
 			caughtMomentumOnDown = false;
 			event.preventDefault();
 			event.stopPropagation();
-			return;
 		}
 	}
 
