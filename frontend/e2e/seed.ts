@@ -107,6 +107,8 @@ export interface SeededLibrary {
 	 * shared library's leader in between.
 	 */
 	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
+	/** The neutral song that establishes Continue's precondition for each proof. */
+	continueAnchorSong: SeededSong;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -339,14 +341,12 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
 		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
 	};
+	const continueAnchorSong = seededSong(songIdByTitle, initialContinueLeaderTitle);
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 	// Give Continue a stable initial pair. Each shell then listens to its own
 	// later row (Opening Move or Second Wind), proving an observable reorder
 	// independently and in either serial order.
-	await seed.postJson(
-		`/api/songs/${seededSong(songIdByTitle, initialContinueLeaderTitle).id}/listen`,
-		{}
-	);
+	await seed.postJson(`/api/songs/${continueAnchorSong.id}/listen`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
@@ -379,6 +379,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		pickedSongTitle,
 		pickedSongId,
 		continueReorderSongs,
+		continueAnchorSong,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,
