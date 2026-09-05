@@ -278,6 +278,7 @@ from songmaker_cli.db.queries.playlists import remove_from_playlist as remove_fr
 from songmaker_cli.db.queries.playlists import (
     reorder_playlist_entry as reorder_playlist_entry,
 )
+from songmaker_cli.db.queries.playlists import set_playlist_cover_key as set_playlist_cover_key
 from songmaker_cli.db.queries.playlists import update_playlist as update_playlist
 from songmaker_cli.db.queries.rate_limits import (
     delete_all_user_rate_limits as delete_all_user_rate_limits,

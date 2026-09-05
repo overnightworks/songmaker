@@ -39,6 +39,7 @@ from songmaker_cli.db.queries import (
     list_playlists,
     remove_from_playlist,
     reorder_playlist_entry,
+    set_playlist_cover_key,
     update_playlist,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -215,11 +216,12 @@ def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_
         response = next(item for item in playlists if item.id == playlist.id)
         from songmaker_cli.api_models.playlists import PlaylistResponse
 
-        album_covers = PlaylistResponse.from_orm(response).album_covers
+        playlist_response = PlaylistResponse.from_orm(response)
     finally:
         event.remove(engine, "before_cursor_execute", handle)
 
-    assert [cover.card for cover in album_covers] == [
+    assert playlist_response.cover is None
+    assert [cover.card for cover in playlist_response.album_covers] == [
         "/api/albums/a1/cover?variant=card&v=one.png",
         "/api/albums/a2/cover?variant=card&v=two.png",
         "/api/albums/a3/cover?variant=card&v=three.png",
@@ -228,6 +230,32 @@ def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_
         "expected one joined playlist query including entry album covers, "
         f"got {len(queries)}: {queries}"
     )
+
+
+def test_playlist_response_reports_own_cover_beside_album_cover_mosaic(
+    seeded_session: Session,
+) -> None:
+    seeded_session.query(Album).filter_by(id="a1").update({"cover_key": "album.png"})
+    playlist = _create_playlist(seeded_session, "Own cover")
+    add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    set_playlist_cover_key(seeded_session, playlist.id, "playlist.png")
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert loaded is not None
+    from songmaker_cli.api_models.playlists import PlaylistResponse
+
+    response = PlaylistResponse.from_orm(loaded)
+    assert response.cover is not None
+    assert response.cover.card == "/api/playlists/{}/cover?variant=card&v=playlist.png".format(
+        playlist.id,
+    )
+    assert response.cover.detail == "/api/playlists/{}/cover?variant=detail&v=playlist.png".format(
+        playlist.id,
+    )
+    assert [cover.card for cover in response.album_covers] == [
+        "/api/albums/a1/cover?variant=card&v=album.png",
+    ]
 
 
 def test_playlist_response_omits_coverless_albums_and_limits_covers_to_four(
@@ -807,7 +835,7 @@ def test_playlist_response_logs_warning_when_entries_is_none(
 
     fake_playlist = SimpleNamespace(
         id="pl-broken", title="T", slug="t", entries=None,
-        is_shared=False, share_slug=None,
+        is_shared=False, share_slug=None, cover_key=None,
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     with caplog.at_level("WARNING", logger="songmaker_cli.api_models.playlists"):

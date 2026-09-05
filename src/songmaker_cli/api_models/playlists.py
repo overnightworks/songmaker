@@ -13,11 +13,29 @@ from songmaker_cli.api_models.songs import (
     generation_version_lyrics,
 )
 from songmaker_cli.api_models.whisper import WhisperCue
+from songmaker_cli.constants import (
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
+)
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry
 
 log = logging.getLogger(__name__)
+
+
+def playlist_cover_urls(playlist_id: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/api/playlists/{playlist_id}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/api/playlists/{playlist_id}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
 
 
 def _playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
@@ -82,6 +100,7 @@ class PlaylistResponse(BaseModel):
     entry_count: int
     is_shared: bool = False
     share_slug: str | None = None
+    cover: AlbumCoverUrls | None = None
     album_covers: list[AlbumCoverUrls] = Field(default_factory=list)
     created_at: str
 
@@ -91,6 +110,7 @@ class PlaylistResponse(BaseModel):
             e for e in _playlist_entries(playlist)
             if e.generation is not None and e.generation.song is not None
         ]
+        cover = playlist_cover_urls(playlist.id, playlist.cover_key) if playlist.cover_key else None
         album_covers: list[AlbumCoverUrls] = []
         covered_album_ids: set[str] = set()
         for entry in live_entries:
@@ -108,6 +128,7 @@ class PlaylistResponse(BaseModel):
             entry_count=len(live_entries),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,
+            cover=cover,
             album_covers=album_covers,
             created_at=playlist.created_at.isoformat(),
         )
