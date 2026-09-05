@@ -36,7 +36,7 @@ function startWorker(): Worker {
 	});
 	started.addEventListener('message', (event: MessageEvent<AlignmentResult>) => {
 		const request = awaited;
-		if (!request || request.id !== event.data.id) return;
+		if (request?.id !== event.data.id) return;
 		awaited = null;
 		request.resolve(event.data.lines);
 	});

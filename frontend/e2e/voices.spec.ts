@@ -19,7 +19,8 @@ const SCREENSHOT_DIR =
 const FAILED_TRAINING_CAPTION = 'e2e fake training failure';
 const TAKE_FIXTURE = fileURLToPath(new URL('./fixtures/take.mp3', import.meta.url));
 
-test.skip( // NOSONAR S1607: the voice proof requires its dedicated worker override.
+// prettier-ignore
+test.skip( // NOSONAR S1607: dedicated override required.
 	process.env.E2E_VOICES_STACK !== '1',
 	'Voices proof requires the docker-compose.e2e-voices.yml worker override.'
 );

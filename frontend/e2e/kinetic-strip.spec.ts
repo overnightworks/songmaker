@@ -434,7 +434,8 @@ test.describe('kinetic take strip', () => {
 		browser,
 		isMobile
 	}) => {
-		test.skip( // NOSONAR S1607: the test creates its own mobile-emulated context.
+		// prettier-ignore
+		test.skip( // NOSONAR S1607: own mobile-emulated context.
 			Boolean(isMobile),
 			'this test opens its own mobile-emulated context regardless of project'
 		);

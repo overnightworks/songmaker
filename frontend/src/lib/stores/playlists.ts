@@ -214,7 +214,7 @@ export function updatePlaylistInList(
 ): void {
 	playlistList.update((list) => list.map((p) => (p.id === playlistId ? updater(p) : p)));
 	selectedPlaylistDetail.update((d) => {
-		if (!d || d.id !== playlistId) return d;
+		if (d?.id !== playlistId) return d;
 		const updated = { ...d, ...updater(d) };
 		cachePlaylistDetail(updated);
 		return updated;
@@ -231,7 +231,7 @@ export async function renamePlaylist(id: string, title: string): Promise<void> {
 	const updated = await apiUpdatePlaylist(id, title);
 	playlistList.update((list) => list.map((p) => (p.id === id ? updated : p)));
 	const detail = get(selectedPlaylistDetail);
-	if (detail && detail.id === id) {
+	if (detail?.id === id) {
 		selectedPlaylistDetail.update((d) => {
 			if (!d) return d;
 			const next = { ...d, title };
