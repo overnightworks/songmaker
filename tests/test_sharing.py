@@ -16,6 +16,7 @@ from sqlalchemy import event
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import TrustedProxies, hash_password, sign_session_id
+from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 
@@ -1113,6 +1114,47 @@ def _seed_playlist_with_entries(session) -> None:
         session.add(PlaylistEntry(id=f"e{i}", playlist_id="pl1", generation_id=f"g{i}", position=i))
 
 
+def _write_cover_variants(audio_dir: Path, dirname: str, entity_id: str) -> None:
+    cover_dir = audio_dir / dirname / entity_id
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "original.png").write_bytes(b"cover")
+    (cover_dir / "card.jpg").write_bytes(b"cover")
+    (cover_dir / "detail.jpg").write_bytes(b"cover")
+
+
+def _add_mosaic_album(session, index: int) -> str:
+    album_id = f"mosaic-album-{index}"
+    song_id = f"mosaic-song-{index}"
+    generation_id = f"mosaic-generation-{index}"
+    session.add(Album(
+        id=album_id,
+        title=f"Mosaic Album {index}",
+        artist="Test Artist",
+        cover_key=f"mosaic-{index}.png",
+    ))
+    session.add(Song(
+        id=song_id,
+        title=f"Mosaic Song {index}",
+        album_id=album_id,
+        track_number=1,
+        slug=f"mosaic-song-{index}",
+    ))
+    session.add(Generation(
+        id=generation_id,
+        song_id=song_id,
+        generation_number=1,
+        mp3_path=f"admin_user/mosaic-{index}.mp3",
+        seed=index,
+    ))
+    session.add(PlaylistEntry(
+        id=f"mosaic-entry-{index}",
+        playlist_id="pl1",
+        generation_id=generation_id,
+        position=index + 2,
+    ))
+    return album_id
+
+
 def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
     login_and_csrf(client, "admin", "admin12345")
@@ -1128,6 +1170,95 @@ def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
         assert entry["generation_id"] == f"g{i}"
         assert entry["audio_duration"] == 100 + i
         assert entry["lyrics"] == f"Lyrics {i}"
+
+
+def test_shared_playlist_page_manifest_exposes_its_own_cover_and_stream_stays_audio_only(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        playlist = session.get(Playlist, "pl1")
+        assert playlist is not None
+        playlist.cover_key = "playlist.png"
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, PLAYLIST_COVER_DIRNAME, "pl1")
+
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = TestClient(client.app, cookies={})
+    page_manifest = public.get(f"/shared/playlist/{slug}").json()
+
+    assert page_manifest["cover"] == {
+        "card": f"/shared/playlist/{slug}/cover?variant=card&v=playlist.png",
+        "detail": f"/shared/playlist/{slug}/cover?variant=detail&v=playlist.png",
+    }
+    assert page_manifest["album_covers"] == []
+    assert public.get(page_manifest["cover"]["detail"]).status_code == 200
+
+    stream_manifest = public.post(f"/shared/playlist/{slug}/stream").json()
+    assert "cover" not in stream_manifest
+    assert "album_covers" not in stream_manifest
+
+
+def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_covers(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        first_album = session.get(Album, "test_album")
+        assert first_album is not None
+        first_album.cover_key = "first.png"
+        mosaic_album_ids = [_add_mosaic_album(session, index) for index in range(1, 5)]
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
+    for album_id in mosaic_album_ids:
+        _write_cover_variants(client.app.state.ctx.audio_dir, "covers", album_id)
+
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = TestClient(client.app, cookies={})
+    page_manifest = public.get(f"/shared/playlist/{slug}").json()
+    mosaic_urls = [cover["card"] for cover in page_manifest["album_covers"]]
+
+    assert mosaic_urls == [
+        f"/shared/playlist/{slug}/album-cover/test_album?variant=card&v=first.png",
+        *[
+            f"/shared/playlist/{slug}/album-cover/mosaic-album-{index}"
+            f"?variant=card&v=mosaic-{index}.png"
+            for index in range(1, 4)
+        ],
+    ]
+    assert all(url.startswith(f"/shared/playlist/{slug}/") for url in mosaic_urls)
+    assert "/api/albums/" not in str(page_manifest)
+    assert all(public.get(url).status_code == 200 for url in mosaic_urls)
+
+
+def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        album = session.get(Album, "test_album")
+        assert album is not None
+        album.cover_key = "album.png"
+        session.add(Album(
+            id="foreign-album", title="Foreign", artist="Other", cover_key="foreign.png",
+        ))
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "foreign-album")
+
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = TestClient(client.app, cookies={})
+    page_manifest = public.get(f"/shared/playlist/{slug}").json()
+    mosaic_cover = page_manifest["album_covers"][0]["detail"]
+
+    assert public.get(mosaic_cover.replace("album.png", "old.png")).status_code == 404
+    assert public.get(
+        f"/shared/playlist/{slug}/album-cover/foreign-album?variant=detail&v=foreign.png",
+    ).status_code == 404
+
+    assert client.delete("/api/playlists/pl1/share").status_code == 200
+    assert public.get(mosaic_cover).status_code == 404
 
 
 def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> None:
@@ -1760,7 +1891,7 @@ def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient
     assert set(album["songs"][0]) == _SHARED_ALBUM_SONG_KEYS
     assert set(song) == _SHARED_SONG_KEYS
     assert set(generation) == _SHARED_GENERATION_KEYS
-    assert set(playlist) == {"title", "entries"}
+    assert set(playlist) == {"title", "entries", "cover", "album_covers"}
     assert set(playlist["entries"][0]) == _SHARED_PLAYLIST_ENTRY_KEYS
 
 
