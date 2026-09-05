@@ -221,7 +221,10 @@ def api_update_album(
             raise HTTPException(422, "Title is required")
 
     subtitle = (req.subtitle or "").strip() if "subtitle" in fields_set else UNSET
-    year = (str(req.year) if req.year is not None else "") if "year" in fields_set else UNSET
+    if "year" in fields_set:
+        year = str(req.year) if req.year is not None else ""
+    else:
+        year = UNSET
 
     try:
         album = update_album(session, album_id, title=title, subtitle=subtitle, year=year)

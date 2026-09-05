@@ -57,7 +57,7 @@ _DEFAULT_USER_ID = "u-test"
 _OTHER_USER_ID = "u-other"
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_db(tmp_path / "test.db")
     session = factory()
@@ -86,7 +86,7 @@ def _seed(session: Session, owner: str | None = None) -> None:
     session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded(db_session: Session) -> Session:
     _seed(db_session)
     return db_session
