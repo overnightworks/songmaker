@@ -19,7 +19,7 @@ from songmaker_cli.db.queries import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def retention_factory(tmp_path: Path):
     factory = init_db(tmp_path / "retention.db")
     with factory() as session:

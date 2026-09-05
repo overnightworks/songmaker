@@ -19,7 +19,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.parser import SongMeta
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
@@ -62,6 +62,19 @@ def test_build_ace_config_cli_overrides_typed() -> None:
     assert config.bpm == 120
     assert config.shift == 4.0
     assert config.seed == 99
+
+
+def test_build_ace_config_keeps_voice_selection_out_of_engine_config() -> None:
+    meta = SongMeta(
+        prompt="test",
+        lyrics="test",
+        generation_params={"user_lora_id": "voice-123"},
+    )
+
+    config = build_ace_config(meta)
+
+    assert config.lora_path == ""
+    assert meta.generation_params.user_lora_id == "voice-123"
 
 
 def test_build_ace_config_zero_duration_propagates_for_auto() -> None:

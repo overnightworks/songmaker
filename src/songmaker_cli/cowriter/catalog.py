@@ -227,36 +227,9 @@ def _refresh_provider_route(
     now = datetime.now(timezone.utc)
     capability = provider_route_capability(provider, route)
     credential = _provider_api_credential(provider, settings)
-    if route is ProviderRoute.API and not _secret(credential.secret):
-        reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
-        return ProviderRouteSnapshot(
-            (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-            capability, reason, now, _API_KEY_SETUP_LABEL,
-        )
-    if (
-        route is ProviderRoute.API
-        and provider == _CLAUDE_PROVIDER
-        and not _anthropic_sdk_available()
-    ):
-        reason = normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR)
-        return ProviderRouteSnapshot(
-            (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-            capability, reason, now, _API_KEY_SETUP_LABEL,
-        )
-    if route is ProviderRoute.CLI:
-        try:
-            if not _cli_is_logged_in(provider):
-                reason = normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
-                return ProviderRouteSnapshot(
-                    (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-                    capability, reason, now, _CLI_LOGIN_SETUP_LABEL,
-                )
-        except AgentCliUnavailableError:
-            reason = normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
-            return ProviderRouteSnapshot(
-                (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-                capability, reason, now, _CLI_LOGIN_SETUP_LABEL,
-            )
+    preflight = _provider_route_preflight(provider, route, credential, capability, now)
+    if preflight is not None:
+        return preflight
     try:
         models = tuple(list_provider_models(provider, route))
     except ProviderModelCatalogUnavailableError as exc:
@@ -284,6 +257,69 @@ def _refresh_provider_route(
         models, None, source, None, ProviderRouteReadinessState.READY,
         capability, None, now,
         _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
+    )
+
+
+def _provider_route_preflight(
+    provider: str,
+    route: ProviderRoute,
+    credential: _ProviderApiCredential,
+    capability: ProviderRouteCapability,
+    now: datetime,
+) -> ProviderRouteSnapshot | None:
+    if route is ProviderRoute.API:
+        return _api_route_preflight(provider, credential, capability, now)
+    return _cli_route_preflight(provider, capability, now)
+
+
+def _api_route_preflight(
+    provider: str,
+    credential: _ProviderApiCredential,
+    capability: ProviderRouteCapability,
+    now: datetime,
+) -> ProviderRouteSnapshot | None:
+    if not _secret(credential.secret):
+        return _route_preflight_snapshot(
+            capability, now, ProviderRouteReadinessState.NOT_CONFIGURED,
+            SafeRouteReasonCode.API_KEY_NOT_SET, _API_KEY_SETUP_LABEL,
+        )
+    if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
+        return _route_preflight_snapshot(
+            capability, now, ProviderRouteReadinessState.DISTURBED,
+            SafeRouteReasonCode.API_HTTP_ERROR, _API_KEY_SETUP_LABEL,
+        )
+    return None
+
+
+def _cli_route_preflight(
+    provider: str,
+    capability: ProviderRouteCapability,
+    now: datetime,
+) -> ProviderRouteSnapshot | None:
+    try:
+        if _cli_is_logged_in(provider):
+            return None
+    except AgentCliUnavailableError:
+        return _route_preflight_snapshot(
+            capability, now, ProviderRouteReadinessState.DISTURBED,
+            SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE, _CLI_LOGIN_SETUP_LABEL,
+        )
+    return _route_preflight_snapshot(
+        capability, now, ProviderRouteReadinessState.NOT_CONFIGURED,
+        SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED, _CLI_LOGIN_SETUP_LABEL,
+    )
+
+
+def _route_preflight_snapshot(
+    capability: ProviderRouteCapability,
+    now: datetime,
+    readiness: ProviderRouteReadinessState,
+    reason_code: SafeRouteReasonCode,
+    setup_label: str,
+) -> ProviderRouteSnapshot:
+    return ProviderRouteSnapshot(
+        (), None, None, None, readiness, capability,
+        normalize_route_failure(reason_code), now, setup_label,
     )
 
 

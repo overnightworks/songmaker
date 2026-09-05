@@ -109,8 +109,9 @@ MALFORMED_MARKERS = (
     MALFORMED_MARKERS,
 )
 def test_collect_claims_rejects_malformed_markers(tmp_path: Path, source: str) -> None:
+    source_path = write_test_source(tmp_path, source)
     with pytest.raises(AcceptanceEvidenceError):
-        collect_claims(write_test_source(tmp_path, source).parent)
+        collect_claims(source_path.parent)
 
 
 def test_validate_claims_rejects_unknown_duplicate_and_orphaned_critical_acceptances(
@@ -126,24 +127,29 @@ def test_validate_claims_rejects_unknown_duplicate_and_orphaned_critical_accepta
         ),
     )
     unknown = collect_claims(tests.parent)
+    unknown_acceptance = acceptance_entry("ACC-DEMO-01")
     with pytest.raises(AcceptanceEvidenceError, match="unknown acceptance"):
-        validate_claims(unknown, (acceptance_entry("ACC-DEMO-01"),))
+        validate_claims(unknown, (unknown_acceptance,))
     duplicate = (
         AcceptanceClaim("tests/test_one.py::test_claim", "ACC-DEMO-01"),
         AcceptanceClaim("tests/test_two.py::test_claim", "ACC-DEMO-01"),
     )
+    duplicate_acceptance = acceptance_entry("ACC-DEMO-01")
     with pytest.raises(AcceptanceEvidenceError, match="duplicate test claims"):
-        validate_claims(duplicate, (acceptance_entry("ACC-DEMO-01"),))
+        validate_claims(duplicate, (duplicate_acceptance,))
+    orphaned_acceptance = acceptance_entry("ACC-DEMO-01")
     with pytest.raises(AcceptanceEvidenceError, match="has no test claim"):
-        validate_claims((), (acceptance_entry("ACC-DEMO-01"),))
+        validate_claims((), (orphaned_acceptance,))
 
 
 def test_validate_claims_allows_only_unclaimed_noncritical_integration() -> None:
-    assert validate_claims((), (acceptance_entry("ACC-DEMO-01", critical=False),)) == ()
+    noncritical_acceptance = acceptance_entry("ACC-DEMO-01", critical=False)
+    assert validate_claims((), (noncritical_acceptance,)) == ()
+    unsupported_acceptance = acceptance_entry(
+        "ACC-DEMO-01", proof_kind="browser", critical=False,
+    )
     with pytest.raises(AcceptanceEvidenceError, match="unsupported proof_kind"):
-        validate_claims(
-            (), (acceptance_entry("ACC-DEMO-01", proof_kind="browser", critical=False),)
-        )
+        validate_claims((), (unsupported_acceptance,))
 
 
 def test_run_writes_a_failed_report_when_validation_fails(tmp_path: Path, monkeypatch) -> None:

@@ -414,54 +414,12 @@ def recover_stale_jobs_by_age_and_type(
     elif now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
 
-    query = session.query(Job).filter(
-        Job.status.in_(JOB_ACTIVE_STATUSES),
-    )
-    if user_id is not None:
-        query = query.filter(Job.user_id == user_id)
-    candidates = query.all()
-    thresholds_by_type = stale_job_thresholds(get_settings().cover_executor)
-    candidates_with_thresholds: list[tuple[Job, JobStaleThresholds]] = []
-    for job in candidates:
-        try:
-            thresholds = thresholds_by_type[JobType(job.type)]
-        except (KeyError, ValueError) as exc:
-            raise RuntimeError(
-                f"Active job {job.id} has no stale-job threshold for type {job.type!r}",
-            ) from exc
-        candidates_with_thresholds.append((job, thresholds))
-
     recovered_by_type: dict[str, int] = {}
-    for job, thresholds in candidates_with_thresholds:
-        status = job.status
-        heartbeat_at = job.heartbeat_at
-        if job.status == JobStatus.QUEUED:
-            liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
-            verdict = _queued_verdict(
-                job, thresholds, liveness, now, max_queue_depth,
-            )
-            if verdict is None:
-                continue
-            error = verdict.error
-            error_type = verdict.error_type
-        else:
-            cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
-            if not _is_heartbeat_stale(job, cutoff):
-                continue
-            error = "Heartbeat lost — please retry."
-            error_type = "heartbeat_lost"
-        _before_stale_job_recovery_update(job)
-        if not _recover_stale_job_if_unchanged(
-            session,
-            job,
-            status=status,
-            heartbeat_at=heartbeat_at,
-            error=error,
-            error_type=error_type,
-            completed_at=now,
+    for job, thresholds in _active_jobs_with_thresholds(session, user_id):
+        if _recover_stale_job(
+            session, job, thresholds, now, worker_liveness, max_queue_depth,
         ):
-            continue
-        recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
+            recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()
     if recovered_by_type:
         log.info(
@@ -470,6 +428,67 @@ def recover_stale_jobs_by_age_and_type(
             recovered_by_type,
         )
     return recovered_by_type
+
+
+def _active_jobs_with_thresholds(
+    session: Session,
+    user_id: str | None,
+) -> list[tuple[Job, JobStaleThresholds]]:
+    query = session.query(Job).filter(Job.status.in_(JOB_ACTIVE_STATUSES))
+    if user_id is not None:
+        query = query.filter(Job.user_id == user_id)
+    thresholds_by_type = stale_job_thresholds(get_settings().cover_executor)
+    candidates: list[tuple[Job, JobStaleThresholds]] = []
+    for job in query.all():
+        try:
+            thresholds = thresholds_by_type[JobType(job.type)]
+        except (KeyError, ValueError) as exc:
+            raise RuntimeError(
+                f"Active job {job.id} has no stale-job threshold for type {job.type!r}",
+            ) from exc
+        candidates.append((job, thresholds))
+    return candidates
+
+
+def _recover_stale_job(
+    session: Session,
+    job: Job,
+    thresholds: JobStaleThresholds,
+    now: datetime,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None,
+    max_queue_depth: int | None,
+) -> bool:
+    status = job.status
+    heartbeat_at = job.heartbeat_at
+    verdict = _stale_job_verdict(job, thresholds, now, worker_liveness, max_queue_depth)
+    if verdict is None:
+        return False
+    _before_stale_job_recovery_update(job)
+    return _recover_stale_job_if_unchanged(
+        session,
+        job,
+        status=status,
+        heartbeat_at=heartbeat_at,
+        error=verdict.error,
+        error_type=verdict.error_type,
+        completed_at=now,
+    )
+
+
+def _stale_job_verdict(
+    job: Job,
+    thresholds: JobStaleThresholds,
+    now: datetime,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None,
+    max_queue_depth: int | None,
+) -> QueuedJobVerdict | None:
+    if job.status == JobStatus.QUEUED:
+        liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
+        return _queued_verdict(job, thresholds, liveness, now, max_queue_depth)
+    cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
+    if not _is_heartbeat_stale(job, cutoff):
+        return None
+    return QueuedJobVerdict("Heartbeat lost — please retry.", "heartbeat_lost")
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

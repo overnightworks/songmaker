@@ -46,6 +46,7 @@ services:
       WORKER_ID: voices-e2e-training-worker
       WORKER_HOST: songmaker-voices-e2e-worker
       WORKER_PORT: "8001"
+      FAKE_GENERATION_OCCUPANCY_PROMPT: "E2E voices occupancy prompt"
     volumes:
       - audiofiles:/app/data/audio
       - type: bind

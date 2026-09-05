@@ -87,6 +87,33 @@ async def _collect_transport_responses(transport) -> list[object]:
     return [item async for item in transport.stream(InitialTurn("system", []))]
 
 
+def test_grok_tool_command_pins_native_tool_and_web_isolation() -> None:
+    model = "grok-test"
+    session_id = "3e04bf5b-4e1c-4f26-8e1e-2f17c5f6d9cf"
+    common = (
+        "grok",
+        "--prompt-file",
+        "<songmaker-private-prompt>",
+        "--output-format",
+        "streaming-json",
+        "--deny",
+        "*",
+        "--max-turns",
+        "1",
+        "--no-subagents",
+        "--disable-web-search",
+        "--model",
+        model,
+    )
+
+    assert grok_cli_adapter._build_grok_cli_tool_command(model) == common
+    assert grok_cli_adapter._build_grok_cli_tool_command(model, session_id) == (
+        *common,
+        "--resume",
+        session_id,
+    )
+
+
 def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypatch) -> None:
     calls = []
     rounds = iter([_tool_round_lines(_tool_call_text()), _tool_round_lines("done")])
@@ -224,11 +251,12 @@ def test_grok_tool_transport_rejects_a_multi_result_batch(monkeypatch) -> None:
 
     async def reject_batch() -> None:
         assert [item async for item in transport.stream(InitialTurn("system", []))]
+        batch = ToolResultBatch((
+            ToolResult("one", "1", False),
+            ToolResult("two", "2", False),
+        ))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(ToolResultBatch((
-                ToolResult("one", "1", False),
-                ToolResult("two", "2", False),
-            ))):
+            async for _ in transport.stream(batch):
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
         await transport.aclose()
@@ -257,8 +285,9 @@ def test_grok_tool_transport_rejects_missing_or_invalid_session_id(
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
     async def collect() -> None:
+        turn = transport.stream(InitialTurn("system", []))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(InitialTurn("system", [])):
+            async for _ in turn:
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
         await transport.aclose()
@@ -434,10 +463,9 @@ def test_grok_tool_transport_rejects_a_changed_resume_session_id(monkeypatch) ->
             grok_cli_adapter.TextDelta("first"),
             grok_cli_adapter.FinalText(""),
         ]
+        batch = ToolResultBatch((ToolResult("one", "1", False),))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(ToolResultBatch((
-                ToolResult("one", "1", False),
-            ))):
+            async for _ in transport.stream(batch):
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
         await transport.aclose()

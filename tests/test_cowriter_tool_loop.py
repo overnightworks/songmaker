@@ -118,8 +118,9 @@ def test_rejects_a_ninth_tool_round_without_executing_it(monkeypatch) -> None:
         executed = True
         return "unreachable", False
 
+    events = _events(transport, executor)
     with pytest.raises(ToolLoopLimitError):
-        asyncio.run(_events(transport, executor))
+        asyncio.run(events)
 
     assert not executed
     assert transport.closed

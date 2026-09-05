@@ -70,6 +70,14 @@ class ResourceEventPage:
     events: tuple[GenerationCreatedResourceEvent, ...]
 
 
+@dataclass
+class ResourceEventStreamState:
+    cursor: int
+    replay_through: int | None
+    resync_sent: bool
+    last_emit: float
+
+
 def parse_last_event_id(raw: str | None) -> int | None:
     """Parse the browser cursor without overflowing PostgreSQL BIGINT."""
     if raw is None or raw == "":
@@ -166,89 +174,172 @@ async def _resource_event_generator(
     oldest_retained: int | None,
 ) -> AsyncGenerator[str, None]:
     deadline = monotonic() + RESOURCE_EVENT_STREAM_CONNECTION_SECONDS
-    fresh = last_event_id is None
-    yield format_sse(
-        "hello",
-        ResourceHelloEvent.from_high_water_mark(high_water_mark),
-        event_id=high_water_mark if fresh else last_event_id,
+    state, hello, initial_resync = _initialize_resource_stream(
+        last_event_id,
+        high_water_mark,
+        oldest_retained,
+        deadline,
     )
-
-    cursor = high_water_mark if last_event_id is None else last_event_id
-    replay_through = None if fresh else high_water_mark
-    resync_sent = False
-    last_emit = monotonic()
-
-    if not fresh and has_replay_gap(cursor, high_water_mark, oldest_retained):
-        if monotonic() >= deadline:
-            return
-        yield format_sse(
-            "resync",
-            ResourceResyncEvent.from_high_water_mark(high_water_mark),
-            event_id=high_water_mark,
-        )
-        cursor = high_water_mark
-        replay_through = None
-        resync_sent = True
-        last_emit = monotonic()
+    yield hello
+    if initial_resync is not None:
+        yield initial_resync
 
     while monotonic() < deadline:
         page = await _read_event_page_before(
             ctx,
             user_id,
-            cursor,
-            replay_through,
+            state.cursor,
+            state.replay_through,
             deadline,
         )
         if page is None:
             return
 
-        target_high = replay_through if replay_through is not None else page.high_water_mark
-        gap_found = cursor < target_high and (
-            not page.events or not _is_contiguous(page.events, cursor)
-        )
-        if gap_found:
-            if resync_sent or monotonic() >= deadline:
-                return
-            yield format_sse(
-                "resync",
-                ResourceResyncEvent.from_high_water_mark(target_high),
-                event_id=target_high,
+        result = _resource_page_frames(state, page, deadline)
+        if result is None:
+            return
+        frames, wait_for_poll = result
+        for frame in frames:
+            yield frame
+        if wait_for_poll and not await _wait_for_next_resource_poll(deadline):
+            return
+
+
+def _initialize_resource_stream(
+    last_event_id: int | None,
+    high_water_mark: int,
+    oldest_retained: int | None,
+    deadline: float,
+) -> tuple[ResourceEventStreamState, str, str | None]:
+    fresh = last_event_id is None
+    cursor = high_water_mark if fresh else last_event_id
+    state = ResourceEventStreamState(
+        cursor=cursor,
+        replay_through=None if fresh else high_water_mark,
+        resync_sent=False,
+        last_emit=monotonic(),
+    )
+    hello = format_sse(
+        "hello",
+        ResourceHelloEvent.from_high_water_mark(high_water_mark),
+        event_id=cursor,
+    )
+    if fresh or not has_replay_gap(cursor, high_water_mark, oldest_retained):
+        return state, hello, None
+    resync = _resync_resource_stream(state, high_water_mark, deadline)
+    return state, hello, resync
+
+
+def _resource_target_high(state: ResourceEventStreamState, page: ResourceEventPage) -> int:
+    return state.replay_through if state.replay_through is not None else page.high_water_mark
+
+
+def _resource_page_has_gap(
+    state: ResourceEventStreamState,
+    page: ResourceEventPage,
+    target_high: int,
+) -> bool:
+    return state.cursor < target_high and (
+        not page.events or not _is_contiguous(page.events, state.cursor)
+    )
+
+
+def _resource_page_frames(
+    state: ResourceEventStreamState,
+    page: ResourceEventPage,
+    deadline: float,
+) -> tuple[tuple[str, ...], bool] | None:
+    target_high = _resource_target_high(state, page)
+    if _resource_page_has_gap(state, page, target_high):
+        return _resource_gap_frame(state, target_high, deadline)
+    if page.events:
+        return _resource_event_frames(state, page.events, deadline)
+    return _resource_idle_frames(state, deadline)
+
+
+def _resource_gap_frame(
+    state: ResourceEventStreamState,
+    target_high: int,
+    deadline: float,
+) -> tuple[tuple[str, ...], bool] | None:
+    resync = _resync_resource_stream(state, target_high, deadline)
+    if resync is None:
+        return None
+    return (resync,), False
+
+
+def _resource_event_frames(
+    state: ResourceEventStreamState,
+    events: tuple[GenerationCreatedResourceEvent, ...],
+    deadline: float,
+) -> tuple[tuple[str, ...], bool] | None:
+    frames: list[str] = []
+    for event in events:
+        if monotonic() >= deadline:
+            return None
+        state.cursor = int(event.sequence)
+        state.last_emit = monotonic()
+        frames.append(
+            format_sse(
+                ResourceEventKind.GENERATION_CREATED,
+                event,
+                event_id=state.cursor,
             )
-            cursor = target_high
-            replay_through = None
-            resync_sent = True
-            last_emit = monotonic()
-            continue
+        )
+    _finish_replay(state)
+    return tuple(frames), False
 
-        if page.events:
-            for event in page.events:
-                if monotonic() >= deadline:
-                    return
-                yield format_sse(
-                    ResourceEventKind.GENERATION_CREATED,
-                    event,
-                    event_id=int(event.sequence),
-                )
-                cursor = int(event.sequence)
-                last_emit = monotonic()
-            if replay_through is not None and cursor >= replay_through:
-                replay_through = None
-            continue
 
-        if replay_through is not None:
-            replay_through = None
+def _resource_idle_frames(
+    state: ResourceEventStreamState,
+    deadline: float,
+) -> tuple[tuple[str, ...], bool] | None:
+    _finish_replay(state)
+    heartbeat = _resource_heartbeat(state, deadline)
+    if heartbeat is False:
+        return None
+    return ((SSE_HEARTBEAT_COMMENT,) if heartbeat else ()), True
 
-        now = monotonic()
-        if now >= deadline:
-            return
-        if now - last_emit >= SSE_HEARTBEAT_SECONDS:
-            yield SSE_HEARTBEAT_COMMENT
-            last_emit = monotonic()
 
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            return
-        await asyncio.sleep(min(RESOURCE_EVENT_STREAM_POLL_SECONDS, remaining))
+def _resync_resource_stream(
+    state: ResourceEventStreamState,
+    target_high: int,
+    deadline: float,
+) -> str | None:
+    if state.resync_sent or monotonic() >= deadline:
+        return None
+    state.cursor = target_high
+    state.replay_through = None
+    state.resync_sent = True
+    state.last_emit = monotonic()
+    return format_sse(
+        "resync",
+        ResourceResyncEvent.from_high_water_mark(target_high),
+        event_id=target_high,
+    )
+
+
+def _finish_replay(state: ResourceEventStreamState) -> None:
+    if state.replay_through is not None and state.cursor >= state.replay_through:
+        state.replay_through = None
+
+
+def _resource_heartbeat(state: ResourceEventStreamState, deadline: float) -> bool | str:
+    now = monotonic()
+    if now >= deadline:
+        return False
+    if now - state.last_emit < SSE_HEARTBEAT_SECONDS:
+        return ""
+    state.last_emit = now
+    return SSE_HEARTBEAT_COMMENT
+
+
+async def _wait_for_next_resource_poll(deadline: float) -> bool:
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        return False
+    await asyncio.sleep(min(RESOURCE_EVENT_STREAM_POLL_SECONDS, remaining))
+    return True
 
 
 # The resource-event SSE stream fails closed: it holds a DB connection for
@@ -269,6 +360,7 @@ def _get_open_limiter(request: Request) -> RedisRateLimiter:
             settings.resource_event_stream_open_limit,
             RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
         )
+
     return get_cached_limiter(request, "_resource_stream_open_limiter", _build)
 
 
@@ -289,6 +381,7 @@ def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
             max_global=global_limit,
             lease_seconds=RESOURCE_EVENT_STREAM_LEASE_SECONDS,
         )
+
     return get_cached_limiter(request, "_resource_stream_lease_limiter", _build)
 
 

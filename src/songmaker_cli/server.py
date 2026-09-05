@@ -193,35 +193,7 @@ def create_app(
     )
 
     if ctx is None:
-        from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
-        from songmaker_cli.db.engine import init_db
-
-        settings = get_settings()
-        db_factory = init_db(settings.database_url)
-        secret = ensure_session_secret(data_dir)
-        hosts_exact, hosts_patterns = parse_allowed_hosts()
-
-        redis_url = settings.redis_url
-        from songmaker_cli.redis_client import create_redis
-        redis_instance = create_redis(redis_url)
-
-        from songmaker_cli.constants import REDIS_STARTUP_ERROR
-        from songmaker_cli.redis_client import redis_health
-        if not redis_health(redis_instance):
-            redis_instance.close()
-            raise RuntimeError(REDIS_STARTUP_ERROR.format(url=redis_url.split("@")[-1]))
-        log.info("Redis connected: %s", redis_url.split("@")[-1])
-
-        ctx = AppContext(
-            db=db_factory,
-            audio_dir=audio_dir,
-            data_dir=data_dir,
-            session_secret=secret.encode(),
-            redis=redis_instance,
-            trusted_proxies=parse_trusted_proxies(),
-            allowed_hosts_exact=hosts_exact,
-            allowed_hosts_patterns=hosts_patterns,
-        )
+        ctx = _create_default_context(audio_dir, data_dir)
 
     app.state.ctx = ctx
     from songmaker_cli.redis_client import RedisHttpMetrics, SessionCache
@@ -265,28 +237,10 @@ def create_app(
     app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
 
-    cors_origin = get_settings().cors_origin
-    cors_kwargs: dict = {
-        "allow_methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
-        "allow_credentials": True,
-    }
-    if cors_origin and "*" in cors_origin:
-        if not re.match(
-            r"^\*\.[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$",
-            cors_origin,
-        ):
-            raise ValueError(
-                f"Invalid CORS_ORIGIN wildcard: {cors_origin!r}. "
-                "Must be *.domain.tld (e.g., *.example.com, *.trycloudflare.com)"
-            )
-        suffix = re.escape(cors_origin[2:])
-        cors_kwargs["allow_origin_regex"] = rf"^https?://[^:/]+\.{suffix}$"
-    elif cors_origin:
-        cors_kwargs["allow_origins"] = [cors_origin]
-    else:
-        cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
-    app.add_middleware(CORSMiddleware, **cors_kwargs)
+    app.add_middleware(  # NOSONAR: CORS order is security-critical; see block above.
+        CORSMiddleware,
+        **_cors_middleware_kwargs(get_settings().cors_origin),
+    )
     app.add_middleware(
         SelectiveGZipMiddleware,
         minimum_size=GZIP_MINIMUM_SIZE_BYTES,
@@ -382,6 +336,55 @@ def create_app(
         return JSONResponse({"detail": detail}, status_code=404)
 
     return app
+
+
+def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
+    from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
+    from songmaker_cli.constants import REDIS_STARTUP_ERROR
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.redis_client import create_redis, redis_health
+
+    settings = get_settings()
+    redis_instance = create_redis(settings.redis_url)
+    if not redis_health(redis_instance):
+        redis_instance.close()
+        raise RuntimeError(REDIS_STARTUP_ERROR.format(url=settings.redis_url.split("@")[-1]))
+    hosts_exact, hosts_patterns = parse_allowed_hosts()
+    log.info("Redis connected: %s", settings.redis_url.split("@")[-1])
+    return AppContext(
+        db=init_db(settings.database_url),
+        audio_dir=audio_dir,
+        data_dir=data_dir,
+        session_secret=ensure_session_secret(data_dir).encode(),
+        redis=redis_instance,
+        trusted_proxies=parse_trusted_proxies(),
+        allowed_hosts_exact=hosts_exact,
+        allowed_hosts_patterns=hosts_patterns,
+    )
+
+
+def _cors_middleware_kwargs(cors_origin: str | None) -> dict:
+    cors_kwargs: dict = {
+        "allow_methods": ["GET", "POST", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
+        "allow_credentials": True,
+    }
+    if cors_origin and "*" in cors_origin:
+        if not re.match(
+            r"^\*\.[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$",
+            cors_origin,
+        ):
+            raise ValueError(
+                f"Invalid CORS_ORIGIN wildcard: {cors_origin!r}. "
+                "Must be *.domain.tld (e.g., *.example.com, *.trycloudflare.com)"
+            )
+        suffix = re.escape(cors_origin[2:])
+        cors_kwargs["allow_origin_regex"] = rf"^https?://[^:/]+\.{suffix}$"
+    elif cors_origin:
+        cors_kwargs["allow_origins"] = [cors_origin]
+    else:
+        cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
+    return cors_kwargs
 
 
 def run_server(
