@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
-    STALE_JOB_THRESHOLDS,
     JobStaleThresholds,
     JobStatus,
     JobType,
+    stale_job_thresholds,
 )
 from songmaker_cli.db.models import Job
 from songmaker_cli.settings import get_settings
@@ -420,10 +420,11 @@ def recover_stale_jobs_by_age_and_type(
     if user_id is not None:
         query = query.filter(Job.user_id == user_id)
     candidates = query.all()
+    thresholds_by_type = stale_job_thresholds(get_settings().cover_executor)
     candidates_with_thresholds: list[tuple[Job, JobStaleThresholds]] = []
     for job in candidates:
         try:
-            thresholds = STALE_JOB_THRESHOLDS[JobType(job.type)]
+            thresholds = thresholds_by_type[JobType(job.type)]
         except (KeyError, ValueError) as exc:
             raise RuntimeError(
                 f"Active job {job.id} has no stale-job threshold for type {job.type!r}",

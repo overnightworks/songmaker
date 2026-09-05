@@ -17,6 +17,7 @@ from songmaker_cli.constants import (
     ARQ_SCORING_HEALTH_KEY,
     REDIS_KEY_PREFIX,
     WORKER_LAST_ALIVE_TTL_SECONDS,
+    CoverExecutor,
     JobType,
     WorkerLivenessSignal,
     worker_restart_grace_seconds,
@@ -143,6 +144,8 @@ def read_worker_liveness(
     now: datetime | None = None,
 ) -> dict[JobType, WorkerLiveness]:
     """Read each execution signal without taking ownership of database access."""
+    from songmaker_cli.settings import get_settings
+
     observed_at = _as_utc(now or datetime.now(timezone.utc))
     return worker_liveness_by_job_type(
         acestep=acestep_worker_liveness(redis, acestep_worker_ids, now=observed_at),
@@ -156,6 +159,7 @@ def read_worker_liveness(
             signal=WorkerLivenessSignal.SCORING,
             now=observed_at,
         ),
+        cover_executor=get_settings().cover_executor,
     )
 
 
@@ -164,11 +168,14 @@ def worker_liveness_by_job_type(
     acestep: WorkerLiveness,
     music: WorkerLiveness,
     scoring: WorkerLiveness,
+    cover_executor: CoverExecutor = CoverExecutor.MUSIC,
 ) -> dict[JobType, WorkerLiveness]:
-    """Return each job's execution signal; either dead model worker is decisive."""
+    """Return each job's execution signal for its configured execution owner."""
     model_execution = _model_execution_liveness(acestep, music)
     return {
-        JobType.COVER: music,
+        JobType.COVER: (
+            music if cover_executor is CoverExecutor.MUSIC else WorkerLiveness.UNKNOWN
+        ),
         JobType.GENERATE: model_execution,
         JobType.LOAD_MODEL_ON_WORKER: model_execution,
         JobType.DOWNLOAD_MODEL_ON_WORKER: model_execution,
