@@ -539,7 +539,7 @@ describe('resource sync owner', () => {
 		const maxInFlight: number[] = [];
 		const responses = new Map<string, ReturnType<typeof deferred<SongItem>>>();
 		const { controller, sources, upserted } = setup({
-			listLoadedSongIds: () => ids,
+			listPrioritySongIds: () => ids,
 			fetchSong: (songId) => {
 				inFlight.add(songId);
 				maxInFlight.push(inFlight.size);
@@ -553,24 +553,28 @@ describe('resource sync owner', () => {
 		await flush();
 		await controller.waitForReady();
 
-		const refreshes = ids.map((songId) => controller.requestSongRefresh(songId));
-		await vi.waitFor(() => expect(responses.size).toBe(1));
-		for (const [songId, response] of responses) {
+		const refresh = controller.handleVisibility();
+		await vi.waitFor(() => expect(responses.size).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY));
+		expect(inFlight.size).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY);
+		for (const songId of inFlight) {
+			const response = responses.get(songId);
+			if (!response) throw new Error(`Missing response for ${songId}`);
 			response.resolve(
 				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
 			);
 		}
 		await vi.waitFor(() => expect(responses.size).toBe(ids.length));
-		for (const [songId, response] of responses) {
-			if (inFlight.has(songId)) {
-				response.resolve(
-					song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
-				);
-			}
+		for (const songId of inFlight) {
+			const response = responses.get(songId);
+			if (!response) throw new Error(`Missing response for ${songId}`);
+			response.resolve(
+				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+			);
 		}
-		await Promise.all(refreshes);
+		await refresh;
 
 		expect(Math.max(...maxInFlight)).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY);
+		expect(upserted).toHaveLength(ids.length);
 		expect(upserted.map((item) => item.id)).toEqual(expect.arrayContaining(ids));
 	});
 
