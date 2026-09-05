@@ -59,6 +59,7 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
+import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
 
@@ -163,6 +164,12 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 }
 
 describe('PlaylistDetailView header', () => {
+	it('keeps the cover file input out of the visible layout', () => {
+		expect(playlistDetailViewSource).toMatch(
+			/\.cover-file-input\s*\{\s*position:\s*absolute;\s*width:\s*1px;\s*height:\s*1px;\s*overflow:\s*hidden;\s*clip:\s*rect\(0 0 0 0\);\s*white-space:\s*nowrap;/
+		);
+	});
+
 	it('uploads and removes a playlist cover through the shared header actions', async () => {
 		const customCover = {
 			card: '/api/playlists/p1/cover?variant=card&v=custom.png',

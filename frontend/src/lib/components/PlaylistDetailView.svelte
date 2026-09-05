@@ -535,6 +535,15 @@
 		min-height: 0;
 	}
 
+	.cover-file-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
 	.entry-list {
 		display: flex;
 		flex-direction: column;
