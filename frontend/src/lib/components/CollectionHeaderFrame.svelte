@@ -12,6 +12,7 @@
 		onplay: () => void;
 		titleArea: Snippet;
 		actions?: Snippet;
+		coverFallback?: Snippet;
 	}
 
 	let {
@@ -23,7 +24,8 @@
 		artFill,
 		onplay,
 		titleArea,
-		actions
+		actions,
+		coverFallback
 	}: Props = $props();
 </script>
 
@@ -31,6 +33,8 @@
 	<span class="header-cover">
 		{#if showCover && coverUrl}
 			<img src={coverUrl} alt={coverAlt} onerror={onCoverError} />
+		{:else if coverFallback}
+			{@render coverFallback()}
 		{:else if artFill}
 			<span class="header-cover-fallback" style:background={artFill} aria-hidden="true"></span>
 		{:else}

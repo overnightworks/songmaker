@@ -10,7 +10,9 @@ import {
 	addSongToPlaylist as apiAddSong,
 	addAlbumToPlaylist as apiAddAlbum,
 	removeFromPlaylist as apiRemoveEntry,
-	reorderPlaylistEntry as apiReorder
+	reorderPlaylistEntry as apiReorder,
+	uploadPlaylistCover as apiUploadPlaylistCover,
+	deletePlaylistCover as apiDeletePlaylistCover
 } from '$lib/api/client';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
@@ -248,6 +250,16 @@ export async function deletePlaylist(id: string): Promise<void> {
 	if (get(selectedPlaylistId) === id) {
 		deselectPlaylist();
 	}
+}
+
+export async function uploadPlaylistCover(playlistId: string, file: File): Promise<void> {
+	const updated = await apiUploadPlaylistCover(playlistId, file);
+	updatePlaylistInList(playlistId, () => updated);
+}
+
+export async function deletePlaylistCover(playlistId: string): Promise<void> {
+	const updated = await apiDeletePlaylistCover(playlistId);
+	updatePlaylistInList(playlistId, () => updated);
 }
 
 export async function addGenerationToPlaylist(playlistId: string, genId: string): Promise<void> {

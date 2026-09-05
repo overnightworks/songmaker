@@ -4,8 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
 import {
+	COLLECTION_MENU_COVER_REMOVE_LABEL,
+	COLLECTION_MENU_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
+	RAIL_LIBRARY_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_PLAYLISTS_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL
@@ -144,10 +147,95 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
-		expect(railCoverRequests).toBe(0);
 		await expect(row.locator('.playlist-cover-initials')).toHaveCount(3);
 		await row.getByRole('button', { name: new RegExp(`^${playlistTitle}`) }).click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
+
+		await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: 'Upload…', exact: true }).click();
+		await page.locator('.cover-file-input').setInputFiles({
+			name: 'playlist-cover.png',
+			mimeType: 'image/png',
+			buffer: COVER_PNG
+		});
+		const headerCover = page.locator('.collection-header .header-cover img');
+		await expect(headerCover).toHaveAttribute(
+			'src',
+			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=detail`)
+		);
+
+		await page
+			.locator('.collection-header')
+			.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true })
+			.click();
+		await expect(wallPlaylistTile.locator('.tile-cover img')).toHaveAttribute(
+			'src',
+			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
+		);
+		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		const refreshedRail = isMobile
+			? page
+					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
+					.getByRole('navigation', { name: RAIL_NAV_LABEL })
+			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const refreshedPlaylistsGroup = refreshedRail.getByRole('button', {
+			name: RAIL_PLAYLISTS_LABEL,
+			exact: true
+		});
+		if ((await refreshedPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
+			await refreshedPlaylistsGroup.click();
+		}
+		const refreshedRow = refreshedRail
+			.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+			.getByRole('listitem')
+			.filter({ hasText: playlistTitle });
+		await expect(refreshedRow.locator('.playlist-cover-image')).toHaveAttribute(
+			'src',
+			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
+		);
+		const [railCoverBox, playlistCoverBox] = await Promise.all([
+			refreshedRow.locator('.playlist-cover').boundingBox(),
+			refreshedRow.locator('.playlist-cover-image').boundingBox()
+		]);
+		expect(playlistCoverBox).toEqual(railCoverBox);
+		if (isMobile) {
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+		}
+
+		await wallPlaylistTile.click();
+		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
+		await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await page
+			.getByRole('button', { name: COLLECTION_MENU_COVER_REMOVE_LABEL, exact: true })
+			.click();
+		await expect(page.locator('.collection-header .header-cover .playlist-cover-cell')).toHaveCount(
+			4
+		);
+
+		await page
+			.locator('.collection-header')
+			.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true })
+			.click();
+		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
+		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		const restoredRail = isMobile
+			? page
+					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
+					.getByRole('navigation', { name: RAIL_NAV_LABEL })
+			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const restoredPlaylistsGroup = restoredRail.getByRole('button', {
+			name: RAIL_PLAYLISTS_LABEL,
+			exact: true
+		});
+		if ((await restoredPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
+			await restoredPlaylistsGroup.click();
+		}
+		const restoredRow = restoredRail
+			.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+			.getByRole('listitem')
+			.filter({ hasText: playlistTitle });
+		await expect(restoredRow.locator('.playlist-cover-cell')).toHaveCount(4);
 	} finally {
 		try {
 			if (playlist) await deleteOwnedPlaylist(page, playlist.id);
