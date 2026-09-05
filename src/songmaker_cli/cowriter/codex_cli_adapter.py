@@ -394,7 +394,6 @@ def generate_codex_cover_image(
         _validate_codex_image_events(
             outcome.stdout,
             codex_home=codex_home,
-            work_dir=work_dir,
         )
         artifact = _find_only_generated_png(codex_home)
         return _normalize_generated_png(artifact)
@@ -410,7 +409,7 @@ def _run_codex_image_cli(
 ) -> CliRunOutcome:
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
-    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    event_gate = _CodexImageEventGate(codex_home=codex_home)
     reservation = get_codex_process_pool().reserve(CodexProcessKind.COVER)
 
     def run() -> None:
@@ -578,11 +577,9 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
         raise CodexImageCliError()
 
 
-def _validate_codex_image_events(
-    output: str, *, codex_home: Path, work_dir: Path,
-) -> None:
+def _validate_codex_image_events(output: str, *, codex_home: Path) -> None:
     """Accept only image generation and its measured read-only bootstrap pair."""
-    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    event_gate = _CodexImageEventGate(codex_home=codex_home)
     for line in output.splitlines():
         event_gate.accept(line.encode("utf-8"))
     event_gate.finish()
@@ -593,7 +590,6 @@ class _CodexImageEventGate:
     """Validate one image-run transcript, whether streamed or complete."""
 
     codex_home: Path
-    work_dir: Path
     saw_completed_turn: bool = False
     completed_error_item_message: str | None = None
     command_id: str | None = None
@@ -625,7 +621,6 @@ class _CodexImageEventGate:
                     command_id=self.command_id,
                     saw_completed_command=self.saw_completed_command,
                     expected_command=_expected_image_skill_command(self.codex_home),
-                    expected_cwd=str(self.work_dir.resolve()),
                 )
                 return
             if item_type in _BLOCKED_ITEM_TYPES:
@@ -662,13 +657,12 @@ def _validate_image_skill_command(
     command_id: str | None,
     saw_completed_command: bool,
     expected_command: str,
-    expected_cwd: str,
 ) -> tuple[str, bool]:
     item = _item(event)
     item_id = item.get("id")
     if not isinstance(item_id, str) or item.get("command") != expected_command:
         raise ImageToolBlockedError()
-    if item.get("cwd") != expected_cwd:
+    if item.get("cwd") is not None:
         raise ImageToolBlockedError()
     if event_type == "item.started":
         if (
