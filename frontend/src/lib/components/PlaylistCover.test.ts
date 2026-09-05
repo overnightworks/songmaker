@@ -29,6 +29,25 @@ async function render(coverCount: number): Promise<HTMLElement> {
 }
 
 describe('PlaylistCover', () => {
+	it('uses a playlist cover instead of its album mosaic', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(PlaylistCover, {
+			target,
+			props: {
+				title: 'Night Drive',
+				covers: [{ card: '/covers/album.jpg', detail: '/covers/album-detail.jpg' }],
+				cover: { card: '/covers/playlist.jpg', detail: '/covers/playlist-detail.jpg' }
+			}
+		});
+		await tick();
+
+		expect(target.querySelector('.playlist-cover-image')?.getAttribute('src')).toBe(
+			'/covers/playlist.jpg'
+		);
+		expect(target.querySelectorAll('.playlist-cover-cell')).toHaveLength(0);
+	});
+
 	it.each([
 		{ coverCount: 4, expectedImages: 4, expectedInitials: 0 },
 		{ coverCount: 2, expectedImages: 2, expectedInitials: 2 },

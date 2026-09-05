@@ -198,7 +198,7 @@ def api_get_playlist_cover(
     )
 
 
-@router.post(
+@router.put(
     "/playlists/{playlist_id}/cover",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
