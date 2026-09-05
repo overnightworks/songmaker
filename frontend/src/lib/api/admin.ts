@@ -4,6 +4,7 @@ import type {
 	PaginatedResponse,
 	RegistryResponse,
 	SessionItem,
+	AdminUserLoraItem,
 	UserItem,
 	WorkerPoolResponse
 } from './types';
@@ -11,6 +12,10 @@ import { apiFetch } from './fetch';
 
 export async function fetchUsers(): Promise<UserItem[]> {
 	return apiFetch<UserItem[]>('/api/admin/users');
+}
+
+export async function fetchAdminVoices(): Promise<AdminUserLoraItem[]> {
+	return apiFetch<AdminUserLoraItem[]>('/api/admin/voices');
 }
 
 export async function createUser(

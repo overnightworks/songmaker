@@ -225,6 +225,14 @@ describe('loadPlaylists', () => {
 		expect(get(playlistLoad).status).toBe('ready');
 	});
 
+	it('dedupes concurrent playlist-list loads', async () => {
+		vi.mocked(fetchPlaylists).mockResolvedValueOnce([]);
+
+		await Promise.all([loadPlaylists(), loadPlaylists()]);
+
+		expect(fetchPlaylists).toHaveBeenCalledTimes(1);
+	});
+
 	it('uses the named load error when the failure is not an Error', async () => {
 		vi.mocked(fetchPlaylists).mockRejectedValueOnce('nope');
 		await loadPlaylists();

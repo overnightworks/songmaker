@@ -514,7 +514,7 @@ export class ResourceSyncController {
 
 	private async flushPending(epoch: number, force = false): Promise<void> {
 		if (!force && !this.canFlush()) return;
-		if (this.flushing) {
+		if (this.flushing !== null) {
 			await this.flushing;
 			if (!this.isCurrentEpoch(epoch) || this.pendingSongIds.size === 0) return;
 		}

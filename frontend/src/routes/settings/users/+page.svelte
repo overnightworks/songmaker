@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import {
 		fetchUsers,
+		fetchAdminVoices,
 		ApiError,
 		createUser,
 		updateUser,
@@ -20,7 +21,8 @@
 		SessionItem,
 		LoginAttemptItem,
 		RateLimitItem,
-		UserRateLimitsResponse
+		UserRateLimitsResponse,
+		AdminUserLoraItem
 	} from '$lib/api/types';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
 	import { loadBuiltins, builtinDefaults } from '$lib/stores/presets';
@@ -50,6 +52,14 @@
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import {
 		ADMIN_TABS_LABEL,
+		ADMIN_VOICES_EMPTY,
+		ADMIN_VOICES_HEADING,
+		ADMIN_VOICES_LOAD_FAILED,
+		ADMIN_VOICES_LOADING,
+		ADMIN_VOICES_NAME_LABEL,
+		ADMIN_VOICES_OWNER_LABEL,
+		ADMIN_VOICES_STATUS_LABEL,
+		ADMIN_VOICES_TAB_LABEL,
 		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
 		PROVIDER_CONFIGURED_LABEL,
@@ -102,11 +112,15 @@
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
 	let attempts = $state<LoginAttemptItem[]>([]);
+	let voices = $state<AdminUserLoraItem[]>([]);
+	let loadingVoices = $state(false);
+	let voicesLoadError = $state('');
 	let error = $state('');
 	let compact = $state(false);
 
 	const ADMIN_TABS = [
 		{ id: 'users', label: 'Users' },
+		{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },
 		{ id: 'sessions', label: 'Sessions' },
 		{ id: 'attempts', label: 'Login Attempts' },
 		{ id: 'ratelimits', label: 'Rate Limits' },
@@ -135,6 +149,8 @@
 		tab = next;
 		if (next === 'ratelimits') {
 			void loadGlobalLimits();
+		} else if (next === 'voices') {
+			void loadVoices();
 		} else if (next === 'generation' || next === 'acestep') {
 			void loadGenDefaults();
 		} else if (next === 'models') {
@@ -220,6 +236,18 @@
 			attempts = a.items;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
+		}
+	}
+
+	async function loadVoices() {
+		loadingVoices = true;
+		voicesLoadError = '';
+		try {
+			voices = await fetchAdminVoices();
+		} catch (e) {
+			voicesLoadError = e instanceof Error ? e.message : ADMIN_VOICES_LOAD_FAILED;
+		} finally {
+			loadingVoices = false;
 		}
 	}
 
@@ -995,6 +1023,52 @@
 			</section>
 		{/if}
 
+		{#if tab === 'voices'}
+			<section>
+				<h2>{ADMIN_VOICES_HEADING}</h2>
+				{#if loadingVoices}
+					<p class="text-muted">{ADMIN_VOICES_LOADING}</p>
+				{:else if voicesLoadError}
+					<p class="error">{voicesLoadError}</p>
+				{:else if voices.length === 0}
+					<p class="text-muted">{ADMIN_VOICES_EMPTY}</p>
+				{:else}
+					<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
+						<thead>
+							<tr>
+								<th>{ADMIN_VOICES_NAME_LABEL}</th>
+								<th>{ADMIN_VOICES_OWNER_LABEL}</th>
+								<th>{ADMIN_VOICES_STATUS_LABEL}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each voices as voice (voice.id)}
+								<tr>
+									<td data-label={ADMIN_VOICES_NAME_LABEL}>{voice.name}</td>
+									<td data-label={ADMIN_VOICES_OWNER_LABEL}>{voice.owner_username}</td>
+									<td data-label={ADMIN_VOICES_STATUS_LABEL}>
+										<span
+											class="badge voice-status"
+											class:voice-status-ready={voice.status === 'ready'}
+											class:voice-status-active={[
+												'queued',
+												'preprocessing',
+												'training',
+												'exporting'
+											].includes(voice.status)}
+											class:voice-status-failed={voice.status === 'failed'}
+										>
+											{voice.status}
+										</span>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/if}
+			</section>
+		{/if}
+
 		{#if tab === 'sessions'}
 			<section>
 				<h2>Active Sessions</h2>
@@ -1751,6 +1825,25 @@
 		border-radius: 3px;
 		font-size: 0.75rem;
 		background: var(--surface-hover);
+	}
+
+	.voice-status {
+		font-weight: 600;
+	}
+
+	.voice-status-ready {
+		background: var(--score-good);
+		color: var(--bg);
+	}
+
+	.voice-status-active {
+		background: var(--score-warn);
+		color: var(--bg);
+	}
+
+	.voice-status-failed {
+		background: var(--score-bad);
+		color: white;
 	}
 
 	.admin-badge {
