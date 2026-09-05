@@ -36,6 +36,10 @@ services:
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "200"
     ports: !override
       - "${WEB_PORT:-8080}:8080"
+    # The isolated CI stack does not load the host profile; the cover-proof
+    # path ends here explicitly, while production keeps songmaker-web.
+    security_opt: !override
+      - apparmor=docker-default
     # !override drops the host Claude-CLI bind mounts — CI has no host
     # Claude credentials and must not depend on the operator's machine.
     volumes: !override

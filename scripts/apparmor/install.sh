@@ -32,4 +32,4 @@ if ! aa-status | grep --fixed-strings --quiet "${profile_name}"; then
   exit 1
 fi
 
-printf 'Loaded AppArmor profile %s. Next: docker compose up -d songmaker-web\n' "${profile_name}"
+printf 'Loaded AppArmor profile %s. Run this before rollout: songmaker-web will not start without it. Next: docker compose up -d songmaker-web\n' "${profile_name}"
