@@ -7,8 +7,10 @@ test('the desktop rail remembers its 52-px icon column while the 375 px drawer s
 }) => {
 	await page.setViewportSize(isMobile ? { width: 375, height: 812 } : { width: 1440, height: 900 });
 	await page.addInitScript((mobile) => {
+		if (sessionStorage.getItem('railCollapsePreferenceReset') === 'true') return;
 		if (mobile) localStorage.setItem('songmaker.rail-collapsed', 'true');
 		else localStorage.removeItem('songmaker.rail-collapsed');
+		sessionStorage.setItem('railCollapsePreferenceReset', 'true');
 	}, Boolean(isMobile));
 	await page.goto('/');
 
