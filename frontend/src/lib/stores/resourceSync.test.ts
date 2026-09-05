@@ -27,6 +27,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { ApiError } from '$lib/api/fetch';
 import { classifyAuthFailure, clearAuth, currentUser } from '$lib/stores/auth';
+import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
 import type {
 	AuthUser,
@@ -293,6 +294,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetResourceSyncForTests();
+	selectedSongId.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 });
@@ -1185,6 +1187,50 @@ describe('probeResourceAuth', () => {
 });
 
 describe('library resource sync wiring', () => {
+	it.each([
+		['the selected song', 'selected-song', ['/api/songs/selected-song']],
+		['no selected song', null, []]
+	] as const)(
+		'revalidates %s through the library owner on visibility',
+		async (_caseName, songId, expected) => {
+			vi.useFakeTimers();
+			const requests: string[] = [];
+			vi.stubGlobal('EventSource', MockEventSource);
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: string) => {
+					const path = String(input);
+					requests.push(path);
+					if (path.startsWith('/api/albums?') || path.startsWith('/api/songs?')) {
+						return {
+							ok: true,
+							json: async () => ({ items: [], total: 0, offset: 0, limit: 0, has_more: false })
+						};
+					}
+					if (path === '/api/songs/selected-song') {
+						return { ok: true, json: async () => song({ id: 'selected-song' }) };
+					}
+					throw new Error(`Unexpected request: ${path}`);
+				})
+			);
+
+			startLibraryResourceSync();
+			MockEventSource.instances[0].emit('hello', { high_water_mark: '0' });
+			await flush();
+			expect(await waitForResourceReady()).toBe(true);
+			selectedSongId.set(songId);
+			await flush();
+			requests.splice(0);
+
+			Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+			document.dispatchEvent(new Event('visibilitychange'));
+			await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+			await flush();
+
+			expect(requests).toEqual(expected);
+		}
+	);
+
 	it('keeps wrapper calls inert until the library owner is started', async () => {
 		vi.stubGlobal('EventSource', MockEventSource);
 
