@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
@@ -26,6 +27,78 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 INITIAL_TRACK_NUMBER: Final[int] = 1
+CONTINUE_MAX_ITEMS: Final[int] = 6
+
+
+@dataclass(frozen=True)
+class ContinueCandidate:
+    """An owned song or album together with its Continue-row activity time."""
+
+    item: Album | Song
+    activity_at: datetime
+
+
+def list_continue_candidates(
+    session: Session,
+    *,
+    user_id: str,
+    limit: int = CONTINUE_MAX_ITEMS,
+) -> list[ContinueCandidate]:
+    """Return the user's newest song and album candidates for Continue.
+
+    Albums do not persist an ``updated_at`` column. Their activity is the
+    newest update among their live songs, falling back to ``created_at`` for
+    an empty album. Fetching the leading ``limit`` entries of each kind is
+    sufficient before merging: an entry behind that cutoff already has at
+    least ``limit`` entries of its own kind ahead of it.
+    """
+    songs = (
+        session.query(Song)
+        .options(joinedload(Song.album))
+        .join(Album)
+        .filter(
+            Album.created_by == user_id,
+            Album.is_archived.is_(False),
+        )
+        .order_by(Song.updated_at.desc(), Song.id.asc())
+        .limit(limit)
+        .all()
+    )
+    song_candidates = [
+        ContinueCandidate(item=song, activity_at=song.updated_at)
+        for song in songs
+    ]
+
+    album_activity = func.coalesce(func.max(Song.updated_at), Album.created_at)
+    album_rows = (
+        session.query(Album, album_activity.label("activity_at"))
+        .outerjoin(Song)
+        .filter(
+            Album.created_by == user_id,
+            Album.is_archived.is_(False),
+        )
+        .group_by(Album.id)
+        .order_by(album_activity.desc(), Album.id.asc())
+        .limit(limit)
+        .all()
+    )
+    album_candidates = [
+        ContinueCandidate(item=album, activity_at=activity_at)
+        for album, activity_at in album_rows
+    ]
+
+    return sorted(
+        [*song_candidates, *album_candidates],
+        key=_continue_sort_key,
+    )[:limit]
+
+
+def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
+    activity_at = candidate.activity_at
+    if activity_at.tzinfo is None:
+        activity_at = activity_at.replace(tzinfo=timezone.utc)
+    item_type = "album" if isinstance(candidate.item, Album) else "song"
+    return (-activity_at.timestamp(), item_type, candidate.item.id)
 
 
 def list_songs(
@@ -284,6 +357,8 @@ def update_song(
     song = get_song(session, song_id)
     if not song:
         raise ValueError(f"Song not found: {song_id}")
+
+    song.updated_at = datetime.now(timezone.utc)
 
     prev = song.latest_version
 

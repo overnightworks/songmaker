@@ -70,6 +70,15 @@ def test_cover_executor_defaults_to_music_and_rejects_unknown_values() -> None:
         Settings(**_required_settings(), cover_executor="unknown")
 
 
+def test_cover_executor_rejects_an_unknown_environment_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", "unknown")
+
+    with pytest.raises(ValidationError):
+        Settings(**_required_settings())
+
+
 def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
     with pytest.raises(ValidationError, match="Cover process cap"):
         Settings(

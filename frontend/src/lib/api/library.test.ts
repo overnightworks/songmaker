@@ -6,7 +6,7 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
-import { fetchLibraryPoolQueue, searchLibrary } from './library';
+import { fetchLibraryContinue, fetchLibraryPoolQueue, searchLibrary } from './library';
 
 function mockOk(data: unknown) {
 	mockFetch.mockResolvedValueOnce({
@@ -55,6 +55,19 @@ describe('searchLibrary', () => {
 			expect(resp.items[0].song).not.toHaveProperty('generations');
 			expect(resp.items[0].album_title).toBe('Nachtstrom');
 		}
+	});
+});
+
+describe('fetchLibraryContinue', () => {
+	it('calls GET /api/library/continue', async () => {
+		mockOk({ items: [] });
+
+		await fetchLibraryContinue();
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/library/continue',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 });
 
