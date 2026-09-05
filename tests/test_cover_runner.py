@@ -18,7 +18,7 @@ from songmaker_cli.cowriter.catalog import ProviderSetupMethod
 from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessPool
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, Job, Song, User, Version
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries import update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
 
@@ -129,6 +129,67 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
     assert winner is True
     assert loser is False
     assert not list(audio_dir.rglob(".*.staging"))
+
+
+def test_web_recovery_fails_interrupted_work_cleans_its_group_and_leaves_queue_for_runner(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    factory, audio_dir, running_job_id = _cover_job(tmp_path)
+    interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
+    interrupted_png.parent.mkdir(parents=True)
+    interrupted_png.write_bytes(_png_bytes())
+    interrupted_staging_dir = interrupted_png.parent / f".{running_job_id}.staging"
+    interrupted_staging_dir.mkdir()
+    (interrupted_staging_dir / "partial.png").write_bytes(_png_bytes())
+    with factory() as session:
+        running_job = session.get(Job, running_job_id)
+        assert running_job is not None
+        assert update_job_status(session, running_job.id, JobStatus.RUNNING)
+        session.add(AlbumCoverSuggestion(
+            id="interrupted",
+            album_id="album",
+            job_id=running_job.id,
+            png_path="cover-suggestions/album/interrupted.png",
+        ))
+        session.add(Job(id="queued", type=JobType.COVER, album_id="album", user_id="u1"))
+        session.commit()
+
+    assert cover_runner.recover_web_cover_jobs(
+        factory, audio_dir, _settings(CoverExecutor.WEB),
+    ) == 1
+
+    with factory() as session:
+        assert session.get(Job, running_job_id).error_type == "server_restart"
+        assert session.get(Job, "queued").status == JobStatus.QUEUED
+        assert session.query(AlbumCoverSuggestion).count() == 0
+    assert not interrupted_png.exists()
+    assert not interrupted_staging_dir.exists()
+
+    def fake_image_generator(*_args, **_kwargs) -> bytes:
+        return _png_bytes()
+
+    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
+    monkeypatch.setattr(
+        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+    )
+    assert asyncio.run(cover_runner.run_next_cover_job(
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+    ))
+    with factory() as session:
+        assert session.get(Job, "queued").status == JobStatus.COMPLETED
+
+
+def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
+    factory, audio_dir, job_id = _cover_job(tmp_path)
+    with factory() as session:
+        assert update_job_status(session, job_id, JobStatus.RUNNING)
+        session.commit()
+
+    assert cover_runner.recover_web_cover_jobs(
+        factory, audio_dir, _settings(CoverExecutor.MUSIC),
+    ) == 0
+    with factory() as session:
+        assert session.get(Job, job_id).status == JobStatus.RUNNING
 
 
 def test_web_runner_records_the_shared_cover_error_terminal_state(
