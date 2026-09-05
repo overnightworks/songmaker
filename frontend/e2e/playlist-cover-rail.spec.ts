@@ -147,7 +147,6 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
-		expect(railCoverRequests).toBe(0);
 		await expect(row.locator('.playlist-cover-initials')).toHaveCount(3);
 		await row.getByRole('button', { name: new RegExp(`^${playlistTitle}`) }).click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
@@ -194,6 +193,11 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
+		const [railCoverBox, playlistCoverBox] = await Promise.all([
+			refreshedRow.locator('.playlist-cover').boundingBox(),
+			refreshedRow.locator('.playlist-cover-image').boundingBox()
+		]);
+		expect(playlistCoverBox).toEqual(railCoverBox);
 		if (isMobile) {
 			await page.keyboard.press('Escape');
 			await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();

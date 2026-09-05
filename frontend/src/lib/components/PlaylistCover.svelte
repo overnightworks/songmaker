@@ -83,6 +83,8 @@
 	}
 
 	.playlist-cover-image {
+		grid-column: 1 / -1;
+		grid-row: 1 / -1;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
