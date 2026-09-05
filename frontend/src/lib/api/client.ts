@@ -78,7 +78,9 @@ export {
 	removeFromPlaylist,
 	reorderPlaylistEntry,
 	sharePlaylist,
-	unsharePlaylist
+	unsharePlaylist,
+	uploadPlaylistCover,
+	deletePlaylistCover
 } from './playlists';
 export {
 	createQueueStreamSnapshot,

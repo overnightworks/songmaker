@@ -101,7 +101,12 @@
 							class:row-active={expanded}
 							onclick={() => onPlaylistLabelClick(playlist.id)}
 						>
-							<PlaylistCover title={playlist.title} covers={playlist.album_covers} visible={open} />
+							<PlaylistCover
+								title={playlist.title}
+								covers={playlist.album_covers}
+								cover={playlist.cover}
+								visible={open}
+							/>
 							<span class="row-title">{playlist.title}</span>
 							<span class="row-meta">{playlist.entry_count}</span>
 						</button>
