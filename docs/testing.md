@@ -2,9 +2,10 @@
 
 ## Running Tests
 
-Agents and subagents run **only the tests that prove the change**. The full
-suite belongs to GitHub CI so it does not saturate this machine (atelier-2
-rule: local = targeted, land gate = CI).
+Agents and subagents run **only the tests that prove the change** and omit
+`-n auto`; GitHub CI explicitly sets `-n auto` for parallel test runs, while
+the full suite remains its responsibility (atelier-2 rule: local = targeted,
+land gate = CI).
 
 ```bash
 # Backend — targeted (local / agents)
@@ -22,13 +23,17 @@ cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 
 ## Static analysis (SonarCloud)
 
-SonarCloud Automatic Analysis reads the repository-root [`.sonarcloud.properties`](../.sonarcloud.properties) file. Product sources are `src`, `frontend/src`, `scripts`, `docker`, and `.github`; `tests` and frontend test files are declared as test scope so test rules are applied correctly. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=FlexOr2_songmaker) shows the analysis results.
+GitHub CI runs SonarCloud analysis from the repository-root [`sonar-project.properties`](../sonar-project.properties). The `backend` and `frontend` jobs produce pytest XML and Vitest lcov coverage reports; the advisory `sonar` job downloads both reports and scans the same commit. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
 
-The scope excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+Before the first CI scan, an operator must disable **Automatic Analysis** in the SonarCloud project. SonarCloud rejects CI-based analysis while that setting remains enabled; until then the scan is advisory and may fail without blocking CI.
+
+The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+
+The profile deliberately ignores two repository-wide smells. `python:S9100` is ignored for `tests/**` because these pytest fixtures use `yield` as setup syntax without teardown; changing them to `return` would only optimize a test-style diagnostic and add no product value. `docker:S7031` is ignored for `**/*Dockerfile*` because separate `RUN` instructions mark intentional install, cache, permission, and model-warmup boundaries; the pattern covers both `Dockerfile` and the repository's `*.Dockerfile` names. These exceptions are limited to their named paths and rules; other Sonar findings remain visible.
 
 ### Parallel Execution
 
-Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
+CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` and SQLite database
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state

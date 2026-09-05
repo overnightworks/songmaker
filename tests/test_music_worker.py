@@ -120,14 +120,15 @@ def test_generate_passes_seed_and_target_model() -> None:
     assert kwargs["target_model"] == "xl-sft"
 
 
-def test_train_lora_passes_the_explicit_training_configuration() -> None:
+def test_train_lora_passes_the_explicit_training_configuration_and_target_mode() -> None:
     worker = _make_worker()
     with patch(
         "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
     ) as mock_run:
-        _run(worker.train_lora(_mock_ctx(), "j1", "l1", "u1"))
+        _run(worker.train_lora(_mock_ctx(), "j1", "l1", "u1", "turbo"))
 
     assert mock_run.await_args.kwargs["training_config"] == worker._settings.lora_training_config
+    assert mock_run.await_args.kwargs["target_mode"] == "turbo"
 
 
 def test_lora_training_uses_its_own_timeout() -> None:

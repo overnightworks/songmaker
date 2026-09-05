@@ -20,7 +20,7 @@ VOLUME_NAME="${VOLUME_NAME:-songmaker_audiofiles}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SNAPSHOT_DIR="$BACKUP_DIR/$TIMESTAMP"
 
-if [ ! -d "$BACKUP_DIR" ]; then
+if [[ ! -d "$BACKUP_DIR" ]]; then
     echo "ERROR: Backup directory $BACKUP_DIR does not exist."
     echo "Mount your external drive and create the directory first."
     exit 1
@@ -59,9 +59,9 @@ audio_bytes=${AUDIO_SIZE:-0}
 hostname=$(hostname)
 MANIFEST
 
-if [ "$RETENTION_DAYS" -gt 0 ]; then
+if [[ "$RETENTION_DAYS" -gt 0 ]]; then
     PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -mtime +"$RETENTION_DAYS" | wc -l)
-    if [ "$PRUNED" -gt 0 ]; then
+    if [[ "$PRUNED" -gt 0 ]]; then
         find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -mtime +"$RETENTION_DAYS" -exec rm -rf {} +
         echo "Pruned $PRUNED old backups (older than $RETENTION_DAYS days)"
     fi

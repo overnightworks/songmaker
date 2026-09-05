@@ -258,11 +258,13 @@ def test_contract_toml_must_be_utf8(tmp_path: Path, relative: Path) -> None:
     project = empty_project(tmp_path)
     (project / relative).write_bytes(b"schema_version = 1\n\xff")
 
-    with pytest.raises(RequirementContractError, match="not UTF-8"):
-        if relative == REGISTRY_LOCATION:
+    if relative == REGISTRY_LOCATION:
+        with pytest.raises(RequirementContractError, match="not UTF-8"):
             read_requirement_shelf(project)
-        else:
-            read_acceptance_manifest(project, read_requirement_shelf(project))
+    else:
+        shelf = read_requirement_shelf(project)
+        with pytest.raises(RequirementContractError, match="not UTF-8"):
+            read_acceptance_manifest(project, shelf)
 
 
 @pytest.mark.parametrize("relative", (REGISTRY_LOCATION, ACCEPTANCE_LOCATION))
@@ -274,11 +276,13 @@ def test_contract_toml_must_be_regular_not_a_symlink(tmp_path: Path, relative: P
     target.unlink()
     target.symlink_to(outside)
 
-    with pytest.raises(RequirementContractError, match="regular non-symlink"):
-        if relative == REGISTRY_LOCATION:
+    if relative == REGISTRY_LOCATION:
+        with pytest.raises(RequirementContractError, match="regular non-symlink"):
             read_requirement_shelf(project)
-        else:
-            read_acceptance_manifest(project, read_requirement_shelf(project))
+    else:
+        shelf = read_requirement_shelf(project)
+        with pytest.raises(RequirementContractError, match="regular non-symlink"):
+            read_acceptance_manifest(project, shelf)
 
 
 @pytest.mark.parametrize(
@@ -371,10 +375,10 @@ def test_registry_path_must_exist(tmp_path: Path) -> None:
 def test_registry_paths_cannot_escape_or_misname_the_document(tmp_path: Path, path: str) -> None:
     content = strict_document()
     registry = "schema_version = 2\n\n" + revision_table("0001", path, digest(content))
+    project = active_project(tmp_path, content=content, registry=registry)
 
     with pytest.raises(RequirementContractError, match="invalid registry path"):
-        active_project(tmp_path, content=content, registry=registry)
-        read_requirement_shelf(tmp_path / "project")
+        read_requirement_shelf(project)
 
 
 def test_numbered_document_must_be_regular_not_a_symlink(tmp_path: Path) -> None:
@@ -472,8 +476,9 @@ def test_current_document_bytes_must_match_the_tip(tmp_path: Path) -> None:
 def test_strict_document_grammar_refuses_every_unowned_shape(
     tmp_path: Path, content: bytes, problem: str
 ) -> None:
+    project = active_project(tmp_path, content=content)
     with pytest.raises(RequirementContractError, match=problem):
-        read_requirement_shelf(active_project(tmp_path, content=content))
+        read_requirement_shelf(project)
 
 
 def test_requirement_ids_are_globally_unique(tmp_path: Path) -> None:
@@ -555,9 +560,10 @@ def test_revision_history_must_be_one_complete_line(
     current = digest(content)
     old = digest(b"old")
     registry = "schema_version = 2\n\n" + registry_for(current, old)
+    project = active_project(tmp_path, content=content, registry=registry)
 
     with pytest.raises(RequirementContractError, match=problem):
-        read_requirement_shelf(active_project(tmp_path, content=content, registry=registry))
+        read_requirement_shelf(project)
 
 
 def test_revision_history_refuses_a_repeated_digest(tmp_path: Path) -> None:
@@ -569,9 +575,10 @@ def test_revision_history_refuses_a_repeated_digest(tmp_path: Path) -> None:
         + "\n"
         + revision_table("0001", "docs/requirements/0001-albums.md", current, comment=1002)
     )
+    project = active_project(tmp_path, content=document, registry=registry)
 
     with pytest.raises(RequirementContractError, match="repeats a revision"):
-        read_requirement_shelf(active_project(tmp_path, content=document, registry=registry))
+        read_requirement_shelf(project)
 
 
 def test_revision_history_refuses_a_cycle(tmp_path: Path) -> None:
@@ -596,9 +603,10 @@ def test_revision_history_refuses_a_cycle(tmp_path: Path) -> None:
             comment=1002,
         )
     )
+    project = active_project(tmp_path, content=document, registry=registry)
 
     with pytest.raises(RequirementContractError, match="has a cycle"):
-        read_requirement_shelf(active_project(tmp_path, content=document, registry=registry))
+        read_requirement_shelf(project)
 
 
 def test_one_document_cannot_change_paths_inside_its_lineage(tmp_path: Path) -> None:
@@ -617,9 +625,10 @@ def test_one_document_cannot_change_paths_inside_its_lineage(tmp_path: Path) -> 
             comment=1001,
         )
     )
+    project = active_project(tmp_path, content=content, registry=registry)
 
     with pytest.raises(RequirementContractError, match="lineage path"):
-        read_requirement_shelf(active_project(tmp_path, content=content, registry=registry))
+        read_requirement_shelf(project)
 
 
 def test_one_approval_comment_cannot_bind_two_revisions(tmp_path: Path) -> None:
@@ -641,9 +650,10 @@ def test_witness_digest_must_match_the_exact_json_bytes(tmp_path: Path) -> None:
         correct, "0" * 64
     )
     registry = "schema_version = 2\n\n" + table
+    project = active_project(tmp_path, content=content, registry=registry)
 
     with pytest.raises(RequirementContractError, match="has digest"):
-        read_requirement_shelf(active_project(tmp_path, content=content, registry=registry))
+        read_requirement_shelf(project)
 
 
 @pytest.mark.parametrize(
@@ -802,15 +812,16 @@ def test_contract_resource_counts_and_bytes_are_bounded(tmp_path: Path) -> None:
     registry.write_text("schema_version = 2\n", encoding="utf-8")
     acceptance = project / ACCEPTANCE_LOCATION
     acceptance.write_bytes(b"schema_version = 1\n" + b" " * CONTRACT.MAX_ACCEPTANCE_BYTES)
+    shelf = read_requirement_shelf(project)
     with pytest.raises(RequirementContractError, match="1048576-byte limit"):
-        read_acceptance_manifest(project, read_requirement_shelf(project))
+        read_acceptance_manifest(project, shelf)
 
     acceptance.write_text(
         "schema_version = 1\n" + "[[acceptance]]\n" * (CONTRACT.MAX_ACCEPTANCE_ENTRIES + 1),
         encoding="utf-8",
     )
     with pytest.raises(RequirementContractError, match="maximum is 4096"):
-        read_acceptance_manifest(project, read_requirement_shelf(project))
+        read_acceptance_manifest(project, shelf)
 
 
 def test_requirement_document_bytes_are_bounded(tmp_path: Path) -> None:
@@ -869,6 +880,7 @@ def test_acceptance_schema_and_edges_fail_closed(
 def test_acceptance_ids_are_unique(tmp_path: Path) -> None:
     manifest = acceptance_table() + acceptance_table().split("schema_version = 1\n\n", 1)[1]
     project = active_project(tmp_path, acceptance=manifest)
+    shelf = read_requirement_shelf(project)
 
     with pytest.raises(RequirementContractError, match="declared more than once"):
-        read_acceptance_manifest(project, read_requirement_shelf(project))
+        read_acceptance_manifest(project, shelf)

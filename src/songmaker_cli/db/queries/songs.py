@@ -389,16 +389,40 @@ def update_song(
     else:
         new_gen_params = generation_params or None
 
-    new_lyrics = lyrics if lyrics is not None else (prev.lyrics if prev else "")
-    new_prompt = prompt if prompt is not None else (prev.prompt if prev else "")
-    new_bpm = bpm if bpm is not None else (prev.bpm if prev else 0)
-    new_audio_duration = (
-        audio_duration if audio_duration is not None
-        else (prev.audio_duration if prev else 180)
-    )
-    new_key_scale = (
-        key_scale if key_scale is not None else (prev.key_scale if prev else "")
-    )
+    if lyrics is not None:
+        new_lyrics = lyrics
+    elif prev:
+        new_lyrics = prev.lyrics
+    else:
+        new_lyrics = ""
+
+    if prompt is not None:
+        new_prompt = prompt
+    elif prev:
+        new_prompt = prev.prompt
+    else:
+        new_prompt = ""
+
+    if bpm is not None:
+        new_bpm = bpm
+    elif prev:
+        new_bpm = prev.bpm
+    else:
+        new_bpm = 0
+
+    if audio_duration is not None:
+        new_audio_duration = audio_duration
+    elif prev:
+        new_audio_duration = prev.audio_duration
+    else:
+        new_audio_duration = 180
+
+    if key_scale is not None:
+        new_key_scale = key_scale
+    elif prev:
+        new_key_scale = prev.key_scale
+    else:
+        new_key_scale = ""
 
     creative_changed = prev is None or (
         new_lyrics != prev.lyrics

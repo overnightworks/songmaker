@@ -127,7 +127,10 @@ def list_voices_endpoint(
     ]
 
 
-@router.post("/users")
+@router.post(
+    "/users",
+    responses={409: {"description": "User already exists"}},
+)
 def create_user_endpoint(
     req: CreateUserRequest,
     db: Session = Depends(get_db_session),
@@ -147,7 +150,13 @@ def create_user_endpoint(
     return UserResponse.from_orm(user)
 
 
-@router.put("/users/{user_id}")
+@router.put(
+    "/users/{user_id}",
+    responses={
+        400: {"description": "User update is invalid"},
+        404: {"description": "User does not exist"},
+    },
+)
 def update_user_endpoint(
     user_id: str,
     req: UpdateUserRequest,
@@ -186,7 +195,13 @@ def update_user_endpoint(
     return UserResponse.from_orm(updated)
 
 
-@router.delete("/users/{user_id}")
+@router.delete(
+    "/users/{user_id}",
+    responses={
+        400: {"description": "User cannot be deactivated"},
+        404: {"description": "User does not exist"},
+    },
+)
 def deactivate_user_endpoint(
     user_id: str,
     request: Request,
@@ -211,7 +226,13 @@ def deactivate_user_endpoint(
     return StatusResponse(status="ok")
 
 
-@router.delete("/users/{user_id}/permanent")
+@router.delete(
+    "/users/{user_id}/permanent",
+    responses={
+        400: {"description": "User cannot be permanently deleted"},
+        404: {"description": "User does not exist"},
+    },
+)
 def hard_delete_user_endpoint(
     user_id: str,
     request: Request,
@@ -306,7 +327,10 @@ def sessions_endpoint(
     )
 
 
-@router.delete("/sessions/{session_hash}")
+@router.delete(
+    "/sessions/{session_hash}",
+    responses={404: {"description": "Session does not exist"}},
+)
 def force_logout_endpoint(
     session_hash: str,
     request: Request,
@@ -438,7 +462,14 @@ async def get_registry_endpoint(
     return RegistryResponse(models=models)
 
 
-@router.post("/workers/{worker_id}/load_model")
+@router.post(
+    "/workers/{worker_id}/load_model",
+    responses={
+        400: {"description": "Model load request is invalid"},
+        404: {"description": "Worker does not exist"},
+        503: {"description": "Worker is unavailable"},
+    },
+)
 async def load_model_on_worker_endpoint(
     worker_id: str,
     req: LoadModelOnWorkerRequest,
@@ -476,7 +507,14 @@ async def load_model_on_worker_endpoint(
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
 
-@router.post("/workers/{worker_id}/evict_model")
+@router.post(
+    "/workers/{worker_id}/evict_model",
+    responses={
+        400: {"description": "Model eviction request is invalid"},
+        404: {"description": "Worker does not exist"},
+        502: {"description": "Worker rejected model eviction"},
+    },
+)
 async def evict_model_on_worker_endpoint(
     worker_id: str,
     req: EvictModelOnWorkerRequest,
@@ -500,7 +538,15 @@ async def evict_model_on_worker_endpoint(
     return StatusResponse(status="ok")
 
 
-@router.post("/workers/{worker_id}/pin_model")
+@router.post(
+    "/workers/{worker_id}/pin_model",
+    responses={
+        400: {"description": "Model pin request is invalid"},
+        404: {"description": "Worker does not exist"},
+        409: {"description": "Model cannot be pinned"},
+        502: {"description": "Worker rejected model pinning"},
+    },
+)
 async def pin_model_on_worker_endpoint(
     worker_id: str,
     req: PinModelOnWorkerRequest,
@@ -532,7 +578,14 @@ async def pin_model_on_worker_endpoint(
     return StatusResponse(status="ok")
 
 
-@router.post("/workers/{worker_id}/unpin_model")
+@router.post(
+    "/workers/{worker_id}/unpin_model",
+    responses={
+        400: {"description": "Model unpin request is invalid"},
+        404: {"description": "Worker does not exist"},
+        502: {"description": "Worker rejected model unpinning"},
+    },
+)
 async def unpin_model_on_worker_endpoint(
     worker_id: str,
     req: UnpinModelOnWorkerRequest,
@@ -556,7 +609,13 @@ async def unpin_model_on_worker_endpoint(
     return StatusResponse(status="ok")
 
 
-@router.post("/workers/{worker_id}/restart")
+@router.post(
+    "/workers/{worker_id}/restart",
+    responses={
+        404: {"description": "Worker does not exist"},
+        502: {"description": "Worker restart failed"},
+    },
+)
 async def restart_worker_endpoint(
     worker_id: str,
     db: Session = Depends(get_db_session),
@@ -581,7 +640,14 @@ async def restart_worker_endpoint(
     return StatusResponse(status="restarting")
 
 
-@router.post("/registry/{mode}/download")
+@router.post(
+    "/registry/{mode}/download",
+    responses={
+        400: {"description": "Requested model mode is invalid"},
+        409: {"description": "Model is already downloaded or downloading"},
+        503: {"description": "Model registry or job queue is unavailable"},
+    },
+)
 async def download_model_endpoint(
     mode: str,
     db: Session = Depends(get_db_session),

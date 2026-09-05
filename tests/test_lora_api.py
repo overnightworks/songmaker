@@ -249,6 +249,27 @@ def test_list_loras_excludes_soft_deleted_by_default(
     assert ids == {keep_id, gone_id}
 
 
+def test_lora_response_includes_its_training_model_mode(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    client, ctx = client_and_ctx
+    with ctx.db() as session:
+        lora = create_user_lora(
+            session,
+            USER_A,
+            "Turbo Voice",
+            "turbo-voice",
+            model_mode="turbo",
+        )
+        session.commit()
+        lora_id = lora.id
+
+    response = client.get(f"/api/loras/{lora_id}")
+
+    assert response.status_code == 200
+    assert response.json()["model_mode"] == "turbo"
+
+
 def test_get_lora_returns_samples_in_position_order(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:

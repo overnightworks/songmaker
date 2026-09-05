@@ -127,7 +127,7 @@ def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClien
     return client, factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
 
@@ -540,8 +540,9 @@ def _assert_escape_markers_survive(
 @pytest.mark.parametrize("song_id", UNSAFE_COVER_SONG_IDS)
 def test_write_song_cover_rejects_unsafe_song_ids(tmp_path: Path, song_id: str) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    image = _png_bytes()
     with pytest.raises(CoverRejectedError, match=COVER_INVALID_SONG_ID):
-        write_song_cover(audio_dir, song_id, _png_bytes())
+        write_song_cover(audio_dir, song_id, image)
     _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
@@ -552,6 +553,20 @@ def test_remove_song_cover_files_rejects_unsafe_song_ids(
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
     remove_song_cover_files(audio_dir, song_id)
     _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+
+
+def test_remove_song_cover_files_logs_its_category_without_the_rejected_id(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    rejected_id = "private-user-content/song"
+
+    with caplog.at_level("WARNING", logger="songmaker_cli.covers"):
+        remove_song_cover_files(audio_dir, rejected_id)
+
+    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert rejected_id not in caplog.text
+    assert "category: song-covers" in caplog.text
 
 
 def test_remove_song_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> None:
@@ -592,8 +607,9 @@ def test_write_song_cover_restores_live_dir_if_publish_rename_fails(
         return real_rename(self, target)
 
     monkeypatch.setattr(Path, "rename", rename_fails_staging_publish)
+    image = _jpeg_bytes()
     with pytest.raises(OSError, match="simulated publish failure"):
-        write_song_cover(audio_dir, "alice-song", _jpeg_bytes())
+        write_song_cover(audio_dir, "alice-song", image)
     assert song_dir.is_dir()
     assert (song_dir / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}").read_bytes() == original
     served = resolve_song_cover_file(
@@ -636,7 +652,8 @@ def test_write_song_cover_restores_orphaned_old_before_replace(
         raise OSError("simulated save failure")
 
     monkeypatch.setattr("songmaker_cli.covers._save_variants", boom)
+    image = _jpeg_bytes()
     with pytest.raises(OSError, match="simulated save failure"):
-        write_song_cover(audio_dir, "alice-song", _jpeg_bytes())
+        write_song_cover(audio_dir, "alice-song", image)
     assert final.is_dir()
     assert (final / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}").read_bytes() == original

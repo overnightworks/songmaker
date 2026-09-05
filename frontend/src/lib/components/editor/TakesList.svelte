@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SongItem, GenerationItem, JobItem } from '$lib/api/types';
+	import type { SongItem, GenerationItem, JobItem, UserLoraItem } from '$lib/api/types';
 	import type { SourceMode } from '$lib/stores/recipe';
 	import {
 		COARSE_POINTER_MEDIA,
@@ -65,6 +65,7 @@
 
 	interface Props {
 		song: SongItem;
+		voices?: UserLoraItem[];
 		loadStatus?: 'loading' | 'ready' | 'error';
 		loadError?: string | null;
 		dirty: boolean;
@@ -78,6 +79,7 @@
 
 	let {
 		song,
+		voices = [],
 		loadStatus = 'ready',
 		loadError = null,
 		dirty,
@@ -245,6 +247,11 @@
 			label: `${taskType === 'repaint' ? TAKE_PROVENANCE_REPAINT_PREFIX : TAKE_PROVENANCE_COVER_PREFIX} ${nowPlayingTakeLabel(sourceVersionNumber, gen.src_generation_number)}`,
 			sourceId: source?.id ?? null
 		};
+	}
+
+	function voiceForGeneration(gen: GenerationItem): UserLoraItem | undefined {
+		const loraId = gen.generation_params?.user_lora_id;
+		return loraId ? voices.find((voice) => voice.id === loraId) : undefined;
 	}
 
 	async function handleBulkDelete(): Promise<void> {
@@ -439,6 +446,7 @@
 					{@const flag = qualityFlag(gen.scores)}
 					{@const modelMode = takeModelModeLabel(gen.model_mode)}
 					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
+					{@const voice = voiceForGeneration(gen)}
 					<!-- `role` and `tabindex` move together with rowIsActionable, which the
 					     a11y check cannot narrow through a dynamic role. -->
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -545,6 +553,12 @@
 										{/if}
 									</span>
 								{/if}
+							{/if}
+
+							{#if voice}
+								<span class:deleted-voice={voice.deleted_at !== null} class="take-voice">
+									Voice: {voice.name}{voice.deleted_at ? ' — voice deleted' : ''}
+								</span>
 							{/if}
 						</span>
 
@@ -897,6 +911,16 @@
 		cursor: default;
 	}
 
+	.take-voice {
+		color: var(--text-subtle);
+		font-size: 0.68rem;
+		margin: 0.2rem 0 0 1.25rem;
+	}
+
+	.take-voice.deleted-voice {
+		color: var(--score-bad);
+	}
+
 	.take-origin a {
 		color: inherit;
 		text-decoration: underline;
@@ -1031,6 +1055,7 @@
 
 	.take-row.archived .take-label,
 	.take-row.archived .take-origin,
+	.take-row.archived .take-voice,
 	.take-row.archived .take-duration,
 	.take-row.archived .score-badge,
 	.take-row.archived .model-badge,

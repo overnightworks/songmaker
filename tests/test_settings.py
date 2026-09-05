@@ -29,9 +29,10 @@ def test_rejects_an_invalid_generation_timeout_order(
     monkeypatch: pytest.MonkeyPatch, setting: str, value: str,
 ) -> None:
     monkeypatch.setenv(setting, value)
+    required = _required_settings()
 
     with pytest.raises(ValidationError, match="SSE read < reaper < arq"):
-        Settings(**_required_settings())
+        Settings(**required)
 
 
 @pytest.mark.parametrize(
@@ -45,9 +46,10 @@ def test_rejects_an_invalid_lora_training_timeout_order(
     monkeypatch: pytest.MonkeyPatch, setting: str, value: str,
 ) -> None:
     monkeypatch.setenv(setting, value)
+    required = _required_settings()
 
     with pytest.raises(ValidationError, match="progress poll < reaper < arq"):
-        Settings(**_required_settings())
+        Settings(**required)
 
 
 def test_voice_capacity_defaults_are_configured() -> None:
@@ -66,25 +68,29 @@ def test_codex_process_caps_default_to_the_single_pool_contract() -> None:
 
 def test_cover_executor_defaults_to_web_and_rejects_unknown_values() -> None:
     assert DEFAULT_COVER_EXECUTOR is CoverExecutor.WEB
-    assert Settings(**_required_settings()).cover_executor is CoverExecutor.WEB
+    settings = Settings(**_required_settings())
+    assert settings.cover_executor is CoverExecutor.WEB
 
+    required = _required_settings()
     with pytest.raises(ValidationError):
-        Settings(**_required_settings(), cover_executor="unknown")
+        Settings(**required, cover_executor="unknown")
 
 
 def test_cover_executor_rejects_an_unknown_environment_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COVER_EXECUTOR", "unknown")
+    required = _required_settings()
 
     with pytest.raises(ValidationError):
-        Settings(**_required_settings())
+        Settings(**required)
 
 
 def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
+    required = _required_settings()
     with pytest.raises(ValidationError, match="Cover process cap"):
         Settings(
-            **_required_settings(),
+            **required,
             codex_cli_max_concurrent_processes=1,
             cover_max_concurrent_runs=2,
         )
@@ -95,5 +101,6 @@ def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
     ["max_user_loras", "max_queued_lora_training_jobs"],
 )
 def test_rejects_non_positive_voice_capacity(setting: str) -> None:
+    required = _required_settings()
     with pytest.raises(ValidationError):
-        Settings(**_required_settings(), **{setting: 0})
+        Settings(**required, **{setting: 0})

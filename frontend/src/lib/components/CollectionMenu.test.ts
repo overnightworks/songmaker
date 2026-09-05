@@ -97,7 +97,7 @@ describe('CollectionMenu share warning', () => {
 
 		expect(shareWarningDialog(target)).toBeNull();
 		expect(target.querySelector('.menu-panel')).toBeNull();
-		expect(target.querySelectorAll('[role="dialog"]').length).toBe(0);
+		expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(0);
 	});
 
 	it('does not open a warning dialog when every song has a playable take', async () => {

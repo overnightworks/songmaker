@@ -10,7 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Final
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 
 from songmaker_cli.constants import (
     COVER_CACHE_CONTROL,
@@ -53,7 +53,7 @@ log = logging.getLogger(__name__)
 
 COVER_RESPONSE_HEADERS: dict[str, str] = {"Cache-Control": COVER_CACHE_CONTROL}
 _COVER_REJECTED_IDS: Final[frozenset[str]] = frozenset({".", ".."})
-_COVER_PATH_TRAVERSAL_LOG = "Path traversal blocked in cover delete: %s"
+_COVER_PATH_TRAVERSAL_LOG = "Path traversal blocked in cover delete for category: %s"
 
 
 class CoverRejectedError(Exception):
@@ -122,6 +122,15 @@ def song_cover_file_exists(audio_dir: Path, song_id: str, cover_key: str | None)
     )
 
 
+def playlist_cover_file_exists(
+    audio_dir: Path, playlist_id: str, cover_key: str | None,
+) -> bool:
+    return _cover_file_exists(
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, cover_key,
+        COVER_INVALID_PLAYLIST_ID,
+    )
+
+
 def resolve_cover_file(
     audio_dir: Path, album_id: str, cover_key: str | None, variant: str,
 ) -> Path:
@@ -173,7 +182,7 @@ def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise CoverRejectedError(COVER_TOO_MANY_PIXELS) from exc
-    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, IndexError) as exc:
+    except (OSError, ValueError, SyntaxError, IndexError) as exc:
         raise CoverRejectedError(COVER_UNREADABLE) from exc
     finally:
         Image.MAX_IMAGE_PIXELS = previous_limit
@@ -266,7 +275,7 @@ def remove_cover_files(
     try:
         final = _cover_entity_dir(audio_dir, dirname, entity_id, invalid_id_message)
     except CoverRejectedError:
-        log.warning(_COVER_PATH_TRAVERSAL_LOG, entity_id)
+        log.warning(_COVER_PATH_TRAVERSAL_LOG, dirname)
         return
     covers_root = _covers_root(audio_dir, dirname)
     parent = final.parent
@@ -296,7 +305,7 @@ def _cover_file_exists(
             audio_dir, dirname, entity_id, cover_key, COVER_VARIANT_ORIGINAL,
             invalid_id_message,
         )
-    except (CoverRejectedError, FileNotFoundError, OSError):
+    except (CoverRejectedError, OSError):
         return False
     return path.is_file()
 

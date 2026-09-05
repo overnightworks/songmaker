@@ -22,6 +22,16 @@ export const EXPIRY_WARN_DAYS = 3;
 
 export const LORA_POLL_INTERVAL_MS = 5000;
 
+export const VOICE_PICKER_LABEL = 'Your Voice';
+export const VOICE_PICKER_NONE_LABEL = 'None';
+export const VOICE_PICKER_CREATE_LABEL = 'Create a voice';
+export const VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL = 'not available for this model';
+export const VOICE_PICKER_DELETED_LABEL = 'voice deleted';
+
+export function voicePickerMobileLabel(modelMode: string): string {
+	return `${VOICE_PICKER_LABEL} · ${modelMode} model`;
+}
+
 export const LORA_MIN_SAMPLES_FOR_TRAINING = 3;
 
 export const LORA_MAX_SAMPLES = 20;
@@ -178,6 +188,8 @@ export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 export const EDITOR_TAB_WRITE_LABEL = 'Write';
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
+
+export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
@@ -203,6 +215,7 @@ export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
 export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
 export const COWRITER_MODEL_CURRENT_NOT_IN_CATALOG = 'current, not in catalog';
 export const COWRITER_SAVE_NOTHING_CHANGED = 'Nothing changed.';
+export const COWRITER_SAVE_SAVED = 'Saved.';
 export const COWRITER_SAVE_CHANGED = 'Changed, not saved yet.';
 export const COWRITER_SAVE_MODEL_REQUIRED = 'Choose a model before saving.';
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';

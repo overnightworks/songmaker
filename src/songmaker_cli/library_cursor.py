@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 import hmac
 import json
 from dataclasses import dataclass
@@ -110,7 +109,7 @@ def _parse_signed_cursor(cursor: str, secret: bytes) -> LibraryCursor:
         raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
     try:
         raw = _b64url_decode(packed)
-    except (ValueError, binascii.Error) as exc:
+    except ValueError as exc:
         raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID) from exc
     expected = hmac.new(secret, raw, sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):

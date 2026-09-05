@@ -19,7 +19,9 @@ COPY --chown=songmaker vendor/acestep/pyproject.toml vendor/acestep/uv.lock vend
 COPY --chown=songmaker vendor/acestep/acestep/third_parts/ ./acestep/third_parts/
 
 # Layer 3: heavy delta install. torch already present from gpu-torch-base.
-RUN uv sync --frozen --no-dev --no-install-project # NOSONAR The upstream path dependency requires its locked source build.
+# The upstream path dependency requires its locked source build.
+RUN uv sync --frozen --no-dev \
+    --no-install-project # NOSONAR
 
 # Layer 4: full upstream source. Invalidates only on upstream source edits.
 COPY --chown=songmaker vendor/acestep/ ./

@@ -144,6 +144,21 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	};
 }
 
+function voice(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 'l1',
+		user_id: 'u1',
+		name: 'Folk Alto',
+		slug: 'folk-alto',
+		status: 'ready',
+		model_mode: 'sft',
+		created_at: '2026-01-01T00:00:00+00:00',
+		deleted_at: '2026-01-02T00:00:00+00:00',
+		samples: [],
+		...overrides
+	};
+}
+
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
 		id: 's1',
@@ -234,6 +249,18 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('TakesList', () => {
+	it('names a deleted voice without changing the take playback target', async () => {
+		const deletedVoiceTake = generation({ generation_params: { user_lora_id: 'l1' } });
+		const songWithDeletedVoice = song({ generations: [deletedVoiceTake] });
+		const { target } = await render({ song: songWithDeletedVoice, voices: [voice()] });
+
+		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
+			'Voice: Folk Alto — voice deleted'
+		);
+		target.querySelector<HTMLElement>('.take-summary')?.click();
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
+	});
+
 	it('groups takes by version, newest first', async () => {
 		const { target } = await render();
 		const headers = Array.from(target.querySelectorAll('.version-header')).map(

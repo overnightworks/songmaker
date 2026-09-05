@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -159,7 +159,13 @@ def api_get_album(
     return _single_album_response(session, album)
 
 
-@router.post("/albums")
+@router.post(
+    "/albums",
+    responses={
+        409: {"description": "Album ID already exists"},
+        422: {"description": "Album title is required"},
+    },
+)
 def api_create_album(
     data: AlbumCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -183,7 +189,13 @@ def api_create_album(
     return AlbumResponse.from_orm(album, song_count=0, picked_count=0)
 
 
-@router.put("/albums/{album_id}")
+@router.put(
+    "/albums/{album_id}",
+    responses={
+        404: {"description": "Album not found"},
+        422: {"description": "Album title is required"},
+    },
+)
 def api_update_album(
     album_id: str, req: AlbumUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -209,7 +221,10 @@ def api_update_album(
             raise HTTPException(422, "Title is required")
 
     subtitle = (req.subtitle or "").strip() if "subtitle" in fields_set else UNSET
-    year = (str(req.year) if req.year is not None else "") if "year" in fields_set else UNSET
+    if "year" in fields_set:
+        year = str(req.year) if req.year is not None else ""
+    else:
+        year = UNSET
 
     try:
         album = update_album(session, album_id, title=title, subtitle=subtitle, year=year)
@@ -234,7 +249,10 @@ def api_delete_album(
     return StatusResponse()
 
 
-@router.post("/albums/{album_id}/restore")
+@router.post(
+    "/albums/{album_id}/restore",
+    responses={410: {"description": "Album restore window has expired"}},
+)
 def api_restore_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -339,7 +357,10 @@ def api_unshare_album(
     session.commit()
     return StatusResponse()
 
-@router.get("/albums/{album_id}/cover")
+@router.get(
+    "/albums/{album_id}/cover",
+    responses={404: {"description": "Album or cover not found"}},
+)
 async def api_get_album_cover(
     album_id: str,
     variant: str = Query(COVER_VARIANT_DETAIL),
@@ -394,10 +415,10 @@ def _utc_day_start() -> datetime:
 @router.post(
     "/albums/{album_id}/cover-suggestions",
     responses={
-        status.HTTP_404_NOT_FOUND: {"description": "Album not found"},
-        status.HTTP_409_CONFLICT: {"description": "Cover suggestions are already running"},
-        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Daily suggestion limit reached"},
-        status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Cover suggestions are unavailable"},
+        404: {"description": "Album not found"},
+        409: {"description": "Cover suggestions are already running"},
+        429: {"description": "Daily suggestion limit reached"},
+        503: {"description": "Cover suggestions are unavailable"},
     },
 )
 async def api_create_cover_suggestions(
@@ -466,7 +487,10 @@ def api_list_cover_suggestions(
     )
 
 
-@router.get("/albums/{album_id}/cover-suggestions/{suggestion_id}")
+@router.get(
+    "/albums/{album_id}/cover-suggestions/{suggestion_id}",
+    responses={404: {"description": "Album or cover suggestion not found"}},
+)
 def api_get_cover_suggestion(
     album_id: str,
     suggestion_id: str,
@@ -486,7 +510,13 @@ def api_get_cover_suggestion(
     return FileResponse(path, media_type="image/png", headers=COVER_RESPONSE_HEADERS)
 
 
-@router.put("/albums/{album_id}/cover")
+@router.put(
+    "/albums/{album_id}/cover",
+    responses={
+        404: {"description": "Album or cover suggestion not found"},
+        422: {"description": "Cover suggestion cannot be used"},
+    },
+)
 def api_select_album_cover_suggestion(
     album_id: str,
     data: CoverSuggestionSelectionRequest,

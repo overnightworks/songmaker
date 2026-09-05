@@ -22,35 +22,60 @@ function parseSongmakerBlock(
 	allSongs: SongItem[]
 ): ApplyData | undefined {
 	const data: ApplyData = {};
-	if (typeof raw.lyrics === 'string' && raw.lyrics.length <= 50_000) data.lyrics = raw.lyrics;
-	if (typeof raw.prompt === 'string' && raw.prompt.length <= 5_000) data.prompt = raw.prompt;
-	if (typeof raw.key_scale === 'string' && raw.key_scale.length <= 10)
-		data.key_scale = raw.key_scale;
-	if (typeof raw.bpm === 'number' && raw.bpm >= 0 && raw.bpm <= 999) data.bpm = raw.bpm;
-	if (
-		typeof raw.audio_duration === 'number' &&
-		raw.audio_duration >= 1 &&
-		raw.audio_duration <= 600
-	)
-		data.audio_duration = raw.audio_duration;
-	if (typeof raw.song === 'string') {
-		data.song = raw.song;
-		const q = raw.song.toLowerCase();
-		const albumMatch = currentAlbumId
-			? allSongs.find((s) => s.title.toLowerCase() === q && s.album_id === currentAlbumId)
-			: undefined;
-		const target = albumMatch ?? allSongs.find((s) => s.title.toLowerCase() === q);
-		if (target) {
-			data.songId = target.id;
-		} else {
-			data.create = true;
-			data.title = raw.song;
-		}
-	}
+	applyValidSongmakerFields(data, raw);
+	applySongTarget(data, raw.song, currentAlbumId, allSongs);
 	const hasFields = Object.keys(data).some(
 		(k) => k !== 'song' && k !== 'songId' && k !== 'create' && k !== 'title'
 	);
 	return hasFields || data.create ? data : undefined;
+}
+
+function applyValidSongmakerFields(data: ApplyData, raw: Record<string, unknown>): void {
+	if (isTextWithinLimit(raw.lyrics, 50_000)) data.lyrics = raw.lyrics;
+	if (isTextWithinLimit(raw.prompt, 5_000)) data.prompt = raw.prompt;
+	if (isTextWithinLimit(raw.key_scale, 10)) data.key_scale = raw.key_scale;
+	if (isNumberWithinRange(raw.bpm, 0, 999)) data.bpm = raw.bpm;
+	if (isNumberWithinRange(raw.audio_duration, 1, 600)) data.audio_duration = raw.audio_duration;
+}
+
+function isTextWithinLimit(value: unknown, maximumLength: number): value is string {
+	return typeof value === 'string' && value.length <= maximumLength;
+}
+
+function isNumberWithinRange(value: unknown, minimum: number, maximum: number): value is number {
+	return typeof value === 'number' && value >= minimum && value <= maximum;
+}
+
+function applySongTarget(
+	data: ApplyData,
+	song: unknown,
+	currentAlbumId: string,
+	allSongs: SongItem[]
+): void {
+	if (typeof song !== 'string') return;
+
+	data.song = song;
+	const target = findSongByTitle(song, currentAlbumId, allSongs);
+	if (target) {
+		data.songId = target.id;
+		return;
+	}
+	data.create = true;
+	data.title = song;
+}
+
+function findSongByTitle(
+	song: string,
+	currentAlbumId: string,
+	allSongs: SongItem[]
+): SongItem | undefined {
+	const normalizedTitle = song.toLowerCase();
+	const albumMatch = currentAlbumId
+		? allSongs.find(
+				(song) => song.title.toLowerCase() === normalizedTitle && song.album_id === currentAlbumId
+			)
+		: undefined;
+	return albumMatch ?? allSongs.find((song) => song.title.toLowerCase() === normalizedTitle);
 }
 
 export function extractAllApplyData(

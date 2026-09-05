@@ -59,5 +59,5 @@ class ResourceStreamDeadlineMiddleware:
                             "more_body": False,
                         }
                     )
-            except (TimeoutError, OSError):
+            except OSError:
                 return

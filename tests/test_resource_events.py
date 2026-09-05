@@ -38,7 +38,7 @@ from songmaker_cli.lifecycle import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_test_db(tmp_path / "resource-events.db")
 

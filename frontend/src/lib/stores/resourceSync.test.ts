@@ -329,7 +329,7 @@ describe('resource sync interleavings', () => {
 		await controller.waitForReady();
 		expect(get(store).status).toBe('live');
 		expect(upserted.at(-1)?.generations.map((item) => item.id)).toEqual(['g-mid']);
-		expect(fetchCalls.filter((id) => id === 's1').length).toBe(1);
+		expect(fetchCalls.filter((id) => id === 's1')).toHaveLength(1);
 	});
 
 	it('commit during snapshot is buffered and visible once', async () => {
@@ -658,7 +658,7 @@ describe('resource sync owner', () => {
 		window.dispatchEvent(new Event('focus'));
 		document.dispatchEvent(new Event('visibilitychange'));
 		await flush();
-		expect(fetchCalls.length).toBe(before);
+		expect(fetchCalls).toHaveLength(before);
 	});
 
 	it('counts bootstrap failures across hello frames until retry is shown', async () => {
@@ -831,13 +831,13 @@ describe('resource sync owner', () => {
 		latestSource(sources).error();
 		await flush();
 		expect(get(store).status).toBe('reconnecting');
-		expect(sources.length).toBe(beforeError);
+		expect(sources).toHaveLength(beforeError);
 
 		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS - 1);
-		expect(sources.length).toBe(beforeError);
+		expect(sources).toHaveLength(beforeError);
 
 		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
-		expect(sources.length).toBe(beforeError + 1);
+		expect(sources).toHaveLength(beforeError + 1);
 	});
 
 	it('grows the backoff delay on successive live drops and resets after a hello', async () => {
@@ -851,16 +851,16 @@ describe('resource sync owner', () => {
 		latestSource(sources).error();
 		await flush();
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		expect(sources.length).toBe(2);
+		expect(sources).toHaveLength(2);
 
 		latestSource(sources).error();
 		await flush();
 		await vi.advanceTimersByTimeAsync(
 			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
 		);
-		expect(sources.length).toBe(2);
+		expect(sources).toHaveLength(2);
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		expect(sources.length).toBe(3);
+		expect(sources).toHaveLength(3);
 
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
@@ -869,7 +869,7 @@ describe('resource sync owner', () => {
 		await vi.advanceTimersByTimeAsync(
 			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
 		);
-		expect(sources.length).toBe(4);
+		expect(sources).toHaveLength(4);
 	});
 
 	it('cancels a pending reconnect when the owner stops', async () => {
@@ -885,7 +885,7 @@ describe('resource sync owner', () => {
 		await flush();
 		controller.stop();
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		expect(sources.length).toBe(beforeError);
+		expect(sources).toHaveLength(beforeError);
 	});
 
 	it('drops a 404 song instead of retrying it forever', async () => {

@@ -23,6 +23,10 @@ from songmaker_cli.api_models import (
     SharedSongItem,
     SharedSongResponse,
 )
+from songmaker_cli.api_models.playlists import (
+    shared_playlist_album_cover_urls,
+    shared_playlist_cover_urls,
+)
 from songmaker_cli.api_models.songs import (
     public_album_cover_urls,
     public_album_cover_urls_at,
@@ -54,7 +58,9 @@ from songmaker_cli.covers import (
     CoverRejectedError,
     album_cover_file_exists,
     cover_media_type,
+    playlist_cover_file_exists,
     resolve_cover_file,
+    resolve_playlist_cover_file,
     resolve_song_cover_file,
     song_cover_file_exists,
 )
@@ -211,7 +217,10 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
     raise HTTPException(404, "Queue stream not found")
 
 
-@router.get("/audio/{owner_id}/{filename}")
+@router.get(
+    "/audio/{owner_id}/{filename}",
+    responses={404: {"description": "Audio file not found"}},
+)
 async def get_audio(
     owner_id: str, filename: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -228,7 +237,10 @@ async def get_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/{slug}")
+@router.get(
+    "/shared/{slug}",
+    responses={404: {"description": "Shared album not found"}},
+)
 def get_shared_album(
     slug: str,
     request: Request,
@@ -266,7 +278,10 @@ def get_shared_album(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/{slug}/cover")
+@router.get(
+    "/shared/{slug}/cover",
+    responses={404: {"description": "Shared album or cover not found"}},
+)
 async def get_shared_album_cover(
     slug: str,
     request: Request,
@@ -294,7 +309,10 @@ async def get_shared_album_cover(
     )
 
 
-@router.post("/shared/{slug}/stream")
+@router.post(
+    "/shared/{slug}/stream",
+    responses={404: {"description": "Shared album not found"}},
+)
 def get_shared_album_stream(
     slug: str,
     request: Request,
@@ -341,7 +359,10 @@ def get_shared_album_stream(
     return public_queue_stream_manifest(snapshot)
 
 
-@router.get("/shared/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_audio(
     slug: str,
     filename: str,
@@ -362,7 +383,10 @@ def get_shared_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/song/{slug}")
+@router.get(
+    "/shared/song/{slug}",
+    responses={404: {"description": "Shared song not found"}},
+)
 def get_shared_song(
     slug: str,
     request: Request,
@@ -403,7 +427,10 @@ def get_shared_song(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/song/{slug}/album-cover")
+@router.get(
+    "/shared/song/{slug}/album-cover",
+    responses={404: {"description": "Shared song, album, or cover not found"}},
+)
 async def get_shared_song_album_cover(
     slug: str,
     request: Request,
@@ -432,7 +459,10 @@ async def get_shared_song_album_cover(
     )
 
 
-@router.get("/shared/song/{slug}/cover")
+@router.get(
+    "/shared/song/{slug}/cover",
+    responses={404: {"description": "Shared song or cover not found"}},
+)
 async def get_shared_song_cover(
     slug: str,
     request: Request,
@@ -460,7 +490,10 @@ async def get_shared_song_cover(
     )
 
 
-@router.get("/shared/song/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/song/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_song_audio(
     slug: str,
     filename: str,
@@ -481,7 +514,10 @@ def get_shared_song_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/gen/{slug}")
+@router.get(
+    "/shared/gen/{slug}",
+    responses={404: {"description": "Shared generation not found"}},
+)
 def get_shared_generation(
     slug: str,
     request: Request,
@@ -524,7 +560,10 @@ def get_shared_generation(
     return JSONResponse(response.model_dump())
 
 
-@router.get("/shared/gen/{slug}/album-cover")
+@router.get(
+    "/shared/gen/{slug}/album-cover",
+    responses={404: {"description": "Shared generation, album, or cover not found"}},
+)
 async def get_shared_generation_album_cover(
     slug: str,
     request: Request,
@@ -553,7 +592,10 @@ async def get_shared_generation_album_cover(
     )
 
 
-@router.get("/shared/gen/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/gen/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_gen_audio(
     slug: str,
     filename: str,
@@ -579,7 +621,10 @@ def get_shared_gen_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/playlist/{slug}")
+@router.get(
+    "/shared/playlist/{slug}",
+    responses={404: {"description": "Shared playlist not found"}},
+)
 def get_shared_playlist(
     slug: str,
     request: Request,
@@ -595,26 +640,115 @@ def get_shared_playlist(
     for e in entries:
         if e.generation is None:
             continue
-        gen = e.generation
-        media = share_pick_media(gen)
-        entry_items.append(SharedPlaylistEntryResponse(
-            entry_id=e.id,
-            song_title=gen.song.title if gen.song else "",
-            artist=gen.song.album.artist if gen.song and gen.song.album else "",
-            generation_number=gen.generation_number,
-            audio_url=_shared_audio_url(
-                f"/shared/playlist/{slug}/audio", gen,
-            ),
-            generation_id=media.generation_id,
-            audio_duration=media.audio_duration,
-            lyrics=media.lyrics,
-            whisper_cues=media.whisper_cues,
+        entry_items.append(SharedPlaylistEntryResponse.from_orm(
+            e,
+            audio_url=_shared_audio_url(f"/shared/playlist/{slug}/audio", e.generation),
         ))
-    response = SharedPlaylistResponse(title=playlist.title, entries=entry_items)
+    cover = None
+    if playlist_cover_file_exists(ctx.audio_dir, playlist.id, playlist.cover_key):
+        cover = shared_playlist_cover_urls(slug, playlist.cover_key)
+    album_covers = []
+    covered_album_ids = set()
+    if cover is None:
+        for entry in entries:
+            song = entry.generation.song if entry.generation else None
+            album = song.album if song else None
+            if (
+                album is None
+                or album.id in covered_album_ids
+                or not album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
+            ):
+                continue
+            covered_album_ids.add(album.id)
+            album_covers.append(shared_playlist_album_cover_urls(
+                slug, album.id, album.cover_key,
+            ))
+            if len(album_covers) == 4:
+                break
+    response = SharedPlaylistResponse.from_orm(
+        playlist,
+        entries=entry_items,
+        cover=cover,
+        album_covers=album_covers,
+    )
     return JSONResponse(response.model_dump())
 
 
-@router.post("/shared/playlist/{slug}/stream")
+@router.get(
+    "/shared/playlist/{slug}/cover",
+    responses={404: {"description": "Shared playlist or cover not found"}},
+)
+async def get_shared_playlist_cover(
+    slug: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+    if v is not None and v != playlist.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_playlist_cover_file(
+            ctx.audio_dir, playlist.id, playlist.cover_key, variant,
+        )
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, playlist.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.get(
+    "/shared/playlist/{slug}/album-cover/{album_id}",
+    responses={404: {"description": "Shared playlist, album, or cover not found"}},
+)
+async def get_shared_playlist_album_cover(
+    slug: str,
+    album_id: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+    album = next((
+        entry.generation.song.album
+        for entry in playlist.entries
+        if entry.generation and entry.generation.song and entry.generation.song.album
+        and entry.generation.song.album.id == album_id
+    ), None)
+    if album is None or (v is not None and v != album.cover_key):
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, album.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.post(
+    "/shared/playlist/{slug}/stream",
+    responses={404: {"description": "Shared playlist not found"}},
+)
 def get_shared_playlist_stream(
     slug: str,
     request: Request,
@@ -663,7 +797,10 @@ def get_shared_playlist_stream(
     return public_queue_stream_manifest(snapshot)
 
 
-@router.get("/shared/playlist/{slug}/audio/{filename:path}")
+@router.get(
+    "/shared/playlist/{slug}/audio/{filename:path}",
+    responses={404: {"description": "Shared audio file not found"}},
+)
 def get_shared_playlist_audio(
     slug: str,
     filename: str,
@@ -684,7 +821,10 @@ def get_shared_playlist_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.get("/shared/queue-streams/{snapshot_id}/audio")
+@router.get(
+    "/shared/queue-streams/{snapshot_id}/audio",
+    responses={404: {"description": "Queue stream not found"}},
+)
 def get_shared_queue_stream_audio(
     snapshot_id: str,
     request: Request,

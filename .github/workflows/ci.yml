@@ -60,7 +60,8 @@ jobs:
       - name: Run tests with coverage
         run: |
           set -o pipefail
-          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci | tee pytest-output.txt
+          mkdir -p reports
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-fail-under=90 --cov-config=.coveragerc-ci | tee pytest-output.txt
 
       - name: Coverage summary
         if: always()
@@ -69,6 +70,16 @@ jobs:
           passed=$(grep -oP '^\d+ passed' pytest-output.txt | awk '{print $1}')
           skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
           echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload backend coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
+        with:
+          name: sonar-coverage-backend
+          path: reports/coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
   acceptance-evidence:
     name: Acceptance evidence (integration)
@@ -221,3 +232,45 @@ jobs:
           cov=$(grep -E 'Statements\s*:' vitest-output.txt | tail -1 || true)
           echo "### Frontend: ${line}" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$cov" ]; then echo "### Coverage: ${cov}" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Upload frontend coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
+        with:
+          name: sonar-coverage-frontend
+          # Upload the reports root so the scan job restores the lcov file at
+          # reports/frontend-coverage/lcov.info, its configured path.
+          path: reports
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # #679: SonarCloud needs CI-based analysis to receive the backend and
+  # frontend coverage reports; Automatic Analysis cannot consume them.
+  sonar:
+    name: SonarCloud scan
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    # Checkout + artifact download + scan; no test suite runs here.
+    timeout-minutes: 10
+    steps:
+      - name: Check out the event commit with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: sonar-coverage-*
+          path: reports
+          merge-multiple: true
+
+      - name: SonarCloud scan
+        # Until the operator disables Automatic Analysis in SonarCloud, the
+        # service rejects CI analysis. The advisory scan must not block CI.
+        continue-on-error: true
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

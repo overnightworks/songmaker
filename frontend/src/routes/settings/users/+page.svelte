@@ -83,6 +83,7 @@
 		COWRITER_SAVE_CHANGED,
 		COWRITER_SAVE_MODEL_REQUIRED,
 		COWRITER_SAVE_NOTHING_CHANGED,
+		COWRITER_SAVE_SAVED,
 		PROVIDER_ROUTE_API_LABEL,
 		PROVIDER_ROUTE_ACTIVE_LABEL,
 		PROVIDER_ROUTE_BROKEN_LABEL,
@@ -196,6 +197,7 @@
 	let cowriterBudget = $state(0);
 	let cowriterRoutes = $state<Record<string, 'cli' | 'api'>>({});
 	let savingCowriter = $state(false);
+	let cowriterSaveSucceeded = $state(false);
 
 	let judgeSettings = $state<JudgeSettings | null>(null);
 	let judgeProvider = $state('claude');
@@ -601,13 +603,15 @@
 	const cowriterSaveReason = $derived(
 		savingCowriter
 			? ''
-			: !cowriterDirty
-				? COWRITER_SAVE_NOTHING_CHANGED
-				: cowriterRouteStatusAvailable && cowriterRoutesToSave === undefined
+			: cowriterDirty
+				? cowriterRouteStatusAvailable && cowriterRoutesToSave === undefined
 					? PROVIDER_ROUTE_CONFIGURATION_REQUIRED
 					: cowriterModel === ''
 						? COWRITER_SAVE_MODEL_REQUIRED
 						: COWRITER_SAVE_CHANGED
+				: cowriterSaveSucceeded
+					? COWRITER_SAVE_SAVED
+					: COWRITER_SAVE_NOTHING_CHANGED
 	);
 
 	const judgeModels = $derived(judgeSettings?.models_by_provider?.[judgeProvider] ?? []);
@@ -618,10 +622,22 @@
 	);
 	const judgeCanSave = $derived(judgeDirty && judgeModel !== '' && !savingJudge);
 
+	function savedCowriterModel(provider: string, models: string[]): string | null {
+		const savedModel =
+			cowriterSettings?.selected_models_by_provider?.[provider] ??
+			(cowriterSettings?.provider === provider ? cowriterSettings.model : undefined);
+		return savedModel && models.includes(savedModel) ? savedModel : null;
+	}
+
+	function cowriterCardModel(provider: string, models: string[]): string {
+		if (provider === cowriterProvider) return cowriterModel;
+		return savedCowriterModel(provider, models) ?? models[0] ?? '';
+	}
+
 	function selectCowriterProvider(provider: string): void {
 		cowriterProvider = provider;
 		const models = routeModels(provider, selectedCowriterRoute(provider));
-		cowriterModel = models[0] ?? '';
+		cowriterModel = savedCowriterModel(provider, models) ?? models[0] ?? '';
 	}
 
 	function selectCowriterRoute(provider: string, route: ProviderRoute): void {
@@ -656,6 +672,7 @@
 			cowriterModel = cowriterSettings.model;
 			cowriterBudget = cowriterSettings.tail_token_budget;
 			cowriterRoutes = { ...(cowriterSettings.provider_routes ?? {}) };
+			cowriterSaveSucceeded = true;
 		} catch (e) {
 			error =
 				providerNotConfiguredMessage(e) ??
@@ -1451,7 +1468,7 @@
 												>
 												<select
 													id={`cowriter-model-${provider}`}
-													value={provider === cowriterProvider ? cowriterModel : (models[0] ?? '')}
+													value={cowriterCardModel(provider, models)}
 													disabled={provider !== cowriterProvider ||
 														models.length === 0 ||
 														!selectedRouteReady}

@@ -60,6 +60,8 @@ bash scripts/download_models.sh       # Downloads all model variants to vendor/a
 sits here; a `pytest tests/ -n auto` or `pnpm test` (all files) plus coverage
 blocks the desktop. Same rule as atelier-2: the land gate is GitHub CI.
 
+Local pytest runs are targeted and omit `-n auto`; GitHub CI explicitly sets `-n auto`.
+
 Local, always **targeted**:
 
 ```bash

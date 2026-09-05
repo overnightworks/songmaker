@@ -256,6 +256,7 @@ export interface CowriterSettings {
 	allowed_providers: string[];
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
+	selected_models_by_provider: Record<string, string>;
 	models_errors: Record<string, string>;
 	models_sources: Record<string, string>;
 	current_models_not_in_catalog: Record<string, string>;
@@ -936,6 +937,8 @@ export interface SharedPlaylistEntryPayload {
 export interface SharedPlaylistPayload {
 	title: string;
 	entries: SharedPlaylistEntryPayload[];
+	cover?: AlbumCoverUrls | null;
+	album_covers: AlbumCoverUrls[];
 }
 
 export interface SharedSongPayload {
@@ -1068,6 +1071,7 @@ export interface UserLoraItem {
 	name: string;
 	slug: string;
 	status: string;
+	model_mode: string;
 	storage_path?: string | null;
 	tensor_path?: string | null;
 	training_job_id?: string | null;

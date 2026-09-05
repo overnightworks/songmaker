@@ -681,7 +681,9 @@ def test_concurrent_lease_limiter_enforces_scope_global_release_and_pruning() ->
     )
     alice_one = limiter.acquire("alice")
     alice_two = limiter.acquire("alice")
-    assert alice_one and alice_two and alice_one != alice_two
+    assert alice_one
+    assert alice_two
+    assert alice_one != alice_two
     assert limiter.acquire("alice") is None
     bob_one = limiter.acquire("bob")
     assert bob_one
@@ -1090,10 +1092,14 @@ def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> 
     async def _starts_response(_scope, _receive, send) -> None:
         await send({"type": "http.response.start", "status": 200, "headers": []})
 
+    broken_middleware = ResourceStreamDeadlineMiddleware(_broken_app, 1)
+    broken_call = broken_middleware(scope, _receive, _send)
     with pytest.raises(RuntimeError, match="application failed"):
-        asyncio.run(ResourceStreamDeadlineMiddleware(_broken_app, 1)(scope, _receive, _send))
+        asyncio.run(broken_call)
+    starts_middleware = ResourceStreamDeadlineMiddleware(_starts_response, 1)
+    starts_call = starts_middleware(scope, _receive, _send)
     with pytest.raises(ValueError, match="downstream send failed"):
-        asyncio.run(ResourceStreamDeadlineMiddleware(_starts_response, 1)(scope, _receive, _send))
+        asyncio.run(starts_call)
 
 
 def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

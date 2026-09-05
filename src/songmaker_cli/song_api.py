@@ -143,7 +143,10 @@ def api_get_song(
     return SongResponse.from_orm(song)
 
 
-@router.post("/songs")
+@router.post(
+    "/songs",
+    responses={404: {"description": "Album or reference audio not found"}},
+)
 def api_create_song(
     req: SongCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -167,7 +170,10 @@ def api_create_song(
     return SongResponse.from_orm(song)
 
 
-@router.put("/songs/{song_id}")
+@router.put(
+    "/songs/{song_id}",
+    responses={404: {"description": "Song or reference audio not found"}},
+)
 def api_update_song(
     song_id: str, req: SongUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -192,7 +198,13 @@ def api_update_song(
     return SongResponse.from_orm(version.song)
 
 
-@router.put("/songs/{song_id}/title")
+@router.put(
+    "/songs/{song_id}/title",
+    responses={
+        404: {"description": "Song not found"},
+        422: {"description": "Song title is required"},
+    },
+)
 def api_rename_song(
     song_id: str, req: TitleUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -214,7 +226,10 @@ def api_rename_song(
     return SongResponse.from_orm(song)
 
 
-@router.put("/songs/{song_id}/album")
+@router.put(
+    "/songs/{song_id}/album",
+    responses={404: {"description": "Song or album not found"}},
+)
 def api_move_song(
     song_id: str, req: SongMoveRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -238,7 +253,10 @@ def api_move_song(
     return SongResponse.from_orm(song)
 
 
-@router.delete("/songs/{song_id}")
+@router.delete(
+    "/songs/{song_id}",
+    responses={404: {"description": "Song not found"}},
+)
 def api_delete_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -254,7 +272,13 @@ def api_delete_song(
     return StatusResponse()
 
 
-@router.post("/songs/{song_id}/restore")
+@router.post(
+    "/songs/{song_id}/restore",
+    responses={
+        404: {"description": "Song not found"},
+        410: {"description": "Song restore window has expired"},
+    },
+)
 def api_restore_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -272,7 +296,10 @@ def api_restore_song(
     return SongResponse.from_orm(restored)
 
 
-@router.post("/songs/{song_id}/listen")
+@router.post(
+    "/songs/{song_id}/listen",
+    responses={422: {"description": "Song has no playable take"}},
+)
 def api_record_song_listen(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -304,7 +331,10 @@ def api_cleanup_song(
     return CleanupResponse(deleted=count)
 
 
-@router.post("/songs/{song_id}/share")
+@router.post(
+    "/songs/{song_id}/share",
+    responses={404: {"description": "Song not found"}},
+)
 def api_share_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -324,7 +354,10 @@ def api_share_song(
     )
 
 
-@router.get("/songs/{song_id}/cover")
+@router.get(
+    "/songs/{song_id}/cover",
+    responses={404: {"description": "Song or cover not found"}},
+)
 async def api_get_song_cover(
     song_id: str,
     variant: str = Query(COVER_VARIANT_DETAIL),
@@ -384,7 +417,10 @@ def api_delete_song_cover(
     return SongResponse.from_orm(song)
 
 
-@router.delete("/songs/{song_id}/share")
+@router.delete(
+    "/songs/{song_id}/share",
+    responses={404: {"description": "Song not found"}},
+)
 def api_unshare_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -410,7 +446,10 @@ def api_song_versions(
     return [VersionResponse.from_orm(v) for v in reversed(song.versions)]
 
 
-@router.delete("/versions/{version_id}")
+@router.delete(
+    "/versions/{version_id}",
+    responses={404: {"description": "Version not found"}},
+)
 def api_delete_version(
     version_id: str,
     delete_generations: bool = Query(False),

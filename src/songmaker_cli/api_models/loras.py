@@ -73,6 +73,7 @@ class UserLoraResponse(BaseModel):
     name: str
     slug: str
     status: str
+    model_mode: str
     storage_path: str | None = None
     tensor_path: str | None = None
     training_job_id: str | None = None
@@ -91,6 +92,7 @@ class UserLoraResponse(BaseModel):
             name=lora.name,
             slug=lora.slug,
             status=lora.status,
+            model_mode=lora.model_mode,
             storage_path=lora.storage_path,
             tensor_path=lora.tensor_path,
             training_job_id=lora.training_job_id,

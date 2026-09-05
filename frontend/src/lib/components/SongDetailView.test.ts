@@ -79,6 +79,7 @@ const deleteSongCover = vi.fn();
 const deleteAlbumCover = vi.fn();
 const fetchHealth = vi.fn();
 const generateSong = vi.fn();
+const listLoras = vi.fn();
 
 // Stands in for the router the way the real one behaves for this app (issue
 // #275): a song selection can now cross from the wall's `/` into the song's
@@ -99,6 +100,10 @@ vi.mock('$lib/api/albums', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi.fn()
 }));
+vi.mock('$lib/api/loras', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/loras')>();
+	return { ...actual, listLoras: (...args: unknown[]) => listLoras(...args) };
+});
 vi.mock('$lib/api/songs', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
@@ -171,6 +176,7 @@ import writeColumnSource from './editor/WriteColumn.svelte?raw';
 import { addGenerationToPlaylist } from '$lib/api/client';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
+import { loras } from '$lib/stores/loras';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -395,6 +401,9 @@ beforeEach(() => {
 	fetchHealth.mockReset();
 	fetchHealth.mockResolvedValue(healthSummary());
 	generateSong.mockReset();
+	listLoras.mockReset();
+	listLoras.mockResolvedValue([]);
+	loras.set([]);
 	activeJobs.set([]);
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.mocked(addToast).mockClear();
@@ -516,6 +525,37 @@ describe('SongDetailView adding a take to a playlist', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
+	it('loads deleted voices once and names their existing takes', async () => {
+		listLoras.mockResolvedValueOnce([
+			{
+				id: 'l1',
+				user_id: 'u1',
+				name: 'Folk Alto',
+				slug: 'folk-alto',
+				status: 'ready',
+				model_mode: 'sft',
+				created_at: '2026-01-01T00:00:00+00:00',
+				deleted_at: '2026-01-02T00:00:00+00:00',
+				samples: []
+			}
+		]);
+		songList.set([
+			song({
+				generations: [generation({ generation_params: { user_lora_id: 'l1' } })]
+			})
+		]);
+
+		const target = await renderView();
+		await vi.waitFor(() => expect(listLoras).toHaveBeenCalledOnce());
+		expect(listLoras).toHaveBeenCalledWith(true);
+		await tick();
+
+		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
+			'Voice: Folk Alto — voice deleted'
+		);
+		expect(visibleText(target)).not.toContain('Custom');
+	});
+
 	it.each([
 		['Repaint', 'repaint'],
 		['Cover', 'cover']

@@ -57,14 +57,16 @@ def test_initial_state() -> None:
 
 def test_load_unknown_mode_raises() -> None:
     cache, _, _ = _make_cache()
+    load_operation = cache.load("nonexistent")
     with pytest.raises(UnknownModeError):
-        _run(cache.load("nonexistent"))
+        _run(load_operation)
 
 
 def test_load_too_big_raises_capacity() -> None:
     cache, _, _ = _make_cache()
+    load_operation = cache.load("huge")
     with pytest.raises(CapacityError):
-        _run(cache.load("huge"))
+        _run(load_operation)
 
 
 def test_load_single_model() -> None:
@@ -282,8 +284,9 @@ def test_target_loading_cleared_on_loader_failure() -> None:
         loader=failing_loader,
         unloader=unloader,
     )
+    load_operation = cache.load("sft")
     with pytest.raises(RuntimeError, match="kaboom"):
-        _run(cache.load("sft"))
+        _run(load_operation)
     assert cache.target_loading is None
     assert cache.loaded_modes() == []
 
@@ -293,8 +296,9 @@ def test_target_loading_cleared_on_loader_failure() -> None:
 
 def test_pin_unknown_mode_raises() -> None:
     cache, _, _ = _make_cache()
+    pin_operation = cache.pin("sft")
     with pytest.raises(ModelNotLoadedError):
-        _run(cache.pin("sft"))
+        _run(pin_operation)
 
 
 def test_pin_then_is_pinned() -> None:
@@ -323,8 +327,9 @@ def test_evict_to_fit_skips_pinned_then_capacity_error() -> None:
     _run(cache.load("b"))
     _run(cache.pin("a"))
     _run(cache.pin("b"))
+    load_operation = cache.load("c")
     with pytest.raises(CapacityError, match="pinned"):
-        _run(cache.load("c"))
+        _run(load_operation)
     assert sorted(cache.loaded_modes()) == ["a", "b"]
     assert unloaded_log == []
 
@@ -428,8 +433,9 @@ def test_evict_to_fit_skips_in_use_then_capacity_error() -> None:
     _run(cache.load("b"))
     _run(cache.acquire_for_use("a"))
     _run(cache.acquire_for_use("b"))
+    load_operation = cache.load("c")
     with pytest.raises(CapacityError, match="in use"):
-        _run(cache.load("c"))
+        _run(load_operation)
     assert sorted(cache.loaded_modes()) == ["a", "b"]
     assert unloaded_log == []
 
@@ -452,8 +458,9 @@ def test_evict_explicit_refuses_in_use() -> None:
     cache, _, unloaded_log = _make_cache()
     _run(cache.load("sft"))
     _run(cache.acquire_for_use("sft"))
+    evict_operation = cache.evict("sft")
     with pytest.raises(CapacityError, match="in use"):
-        _run(cache.evict("sft"))
+        _run(evict_operation)
     assert cache.loaded_modes() == ["sft"]
     assert unloaded_log == []
 
@@ -577,8 +584,9 @@ def test_load_rejects_second_model_when_measured_vram_leaves_no_room() -> None:
     cache_box["cache"] = cache
     _run(cache.load("turbo"))
     _run(cache.pin("turbo"))
+    load_operation = cache.load("sft")
     with pytest.raises(CapacityError, match="measured"):
-        _run(cache.load("sft"))
+        _run(load_operation)
     assert cache.loaded_modes() == ["turbo"]
     assert unloaded_log == []
 
@@ -634,8 +642,9 @@ def test_load_rejects_without_destroying_anything_when_plan_would_still_fail() -
     _run(cache.load("sft"))
     _run(cache.load("xl-base"))
     _run(cache.pin("xl-base"))
+    load_operation = cache.load("xl-sft")
     with pytest.raises(CapacityError):
-        _run(cache.load("xl-sft"))
+        _run(load_operation)
     assert cache.loaded_modes() == ["sft", "xl-base"]
     assert unloaded_log == []
 
@@ -651,8 +660,9 @@ def test_load_rejects_without_destroying_anything_when_measured_and_plan_would_s
     _run(cache.load("sft"))
     _run(cache.load("xl-base"))
     _run(cache.pin("xl-base"))
+    load_operation = cache.load("xl-sft")
     with pytest.raises(CapacityError, match="measured"):
-        _run(cache.load("xl-sft"))
+        _run(load_operation)
     assert cache.loaded_modes() == ["sft", "xl-base"]
     assert unloaded_log == []
 
@@ -701,8 +711,9 @@ def test_load_rejects_when_gpu_already_full_with_nothing_tracked_loaded() -> Non
         sizes={"turbo": 6.0},
         vram_reader=lambda: VramStats(used_gb=23.0, total_gb=24.0),
     )
+    load_operation = cache.load("turbo")
     with pytest.raises(CapacityError, match="measured"):
-        _run(cache.load("turbo"))
+        _run(load_operation)
     assert cache.loaded_modes() == []
     assert loaded_log == []
 
@@ -741,6 +752,7 @@ def test_loading_last_log_line_cleared_on_loader_failure() -> None:
         loader=failing_loader,
         unloader=unloader,
     )
+    load_operation = cache.load("sft")
     with pytest.raises(RuntimeError, match="boom"):
-        _run(cache.load("sft"))
+        _run(load_operation)
     assert cache.loading_last_log_line is None

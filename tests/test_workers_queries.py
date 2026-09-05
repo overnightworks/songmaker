@@ -15,7 +15,7 @@ from songmaker_cli.db.queries import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_db(tmp_path / "workers.db")
     session = factory()
