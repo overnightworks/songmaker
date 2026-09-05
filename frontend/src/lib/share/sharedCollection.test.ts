@@ -104,7 +104,16 @@ describe('fromSharedPlaylist', () => {
 	it('maps a playlist payload to a collection view carrying per-entry artist', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
-			album_covers: [],
+			cover: {
+				card: '/shared/playlist/mix/cover?variant=card&v=uploaded.png',
+				detail: '/shared/playlist/mix/cover?variant=detail&v=uploaded.png'
+			},
+			album_covers: [
+				{
+					card: '/shared/playlist/mix/album-cover/a1?variant=card&v=album.png',
+					detail: '/shared/playlist/mix/album-cover/a1?variant=detail&v=album.png'
+				}
+			],
 			entries: [
 				{
 					entry_id: 'e1',
@@ -127,6 +136,16 @@ describe('fromSharedPlaylist', () => {
 
 		expect(view.kind).toBe('playlist');
 		expect(view.title).toBe('Late Night Mix');
+		expect(view.cover).toEqual({
+			card: '/shared/playlist/mix/cover?variant=card&v=uploaded.png',
+			detail: '/shared/playlist/mix/cover?variant=detail&v=uploaded.png'
+		});
+		expect(view.playlistCovers).toEqual([
+			{
+				card: '/shared/playlist/mix/album-cover/a1?variant=card&v=album.png',
+				detail: '/shared/playlist/mix/album-cover/a1?variant=detail&v=album.png'
+			}
+		]);
 		expect(view.tracks).toEqual([
 			track({
 				key: 'e1',
