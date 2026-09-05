@@ -93,6 +93,42 @@ function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	);
 }
 
+function refreshSongAfterTerminalJob(job: JobStatus, songId: string | undefined): void {
+	if (job.type !== JOB_TYPE_GENERATE && songId) {
+		void requestSongRefresh(songId);
+	}
+}
+
+function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
+	if (job.status === 'completed') {
+		refreshSongAfterTerminalJob(job, songId);
+		addToast(`${job.type} completed`, 'success');
+		return;
+	}
+	if (job.status === 'partial') {
+		refreshSongAfterTerminalJob(job, songId);
+		addToast(job.error || `${job.type} partially completed`, 'info');
+		return;
+	}
+	if (job.status === 'cancelled') {
+		addToast(`${job.type} cancelled`, 'info');
+		return;
+	}
+	const message = failureMessage(job);
+	if (songId && job.type === JOB_TYPE_GENERATE) {
+		generationFailures.update((failures) => ({ ...failures, [songId]: message }));
+	}
+	addToast(message, 'error');
+}
+
+function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource): void {
+	source.close();
+	eventSources.delete(jobId);
+	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
+	notifyTerminalJob(job, songId);
+	activeJobs.update((jobs) => jobs.filter((active) => active.job.id !== jobId));
+}
+
 export function trackJob(
 	job: JobStatus,
 	context: { songId?: string; albumId?: string; genId?: string; workerId?: string; mode?: string }
@@ -149,31 +185,7 @@ function streamJob(jobId: string, attempt = 0): void {
 		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
 
 		if (isTerminalJobStatus(updated.status)) {
-			source.close();
-			eventSources.delete(jobId);
-			const songId = get(activeJobs).find((j) => j.job.id === jobId)?.songId;
-
-			if (updated.status === 'completed') {
-				if (updated.type !== JOB_TYPE_GENERATE && songId) {
-					void requestSongRefresh(songId);
-				}
-				addToast(`${updated.type} completed`, 'success');
-			} else if (updated.status === 'partial') {
-				if (updated.type !== JOB_TYPE_GENERATE && songId) {
-					void requestSongRefresh(songId);
-				}
-				addToast(updated.error || `${updated.type} partially completed`, 'info');
-			} else if (updated.status === 'cancelled') {
-				addToast(`${updated.type} cancelled`, 'info');
-			} else {
-				const message = failureMessage(updated);
-				if (songId && updated.type === JOB_TYPE_GENERATE) {
-					generationFailures.update((failures) => ({ ...failures, [songId]: message }));
-				}
-				addToast(message, 'error');
-			}
-
-			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
+			completeTrackedJob(jobId, updated, source);
 		}
 	};
 
