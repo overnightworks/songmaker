@@ -122,6 +122,37 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     )
 
 
+def claim_next_cover_job(session: Session) -> Job | None:
+    """Atomically move the oldest queued cover job to running.
+
+    The status predicate is deliberately repeated on the UPDATE.  Competing
+    web processes may select the same candidate, but only one can change its
+    queued row and receive it through RETURNING.
+    """
+    candidate_id = (
+        session.query(Job.id)
+        .filter(Job.type == JobType.COVER, Job.status == JobStatus.QUEUED)
+        .order_by(Job.started_at.asc(), Job.id.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    now = datetime.now(timezone.utc)
+    claimed_id = session.execute(
+        update(Job)
+        .where(
+            Job.id == candidate_id,
+            Job.type == JobType.COVER,
+            Job.status == JobStatus.QUEUED,
+        )
+        .values(status=JobStatus.RUNNING, heartbeat_at=now)
+        .returning(Job.id),
+    ).scalar_one_or_none()
+    if claimed_id is None:
+        return None
+    session.flush()
+    return session.get(Job, claimed_id)
+
+
 def update_job_status(
     session: Session, job_id: str, status: str,
     progress: float = 0.0, error: str | None = None,
