@@ -28,6 +28,14 @@ from songmaker_cli.scoring.subprocess_runner import (
 _ctx = multiprocessing.get_context("spawn")
 
 
+def _set_required_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let monkeypatch restore settings after an in-process child run scrubs them."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("SESSION_SECRET", "x" * 64)
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
+
+
 class _FakeConnection:
     def __init__(
         self,
@@ -214,6 +222,7 @@ def test_child_publishes_progress_and_a_terminal_pipeline_result(
     from songmaker_cli.scoring import pipeline
     from songmaker_cli.scoring.pipeline import PipelineConfig
 
+    _set_required_settings_env(monkeypatch)
     request = ScoreRequest(
         mp3_path=Path("song.mp3"),
         meta=None,
@@ -247,6 +256,7 @@ def test_child_stops_cleanly_when_its_parent_connection_closes(
 ) -> None:
     from songmaker_cli.scoring import pipeline
 
+    _set_required_settings_env(monkeypatch)
     conn = _FakeConnection()
     monkeypatch.setattr(pipeline.default_registry, "ensure_loaded", lambda: None)
     monkeypatch.setattr("songmaker_cli.scoring.subprocess_runner.signal.signal", lambda *_: None)
