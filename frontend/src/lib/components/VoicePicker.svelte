@@ -25,7 +25,9 @@
 	let open = $state(false);
 
 	function isSelectable(lora: UserLoraItem): boolean {
-		return lora.status === 'ready' && lora.deleted_at === null && lora.model_mode === targetModelMode;
+		return (
+			lora.status === 'ready' && lora.deleted_at === null && lora.model_mode === targetModelMode
+		);
 	}
 
 	function unavailableLabel(lora: UserLoraItem): string | null {
