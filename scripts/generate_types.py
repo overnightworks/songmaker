@@ -51,6 +51,7 @@ export interface PaginatedResponse<T> {
 
 TS_MODEL_NAMES: dict[str, str] = {
     "AddAlbumToPlaylistResponse": "AddAlbumToPlaylistResult",
+    "AdminUserLoraResponse": "AdminUserLoraItem",
     "BaseGenerationParams": "VersionGenerationParams",
     "GenerationCreatedResourceEvent": "GenerationCreatedResourceEvent",
     "QueueStreamLibraryRequest": "LibraryQueueStreamRequest",

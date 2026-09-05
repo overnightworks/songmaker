@@ -27,6 +27,7 @@ from songmaker_cli.api_helpers import (
     page_has_more,
 )
 from songmaker_cli.api_models import (
+    AdminUserLoraResponse,
     AuditLogResponse,
     CreateUserRequest,
     EvictModelOnWorkerRequest,
@@ -77,6 +78,7 @@ from songmaker_cli.db.queries import (
     list_audit_log,
     list_login_attempts,
     list_song_ids_for_owner,
+    list_user_loras_for_admin,
     list_users,
     list_worker_identities,
     record_audit,
@@ -108,6 +110,17 @@ def list_users_endpoint(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[UserResponse]:
     return [UserResponse.from_orm(u) for u in list_users(db)]
+
+
+@router.get("/voices")
+def list_voices_endpoint(
+    db: Session = Depends(get_db_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[AdminUserLoraResponse]:
+    return [
+        AdminUserLoraResponse.from_orm(lora, owner_username)
+        for lora, owner_username in list_user_loras_for_admin(db)
+    ]
 
 
 @router.post("/users")

@@ -45,6 +45,7 @@ from songmaker_cli.api_models.library import (
     ShareInventoryType,
 )
 from songmaker_cli.api_models.loras import (
+    AdminUserLoraResponse,
     LoraCapacityErrorResponse,
     LoraCapacityReason,
     OwnPlayableTakeListResponse,
@@ -227,6 +228,7 @@ __all__ = [
     "AddAlbumToPlaylistResponse",
     "AddGenerationToPlaylistRequest",
     "AddSongToPlaylistRequest",
+    "AdminUserLoraResponse",
     "AlbumCoverUrls",
     "AlbumCreateRequest",
     "AlbumResponse",
