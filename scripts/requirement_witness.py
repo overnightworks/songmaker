@@ -61,7 +61,7 @@ class ApprovalRequest:
     comment_id: int
 
     def __post_init__(self) -> None:
-        if re.fullmatch(r"[0-9]{4}", self.document) is None:
+        if re.fullmatch(r"(?a:\d{4})", self.document) is None:
             raise LiveWitnessError("approval request has an invalid document id")
         if DIGEST.fullmatch(self.content_sha256) is None:
             raise LiveWitnessError("approval request has an invalid content digest")
@@ -390,7 +390,7 @@ def _text_field(raw: dict[str, Any], field: str, owner: str) -> str:
 def _timestamp_field(raw: dict[str, Any], field: str) -> str:
     value = _text_field(raw, field, "comment")
     if re.fullmatch(
-        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value
+        r"(?a:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", value
     ) is None:
         raise LiveWitnessError(f"live comment has invalid {field}")
     try:

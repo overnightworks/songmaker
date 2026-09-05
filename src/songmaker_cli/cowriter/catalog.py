@@ -57,6 +57,8 @@ _ANTHROPIC_SDK_DISTRIBUTION: Final = "anthropic"
 ANTHROPIC_API_KEY_ENVIRONMENT: Final = "ANTHROPIC_API_KEY"
 XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
+_API_KEY_SETUP_LABEL: Final = "API key"
+_CLI_LOGIN_SETUP_LABEL: Final = "CLI login"
 
 # Owner: Codex CLI route. Checked 2026-09-04: ``codex --help`` and
 # ``codex exec --help`` accept ``--model <MODEL>`` but do not enumerate models.
@@ -229,7 +231,7 @@ def _refresh_provider_route(
         reason = normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET)
         return ProviderRouteSnapshot(
             (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-            capability, reason, now, "API key",
+            capability, reason, now, _API_KEY_SETUP_LABEL,
         )
     if (
         route is ProviderRoute.API
@@ -239,7 +241,7 @@ def _refresh_provider_route(
         reason = normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR)
         return ProviderRouteSnapshot(
             (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-            capability, reason, now, "API key",
+            capability, reason, now, _API_KEY_SETUP_LABEL,
         )
     if route is ProviderRoute.CLI:
         try:
@@ -247,13 +249,13 @@ def _refresh_provider_route(
                 reason = normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
                 return ProviderRouteSnapshot(
                     (), None, None, None, ProviderRouteReadinessState.NOT_CONFIGURED,
-                    capability, reason, now, "CLI login",
+                    capability, reason, now, _CLI_LOGIN_SETUP_LABEL,
                 )
         except AgentCliUnavailableError:
             reason = normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
             return ProviderRouteSnapshot(
                 (), None, None, None, ProviderRouteReadinessState.DISTURBED,
-                capability, reason, now, "CLI login",
+                capability, reason, now, _CLI_LOGIN_SETUP_LABEL,
             )
     try:
         models = tuple(list_provider_models(provider, route))
@@ -263,7 +265,8 @@ def _refresh_provider_route(
         )
         return ProviderRouteSnapshot(
             (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
-            capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+            capability, reason, now,
+            _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
         )
     except ProviderUnavailableError as exc:
         reason = exc.reason or normalize_route_failure(
@@ -271,14 +274,16 @@ def _refresh_provider_route(
         )
         return ProviderRouteSnapshot(
             (), reason, None, None, ProviderRouteReadinessState.DISTURBED,
-            capability, reason, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+            capability, reason, now,
+            _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
         )
     source = _CODEX_CLI_KNOWN_MODELS_SOURCE if (
         provider == _CODEX_PROVIDER and route is ProviderRoute.CLI
     ) else "provider API" if route is ProviderRoute.API else "provider CLI"
     return ProviderRouteSnapshot(
         models, None, source, None, ProviderRouteReadinessState.READY,
-        capability, None, now, "CLI login" if route is ProviderRoute.CLI else "API key",
+        capability, None, now,
+        _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
     )
 
 

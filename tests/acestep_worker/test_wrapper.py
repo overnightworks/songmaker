@@ -137,6 +137,35 @@ def test_health_endpoint(tmp_path: Path) -> None:
     assert resp.json() == {"status": "ok"}
 
 
+@pytest.mark.parametrize(
+    ("path", "method", "error_statuses"),
+    [
+        pytest.param("/health", "get", {"503"}, id="health"),
+        pytest.param("/load_model", "post", {"400", "409", "502"}, id="load-model"),
+        pytest.param("/evict_model", "post", {"409"}, id="evict-model"),
+        pytest.param("/pin_model", "post", {"409"}, id="pin-model"),
+        pytest.param("/generate", "post", {"409"}, id="generate"),
+        pytest.param("/gpu_hold/reserve", "post", {"409"}, id="reserve-gpu-hold"),
+        pytest.param("/gpu_hold/renew", "post", {"409"}, id="renew-gpu-hold"),
+        pytest.param("/gpu_hold/release", "post", {"409"}, id="release-gpu-hold"),
+        pytest.param("/tasks/train_lora", "post", {"409", "422", "501"}, id="train-lora"),
+        pytest.param("/tasks/{task_id}", "get", {"404"}, id="get-task"),
+        pytest.param("/tasks/{task_id}/stream", "get", {"404"}, id="stream-task"),
+    ],
+)
+def test_worker_api_documents_its_http_error_responses(
+    tmp_path: Path,
+    path: str,
+    method: str,
+    error_statuses: set[str],
+) -> None:
+    deps, _ = _make_deps(tmp_path)
+    schema = create_app(deps).openapi()
+    documented_responses = schema["paths"][path][method]["responses"]
+
+    assert error_statuses.issubset(documented_responses)
+
+
 def test_health_returns_503_when_gpu_is_unavailable(tmp_path: Path) -> None:
     """Issue #367: a worker whose NVML call fails (GPU vanished, driver
     mismatch) must fail its own healthcheck — never stay green while

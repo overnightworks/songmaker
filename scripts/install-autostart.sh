@@ -43,7 +43,7 @@
 set -euo pipefail
 
 FORCE=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --force) FORCE=1; shift ;;
         *) echo "ERROR: unknown argument '$1'. Usage: $0 [--force]" >&2; exit 2 ;;
@@ -71,32 +71,32 @@ ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
 PREFLIGHT_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 
-if [ ! -f "$UNIT_SOURCE" ]; then
+if [[ ! -f "$UNIT_SOURCE" ]]; then
     echo "ERROR: $UNIT_SOURCE not found." >&2
     exit 1
 fi
 
-if [ ! -f "$ALERT_UNIT_SOURCE" ]; then
+if [[ ! -f "$ALERT_UNIT_SOURCE" ]]; then
     echo "ERROR: $ALERT_UNIT_SOURCE not found." >&2
     exit 1
 fi
 
-if [ ! -x "$ALERT_SCRIPT" ]; then
+if [[ ! -x "$ALERT_SCRIPT" ]]; then
     echo "ERROR: $ALERT_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
-if [ ! -f "$ALERT_CONFIG_LIB" ]; then
+if [[ ! -f "$ALERT_CONFIG_LIB" ]]; then
     echo "ERROR: $ALERT_CONFIG_LIB not found." >&2
     exit 1
 fi
 
-if [ ! -x "$PREFLIGHT_SCRIPT" ]; then
+if [[ ! -x "$PREFLIGHT_SCRIPT" ]]; then
     echo "ERROR: $PREFLIGHT_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
-if [ "$INSTALL_USER" = "root" ]; then
+if [[ "$INSTALL_USER" = "root" ]]; then
     echo "ERROR: refusing to install a unit that runs as root." >&2
     echo "You're running this as root directly (no SUDO_USER set), so the unit" >&2
     echo "would get User=root and HOME=/root — that silently breaks the Claude" >&2
@@ -134,7 +134,7 @@ if PREFLIGHT_OUTPUT="$(sudo -u "$INSTALL_USER" "$PREFLIGHT_SCRIPT" 2>&1)"; then
     :
 else
     echo "ERROR: the agent-CLI mount preflight does not pass yet." >&2
-    if [ -n "$PREFLIGHT_OUTPUT" ]; then
+    if [[ -n "$PREFLIGHT_OUTPUT" ]]; then
         printf '%s\n' "$PREFLIGHT_OUTPUT" >&2
     fi
     echo "songmaker.service would then refuse to start the stack at boot." >&2
