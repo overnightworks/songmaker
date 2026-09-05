@@ -295,48 +295,60 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		options.onOpen?.(item);
 	}
 
-	function onKeyDown(event: KeyboardEvent) {
-		axis = readAxis();
-		if (event.key === 'Home' || event.key === 'End') {
-			const items = visibleItems();
-			if (items.length === 0) return;
-			event.preventDefault();
-			stopMomentum();
-			focusAndReveal(event.key === 'Home' ? items[0] : items[items.length - 1]);
-			return;
-		}
+	function boundaryKeyTarget(key: string): HTMLElement | null | undefined {
+		if (key !== 'Home' && key !== 'End') return undefined;
+		const items = visibleItems();
+		if (items.length === 0) return null;
+		return key === 'Home' ? items[0] : items[items.length - 1];
+	}
+
+	function navigationDirection(key: string): -1 | 0 | 1 {
 		const forwardKey = axis === 'x' ? 'ArrowRight' : 'ArrowDown';
 		const backwardKey = axis === 'x' ? 'ArrowLeft' : 'ArrowUp';
-		if (event.key !== forwardKey && event.key !== backwardKey) {
-			const target = event.target;
-			// Real buttons/links already turn Enter/Space into a native click that
-			// bubbles to onClick above — handling it here too would open twice.
-			// This branch exists for non-native item elements (e.g. role="button").
-			const isNativelyActivatable =
-				target instanceof HTMLElement && (target.tagName === 'BUTTON' || target.tagName === 'A');
-			if (
-				(event.key === 'Enter' || event.key === ' ') &&
-				!isNativelyActivatable &&
-				target instanceof Element &&
-				target.matches(options.itemSelector)
-			) {
+		if (key === forwardKey) return 1;
+		if (key === backwardKey) return -1;
+		return 0;
+	}
+
+	function openNonNativeKeyboardItem(event: KeyboardEvent): void {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		const target = event.target;
+		if (!(target instanceof HTMLElement) || !target.matches(options.itemSelector)) return;
+		if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement) return;
+		event.preventDefault();
+		options.onOpen?.(target);
+	}
+
+	function focusNextItem(direction: -1 | 1): void {
+		const items = visibleItems();
+		const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+		const nextIndex = Math.max(
+			0,
+			Math.min(items.length - 1, (currentIndex === -1 ? 0 : currentIndex) + direction)
+		);
+		const next = items[nextIndex];
+		if (next) focusAndReveal(next);
+	}
+
+	function onKeyDown(event: KeyboardEvent) {
+		axis = readAxis();
+		const boundaryTarget = boundaryKeyTarget(event.key);
+		if (boundaryTarget !== undefined) {
+			if (boundaryTarget) {
 				event.preventDefault();
-				options.onOpen?.(target as HTMLElement);
+				stopMomentum();
+				focusAndReveal(boundaryTarget);
 			}
+			return;
+		}
+		const direction = navigationDirection(event.key);
+		if (direction === 0) {
+			openNonNativeKeyboardItem(event);
 			return;
 		}
 		event.preventDefault();
 		stopMomentum();
-		const items = visibleItems();
-		const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-		const step = event.key === forwardKey ? 1 : -1;
-		const nextIndex = Math.max(
-			0,
-			Math.min(items.length - 1, (currentIndex === -1 ? 0 : currentIndex) + step)
-		);
-		const next = items[nextIndex];
-		if (!next) return;
-		focusAndReveal(next);
+		focusNextItem(direction);
 	}
 
 	function onReducedMotionChange() {
