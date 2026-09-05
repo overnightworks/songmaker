@@ -99,8 +99,6 @@ export interface SeededLibrary {
 	albumShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
-	/** The picked song's API id, used by the Continue reorder proof. */
-	pickedSongId: string;
 	/**
 	 * One non-leading song per shell, so the serial desktop and mobile flows
 	 * each prove their own reorder without relying on another spec to move the
@@ -333,8 +331,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	// Desktop moves and plays Closing Time, leaving the mobile Continue target
 	// untouched for the next project in the full serial suite.
 	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
-	const pickedSongId = songIdByTitle.get(pickedSongTitle);
-	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
 	const continueReorderSongs = {
 		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
 		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
@@ -369,7 +365,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
-		pickedSongId,
 		continueReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],

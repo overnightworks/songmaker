@@ -11,8 +11,8 @@ import { readSeededLibrary } from './seed';
  * rather than a budget to raise.
  */
 const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 45,
-	mobile: 40
+	desktop: 42,
+	mobile: 36
 };
 
 test('Continue shows up to six tagged entries and moves a played song to the front after reload', async ({
