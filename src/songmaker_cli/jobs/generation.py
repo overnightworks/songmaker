@@ -214,7 +214,7 @@ def _apply_user_lora_path(
         ):
             raise GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
         lora_path = str((audio_dir / lora.storage_path).resolve())
-    return replace(ace_config, lora_path=lora_path)
+    return cast(AceStepConfig, replace(ace_config, lora_path=lora_path))
 
 
 def _build_generation_context(
