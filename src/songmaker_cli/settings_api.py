@@ -130,7 +130,13 @@ def api_list_presets(
     return [PresetResponse.from_orm(p) for p in [*own, *shared]]
 
 
-@router.post("/settings/presets")
+@router.post(
+    "/settings/presets",
+    responses={
+        400: {"description": "Requested model is not available"},
+        409: {"description": "A preset with that name already exists"},
+    },
+)
 def api_create_preset(
     req: PresetCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -157,7 +163,13 @@ def api_create_preset(
     return PresetResponse.from_orm(preset)
 
 
-@router.put("/settings/presets/{preset_id}")
+@router.put(
+    "/settings/presets/{preset_id}",
+    responses={
+        404: {"description": "Preset does not exist"},
+        409: {"description": "A preset with that name already exists"},
+    },
+)
 def api_update_preset(
     preset_id: str,
     req: PresetUpdateRequest,
@@ -179,7 +191,10 @@ def api_update_preset(
     return PresetResponse.from_orm(preset)
 
 
-@router.delete("/settings/presets/{preset_id}")
+@router.delete(
+    "/settings/presets/{preset_id}",
+    responses={404: {"description": "Preset does not exist"}},
+)
 def api_delete_preset(
     preset_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -192,7 +207,10 @@ def api_delete_preset(
     return StatusResponse()
 
 
-@router.post("/settings/presets/{preset_id}/set-default")
+@router.post(
+    "/settings/presets/{preset_id}/set-default",
+    responses={404: {"description": "Preset does not exist"}},
+)
 def api_set_default_preset(
     preset_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -252,7 +270,10 @@ def api_list_all_models(
     return [_build_model_response(m) for m in models]
 
 
-@router.put("/settings/models/{model_id}")
+@router.put(
+    "/settings/models/{model_id}",
+    responses={404: {"description": "Model does not exist"}},
+)
 def api_toggle_model(
     model_id: str,
     active: bool,
@@ -286,7 +307,13 @@ def api_get_default_config(
     return DefaultConfigResponse(config=db_user.default_generation_config if db_user else None)
 
 
-@router.put("/settings/default-config")
+@router.put(
+    "/settings/default-config",
+    responses={
+        400: {"description": "Default configuration is invalid"},
+        404: {"description": "User does not exist"},
+    },
+)
 def api_set_default_config(
     req: DefaultConfigRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -331,7 +358,10 @@ def api_get_claude_models(
     )
 
 
-@router.put("/settings/claude-models")
+@router.put(
+    "/settings/claude-models",
+    responses={400: {"description": "Selected Claude model is not allowed"}},
+)
 def api_set_claude_models(
     req: ClaudeModelsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
@@ -621,7 +651,10 @@ def _route_statuses(
     return result
 
 
-@router.get("/settings/cowriter")
+@router.get(
+    "/settings/cowriter",
+    responses={422: {"description": "Stored co-writer configuration is invalid"}},
+)
 def api_get_cowriter_settings(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -664,7 +697,13 @@ def _matches_complete_stored_provider_and_model(
     )
 
 
-@router.put("/settings/cowriter")
+@router.put(
+    "/settings/cowriter",
+    responses={
+        422: {"description": "Co-writer selection or configuration is invalid"},
+        503: {"description": "Co-writer model catalog is unavailable"},
+    },
+)
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
@@ -788,7 +827,10 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
     )
 
 
-@router.get("/settings/judge")
+@router.get(
+    "/settings/judge",
+    responses={422: {"description": "Stored judge configuration is invalid"}},
+)
 def api_get_judge_settings(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -799,7 +841,13 @@ def api_get_judge_settings(
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.put("/settings/judge")
+@router.put(
+    "/settings/judge",
+    responses={
+        422: {"description": "Judge selection or provider configuration is invalid"},
+        503: {"description": "Judge model catalog is unavailable"},
+    },
+)
 def api_set_judge_settings(
     req: JudgeSettingsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
@@ -875,7 +923,10 @@ def api_get_rate_limits(
     return RateLimitsResponse(settings=items)
 
 
-@router.put("/settings/rate-limits")
+@router.put(
+    "/settings/rate-limits",
+    responses={400: {"description": "Rate-limit setting or value is invalid"}},
+)
 def api_update_rate_limits(
     req: RateLimitUpdateRequest,
     admin: AuthenticatedUser = Depends(require_admin),
@@ -895,7 +946,10 @@ def api_update_rate_limits(
     return api_get_rate_limits(_admin=admin, session=session)
 
 
-@router.get("/settings/rate-limits/user/{user_id}")
+@router.get(
+    "/settings/rate-limits/user/{user_id}",
+    responses={404: {"description": "User does not exist"}},
+)
 def api_get_user_rate_limits(
     user_id: str,
     _admin: AuthenticatedUser = Depends(require_admin),
@@ -918,7 +972,13 @@ def api_get_user_rate_limits(
     )
 
 
-@router.put("/settings/rate-limits/user/{user_id}")
+@router.put(
+    "/settings/rate-limits/user/{user_id}",
+    responses={
+        400: {"description": "Rate-limit setting or value is invalid"},
+        404: {"description": "User does not exist"},
+    },
+)
 def api_update_user_rate_limits(
     user_id: str,
     req: RateLimitUpdateRequest,
@@ -941,7 +1001,10 @@ def api_update_user_rate_limits(
     return api_get_user_rate_limits(user_id, _admin=admin, session=session)
 
 
-@router.delete("/settings/rate-limits/user/{user_id}")
+@router.delete(
+    "/settings/rate-limits/user/{user_id}",
+    responses={404: {"description": "User does not exist"}},
+)
 def api_delete_user_rate_limits(
     user_id: str,
     admin: AuthenticatedUser = Depends(require_admin),
