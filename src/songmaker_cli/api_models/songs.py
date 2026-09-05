@@ -301,25 +301,7 @@ class GenerationResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, gen: Generation) -> GenerationResponse:
-        scores: dict[str, object] = {}
-        try:
-            for score in gen.scores:
-                if isinstance(score.value, dict):
-                    for key, value in score.value.items():
-                        if key in scores:
-                            log.warning(
-                                "Duplicate score key '%s' in generation %s", key, gen.id,
-                            )
-                        scores[key] = value
-            if gen.rating:
-                scores["user_rating"] = gen.rating.rating
-                scores["user_notes"] = gen.rating.notes
-        except (TypeError, AttributeError, KeyError):
-            log.error(
-                "Corrupted score data in generation %s", gen.id, exc_info=True,
-            )
-            scores = {}
-
+        scores = _generation_scores(gen)
         generation_params = _safe_json_dict(
             gen.generation_params, "generation", gen.id,
         )
@@ -362,6 +344,35 @@ class GenerationResponse(BaseModel):
             audio_duration_sec=gen.audio_duration_sec,
             created_at=gen.created_at.isoformat(),
         )
+
+
+def _generation_scores(gen: Generation) -> dict[str, object]:
+    try:
+        scores = _score_values(gen)
+        _add_user_rating(scores, gen)
+        return scores
+    except (TypeError, AttributeError, KeyError):
+        log.error("Corrupted score data in generation %s", gen.id, exc_info=True)
+        return {}
+
+
+def _score_values(gen: Generation) -> dict[str, object]:
+    scores: dict[str, object] = {}
+    for score in gen.scores:
+        if not isinstance(score.value, dict):
+            continue
+        for key, value in score.value.items():
+            if key in scores:
+                log.warning("Duplicate score key '%s' in generation %s", key, gen.id)
+            scores[key] = value
+    return scores
+
+
+def _add_user_rating(scores: dict[str, object], gen: Generation) -> None:
+    if gen.rating is None:
+        return
+    scores["user_rating"] = gen.rating.rating
+    scores["user_notes"] = gen.rating.notes
 
 
 def song_cover_urls(song_id: str, cover_key: str) -> AlbumCoverUrls:

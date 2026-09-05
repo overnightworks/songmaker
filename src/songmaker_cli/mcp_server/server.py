@@ -162,9 +162,8 @@ def build_server(
 
     @mcp.tool(
         description=(
-            "Replace the song's current lyrics. If the latest version "
-            "has no generations yet, updates in place; otherwise creates "
-            "a new version so audio stays traceable to its lyrics."
+            "Replace the song's current lyrics in a new version so audio "
+            "stays traceable to its lyrics. The response names the new vN."
         ),
     )
     def update_song_lyrics(song_id: str, lyrics: str) -> WriteResult:
