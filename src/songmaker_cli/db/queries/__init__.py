@@ -423,6 +423,7 @@ from songmaker_cli.db.queries.songs import disable_song_sharing as disable_song_
 from songmaker_cli.db.queries.songs import enable_song_sharing as enable_song_sharing
 from songmaker_cli.db.queries.songs import get_song as get_song
 from songmaker_cli.db.queries.songs import get_song_by_slug as get_song_by_slug
+from songmaker_cli.db.queries.songs import list_continue_candidates as list_continue_candidates
 from songmaker_cli.db.queries.songs import list_expired_songs as list_expired_songs
 from songmaker_cli.db.queries.songs import list_song_ids_for_albums as list_song_ids_for_albums
 from songmaker_cli.db.queries.songs import list_song_ids_for_owner as list_song_ids_for_owner
