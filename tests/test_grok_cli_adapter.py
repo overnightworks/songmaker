@@ -87,6 +87,33 @@ async def _collect_transport_responses(transport) -> list[object]:
     return [item async for item in transport.stream(InitialTurn("system", []))]
 
 
+def test_grok_tool_command_pins_native_tool_and_web_isolation() -> None:
+    model = "grok-test"
+    session_id = "3e04bf5b-4e1c-4f26-8e1e-2f17c5f6d9cf"
+    common = (
+        "grok",
+        "--prompt-file",
+        "<songmaker-private-prompt>",
+        "--output-format",
+        "streaming-json",
+        "--deny",
+        "*",
+        "--max-turns",
+        "1",
+        "--no-subagents",
+        "--disable-web-search",
+        "--model",
+        model,
+    )
+
+    assert grok_cli_adapter._build_grok_cli_tool_command(model) == common
+    assert grok_cli_adapter._build_grok_cli_tool_command(model, session_id) == (
+        *common,
+        "--resume",
+        session_id,
+    )
+
+
 def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypatch) -> None:
     calls = []
     rounds = iter([_tool_round_lines(_tool_call_text()), _tool_round_lines("done")])
