@@ -12,15 +12,21 @@
 		playlistCovers?: AlbumCoverUrls[] | null;
 	}
 
-	let { title, subtitle, coverAlt, coverUrl = null, fill = null, playlistCovers = null }: Props =
-		$props();
+	let {
+		title,
+		subtitle,
+		coverAlt,
+		coverUrl = null,
+		fill = null,
+		playlistCovers = null
+	}: Props = $props();
 </script>
 
 <span class="tile-cover">
 	{#if coverUrl}
 		<img src={coverUrl} alt={coverAlt} draggable="false" loading="lazy" decoding="async" />
 	{:else if playlistCovers}
-		<PlaylistCover title={title} covers={playlistCovers} size="100%" />
+		<PlaylistCover {title} covers={playlistCovers} size="100%" />
 	{:else if fill}
 		<span class="tile-cover-fill" style:background={fill} aria-hidden="true"></span>
 	{:else}
