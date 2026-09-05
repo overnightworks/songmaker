@@ -435,7 +435,6 @@ class AudioPlayer {
 		});
 		el.addEventListener('play', () => {
 			this.streamEndSignaled = false;
-			this.callbacks.onPlaybackStarted?.();
 			if (this.status !== 'error') this.status = 'playing';
 		});
 		el.addEventListener('playing', () => {
@@ -445,6 +444,7 @@ class AudioPlayer {
 			// between blips.
 			if (this.streamEngine.active) this.recoveryAttempts = 0;
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
+			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		el.addEventListener('pause', () => {
 			this.clearStallRecoveryTimer();

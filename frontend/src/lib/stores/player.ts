@@ -1412,12 +1412,16 @@ const listenedTakeIds = new Set<string>();
 function recordFirstTakeListen(): void {
 	clearWindowEnd();
 	const current = audioPlayer.current;
-	if (!current || audioPlayer.status === 'error' || listenedTakeIds.has(current.generation.id))
-		return;
+	if (!current || listenedTakeIds.has(current.generation.id)) return;
 	listenedTakeIds.add(current.generation.id);
 	void recordSongListen(current.songId).catch((error: unknown) => {
 		console.error('Could not record song listen:', error);
 	});
+}
+
+function handleCurrentChange(current: PlaybackInfo | null): void {
+	updateMediaSessionMetadata(current);
+	if (audioPlayer.status === 'playing') recordFirstTakeListen();
 }
 
 // The app's single callback set for the singleton audioPlayer, installed
@@ -1429,5 +1433,5 @@ audioPlayer.swapCallbacks({
 	onPlaybackStarted: recordFirstTakeListen,
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
-	onCurrentChange: updateMediaSessionMetadata
+	onCurrentChange: handleCurrentChange
 });

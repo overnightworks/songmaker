@@ -634,15 +634,30 @@ describe('playback dispatch', () => {
 		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id);
 	});
 
-	it('does not record an errored take and logs a reporting failure without interrupting playback', async () => {
-		const song = makeSong({ id: 's-listen-error' });
-		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-error', song_id: song.id }), song);
-		audioPlayer.status = 'error';
-
+	it('records a stream take when playback crosses into it', () => {
+		const firstSong = makeSong({ id: 's-stream-listen-1' });
+		const secondSong = makeSong({ id: 's-stream-listen-2' });
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-stream-listen-1', song_id: firstSong.id }),
+			firstSong
+		);
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 
-		expect(recordSongListen).not.toHaveBeenCalled();
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-stream-listen-2', song_id: secondSong.id }),
+			secondSong
+		);
+		audioPlayer.currentCallbacks.onCurrentChange?.(audioPlayer.current);
 
+		expect(recordSongListen).toHaveBeenCalledTimes(2);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, firstSong.id);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, secondSong.id);
+	});
+
+	it('logs a reporting failure without interrupting playback', async () => {
+		const song = makeSong({ id: 's-listen-error' });
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-error', song_id: song.id }), song);
 		const reportingError = new Error('offline');
 		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 		vi.mocked(recordSongListen).mockRejectedValueOnce(reportingError);

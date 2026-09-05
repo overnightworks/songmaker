@@ -278,6 +278,17 @@ describe('event handling', () => {
 		expect(audioPlayer.status).toBe('playing');
 	});
 
+	it('notifies playback started only after media starts playing', () => {
+		const onPlaybackStarted = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onPlaybackStarted }));
+
+		fakeAudio.fire('play');
+		fakeAudio.fire('error');
+		fakeAudio.fire('playing');
+
+		expect(onPlaybackStarted).not.toHaveBeenCalled();
+	});
+
 	it('pause event sets status to paused (when not error or ended)', () => {
 		fakeAudio.fire('play');
 		fakeAudio.paused = true;
@@ -390,6 +401,22 @@ describe('stream playback', () => {
 		expect(audioPlayer.duration).toBe(20);
 	});
 
+	it('notifies the owner when a running stream crosses into another track', () => {
+		const onCurrentChange = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange }));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		onCurrentChange.mockClear();
+
+		fakeAudio.currentTime = 12.5;
+		fakeAudio.fire('timeupdate');
+
+		expect(onCurrentChange).toHaveBeenCalledOnce();
+		expect(onCurrentChange).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) })
+		);
+	});
+
 	it('seeks next and previous tracks inside the stream', () => {
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 
@@ -431,6 +458,7 @@ describe('stream playback', () => {
 		expect(onEnded).toHaveBeenCalledWith('window-end');
 
 		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
 		fakeAudio.fire('ended');
 		expect(onPlaybackStarted).toHaveBeenCalledOnce();
 		expect(onEnded).toHaveBeenCalledTimes(2);
