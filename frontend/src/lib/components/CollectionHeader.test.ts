@@ -83,6 +83,30 @@ describe('CollectionHeader', () => {
 		expect(props.onplay).toHaveBeenCalledTimes(1);
 	});
 
+	it('uses the album art fill when an album has no cover', async () => {
+		const target = await render({ ...baseProps(), artFill: 'rgb(12, 34, 56)' });
+		const fallback = requireElement<HTMLElement>(target, '.header-cover-fallback');
+
+		expect(fallback.style.background).toBe('rgb(12, 34, 56)');
+	});
+
+	it('uses album initials when an album has neither cover nor art fill', async () => {
+		const target = await render(baseProps());
+		const fallback = requireElement<HTMLElement>(target, '.header-cover-initials');
+
+		expect(fallback.textContent).toBe('ND');
+	});
+
+	it('uses the playlist mosaic when a playlist has no own cover', async () => {
+		const target = await render({
+			...baseProps(),
+			kind: 'playlist' as const,
+			playlistCovers: []
+		});
+
+		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
+	});
+
 	it('opens the Library wall from the breadcrumb', async () => {
 		const target = await render(baseProps());
 		requireElement<HTMLButtonElement>(target, '.crumb-link').click();

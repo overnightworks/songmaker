@@ -155,7 +155,7 @@
 	{onplay}
 	{titleArea}
 	{actions}
-	{coverFallback}
+	coverFallback={kind === 'playlist' ? coverFallback : undefined}
 />
 
 <style>
