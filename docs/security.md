@@ -449,10 +449,12 @@ adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
 Bubblewrap 0.9.0's private-root setup operations: recursive-slave propagation,
 construction and sandbox tmpfs mounts, root and private-home binds and
 remounts, both `pivot_root` calls, fresh `proc`, writable-proc covers, and
-minimal `dev`/`devpts`. The profile matches Bubblewrap's required `silent`
-mount flag and preserves only its observed inherited mount flags during
-remounts. Compose applies the profile only to `songmaker-web`, drops every
-container capability, and sets `no-new-privileges:true`.
+minimal `dev`/`devpts`. It accepts Bubblewrap's optional `silent` flag only
+where its mount syscall uses it, preserves the observed inherited mount flags
+during remounts, and permits private homes only below the cover, Co-Writer,
+and post-rollout-probe directory prefixes. Compose applies the profile only to
+`songmaker-web`, drops every container capability, and sets
+`no-new-privileges:true`.
 
 `scripts/prove_codex_image_sandbox.py` is the post-rollout proof. It verifies
 the container label, starts Bubblewrap with `--unshare-user --unshare-all`,

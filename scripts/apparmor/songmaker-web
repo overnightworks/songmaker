@@ -49,22 +49,23 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # The remount preserves the flags inherited from each source mount.
   mount options=(ro remount bind nosuid nodev) options in (silent relatime noatime nodiratime noexec) -> /newroot/{,**},
   # --proc mounts a fresh, non-executable procfs for the private PID namespace.
-  mount fstype=proc options=(rw nosuid nodev noexec silent) proc -> /newroot/proc/,
+  mount fstype=proc options=(rw nosuid nodev noexec) options in (silent) proc -> /newroot/proc/,
   # Bubblewrap covers writable legacy proc nodes with read-only self-binds.
   mount options=(rw rbind) options in (silent) /newroot/proc/{sys,sysrq-trigger,irq,bus}{,/**} -> /newroot/proc/{sys,sysrq-trigger,irq,bus}{,/**},
   mount options=(ro remount bind nosuid nodev) options in (silent relatime noatime nodiratime noexec) -> /newroot/proc/{sys,sysrq-trigger,irq,bus}{,/**},
   # --dev creates a nodev,nosuid tmpfs, then a noexec devpts instance.
-  mount fstype=tmpfs options=(rw nosuid nodev silent) tmpfs -> /newroot/dev/,
-  mount fstype=devpts options=(rw nosuid noexec silent) devpts -> /newroot/dev/pts/,
+  mount fstype=tmpfs options=(rw nosuid nodev) options in (silent) tmpfs -> /newroot/dev/,
+  mount fstype=devpts options=(rw nosuid noexec) options in (silent) devpts -> /newroot/dev/pts/,
   # --dev exposes only Bubblewrap's six standard device nodes from oldroot.
   mount options=(rw rbind) options in (silent) /oldroot/dev/{null,zero,full,random,urandom,tty} -> /newroot/dev/{null,zero,full,random,urandom,tty},
   mount options=(rw remount bind nosuid silent) -> /newroot/dev/{null,zero,full,random,urandom,tty},
   # --tmpfs /tmp supplies the sandbox scratch mount.
-  mount fstype=tmpfs options=(rw nosuid nodev silent) tmpfs -> /newroot/tmp/,
+  mount fstype=tmpfs options=(rw nosuid nodev) options in (silent) tmpfs -> /newroot/tmp/,
   # The private Codex home is the sole writable bind below that scratch mount.
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-cover-codex-*/codex-home/ -> /newroot/tmp/songmaker-cover-codex-*/codex-home/,
+  mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-tool-*/codex-home/ -> /newroot/tmp/songmaker-codex-tool-*/codex-home/,
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-sandbox-probe/codex-home/ -> /newroot/tmp/songmaker-codex-sandbox-probe/codex-home/,
-  mount options=(rw remount bind nosuid nodev) options in (silent) -> /newroot/tmp/{songmaker-cover-codex-*,songmaker-codex-sandbox-probe}/codex-home/{,**},
+  mount options=(rw remount bind nosuid nodev) options in (silent relatime noatime nodiratime noexec) -> /newroot/tmp/{songmaker-cover-codex-*,songmaker-codex-tool-*,songmaker-codex-sandbox-probe}/codex-home/{,**},
 
   deny /sys/[^f]*/** wklx,
   deny /sys/f[^s]*/** wklx,
