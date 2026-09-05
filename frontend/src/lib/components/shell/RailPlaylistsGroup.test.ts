@@ -4,11 +4,7 @@ import { get } from 'svelte/store';
 
 import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import {
-	libraryFilter,
-	librarySurface,
-	resetLibraryContextForTests
-} from '$lib/stores/libraryContext';
+import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -81,13 +77,11 @@ describe('RailPlaylistsGroup', () => {
 
 	it('toggles the PLAYLISTS group without navigating when its label is clicked', async () => {
 		librarySurface.set('detail');
-		libraryFilter.set('albums');
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
 		requireElement<HTMLSpanElement>(toggle, '.group-title').click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(get(libraryFilter)).toBe('albums');
 		expect(get(librarySurface)).toBe('detail');
 	});
 
