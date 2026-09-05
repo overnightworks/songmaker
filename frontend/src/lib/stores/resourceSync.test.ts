@@ -869,6 +869,45 @@ describe('resource sync owner', () => {
 		expect(loads.length).toBeGreaterThanOrEqual(2);
 	});
 
+	it('ignores a rejected snapshot from an older hello epoch', async () => {
+		const firstSnapshot = deferred<boolean>();
+		let loads = 0;
+		const { controller, sources, store } = setup({
+			loadSnapshot: () => {
+				loads += 1;
+				return loads === 1 ? firstSnapshot.promise : Promise.resolve(true);
+			}
+		});
+		controller.start();
+		const ready = controller.waitForReady();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+		firstSnapshot.reject(new Error('stale snapshot'));
+		await flush();
+
+		expect(await ready).toBe(true);
+		expect(get(store)).toMatchObject({ status: 'live', error: null, ready: true });
+	});
+
+	it('ignores stream frames delivered after its owner has stopped', async () => {
+		const probeAuth = vi.fn(async () => 'unauthorized' as const);
+		const { controller, sources, fetchCalls, store } = setup({ probeAuth });
+		controller.start();
+		const source = latestSource(sources);
+		controller.stop();
+
+		source.emit('hello', { high_water_mark: '0' });
+		source.emit('generation.created', created('1', 'g1'));
+		source.error();
+		await flush();
+
+		expect(fetchCalls).toEqual([]);
+		expect(probeAuth).not.toHaveBeenCalled();
+		expect(get(store)).toEqual(EMPTY_RESOURCE_SYNC);
+	});
+
 	it('retries failed live refreshes on the next hello instead of hiding them', async () => {
 		vi.useFakeTimers();
 		let fail = true;

@@ -98,6 +98,41 @@ afterEach(() => {
 	resetShares();
 });
 
+describe('share request failures', () => {
+	it.each([
+		['count', 'an API detail', new ApiError(400, 'server detail', '/api/shares'), 'server detail'],
+		[
+			'count',
+			'an API message without a detail',
+			new ApiError(400, '', '/api/shares'),
+			API_ERROR_GENERIC_MESSAGE
+		],
+		['count', 'an unknown rejection', 'offline', LIBRARY_SHARES_ERROR],
+		[
+			'inventory',
+			'an API detail',
+			new ApiError(400, 'server detail', '/api/shares'),
+			'server detail'
+		],
+		[
+			'inventory',
+			'an API message without a detail',
+			new ApiError(400, '', '/api/shares'),
+			API_ERROR_GENERIC_MESSAGE
+		],
+		['inventory', 'an unknown rejection', null, LIBRARY_SHARES_ERROR]
+	])('shows %s request failure for %s', async (target, _caseName, failure, error) => {
+		fetchShares.mockRejectedValueOnce(failure);
+
+		const loaded =
+			target === 'count' ? await refreshShareCount() : await loadShareInventory({ reset: true });
+		const state = target === 'count' ? get(shareCount) : get(shareInventory);
+
+		expect(loaded).toBe(false);
+		expect(state).toMatchObject({ status: 'error', error });
+	});
+});
+
 describe('share count', () => {
 	it('does not report a total until a complete server response', async () => {
 		let resolvePage: ((value: ReturnType<typeof page>) => void) | undefined;
@@ -120,21 +155,6 @@ describe('share count', () => {
 		fetchShares.mockRejectedValueOnce(new Error('offline'));
 		expect(await refreshShareCount({ force: true })).toBe(false);
 		expect(get(shareCount)).toMatchObject({ status: 'error', total: 3, error: 'offline' });
-	});
-
-	it.each([
-		['an API detail', new ApiError(400, 'server detail', '/api/shares'), 'server detail'],
-		[
-			'an API message without a detail',
-			new ApiError(400, '', '/api/shares'),
-			API_ERROR_GENERIC_MESSAGE
-		],
-		['an unknown rejection', 'offline', LIBRARY_SHARES_ERROR]
-	])('shows %s when the count request fails', async (_caseName, failure, error) => {
-		fetchShares.mockRejectedValueOnce(failure);
-
-		expect(await refreshShareCount()).toBe(false);
-		expect(get(shareCount)).toMatchObject({ status: 'error', error });
 	});
 
 	it('dedupes concurrent refreshes into a single request', async () => {
@@ -242,21 +262,6 @@ describe('share inventory', () => {
 			items: [],
 			error: LIBRARY_SHARES_ERROR
 		});
-	});
-
-	it.each([
-		['an API detail', new ApiError(400, 'server detail', '/api/shares'), 'server detail'],
-		[
-			'an API message without a detail',
-			new ApiError(400, '', '/api/shares'),
-			API_ERROR_GENERIC_MESSAGE
-		],
-		['an unknown rejection', null, LIBRARY_SHARES_ERROR]
-	])('shows %s when an inventory request fails', async (_caseName, failure, error) => {
-		fetchShares.mockRejectedValueOnce(failure);
-
-		expect(await loadShareInventory({ reset: true })).toBe(false);
-		expect(get(shareInventory)).toMatchObject({ status: 'error', error });
 	});
 
 	it('dedupes concurrent loads of the same page into a single request', async () => {
@@ -480,4 +485,15 @@ describe('share watchers', () => {
 			stop?.();
 		}
 	);
+
+	it('refreshes only the count after a mutation without an open inventory or view watcher', async () => {
+		fetchShares.mockResolvedValueOnce(page({ total: 7 }));
+
+		await refreshSharesAfterMutation();
+
+		expect(fetchShares).toHaveBeenCalledWith({ offset: 0, limit: 1 });
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+		expect(get(shareCount)).toMatchObject({ status: 'ready', total: 7 });
+		expect(get(shareInventory)).toMatchObject({ status: 'idle', items: [] });
+	});
 });
