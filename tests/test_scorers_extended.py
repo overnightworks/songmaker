@@ -91,17 +91,13 @@ def test_force_cpu_env_context_manager() -> None:
         assert os.environ["CUDA_VISIBLE_DEVICES"] == original
 
 
-def test_force_cpu_env_restores_existing() -> None:
+def test_force_cpu_env_restores_existing(monkeypatch) -> None:
     from songmaker_cli.scoring.audiobox_aesthetics import _force_cpu_env
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-    try:
-        with _force_cpu_env():
-            assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
-        assert os.environ["CUDA_VISIBLE_DEVICES"] == "0,1"
-    finally:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
+    with _force_cpu_env():
+        assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
+    assert os.environ["CUDA_VISIBLE_DEVICES"] == "0,1"
 
 
 def test_get_predictor_caches() -> None:

@@ -160,28 +160,20 @@ def test_child_reports_a_missing_audio_file_as_an_error(tmp_path: Path) -> None:
 _TEST_MARKER_KEY = "SONGMAKER_TEST_NON_SECRET_MARKER"
 
 
-def test_scorer_child_drops_secret_env_keys_at_spawn() -> None:
+def test_scorer_child_drops_secret_env_keys_at_spawn(monkeypatch) -> None:
     """The scorer child inherits the full parent env at spawn (multiprocessing
     has no env= parameter), so _child_main must scrub secrets itself, first
     thing. Drives the real _child_main (via _run_child_with_messages) rather
     than a test-only stand-in, so deleting the scrub call site fails this.
     """
     probed_keys = (*SECRET_ENV_KEYS, _TEST_MARKER_KEY)
-    previous = {key: os.environ.get(key) for key in probed_keys}
     for key in SECRET_ENV_KEYS:
-        os.environ[key] = "leaked-secret-value"
-    os.environ[_TEST_MARKER_KEY] = "visible-non-secret"
-    try:
-        responses = _run_child_with_messages([
-            EnvProbeRequest(keys=probed_keys),
-            ShutdownRequest(),
-        ])
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
+        monkeypatch.setenv(key, "leaked-secret-value")
+    monkeypatch.setenv(_TEST_MARKER_KEY, "visible-non-secret")
+    responses = _run_child_with_messages([
+        EnvProbeRequest(keys=probed_keys),
+        ShutdownRequest(),
+    ])
 
     probe_responses = [r for r in responses if isinstance(r, EnvProbeResponse)]
     assert len(probe_responses) == 1
