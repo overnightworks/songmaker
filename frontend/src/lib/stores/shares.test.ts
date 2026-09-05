@@ -449,6 +449,26 @@ describe('shares view and patches', () => {
 });
 
 describe('share watchers', () => {
+	it.each([
+		['a status watcher', () => watchShareStatus(), { offset: 0, limit: 1 }],
+		['a view watcher', () => watchShareView(), { offset: 0, limit: 50, type: null }]
+	])('refreshes %s when the tab becomes visible', async (_caseName, watch, request) => {
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		const stop = watch();
+		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(15_000);
+		fetchShares.mockClear();
+
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+		document.dispatchEvent(new Event('visibilitychange'));
+
+		await Promise.resolve();
+		expect(fetchShares).toHaveBeenCalledWith(request);
+		stop();
+		vi.useRealTimers();
+	});
+
 	it('does not refresh after a stopped status watcher receives a visible-tab event', async () => {
 		const stop = watchShareStatus();
 		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
