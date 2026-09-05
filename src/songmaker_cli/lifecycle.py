@@ -120,6 +120,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
             (
                 bubblewrap,
                 "--unshare-user",
+                "--unshare-all",
                 "--uid", "0",
                 "--gid", "0",
                 "--ro-bind", "/", "/",

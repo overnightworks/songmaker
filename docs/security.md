@@ -437,16 +437,25 @@ The host remains the only refresh owner: the mounted Codex document keeps
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
-The web service alone runs under the host profile `songmaker-web`. An operator
-loads it for the current host boot with `sudo scripts/apparmor/install.sh` and
-then recreates the service with `docker compose up -d songmaker-web`; the script
-does not install the profile under `/etc/apparmor.d/`, so the operator must load
-it again after a host reboot. Loading changes the host kernel policy, so the
-script deliberately requires root. The profile derives
+The web service alone runs under the host profile `songmaker-web` and the
+repository's `scripts/seccomp/songmaker-web.json`. The seccomp file is a pinned
+copy of Docker's default profile with only Bubblewrap's namespace and mount
+setup syscalls freed from Docker's `CAP_SYS_ADMIN` filter; its adjacent README
+names the Moby revision and the test proves the exact diff. It grants no
+capability. AppArmor remains the mount-shape boundary inside the nested user
+and mount namespaces, while Compose still drops every container capability and
+sets `no-new-privileges:true`; neither profile replaces the other.
+
+An operator loads the AppArmor policy for the current host boot with
+`sudo scripts/apparmor/install.sh` and then recreates the service with
+`docker compose up -d songmaker-web`. The script does not install the profile
+under `/etc/apparmor.d/`, so the operator must load it again after a host reboot.
+Loading changes the host kernel policy, so the script deliberately requires
+root. The profile derives
 Docker Engine 29.1.3's `docker-default` template (Moby
 `profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
 adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
-Bubblewrap 0.9.0's private-root setup operations: recursive-slave propagation,
+Bubblewrap 0.12.0's private-root setup operations: recursive-slave propagation,
 construction and sandbox tmpfs mounts, root and private-home binds and
 remounts, both `pivot_root` calls, fresh `proc`, writable-proc covers, and
 minimal `dev`/`devpts`. It accepts Bubblewrap's optional `silent` flag only

@@ -166,6 +166,7 @@ services:
     # profile retains Docker's default denials and permits only its setup mounts.
     security_opt:
       - apparmor=songmaker-web
+      - seccomp=scripts/seccomp/songmaker-web.json
       - no-new-privileges:true
 
   songmaker-music-worker:
