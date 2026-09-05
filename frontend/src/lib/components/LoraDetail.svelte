@@ -1,12 +1,22 @@
 <script lang="ts">
-	import type { UserLoraItem, UserLoraSampleItem } from '$lib/api/types';
+	import type { OwnPlayableTakeResponse, UserLoraItem, UserLoraSampleItem } from '$lib/api/types';
 	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '$lib/api/client';
+	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '$lib/api/loras';
 	import { refreshLora, trainLora, isLoraActive } from '$lib/stores/loras';
 	import { addToast } from '$lib/stores/toast';
 	import {
 		LORA_AUDIO_EXTENSIONS,
 		LORA_MAX_SAMPLES,
-		LORA_MIN_SAMPLES_FOR_TRAINING
+		LORA_MIN_SAMPLES_FOR_TRAINING,
+		LORA_OWN_TAKES_CLOSE,
+		LORA_OWN_TAKES_EMPTY,
+		LORA_OWN_TAKES_LABEL,
+		LORA_OWN_TAKES_LOADING,
+		LORA_OWN_TAKES_OPEN,
+		LORA_OWN_TAKES_USE,
+		LORA_SAMPLE_COPY_FAILED,
+		LORA_SAMPLE_UPLOAD_FAILED,
+		LORA_TAKE_LABEL_PREFIX
 	} from '$lib/constants';
 
 	interface Props {
@@ -22,6 +32,11 @@
 	let newFile = $state<File | null>(null);
 	let dragOver = $state(false);
 	let fileInputEl = $state<HTMLInputElement | null>(null);
+	let showOwnTakes = $state(false);
+	let ownTakes = $state<OwnPlayableTakeResponse[]>([]);
+	let ownTakesLoading = $state(false);
+	let addingGenerationId = $state<string | null>(null);
+	let sampleError = $state<string | null>(null);
 
 	const samples = $derived([...lora.samples].sort((a, b) => a.position - b.position));
 	const active = $derived(isLoraActive(lora.status));
@@ -96,6 +111,7 @@
 			addToast('Caption and lyrics are required', 'error');
 			return;
 		}
+		sampleError = null;
 		uploading = true;
 		try {
 			await addLoraSample(lora.id, newFile, newCaption.trim(), newLyrics.trim());
@@ -106,9 +122,47 @@
 			if (fileInputEl) fileInputEl.value = '';
 			addToast('Sample added', 'success');
 		} catch (e) {
-			addToast(e instanceof ApiError ? e.detail || 'Upload failed' : 'Upload failed', 'error');
+			const message =
+				e instanceof ApiError ? e.detail || LORA_SAMPLE_UPLOAD_FAILED : LORA_SAMPLE_UPLOAD_FAILED;
+			sampleError = message;
+			addToast(message, 'error');
 		} finally {
 			uploading = false;
+		}
+	}
+
+	async function toggleOwnTakes() {
+		showOwnTakes = !showOwnTakes;
+		if (!showOwnTakes || ownTakes.length > 0) return;
+
+		ownTakesLoading = true;
+		sampleError = null;
+		try {
+			ownTakes = await listOwnPlayableTakes();
+		} catch (e) {
+			const message =
+				e instanceof ApiError ? e.detail || LORA_SAMPLE_COPY_FAILED : LORA_SAMPLE_COPY_FAILED;
+			sampleError = message;
+			addToast(message, 'error');
+		} finally {
+			ownTakesLoading = false;
+		}
+	}
+
+	async function addOwnTake(take: OwnPlayableTakeResponse) {
+		addingGenerationId = take.generation_id;
+		sampleError = null;
+		try {
+			await addLoraSampleFromGeneration(lora.id, take.generation_id);
+			await refreshLora(lora.id);
+			addToast('Sample added', 'success');
+		} catch (e) {
+			const message =
+				e instanceof ApiError ? e.detail || LORA_SAMPLE_COPY_FAILED : LORA_SAMPLE_COPY_FAILED;
+			sampleError = message;
+			addToast(message, 'error');
+		} finally {
+			addingGenerationId = null;
 		}
 	}
 
@@ -257,7 +311,41 @@
 				>
 					{uploading ? 'Uploading...' : 'Add sample'}
 				</button>
+				<button class="own-takes-toggle" aria-expanded={showOwnTakes} onclick={toggleOwnTakes}>
+					{showOwnTakes ? LORA_OWN_TAKES_CLOSE : LORA_OWN_TAKES_OPEN}
+				</button>
 			</div>
+			{#if sampleError}
+				<p class="sample-error" role="alert">{sampleError}</p>
+			{/if}
+			{#if showOwnTakes}
+				<section class="own-takes" aria-label={LORA_OWN_TAKES_LABEL}>
+					<h4>{LORA_OWN_TAKES_LABEL}</h4>
+					{#if ownTakesLoading}
+						<p class="empty">{LORA_OWN_TAKES_LOADING}</p>
+					{:else if ownTakes.length === 0}
+						<p class="empty">{LORA_OWN_TAKES_EMPTY}</p>
+					{:else}
+						<ul>
+							{#each ownTakes as take (take.generation_id)}
+								<li>
+									<div>
+										<strong>{take.song_title}</strong>
+										<span>{LORA_TAKE_LABEL_PREFIX} {take.generation_number}</span>
+									</div>
+									<button
+										class="use-take-btn"
+										disabled={addingGenerationId !== null}
+										onclick={() => addOwnTake(take)}
+									>
+										{addingGenerationId === take.generation_id ? 'Adding...' : LORA_OWN_TAKES_USE}
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
+			{/if}
 		{:else if atCapacity && !deleted}
 			<p class="hint">Sample limit reached.</p>
 		{/if}
@@ -490,6 +578,99 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		cursor: pointer;
+	}
+
+	.own-takes-toggle,
+	.use-take-btn {
+		padding: 0.4rem 0.8rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		background: transparent;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+	}
+
+	.own-takes-toggle:hover,
+	.use-take-btn:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.use-take-btn:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	.sample-error {
+		margin: 0.7rem 0 0;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--score-bad);
+		border-radius: 4px;
+		color: var(--score-bad);
+		font-size: 0.85rem;
+	}
+
+	.own-takes {
+		margin-top: 0.8rem;
+		padding: 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+	}
+
+	.own-takes h4 {
+		margin: 0 0 0.6rem;
+		font-family: var(--font-display);
+		font-size: 0.8rem;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	.own-takes ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.own-takes li {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.own-takes li:first-child {
+		padding-top: 0;
+		border-top: 0;
+	}
+
+	.own-takes li div {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.own-takes li strong,
+	.own-takes li span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.own-takes li span {
+		font-size: 0.75rem;
+		color: var(--text-subtle);
 	}
 
 	.add-sample-btn:disabled {

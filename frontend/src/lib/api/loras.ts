@@ -1,4 +1,10 @@
-import type { UserLoraItem, UserLoraListResponse, UserLoraSampleItem } from './types';
+import type {
+	OwnPlayableTakeListResponse,
+	OwnPlayableTakeResponse,
+	UserLoraItem,
+	UserLoraListResponse,
+	UserLoraSampleItem
+} from './types';
 import { apiFetch } from './fetch';
 
 const SAMPLE_UPLOAD_TIMEOUT_MS = 120_000;
@@ -42,6 +48,31 @@ export async function addLoraSample(
 		{ method: 'POST', body: form },
 		SAMPLE_UPLOAD_TIMEOUT_MS
 	);
+}
+
+/**
+ * The musician's own playable takes. This deliberately does not use the
+ * Library queue: the server is the single owner of the private take policy.
+ */
+export async function listOwnPlayableTakes(): Promise<OwnPlayableTakeResponse[]> {
+	const result = await apiFetch<OwnPlayableTakeListResponse>('/api/loras/own-takes');
+	return result.takes;
+}
+
+/**
+ * Ask the server to copy one of the caller's own takes into this voice.
+ * Sending the generation id keeps the audio private and avoids a client-side
+ * download/re-upload round trip.
+ */
+export async function addLoraSampleFromGeneration(
+	loraId: string,
+	generationId: string
+): Promise<UserLoraSampleItem> {
+	return apiFetch<UserLoraSampleItem>(`/api/loras/${loraId}/samples/from-generation`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ generation_id: generationId })
+	});
 }
 
 export interface LoraSamplePatch {

@@ -66,6 +66,13 @@ export interface SeededTake {
 	takeId: string;
 }
 
+/** A private, playable take for the Voices flow to select through its real catalogue. */
+export interface SeededVoiceTake {
+	songTitle: string;
+	caption: string;
+	lyrics: string;
+}
+
 /** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
 	albumTitle: string;
@@ -292,6 +299,33 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		})),
 		takeLabel: nowPlayingTakeLabel(null, 1)
 	};
+}
+
+/**
+ * Creates one album, song, and imported take through the public API. The
+ * Voices browser flow then discovers it through `/api/loras/own-takes`, just
+ * as a musician does, rather than injecting a LoRA sample into the database.
+ */
+export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoiceTake> {
+	const seed = await SeedApi.login(api);
+	const marker = runMarker();
+	const songTitle = `E2E Voice Source ${marker}`;
+	const caption = 'warm e2e tenor';
+	const lyrics = 'E2E source lyrics';
+	const album = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `E2E Voice Album ${marker}`,
+		artist: ALBUM_ARTIST
+	});
+	const song = await seed.postJson<CreatedResource>('/api/songs', {
+		title: songTitle,
+		album_id: album.id,
+		lyrics,
+		prompt: caption
+	});
+	await seed.postFile<CreatedResource>(`/api/songs/${song.id}/reimport`, {
+		mp3: { name: 'voice-source.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+	});
+	return { songTitle, caption, lyrics };
 }
 
 function takeId(takes: Map<string, string>, songTitle: string): string {
