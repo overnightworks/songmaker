@@ -13,6 +13,7 @@ export function closeSidebar(): void {
 export type Theme = 'dark' | 'light';
 
 const STORAGE_KEY = 'theme';
+export const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 
 const VALID_THEMES: ReadonlySet<string> = new Set<Theme>(['dark', 'light']);
 
@@ -23,6 +24,25 @@ function getInitialTheme(): Theme {
 }
 
 export const theme = writable<Theme>(getInitialTheme());
+
+function getInitialRailCollapsed(): boolean {
+	if (typeof window === 'undefined') return false;
+	return localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
+export const railCollapsed = writable(getInitialRailCollapsed());
+
+export function toggleRailCollapsed(): void {
+	railCollapsed.update((collapsed) => {
+		const next = !collapsed;
+		localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(next));
+		return next;
+	});
+}
+
+export function initRailCollapsed(): void {
+	railCollapsed.set(getInitialRailCollapsed());
+}
 
 export function toggleTheme(): void {
 	theme.update((t) => {

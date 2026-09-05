@@ -1062,7 +1062,7 @@ describe('song header album rail', () => {
 		expect(crumbs[1]).toBe('Local Album');
 	});
 
-	it('shows album title and disabled ends without wrapping through neighbors', async () => {
+	it('shows one album line and disabled ends without wrapping through neighbors', async () => {
 		stubLibraryMedia({ narrow: true });
 		albumList.set([album()]);
 		songList.set(albumSongs());
@@ -1070,15 +1070,16 @@ describe('song header album rail', () => {
 		const target = await renderView();
 		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
-		if (!prev || !next) throw new Error('Expected previous and next');
+		const albumLine = target.querySelector('.mobile-album-line');
+		if (!prev || !next || !albumLine) throw new Error('Expected mobile album navigation');
+		expect(albumLine.textContent).toContain('Local Album · 3 songs');
+		expect(albumLine.querySelector('.album-line-cover')).not.toBeNull();
+		expect(target.querySelector('.detail-header .breadcrumb')).toBeNull();
 		expect(prev.disabled).toBe(false);
 		expect(next.disabled).toBe(false);
 		expect(prev.getAttribute('data-hitbox')).toBe('frequent');
 		expect(next.getAttribute('data-hitbox')).toBe('frequent');
-		const albumCrumb = Array.from(target.querySelectorAll('.crumb-link')).find(
-			(el) => el.textContent === 'Local Album'
-		);
-		expect(albumCrumb).toBeDefined();
+		expect(target.querySelector('.detail-header .crumb-link')).toBeNull();
 
 		setPointer('coarse');
 		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
@@ -1129,7 +1130,7 @@ describe('song header album rail', () => {
 		cleanup();
 	});
 
-	it('keeps the narrow coarse rail inside 320px with a long album title', async () => {
+	it('keeps the narrow coarse album line inside 320px with a long album title', async () => {
 		stubLibraryMedia({ narrow: true });
 		document.documentElement.dataset.pointer = 'coarse';
 		const longAlbumTitle =
@@ -1138,16 +1139,13 @@ describe('song header album rail', () => {
 		selectedSongId.set('s1');
 		const target = await renderView({ widthPx: 320 });
 		const headerEl = target.querySelector('.detail-header');
-		const rail = target.querySelector('.song-rail');
+		const rail = target.querySelector('.mobile-album-line');
 		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
 		if (!(headerEl instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
 			throw new Error('Expected header song rail');
 		}
-		const albumCrumb = Array.from(rail.querySelectorAll('.crumb-link')).find(
-			(el) => el.textContent === longAlbumTitle
-		);
-		expect(albumCrumb).toBeDefined();
+		expect(rail.textContent).toContain(`${longAlbumTitle} · 3 songs`);
 		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
 		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 		expect(headerEl.scrollWidth).toBeLessThanOrEqual(320);
@@ -1167,21 +1165,14 @@ describe('song header album rail', () => {
 		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
 	});
 
-	it('opens album overview from the album title', async () => {
+	it('does not render a second album navigation control on mobile', async () => {
 		stubLibraryMedia({ narrow: true });
 		selectedAlbumId.set('a-local');
-		const cleanup = initNavigation();
 		selectSong('s1');
 		const target = await renderView();
-		const albumBtn = Array.from(target.querySelectorAll<HTMLButtonElement>('.crumb-link')).find(
-			(el) => el.textContent === 'Local Album'
-		);
-		if (!albumBtn) throw new Error('Expected album control');
-		albumBtn.click();
-		await tick();
-		expect(get(selectedSongId)).toBeNull();
+		expect(target.querySelector('.detail-header .crumb-link')).toBeNull();
+		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedAlbumId)).toBe('a-local');
-		cleanup();
 	});
 });
 

@@ -31,7 +31,11 @@ from songmaker_cli.constants import (
     HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
-from songmaker_cli.cover_runner import CoverJobCancellationRegistry, cover_runner_loop
+from songmaker_cli.cover_runner import (
+    CoverJobCancellationRegistry,
+    cover_runner_loop,
+    recover_web_cover_jobs,
+)
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
@@ -128,6 +132,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         session.commit()
 
     auto_setup_admin(ctx)
+    if settings.cover_executor is CoverExecutor.WEB:
+        await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir, settings)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)

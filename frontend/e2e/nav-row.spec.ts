@@ -62,14 +62,57 @@ test('album, song, and take content begin at their breadcrumb headers on desktop
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
 	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
-	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	if (isMobile) {
+		await expect(surface.locator('.mobile-album-line')).toBeVisible();
+		await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
+	} else {
+		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
 	await page.goto(`${songAddress}/take/1`);
 	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
-	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	if (isMobile) {
+		await expect(surface.locator('.mobile-album-line')).toBeVisible();
+		await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
+	} else {
+		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
+	guard.assertClean();
+});
+
+test('the 375 px album line skips songs without losing its URL or focus', async ({
+	page,
+	isMobile
+}) => {
+	test.skip(!isMobile, 'The compact album line only renders on mobile.');
+	await page.setViewportSize({ width: 375, height: 812 });
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+	const firstSongAddress = `/album/${library.albumId}/${expectedSongSlug('Opening Move')}`;
+	const secondSongAddress = `/album/${library.albumId}/${expectedSongSlug('Second Wind')}`;
+
+	await page.goto(`/album/${library.albumId}`);
+	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await expect(page).toHaveURL(firstSongAddress);
+	const line = surface.locator('.mobile-album-line');
+	await expect(line).toBeVisible();
+	await expect(line).toContainText(`${library.albumTitle} · ${library.albumSongCount} songs`);
+	await expect(line.locator('.album-line-cover')).toBeVisible();
+	await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
+	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
+
+	const next = line.getByRole('button', { name: 'Next song' });
+	await next.focus();
+	await expect(next).toBeFocused();
+	await next.click();
+	await expect(page).toHaveURL(secondSongAddress);
+	await expect(next).toBeFocused();
+	await expect(line).toBeVisible();
 	guard.assertClean();
 });
 
