@@ -207,6 +207,8 @@ request budget per shell.
 - Re-running against a warm stack trips the app's IP rate limit (120 requests
   per window) and the flow reports 429s. That is the guard working, not
   flakiness — reset the stack or wait out the window.
+- The CI stack allows 200 resource-event stream opens per user. In the
+  2026-09-05 CI run, 30 opens succeeded and the 31st returned 429.
 
 `frontend/e2e/README.md` has the exact commands, the audio fixture, and the
 budget rule.
