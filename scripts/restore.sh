@@ -18,17 +18,17 @@ POSTGRES_USER="${POSTGRES_USER:-songmaker}"
 POSTGRES_DB="${POSTGRES_DB:-songmaker}"
 VOLUME_NAME="${VOLUME_NAME:-songmaker_audiofiles}"
 
-if [ ! -f "$SNAPSHOT_DIR/db.dump" ]; then
+if [[ ! -f "$SNAPSHOT_DIR/db.dump" ]]; then
     echo "ERROR: $SNAPSHOT_DIR/db.dump not found"
     exit 1
 fi
 
-if [ ! -d "$SNAPSHOT_DIR/audio" ]; then
+if [[ ! -d "$SNAPSHOT_DIR/audio" ]]; then
     echo "ERROR: $SNAPSHOT_DIR/audio/ not found"
     exit 1
 fi
 
-if [ -f "$SNAPSHOT_DIR/manifest.txt" ]; then
+if [[ -f "$SNAPSHOT_DIR/manifest.txt" ]]; then
     echo "=== Restoring from backup ==="
     cat "$SNAPSHOT_DIR/manifest.txt"
     echo "==========================="

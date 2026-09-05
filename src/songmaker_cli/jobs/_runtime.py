@@ -132,10 +132,10 @@ def _touch_heartbeat(factory, job_id: str) -> None:
             update_job_heartbeat(session, job_id)
             session.commit()
     except Exception:
-        log.error(
+        log.exception(
             "Heartbeat update failed for job %s — "
             "worker may be falsely declared stale if DB stays unreachable",
-            job_id, exc_info=True,
+            job_id,
         )
 
 
