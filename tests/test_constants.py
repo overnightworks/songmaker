@@ -7,6 +7,7 @@ import json
 from songmaker_cli.constants import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
+    COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS,
     GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
@@ -20,11 +21,13 @@ from songmaker_cli.constants import (
     STALE_JOB_THRESHOLDS,
     WORKER_RESTART_GRACE_SECONDS,
     AuditAction,
+    CoverExecutor,
     JobFunction,
     JobStatus,
     JobType,
     ResourceType,
     WorkerLivenessSignal,
+    stale_job_thresholds,
     worker_restart_grace_seconds,
 )
 from songmaker_cli.settings import Settings
@@ -136,6 +139,18 @@ def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
     assert {
         worker_restart_grace_seconds(signal) for signal in WorkerLivenessSignal
     } == {WORKER_RESTART_GRACE_SECONDS}
+
+
+def test_web_cover_policy_uses_the_web_queue_without_a_worker_signal() -> None:
+    policy = stale_job_thresholds(CoverExecutor.WEB)[JobType.COVER]
+
+    assert policy.queued_seconds == COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS
+    assert policy.liveness_signal is None
+    assert policy.restart_grace_seconds is None
+    assert (
+        stale_job_thresholds(CoverExecutor.MUSIC)[JobType.COVER]
+        is STALE_JOB_THRESHOLDS[JobType.COVER]
+    )
 
 
 def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:

@@ -4,9 +4,10 @@
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin/main every couple of minutes (see songmaker-autodeploy.timer) and
 # fast-forwards + redeploys the local checkout when main has moved. Before it
-# pulls, it verifies through GitHub that every check run for the newest green
-# commit in the fetched main history has completed successfully; the script
-# itself does not re-run tests.
+# pulls, it verifies through GitHub that every GitHub Actions check run for
+# the newest green commit in the fetched main history has completed
+# successfully; check runs from other apps are advisory. The script itself
+# does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -138,6 +139,13 @@ PROMETHEUS_READY_URL="${PROMETHEUS_URL}/-/ready"
 PROMETHEUS_METRICS_URL="${PROMETHEUS_URL}/metrics"
 PROMETHEUS_RULES_URL="${PROMETHEUS_URL}/api/v1/rules"
 PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
+# This repository's workflows are the deploy gate. External integrations may
+# report check runs too, but their results are advisory rather than rollout
+# decisions.
+REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
+# A non-whitespace separator preserves empty fields in Bash `read`; a tab
+# would collapse a missing app slug into the status field before validation.
+CHECK_RUN_FIELD_SEPARATOR=$'\x1f'
 
 log() {
     local level="$1"
@@ -726,7 +734,7 @@ remote_check_status() {
     fi
     if check_runs="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
         "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
-        --jq 'if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\t\(.total_count)", (.check_runs[] | "check\t\(.status // "")\t\(.conclusion // "")") else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
+        --jq 'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.status)\u001f\(.conclusion // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
         rm -f "$gh_stderr_file"
     else
         lookup_exit=$?
@@ -740,32 +748,38 @@ remote_check_status() {
         return 1
     fi
 
-    local record status conclusion
+    local record app_slug status conclusion
     local expected_check_count=""
     local observed_check_count=0
+    local observed_required_check_count=0
     local has_envelope=false
     local has_running_check=false
     local has_failed_check=false
-    while IFS=$'\t' read -r record status conclusion; do
+    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug status conclusion; do
         case "$record" in
             envelope)
-                if [[ ! "$status" =~ ^[0-9]+$ || -n "$conclusion" ]]; then
+                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$status" || -n "$conclusion" ]]; then
                     printf 'GitHub returned a malformed check-runs envelope'
                     return 1
                 fi
-                if [[ -n "$expected_check_count" && "$expected_check_count" != "$status" ]]; then
+                if [[ -n "$expected_check_count" && "$expected_check_count" != "$app_slug" ]]; then
                     printf 'GitHub returned inconsistent paginated check-run counts'
                     return 1
                 fi
-                expected_check_count="$status"
+                expected_check_count="$app_slug"
                 has_envelope=true
                 ;;
             check)
                 ((observed_check_count += 1))
-                if [[ -z "$status" ]]; then
+                if [[ -z "$app_slug" || -z "$status" ]]; then
                     printf 'GitHub returned an incomplete check-run status'
                     return 1
                 fi
+                if [[ "$app_slug" != "$REQUIRED_CHECK_RUN_APP_SLUG" ]]; then
+                    log_info "GitHub check run from app '$app_slug' is advisory, ignored"
+                    continue
+                fi
+                ((observed_required_check_count += 1))
                 case "$status" in
                     queued|in_progress|pending|requested|waiting)
                         has_running_check=true
@@ -796,16 +810,16 @@ remote_check_status() {
         printf 'GitHub returned an incomplete check-runs response'
         return 1
     fi
-    if ((observed_check_count == 0)); then
+    if ((observed_required_check_count == 0)); then
         local now
         if ! now="$(now_seconds)" || ! [[ "$now" =~ ^[0-9]+$ ]]; then
             printf 'cannot determine current time for check-run grace period'
             return 1
         fi
         if ((now - commit_timestamp >= CHECK_RUN_APPEARANCE_GRACE_SECONDS)); then
-            printf 'failed (GitHub has not reported a check run within %ss of its commit)' "$CHECK_RUN_APPEARANCE_GRACE_SECONDS"
+            printf 'failed (GitHub Actions has not reported a check run within %ss of its commit)' "$CHECK_RUN_APPEARANCE_GRACE_SECONDS"
         else
-            printf 'waiting (GitHub has not reported a check run yet)'
+            printf 'waiting (GitHub Actions has not reported a check run yet)'
         fi
         return
     fi
@@ -814,9 +828,9 @@ remote_check_status() {
     # yet, even if another completed run has already failed. Waiting avoids
     # escalating while CI is still producing its final verdict.
     if [[ "$has_running_check" == true ]]; then
-        printf 'waiting (one or more GitHub check runs are still running)'
+        printf 'waiting (one or more GitHub Actions check runs are still running)'
     elif [[ "$has_failed_check" == true ]]; then
-        printf 'failed (one or more GitHub check runs did not succeed)'
+        printf 'failed (one or more GitHub Actions check runs did not succeed)'
     else
         printf 'green'
     fi

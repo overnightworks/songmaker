@@ -280,6 +280,18 @@ def test_update_song(seeded_session: Session) -> None:
     assert ver.lyrics == "new lyrics"
 
 
+def test_update_song_sets_updated_at(seeded_session: Session) -> None:
+    song = get_song(seeded_session, "s1")
+    assert song is not None
+    previous = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    song.updated_at = previous
+    seeded_session.flush()
+
+    update_song(seeded_session, song.id, lyrics="new lyrics")
+
+    assert song.updated_at > previous
+
+
 def test_generation_to_dict(seeded_session: Session) -> None:
     gen = get_generation(seeded_session, "g1")
     d = GenerationResponse.from_orm(gen).model_dump()

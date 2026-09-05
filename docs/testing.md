@@ -213,6 +213,37 @@ request budget per shell.
 `frontend/e2e/README.md` has the exact commands, the audio fixture, and the
 budget rule.
 
+### Voices E2E worker
+
+The Voices browser flow adds `docker-compose.e2e-voices.yml` to the normal CI
+stack. It starts the test-only worker at
+`tests/e2e_fixtures/fake_training_worker.py`; the Library E2E continues to use
+only `docker-compose.ci.yml`.
+
+Run it under the probe lock with the isolated project and port:
+
+```bash
+flock /tmp/songmaker-probe.lock env \
+  COMPOSE_PROJECT_NAME=songmaker-i607-probe \
+  WEB_PORT=18080 \
+  POSTGRES_PASSWORD=e2e-ci-postgres-password \
+  SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else \
+  SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token \
+  ADMIN_USERNAME=e2e-ci-admin \
+  ADMIN_PASSWORD='E2eCiSmoke#2026!' \
+  PUBLIC_BASE_URL=http://localhost:18080 \
+  docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+  -f docker-compose.e2e-voices.yml up -d --build --wait \
+  postgres redis migrate songmaker-web songmaker-music-worker \
+  songmaker-voices-e2e-worker
+```
+
+The fake worker uses the same internal worker registration, Redis heartbeat,
+GPU-hold, task-SSE, and adapter-result contracts as the ACE-Step worker. It
+only replaces model training; ARQ, job, and database handling remain in the
+application. Tear the isolated stack down afterwards with the same environment
+and `docker compose ... down -v`.
+
 ## Test Structure
 
 ```
