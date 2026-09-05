@@ -71,7 +71,6 @@ async def _events(provider: str, route: ProviderRoute) -> list[StreamEvent]:
     ("provider", "route", "adapter"),
     [
         ("claude", ProviderRoute.CLI, "stream_claude_turn"),
-        ("codex", ProviderRoute.CLI, "stream_codex_cli_turn"),
     ],
 )
 def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
@@ -93,7 +92,16 @@ def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
 
 
 @pytest.mark.acceptance("ACC-COWRITER-09")
-def test_grok_cli_turn_uses_its_transport_through_the_shared_tool_loop(monkeypatch):
+@pytest.mark.parametrize(
+    ("provider", "transport_factory"),
+    [
+        ("grok", "GrokCliToolTransport"),
+        ("codex", "CodexCliToolTransport"),
+    ],
+)
+def test_cli_turn_uses_its_transport_through_the_shared_tool_loop(
+    monkeypatch, provider, transport_factory,
+):
     class Transport:
         closed = False
 
@@ -114,7 +122,7 @@ def test_grok_cli_turn_uses_its_transport_through_the_shared_tool_loop(monkeypat
             self.closed = True
 
     transport = Transport()
-    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -127,7 +135,7 @@ def test_grok_cli_turn_uses_its_transport_through_the_shared_tool_loop(monkeypat
         ),
     )
 
-    events = asyncio.run(_events("grok", ProviderRoute.CLI))
+    events = asyncio.run(_events(provider, ProviderRoute.CLI))
 
     assert events == [
         AssistantTextEvent(text="I will update it. "),
@@ -142,7 +150,14 @@ def test_grok_cli_turn_uses_its_transport_through_the_shared_tool_loop(monkeypat
     assert transport.closed
 
 
-def test_grok_cli_dispatch_names_a_text_protocol_error(monkeypatch):
+@pytest.mark.parametrize(
+    ("provider", "transport_factory"),
+    [
+        ("grok", "GrokCliToolTransport"),
+        ("codex", "CodexCliToolTransport"),
+    ],
+)
+def test_cli_dispatch_names_a_text_protocol_error(monkeypatch, provider, transport_factory):
     class InvalidTransport:
         async def stream(self, _message):
             yield ToolCallBatch((ToolCall("call-1", "get_song", {"song_id": "s1"}),))
@@ -151,18 +166,25 @@ def test_grok_cli_dispatch_names_a_text_protocol_error(monkeypatch):
         async def aclose(self):
             pass
 
-    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: InvalidTransport())
+    monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: InvalidTransport())
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events("grok", ProviderRoute.CLI))
+        asyncio.run(_events(provider, ProviderRoute.CLI))
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
 
-def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
-    monkeypatch, tmp_path: Path,
+@pytest.mark.parametrize(
+    ("provider", "transport_factory"),
+    [
+        ("grok", "GrokCliToolTransport"),
+        ("codex", "CodexCliToolTransport"),
+    ],
+)
+def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
+    monkeypatch, tmp_path: Path, provider, transport_factory,
 ) -> None:
-    factory = init_test_db(tmp_path / "grok-dispatch.db")
+    factory = init_test_db(tmp_path / f"{provider}-dispatch.db")
     with factory() as session:
         session.add_all([
             User(id="owner", username="owner", password_hash="x", role="user"),
@@ -214,7 +236,7 @@ def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
             self.closed = True
 
     transport = Transport()
-    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
     user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
 
     async def collect():
@@ -222,9 +244,9 @@ def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
             return [
                 event
                 async for event in dispatch.stream_cowriter_turn(
-                    provider="grok",
+                    provider=provider,
                     route=ProviderRoute.CLI,
-                    model="grok-test",
+                    model=f"{provider}-test",
                     user_id=user.id,
                     system="system",
                     messages=[],
@@ -246,7 +268,14 @@ def test_grok_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
         assert session.get(Version, "other-version").lyrics == "private"
 
 
-def test_closing_a_grok_cli_turn_aborts_its_transport(monkeypatch):
+@pytest.mark.parametrize(
+    ("provider", "transport_factory"),
+    [
+        ("grok", "GrokCliToolTransport"),
+        ("codex", "CodexCliToolTransport"),
+    ],
+)
+def test_closing_a_cli_turn_aborts_its_transport(monkeypatch, provider, transport_factory):
     class BlockingTransport:
         closed = False
 
@@ -258,11 +287,11 @@ def test_closing_a_grok_cli_turn_aborts_its_transport(monkeypatch):
             self.closed = True
 
     transport = BlockingTransport()
-    monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: transport)
+    monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
 
     async def close_turn():
         turn = dispatch.stream_cowriter_turn(
-            provider="grok",
+            provider=provider,
             route=ProviderRoute.CLI,
             model="model",
             user_id="user",
@@ -305,31 +334,22 @@ def test_codex_cover_route_reports_an_unavailable_cli_probe(monkeypatch) -> None
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
 
 
-def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, adapter: str) -> None:
-    async def failing_cli(**_kwargs):
-        raise ProviderUnavailableError(
-            provider,
-            "cli",
-            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
-        )
-        yield AssistantTextEvent(text="unreachable")
+def _assert_cli_failure_never_falls_back_to_http(
+    monkeypatch, provider: str, transport_factory: str,
+) -> None:
+    class FailingTransport:
+        async def stream(self, _message):
+            raise ProviderUnavailableError(
+                provider,
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+            )
+            yield  # pragma: no cover
 
-    if provider == "grok":
-        class FailingTransport:
-            async def stream(self, _message):
-                raise ProviderUnavailableError(
-                    provider,
-                    "cli",
-                    normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
-                )
-                yield  # pragma: no cover
+        async def aclose(self):
+            pass
 
-            async def aclose(self):
-                pass
-
-        monkeypatch.setattr(dispatch, "GrokCliToolTransport", lambda **_kwargs: FailingTransport())
-    else:
-        monkeypatch.setattr(dispatch, adapter, failing_cli)
+    monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: FailingTransport())
     monkeypatch.setattr(
         dispatch,
         "stream_openai_compatible_turn",
@@ -344,12 +364,12 @@ def _assert_cli_failure_never_falls_back_to_http(monkeypatch, provider: str, ada
 
 @pytest.mark.acceptance("ACC-COWRITER-11")
 def test_grok_cli_failure_never_falls_back_to_http(monkeypatch):
-    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "")
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "GrokCliToolTransport")
 
 
 @pytest.mark.acceptance("ACC-COWRITER-13")
 def test_codex_cli_failure_never_falls_back_to_http(monkeypatch):
-    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "codex", "stream_codex_cli_turn")
+    _assert_cli_failure_never_falls_back_to_http(monkeypatch, "codex", "CodexCliToolTransport")
 
 
 def test_dispatch_preserves_the_adapter_named_reason(monkeypatch):
