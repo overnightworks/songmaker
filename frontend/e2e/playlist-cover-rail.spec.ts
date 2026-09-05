@@ -95,6 +95,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		await postJson(page, `/api/playlists/${playlist.id}/entries/generation`, {
 			generation_id: take.id
 		});
+		await postJson(page, `/api/albums/${album.id}/archive`, {});
 
 		let coverRequests = 0;
 		page.on('request', (request) => {
@@ -109,16 +110,19 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		});
 
 		await page.goto('/');
-		if (isMobile) {
-			expect(coverRequests).toBe(0);
-			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		}
+		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 		const rail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
+		const collapsedMosaicRow = rail
+			.locator('#rail-playlists-group li')
+			.filter({ hasText: playlistTitle });
+		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'false');
+		await expect(collapsedMosaicRow.locator('.playlist-cover-cell')).toHaveCount(4);
+		await expect(collapsedMosaicRow.locator('.playlist-cover-cell img')).toHaveCount(0);
 		expect(coverRequests).toBe(0);
 		if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
 			await playlistsGroup.click();
