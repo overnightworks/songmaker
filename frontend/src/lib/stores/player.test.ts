@@ -448,6 +448,14 @@ describe('browsing state', () => {
 		expect(get(selectedGeneration)).toBeNull();
 	});
 
+	it('selectedGeneration returns null when the selected take is no longer in its song', () => {
+		songList.set([makeSong()]);
+		selectedSongId.set('s1');
+		selectedGenerationId.set('g-removed');
+
+		expect(get(selectedGeneration)).toBeNull();
+	});
+
 	it('filteredSongs filters by album', () => {
 		songList.set([makeSong({ album_id: 'a1' }), makeSong({ id: 's2', album_id: 'a2' })]);
 		selectedAlbumId.set('a1');
@@ -2598,6 +2606,16 @@ describe('playIdleStart', () => {
 });
 
 describe('buildQueueViewModel', () => {
+	it('uses the native queue position when no playback is current', () => {
+		const first = makePlayback(makeGen({ id: 'g1' }), makeSong({ id: 's1' }));
+		const second = makePlayback(makeGen({ id: 'g2' }), makeSong({ id: 's2' }));
+
+		const vm = buildQueueViewModel({ type: 'library', takes: [first, second], index: 1 }, null);
+
+		expect(vm.currentIndex).toBe(1);
+		expect(vm.upNext?.generationId).toBe('g1');
+	});
+
 	it('classic-mode contexts without takes render current only, with no up next', () => {
 		const vm = buildQueueViewModel({ type: 'library' }, makePlayback(makeGen(), makeSong()));
 		expect(vm.items).toEqual([]);
@@ -2704,6 +2722,31 @@ describe('buildQueueViewModel', () => {
 	});
 });
 
+describe('stream transport direction', () => {
+	it.each([
+		['next', () => playNextSong(), 'next'],
+		['previous', () => playPrevSong(), 'previous']
+	])('moves to the %s stream track', async (_caseName, move, expectedSongId) => {
+		audioPlayer.mode = 'stream';
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-current' }), makeSong({ id: 's-current' }));
+		vi.spyOn(audioPlayer, 'nextStreamTrack').mockImplementation(() => {
+			audioPlayer.current = makePlayback(makeGen({ id: 'g-next' }), makeSong({ id: 'next' }));
+			return true;
+		});
+		vi.spyOn(audioPlayer, 'prevStreamTrack').mockImplementation(() => {
+			audioPlayer.current = makePlayback(
+				makeGen({ id: 'g-previous' }),
+				makeSong({ id: 'previous' })
+			);
+			return true;
+		});
+
+		await move();
+
+		expect(audioPlayer.current?.songId).toBe(expectedSongId);
+	});
+});
+
 describe('jumpToQueueIndex', () => {
 	it('plays the take at the requested index in a native queue', () => {
 		const songA = makeSong({ id: 's1' });
@@ -2784,6 +2827,18 @@ describe('playTake', () => {
 
 		expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error' })]);
 		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('reports a generic toast when the queue-stream path rejects a non-Error value', async () => {
+		vi.mocked(audioPlayer.load).mockImplementationOnce(() => {
+			throw 'offline';
+		});
+
+		await playTake(makeGen(), makeSong());
+
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ type: 'error', message: 'Playback failed' })
+		]);
 	});
 });
 

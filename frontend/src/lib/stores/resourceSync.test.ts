@@ -27,6 +27,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { ApiError } from '$lib/api/fetch';
 import { classifyAuthFailure, clearAuth, currentUser } from '$lib/stores/auth';
+import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
 import type {
 	AuthUser,
@@ -50,9 +51,12 @@ import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
 	probeResourceAuth,
+	requestSongRefresh,
 	resetResourceSyncForTests,
+	retryResourceSync,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
+	waitForResourceReady,
 	type ResourceAuthProbe,
 	type ResourceEventSource,
 	type ResourceSyncDeps,
@@ -290,6 +294,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetResourceSyncForTests();
+	selectedSongId.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 });
@@ -377,6 +382,74 @@ describe('resource sync interleavings', () => {
 });
 
 describe('resource sync owner', () => {
+	it('reports an unstarted owner as not ready', async () => {
+		const { controller } = setup();
+		expect(await controller.waitForReady()).toBe(false);
+	});
+
+	it('does not refresh songs before its owner starts', async () => {
+		const { controller, fetchCalls } = setup();
+		await controller.requestSongRefresh('s1');
+		expect(fetchCalls).toEqual([]);
+	});
+
+	it('creates one stream when start is called repeatedly', () => {
+		const { controller, sources } = setup();
+		controller.start();
+		controller.start();
+		expect(sources).toHaveLength(1);
+	});
+
+	it('does not revalidate while the document is hidden or before the first snapshot', async () => {
+		const { controller, sources, fetchCalls } = setup();
+		controller.start();
+		await controller.handleVisibility();
+		expect(fetchCalls).toEqual([]);
+
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		await controller.handleVisibility();
+		expect(fetchCalls).toEqual([]);
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+	});
+
+	it.each([
+		['hello', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
+		['resync', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
+		['generation.created', { sequence: 1 }, 'Malformed resource event field: kind', false]
+	])(
+		'surfaces malformed %s events with their parse error',
+		async (type, data, error, closesSource) => {
+			const { controller, sources, store } = setup();
+			controller.start();
+
+			latestSource(sources).emit(type, data);
+			await flush();
+
+			expect(get(store)).toMatchObject({ status: 'error', error, ready: false });
+			expect(latestSource(sources).closed).toBe(closesSource);
+		}
+	);
+
+	it('keeps a song refresh error when bootstrap would otherwise use its generic fallback', async () => {
+		const { controller, sources, store } = setup({
+			fetchSong: async () => Promise.reject(new Error('song unavailable'))
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+
+		expect(get(store)).toMatchObject({
+			status: 'error',
+			error: 'song unavailable',
+			ready: false
+		});
+		expect(latestSource(sources).closed).toBe(true);
+	});
+
 	it('bounds deferred events and remembered generation ids', async () => {
 		let loaded: string[] = [];
 		const newestSongId = `s-${RESOURCE_SYNC_TRACKED_EVENT_LIMIT + 1}`;
@@ -516,18 +589,77 @@ describe('resource sync owner', () => {
 		expect(get(store).highWaterMark).toBe('4');
 	});
 
-	it('focus revalidation fetches the selected song, not the whole browse page', async () => {
+	it.each([
+		['the selected song', ['s1']],
+		['no selected song', []]
+	])('revalidates %s on visibility', async (_caseName, prioritySongIds) => {
 		const { controller, sources, fetchCalls } = setup({
 			listLoadedSongIds: () => ['s1', 's2', 's3'],
-			listPrioritySongIds: () => ['s1']
+			listPrioritySongIds: () => prioritySongIds
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 		await controller.waitForReady();
+
 		const before = fetchCalls.length;
 		await controller.handleVisibility();
-		expect(fetchCalls.slice(before)).toEqual(['s1']);
+		expect(fetchCalls.slice(before)).toEqual(prioritySongIds);
+	});
+
+	it('uses the generic error when live recovery has no retained detail', async () => {
+		vi.useFakeTimers();
+		let clearError = false;
+		const { controller, sources, store } = setup({
+			fetchSong: async () => {
+				throw new Error('transient detail');
+			}
+		});
+		const unsubscribe = store.subscribe((state) => {
+			if (clearError && state.status === 'error' && state.error === 'transient detail') {
+				store.set({ ...state, error: null });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store).error).toBe('transient detail');
+		clearError = true;
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+		unsubscribe();
+		vi.useRealTimers();
+	});
+
+	it('uses the generic error when a deferred bootstrap refresh has no retained detail', async () => {
+		let loadedCalls = 0;
+		const { controller, sources, store } = setup({
+			listLoadedSongIds: () => (loadedCalls++ === 0 ? [] : ['s1']),
+			fetchSong: async () => {
+				throw new Error('deferred detail');
+			}
+		});
+		const unsubscribe = store.subscribe((state) => {
+			if (state.status === 'error' && state.error === 'deferred detail') {
+				store.set({ ...state, error: null });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR, ready: false });
+		unsubscribe();
 	});
 
 	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
@@ -623,6 +755,20 @@ describe('resource sync owner', () => {
 		expect(await controller.retry()).toBe(true);
 		expect(get(store).status).toBe('live');
 		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
+	});
+
+	it('returns a failed retry when the active owner stops during its refresh', async () => {
+		const pending = deferred<SongItem>();
+		const { controller, sources } = setup({ fetchSong: () => pending.promise });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const retry = controller.retry();
+		controller.stop();
+		pending.resolve(song());
+
+		expect(await retry).toBe(false);
 	});
 
 	it('unauthorized stream errors stop the owner and clear auth', async () => {
@@ -771,6 +917,45 @@ describe('resource sync owner', () => {
 		expect(await ready).toBe(true);
 		expect(get(store).status).toBe('live');
 		expect(loads.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('ignores a rejected snapshot from an older hello epoch', async () => {
+		const firstSnapshot = deferred<boolean>();
+		let loads = 0;
+		const { controller, sources, store } = setup({
+			loadSnapshot: () => {
+				loads += 1;
+				return loads === 1 ? firstSnapshot.promise : Promise.resolve(true);
+			}
+		});
+		controller.start();
+		const ready = controller.waitForReady();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+		firstSnapshot.reject(new Error('stale snapshot'));
+		await flush();
+
+		expect(await ready).toBe(true);
+		expect(get(store)).toMatchObject({ status: 'live', error: null, ready: true });
+	});
+
+	it('ignores stream frames delivered after its owner has stopped', async () => {
+		const probeAuth = vi.fn(async () => 'unauthorized' as const);
+		const { controller, sources, fetchCalls, store } = setup({ probeAuth });
+		controller.start();
+		const source = latestSource(sources);
+		controller.stop();
+
+		source.emit('hello', { high_water_mark: '0' });
+		source.emit('generation.created', created('1', 'g1'));
+		source.error();
+		await flush();
+
+		expect(fetchCalls).toEqual([]);
+		expect(probeAuth).not.toHaveBeenCalled();
+		expect(get(store)).toEqual(EMPTY_RESOURCE_SYNC);
 	});
 
 	it('retries failed live refreshes on the next hello instead of hiding them', async () => {
@@ -953,6 +1138,28 @@ describe('resource sync owner', () => {
 		expect(get(store).status).toBe('live');
 		expect(get(store).error).toBeNull();
 	});
+
+	it.each([
+		['an API detail', new ApiError(500, 'server detail', '/api/songs/s1'), 'server detail'],
+		[
+			'an API fallback message',
+			new ApiError(500, '', '/api/songs/s1'),
+			'Something went wrong. Try again.'
+		],
+		['an unknown failure', null, RESOURCE_SYNC_ERROR]
+	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
+		const { controller, sources, store } = setup({
+			fetchSong: async () => Promise.reject(failure)
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error });
+	});
 });
 
 function stubFetchOnce(status: number) {
@@ -980,6 +1187,67 @@ describe('probeResourceAuth', () => {
 });
 
 describe('library resource sync wiring', () => {
+	it.each([
+		['the selected song', 'selected-song', ['/api/songs/selected-song']],
+		['no selected song', null, []]
+	] as const)(
+		'revalidates %s through the library owner on visibility',
+		async (_caseName, songId, expected) => {
+			vi.useFakeTimers();
+			const requests: string[] = [];
+			vi.stubGlobal('EventSource', MockEventSource);
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (input: string) => {
+					const path = String(input);
+					requests.push(path);
+					if (path.startsWith('/api/albums?') || path.startsWith('/api/songs?')) {
+						return {
+							ok: true,
+							json: async () => ({ items: [], total: 0, offset: 0, limit: 0, has_more: false })
+						};
+					}
+					if (path === '/api/songs/selected-song') {
+						return { ok: true, json: async () => song({ id: 'selected-song' }) };
+					}
+					throw new Error(`Unexpected request: ${path}`);
+				})
+			);
+
+			startLibraryResourceSync();
+			MockEventSource.instances[0].emit('hello', { high_water_mark: '0' });
+			await flush();
+			expect(await waitForResourceReady()).toBe(true);
+			selectedSongId.set(songId);
+			await flush();
+			requests.splice(0);
+
+			Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+			document.dispatchEvent(new Event('visibilitychange'));
+			await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+			await flush();
+
+			expect(requests).toEqual(expected);
+		}
+	);
+
+	it('keeps wrapper calls inert until the library owner is started', async () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+
+		await requestSongRefresh('s1');
+		expect(MockEventSource.instances).toHaveLength(0);
+		expect(await waitForResourceReady()).toBe(false);
+		expect(MockEventSource.instances).toHaveLength(0);
+	});
+
+	it('starts the singleton owner when retry is requested while stopped', () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+
+		void retryResourceSync();
+
+		expect(MockEventSource.instances).toHaveLength(1);
+	});
+
 	it('starts a credentialed EventSource and stops it on demand', () => {
 		vi.stubGlobal('EventSource', MockEventSource);
 		startLibraryResourceSync();
