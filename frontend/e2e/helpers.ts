@@ -16,7 +16,7 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
  * What the library flow costs the API per shell, measured on a green full-suite
- * run against `library.spec.ts`'s own first test: 40 requests on desktop and
+ * run against `library.spec.ts`'s own first test: 39 requests on desktop and
  * 30 on mobile against a clean stack, budgeted at 40 for both. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
