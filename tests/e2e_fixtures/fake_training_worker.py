@@ -112,8 +112,8 @@ async def _queued_generate_runner(
 
     prompt = getattr(config, "prompt", "")
     seed = getattr(config, "seed", -1)
-    lora_path = getattr(config, "lora_path", "")
-    if not isinstance(prompt, str) or not isinstance(seed, int) or not isinstance(lora_path, str):
+    lora_path = getattr(config, "lora_path", None)
+    if not isinstance(prompt, str) or not isinstance(seed, int) or not isinstance(lora_path, (str, type(None))):
         raise TypeError("Fake generation requires prompt, seed, and lora_path on its config")
     audio_output_dir.mkdir(parents=True, exist_ok=True)
     audio_path = audio_output_dir / f"{task_id}.wav"
