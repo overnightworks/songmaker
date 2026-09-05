@@ -44,6 +44,7 @@ from songmaker_cli.constants import (
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
+    CoverExecutor,
     JobFunction,
     JobStatus,
     ResourceType,
@@ -404,9 +405,13 @@ async def api_create_cover_suggestions(
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     session.commit()
+    settings = get_settings()
     try:
         request = request_cover_suggestions(session, album_id, user)
-        if not await is_music_worker_healthy():
+        if (
+            settings.cover_executor is CoverExecutor.MUSIC
+            and not await is_music_worker_healthy()
+        ):
             raise HTTPException(503, "Worker not running")
         session.commit()
     except CoverSuggestionRequestError as exc:
@@ -416,6 +421,8 @@ async def api_create_cover_suggestions(
         session.rollback()
         raise
     remove_cover_suggestion_files(ctx.audio_dir, request.stale_suggestion_paths)
+    if settings.cover_executor is CoverExecutor.WEB:
+        return JobResponse.from_orm(request.job)
     try:
         await get_arq_pool().enqueue_job(
             JobFunction.COVER,

@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
     JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_HEARTBEAT_INTERVAL_SECONDS,
     JobStatus,
+    JobType,
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
@@ -32,8 +33,15 @@ from songmaker_cli.cowriter.codex_cli_adapter import (
 )
 from songmaker_cli.cowriter.dispatch import cover_image_provider_method
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
-from songmaker_cli.db.models import AlbumCoverSuggestion
-from songmaker_cli.db.queries import claim_next_cover_job, get_album, get_job, list_songs
+from songmaker_cli.db.models import AlbumCoverSuggestion, Job
+from songmaker_cli.db.queries import (
+    claim_next_cover_job,
+    delete_album_cover_suggestions,
+    get_album,
+    get_job,
+    list_songs,
+    recover_stale_jobs_by_type,
+)
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
 from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 
@@ -84,6 +92,45 @@ def abort_web_cover_job(app, job_id: str) -> bool:
     """Signal a running web cover job after its DB cancellation commits."""
     registry = getattr(app.state, "cover_job_cancellation_registry", None)
     return registry is not None and registry.abort(job_id)
+
+
+def recover_web_cover_jobs(
+    db_factory,
+    audio_dir: Path,
+    settings: Settings | None = None,
+) -> int:
+    """Fail interrupted web covers, then remove only their unpublished group."""
+    settings = settings or get_settings()
+    if settings.cover_executor is not CoverExecutor.WEB:
+        return 0
+    with db_factory() as session:
+        interrupted_jobs = session.query(Job.id, Job.album_id).filter(
+            Job.type == JobType.COVER,
+            Job.status == JobStatus.RUNNING,
+        ).all()
+        interrupted_album_ids = {
+            album_id for _job_id, album_id in interrupted_jobs if album_id is not None
+        }
+        staging_dirs = [
+            _staging_path(audio_dir, album_id, job_id)
+            for job_id, album_id in interrupted_jobs
+            if album_id is not None
+        ]
+        stale_suggestion_paths = [
+            path
+            for album_id in interrupted_album_ids
+            for path in delete_album_cover_suggestions(session, album_id)
+        ]
+        recovered = recover_stale_jobs_by_type(
+            session,
+            {JobType.COVER: frozenset({JobStatus.RUNNING})},
+        )
+        session.commit()
+    remove_cover_suggestion_files(audio_dir, stale_suggestion_paths)
+    for staging_dir in staging_dirs:
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir)
+    return recovered.get(JobType.COVER, 0)
 
 
 async def run_next_cover_job(
@@ -287,11 +334,15 @@ def _load_cover_prompt(db_factory, job_id: str) -> tuple[str, str]:
 
 
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
-    root = suggestion_png_path(audio_dir, album_id, "staging").parent.parent
-    root.mkdir(parents=True, exist_ok=True)
-    staging_dir = root / f".{job_id}.staging"
+    staging_dir = _staging_path(audio_dir, album_id, job_id)
+    staging_dir.parent.mkdir(parents=True, exist_ok=True)
     staging_dir.mkdir()
     return staging_dir
+
+
+def _staging_path(audio_dir: Path, album_id: str, job_id: str) -> Path:
+    root = suggestion_png_path(audio_dir, album_id, "staging").parent.parent
+    return root / f".{job_id}.staging"
 
 
 def _write_staged_png(staging_dir: Path, suggestion_id: str, payload: bytes) -> None:

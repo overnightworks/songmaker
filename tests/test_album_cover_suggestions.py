@@ -17,6 +17,7 @@ from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     ARQ_MUSIC_QUEUE_NAME,
     JSON_REQUEST_BODY_MAX_BYTES,
+    CoverExecutor,
     JobFunction,
     JobStatus,
     JobType,
@@ -213,6 +214,31 @@ def test_create_cover_suggestions_enqueues_a_music_worker_job(
     ]
     with factory() as session:
         job = session.get(Job, job_id)
+        assert job is not None
+        assert job.status == JobStatus.QUEUED
+
+
+def test_web_cover_executor_leaves_the_job_for_the_web_runner(
+    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, factory = alice_app
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.WEB)
+    get_settings.cache_clear()
+
+    async def arq_must_not_be_read() -> None:
+        raise AssertionError("web covers must not enqueue an ARQ job")
+
+    monkeypatch.setattr("songmaker_cli.album_api.is_music_worker_healthy", arq_must_not_be_read)
+    monkeypatch.setattr(
+        "songmaker_cli.album_api.get_arq_pool",
+        lambda: (_ for _ in ()).throw(AssertionError("web covers must not read the ARQ pool")),
+    )
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    with factory() as session:
+        job = session.get(Job, response.json()["id"])
         assert job is not None
         assert job.status == JobStatus.QUEUED
 
