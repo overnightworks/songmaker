@@ -6,10 +6,12 @@ import {
 	addSongToPlaylist,
 	createPlaylist,
 	deletePlaylistApi,
+	deletePlaylistCover as deletePlaylistCoverApi,
 	fetchPlaylist,
 	fetchPlaylists,
 	removeFromPlaylist,
 	reorderPlaylistEntry,
+	uploadPlaylistCover as uploadPlaylistCoverApi,
 	updatePlaylist
 } from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
@@ -19,6 +21,7 @@ import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from 
 import {
 	createNewPlaylist,
 	deletePlaylist,
+	deletePlaylistCover,
 	ensurePlaylistsLoaded,
 	movePlaylistEntry,
 	addGenerationToPlaylist as addGeneration,
@@ -33,7 +36,8 @@ import {
 	removePlaylistEntry,
 	resetPlaylists,
 	selectedPlaylistDetail,
-	selectedPlaylistId
+	selectedPlaylistId,
+	uploadPlaylistCover
 } from './playlists';
 
 vi.mock('$lib/api/client', () => ({
@@ -41,12 +45,14 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylist: vi.fn(),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
+	deletePlaylistCover: vi.fn(),
 	updatePlaylist: vi.fn(),
 	addGenerationToPlaylist: vi.fn(),
 	addSongToPlaylist: vi.fn(),
 	addAlbumToPlaylist: vi.fn(),
 	removeFromPlaylist: vi.fn(),
-	reorderPlaylistEntry: vi.fn()
+	reorderPlaylistEntry: vi.fn(),
+	uploadPlaylistCover: vi.fn()
 }));
 
 function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
@@ -303,6 +309,32 @@ describe('loadPlaylists', () => {
 });
 
 describe('playlist mutations', () => {
+	it('mirrors an uploaded and removed cover into the list and open detail', async () => {
+		const original = makePlaylist('p1');
+		const customCover = {
+			card: '/api/playlists/p1/cover?variant=card&v=custom.png',
+			detail: '/api/playlists/p1/cover?variant=detail&v=custom.png'
+		};
+		playlistList.set([original]);
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('p1'));
+		vi.mocked(uploadPlaylistCoverApi).mockResolvedValue(makePlaylist('p1', { cover: customCover }));
+		vi.mocked(deletePlaylistCoverApi).mockResolvedValue(makePlaylist('p1', { cover: null }));
+
+		await loadPlaylistDetail('p1');
+		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
+		await uploadPlaylistCover('p1', file);
+
+		expect(uploadPlaylistCoverApi).toHaveBeenCalledWith('p1', file);
+		expect(get(playlistList)[0]?.cover).toEqual(customCover);
+		expect(get(selectedPlaylistDetail)?.cover).toEqual(customCover);
+
+		await deletePlaylistCover('p1');
+
+		expect(deletePlaylistCoverApi).toHaveBeenCalledWith('p1');
+		expect(get(playlistList)[0]?.cover).toBeNull();
+		expect(get(selectedPlaylistDetail)?.cover).toBeNull();
+	});
+
 	it('mirrors creating, renaming, and deleting a selected playlist in library state', async () => {
 		const original = makePlaylist('p1', { title: 'Original' });
 		const created = makePlaylist('p2', { title: 'New playlist' });

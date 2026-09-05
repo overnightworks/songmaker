@@ -5,11 +5,12 @@
 	interface Props {
 		title: string;
 		covers: AlbumCoverUrls[];
+		cover?: AlbumCoverUrls | null;
 		size?: string;
 		visible?: boolean;
 	}
 
-	let { title, covers, size = '18px', visible = true }: Props = $props();
+	let { title, covers, cover = null, size = '18px', visible = true }: Props = $props();
 
 	const initials = $derived(titleInitials(title));
 	const cells = $derived(Array.from({ length: 4 }, (_, index) => covers[index] ?? null));
@@ -21,22 +22,34 @@
 </script>
 
 <span class="playlist-cover" style:--playlist-cover-size={size} aria-hidden="true">
-	{#each cells as cover, index (index)}
-		<span class="playlist-cover-cell">
-			{#if visible && cover && !failedCoverUrls.has(cover.card)}
-				<img
-					src={cover.card}
-					alt=""
-					draggable="false"
-					loading="lazy"
-					decoding="async"
-					onerror={() => hideFailedCover(cover.card)}
-				/>
-			{:else}
-				<span class="playlist-cover-initials">{initials}</span>
-			{/if}
-		</span>
-	{/each}
+	{#if visible && cover && !failedCoverUrls.has(cover.card)}
+		<img
+			class="playlist-cover-image"
+			src={cover.card}
+			alt=""
+			draggable="false"
+			loading="lazy"
+			decoding="async"
+			onerror={() => hideFailedCover(cover.card)}
+		/>
+	{:else}
+		{#each cells as albumCover, index (index)}
+			<span class="playlist-cover-cell">
+				{#if visible && albumCover && !failedCoverUrls.has(albumCover.card)}
+					<img
+						src={albumCover.card}
+						alt=""
+						draggable="false"
+						loading="lazy"
+						decoding="async"
+						onerror={() => hideFailedCover(albumCover.card)}
+					/>
+				{:else}
+					<span class="playlist-cover-initials">{initials}</span>
+				{/if}
+			</span>
+		{/each}
+	{/if}
 </span>
 
 <style>
@@ -64,6 +77,14 @@
 	}
 
 	.playlist-cover-cell img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.playlist-cover-image {
+		grid-column: 1 / -1;
+		grid-row: 1 / -1;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;

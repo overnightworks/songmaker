@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { ShareResult } from '$lib/api/types';
+	import type { AlbumCoverUrls, ShareResult } from '$lib/api/types';
 	import CollectionHeaderFrame from './CollectionHeaderFrame.svelte';
 	import Breadcrumb from './Breadcrumb.svelte';
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
+	import PlaylistCover from './PlaylistCover.svelte';
 	import { ALBUM_ADD_SONG_GLYPH, ALBUM_ADD_SONG_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
 
@@ -33,6 +34,8 @@
 		offlineSaved?: boolean;
 		offlineSaving?: boolean;
 		offlineProgressLabel?: string | null;
+		playlistCovers?: AlbumCoverUrls[];
+		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only metadata editor (subtitle/year) rendered under the title. */
 		metaEditor?: Snippet;
 	}
@@ -62,6 +65,8 @@
 		offlineSaved = false,
 		offlineSaving = false,
 		offlineProgressLabel = null,
+		playlistCovers,
+		playlistCover,
 		metaEditor
 	}: Props = $props();
 
@@ -134,6 +139,12 @@
 	/>
 {/snippet}
 
+{#snippet coverFallback()}
+	{#if kind === 'playlist' && playlistCovers}
+		<PlaylistCover {title} covers={playlistCovers} cover={playlistCover} size="56px" />
+	{/if}
+{/snippet}
+
 <CollectionHeaderFrame
 	{coverUrl}
 	{showCover}
@@ -144,6 +155,7 @@
 	{onplay}
 	{titleArea}
 	{actions}
+	coverFallback={kind === 'playlist' ? coverFallback : undefined}
 />
 
 <style>

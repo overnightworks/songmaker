@@ -88,3 +88,16 @@ export async function sharePlaylist(id: string): Promise<ShareResult> {
 export async function unsharePlaylist(id: string): Promise<void> {
 	await apiFetch(`/api/playlists/${id}/share`, { method: 'DELETE' });
 }
+
+export async function uploadPlaylistCover(playlistId: string, file: File): Promise<PlaylistItem> {
+	const form = new FormData();
+	form.append('file', file);
+	return apiFetch<PlaylistItem>(`/api/playlists/${playlistId}/cover`, {
+		method: 'PUT',
+		body: form
+	});
+}
+
+export async function deletePlaylistCover(playlistId: string): Promise<PlaylistItem> {
+	return apiFetch<PlaylistItem>(`/api/playlists/${playlistId}/cover`, { method: 'DELETE' });
+}
