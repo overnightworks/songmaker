@@ -41,8 +41,11 @@ def test_value_set_at_runtime_is_restored(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_restore_survives_an_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(_KEY, "before")
+    override = temporary_env_override(_KEY, "during")
+    error = RuntimeError("boom")
 
-    with pytest.raises(RuntimeError), temporary_env_override(_KEY, "during"):
-        raise RuntimeError("boom")
+    with pytest.raises(RuntimeError):
+        with override:
+            raise error
 
     assert os.environ[_KEY] == "before"

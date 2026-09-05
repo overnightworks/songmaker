@@ -109,8 +109,9 @@ def test_check_lora_ready_rejects_non_ready(db_factory) -> None:
         session.commit()
 
     with db_factory() as session:
+        auth = _auth(USER_A)
         with pytest.raises(HTTPException) as exc:
-            check_lora_ready_for_generation(session, lora_id, _auth(USER_A))
+            check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 422
 
 
@@ -125,8 +126,9 @@ def test_check_lora_ready_rejects_deleted(db_factory) -> None:
         lora.deleted_at = datetime.now(timezone.utc)
         session.commit()
     with db_factory() as session:
+        auth = _auth(USER_A)
         with pytest.raises(HTTPException) as exc:
-            check_lora_ready_for_generation(session, lora_id, _auth(USER_A))
+            check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 422
 
 
@@ -135,8 +137,9 @@ def test_check_lora_ready_rejects_cross_user(db_factory) -> None:
 
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
+        auth = _auth(USER_B)
         with pytest.raises(HTTPException) as exc:
-            check_lora_ready_for_generation(session, lora_id, _auth(USER_B))
+            check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 404
 
 
@@ -145,10 +148,9 @@ def test_check_lora_ready_admin_cannot_access_another_users_lora(db_factory) -> 
 
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
+        auth = _auth(USER_B, role="admin")
         with pytest.raises(HTTPException) as exc:
-            check_lora_ready_for_generation(
-                session, lora_id, _auth(USER_B, role="admin"),
-            )
+            check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 404
 
 
@@ -156,10 +158,9 @@ def test_check_lora_ready_404_when_missing(db_factory) -> None:
     from fastapi import HTTPException
 
     with db_factory() as session:
+        auth = _auth(USER_A)
         with pytest.raises(HTTPException) as exc:
-            check_lora_ready_for_generation(
-                session, "does-not-exist", _auth(USER_A),
-            )
+            check_lora_ready_for_generation(session, "does-not-exist", auth)
     assert exc.value.status_code == 404
 
 

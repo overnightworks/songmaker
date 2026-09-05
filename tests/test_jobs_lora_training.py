@@ -581,18 +581,17 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
         session.commit()
 
     with patches():
+        training = run_lora_training_job(
+            {},
+            "job-1",
+            seeded["lora_id"],
+            seeded["user_id"],
+            db_factory=db_factory,
+            audio_dir=seeded["audio_dir"],
+            redis=MagicMock(),
+        )
         with pytest.raises(asyncio.CancelledError):
-            _run(
-                run_lora_training_job(
-                    {},
-                    "job-1",
-                    seeded["lora_id"],
-                    seeded["user_id"],
-                    db_factory=db_factory,
-                    audio_dir=seeded["audio_dir"],
-                    redis=MagicMock(),
-                )
-            )
+            _run(training)
 
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
@@ -638,11 +637,12 @@ def test_validate_export_path_rejects_outside(tmp_path) -> None:
             user_id="u1",
             reported="/etc/shadow",
         )
+    reported = str(tmp_path / "audio" / USER_LORAS_DIRNAME / "u1")
     with pytest.raises(ValueError):
         _validate_export_path(
             audio_dir=tmp_path / "audio",
             user_id="u1",
-            reported=str(tmp_path / "audio" / USER_LORAS_DIRNAME / "u1"),
+            reported=reported,
         )
 
 
@@ -727,19 +727,18 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
         )
 
     with _patch_worker_calls(str(temporary_dir), events=turbo_training_events):
+        training = run_lora_training_job(
+            {},
+            "job-1",
+            seeded["lora_id"],
+            seeded["user_id"],
+            db_factory=db_factory,
+            audio_dir=seeded["audio_dir"],
+            redis=MagicMock(),
+            target_mode="turbo",
+        )
         with pytest.raises(SystemExit, match="simulated process crash"):
-            _run(
-                run_lora_training_job(
-                    {},
-                    "job-1",
-                    seeded["lora_id"],
-                    seeded["user_id"],
-                    db_factory=db_factory,
-                    audio_dir=seeded["audio_dir"],
-                    redis=MagicMock(),
-                    target_mode="turbo",
-                )
-            )
+            _run(training)
 
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
@@ -1248,20 +1247,21 @@ def test_lora_worker_progress_requires_training_epochs() -> None:
         async def events(*_args, **_kwargs):
             yield ("progress", {"progress": 0.5})
 
+        worker = _WorkerHandle(base_url="http://fake", id="w0")
         with (
             patch("httpx.AsyncClient", return_value=client),
             patch("songmaker_cli.jobs.lora_training._iterate_task_events", events),
-            pytest.raises(WorkerProtocolError, match="invalid training epoch fields"),
         ):
-            await _pick_and_call_worker(
-                target_mode="sft",
-                request_payload={},
-                worker=_WorkerHandle(base_url="http://fake", id="w0"),
-                hold_token="hold-token",
-                renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
-                on_heartbeat=lambda: None,
-            )
+            with pytest.raises(WorkerProtocolError, match="invalid training epoch fields"):
+                await _pick_and_call_worker(
+                    target_mode="sft",
+                    request_payload={},
+                    worker=worker,
+                    hold_token="hold-token",
+                    renew_task=renew_task,
+                    on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                    on_heartbeat=lambda: None,
+                )
 
         assert renew_task.cancelled()
 
@@ -1449,9 +1449,8 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
             ),
             patch("songmaker_cli.jobs.lora_training.update_user_lora", cancel_preprocessing),
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release_hold),
-            pytest.raises(asyncio.CancelledError),
         ):
-            await run_lora_training_job(
+            training = run_lora_training_job(
                 {},
                 "job-1",
                 seeded["lora_id"],
@@ -1460,6 +1459,8 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
                 audio_dir=seeded["audio_dir"],
                 redis=redis,
             )
+            with pytest.raises(asyncio.CancelledError):
+                await training
 
         assert renew_task.cancelled()
         assert await reserve_gpu_hold(redis, "w0", "hold-token", 15)
@@ -1519,6 +1520,7 @@ def test_cancel_before_handover_releases_the_job_hold() -> None:
         client = MagicMock()
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
+        worker = _WorkerHandle(base_url="http://fake", id="w0")
         with (
             patch(
                 "songmaker_cli.jobs.lora_training._race_with_renewal",
@@ -1526,17 +1528,17 @@ def test_cancel_before_handover_releases_the_job_hold() -> None:
             ),
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release),
             patch("httpx.AsyncClient", return_value=client),
-            pytest.raises(asyncio.CancelledError),
         ):
-            await _pick_and_call_worker(
-                target_mode="sft",
-                request_payload={},
-                worker=_WorkerHandle(base_url="http://fake", id="w0"),
-                hold_token="hold-token",
-                renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
-                on_heartbeat=lambda: None,
-            )
+            with pytest.raises(asyncio.CancelledError):
+                await _pick_and_call_worker(
+                    target_mode="sft",
+                    request_payload={},
+                    worker=worker,
+                    hold_token="hold-token",
+                    renew_task=renew_task,
+                    on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                    on_heartbeat=lambda: None,
+                )
         assert renew_task.cancelled()
         return release
 
@@ -1565,20 +1567,21 @@ def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
         client.post = AsyncMock(return_value=response)
         release = AsyncMock()
 
+        worker = _WorkerHandle(base_url="http://fake", id="w0")
         with (
             patch("httpx.AsyncClient", return_value=client),
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release),
-            pytest.raises(asyncio.CancelledError),
         ):
-            await _pick_and_call_worker(
-                target_mode="sft",
-                request_payload={},
-                worker=_WorkerHandle(base_url="http://fake", id="w0"),
-                hold_token="hold-token",
-                renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
-                on_heartbeat=lambda: None,
-            )
+            with pytest.raises(asyncio.CancelledError):
+                await _pick_and_call_worker(
+                    target_mode="sft",
+                    request_payload={},
+                    worker=worker,
+                    hold_token="hold-token",
+                    renew_task=renew_task,
+                    on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                    on_heartbeat=lambda: None,
+                )
         assert renew_task.cancelled()
         return release
 
@@ -1689,20 +1692,21 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
             assert await release_gpu_hold(redis, "w0", "hold-token")
 
         release = AsyncMock(side_effect=release_hold)
+        worker = _WorkerHandle(base_url="http://fake", id="w0")
         with (
             patch("httpx.AsyncClient", return_value=client),
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release),
-            pytest.raises(httpx.ReadError),
         ):
-            await _pick_and_call_worker(
-                target_mode="sft",
-                request_payload={},
-                worker=_WorkerHandle(base_url="http://fake", id="w0"),
-                hold_token="hold-token",
-                renew_task=job_renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
-                on_heartbeat=lambda: None,
-            )
+            with pytest.raises(httpx.ReadError):
+                await _pick_and_call_worker(
+                    target_mode="sft",
+                    request_payload={},
+                    worker=worker,
+                    hold_token="hold-token",
+                    renew_task=job_renew_task,
+                    on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                    on_heartbeat=lambda: None,
+                )
         assert job_renew_task.cancelled()
         assert not await admit_generation(redis, "w0")
         worker_renew_task.cancel()
@@ -1753,20 +1757,21 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
 
         release = AsyncMock(side_effect=release_hold)
         expected = asyncio.CancelledError if probe_outcome == "cancelled" else httpx.ReadError
+        worker = _WorkerHandle(base_url="http://fake", id="w0")
         with (
             patch("httpx.AsyncClient", return_value=client),
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release),
-            pytest.raises(expected),
         ):
-            await _pick_and_call_worker(
-                target_mode="sft",
-                request_payload={},
-                worker=_WorkerHandle(base_url="http://fake", id="w0"),
-                hold_token="hold-token",
-                renew_task=renew_task,
-                on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
-                on_heartbeat=lambda: None,
-            )
+            with pytest.raises(expected):
+                await _pick_and_call_worker(
+                    target_mode="sft",
+                    request_payload={},
+                    worker=worker,
+                    hold_token="hold-token",
+                    renew_task=renew_task,
+                    on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
+                    on_heartbeat=lambda: None,
+                )
         assert renew_task.cancelled()
         assert not await admit_generation(redis, "w0")
         return release
@@ -1823,20 +1828,21 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
         assert picked
         return count_queued_generation_jobs(session)
 
+    redis = MagicMock()
+    reservation = _reserve_lora_worker(
+        target_mode="sft",
+        redis=redis,
+        db_factory=db_factory,
+    )
     with (
         patch("songmaker_cli.jobs.lora_training.pick_worker", pick),
         patch("songmaker_cli.jobs.lora_training.count_queued_generation_jobs", count),
-        pytest.raises(AllWorkersHeld),
     ):
-        _run(
-            _reserve_lora_worker(
-                target_mode="sft",
-                redis=MagicMock(),
-                db_factory=db_factory,
-            )
-        )
+        with pytest.raises(AllWorkersHeld):
+            _run(reservation)
 
 
 def test_run_without_factory_raises(db_factory, tmp_path) -> None:
+    training = run_lora_training_job({}, "j", "l", "u")
     with pytest.raises(RuntimeError):
-        _run(run_lora_training_job({}, "j", "l", "u"))
+        _run(training)

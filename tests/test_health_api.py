@@ -204,8 +204,9 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
         drifted_binary.write_bytes(b"cli-build-2")
         provider.clear_cli_tool_surface_cache()
         _use_real_gate_with_fake_cli(monkeypatch, drifted_binary, _init_line(["Bash"]))
+        verification = _real_verify_cli_tool_surface()
         with pytest.raises(provider.CliToolSurfaceError):
-            asyncio.run(_real_verify_cli_tool_surface())
+            asyncio.run(verification)
         after_drift = client.get("/health").json()["claude_cli_tool_surface"]
 
     assert after_clean == "ok"

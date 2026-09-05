@@ -248,11 +248,11 @@ def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
     codex_home.mkdir()
     records = _image_event_records(codex_home)
     mutate(records)
+    event_stream = "\n".join(json.dumps(record) for record in records)
 
     with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
         codex_cli_adapter._validate_codex_image_events(
-            "\n".join(json.dumps(record) for record in records),
-            codex_home=codex_home,
+            event_stream, codex_home=codex_home,
         )
 
 

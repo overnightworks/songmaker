@@ -321,4 +321,3 @@ def test_unique_slug_per_user(session: Session) -> None:
 
     with pytest.raises(IntegrityError):
         create_user_lora(session, _USER_A, "V2", "voice")
-        session.commit()

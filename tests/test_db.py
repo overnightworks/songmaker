@@ -1152,8 +1152,9 @@ def test_whisper_cue_rejects_negative_start() -> None:
 
 
 def test_whisper_cue_rejects_non_finite_end() -> None:
+    infinite_end = float("inf")
     with pytest.raises(PydanticValidationError, match="finite number of seconds"):
-        WhisperCue(start=0.0, end=float("inf"), text="hello")
+        WhisperCue(start=0.0, end=infinite_end, text="hello")
 
 
 def test_whisper_cue_rejects_backward_range() -> None:
@@ -1222,16 +1223,14 @@ def test_generation_validator_rejects_unknown_key(seeded_session: Session) -> No
     from songmaker_cli.db.models import Generation
 
     with pytest.raises(PydanticValidationError, match="not permitted|extra"):
-        seeded_session.add(
-            Generation(
-                id="gx",
-                song_id="s1",
-                version_id="v1",
-                generation_number=99,
-                mp3_path="user1/gx.mp3",
-                model_mode="sft",
-                generation_params={"acestep_model": "sft", "bogus": True},
-            )
+        Generation(
+            id="gx",
+            song_id="s1",
+            version_id="v1",
+            generation_number=99,
+            mp3_path="user1/gx.mp3",
+            model_mode="sft",
+            generation_params={"acestep_model": "sft", "bogus": True},
         )
 
 
@@ -1241,12 +1240,10 @@ def test_preset_validator_rejects_unknown_key(db_session: Session) -> None:
     from songmaker_cli.db.models import GenerationPreset
 
     with pytest.raises(PydanticValidationError, match="not permitted|extra"):
-        db_session.add(
-            GenerationPreset(
-                name="p",
-                model_mode="sft",
-                params={"shift": 2.0, "junk": 1},
-            )
+        GenerationPreset(
+            name="p",
+            model_mode="sft",
+            params={"shift": 2.0, "junk": 1},
         )
 
 
@@ -2478,15 +2475,14 @@ def test_user_lora_model_mode_migration_backfills_constrains_and_removes(
     with engine.begin() as conn:
         model_mode = conn.execute(text("SELECT model_mode FROM user_loras")).scalar_one()
         assert model_mode == MODEL_DEFAULT_MODE
+        invalid_lora = text(
+            "INSERT INTO user_loras "
+            "(id, user_id, name, slug, status, model_mode, created_at) "
+            "VALUES ('lora-2', 'user-1', 'Invalid Voice', 'invalid-voice', "
+            "'draft', 'xl-sft', CURRENT_TIMESTAMP)"
+        )
         with pytest.raises(IntegrityError):
-            conn.execute(
-                text(
-                    "INSERT INTO user_loras "
-                    "(id, user_id, name, slug, status, model_mode, created_at) "
-                    "VALUES ('lora-2', 'user-1', 'Invalid Voice', 'invalid-voice', "
-                    "'draft', 'xl-sft', CURRENT_TIMESTAMP)"
-                ),
-            )
+            conn.execute(invalid_lora)
     engine.dispose()
 
     command.downgrade(config, migration.down_revision)
@@ -3056,16 +3052,15 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -
     assert rows == {"s1": "intro", "s2": "reprise"}
 
     with engine.begin() as conn:
+        duplicate_song = text(
+            "INSERT INTO songs "
+            "(id, title, album_id, vocal_language, track_number, created_at, "
+            "updated_at, slug) "
+            "VALUES ('s3', 'Dup', 'a1', '', 3, CURRENT_TIMESTAMP, "
+            "CURRENT_TIMESTAMP, 'intro')"
+        )
         with pytest.raises(IntegrityError):
-            conn.execute(
-                text(
-                    "INSERT INTO songs "
-                    "(id, title, album_id, vocal_language, track_number, created_at, "
-                    "updated_at, slug) "
-                    "VALUES ('s3', 'Dup', 'a1', '', 3, CURRENT_TIMESTAMP, "
-                    "CURRENT_TIMESTAMP, 'intro')",
-                ),
-            )
+            conn.execute(duplicate_song)
     engine.dispose()
 
     command.downgrade(cfg, "b8e3f1c07a25")
@@ -3134,15 +3129,14 @@ def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path:
 
     engine = create_engine(url)
     with engine.begin() as conn:
+        duplicate_playlist = text(
+            "INSERT INTO playlists "
+            "(id, title, slug, is_shared, created_at, updated_at) "
+            "VALUES ('p4', 'Dup', 'favorites', 0, CURRENT_TIMESTAMP, "
+            "CURRENT_TIMESTAMP)"
+        )
         with pytest.raises(IntegrityError):
-            conn.execute(
-                text(
-                    "INSERT INTO playlists "
-                    "(id, title, slug, is_shared, created_at, updated_at) "
-                    "VALUES ('p4', 'Dup', 'favorites', 0, CURRENT_TIMESTAMP, "
-                    "CURRENT_TIMESTAMP)"
-                )
-            )
+            conn.execute(duplicate_playlist)
     engine.dispose()
 
     command.downgrade(cfg, "c9d4a2f18e37")

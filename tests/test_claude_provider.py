@@ -630,8 +630,9 @@ def test_acall_cli_refuses_a_cli_the_gate_rejects(_no_tool_gate_open, monkeypatc
     )
     create = AsyncMock()
     with patch("asyncio.create_subprocess_exec", create):
+        call = _acall_cli("hello")
         with pytest.raises(CliToolSurfaceError):
-            asyncio.run(_acall_cli("hello"))
+            asyncio.run(call)
     create.assert_not_called()
 
 
@@ -926,8 +927,9 @@ def test_tool_surface_rejects_a_cli_offering_an_unlisted_tool(
 ) -> None:
     _answer_with(monkeypatch, _init_line([*_ALL_SONGMAKER_TOOLS, "Bash"]))
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "Bash" in str(exc.value)
 
 
@@ -939,8 +941,9 @@ def test_tool_surface_rejects_a_cli_offering_fewer_than_the_eleven_tools(
     reported set compared exactly, not just checked for extras."""
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS[:-1]))
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "missing tools" in str(exc.value)
     assert _ALL_SONGMAKER_TOOLS[-1] in str(exc.value)
 
@@ -953,8 +956,9 @@ def test_tool_surface_rejects_a_cli_that_still_advertises_slash_commands(
         _init_line(_ALL_SONGMAKER_TOOLS, slash_commands=["/compact"]),
     )
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "/compact" in str(exc.value)
 
 
@@ -1206,8 +1210,9 @@ def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
     asyncio.run(verify_cli_tool_surface())
     claude_binary.write_bytes(b"cli-build-two-is-a-different-size")
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "FutureTool" in str(exc.value)
 
 
@@ -1374,8 +1379,9 @@ def test_tool_surface_reports_a_cli_that_vanished_mid_update(
 ) -> None:
     claude_binary.unlink()
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
 
 def test_tool_surface_rejects_a_cli_that_announces_nothing(
@@ -1383,8 +1389,9 @@ def test_tool_surface_rejects_a_cli_that_announces_nothing(
 ) -> None:
     _answer_with(monkeypatch, b'{"type": "assistant"}\n')
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
 
 def test_tool_surface_rejects_an_init_event_with_the_wrong_subtype(
@@ -1395,8 +1402,9 @@ def test_tool_surface_rejects_an_init_event_with_the_wrong_subtype(
     }).encode() + b"\n"
     _answer_with(monkeypatch, line)
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
 
 def test_tool_surface_failure_is_cached_across_sequential_calls(
@@ -1408,10 +1416,12 @@ def test_tool_surface_failure_is_cached_across_sequential_calls(
     3, Finding 2)."""
     commands = _answer_with(monkeypatch, b"not json\n")
 
+    first_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(first_probe)
+    second_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(second_probe)
 
     assert len(commands) == 1
 
@@ -1423,8 +1433,9 @@ def test_tool_surface_failure_cache_expires_so_a_repair_takes_effect(
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
+    first_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(first_probe, clock)
 
     clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
     _run_with_clock(verify_cli_tool_surface(), clock)
@@ -1449,8 +1460,9 @@ def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanen
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
+    failed_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError) as exc:
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(failed_probe, clock)
     assert not isinstance(exc.value, CliToolSurfaceError)
 
     clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
@@ -1474,8 +1486,9 @@ def test_claude_cli_tool_surface_health_transitions_from_unverified_to_ok(
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
+    failed_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(failed_probe, clock)
     assert provider.claude_cli_tool_surface_health() == "unverified"
 
     clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
@@ -1501,8 +1514,9 @@ def test_claude_cli_tool_surface_health_transitions_from_ok_to_drift_after_a_bui
     assert provider.claude_cli_tool_surface_health() == "ok"
 
     claude_binary.write_bytes(b"a-different-build-entirely")
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
     assert provider.claude_cli_tool_surface_health() == "drift"
     assert len(commands) == 2
@@ -1521,8 +1535,9 @@ def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_
         lambda: (_ for _ in ()).throw(UnavailableError("Claude CLI is unavailable")),
     )
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError, match="unavailable"):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
     assert provider.claude_cli_tool_surface_health() == "unverified"
     assert len(commands) == 1
@@ -1541,8 +1556,9 @@ def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_
         lambda _binary: (_ for _ in ()).throw(UnavailableError("Claude CLI is unreadable")),
     )
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError, match="unreadable"):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
     assert provider.claude_cli_tool_surface_health() == "unverified"
     assert len(commands) == 1
@@ -1564,14 +1580,16 @@ def test_tool_surface_unexpected_tool_is_permanent_even_when_mcp_is_disconnected
     short-lived."""
     commands = _answer_with(monkeypatch, _init_line(["Bash"], mcp_connected=False))
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "Bash" in str(exc.value)
 
     # A second call, even immediately, must not re-probe — the mismatch is
     # cached forever, not merely for the ordinary ten-second failure TTL.
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert len(commands) == 1
 
 
@@ -1582,12 +1600,14 @@ def test_tool_surface_slash_command_is_permanent_even_when_mcp_is_disconnected(
         monkeypatch, _init_line([], slash_commands=["/compact"], mcp_connected=False),
     )
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert "/compact" in str(exc.value)
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     assert len(commands) == 1
 
 
@@ -1601,12 +1621,14 @@ def test_tool_surface_permanent_mismatch_outlives_the_zombie_failure_ttl(
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
+    first_probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(first_probe, clock)
 
     clock["now"] += provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS + 1
+    second_probe = verify_cli_tool_surface()
     with pytest.raises(CliToolSurfaceError):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(second_probe, clock)
 
     assert len(commands) == 1
 
@@ -1639,8 +1661,9 @@ def test_tool_surface_is_reprobed_after_a_genuine_symlink_retarget(
         symlink.unlink()
         symlink.symlink_to(target_b)
 
+        probe = verify_cli_tool_surface()
         with pytest.raises(CliToolSurfaceError) as exc:
-            asyncio.run(verify_cli_tool_surface())
+            asyncio.run(probe)
         assert "FutureTool" in str(exc.value)
 
     assert len(commands) == 2
@@ -1660,8 +1683,9 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
     monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(provider._ZombieProbeError):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
     with provider._tool_surface_lock:
         assert not provider._tool_surface_verdicts
@@ -1712,16 +1736,18 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(provider._ZombieProbeError):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(probe, clock)
 
     # The ordinary (short) failure TTL alone must not be enough to retry —
     # this second call is a cache hit, which always re-raises as a plain
     # UnavailableError (the cache carries the message and the TTL choice
     # it already made, not the original exception's exact type).
     clock["now"] += provider.CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS + 1
+    cached_probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError, match="outlived SIGKILL"):
-        _run_with_clock(verify_cli_tool_surface(), clock)
+        _run_with_clock(cached_probe, clock)
     assert len(commands) == 1
 
     # Past the zombie TTL a fresh probe runs — and this time the process
@@ -1744,8 +1770,9 @@ def test_zombie_failure_uses_the_event_loop_clock_when_the_loop_is_offset(
     monkeypatch.setattr(provider.agent_cli.time, "monotonic", loop.time)
 
     try:
+        probe = verify_cli_tool_surface()
         with pytest.raises(provider._ZombieProbeError):
-            loop.run_until_complete(verify_cli_tool_surface())
+            loop.run_until_complete(probe)
     finally:
         loop.close()
 
@@ -1790,8 +1817,9 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
     monkeypatch.setattr(provider, "CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
 
     started = time.monotonic()
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError, match="Broken pipe") as exc:
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
     elapsed = time.monotonic() - started
 
     assert not isinstance(exc.value, provider._ZombieProbeError)
@@ -1928,8 +1956,9 @@ def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_ra
         lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
+    probe = verify_cli_tool_surface()
     with pytest.raises(UnavailableError, match="boom"):
-        asyncio.run(verify_cli_tool_surface())
+        asyncio.run(probe)
 
     with provider._tool_surface_lock:
         assert not provider._tool_surface_inflight_async
@@ -1960,8 +1989,10 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.05)
 
     try:
+        probe = averify_no_builtin_cli_tools()
+        bounded_probe = asyncio.wait_for(probe, timeout=3)
         with pytest.raises(UnavailableError) as exc:
-            asyncio.run(asyncio.wait_for(averify_no_builtin_cli_tools(), timeout=3))
+            asyncio.run(bounded_probe)
         assert str(exc.value) == "Claude CLI probe did not start within its budget"
     finally:
         popen_may_return.set()
@@ -1988,13 +2019,13 @@ def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
         await work_started
         deadline = loop.time() + 0.05
         try:
+            binary = str(claude_binary)
+            probe = provider._probe_cli_surface_async(
+                binary, mcp_config_path=None, deadline=deadline,
+            )
+            bounded_probe = asyncio.wait_for(probe, timeout=1)
             with pytest.raises(UnavailableError) as exc:
-                await asyncio.wait_for(
-                    provider._probe_cli_surface_async(
-                        str(claude_binary), mcp_config_path=None, deadline=deadline,
-                    ),
-                    timeout=1,
-                )
+                await bounded_probe
             assert str(exc.value) == "Claude CLI probe cleanup did not finish within its budget"
         finally:
             release_work.set()
@@ -2013,10 +2044,9 @@ def test_delayed_probe_start_is_a_probe_failure_not_a_judge_timeout(
         provider.subprocess, "Popen", lambda *_args, **_kwargs: spawned.append(1),
     )
 
+    binary = str(claude_binary)
     with pytest.raises(UnavailableError) as exc:
-        provider._probe_cli_surface_sync(
-            str(claude_binary), mcp_config_path=None, deadline=100.0,
-        )
+        provider._probe_cli_surface_sync(binary, mcp_config_path=None, deadline=100.0)
 
     assert not isinstance(exc.value, provider._JudgeTimeoutExhausted)
     assert str(exc.value) == "Claude CLI probe preflight budget was already exhausted"
@@ -2423,10 +2453,9 @@ def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch
 
     monkeypatch.setattr(provider.agent_cli.threading.Thread, "start", fail_start)
 
+    deadline = time.monotonic() + 1
     with pytest.raises(RuntimeError, match="thread start failed"):
-        provider._probe_cli_surface_sync(
-            "claude", mcp_config_path=None, deadline=time.monotonic() + 1,
-        )
+        provider._probe_cli_surface_sync("claude", mcp_config_path=None, deadline=deadline)
 
     reservation = provider._reserve_zombie_admission()
     assert reservation is not None
@@ -2455,8 +2484,9 @@ def test_cowriter_non_stream_turn_refuses_a_cli_with_an_unverified_tool_surface(
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
+    turn = provider.acall_claude_with_mcp(prompt="hi", user_id="u-1")
     with pytest.raises(CliToolSurfaceError):
-        asyncio.run(provider.acall_claude_with_mcp(prompt="hi", user_id="u-1"))
+        asyncio.run(turn)
     assert spawned == []
 
 
@@ -2481,8 +2511,9 @@ def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
         async for _ in acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"):
             pass
 
+    turn = _turn()
     with pytest.raises(CliToolSurfaceError):
-        asyncio.run(_turn())
+        asyncio.run(turn)
     assert spawned == []
 
 
@@ -2573,8 +2604,9 @@ def test_stream_reap_does_not_spin_under_anyio_level_cancellation(monkeypatch) -
         monkeypatch.setattr(provider, "_reap_process_group", fake_reap)
 
         async def close_after_cancellation() -> None:
+            process = MagicMock()
             with pytest.raises(asyncio.CancelledError):
-                await provider._reap_stream_process_after_cancellation(MagicMock())
+                await provider._reap_stream_process_after_cancellation(process)
             close_finished.set()
 
         async with anyio.create_task_group() as task_group:
@@ -2673,8 +2705,9 @@ def test_no_builtin_gate_rejects_a_cli_offering_any_tool(
 ) -> None:
     _answer_with(monkeypatch, _init_line(["Bash"]))
 
+    probe = averify_no_builtin_cli_tools()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(averify_no_builtin_cli_tools())
+        asyncio.run(probe)
     assert "Bash" in str(exc.value)
 
 
@@ -2683,8 +2716,9 @@ def test_no_builtin_gate_rejects_a_cli_still_advertising_slash_commands(
 ) -> None:
     _answer_with(monkeypatch, _init_line([], slash_commands=["/help"]))
 
+    probe = averify_no_builtin_cli_tools()
     with pytest.raises(CliToolSurfaceError) as exc:
-        asyncio.run(averify_no_builtin_cli_tools())
+        asyncio.run(probe)
     assert "/help" in str(exc.value)
 
 

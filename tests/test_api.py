@@ -2046,14 +2046,13 @@ def test_chat_heartbeat_timer_continues_after_a_write_failure() -> None:
         "_write_chat_job_heartbeat",
         side_effect=RuntimeError("database unavailable"),
     ) as write:
+        heartbeat = _runtime._keep_chat_job_heartbeat(
+            lambda: None,
+            "chat-heartbeat",
+            interval_seconds=0,
+        )
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(
-                _runtime._keep_chat_job_heartbeat(
-                    lambda: None,
-                    "chat-heartbeat",
-                    interval_seconds=0,
-                ),
-            )
+            asyncio.run(heartbeat)
 
     assert write.call_count == 1
     assert sleeps == 2

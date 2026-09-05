@@ -229,11 +229,12 @@ def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monk
 
     async def reject_batch() -> None:
         assert [item async for item in transport.stream(InitialTurn("system", []))]
+        batch = ToolResultBatch((
+            ToolResult("one", "1", False),
+            ToolResult("two", "2", False),
+        ))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(ToolResultBatch((
-                ToolResult("one", "1", False),
-                ToolResult("two", "2", False),
-            ))):
+            async for _ in transport.stream(batch):
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
         await transport.aclose()
@@ -296,8 +297,9 @@ def test_codex_tool_transport_aborts_for_an_unrelated_completed_error_item(monke
     transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
 
     async def collect() -> None:
+        turn = transport.stream(InitialTurn("system", []))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(InitialTurn("system", [])):
+            async for _ in turn:
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 

@@ -207,8 +207,10 @@ def test_claude_api_refuses_a_tool_call_after_the_limit(monkeypatch) -> None:
     _install_anthropic(monkeypatch, client)
     monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
 
@@ -219,8 +221,10 @@ def test_claude_api_names_protocol_and_tool_execution_failures(monkeypatch) -> N
     ]))])
     _install_anthropic(monkeypatch, malformed_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as malformed:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert malformed.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
@@ -250,16 +254,20 @@ def test_claude_api_names_protocol_and_tool_execution_failures(monkeypatch) -> N
 def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "anthropic", None)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as unavailable:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert unavailable.value.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
 
     transport_client = _FakeClient([_FailingFakeStream([], _AssistantMessage([]))])
     _install_anthropic(monkeypatch, transport_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as transport:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert transport.value.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
 
@@ -268,8 +276,10 @@ def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(mon
     protocol_client = _FakeClient([protocol_stream])
     _install_anthropic(monkeypatch, protocol_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as protocol:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert protocol.value.reason.code is SafeRouteReasonCode.API_PROTOCOL_ERROR
 
@@ -278,8 +288,10 @@ def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(mon
     ])
     _install_anthropic(monkeypatch, final_message_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as final_message:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert final_message.value.reason.code is SafeRouteReasonCode.API_PROTOCOL_ERROR
 
