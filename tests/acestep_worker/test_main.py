@@ -14,6 +14,17 @@ from acestep_worker.__main__ import (
     main,
 )
 from acestep_worker.gpu_util import GpuHealth
+from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
+
+
+def test_worker_settings_default_to_container_network_bind_host() -> None:
+    settings = WorkerSettings(
+        worker_id="acestep-worker-0",
+        redis_url="redis://fake",
+        songmaker_internal_token="secret",
+    )
+
+    assert settings.worker_bind_host == DEFAULT_CONTAINER_BIND_HOST
 
 
 def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,8 +80,12 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) -> None:
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
+    monkeypatch.setenv("WORKER_BIND_HOST", "127.0.0.1")
     monkeypatch.setenv("WORKER_PORT", "8765")
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
+    from acestep_worker.settings import get_worker_settings
+
+    get_worker_settings.cache_clear()
 
     with (
         patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
@@ -84,6 +99,7 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) ->
 
     run_mock.assert_called_once()
     _, kwargs = run_mock.call_args
+    assert kwargs["host"] == "127.0.0.1"
     assert kwargs["port"] == 8765
 
 

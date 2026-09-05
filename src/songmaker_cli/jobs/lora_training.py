@@ -290,7 +290,7 @@ async def _race_with_renewal(awaitable, renew_task: asyncio.Task[None]):
         operation_task.cancel()
         try:
             await operation_task
-        except asyncio.CancelledError:
+        except asyncio.CancelledError:  # NOSONAR Renewal owns this intentional cancellation.
             pass
         return await renew_task
     return await operation_task

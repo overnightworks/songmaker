@@ -127,7 +127,7 @@ class HttpsGitHubClient:
         self._token = token
         self._connection_factory = connection_factory
         self._clock = clock
-        self._context = ssl.create_default_context()
+        self._context = ssl.create_default_context()  # NOSONAR Uses Python 3.12 TLS defaults.
 
     @classmethod
     def from_environment(cls) -> HttpsGitHubClient:

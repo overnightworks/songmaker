@@ -34,6 +34,7 @@ WORKDIR /opt/acestep
 ENV UV_HTTP_TIMEOUT=600
 RUN uv venv --python 3.12 .venv \
     && uv pip install --python .venv/bin/python \
+        --only-binary :all: \
         --index-url https://download.pytorch.org/whl/cu128 \
         torch==2.10.0+cu128 \
         torchvision==0.25.0+cu128 \

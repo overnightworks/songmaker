@@ -7,10 +7,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
-def test_script_imports_songmaker_cli_from_its_copied_checkout(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "script_name",
+    ["archive_e2e_albums.py", "seed_e2e_filler_albums.py"],
+)
+def test_script_imports_songmaker_cli_from_its_copied_checkout(
+    tmp_path: Path, script_name: str,
+) -> None:
     copied_checkout = tmp_path / "copied-checkout"
     copied_scripts = copied_checkout / "scripts"
     shutil.copytree(SCRIPTS, copied_scripts)
@@ -27,11 +35,12 @@ def test_script_imports_songmaker_cli_from_its_copied_checkout(tmp_path: Path) -
         "def create_album(*args):\n    return None\n\n"
         "def get_user_by_username(*args):\n    return None\n",
     )
+    (database / "models.py").write_text("class Album:\n    pass\n")
 
     result = subprocess.run(
         [
             sys.executable,
-            str(copied_scripts / "seed_e2e_filler_albums.py"),
+            str(copied_scripts / script_name),
             "--help",
         ],
         check=True,

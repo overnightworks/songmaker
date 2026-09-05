@@ -1235,6 +1235,7 @@
 				<div class="zoom-label">Library — Alben</div>
 				<div style="padding:.4rem 0">
 					<ul class="nav-list rail-live-list" id="live-rail-list" aria-label="Albums — drag, or click a neighbour to open it">
+						<li class="row row-sub rail-live-row rail-live-wall" role="button" tabindex="0" data-destination="wall">‹ All albums <span class="meta">8</span></li>
 						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Anfield" aria-current="false">Anfield <span class="meta">2</span></li>
 						<li class="row row-sub row-active rail-live-row" role="button" tabindex="0" data-title="Open Windows" aria-current="true">Open Windows <span class="meta">8</span></li>
 						<li class="row row-sub rail-live-row" role="button" tabindex="0" data-title="Sommerluft" aria-current="false">Sommerluft <span class="meta">1</span></li>
@@ -1615,13 +1616,18 @@
 	function wireOpenBehavior(config) {
 		return function openItem(item) {
 			var items = config.container.querySelectorAll(config.itemSelector);
+			var opensWall = item.dataset.destination === 'wall';
 			for (var i = 0; i < items.length; i++) {
 				var el = items[i];
-				var isTarget = el === item;
+				var isTarget = !opensWall && el === item;
 				el.classList.toggle(config.activeClass, isTarget);
 				el.setAttribute('aria-current', String(isTarget));
 			}
-			if (config.statusEl) config.statusEl.textContent = config.statusPrefix + (item.dataset.title || '');
+			if (config.statusEl) {
+				config.statusEl.textContent = opensWall
+					? 'Wall open'
+					: config.statusPrefix + (item.dataset.title || '');
+			}
 			item.scrollIntoView({
 				inline: config.scrollAxis === 'x' ? 'center' : 'nearest',
 				block: config.scrollAxis === 'y' ? 'center' : 'nearest',
