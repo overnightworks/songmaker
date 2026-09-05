@@ -39,6 +39,7 @@ from songmaker_cli.constants import (
     JOB_ERROR_GENERATION_CANCELLED,
     JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
     JOB_ERROR_SONG_NOT_FOUND,
+    JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
     WORKER_SHARED_TMP_DIRNAME,
     JobFunction,
@@ -189,6 +190,8 @@ def _apply_user_lora_path(
     base_params: BaseGenerationParams,
     db_factory: sessionmaker[Session],
     audio_dir: Path,
+    user_id: str,
+    target_model_mode: str,
 ) -> AceStepConfig:
     user_lora_id = base_params.user_lora_id
     if not user_lora_id:
@@ -197,13 +200,16 @@ def _apply_user_lora_path(
     from songmaker_cli.db.queries import get_user_lora
 
     with db_factory() as session:
-        lora = get_user_lora(session, user_lora_id)
-        if lora is None or lora.status != LoraStatus.READY or not lora.storage_path:
-            log.warning(
-                "UserLora %s not READY — falling back to base model",
-                user_lora_id,
-            )
-            return ace_config
+        lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)
+        if (
+            lora is None
+            or lora.user_id != user_id
+            or lora.deleted_at is not None
+            or lora.status != LoraStatus.READY
+            or not lora.storage_path
+            or lora.model_mode != target_model_mode
+        ):
+            raise GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
         lora_path = str((audio_dir / lora.storage_path).resolve())
     return replace(ace_config, lora_path=lora_path)
 
@@ -258,6 +264,8 @@ def _build_generation_context(
         meta.generation_params,
         db_factory,
         audio_dir,
+        user_id,
+        model_name,
     )
 
     return GenerationContext(
