@@ -5,8 +5,6 @@ Split by domain, re-exported here for backwards compatibility.
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import (
@@ -181,10 +179,8 @@ from songmaker_cli.api_models.workers import (
     WorkerRegisterResponse,
 )
 
-T = TypeVar("T")
 
-
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     items: list[T]
     total: int
     offset: int

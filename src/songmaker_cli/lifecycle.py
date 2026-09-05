@@ -603,7 +603,7 @@ def _sync_sessions(ctx: AppContext, session_cache) -> int:
             return 0
 
         session_ids = [sid for sid, _ in active]
-        ttl_by_id = {sid: ttl for sid, ttl in active}
+        ttl_by_id = dict(active)
         synced = 0
 
         db_sessions = (

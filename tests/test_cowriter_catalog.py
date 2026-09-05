@@ -161,5 +161,5 @@ def test_cli_probe_failure_is_isolated_to_its_provider_route(monkeypatch):
 
 
 def test_retained_alias_is_appended_once_without_a_provider_prefix():
-    assert models_with_active_model("claude", ["opus"], "sonnet") == ["opus", "sonnet"]
-    assert models_with_active_model("claude", ["sonnet"], "sonnet") == ["sonnet"]
+    assert models_with_active_model(["opus"], "sonnet") == ["opus", "sonnet"]
+    assert models_with_active_model(["sonnet"], "sonnet") == ["sonnet"]

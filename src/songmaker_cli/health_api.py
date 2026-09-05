@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,6 +45,28 @@ _background_loop_response_adapter = TypeAdapter(
 )
 
 
+@dataclass(frozen=True)
+class _PrometheusMetrics:
+    http_snapshot: dict
+    jobs_by_type: dict[str, dict[str, int]]
+    last_job_failure_epoch_seconds: float
+    duration_avg: float | None
+    duration_min: float | None
+    duration_max: float | None
+    music_queue_depth: int
+    scoring_queue_depth: int
+    active_sessions: int
+    acestep_workers_online: int
+    acestep_workers_loading: int
+    acestep_workers_offline: int
+    acestep_worker_loaded_counts: dict[str, int]
+    acestep_worker_queue_depths: dict[str, int]
+    acestep_worker_vram_used_gb: dict[str, float]
+    acestep_worker_vram_total_gb: dict[str, float]
+    background_loop_consecutive_failures: dict[str, int]
+    background_loop_alive: dict[str, bool]
+
+
 def _compute_script_hashes(index_html: Path) -> list[str]:
     if not index_html.exists():
         return []
@@ -68,26 +91,25 @@ def _check_db(ctx: AppContext) -> bool:
         return False
 
 
-def _format_prometheus(
-    http_snapshot: dict,
-    jobs_by_type: dict[str, dict[str, int]],
-    last_job_failure_epoch_seconds: float,
-    duration_avg: float | None,
-    duration_min: float | None,
-    duration_max: float | None,
-    music_queue_depth: int,
-    scoring_queue_depth: int,
-    active_sessions: int,
-    acestep_workers_online: int,
-    acestep_workers_loading: int,
-    acestep_workers_offline: int,
-    acestep_worker_loaded_counts: dict[str, int],
-    acestep_worker_queue_depths: dict[str, int],
-    acestep_worker_vram_used_gb: dict[str, float],
-    acestep_worker_vram_total_gb: dict[str, float],
-    background_loop_consecutive_failures: dict[str, int],
-    background_loop_alive: dict[str, bool],
-) -> str:
+def _format_prometheus(metrics: _PrometheusMetrics) -> str:
+    http_snapshot = metrics.http_snapshot
+    jobs_by_type = metrics.jobs_by_type
+    last_job_failure_epoch_seconds = metrics.last_job_failure_epoch_seconds
+    duration_avg = metrics.duration_avg
+    duration_min = metrics.duration_min
+    duration_max = metrics.duration_max
+    music_queue_depth = metrics.music_queue_depth
+    scoring_queue_depth = metrics.scoring_queue_depth
+    active_sessions = metrics.active_sessions
+    acestep_workers_online = metrics.acestep_workers_online
+    acestep_workers_loading = metrics.acestep_workers_loading
+    acestep_workers_offline = metrics.acestep_workers_offline
+    acestep_worker_loaded_counts = metrics.acestep_worker_loaded_counts
+    acestep_worker_queue_depths = metrics.acestep_worker_queue_depths
+    acestep_worker_vram_used_gb = metrics.acestep_worker_vram_used_gb
+    acestep_worker_vram_total_gb = metrics.acestep_worker_vram_total_gb
+    background_loop_consecutive_failures = metrics.background_loop_consecutive_failures
+    background_loop_alive = metrics.background_loop_alive
     lines: list[str] = []
 
     lines.append(f"# HELP {PROM_HTTP_REQUESTS_TOTAL} Total HTTP requests by method and status.")
@@ -267,7 +289,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         if state.get("vram_total_gb") is not None:
             vram_total_gb[w.id] = state["vram_total_gb"]
 
-    body = _format_prometheus(
+    body = _format_prometheus(_PrometheusMetrics(
         http_snapshot=http_metrics.snapshot(),
         jobs_by_type=jobs_by_type,
         last_job_failure_epoch_seconds=(
@@ -294,7 +316,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         background_loop_alive={
             name.value: health.is_alive for name, health in background_loop_metrics.items()
         },
-    )
+    ))
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 

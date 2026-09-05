@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, replace
 from enum import StrEnum
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -225,7 +226,10 @@ class SongScores:
             {execution.run.scorer: execution.value}
             if execution.run.produced_value else {}
         )
-        return replace(self, runs=(*self.runs, execution.run), **produced)
+        return cast(
+            SongScores,
+            replace(self, runs=(*self.runs, execution.run), **produced),
+        )
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {}

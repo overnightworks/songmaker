@@ -6,7 +6,6 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TypeVar
 
 from sqlalchemy import ColumnElement, and_, func, or_
 from sqlalchemy.orm import Session, aliased, joinedload
@@ -30,8 +29,6 @@ from songmaker_cli.db.models import (
 
 log = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=ShareMixin)
-
 SharedInventoryEntity = Album | Song | Generation | Playlist
 
 
@@ -42,7 +39,7 @@ class SharedInventoryPage:
     filtered_total: int
 
 
-def enable_sharing(session: Session, model_class: type[T], entity_id: str) -> T:
+def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
     entity = session.query(model_class).filter_by(id=entity_id).first()
     if not entity:
         raise ValueError(f"{model_class.__name__} not found: {entity_id}")
@@ -57,7 +54,7 @@ def enable_sharing(session: Session, model_class: type[T], entity_id: str) -> T:
     return entity
 
 
-def disable_sharing(session: Session, model_class: type[T], entity_id: str) -> T:
+def disable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
     entity = session.query(model_class).filter_by(id=entity_id).first()
     if not entity:
         raise ValueError(f"{model_class.__name__} not found: {entity_id}")
