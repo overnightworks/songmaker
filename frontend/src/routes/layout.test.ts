@@ -24,7 +24,13 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import type { GenerationItem, SongItem } from '$lib/api/types';
-import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
+import {
+	closeSidebar,
+	railCollapsed,
+	railWidth,
+	RAIL_WIDTH_STORAGE_KEY,
+	sidebarOpen
+} from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState, liveStream } = vi.hoisted(() => ({
@@ -213,6 +219,10 @@ afterEach(async () => {
 	authLoading.set(false);
 	authCheckError.set(null);
 	closeSidebar();
+	railCollapsed.set(false);
+	localStorage.removeItem('songmaker.rail-collapsed');
+	railWidth.set(264);
+	localStorage.removeItem(RAIL_WIDTH_STORAGE_KEY);
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
@@ -407,6 +417,44 @@ describe('app shell', () => {
 		const target = await renderLayout('/');
 		expect(target.querySelector('.mobile-strip')).toBeNull();
 		expect(requireElement(target, '.rail')).toBeTruthy();
+	});
+
+	it('makes the desktop workspace follow the rail edge control', async () => {
+		const target = await renderDesktopLayout();
+		const shell = requireElement<HTMLElement>(target, '.shell-row');
+		const rail = requireElement<HTMLElement>(shell, '.rail');
+		const control = requireElement<HTMLButtonElement>(rail, '.rail-collapse');
+
+		expect(shell.classList.contains('rail-collapsed')).toBe(false);
+		expect(control.getAttribute('aria-label')).toBe('Collapse rail');
+		control.click();
+		await tick();
+
+		expect(get(railCollapsed)).toBe(true);
+		expect(shell.classList.contains('rail-collapsed')).toBe(true);
+		expect(rail.classList.contains('rail-collapsed')).toBe(true);
+		expect(localStorage.getItem('songmaker.rail-collapsed')).toBe('true');
+	});
+
+	it('makes the desktop shell inherit the remembered expanded rail width', async () => {
+		localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, '320');
+		const target = await renderDesktopLayout();
+		const shell = requireElement<HTMLElement>(target, '.shell-row');
+		const rail = requireElement<HTMLElement>(shell, '.rail');
+
+		expect(shell.style.getPropertyValue('--rail-expanded-width')).toBe('320px');
+		expect(rail.style.width).toBe('');
+	});
+
+	it('keeps the drawer full-width when this browser collapsed the desktop rail', async () => {
+		railCollapsed.set(true);
+		const target = await renderLayout('/');
+		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
+		await tick();
+		const rail = requireElement<HTMLElement>(document.body, '.drawer-panel .rail');
+
+		expect(rail.classList.contains('rail-collapsed')).toBe(false);
+		expect(rail.querySelector('.rail-collapse')).toBeNull();
 	});
 
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {

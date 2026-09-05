@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slugify import slugify
+from sqlalchemy import event
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -54,17 +56,28 @@ def _add_album(
 
 def _add_song(
     session, *, song_id: str, title: str, album_id: str, created_at: datetime,
-    track_number: int = 1,
+    track_number: int = 1, updated_at: datetime | None = None,
 ) -> Song:
     song = Song(
         id=song_id, title=title, album_id=album_id,
-        track_number=track_number, created_at=created_at, slug=slugify(title),
+        track_number=track_number, created_at=created_at,
+        updated_at=updated_at or created_at, slug=slugify(title),
     )
     session.add(song)
     session.add(Version(
         song_id=song_id, version_number=1, lyrics="lyrics", prompt="prompt",
     ))
     return song
+
+
+def _count_queries(engine) -> tuple[list[str], Callable]:
+    queries: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany) -> None:
+        queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _record)
+    return queries, _record
 
 
 def _library_env(tmp_path: Path) -> tuple[object, object]:
@@ -201,6 +214,81 @@ def _hit_id(item: dict) -> str:
     if item["type"] == LIBRARY_ITEM_ALBUM:
         return item["album"]["id"]
     return item["song"]["id"]
+
+
+def test_continue_mixes_owned_songs_and_albums_in_stable_activity_order(
+    tmp_path: Path,
+) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="continue-first", title="First", owner=USER_A,
+            created_at=_ts(100),
+        )
+        _add_song(
+            session, song_id="continue-first-song", title="First Song",
+            album_id="continue-first", created_at=_ts(100), updated_at=_ts(1000),
+        )
+        _add_album(
+            session, album_id="continue-empty", title="Empty", owner=USER_A,
+            created_at=_ts(950),
+        )
+        _add_album(
+            session, album_id="continue-second", title="Second", owner=USER_A,
+            created_at=_ts(200),
+        )
+        _add_song(
+            session, song_id="continue-second-song", title="Second Song",
+            album_id="continue-second", created_at=_ts(200), updated_at=_ts(900),
+        )
+        _add_album(
+            session, album_id="continue-third", title="Third", owner=USER_A,
+            created_at=_ts(300),
+        )
+        _add_song(
+            session, song_id="continue-third-song", title="Third Song",
+            album_id="continue-third", created_at=_ts(300), updated_at=_ts(800),
+        )
+        _add_album(
+            session, album_id="foreign-continue", title="Foreign", owner=USER_B,
+            created_at=_ts(5000),
+        )
+        _add_song(
+            session, song_id="foreign-continue-song", title="Foreign Song",
+            album_id="foreign-continue", created_at=_ts(5000), updated_at=_ts(5000),
+        )
+        session.commit()
+
+    resp = client.get("/api/library/continue")
+
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert [(item["type"], item["id"]) for item in items] == [
+        ("album", "continue-first"),
+        ("song", "continue-first-song"),
+        ("album", "continue-empty"),
+        ("album", "continue-second"),
+        ("song", "continue-second-song"),
+        ("album", "continue-third"),
+    ]
+    assert all(item["id"] not in {"foreign-continue", "foreign-continue-song"} for item in items)
+    assert items[1]["album_id"] == "continue-first"
+    assert items[1]["album_title"] == "First"
+
+
+def test_continue_uses_one_song_query_and_one_album_query(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine)
+    try:
+        resp = client.get("/api/library/continue")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert resp.status_code == 200
+    assert len(queries) == 2, f"expected two Continue queries, got {len(queries)}: {queries}"
 
 
 def test_search_requires_query(alice: TestClient) -> None:

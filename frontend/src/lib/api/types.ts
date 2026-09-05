@@ -436,6 +436,19 @@ export interface LibraryAlbumHit {
 	album: AlbumItem;
 }
 
+export interface LibraryContinueItem {
+	type: 'album' | 'song';
+	id: string;
+	title: string;
+	cover?: AlbumCoverUrls | null;
+	album_id?: string | null;
+	album_title?: string | null;
+}
+
+export interface LibraryContinueResponse {
+	items: LibraryContinueItem[];
+}
+
 export interface LibraryPoolQueue {
 	pool: 'mix' | 'picks' | 'keeps' | 'all';
 	takes: LibraryPoolTakeItem[];
@@ -561,6 +574,7 @@ export interface PlaylistDetailItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	album_covers: AlbumCoverUrls[];
 	created_at: string;
 	entries: PlaylistEntryItem[];
 }
@@ -590,6 +604,7 @@ export interface PlaylistItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	album_covers: AlbumCoverUrls[];
 	created_at: string;
 }
 

@@ -1,4 +1,4 @@
-import { tick } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -7,6 +7,7 @@ import { librarySurface, resetLibraryContextForTests } from '$lib/stores/library
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/filter';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
@@ -28,6 +29,18 @@ import Rail from './Rail.svelte';
 
 const onlogout = vi.fn();
 const { render, cleanup } = createComponentMount(Rail, { username: 'felix', onlogout });
+let collapsedMounted: ReturnType<typeof mount> | undefined;
+
+async function renderCollapsedRail(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	collapsedMounted = mount(Rail, {
+		target,
+		props: { username: 'felix', onlogout, collapsed: true }
+	});
+	await tick();
+	return target;
+}
 
 function findButtonByText(root: ParentNode, text: string): HTMLButtonElement {
 	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((candidate) =>
@@ -59,6 +72,23 @@ function fireClick(target: EventTarget): void {
 	target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 }
 
+function fireRailResizePointer(
+	target: EventTarget,
+	type: 'pointerdown' | 'pointermove' | 'pointerup',
+	clientX: number
+): void {
+	target.dispatchEvent(
+		new PointerEvent(type, {
+			pointerId: 1,
+			pointerType: 'mouse',
+			button: 0,
+			bubbles: true,
+			cancelable: true,
+			clientX
+		})
+	);
+}
+
 function stubMomentumTiming(): void {
 	vi.stubGlobal(
 		'requestAnimationFrame',
@@ -79,6 +109,7 @@ async function openRailGroup(root: ParentNode, index: number): Promise<void> {
 
 beforeEach(() => {
 	localStorage.clear();
+	railWidth.set(264);
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	albumList.set([]);
@@ -87,6 +118,8 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await cleanup();
+	if (collapsedMounted) await unmount(collapsedMounted);
+	collapsedMounted = undefined;
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	resetPlaylists();
@@ -116,6 +149,64 @@ describe('Rail', () => {
 		expect(searchFields).toHaveLength(1);
 		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
 		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
+	});
+
+	it('reduces the rail to labelled group icons when collapsed', async () => {
+		const target = await renderCollapsedRail();
+		const rail = requireElement<HTMLElement>(target, '.rail');
+
+		expect(rail.classList.contains('rail-collapsed')).toBe(true);
+		expect(
+			requireElement<HTMLButtonElement>(rail, '.rail-collapse').getAttribute('aria-label')
+		).toBe('Expand rail');
+		expect(rail.querySelector('.rail-search-region')).not.toBeNull();
+		expect(rail.querySelectorAll<HTMLInputElement>('input[type="search"]')).toHaveLength(1);
+		for (const label of ['Library', 'Playlists', 'Settings']) {
+			const group = Array.from(rail.querySelectorAll<HTMLButtonElement>('.disclose')).find(
+				(button) => button.getAttribute('aria-label') === label
+			);
+			expect(group?.getAttribute('title')).toBe(label);
+		}
+		expect(
+			requireElement<HTMLAnchorElement>(rail, '.collapsed-account').getAttribute('aria-label')
+		).toBe('Account');
+		expect(rail.querySelector('input[type="range"]')).toBeNull();
+	});
+
+	it('resizes from its accessible handle without moving focus or the rail scroll anchor', async () => {
+		const target = await render();
+		const handle = requireElement<HTMLInputElement>(target, 'input[type="range"]');
+		const scroll = requireElement<HTMLElement>(target, '.rail-scroll');
+		scroll.scrollTop = 48;
+
+		expect(handle.getAttribute('aria-label')).toBe('Resize rail');
+		expect(handle.min).toBe(String(RAIL_MIN_WIDTH_PX));
+		expect(handle.max).toBe(String(RAIL_MAX_WIDTH_PX));
+		handle.focus();
+		fireRailResizePointer(handle, 'pointerdown', 264);
+		fireRailResizePointer(window, 'pointermove', RAIL_MAX_WIDTH_PX + 40);
+		fireRailResizePointer(window, 'pointerup', RAIL_MAX_WIDTH_PX + 40);
+		await tick();
+
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
+		expect(document.activeElement).toBe(handle);
+		expect(scroll.scrollTop).toBe(48);
+	});
+
+	it('resizes in keyboard steps and clamps the focused handle', async () => {
+		const target = await render();
+		const handle = requireElement<HTMLInputElement>(target, 'input[type="range"]');
+		railWidth.set(RAIL_MAX_WIDTH_PX);
+		handle.focus();
+
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX - 8);
+		railWidth.set(RAIL_MIN_WIDTH_PX);
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MIN_WIDTH_PX);
+		expect(document.activeElement).toBe(handle);
 	});
 
 	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {

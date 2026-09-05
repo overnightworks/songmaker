@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.api_models.songs import generation_version_lyrics
+from songmaker_cli.api_models.songs import (
+    AlbumCoverUrls,
+    album_cover_urls,
+    generation_version_lyrics,
+)
 from songmaker_cli.api_models.whisper import WhisperCue
 
 if TYPE_CHECKING:
@@ -78,6 +82,7 @@ class PlaylistResponse(BaseModel):
     entry_count: int
     is_shared: bool = False
     share_slug: str | None = None
+    album_covers: list[AlbumCoverUrls] = Field(default_factory=list)
     created_at: str
 
     @classmethod
@@ -86,6 +91,16 @@ class PlaylistResponse(BaseModel):
             e for e in _playlist_entries(playlist)
             if e.generation is not None and e.generation.song is not None
         ]
+        album_covers: list[AlbumCoverUrls] = []
+        covered_album_ids: set[str] = set()
+        for entry in live_entries:
+            album = entry.generation.song.album
+            if album is None or album.cover_key is None or album.id in covered_album_ids:
+                continue
+            covered_album_ids.add(album.id)
+            album_covers.append(album_cover_urls(album.id, album.cover_key))
+            if len(album_covers) == 4:
+                break
         return cls(
             id=playlist.id,
             title=playlist.title,
@@ -93,6 +108,7 @@ class PlaylistResponse(BaseModel):
             entry_count=len(live_entries),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,
+            album_covers=album_covers,
             created_at=playlist.created_at.isoformat(),
         )
 

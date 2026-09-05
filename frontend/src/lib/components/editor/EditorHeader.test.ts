@@ -75,6 +75,11 @@ function defaultProps() {
 			{ label: 'Track 1 of 3' }
 		],
 		songRail: false,
+		albumTitle: 'Album',
+		albumSongCount: 3,
+		albumCoverUrl: null,
+		albumArtFill: null,
+		albumInitials: 'AL',
 		previousDisabled: true,
 		nextDisabled: false,
 		onselectprevious: vi.fn(),
@@ -143,6 +148,29 @@ describe('EditorHeader', () => {
 		);
 		libraryCrumb?.click();
 		expect(onclick).toHaveBeenCalledTimes(1);
+	});
+
+	it('renders one compact album line with album skip controls', async () => {
+		const onselectprevious = vi.fn();
+		const onselectnext = vi.fn();
+		const { target } = await render({
+			songRail: true,
+			albumTitle: 'Anfield',
+			albumSongCount: 2,
+			previousDisabled: false,
+			onselectprevious,
+			onselectnext
+		});
+
+		const line = target.querySelector('.mobile-album-line');
+		if (!line) throw new Error('Expected mobile album line');
+		expect(line.textContent).toContain('Anfield · 2 songs');
+		expect(line.querySelector('.album-line-cover')).not.toBeNull();
+		expect(line.querySelector('.breadcrumb')).toBeNull();
+		line.querySelector<HTMLButtonElement>(`[aria-label="Previous song"]`)?.click();
+		line.querySelector<HTMLButtonElement>(`[aria-label="Next song"]`)?.click();
+		expect(onselectprevious).toHaveBeenCalledTimes(1);
+		expect(onselectnext).toHaveBeenCalledTimes(1);
 	});
 
 	it('reflects toggle state via aria-pressed and calls the right handler', async () => {

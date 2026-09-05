@@ -33,7 +33,15 @@
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
-	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
+	import {
+		initRailCollapsed,
+		initRailWidth,
+		railCollapsed,
+		railWidth,
+		sidebarOpen,
+		toggleSidebar,
+		initTheme
+	} from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
@@ -130,6 +138,8 @@
 
 	$effect(() => {
 		initTheme();
+		initRailCollapsed();
+		initRailWidth();
 		initAuth();
 		if (!dev && browser && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/service-worker.js').catch(() => {
@@ -247,15 +257,25 @@
 			>
 		</header>
 		<RailDrawer>
-			<Rail username={me.username} onlogout={handleLogout} />
+			<Rail
+				username={me.username}
+				onlogout={handleLogout}
+				showCollapseControl={false}
+				showResizeHandle={false}
+			/>
 		</RailDrawer>
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
 		</div>
 		{@render nowPlayingView()}
 	{:else}
-		<div class="shell-row" class:has-player={hasPrivatePlayer}>
-			<Rail username={me.username} onlogout={handleLogout} />
+		<div
+			class="shell-row"
+			class:has-player={hasPrivatePlayer}
+			class:rail-collapsed={$railCollapsed}
+			style:--rail-expanded-width={`${$railWidth}px`}
+		>
+			<Rail username={me.username} onlogout={handleLogout} collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>
@@ -334,10 +354,15 @@
 		display: flex;
 		height: 100dvh;
 		overflow: hidden;
+		--rail-width: var(--rail-expanded-width);
 	}
 
 	.shell-row.has-player {
 		height: calc(100dvh - var(--player-height));
+	}
+
+	.shell-row.rail-collapsed {
+		--rail-width: var(--rail-collapsed-width);
 	}
 
 	.app-shell.desktop {

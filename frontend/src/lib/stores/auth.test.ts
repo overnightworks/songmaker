@@ -191,6 +191,7 @@ describe('clearAuth', () => {
 				entry_count: 1,
 				is_shared: false,
 				share_slug: null,
+				album_covers: [],
 				created_at: ''
 			}
 		]);
@@ -201,6 +202,7 @@ describe('clearAuth', () => {
 			entry_count: 1,
 			is_shared: false,
 			share_slug: null,
+			album_covers: [],
 			created_at: '',
 			entries: []
 		});
