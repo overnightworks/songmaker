@@ -16,6 +16,7 @@ from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     ARQ_MUSIC_QUEUE_NAME,
+    CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE,
     JSON_REQUEST_BODY_MAX_BYTES,
     CoverExecutor,
     JobFunction,
@@ -237,6 +238,9 @@ def test_web_cover_executor_leaves_the_job_for_the_web_runner(
         "songmaker_cli.album_api.get_arq_pool",
         lambda: (_ for _ in ()).throw(AssertionError("web covers must not read the ARQ pool")),
     )
+    monkeypatch.setattr(
+        "songmaker_cli.album_api.codex_cover_image_capability_is_available", lambda: True,
+    )
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
@@ -247,12 +251,31 @@ def test_web_cover_executor_leaves_the_job_for_the_web_runner(
         assert job.status == JobStatus.QUEUED
 
 
+def test_web_cover_executor_rejects_a_missing_codex_capability_without_creating_a_job(
+    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, factory = alice_app
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.WEB)
+    monkeypatch.setattr(
+        "songmaker_cli.album_api.codex_cover_image_capability_is_available", lambda: False,
+    )
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE}
+    with factory() as session:
+        assert session.query(Job).filter_by(album_id="alice-album").count() == 0
+
+
 def test_create_cover_suggestions_replaces_stale_suggestions(
     alice_app: tuple[TestClient, object],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, factory = alice_app
+    monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
+    get_settings.cache_clear()
     _add_suggestion(factory, tmp_path / "audio")
     with factory() as session:
         stale_job = session.query(Job).filter_by(album_id="alice-album").one()
