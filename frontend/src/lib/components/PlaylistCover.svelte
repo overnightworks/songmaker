@@ -6,9 +6,10 @@
 		title: string;
 		covers: AlbumCoverUrls[];
 		size?: string;
+		visible?: boolean;
 	}
 
-	let { title, covers, size = '18px' }: Props = $props();
+	let { title, covers, size = '18px', visible = true }: Props = $props();
 
 	const initials = $derived(titleInitials(title));
 	const cells = $derived(Array.from({ length: 4 }, (_, index) => covers[index] ?? null));
@@ -22,7 +23,7 @@
 <span class="playlist-cover" style:--playlist-cover-size={size} aria-hidden="true">
 	{#each cells as cover, index (index)}
 		<span class="playlist-cover-cell">
-			{#if cover && !failedCoverUrls.has(cover.card)}
+			{#if visible && cover && !failedCoverUrls.has(cover.card)}
 				<img
 					src={cover.card}
 					alt=""

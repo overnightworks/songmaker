@@ -35,6 +35,26 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	return (await response.json()) as T;
 }
 
+async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
+	const response = await page.request.delete(`/api/playlists/${playlistId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(
+		response.ok(),
+		`DELETE /api/playlists/${playlistId} failed: ${await response.text()}`
+	).toBeTruthy();
+}
+
+async function deleteOwnedAlbum(page: Page, albumId: string): Promise<void> {
+	const response = await page.request.delete(`/api/albums/${albumId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(
+		response.ok(),
+		`DELETE /api/albums/${albumId} failed: ${await response.text()}`
+	).toBeTruthy();
+}
+
 test('a playlist rail row shows its album-cover mosaic and opens with one click at desktop and 375 px', async ({
 	page,
 	isMobile
@@ -42,6 +62,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
 	const marker = Date.now().toString(36);
 	const playlistTitle = `E2E Playlist Mosaic ${marker}`;
+	let playlist: CreatedResource | undefined;
 	const album = await postJson<CreatedResource>(page, '/api/albums', {
 		title: `E2E Mosaic Album ${marker}`,
 		artist: 'E2E Cover Artist'
@@ -67,31 +88,56 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		}
 	});
 	expect(cover.ok(), `Cover upload failed: ${await cover.text()}`).toBeTruthy();
-	const playlist = await postJson<CreatedResource>(page, '/api/playlists', {
-		title: playlistTitle
-	});
-	await postJson(page, `/api/playlists/${playlist.id}/entries/generation`, {
-		generation_id: take.id
-	});
+	try {
+		playlist = await postJson<CreatedResource>(page, '/api/playlists', {
+			title: playlistTitle
+		});
+		await postJson(page, `/api/playlists/${playlist.id}/entries/generation`, {
+			generation_id: take.id
+		});
 
-	await page.goto('/');
-	if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-	const rail = isMobile
-		? page
-				.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
-				.getByRole('navigation', { name: RAIL_NAV_LABEL })
-		: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-	const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
-	if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
-		await playlistsGroup.click();
-	const row = rail
-		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
-		.getByRole('listitem')
-		.filter({ hasText: playlistTitle });
+		let coverRequests = 0;
+		page.on('request', (request) => {
+			const url = new URL(request.url());
+			if (
+				request.method() === 'GET' &&
+				url.pathname === `/api/albums/${album.id}/cover` &&
+				url.searchParams.get('variant') === 'card'
+			) {
+				coverRequests += 1;
+			}
+		});
 
-	await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
-	await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
-	await expect(row.locator('.playlist-cover-initials')).toHaveCount(3);
-	await row.getByRole('button', { name: new RegExp(`^${playlistTitle}`) }).click();
-	await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
+		await page.goto('/');
+		if (isMobile) {
+			expect(coverRequests).toBe(0);
+			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		}
+		const rail = isMobile
+			? page
+					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
+					.getByRole('navigation', { name: RAIL_NAV_LABEL })
+			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
+		expect(coverRequests).toBe(0);
+		if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
+			await playlistsGroup.click();
+		const row = rail
+			.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+			.getByRole('listitem')
+			.filter({ hasText: playlistTitle });
+
+		await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
+		await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
+		await expect.poll(() => coverRequests).toBeGreaterThan(0);
+		await expect(row.locator('.playlist-cover-initials')).toHaveCount(3);
+		await row.getByRole('button', { name: new RegExp(`^${playlistTitle}`) }).click();
+		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
+	} finally {
+		try {
+			if (playlist) await deleteOwnedPlaylist(page, playlist.id);
+		} finally {
+			await deleteOwnedAlbum(page, album.id);
+		}
+	}
 });
