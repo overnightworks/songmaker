@@ -20,7 +20,7 @@ RUN uv sync --frozen --no-build --no-dev --no-install-project --extra server # N
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
-RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable .
+RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable . # NOSONAR The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

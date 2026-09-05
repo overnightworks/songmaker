@@ -19,7 +19,7 @@ RUN uv export --frozen --no-dev --no-emit-project --extra acestep-worker --forma
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
-RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable .
+RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable . # NOSONAR The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

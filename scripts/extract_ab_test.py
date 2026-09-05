@@ -101,13 +101,13 @@ def acestep_submit_extract(base_url: str, src_audio_path: str, track_name: str) 
         "use_random_seed": True,
         "thinking": False,
     }
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # NOSONAR Operator CLI, not a server sink.
         f"{base_url}/release_task",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # NOSONAR Endpoint is local-only.
+    with urllib.request.urlopen(req, timeout=30) as resp:
         body = json.loads(resp.read().decode("utf-8"))
     task_id = body.get("task_id") or body.get("id")
     if not task_id:
@@ -219,7 +219,7 @@ def main() -> None:
     rng = random.Random(time.time_ns())  # NOSONAR Not a security token.
     blind_map: dict[str, dict] = {}
     for sep, track, src_wav in candidates:
-        nonce = rng.randint(1000, 9999)
+        nonce = rng.randint(1000, 9999)  # NOSONAR Filename only, never a security token.
         blind_name = f"{track}_{nonce}.wav"
         blind_path = blind_dir / blind_name
         ffmpeg_normalize(src_wav, blind_path)
