@@ -159,8 +159,9 @@ def test_register_finite_delays_exhausted_raises() -> None:
 
     httpx.AsyncClient = factory  # type: ignore[misc]
     try:
+        registration = client.register(_make_registration())
         with pytest.raises(RegistrationFailedError):
-            _run(client.register(_make_registration()))
+            _run(registration)
     finally:
         httpx.AsyncClient = original  # type: ignore[misc]
 
@@ -189,8 +190,9 @@ def test_register_handles_transport_error() -> None:
 
     httpx.AsyncClient = factory  # type: ignore[misc]
     try:
+        registration = client.register(_make_registration())
         with pytest.raises(RegistrationFailedError):
-            _run(client.register(_make_registration()))
+            _run(registration)
     finally:
         httpx.AsyncClient = original  # type: ignore[misc]
 
