@@ -505,7 +505,7 @@ def _start_bounded_cli(
             start_new_session=True,
             cwd=cwd,
         )
-    except BaseException as error:
+    except Exception as error:
         _notify_spawn_failed(on_spawn_failed)
         return None, prompt_file_path, _spawn_failure_outcome(error)
     return process, prompt_file_path, None
