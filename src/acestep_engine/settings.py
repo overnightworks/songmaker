@@ -1,6 +1,6 @@
-"""Engine-package settings — kept independent of songmaker_cli.
+"""Engine-package settings — kept independent of the application package.
 
-The engine package must not import from songmaker_cli (one-way
+The engine package must not import from the application package (one-way
 dependency rule). It owns its own minimal settings module so the
 ACE-Step HTTP client can read its own env vars without violating
 the boundary.

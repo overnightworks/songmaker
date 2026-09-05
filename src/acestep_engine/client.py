@@ -314,6 +314,10 @@ class AceStepClient:
         lora_loaded_by_us = False
         if config.lora_path:
             lora_loaded_by_us = self._ensure_lora_loaded(config.lora_path)
+            if not lora_loaded_by_us:
+                raise TaskSubmissionError(
+                    f"Failed to load configured LoRA adapter: {config.lora_path}"
+                )
         try:
             task_id = self._submit_task(config)
             poll_result = self._poll_result(task_id, on_progress=on_progress)
