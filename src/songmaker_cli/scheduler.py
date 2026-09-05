@@ -384,35 +384,66 @@ async def _consume_task_stream(
     try:
         async for event_type, data in _iterate_task_events(worker, task_id, options=options):
             await _maybe_invoke(on_heartbeat)
-            if event_type == "progress":
-                fraction = float(data.get("progress", 0.0))
-                await _maybe_invoke(on_progress, fraction)
-            elif event_type == "done":
-                if "result" not in data:
-                    raise WorkerProtocolError(
-                        "Worker done event missing 'result' field",
-                    )
-                try:
-                    return result_type.model_validate(data["result"])
-                except ValidationError as exc:
-                    raise WorkerTaskFailed(
-                        f"Worker returned {invalid_result_label}: {exc}",
-                    ) from exc
-            elif event_type == "error":
-                if "error" not in data:
-                    raise WorkerProtocolError(
-                        "Worker error event missing 'error' field",
-                    )
-                message = data["error"]
-                if not message:
-                    log.warning("Worker error event has empty 'error' field")
-                    raise WorkerProtocolError(
-                        "Worker error event has an empty 'error' field",
-                    )
-                raise error_exception_type(message)
+            result = await _consume_stream_event(
+                event_type,
+                data,
+                result_type=result_type,
+                invalid_result_label=invalid_result_label,
+                error_exception_type=error_exception_type,
+                on_progress=on_progress,
+            )
+            if result is not None:
+                return result
     except httpx.ReadTimeout as exc:
         raise error_exception_type(WORKER_STREAM_WENT_SILENT) from exc
     raise WorkerTaskFailed("SSE stream ended without done/error event")
+
+
+async def _consume_stream_event(
+    event_type: str,
+    data: dict,
+    *,
+    result_type: type[_TaskResultT],
+    invalid_result_label: str,
+    error_exception_type: type[WorkerTaskFailed],
+    on_progress: ProgressCallback | None,
+) -> _TaskResultT | None:
+    if event_type == "progress":
+        await _maybe_invoke(on_progress, float(data.get("progress", 0.0)))
+        return None
+    if event_type == "done":
+        return _validate_task_result(data, result_type, invalid_result_label)
+    if event_type == "error":
+        _raise_worker_event_error(data, error_exception_type)
+    return None
+
+
+def _validate_task_result(
+    data: dict,
+    result_type: type[_TaskResultT],
+    invalid_result_label: str,
+) -> _TaskResultT:
+    if "result" not in data:
+        raise WorkerProtocolError("Worker done event missing 'result' field")
+    try:
+        return result_type.model_validate(data["result"])
+    except ValidationError as exc:
+        raise WorkerTaskFailed(
+            f"Worker returned {invalid_result_label}: {exc}",
+        ) from exc
+
+
+def _raise_worker_event_error(
+    data: dict,
+    error_exception_type: type[WorkerTaskFailed],
+) -> None:
+    if "error" not in data:
+        raise WorkerProtocolError("Worker error event missing 'error' field")
+    message = data["error"]
+    if not message:
+        log.warning("Worker error event has empty 'error' field")
+        raise WorkerProtocolError("Worker error event has an empty 'error' field")
+    raise error_exception_type(message)
 
 
 async def consume_task_stream(

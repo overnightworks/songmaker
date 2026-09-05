@@ -67,6 +67,38 @@ _AUDIO_UPLOAD_FIELDS: Final[tuple[tuple[str, str], ...]] = (
 )
 
 
+def _completed_poll_result(entry: TaskQueryEntry, started_at: float) -> _PollResult:
+    items = entry.parse_result_items()
+    if not items or not items[0].file:
+        raise GenerationFailedError(
+            f"ACE-Step completed but no audio returned: {entry.result}"
+        )
+
+    elapsed = time.monotonic() - started_at
+    log.info("ACE-Step generation complete (%.1fs)", elapsed)
+    item = items[0]
+    return _PollResult(
+        audio_path=item.file,
+        seed=item.seed,
+        cot_caption=item.cot_caption,
+        cot_lyrics=item.cot_lyrics,
+        requested_batch_size=item.requested_batch_size,
+        delivered_batch_size=item.delivered_batch_size,
+    )
+
+
+def _report_poll_progress(
+    entry: TaskQueryEntry,
+    started_at: float,
+    on_progress: Callable[[str], None] | None,
+) -> None:
+    elapsed = time.monotonic() - started_at
+    progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
+    log.info("ACE-Step: %s", progress)
+    if on_progress is not None:
+        on_progress(progress)
+
+
 def _failure_cause(entry: TaskQueryEntry) -> str:
     """Return ACE-Step's own text for a failed task, short enough to show.
 
@@ -472,48 +504,9 @@ class AceStepClient:
 
         while time.monotonic() - start < poll_timeout:
             try:
-                req = Request(
-                    f"{self.base_url}/query_result",
-                    data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                with urlopen(req, timeout=10) as resp:
-                    raw = json.loads(resp.read())
-
-                response = TaskQueryResponse.model_validate(raw)
-                if not response.data:
-                    time.sleep(POLL_INTERVAL)
-                    continue
-
-                entry = response.data[0]
-
-                if entry.status == _TASK_STATUS_FAILED:
-                    raise GenerationFailedError(_failure_cause(entry))
-
-                if entry.status == _TASK_STATUS_COMPLETE:
-                    items = entry.parse_result_items()
-                    if items and items[0].file:
-                        elapsed = time.monotonic() - start
-                        log.info("ACE-Step generation complete (%.1fs)", elapsed)
-                        item = items[0]
-                        return _PollResult(
-                            audio_path=item.file,
-                            seed=item.seed,
-                            cot_caption=item.cot_caption,
-                            cot_lyrics=item.cot_lyrics,
-                            requested_batch_size=item.requested_batch_size,
-                            delivered_batch_size=item.delivered_batch_size,
-                        )
-                    raise GenerationFailedError(
-                        f"ACE-Step completed but no audio returned: {entry.result}"
-                    )
-
-                elapsed = time.monotonic() - start
-                progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
-                log.info("ACE-Step: %s", progress)
-                if on_progress:
-                    on_progress(progress)
+                result = self._read_polled_result(payload, start, on_progress)
+                if result is not None:
+                    return result
 
             except KeyboardInterrupt:
                 log.warning("Generation cancelled by user (task_id=%s)", task_id)
@@ -527,6 +520,36 @@ class AceStepClient:
         raise GenerationTimeoutError(
             f"ACE-Step generation timed out after {poll_timeout:.0f}s"
         )
+
+    def _read_polled_result(
+        self,
+        payload: bytes,
+        started_at: float,
+        on_progress: Callable[[str], None] | None,
+    ) -> _PollResult | None:
+        response = self._query_task_result(payload)
+        if not response.data:
+            return None
+
+        entry = response.data[0]
+        if entry.status == _TASK_STATUS_FAILED:
+            raise GenerationFailedError(_failure_cause(entry))
+        if entry.status == _TASK_STATUS_COMPLETE:
+            return _completed_poll_result(entry, started_at)
+
+        _report_poll_progress(entry, started_at, on_progress)
+        return None
+
+    def _query_task_result(self, payload: bytes) -> TaskQueryResponse:
+        req = Request(
+            f"{self.base_url}/query_result",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=10) as resp:
+            raw = json.loads(resp.read())
+        return TaskQueryResponse.model_validate(raw)
 
     def _download_audio(
         self, audio_path: str, seed: int,
