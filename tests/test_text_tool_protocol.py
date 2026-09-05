@@ -240,6 +240,12 @@ def test_catalog_rendering_is_deterministic_and_pinned_to_the_canonical_tools():
             {"song_id": "string", "title": "string"},
             ["song_id", "title"],
         ),
+        (
+            "suggest_album_cover",
+            "Request three album cover suggestions. Returns the queued job ID and status.",
+            {"album_id": "string"},
+            ["album_id"],
+        ),
     )
     rendered = render_tool_catalog()
     header, rendered_tools = rendered.split("Available tools:\n", maxsplit=1)

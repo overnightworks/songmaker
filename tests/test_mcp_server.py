@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
+from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.mcp_server import auth, server, tools
 from songmaker_cli.middleware.auth import AuthenticatedUser
 
@@ -368,6 +369,56 @@ def test_rename_song_rejects_empty(db_session: Session):
         tools.tool_rename_song(db_session, owner, song_id=song_id, title="  ")
 
 
+def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
+    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner = _owner(db_session, owner_id)
+
+    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+
+    assert result.status == JobStatus.QUEUED
+    assert result.message == "Cover suggestions queued."
+    job = db_session.query(Job).filter_by(id=result.job_id).one()
+    assert job.type == JobType.COVER
+    assert job.album_id == album_id
+
+
+@pytest.mark.parametrize(
+    ("album_id", "existing_status", "daily_limit", "message"),
+    [
+        ("missing", None, None, "Album not found"),
+        ("album1", JobStatus.QUEUED, None, "Cover suggestions are already being generated"),
+        ("album1", JobStatus.FAILED, "1", "Daily cover suggestion limit reached"),
+    ],
+)
+def test_suggest_album_cover_surfaces_the_admission_owner_errors(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    album_id: str,
+    existing_status: JobStatus | None,
+    daily_limit: str | None,
+    message: str,
+):
+    owner_id, _, _, _, _ = _seed(db_session)
+    owner = _owner(db_session, owner_id)
+    if existing_status is not None:
+        db_session.add(Job(
+            id="cover-job", type=JobType.COVER, status=existing_status,
+            album_id="album1", user_id=owner_id,
+        ))
+        db_session.commit()
+    if daily_limit is not None:
+        monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", daily_limit)
+        from songmaker_cli.settings import get_settings
+        get_settings.cache_clear()
+
+    try:
+        with pytest.raises(tools.MCPToolError, match=message):
+            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+    finally:
+        if daily_limit is not None:
+            get_settings.cache_clear()
+
+
 def test_write_tools_block_other_users(db_session: Session):
     _, stranger_id, _, song_id, _ = _seed(db_session)
     stranger = _owner(db_session, stranger_id)
@@ -437,10 +488,12 @@ def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
         "get_song": {"song_id": song_id},
         "get_version": {"song_id": song_id, "version_id": version_id},
         "get_generation": {"generation_id": "gen-e2e"},
+        "update_song_lyrics": {"song_id": song_id, "lyrics": "E2E lyrics"},
         "update_song_prompt": {"song_id": song_id, "prompt": "bossa"},
         "update_song_style": {"song_id": song_id, "bpm": 99},
         "rename_song": {"song_id": song_id, "title": "E2E Renamed"},
         "create_song": {"album_id": album_id, "title": "E2E New"},
+        "suggest_album_cover": {"album_id": album_id},
     }
     for name, args in calls.items():
         result = asyncio.run(srv.call_tool(name, args))
