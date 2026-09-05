@@ -288,8 +288,11 @@ def test_continue_orders_by_a_newer_listen_than_an_edit(tmp_path: Path) -> None:
         _add_song(
             session, song_id="listened-song", title="Listened Song",
             album_id="listened", created_at=_ts(100), updated_at=_ts(100),
-            last_played_at=_ts(1000),
         )
+        session.add(Generation(
+            id="listened-generation", song_id="listened-song", generation_number=1,
+            mp3_path="user-a/listened-generation.mp3",
+        ))
         _add_album(
             session, album_id="edited", title="Edited", owner=USER_A,
             created_at=_ts(200),
@@ -300,8 +303,10 @@ def test_continue_orders_by_a_newer_listen_than_an_edit(tmp_path: Path) -> None:
         )
         session.commit()
 
+    listen_response = client.post("/api/songs/listened-song/listen")
     resp = client.get("/api/library/continue")
 
+    assert listen_response.status_code == 200
     assert resp.status_code == 200
     assert [(item["type"], item["id"]) for item in resp.json()["items"]][:4] == [
         ("album", "listened"),

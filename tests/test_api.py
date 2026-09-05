@@ -497,6 +497,11 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
 
 
 def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
+    with client.app.state.ctx.db() as session:
+        song = session.get(Song, "s1")
+        assert song is not None
+        updated_at_before_listen = song.updated_at
+
     before = datetime.now(timezone.utc)
 
     resp = client.post("/api/songs/s1/listen")
@@ -509,6 +514,7 @@ def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
         assert song.last_played_at is not None
         played_at = song.last_played_at.replace(tzinfo=timezone.utc)
         assert before <= played_at <= after
+        assert song.updated_at == updated_at_before_listen
 
 
 def test_listen_song_rejects_an_unplayable_song(client: TestClient) -> None:

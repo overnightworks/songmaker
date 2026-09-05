@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from songmaker_cli.db.models import (
@@ -101,11 +101,16 @@ def list_continue_candidates(
     )[:limit]
 
 
-def record_song_listen(session: Session, song: Song) -> Song:
+def record_song_listen(session: Session, song: Song) -> None:
     """Persist the server time at which an owner started listening to a song."""
-    song.last_played_at = datetime.now(timezone.utc)
-    session.flush()
-    return song
+    session.execute(
+        update(Song)
+        .where(Song.id == song.id)
+        .values(
+            last_played_at=datetime.now(timezone.utc),
+            updated_at=Song.updated_at,
+        ),
+    )
 
 
 def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
