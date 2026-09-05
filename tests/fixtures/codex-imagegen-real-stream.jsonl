@@ -1,7 +1,7 @@
 {"type":"thread.started","thread_id":"<redacted>"}
 {"type":"turn.started"}
 {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Using the image-generation skill."}}
-{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,240p' {CODEX_HOME}/skills/.system/imagegen/SKILL.md\"","cwd":"{WORK_DIR}","aggregated_output":"","exit_code":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,240p' {CODEX_HOME}/skills/.system/imagegen/SKILL.md\"","cwd":"{WORK_DIR}","aggregated_output":"<redacted>","exit_code":0,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,240p' {CODEX_HOME}/skills/.system/imagegen/SKILL.md\"","cwd":null,"aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,240p' {CODEX_HOME}/skills/.system/imagegen/SKILL.md\"","cwd":null,"aggregated_output":"<redacted>","exit_code":0,"status":"completed"}}
 {"type":"item.completed","item":{"id":"item_2","type":"image_gen"}}
 {"type":"turn.completed","usage":{"input_tokens":45162,"cached_input_tokens":38784,"cache_write_input_tokens":0,"output_tokens":444,"reasoning_output_tokens":65}}
