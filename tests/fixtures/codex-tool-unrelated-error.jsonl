@@ -1,0 +1,3 @@
+{"type":"thread.started","thread_id":"52700000-0000-4000-8000-000000000000"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"The requested model is unavailable."}}
