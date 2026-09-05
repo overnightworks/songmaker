@@ -94,4 +94,11 @@ def test_codex_cover_boot_check_uses_the_full_read_only_sandbox_shape() -> None:
     ) as run:
         report_codex_image_sandbox_runtime()
 
-    assert "--unshare-all" in run.call_args.args[0]
+    assert run.call_args.args[0] == (
+        "/usr/bin/bwrap",
+        "--unshare-user",
+        "--unshare-net",
+        "--ro-bind", "/", "/",
+        "--",
+        "/bin/true",
+    )

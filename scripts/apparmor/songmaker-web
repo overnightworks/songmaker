@@ -43,8 +43,8 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # It detaches the old root after each pivot and makes it private first.
   mount options=(rprivate) options in (silent) -> /oldroot/,
 
-  # Bubblewrap 0.12.0 retains proc across the first pivot before it mounts the
-  # sandbox's fresh procfs. This is the measured /oldroot/proc -> /proc bind.
+  # Codex's observed Bubblewrap form retains proc across the first pivot. This
+  # is the first denied mount under this profile: /oldroot/proc -> /proc.
   mount options=(rw rbind) options in (silent) /oldroot/proc/ -> /proc/,
 
   # --ro-bind / / recursively binds only the old root into the new root, then

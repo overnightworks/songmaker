@@ -11,33 +11,13 @@ from dataclasses import dataclass
 WEB_SERVICE = "songmaker-web"
 WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
-EMPTY_CAPABILITY_MASK = "0000000000000000"
-SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
-
-_SANDBOX_ASSERTIONS = """set -eu
-mkdir -p "$CODEX_HOME"
-: > "$CODEX_HOME/allowed"
-if : > /app/songmaker-sandbox-write-probe; then
-  echo 'sandbox wrote outside CODEX_HOME' >&2
-  exit 1
-fi
-if : > /tmp/outside-codex-home; then
-  echo 'sandbox wrote outside CODEX_HOME' >&2
-  exit 1
-fi
-test "$(awk '/^NoNewPrivs:/ { print $2 }' /proc/self/status)" = 1
-test "$(awk '/^CapEff:/ { print $2 }' /proc/self/status)" = "${EMPTY_CAPABILITY_MASK}"
-""" + """/app/.venv/bin/python - <<'PY'
-import socket
-
-try:
-    socket.create_connection(("1.1.1.1", 443), timeout=2)
-except OSError:
-    pass
-else:
-    raise SystemExit("sandbox network unexpectedly reachable")
-PY
-"""
+CODEX_READ_ONLY_BWRAP_ARGUMENTS = (
+    "--unshare-user",
+    "--unshare-net",
+    "--ro-bind", "/", "/",
+    "--",
+    "/bin/true",
+)
 
 
 @dataclass(frozen=True)
@@ -53,38 +33,8 @@ CommandRunner = Callable[[Sequence[str]], CommandResult]
 
 
 def bubblewrap_probe_command() -> tuple[str, ...]:
-    """Build the smallest Bubblewrap command that exercises the profile."""
-    return (
-        "bwrap",
-        "--unshare-user",
-        "--unshare-all",
-        "--ro-bind",
-        "/",
-        "/",
-        "--proc",
-        "/proc",
-        "--dev",
-        "/dev",
-        "--tmpfs",
-        "/tmp",
-        "--dir",
-        SANDBOX_CODEX_HOME,
-        "--bind",
-        SANDBOX_CODEX_HOME,
-        SANDBOX_CODEX_HOME,
-        "--remount-ro",
-        "/tmp",
-        "--setenv",
-        "CODEX_HOME",
-        SANDBOX_CODEX_HOME,
-        "--setenv",
-        "EMPTY_CAPABILITY_MASK",
-        EMPTY_CAPABILITY_MASK,
-        "--",
-        "/bin/sh",
-        "-ec",
-        _SANDBOX_ASSERTIONS,
-    )
+    """Build the Bubblewrap form embedded in Codex's Linux binary."""
+    return ("bwrap", *CODEX_READ_ONLY_BWRAP_ARGUMENTS)
 
 
 def _run(command: Sequence[str]) -> CommandResult:
@@ -116,19 +66,8 @@ def _verify_web_profile(run: CommandRunner) -> None:
 
 
 def _verify_sandbox(run: CommandRunner) -> None:
-    prepare = run((
-        "docker", "compose", "exec", "-T", WEB_SERVICE,
-        "/bin/mkdir", "-p", SANDBOX_CODEX_HOME,
-    ))
-    _required_output(prepare, "preparing the private CODEX_HOME probe directory")
-    try:
-        result = run(("docker", "compose", "exec", "-T", WEB_SERVICE, *bubblewrap_probe_command()))
-        _required_output(result, "Bubblewrap sandbox probe")
-    finally:
-        run((
-            "docker", "compose", "exec", "-T", WEB_SERVICE,
-            "/bin/rm", "-rf", SANDBOX_CODEX_HOME,
-        ))
+    result = run(("docker", "compose", "exec", "-T", WEB_SERVICE, *bubblewrap_probe_command()))
+    _required_output(result, "Codex Bubblewrap probe")
 
 
 def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:

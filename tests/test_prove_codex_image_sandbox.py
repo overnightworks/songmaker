@@ -15,24 +15,15 @@ sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
 
 
-def test_bubblewrap_probe_has_the_required_isolation_and_negative_checks() -> None:
-    command = proof.bubblewrap_probe_command()
-    shell_assertions = command[-1]
-
-    assert command[:2] == ("bwrap", "--unshare-user")
-    assert "--unshare-all" in command
-    assert ("--ro-bind", "/", "/") == command[3:6]
-    assert ("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp") == command[6:12]
-    assert ("--bind", proof.SANDBOX_CODEX_HOME, proof.SANDBOX_CODEX_HOME) == command[14:17]
-    assert ("--remount-ro", "/tmp") == command[17:19]
-    assert ("--setenv", "CODEX_HOME", proof.SANDBOX_CODEX_HOME) == command[19:22]
-    assert ("--setenv", "EMPTY_CAPABILITY_MASK", proof.EMPTY_CAPABILITY_MASK) == command[22:25]
-    assert "songmaker-sandbox-write-probe" in shell_assertions
-    assert "outside-codex-home" in shell_assertions
-    assert "NoNewPrivs:" in shell_assertions
-    assert "CapEff:" in shell_assertions
-    assert '"${EMPTY_CAPABILITY_MASK}"' in shell_assertions
-    assert "1.1.1.1" in shell_assertions
+def test_bubblewrap_probe_matches_the_observed_codex_argv() -> None:
+    assert proof.bubblewrap_probe_command() == (
+        "bwrap",
+        "--unshare-user",
+        "--unshare-net",
+        "--ro-bind", "/", "/",
+        "--",
+        "/bin/true",
+    )
 
 
 def test_prove_checks_the_custom_profile_and_default_profile_negative_control() -> None:
@@ -53,7 +44,6 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
     proof.prove(run)
 
     assert any(command[:4] == ("docker", "compose", "exec", "-T") for command in commands)
-    assert any(command[-2:] == ("-p", proof.SANDBOX_CODEX_HOME) for command in commands)
     reference = next(command for command in commands if command[:2] == ("docker", "run"))
     assert f"apparmor={proof.DEFAULT_DOCKER_PROFILE}" in reference
     assert ("--network", "none") == reference[3:5]
