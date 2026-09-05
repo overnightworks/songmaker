@@ -8,7 +8,6 @@ import {
 	COLLECTION_MENU_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_PLAYLISTS_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL
@@ -166,7 +165,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await page
 			.locator('.collection-header')
-			.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true })
+			.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true })
 			.click();
 		await expect(wallPlaylistTile.locator('.tile-cover img')).toHaveAttribute(
 			'src',
@@ -215,7 +214,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await page
 			.locator('.collection-header')
-			.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true })
+			.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true })
 			.click();
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
 		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
