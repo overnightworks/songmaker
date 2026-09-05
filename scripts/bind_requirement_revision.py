@@ -80,7 +80,7 @@ def _supervise(raw_arguments: list[str]) -> int:
         str(guard_read),
     ]
     try:
-        process = subprocess.Popen(  # NOSONAR: fixed Python worker receives shell-free argv
+        process = subprocess.Popen(  # NOSONAR Fixed worker uses shell-free argv.
             command,
             cwd=Path.cwd(),
             env=os.environ.copy(),

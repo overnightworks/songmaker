@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -386,7 +387,7 @@ def _persist_generation_row(
         thinking=ctx.ace_config.thinking,
         lm_repetition_penalty=(
             ctx.ace_config.lm_repetition_penalty
-            if ctx.ace_config.lm_repetition_penalty != 1.0
+            if not math.isclose(ctx.ace_config.lm_repetition_penalty, 1.0)
             else None
         ),
         use_cot_caption=False if not ctx.ace_config.use_cot_caption else None,
@@ -412,7 +413,9 @@ def _persist_generation_row(
         ),
         latent_shift=(ctx.ace_config.latent_shift if ctx.ace_config.latent_shift != 0 else None),
         latent_rescale=(
-            ctx.ace_config.latent_rescale if ctx.ace_config.latent_rescale != 1.0 else None
+            ctx.ace_config.latent_rescale
+            if not math.isclose(ctx.ace_config.latent_rescale, 1.0)
+            else None
         ),
         timesteps=ctx.ace_config.timesteps or None,
         task_type=(ctx.ace_config.task_type if ctx.ace_config.task_type != "text2music" else None),
@@ -434,7 +437,7 @@ def _persist_generation_row(
         ),
         audio_cover_strength=(
             ctx.ace_config.audio_cover_strength
-            if ctx.ace_config.audio_cover_strength != 1.0
+            if not math.isclose(ctx.ace_config.audio_cover_strength, 1.0)
             else None
         ),
         cover_noise_strength=(

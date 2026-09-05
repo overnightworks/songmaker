@@ -78,13 +78,10 @@ async def _poll_progress(
     interval: float = PROGRESS_POLL_SECONDS,
 ) -> None:
     while True:
-        try:
-            await asyncio.sleep(interval)
-            actual = directory_size_bytes(target_dir)
-            ratio = min(actual / expected_size, 0.99) if expected_size > 0 else 0.0
-            await task_store.update_progress(task_id, ratio)
-        except asyncio.CancelledError:
-            return
+        await asyncio.sleep(interval)
+        actual = directory_size_bytes(target_dir)
+        ratio = min(actual / expected_size, 0.99) if expected_size > 0 else 0.0
+        await task_store.update_progress(task_id, ratio)
 
 
 async def run_download(
@@ -119,7 +116,7 @@ async def run_download(
         progress_task.cancel()
         try:
             await progress_task
-        except asyncio.CancelledError:
+        except asyncio.CancelledError:  # NOSONAR: The owner cancels this child during cleanup.
             pass
 
 
