@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import signal
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -14,6 +15,7 @@ from songmaker_cli.scoring.models import ScorerOutcome, ScorerRun, SongScores
 from songmaker_cli.scoring.subprocess_runner import (
     EnvProbeRequest,
     EnvProbeResponse,
+    ScoreProgressUpdate,
     ScoreRequest,
     ScoreResponse,
     ScorerProcess,
@@ -24,6 +26,48 @@ from songmaker_cli.scoring.subprocess_runner import (
 )
 
 _ctx = multiprocessing.get_context("spawn")
+
+
+class _FakeConnection:
+    def __init__(
+        self,
+        *,
+        incoming: list[object] | None = None,
+        send_error: BaseException | None = None,
+    ) -> None:
+        self._incoming = list(incoming or [])
+        self._send_error = send_error
+        self.sent: list[object] = []
+        self.closed = False
+
+    def send(self, message: object) -> None:
+        self.sent.append(message)
+        if self._send_error is not None:
+            raise self._send_error
+
+    def recv(self) -> object:
+        if not self._incoming:
+            raise EOFError
+        return self._incoming.pop(0)
+
+    def poll(self, timeout: float) -> bool:
+        return bool(self._incoming)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeProcess:
+    def __init__(self, *, pid: int, exits_after_joins: int) -> None:
+        self.pid = pid
+        self._exits_after_joins = exits_after_joins
+        self._join_count = 0
+
+    def is_alive(self) -> bool:
+        return self._join_count < self._exits_after_joins
+
+    def join(self, timeout: float) -> None:
+        self._join_count += 1
 
 
 # ── Message pickling ─────────────────────────────────────────────
@@ -153,6 +197,89 @@ def test_child_reports_a_missing_audio_file_as_an_error(tmp_path: Path) -> None:
     assert resp.scores is None
     assert resp.error is not None
     assert str(missing) in resp.error
+
+
+@pytest.mark.parametrize(
+    ("pipeline_result", "expected_error"),
+    (
+        (SongScores(), None),
+        (RuntimeError("scorer failed"), "scorer failed"),
+    ),
+)
+def test_child_publishes_progress_and_a_terminal_pipeline_result(
+    monkeypatch: pytest.MonkeyPatch,
+    pipeline_result: SongScores | RuntimeError,
+    expected_error: str | None,
+) -> None:
+    from songmaker_cli.scoring import pipeline
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    request = ScoreRequest(
+        mp3_path=Path("song.mp3"),
+        meta=None,
+        scorers=["silence"],
+        config=PipelineConfig(device="cpu"),
+        job_id="score-42",
+    )
+    conn = _FakeConnection(incoming=[request, ShutdownRequest()])
+    progress_callbacks: list[tuple[int, int, str]] = []
+
+    def run_pipeline(*_args, on_progress, **_kwargs) -> SongScores:
+        on_progress(1, 1, "silence")
+        progress_callbacks.append((1, 1, "silence"))
+        if isinstance(pipeline_result, Exception):
+            raise pipeline_result
+        return pipeline_result
+
+    monkeypatch.setattr(pipeline.default_registry, "ensure_loaded", lambda: None)
+    monkeypatch.setattr(pipeline, "run_scoring_pipeline", run_pipeline)
+    monkeypatch.setattr("songmaker_cli.scoring.subprocess_runner.signal.signal", lambda *_: None)
+
+    _child_main(conn)  # type: ignore[arg-type]
+
+    assert progress_callbacks == [(1, 1, "silence")]
+    assert conn.closed is True
+    assert conn.sent[0] == ScoreProgressUpdate(completed=1, total=1, scorer_name="silence")
+    response = conn.sent[1]
+    assert isinstance(response, ScoreResponse)
+    assert response.scores is (None if expected_error else pipeline_result)
+    assert response.error == expected_error
+
+
+def test_child_confirms_that_it_scrubbed_the_inherited_secret_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.scoring import pipeline
+
+    secret_key = SECRET_ENV_KEYS[0]
+    monkeypatch.setenv(secret_key, "secret")
+    conn = _FakeConnection(incoming=[
+        EnvProbeRequest(keys=(secret_key, _TEST_MARKER_KEY)),
+        ShutdownRequest(),
+    ])
+    monkeypatch.setenv(_TEST_MARKER_KEY, "visible")
+    monkeypatch.setattr(pipeline.default_registry, "ensure_loaded", lambda: None)
+    monkeypatch.setattr("songmaker_cli.scoring.subprocess_runner.signal.signal", lambda *_: None)
+
+    _child_main(conn)  # type: ignore[arg-type]
+
+    assert conn.sent == [EnvProbeResponse(present=frozenset({_TEST_MARKER_KEY}))]
+    assert conn.closed is True
+
+
+def test_child_stops_cleanly_when_its_parent_connection_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.scoring import pipeline
+
+    conn = _FakeConnection()
+    monkeypatch.setattr(pipeline.default_registry, "ensure_loaded", lambda: None)
+    monkeypatch.setattr("songmaker_cli.scoring.subprocess_runner.signal.signal", lambda *_: None)
+
+    _child_main(conn)  # type: ignore[arg-type]
+
+    assert conn.sent == []
+    assert conn.closed is False
 
 
 # ── Secret env scrubbing ─────────────────────────────────────────
@@ -345,6 +472,153 @@ def test_scorer_process_handles_child_crash(tmp_path: Path) -> None:
     )
     assert isinstance(result, SongScores)
     sp.shutdown()
+
+
+def test_scorer_process_retries_a_crashed_request_with_a_fresh_connection() -> None:
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    expected = SongScores()
+    crashed = _FakeConnection(send_error=BrokenPipeError())
+    recovered = _FakeConnection(incoming=[ScoreResponse(scores=expected, error=None)])
+    sp = ScorerProcess()
+    connections = iter((crashed, recovered))
+    with patch.object(sp, "_ensure_started", side_effect=lambda: next(connections)):
+        result = sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
+
+    assert result is expected
+    assert len(crashed.sent) == 1
+    assert len(recovered.sent) == 1
+
+
+def test_scorer_process_stops_after_the_replacement_child_also_crashes() -> None:
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    sp = ScorerProcess()
+    connections = iter((
+        _FakeConnection(send_error=BrokenPipeError()),
+        _FakeConnection(send_error=BrokenPipeError()),
+    ))
+    with (
+        patch.object(sp, "_ensure_started", side_effect=lambda: next(connections)),
+        pytest.raises(RuntimeError, match="crashed twice"),
+    ):
+        sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
+
+
+def test_scorer_process_propagates_a_child_pipeline_error() -> None:
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    conn = _FakeConnection(incoming=[ScoreResponse(scores=None, error="scorer failed")])
+    sp = ScorerProcess()
+    with (
+        patch.object(sp, "_ensure_started", return_value=conn),
+        pytest.raises(RuntimeError, match="scorer failed"),
+    ):
+        sp.score(Path("song.mp3"), scorers=[], config=PipelineConfig(device="cpu"))
+
+
+def test_scorer_process_delivers_progress_before_its_final_scores() -> None:
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    expected = SongScores()
+    conn = _FakeConnection(incoming=[
+        ScoreProgressUpdate(completed=1, total=2, scorer_name="silence"),
+        ScoreResponse(scores=expected, error=None),
+    ])
+    progress: list[tuple[int, int, str]] = []
+
+    def record_progress(completed: int, total: int, scorer: str) -> None:
+        progress.append((completed, total, scorer))
+
+    sp = ScorerProcess()
+    with patch.object(sp, "_ensure_started", return_value=conn):
+        result = sp.score(
+            Path("song.mp3"),
+            scorers=["silence"],
+            config=PipelineConfig(device="cpu"),
+            on_progress=record_progress,
+        )
+
+    assert result is expected
+    assert progress == [(1, 2, "silence")]
+
+
+def test_scorer_process_times_out_before_waiting_for_a_child_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.scoring import subprocess_runner
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    conn = _FakeConnection()
+    sp = ScorerProcess()
+    monotonic_values = iter((10.0, 11.0))
+    monkeypatch.setattr(subprocess_runner.time, "monotonic", lambda: next(monotonic_values))
+    with (
+        patch.object(sp, "_ensure_started", return_value=conn),
+        patch.object(sp, "_kill") as kill,
+        pytest.raises(TimeoutError, match="1s"),
+    ):
+        sp.score(
+            Path("song.mp3"),
+            scorers=["silence"],
+            config=PipelineConfig(device="cpu", pipeline_timeout=1),
+        )
+
+    assert conn.sent
+    kill.assert_called_once()
+
+
+def test_scorer_process_recycles_a_live_child_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sp = ScorerProcess()
+    process = _FakeProcess(pid=7122, exits_after_joins=1)
+    conn = _FakeConnection()
+    signals: list[signal.Signals] = []
+    sp._process = process  # type: ignore[assignment]
+    sp._conn = conn  # type: ignore[assignment]
+    monkeypatch.setattr(
+        "songmaker_cli.scoring.subprocess_runner.os.kill",
+        lambda _pid, signal_number: signals.append(signal_number),
+    )
+
+    sp.recycle()
+
+    assert signals == [signal.SIGTERM]
+    assert conn.closed is True
+    assert not sp.alive
+
+
+def test_scorer_process_shutdown_releases_an_already_dead_connection() -> None:
+    sp = ScorerProcess()
+    conn = _FakeConnection()
+    sp._conn = conn  # type: ignore[assignment]
+
+    sp.shutdown()
+
+    assert conn.closed is True
+
+
+def test_scorer_process_shutdown_escalates_for_a_child_that_ignores_its_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sp = ScorerProcess()
+    process = _FakeProcess(pid=7123, exits_after_joins=3)
+    conn = _FakeConnection()
+    signals: list[signal.Signals] = []
+    sp._process = process  # type: ignore[assignment]
+    sp._conn = conn  # type: ignore[assignment]
+    monkeypatch.setattr(
+        "songmaker_cli.scoring.subprocess_runner.os.kill",
+        lambda _pid, signal_number: signals.append(signal_number),
+    )
+
+    sp.shutdown()
+
+    assert conn.sent == [ShutdownRequest()]
+    assert conn.closed is True
+    assert signals == [signal.SIGTERM, signal.SIGKILL]
+    assert not sp.alive
 
 
 # ── Module-level accessor ────────────────────────────────────────
