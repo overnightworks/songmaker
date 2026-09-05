@@ -21,6 +21,11 @@ DEFAULT_BIND_HOST = "0.0.0.0"
 DEFAULT_CONTROL_PLANE_URL = "http://songmaker-web:8080"
 DEFAULT_PORT = 8001
 DEFAULT_PROGRESS_PAUSE_SECONDS = 1.0
+# Keep the one fake GPU occupied while the browser adds two training jobs and
+# retries a failed voice. This makes the configured queue-capacity evidence
+# deterministic without seeding a queue state.
+FAKE_GENERATION_OCCUPANCY_SECONDS = 15.0
+FAKE_FAILED_TRAINING_CAPTION = "e2e fake training failure"
 FAKE_WORKER_ID = "voices-e2e-training-worker"
 FAKE_WORKER_HOST = "songmaker-voices-e2e-worker"
 FAKE_WORKER_VRAM_GB = 1.0
@@ -59,8 +64,15 @@ async def _discard_model(_: LoadedModel) -> None:
     return None
 
 
-async def _unused_generate_runner(*_: object, **__: object) -> None:
-    raise RuntimeError("The Voices E2E fake worker only accepts LoRA training")
+async def _queued_generate_runner(
+    task_store: TaskStore,
+    task_id: str,
+    **_: object,
+) -> None:
+    """Occupy the worker long enough for the Voices flow to show its queue state."""
+    await task_store.mark_running(task_id)
+    await asyncio.sleep(FAKE_GENERATION_OCCUPANCY_SECONDS)
+    await task_store.fail(task_id, "E2E fake generation released the training worker")
 
 
 async def _fake_train_lora_runner(
@@ -79,6 +91,10 @@ async def _fake_train_lora_runner(
 
     await task_store.mark_running(task_id)
     await task_store.mark_training_started(task_id)
+    captions = Path(request.dataset_dir).glob("*.caption.txt")
+    if any(FAKE_FAILED_TRAINING_CAPTION in caption.read_text() for caption in captions):
+        await task_store.fail(task_id, "E2E fake training failure requested by its sample")
+        return
     for current_epoch in (0, request.train_epochs // 2, request.train_epochs):
         await task_store.update_progress(
             task_id,
@@ -132,7 +148,7 @@ def build_fake_worker_deps(
         ),
         checkpoint_dir=settings.audio_dir,
         audio_output_dir=settings.audio_dir,
-        generate_runner=_unused_generate_runner,
+        generate_runner=_queued_generate_runner,
         internal_token=settings.internal_token,
         shared_audio_root=settings.audio_dir,
         train_lora_runner=_fake_train_lora_runner,
