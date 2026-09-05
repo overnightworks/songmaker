@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
@@ -28,6 +29,7 @@ from songmaker_cli.constants import (
     COVER_VARIANT_ORIGINAL,
     PLAYLIST_COVER_DIRNAME,
 )
+from songmaker_cli.covers import write_playlist_cover
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -682,6 +684,36 @@ def test_api_delete_playlist(client: TestClient) -> None:
 
     resp = client.get(f"/api/playlists/{pid}")
     assert resp.status_code == 404
+
+
+def test_api_delete_playlist_removes_its_cover_after_commit(
+    client: TestClient,
+) -> None:
+    playlist_id = client.post("/api/playlists", json={"title": "Doomed"}).json()["id"]
+    cover_dir = client.app.state.ctx.audio_dir / PLAYLIST_COVER_DIRNAME / playlist_id
+    write_playlist_cover(client.app.state.ctx.audio_dir, playlist_id, _png_bytes())
+
+    response = client.delete(f"/api/playlists/{playlist_id}")
+
+    assert response.status_code == 200
+    assert not cover_dir.exists()
+
+
+def test_api_delete_playlist_keeps_its_cover_when_commit_fails(
+    client: TestClient,
+) -> None:
+    playlist_id = client.post("/api/playlists", json={"title": "Doomed"}).json()["id"]
+    cover_dir = client.app.state.ctx.audio_dir / PLAYLIST_COVER_DIRNAME / playlist_id
+    write_playlist_cover(client.app.state.ctx.audio_dir, playlist_id, _png_bytes())
+
+    with patch(
+        "songmaker_cli.playlist_api.Session.commit",
+        side_effect=RuntimeError("commit failed"),
+    ):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            client.delete(f"/api/playlists/{playlist_id}")
+
+    assert cover_dir.is_dir()
 
 
 def test_api_add_generation_to_playlist(client: TestClient) -> None:

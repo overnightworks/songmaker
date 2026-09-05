@@ -274,10 +274,11 @@ def test_hard_delete_user_includes_soft_deleted_albums(db_session: Session) -> N
     _seed(db_session, owner=_OTHER_USER_ID)
     soft_delete_album(db_session, "rock")
     db_session.commit()
-    paths, album_ids = hard_delete_user(db_session, _OTHER_USER_ID)
+    paths, album_ids, playlist_ids = hard_delete_user(db_session, _OTHER_USER_ID)
     db_session.commit()
     assert "u-test/g1.mp3" in paths
     assert "rock" in album_ids
+    assert playlist_ids == []
     assert db_session.query(Album).execution_options(
         include_deleted=True,
     ).count() == 0
