@@ -19,6 +19,8 @@ from songmaker_cli.errors import ValidationError
 
 log = logging.getLogger(__name__)
 
+_ACE_STEP_CONFIG_FIELDS = frozenset(AceStepConfig.__dataclass_fields__)
+
 if TYPE_CHECKING:
     from songmaker_cli.parser import SongMeta
 
@@ -246,9 +248,15 @@ def build_ace_config(
         "prompt": meta.prompt,
         "lyrics": meta.lyrics,
     }
-    fields.update(_merge_layers(
-        builtin_layer, user_defaults_layer, preset_layer, song_layer, cli_layer,
-    ))
+    fields.update(
+        {
+            key: value
+            for key, value in _merge_layers(
+                builtin_layer, user_defaults_layer, preset_layer, song_layer, cli_layer
+            ).items()
+            if key in _ACE_STEP_CONFIG_FIELDS
+        }
+    )
 
     if meta.bpm:
         fields["bpm"] = meta.bpm
