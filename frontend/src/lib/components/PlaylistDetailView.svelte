@@ -15,7 +15,9 @@
 		renamePlaylist,
 		removePlaylistEntry,
 		movePlaylistEntry,
-		updatePlaylistInList
+		updatePlaylistInList,
+		uploadPlaylistCover,
+		deletePlaylistCover
 	} from '$lib/stores/playlists';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
@@ -33,6 +35,7 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
+		ALBUM_COVER_ACCEPT,
 		collectionRowPauseLabel,
 		collectionRowPlayLabel,
 		LIBRARY_RETRY_LABEL,
@@ -71,6 +74,8 @@
 						entry_count: playlistDetail.entry_count,
 						is_shared: playlistDetail.is_shared,
 						share_slug: playlistDetail.share_slug,
+						cover: playlistDetail.cover,
+						album_covers: playlistDetail.album_covers,
 						created_at: playlistDetail.created_at
 					}
 				: null)
@@ -82,6 +87,12 @@
 	const initials = $derived(
 		playlistMeta ? titleInitials(playlistMeta.title) : ALBUM_ART_EMPTY_INITIALS
 	);
+	const coverUrl = $derived(playlistMeta?.cover?.detail ?? null);
+	const coverAlt = $derived(
+		playlistMeta ? `Playlist cover for ${playlistMeta.title}` : 'Playlist cover'
+	);
+	let coverBusy = $state(false);
+	let coverInput: HTMLInputElement | null = $state(null);
 
 	function toggleOverflow(entryId: string, e: MouseEvent): void {
 		e.stopPropagation();
@@ -160,6 +171,39 @@
 		} catch {
 			addToast('Rename failed', 'error');
 			throw new Error('Rename failed');
+		}
+	}
+
+	async function onCoverFile(event: Event): Promise<void> {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !playlistMeta) return;
+		coverBusy = true;
+		try {
+			await uploadPlaylistCover(playlistMeta.id, file);
+			addToast('Cover saved', 'success');
+		} catch (error) {
+			addToast(error instanceof Error ? error.message : 'Cover upload failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
+
+	function onCoverAction(): void {
+		coverInput?.click();
+	}
+
+	async function onCoverRemove(): Promise<void> {
+		if (!playlistMeta) return;
+		coverBusy = true;
+		try {
+			await deletePlaylistCover(playlistMeta.id);
+			addToast('Cover removed', 'success');
+		} catch (error) {
+			addToast(error instanceof Error ? error.message : 'Cover remove failed', 'error');
+		} finally {
+			coverBusy = false;
 		}
 	}
 
@@ -299,10 +343,12 @@
 			<CollectionHeader
 				kind="playlist"
 				title={playlistMeta.title}
-				coverUrl={null}
-				coverAlt=""
+				{coverUrl}
+				{coverAlt}
 				{initials}
 				artFill={null}
+				playlistCovers={playlistMeta.album_covers}
+				playlistCover={playlistMeta.cover}
 				onplay={() => playEntry(0)}
 				onrename={onPlaylistRename}
 				isShared={playlistMeta.is_shared}
@@ -310,10 +356,20 @@
 				onshare={onPlaylistShareEnable}
 				onunshare={onPlaylistShareDisable}
 				ondelete={() => (showDeleteConfirm = true)}
+				oncover={onCoverAction}
+				onremovecover={onCoverRemove}
 				onsaveoffline={onSaveOfflineToggle}
 				offlineSaved={Boolean(offlineSavedStreamUrl)}
 				{offlineSaving}
 				{offlineProgressLabel}
+			/>
+			<input
+				bind:this={coverInput}
+				class="cover-file-input"
+				type="file"
+				accept={ALBUM_COVER_ACCEPT}
+				disabled={coverBusy}
+				onchange={onCoverFile}
 			/>
 		{/if}
 
@@ -477,6 +533,15 @@
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
+	}
+
+	.cover-file-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 
 	.entry-list {

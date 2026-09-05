@@ -33,6 +33,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		sharePlaylist: vi.fn(),
 		unsharePlaylist: vi.fn(),
+		uploadPlaylistCover: vi.fn(),
+		deletePlaylistCover: vi.fn(),
 		createQueueStreamSnapshot: vi.fn(),
 		fetchPlaylist: vi.fn()
 	};
@@ -57,8 +59,9 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
+import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
-import { fetchPlaylist } from '$lib/api/client';
+import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -112,6 +115,7 @@ function openPlaylistDetail(d: PlaylistDetailItem): void {
 			entry_count: d.entry_count,
 			is_shared: d.is_shared,
 			share_slug: d.share_slug,
+			cover: d.cover,
 			album_covers: d.album_covers,
 			created_at: d.created_at
 		}
@@ -160,6 +164,70 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 }
 
 describe('PlaylistDetailView header', () => {
+	it('keeps the cover file input out of the visible layout', () => {
+		expect(playlistDetailViewSource).toMatch(
+			/\.cover-file-input\s*\{\s*position:\s*absolute;\s*width:\s*1px;\s*height:\s*1px;\s*overflow:\s*hidden;\s*clip:\s*rect\(0 0 0 0\);\s*white-space:\s*nowrap;/
+		);
+	});
+
+	it('uploads and removes a playlist cover through the shared header actions', async () => {
+		const customCover = {
+			card: '/api/playlists/p1/cover?variant=card&v=custom.png',
+			detail: '/api/playlists/p1/cover?variant=detail&v=custom.png'
+		};
+		vi.mocked(uploadPlaylistCover).mockResolvedValue({
+			id: 'p1',
+			title: 'Night Drive',
+			slug: 'night-drive',
+			entry_count: 1,
+			is_shared: false,
+			share_slug: null,
+			cover: customCover,
+			album_covers: [],
+			created_at: '2026-01-01T00:00:00+00:00'
+		});
+		vi.mocked(deletePlaylistCover).mockResolvedValue({
+			id: 'p1',
+			title: 'Night Drive',
+			slug: 'night-drive',
+			entry_count: 1,
+			is_shared: false,
+			share_slug: null,
+			cover: null,
+			album_covers: [],
+			created_at: '2026-01-01T00:00:00+00:00'
+		});
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		const upload = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(item) => item.textContent?.trim() === 'Upload…'
+		);
+		upload?.click();
+		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+		await vi.waitFor(() => expect(uploadPlaylistCover).toHaveBeenCalledWith('p1', file));
+		await tick();
+		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(customCover.detail);
+
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		const remove = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(item) => item.textContent?.trim() === 'Remove cover'
+		);
+		remove?.click();
+		await vi.waitFor(() => expect(deletePlaylistCover).toHaveBeenCalledWith('p1'));
+		await tick();
+		expect(target.querySelector('.header-cover img')).toBeNull();
+		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
+	});
+
 	it('uses the collection header with a Play action and a … menu instead of a visible Share icon', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
@@ -170,7 +238,7 @@ describe('PlaylistDetailView header', () => {
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
-		expect(header.querySelector('.header-cover-initials')?.textContent).toBe('ND');
+		expect(header.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
 	});
 
 	it('lists Share playlist, Save offline, Rename, and Delete playlist in the menu', async () => {
@@ -186,7 +254,7 @@ describe('PlaylistDetailView header', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
+		expect(items).toEqual(['Upload…', 'Save offline', 'Rename', 'Delete playlist']);
 	});
 });
 
