@@ -126,21 +126,13 @@ async def stream_tool_loop(
     try:
         while True:
             terminal: ToolCallBatch | FinalText | None = None
-            async for response in transport.stream(next_message):
-                if isinstance(response, TextDelta):
-                    if terminal is not None:
-                        raise ToolLoopProtocolError()
-                    if response.text:
-                        text_chunks.append(response.text)
-                        yield AssistantTextEvent(text=response.text)
-                    continue
-                if not isinstance(response, (ToolCallBatch, FinalText)) or terminal is not None:
-                    raise ToolLoopProtocolError()
-                if isinstance(response, ToolCallBatch) and not response.calls:
-                    raise ToolLoopProtocolError()
-                terminal = response
-            if terminal is None:
-                raise ToolLoopProtocolError()
+            async for response in _stream_transport_response(
+                transport, next_message, text_chunks,
+            ):
+                if isinstance(response, AssistantTextEvent):
+                    yield response
+                else:
+                    terminal = response
             if isinstance(terminal, FinalText):
                 if terminal.text:
                     text_chunks.append(terminal.text)
@@ -151,24 +143,60 @@ async def stream_tool_loop(
                 raise ToolLoopLimitError()
             round_index += 1
             results: list[ToolResult] = []
-            for call in terminal.calls:
-                yield ToolCallEvent(
-                    tool_use_id=call.tool_use_id,
-                    name=call.name,
-                    input=call.arguments,
-                )
-                result, is_error = _execute_tool(
-                    executor, provider, route, round_index, call,
-                )
-                yield ToolResultEvent(
-                    tool_use_id=call.tool_use_id,
-                    content=result,
-                    is_error=is_error,
-                )
-                results.append(ToolResult(call.tool_use_id, result, is_error))
+            async for event in _stream_tool_results(
+                terminal.calls, executor, provider, route, round_index, results,
+            ):
+                yield event
             next_message = ToolResultBatch(tuple(results))
     finally:
         await transport.aclose()
+
+
+async def _stream_transport_response(
+    transport: ToolTransport,
+    message: InitialTurn | ToolResultBatch,
+    text_chunks: list[str],
+) -> AsyncIterator[AssistantTextEvent | ToolCallBatch | FinalText]:
+    terminal: ToolCallBatch | FinalText | None = None
+    async for response in transport.stream(message):
+        if isinstance(response, TextDelta):
+            if terminal is not None:
+                raise ToolLoopProtocolError()
+            if response.text:
+                text_chunks.append(response.text)
+                yield AssistantTextEvent(text=response.text)
+            continue
+        if not isinstance(response, (ToolCallBatch, FinalText)) or terminal is not None:
+            raise ToolLoopProtocolError()
+        if isinstance(response, ToolCallBatch) and not response.calls:
+            raise ToolLoopProtocolError()
+        terminal = response
+    if terminal is None:
+        raise ToolLoopProtocolError()
+    yield terminal
+
+
+async def _stream_tool_results(
+    calls: tuple[ToolCall, ...],
+    executor: ToolExecutor,
+    provider: str,
+    route: str,
+    round_index: int,
+    results: list[ToolResult],
+) -> AsyncIterator[ToolCallEvent | ToolResultEvent]:
+    for call in calls:
+        yield ToolCallEvent(
+            tool_use_id=call.tool_use_id,
+            name=call.name,
+            input=call.arguments,
+        )
+        result, is_error = _execute_tool(executor, provider, route, round_index, call)
+        yield ToolResultEvent(
+            tool_use_id=call.tool_use_id,
+            content=result,
+            is_error=is_error,
+        )
+        results.append(ToolResult(call.tool_use_id, result, is_error))
 
 
 def _execute_tool(

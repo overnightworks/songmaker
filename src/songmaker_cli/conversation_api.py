@@ -326,49 +326,67 @@ def resolve_mention_blocks(
     Unknown, foreign, or unrelated IDs 404 the whole turn. The client
     never supplies lyrics or other raw context as the source of truth.
     """
-    blocks: list[TurnContextBlock] = []
+    blocks = _mentioned_song_blocks(session, user, current_song, mentioned_song_ids)
+    album_block = _mentioned_album_block(session, user, current_song, mentioned_album_id)
+    version_block = _mentioned_version_block(session, current_song, mentioned_version_ids)
+    return [block for block in (*blocks, album_block, version_block) if block is not None]
+
+
+def _mentioned_song_blocks(
+    session: Session,
+    user: AuthenticatedUser,
+    current_song: Song | None,
+    mentioned_song_ids: list[str],
+) -> list[TurnContextBlock]:
     current_id = current_song.id if current_song is not None else None
-    extra_songs = []
-    for song_id in _unique_ids(mentioned_song_ids):
-        if song_id == current_id:
-            continue
-        extra_songs.append(check_song_access(session, song_id, user))
-    if extra_songs:
-        body = "\n\n".join(_format_current_song(song) for song in extra_songs)
-        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_SONGS, body))
+    songs = [
+        check_song_access(session, song_id, user)
+        for song_id in _unique_ids(mentioned_song_ids)
+        if song_id != current_id
+    ]
+    if not songs:
+        return []
+    body = "\n\n".join(_format_current_song(song) for song in songs)
+    return [TurnContextBlock(TURN_BLOCK_MENTIONED_SONGS, body)]
 
-    if mentioned_album_id is not None:
-        if current_song is None or mentioned_album_id != current_song.album_id:
-            raise HTTPException(404, "Album not found")
-        album = get_album(session, mentioned_album_id)
-        check_album_access(album, user)
-        tracks = list_songs(
-            session, album_id=album.id, user_id=owner_filter(user), light=True,
-        )
-        track_blocks = [_format_current_song(song) for song in tracks]
-        album_body = (
-            f"id: {album.id}\n"
-            f"title: {album.title}\n"
-            "tracks:\n"
-            + "\n\n".join(track_blocks)
-        )
-        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_ALBUM, album_body))
 
+def _mentioned_album_block(
+    session: Session,
+    user: AuthenticatedUser,
+    current_song: Song | None,
+    mentioned_album_id: str | None,
+) -> TurnContextBlock | None:
+    if mentioned_album_id is None:
+        return None
+    if current_song is None or mentioned_album_id != current_song.album_id:
+        raise HTTPException(404, "Album not found")
+    album = get_album(session, mentioned_album_id)
+    check_album_access(album, user)
+    tracks = list_songs(
+        session, album_id=album.id, user_id=owner_filter(user), light=True,
+    )
+    body = f"id: {album.id}\n" f"title: {album.title}\ntracks:\n"
+    return TurnContextBlock(
+        TURN_BLOCK_MENTIONED_ALBUM,
+        body + "\n\n".join(_format_current_song(song) for song in tracks),
+    )
+
+
+def _mentioned_version_block(
+    session: Session,
+    current_song: Song | None,
+    mentioned_version_ids: list[str],
+) -> TurnContextBlock | None:
     version_ids = _unique_ids(mentioned_version_ids)
-    if version_ids:
-        if current_song is None:
-            raise HTTPException(404, "Version not found")
-        versions = []
-        for version_id in version_ids:
-            version = get_version(session, version_id, current_song.id)
-            if version is None:
-                raise HTTPException(404, "Version not found")
-            versions.append(version)
-        body = "\n\n".join(
-            _format_version(version, current_song) for version in versions
-        )
-        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body))
-    return blocks
+    if not version_ids:
+        return None
+    if current_song is None:
+        raise HTTPException(404, "Version not found")
+    versions = [get_version(session, version_id, current_song.id) for version_id in version_ids]
+    if any(version is None for version in versions):
+        raise HTTPException(404, "Version not found")
+    body = "\n\n".join(_format_version(version, current_song) for version in versions)
+    return TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body)
 
 
 def _generation_is_playable(generation: Generation) -> bool:
