@@ -47,16 +47,16 @@ HOME_DIR=""
 CREDENTIALS_DIR=""
 IS_ARGUMENTLESS=0
 
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
     IS_ARGUMENTLESS=1
 fi
 
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
-        --mirror-dir) [ $# -ge 2 ] || { echo "ERROR: --mirror-dir needs a directory." >&2; exit 2; }
+        --mirror-dir) [[ $# -ge 2 ]] || { echo "ERROR: --mirror-dir needs a directory." >&2; exit 2; }
                       CREDENTIALS_DIR="$2"; shift 2 ;;
         --mirror-dir=*) CREDENTIALS_DIR="${1#--mirror-dir=}"; shift ;;
-        --home) [ $# -ge 2 ] || { echo "ERROR: --home needs a directory." >&2; exit 2; }
+        --home) [[ $# -ge 2 ]] || { echo "ERROR: --home needs a directory." >&2; exit 2; }
                 HOME_DIR="$2"; shift 2 ;;
         --home=*) HOME_DIR="${1#--home=}"; shift ;;
         *) echo "ERROR: unknown argument '$1'." >&2
@@ -66,11 +66,11 @@ while [ $# -gt 0 ]; do
 done
 
 : "${HOME_DIR:=$(owner_home)}"
-if [ -z "$HOME_DIR" ]; then
+if [[ -z "$HOME_DIR" ]]; then
     echo "ERROR: could not resolve the stack owner's home directory." >&2
     exit 2
 fi
-if [ -z "$CREDENTIALS_DIR" ]; then
+if [[ -z "$CREDENTIALS_DIR" ]]; then
     CREDENTIALS_DIR="$(resolve_mirror_dir "$PROJECT_ROOT" "$HOME_DIR")" || exit 2
 fi
 
@@ -89,19 +89,19 @@ problem() {
 
 check_binary() {
     local label="$1" path="$2" environment_name="$3"
-    if [ ! -e "$path" ]; then
+    if [[ ! -e "$path" ]]; then
         problem "$label CLI '$path' is missing. Install the CLI, or point" \
             "$environment_name at where it really lives."
         return
     fi
     local resolved
     resolved="$(readlink -f "$path")"
-    if [ ! -f "$resolved" ]; then
+    if [[ ! -f "$resolved" ]]; then
         problem "$label CLI '$path' resolves to '$resolved', which is not a" \
             "regular file."
         return
     fi
-    if [ ! -x "$resolved" ]; then
+    if [[ ! -x "$resolved" ]]; then
         problem "$label CLI '$resolved' is not executable."
         return
     fi
@@ -110,7 +110,7 @@ check_binary() {
 
 check_codex_resources() {
     local path="$1" environment_name="$2"
-    if [ ! -d "$path" ]; then
+    if [[ ! -d "$path" ]]; then
         problem "Codex resources '$path' are missing or not a directory. Install Codex, or point" \
             "$environment_name at its resource directory."
         return
@@ -145,7 +145,7 @@ check_mirror_is_running() {
     # nothing about currency if the thing that rewrites it has been erroring
     # out since yesterday.
     _unit_has_not_failed "$MIRROR_SERVICE_UNIT" || return
-    if [ "$IS_ARGUMENTLESS" = "1" ]; then
+    if [[ "$IS_ARGUMENTLESS" = "1" ]]; then
         check_frozen_mirror_dir || return
     fi
     echo "ok: the mirror service, its login watch and its timer are all live"
@@ -157,7 +157,7 @@ check_frozen_mirror_dir() {
     local line value index=0 frozen_dir="" frozen_count=0
     local -a words
 
-    if [ ! -r "$unit" ]; then
+    if [[ ! -r "$unit" ]]; then
         problem "could not read $unit to verify its frozen --mirror-dir. Spiegel-Installer erneut ausführen."
         return 1
     fi
@@ -169,9 +169,9 @@ check_frozen_mirror_dir() {
         esac
         read -r -a words <<< "${line#ExecStart=}"
         for ((index = 0; index < ${#words[@]}; index += 1)); do
-            [ "${words[$index]}" = "--mirror-dir" ] || continue
+            [[ "${words[$index]}" = "--mirror-dir" ]] || continue
             frozen_count=$((frozen_count + 1))
-            if [ "$index" -lt $((${#words[@]} - 1)) ]; then
+            if [[ "$index" -lt $((${#words[@]} - 1)) ]]; then
                 value="${words[$((index + 1))]}"
             else
                 value=""
@@ -180,11 +180,11 @@ check_frozen_mirror_dir() {
         done
     done < "$unit"
 
-    if [ "$frozen_count" -ne 1 ] || [ -z "$frozen_dir" ]; then
+    if [[ "$frozen_count" -ne 1 ]] || [[ -z "$frozen_dir" ]]; then
         problem "$unit has no unique frozen --mirror-dir. Spiegel-Installer erneut ausführen."
         return 1
     fi
-    if [ "$frozen_dir" != "$CREDENTIALS_DIR" ]; then
+    if [[ "$frozen_dir" != "$CREDENTIALS_DIR" ]]; then
         problem "the mirror service freezes --mirror-dir '$frozen_dir', but this preflight resolves '$CREDENTIALS_DIR'. Spiegel-Installer erneut ausführen."
         return 1
     fi
@@ -201,7 +201,7 @@ _unit_has_not_failed() {
 
 _unit_is_installed_and_enabled() {
     local unit="$1"
-    if [ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]; then
+    if [[ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]]; then
         problem "$unit is not installed. Nothing keeps the mirrored logins" \
             "current. Run: sudo ./scripts/install-cli-credentials-mirror.sh"
         return 1
@@ -240,7 +240,7 @@ check_binary codex "$CODEX_CLI" SONGMAKER_CODEX_CLI
 check_binary codex-code-mode-host "$CODEX_CODE_MODE_HOST" SONGMAKER_CODEX_CODE_MODE_HOST
 check_codex_resources "$CODEX_RESOURCES" SONGMAKER_CODEX_RESOURCES
 
-if [ "$problems" -gt 0 ]; then
+if [[ "$problems" -gt 0 ]]; then
     echo >&2
     echo "docker compose would either refuse to start or mount something the" >&2
     echo "CLIs cannot use — see docs/security.md, \"Agent-CLI Mounts\"." >&2

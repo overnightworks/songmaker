@@ -30,18 +30,18 @@ export function parseRangeHeader(rangeHeader: string, totalLength: number): Byte
 
 	if (!startStr) {
 		// Suffix range: bytes=-N → last N bytes
-		const suffixLength = parseInt(endStr, 10);
+		const suffixLength = Number.parseInt(endStr, 10);
 		if (Number.isNaN(suffixLength) || suffixLength <= 0) return null;
 		start = Math.max(0, totalLength - suffixLength);
 		end = totalLength - 1;
 	} else if (!endStr) {
 		// Open range: bytes=N-
-		start = parseInt(startStr, 10);
+		start = Number.parseInt(startStr, 10);
 		if (Number.isNaN(start)) return null;
 		end = totalLength - 1;
 	} else {
-		start = parseInt(startStr, 10);
-		end = parseInt(endStr, 10);
+		start = Number.parseInt(startStr, 10);
+		end = Number.parseInt(endStr, 10);
 		if (Number.isNaN(start) || Number.isNaN(end)) return null;
 		if (start > end) return null;
 		end = Math.min(end, totalLength - 1);

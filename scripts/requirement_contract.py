@@ -18,15 +18,15 @@ REGISTRY_LOCATION = REQUIREMENTS_DIRECTORY / "revisions.toml"
 ACCEPTANCE_LOCATION = Path("docs/acceptance/acceptance.toml")
 PRODUCT_LOCATION = Path("docs/PRODUCT.md")
 DOCUMENT_NAME = re.compile(r"^(?P<document>\d{4})-.+\.md$")
-WITNESS_NAME = re.compile(r"^(?P<comment>[1-9][0-9]*)\.json$")
-REQUIREMENT_IDENTIFIER = re.compile(r"REQ-[A-Z0-9]+-[0-9]{2}")
+WITNESS_NAME = re.compile(r"^(?P<comment>[1-9](?a:\d)*)\.json$")
+REQUIREMENT_IDENTIFIER = re.compile(r"REQ-[A-Z0-9]+-(?a:\d{2})")
 REQUIREMENT_HEADING = re.compile(
-    r"### (?P<identifier>REQ-[A-Z0-9]+-[0-9]{2}):\s*(?P<sentence>\S.*)"
+    r"### (?P<identifier>REQ-[A-Z0-9]+-(?a:\d{2})):\s*(?P<sentence>\S.*)"
 )
 SOURCE_LINE = re.compile(r"Quelle: (?:OPERATOR|DESK) — \S.*")
-ACCEPTANCE_IDENTIFIER = re.compile(r"ACC-[A-Z0-9]+-[0-9]{2}")
+ACCEPTANCE_IDENTIFIER = re.compile(r"ACC-[A-Z0-9]+-(?a:\d{2})")
 DIGEST = re.compile(r"[0-9a-f]{64}")
-GITHUB_TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+GITHUB_TIMESTAMP = re.compile(r"(?a:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)")
 GENESIS = "GENESIS"
 REGISTRY_SCHEMA_VERSION = 2
 ACCEPTANCE_SCHEMA_VERSION = 1
