@@ -52,6 +52,13 @@ export interface AddSongToPlaylistRequest {
 	song_id: string;
 }
 
+export interface AdminUserLoraItem {
+	id: string;
+	name: string;
+	owner_username: string;
+	status: string;
+}
+
 export interface AlbumCoverUrls {
 	card: string;
 	detail: string;
