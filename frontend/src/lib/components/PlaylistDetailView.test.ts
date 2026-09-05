@@ -91,6 +91,7 @@ function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem
 		entry_count: 1,
 		is_shared: false,
 		share_slug: null,
+		album_covers: [],
 		created_at: '2026-01-01T00:00:00+00:00',
 		entries: [entry()],
 		...overrides
@@ -111,6 +112,7 @@ function openPlaylistDetail(d: PlaylistDetailItem): void {
 			entry_count: d.entry_count,
 			is_shared: d.is_shared,
 			share_slug: d.share_slug,
+			album_covers: d.album_covers,
 			created_at: d.created_at
 		}
 	]);
@@ -435,6 +437,7 @@ function addPlaylistToList(item: { id: string; title: string; entry_count: numbe
 			entry_count: item.entry_count,
 			is_shared: false,
 			share_slug: null,
+			album_covers: [],
 			created_at: '2026-01-01T00:00:00+00:00'
 		}
 	]);

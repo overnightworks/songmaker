@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import slugify
@@ -141,6 +143,126 @@ def test_create_and_list_playlists(seeded_session: Session) -> None:
     playlists = list_playlists(seeded_session, _DEFAULT_USER_ID)
     assert len(playlists) == 2
     assert {p.title for p in playlists} == {"Chill", "My Mix"}
+
+
+def _add_album_generation(
+    session: Session,
+    *,
+    album_id: str,
+    song_id: str,
+    generation_id: str,
+    cover_key: str | None,
+) -> None:
+    session.add(Album(
+        id=album_id,
+        title=album_id,
+        artist="Artist",
+        created_by=_DEFAULT_USER_ID,
+        cover_key=cover_key,
+    ))
+    session.add(Song(id=song_id, title=song_id, album_id=album_id, slug=song_id))
+    session.add(Version(
+        id=f"version-{song_id}", song_id=song_id, version_number=1, lyrics="lyrics",
+    ))
+    session.add(Generation(
+        id=generation_id,
+        song_id=song_id,
+        version_id=f"version-{song_id}",
+        generation_number=1,
+        mp3_path=f"{_DEFAULT_USER_ID}/{generation_id}.mp3",
+    ))
+
+
+def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_plus_one(
+    seeded_session: Session,
+) -> None:
+    seeded_session.query(Album).filter_by(id="a1").update({"cover_key": "one.png"})
+    _add_album_generation(
+        seeded_session,
+        album_id="a2",
+        song_id="s3",
+        generation_id="g4",
+        cover_key="two.png",
+    )
+    _add_album_generation(
+        seeded_session,
+        album_id="a3",
+        song_id="s4",
+        generation_id="g5",
+        cover_key="three.png",
+    )
+    playlist = _create_playlist(seeded_session, "Covers")
+    seeded_session.add_all([
+        PlaylistEntry(playlist_id=playlist.id, generation_id="g1", position=0),
+        PlaylistEntry(playlist_id=playlist.id, generation_id="g2", position=1),
+        PlaylistEntry(playlist_id=playlist.id, generation_id="g4", position=2),
+        PlaylistEntry(playlist_id=playlist.id, generation_id="g5", position=3),
+        PlaylistEntry(playlist_id=playlist.id, generation_id="g1", position=4),
+    ])
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    queries: list[str] = []
+
+    def record_query(conn, cursor, statement, parameters, context, executemany) -> None:
+        queries.append(statement)
+
+    engine = seeded_session.get_bind()
+    handle: Callable = record_query
+    event.listen(engine, "before_cursor_execute", handle)
+    try:
+        playlists = list_playlists(seeded_session, _DEFAULT_USER_ID)
+        response = next(item for item in playlists if item.id == playlist.id)
+        from songmaker_cli.api_models.playlists import PlaylistResponse
+
+        album_covers = PlaylistResponse.from_orm(response).album_covers
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert [cover.card for cover in album_covers] == [
+        "/api/albums/a1/cover?variant=card&v=one.png",
+        "/api/albums/a2/cover?variant=card&v=two.png",
+        "/api/albums/a3/cover?variant=card&v=three.png",
+    ]
+    assert len(queries) == 1, (
+        "expected one joined playlist query including entry album covers, "
+        f"got {len(queries)}: {queries}"
+    )
+
+
+def test_playlist_response_omits_coverless_albums_and_limits_covers_to_four(
+    seeded_session: Session,
+) -> None:
+    playlist = _create_playlist(seeded_session, "Four covers")
+    generation_ids: list[str] = []
+    for index in range(6):
+        generation_id = f"cover-generation-{index}"
+        generation_ids.append(generation_id)
+        _add_album_generation(
+            seeded_session,
+            album_id=f"cover-album-{index}",
+            song_id=f"cover-song-{index}",
+            generation_id=generation_id,
+            cover_key=None if index == 1 else f"cover-{index}.png",
+        )
+    seeded_session.flush()
+    seeded_session.add_all([
+        PlaylistEntry(playlist_id=playlist.id, generation_id=generation_id, position=index)
+        for index, generation_id in enumerate(generation_ids)
+    ])
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert loaded is not None
+    from songmaker_cli.api_models.playlists import PlaylistResponse
+
+    album_covers = PlaylistResponse.from_orm(loaded).album_covers
+    assert [cover.card for cover in album_covers] == [
+        "/api/albums/cover-album-0/cover?variant=card&v=cover-0.png",
+        "/api/albums/cover-album-2/cover?variant=card&v=cover-2.png",
+        "/api/albums/cover-album-3/cover?variant=card&v=cover-3.png",
+        "/api/albums/cover-album-4/cover?variant=card&v=cover-4.png",
+    ]
 
 
 def test_get_playlist_with_entries(seeded_session: Session) -> None:
@@ -375,6 +497,7 @@ def test_api_create_and_list_playlists(client: TestClient) -> None:
     assert resp.status_code == 200
     assert len(resp.json()) == 1
     assert resp.json()[0]["slug"] == "my-mix"
+    assert resp.json()[0]["album_covers"] == []
 
 
 def test_api_create_playlist_dedupes_a_colliding_title(client: TestClient) -> None:

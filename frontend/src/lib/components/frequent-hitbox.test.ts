@@ -396,6 +396,7 @@ function playlistDetail(): PlaylistDetailItem {
 		entry_count: 3,
 		is_shared: false,
 		share_slug: null,
+		album_covers: [],
 		created_at: '2026-01-01T00:00:00+00:00',
 		entries: [
 			playlistEntry({ id: 'e1', position: 0, song_title: 'First Track' }),
