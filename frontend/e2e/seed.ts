@@ -33,7 +33,6 @@ const ALBUM_ARTIST = 'E2E Ensemble';
 // Fixed titles: only one album is ever open at a time, so they stay unique on
 // screen even when a local re-run seeds a second album.
 const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
-const PLAYLIST_SONG_TITLE = 'After Hours';
 // The album and the playlist are listed side by side with everything a
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
@@ -316,10 +315,10 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	const songIdByTitle = new Map<string, string>();
 	const takeBySongTitle = new Map<string, string>();
-	async function seedPlayableSong(albumId: string, title: string): Promise<void> {
+	for (const title of SONG_TITLES) {
 		const song = await seed.postJson<CreatedResource>('/api/songs', {
 			title,
-			album_id: albumId,
+			album_id: album.id,
 			lyrics: `${title} — seeded lyrics`,
 			prompt: 'calm test tone'
 		});
@@ -329,12 +328,11 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		songIdByTitle.set(title, song.id);
 		takeBySongTitle.set(title, take.id);
 	}
-	for (const title of SONG_TITLES) await seedPlayableSong(album.id, title);
 
 	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
-	// Keep the mobile Continue target out of the desktop playlist flow: moving
-	// and playing that playlist must not establish the next shell's precondition.
-	const playlistSongTitles = [PLAYLIST_SONG_TITLE, desktopContinueSongTitle];
+	// Desktop moves and plays Closing Time, leaving the mobile Continue target
+	// untouched for the next project in the full serial suite.
+	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
 	const pickedSongId = songIdByTitle.get(pickedSongTitle);
 	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
 	const continueReorderSongs = {
@@ -358,8 +356,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 			prompt: 'calm test tone'
 		});
 	}
-	await seedPlayableSong(secondAlbum.id, PLAYLIST_SONG_TITLE);
-
 	const kineticStripAlbum = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${KINETIC_STRIP_ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST

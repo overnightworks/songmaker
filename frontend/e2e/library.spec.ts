@@ -330,12 +330,12 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		]);
 
 		await entryRows
-			.first()
-			.getByRole('button', { name: nameStartingWith(secondPlaylistSong) })
+			.last()
+			.getByRole('button', { name: nameStartingWith(firstPlaylistSong) })
 			.click();
-		await expectTakeShownInNowPlaying(page, shell, secondPlaylistSong);
+		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSong);
 		await expect(
-			shellTransport(page, shell, secondPlaylistSong).getByRole('button', {
+			shellTransport(page, shell, firstPlaylistSong).getByRole('button', {
 				name: TRANSPORT_PAUSE_LABEL,
 				exact: true
 			})
