@@ -91,16 +91,22 @@ def score_text_accuracy(
     )
 
 
-_VOCALIZATION_PATTERN = re.compile(
-    r"^(?:oh|ah|la|na|da|hey|yeah|o{2,}h?|hm+|m{2,}|wo+h?|eh)[\s,]*$",
-    re.IGNORECASE,
-)
+_VOCALIZATION_WORDS = frozenset({
+    "oh", "ah", "la", "na", "da", "hey", "yeah", "eh",
+})
+_REPEATED_VOCALIZATION_PATTERN = re.compile(r"^(?:o{2,}h?|hm+|m{2,}|wo+h?)$")
+
+
+def _is_vocalization_word(word: str) -> bool:
+    return word in _VOCALIZATION_WORDS or bool(
+        _REPEATED_VOCALIZATION_PATTERN.fullmatch(word)
+    )
 
 
 def _is_vocalization(line: str) -> bool:
     """Check if a line is only non-lyric vocalizations (oh, ah, la la, etc.)."""
     words = clean_lyrics(line).split()
-    return all(_VOCALIZATION_PATTERN.match(w) for w in words) if words else True
+    return all(_is_vocalization_word(word) for word in words) if words else True
 
 
 def _word_level_accuracy(
