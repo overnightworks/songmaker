@@ -5,19 +5,19 @@ import { get } from 'svelte/store';
 import type { LibraryContinueItem } from '$lib/api/library';
 import { libraryContinueCollapsed } from '$lib/stores/ui';
 
-const fetchLibraryContinue = vi.fn();
+const loadLibraryContinueItems = vi.fn();
 const openAlbum = vi.fn();
 const selectSong = vi.fn();
 
-vi.mock('$lib/api/library', () => ({
-	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
+vi.mock('$lib/stores/libraryData', () => ({
+	loadLibraryContinueItems: (...args: unknown[]) => loadLibraryContinueItems(...args)
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	openAlbum: (...args: unknown[]) => openAlbum(...args),
 	selectSong: (...args: unknown[]) => selectSong(...args)
 }));
 
-import LibraryContinue, { clearLibraryContinueCache } from './LibraryContinue.svelte';
+import LibraryContinue from './LibraryContinue.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -32,8 +32,7 @@ function item(overrides: Partial<LibraryContinueItem> = {}): LibraryContinueItem
 }
 
 beforeEach(() => {
-	clearLibraryContinueCache();
-	fetchLibraryContinue.mockReset();
+	loadLibraryContinueItems.mockReset();
 	openAlbum.mockReset().mockResolvedValue(undefined);
 	selectSong.mockReset().mockResolvedValue(undefined);
 	localStorage.clear();
@@ -60,30 +59,13 @@ async function settle(): Promise<void> {
 }
 
 describe('LibraryContinue', () => {
-	it('shares one request across wall remounts in the same document', async () => {
-		fetchLibraryContinue.mockResolvedValue({ items: [item()] });
-		await render();
-		await settle();
-		const firstMount = mounted.pop();
-		if (!firstMount) throw new Error('Expected the first Continue mount');
-		await unmount(firstMount);
-
-		const target = await render();
-		await settle();
-
-		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
-		expect(target.querySelectorAll('.continue-item')).toHaveLength(1);
-	});
-
 	it('renders at most six tagged items with their cover and title', async () => {
-		fetchLibraryContinue.mockResolvedValue({
-			items: [
-				item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' }),
-				...Array.from({ length: 6 }, (_, index) =>
-					item({ id: `album-${index + 2}`, title: `Album ${index + 2}` })
-				)
-			]
-		});
+		loadLibraryContinueItems.mockResolvedValue([
+			item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' }),
+			...Array.from({ length: 6 }, (_, index) =>
+				item({ id: `album-${index + 2}`, title: `Album ${index + 2}` })
+			)
+		]);
 		const target = await render();
 		await settle();
 
@@ -98,12 +80,10 @@ describe('LibraryContinue', () => {
 	});
 
 	it('opens albums and songs through the navigation store', async () => {
-		fetchLibraryContinue.mockResolvedValue({
-			items: [
-				item(),
-				item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' })
-			]
-		});
+		loadLibraryContinueItems.mockResolvedValue([
+			item(),
+			item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' })
+		]);
 		const target = await render();
 		await settle();
 
@@ -116,32 +96,32 @@ describe('LibraryContinue', () => {
 	});
 
 	it('names loading and empty states honestly', async () => {
-		let resolveRequest: ((value: { items: LibraryContinueItem[] }) => void) | undefined;
-		fetchLibraryContinue.mockImplementationOnce(
+		let resolveRequest: ((value: LibraryContinueItem[]) => void) | undefined;
+		loadLibraryContinueItems.mockImplementationOnce(
 			() => new Promise((resolve) => (resolveRequest = resolve))
 		);
 		const target = await render();
 		expect(target.textContent).toContain('Loading continue items…');
 
-		resolveRequest?.({ items: [] });
+		resolveRequest?.([]);
 		await settle();
 		expect(target.textContent).toContain('Nothing to continue yet.');
 	});
 
 	it('names an error and retries it', async () => {
-		fetchLibraryContinue.mockRejectedValueOnce(new Error('offline'));
+		loadLibraryContinueItems.mockRejectedValueOnce(new Error('offline'));
 		const target = await render();
 		await settle();
 		expect(target.textContent).toContain('Could not load continue items.');
 
-		fetchLibraryContinue.mockResolvedValueOnce({ items: [item()] });
+		loadLibraryContinueItems.mockResolvedValueOnce([item()]);
 		target.querySelector<HTMLButtonElement>('.continue-retry')?.click();
 		await settle();
 		expect(target.querySelectorAll('.continue-item')).toHaveLength(1);
 	});
 
 	it('collapses and restores the browser preference', async () => {
-		fetchLibraryContinue.mockResolvedValue({ items: [item()] });
+		loadLibraryContinueItems.mockResolvedValue([item()]);
 		const target = await render();
 		await settle();
 

@@ -21,16 +21,23 @@ vi.mock('$lib/api/client', () => ({
 	})
 }));
 
+vi.mock('$lib/api/library', () => ({
+	fetchLibraryContinue: vi.fn()
+}));
+
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
+import { fetchLibraryContinue } from '$lib/api/library';
 import {
 	albumList,
 	albumSongsLoad,
 	allAlbumsLoad,
 	cancelAlbumSongLoads,
 	ensureAllAlbumsLoaded,
+	loadLibraryContinueItems,
 	loadSongsForAlbum,
 	overlaySongList,
 	replaceSongInList,
+	resetLibraryContinueItems,
 	retainRicherSong,
 	songList,
 	updateGenerationScores,
@@ -112,6 +119,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 }
 
 beforeEach(() => {
+	resetLibraryContinueItems();
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items: [],
 		total: 0,
@@ -125,6 +133,30 @@ beforeEach(() => {
 		offset: 0,
 		limit: 50,
 		has_more: false
+	});
+});
+
+describe('Continue items', () => {
+	it('shares one request until the per-user cache is reset', async () => {
+		vi.mocked(fetchLibraryContinue).mockResolvedValue({ items: [] });
+
+		await loadLibraryContinueItems();
+		await loadLibraryContinueItems();
+
+		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
+		resetLibraryContinueItems();
+		await loadLibraryContinueItems();
+		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
+	});
+
+	it('retries after a failed request', async () => {
+		vi.mocked(fetchLibraryContinue)
+			.mockRejectedValueOnce(new Error('offline'))
+			.mockResolvedValueOnce({ items: [] });
+
+		await expect(loadLibraryContinueItems()).rejects.toThrow('offline');
+		await expect(loadLibraryContinueItems()).resolves.toEqual([]);
+		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
 	});
 });
 

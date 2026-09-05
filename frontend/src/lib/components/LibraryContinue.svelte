@@ -1,25 +1,7 @@
-<script module lang="ts">
-	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
-
-	let continueItemsRequest: Promise<LibraryContinueItem[]> | null = null;
-
-	function requestContinueItems(): Promise<LibraryContinueItem[]> {
-		continueItemsRequest ??= fetchLibraryContinue()
-			.then((response) => response.items)
-			.catch((error: unknown) => {
-				continueItemsRequest = null;
-				throw error;
-			});
-		return continueItemsRequest;
-	}
-
-	export function clearLibraryContinueCache(): void {
-		continueItemsRequest = null;
-	}
-</script>
-
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { LibraryContinueItem } from '$lib/api/library';
+	import { loadLibraryContinueItems } from '$lib/stores/libraryData';
 	import { openAlbum, selectSong } from '$lib/stores/navigation';
 	import {
 		initLibraryContinueCollapsed,
@@ -45,7 +27,7 @@
 	async function loadItems(): Promise<void> {
 		loadState = 'loading';
 		try {
-			items = await requestContinueItems();
+			items = await loadLibraryContinueItems();
 			loadState = 'ready';
 		} catch {
 			loadState = 'error';
