@@ -367,12 +367,24 @@ async def _generate_cover_image(
         abort_signal=abort_signal,
     ))
     try:
-        return await generation
+        return await asyncio.shield(generation)
     except asyncio.CancelledError:
         abort_signal.set()
         with suppress(Exception):
-            await asyncio.shield(generation)
+            await _await_generation_completion(generation)
         raise
+
+
+async def _await_generation_completion(generation: asyncio.Task[bytes]) -> bytes:
+    """Wait for a cancellation-triggered CLI abort despite repeat task cancellation."""
+    current_task = asyncio.current_task()
+    while True:
+        try:
+            return await asyncio.shield(generation)
+        except asyncio.CancelledError:
+            if current_task is None:
+                raise
+            current_task.uncancel()
 
 
 async def _stop_heartbeats(task: asyncio.Task[None]) -> None:
