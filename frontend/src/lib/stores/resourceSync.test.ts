@@ -587,29 +587,77 @@ describe('resource sync owner', () => {
 		expect(get(store).highWaterMark).toBe('4');
 	});
 
-	it('focus revalidation fetches the selected song, not the whole browse page', async () => {
+	it.each([
+		['the selected song', ['s1']],
+		['no selected song', []]
+	])('revalidates %s on visibility', async (_caseName, prioritySongIds) => {
 		const { controller, sources, fetchCalls } = setup({
 			listLoadedSongIds: () => ['s1', 's2', 's3'],
-			listPrioritySongIds: () => ['s1']
+			listPrioritySongIds: () => prioritySongIds
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 		await controller.waitForReady();
+
 		const before = fetchCalls.length;
 		await controller.handleVisibility();
-		expect(fetchCalls.slice(before)).toEqual(['s1']);
+		expect(fetchCalls.slice(before)).toEqual(prioritySongIds);
 	});
 
-	it('does nothing when a live revalidation has no failed or priority song', async () => {
-		const { controller, sources, fetchCalls } = setup({ listPrioritySongIds: () => [] });
+	it('uses the generic error when live recovery has no retained detail', async () => {
+		vi.useFakeTimers();
+		let clearError = false;
+		const { controller, sources, store } = setup({
+			fetchSong: async () => {
+				throw new Error('transient detail');
+			}
+		});
+		const unsubscribe = store.subscribe((state) => {
+			if (clearError && state.status === 'error' && state.error === 'transient detail') {
+				store.set({ ...state, error: null });
+			}
+		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 		await controller.waitForReady();
 
-		await controller.handleVisibility();
-		expect(fetchCalls).toEqual([]);
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store).error).toBe('transient detail');
+		clearError = true;
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+		unsubscribe();
+		vi.useRealTimers();
+	});
+
+	it('uses the generic error when a deferred bootstrap refresh has no retained detail', async () => {
+		let loadedCalls = 0;
+		const { controller, sources, store } = setup({
+			listLoadedSongIds: () => (loadedCalls++ === 0 ? [] : ['s1']),
+			fetchSong: async () => {
+				throw new Error('deferred detail');
+			}
+		});
+		const unsubscribe = store.subscribe((state) => {
+			if (state.status === 'error' && state.error === 'deferred detail') {
+				store.set({ ...state, error: null });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR, ready: false });
+		unsubscribe();
 	});
 
 	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
