@@ -824,7 +824,10 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 		const loadingDeadLink = loadSongContext('s1');
 		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
 		selectedSongId.set('s2');
-		rejectLookup!(new ApiError(404, 'Song not found', '/api/songs/s1'));
+		if (!rejectLookup) {
+			throw new Error('Expected the song lookup to expose its rejection callback');
+		}
+		rejectLookup(new ApiError(404, 'Song not found', '/api/songs/s1'));
 		await expect(loadingDeadLink).resolves.toBeUndefined();
 
 		expect(get(selectedSongId)).toBe('s2');
