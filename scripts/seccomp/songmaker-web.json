@@ -874,7 +874,6 @@
 		{
 			"names": [
 				"unshare",
-				"clone3",
 				"mount",
 				"umount2",
 				"pivot_root",

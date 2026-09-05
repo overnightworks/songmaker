@@ -469,6 +469,9 @@ uses it and preserves the observed inherited mount flags during remounts. Compos
 the profile only to `songmaker-web`, drops every container capability, and
 sets `no-new-privileges:true`.
 
+Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
+`CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
+
 Do not use `apparmor=unconfined` as a Sandbox diagnostic on this Ubuntu host.
 With `kernel.apparmor_restrict_unprivileged_userns=1`, an unconfined process is
 blocked before it can create the required user namespace; that result says

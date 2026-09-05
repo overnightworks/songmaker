@@ -7,7 +7,7 @@
 
 `songmaker-web.json` differs only by one Bubblewrap setup extension. It allows
 the user-namespace and mount syscalls that Docker otherwise gates on
-`CAP_SYS_ADMIN`: `unshare`, namespace-flagged `clone`, `clone3`, `mount`,
+`CAP_SYS_ADMIN`: `unshare`, namespace-flagged `clone`, `mount`,
 `umount2`, `pivot_root`, `setns`, `mount_setattr`, `open_tree`, `move_mount`,
 and `fsopen`. Docker's JSON policy cannot express “clone with any namespace
 flag” as one inverse comparison, so the extension has two rules: the syscall

@@ -10,7 +10,6 @@ SECCOMP_DIRECTORY = REPOSITORY_ROOT / "scripts" / "seccomp"
 
 _BUBBLEWRAP_SYSCALLS = [
     "unshare",
-    "clone3",
     "mount",
     "umount2",
     "pivot_root",
