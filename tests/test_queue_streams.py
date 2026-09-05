@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from songmaker_cli.queue_streams import (
     queue_stream_duration_fits_ffmpeg_timeout,
     queue_stream_ffmpeg_timeout_seconds,
     read_audio_duration,
+    run_ffmpeg_concat,
     track_source_from_generation,
 )
 
@@ -135,6 +137,58 @@ def test_read_audio_duration_is_none_for_a_zero_length_file(
     wav_path = tmp_path / "empty.wav"
     wav_path.write_bytes(make_stereo_wav_bytes(duration=0.0))
     assert read_audio_duration(wav_path) is None
+
+
+@pytest.mark.parametrize(
+    ("ffmpeg_path", "failure", "expected_status", "expected_output_exists"),
+    [
+        pytest.param(None, None, 503, True, id="binary-is-unavailable"),
+        pytest.param(
+            "/usr/bin/ffmpeg",
+            subprocess.TimeoutExpired(["ffmpeg"], timeout=1),
+            504,
+            False,
+            id="build-times-out",
+        ),
+        pytest.param(
+            "/usr/bin/ffmpeg",
+            subprocess.CalledProcessError(
+                1, ["ffmpeg"], stderr="invalid audio",
+            ),
+            422,
+            False,
+            id="build-fails",
+        ),
+    ],
+)
+def test_run_ffmpeg_concat_maps_build_failures_to_public_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ffmpeg_path: str | None,
+    failure: Exception | None,
+    expected_status: int,
+    expected_output_exists: bool,
+) -> None:
+    """Queue builders distinguish unavailable, timed-out, and failed ffmpeg runs."""
+    import songmaker_cli.queue_streams as queue_streams
+
+    concat_path = tmp_path / "input.concat.txt"
+    output_path = tmp_path / "stream.tmp.mp3"
+    concat_path.write_text("file 'input.mp3'\n", encoding="utf-8")
+    output_path.write_bytes(b"partial")
+    monkeypatch.setattr(queue_streams.shutil, "which", lambda _name: ffmpeg_path)
+
+    if failure is not None:
+        def fail_run(*_args, **_kwargs) -> None:
+            raise failure
+
+        monkeypatch.setattr(queue_streams.subprocess, "run", fail_run)
+
+    with pytest.raises(HTTPException) as exc_info:
+        run_ffmpeg_concat(concat_path, output_path)
+
+    assert exc_info.value.status_code == expected_status
+    assert output_path.exists() is expected_output_exists
 
 
 def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
