@@ -284,114 +284,181 @@ async def _pick_and_call_worker(
     on_progress: ProgressCallback,
     on_heartbeat: HeartbeatCallback,
 ) -> TrainLoraTaskResultDTO:
-    import httpx
-
     if handover is None:
         handover = _LoraHoldHandover()
-    headers = _internal_headers()
     submit_transmission_started = False
-    load_options = DispatchOptions()
     task_id: str | None = None
     try:
-        async with httpx.AsyncClient(timeout=load_options.load_model_timeout_seconds) as client:
-            load = await _race_with_renewal(
-                client.post(
-                    f"{worker.base_url}/load_model",
-                    json={"mode": target_mode},
-                    headers=headers,
-                ),
-                renew_task,
-            )
-            load.raise_for_status()
-
-        async def submit_training(client: httpx.AsyncClient):
-            nonlocal submit_transmission_started
-
-            submit_transmission_started = True
-            return await client.post(
-                f"{worker.base_url}/tasks/train_lora",
-                json={**request_payload, "hold_token": hold_token},
-                headers=headers,
-            )
-
-        async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
-            submit = await _race_with_renewal(
-                submit_training(client),
-                renew_task,
-            )
-            submit.raise_for_status()
-            task_id = submit.json()["task_id"]
-            handover.complete = True
+        await _load_lora_training_model(worker, target_mode, renew_task)
+        submit_transmission_started = True
+        task_id = await _submit_lora_training(
+            worker,
+            request_payload,
+            hold_token,
+            renew_task,
+        )
+        handover.complete = True
     except BaseException:
-        if submit_transmission_started:
-            handover.complete = True
-            probe = await _worker_claimed_lora_handover(worker, hold_token)
-            if probe.task_id is not None:
-                task_id = probe.task_id
-            elif probe.claimed is False:
-                handover.complete = False
-        if not handover.complete:
-            await _release_lora_hold(worker, hold_token, best_effort=True)
+        task_id = await _recover_lora_submission(
+            worker,
+            hold_token,
+            handover,
+            task_id,
+            submit_transmission_started,
+        )
         if task_id is None:
             raise
     finally:
         await _stop_lora_renewal(renew_task, suppress_failure=handover.complete)
 
-    last_result: TrainLoraTaskResultDTO | None = None
+    return await _read_lora_training_events(
+        worker,
+        task_id,
+        on_progress,
+        on_heartbeat,
+    )
+
+
+async def _load_lora_training_model(
+    worker: _WorkerHandle,
+    target_mode: str,
+    renew_task: asyncio.Task[None],
+) -> None:
+    import httpx
+
+    options = DispatchOptions()
+    async with httpx.AsyncClient(timeout=options.load_model_timeout_seconds) as client:
+        response = await _race_with_renewal(
+            client.post(
+                f"{worker.base_url}/load_model",
+                json={"mode": target_mode},
+                headers=_internal_headers(),
+            ),
+            renew_task,
+        )
+        response.raise_for_status()
+
+
+async def _submit_lora_training(
+    worker: _WorkerHandle,
+    request_payload: dict,
+    hold_token: str,
+    renew_task: asyncio.Task[None],
+) -> str:
+    import httpx
+
+    async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
+        response = await _race_with_renewal(
+            client.post(
+                f"{worker.base_url}/tasks/train_lora",
+                json={**request_payload, "hold_token": hold_token},
+                headers=_internal_headers(),
+            ),
+            renew_task,
+        )
+        response.raise_for_status()
+        return response.json()["task_id"]
+
+
+async def _recover_lora_submission(
+    worker: _WorkerHandle,
+    hold_token: str,
+    handover: _LoraHoldHandover,
+    task_id: str | None,
+    submit_transmission_started: bool,
+) -> str | None:
+    if submit_transmission_started:
+        handover.complete = True
+        probe = await _worker_claimed_lora_handover(worker, hold_token)
+        if probe.task_id is not None:
+            task_id = probe.task_id
+        elif probe.claimed is False:
+            handover.complete = False
+    if not handover.complete:
+        await _release_lora_hold(worker, hold_token, best_effort=True)
+    return task_id
+
+
+async def _read_lora_training_events(
+    worker: _WorkerHandle,
+    task_id: str,
+    on_progress: ProgressCallback,
+    on_heartbeat: HeartbeatCallback,
+) -> TrainLoraTaskResultDTO:
     async for event_type, data in _iterate_task_events(
         worker,
         task_id,
         options=DispatchOptions(),
     ):
-        done = False
-        if event_type == "progress":
-            fraction = float(data.get("progress", 0.0))
-            current_epoch = data.get("current_epoch")
-            train_epochs = data.get("train_epochs")
-            if (
-                isinstance(current_epoch, bool)
-                or not isinstance(current_epoch, int)
-                or isinstance(train_epochs, bool)
-                or not isinstance(train_epochs, int)
-                or current_epoch < 0
-                or train_epochs < 1
-                or current_epoch > train_epochs
-            ):
-                raise WorkerProtocolError(
-                    "Worker progress event has invalid training epoch fields",
-                )
-            training_started_at = _worker_training_started_at(data.get("training_started_at"))
-            maybe = on_progress(
-                fraction,
-                current_epoch,
-                train_epochs,
-                training_started_at,
-            )
-            if asyncio.iscoroutine(maybe):
-                await maybe
-        elif event_type == "done":
-            if "result" not in data:
-                raise WorkerProtocolError(
-                    "Worker done event missing 'result' field",
-                )
-            try:
-                last_result = TrainLoraTaskResultDTO.model_validate(data["result"])
-            except ValidationError as exc:
-                raise WorkerTaskFailed(
-                    f"Worker returned invalid train_lora result: {exc}",
-                ) from exc
-            done = True
-        elif event_type == "error":
-            raise WorkerTaskFailed(data.get("error") or "train_lora failed")
-        if on_heartbeat is not None:
-            maybe = on_heartbeat()
-            if asyncio.iscoroutine(maybe):
-                await maybe
-        if done:
-            break
-    if last_result is None:
-        raise WorkerTaskFailed("SSE stream ended without done/error event")
-    return last_result
+        result = await _handle_lora_training_event(event_type, data, on_progress)
+        await _await_lora_callback(on_heartbeat)
+        if result is not None:
+            return result
+    raise WorkerTaskFailed("SSE stream ended without done/error event")
+
+
+async def _handle_lora_training_event(
+    event_type: str,
+    data: dict,
+    on_progress: ProgressCallback,
+) -> TrainLoraTaskResultDTO | None:
+    if event_type == "progress":
+        await _report_lora_training_progress(data, on_progress)
+        return None
+    if event_type == "done":
+        return _read_lora_training_result(data)
+    if event_type == "error":
+        raise WorkerTaskFailed(data.get("error") or "train_lora failed")
+    return None
+
+
+async def _report_lora_training_progress(
+    data: dict,
+    on_progress: ProgressCallback,
+) -> None:
+    fraction = float(data.get("progress", 0.0))
+    current_epoch, train_epochs = _read_lora_training_epochs(data)
+    training_started_at = _worker_training_started_at(data.get("training_started_at"))
+    await _await_lora_callback(
+        on_progress,
+        fraction,
+        current_epoch,
+        train_epochs,
+        training_started_at,
+    )
+
+
+def _read_lora_training_epochs(data: dict) -> tuple[int, int]:
+    current_epoch = data.get("current_epoch")
+    train_epochs = data.get("train_epochs")
+    if (
+        isinstance(current_epoch, bool)
+        or not isinstance(current_epoch, int)
+        or isinstance(train_epochs, bool)
+        or not isinstance(train_epochs, int)
+        or current_epoch < 0
+        or train_epochs < 1
+        or current_epoch > train_epochs
+    ):
+        raise WorkerProtocolError("Worker progress event has invalid training epoch fields")
+    return current_epoch, train_epochs
+
+
+def _read_lora_training_result(data: dict) -> TrainLoraTaskResultDTO:
+    if "result" not in data:
+        raise WorkerProtocolError("Worker done event missing 'result' field")
+    try:
+        return TrainLoraTaskResultDTO.model_validate(data["result"])
+    except ValidationError as exc:
+        raise WorkerTaskFailed(f"Worker returned invalid train_lora result: {exc}") from exc
+
+
+async def _await_lora_callback(callback, *args) -> None:
+    if callback is None:
+        return
+    result = callback(*args)
+    if asyncio.iscoroutine(result):
+        await result
 
 
 async def _race_with_renewal(awaitable, renew_task: asyncio.Task[None]):
@@ -705,28 +772,41 @@ def _recover_complete_lora_adapter(
     previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
     tmp_output = _tmp_training_dir(audio_dir, user_id, lora_id)
     if completed_model_mode is not None:
-        if final_dir.exists() and not final_dir.is_dir():
-            raise RuntimeError(f"LoRA adapter path is not a directory: {final_dir}")
-        if previous_dir.exists() and not previous_dir.is_dir():
-            raise RuntimeError(f"Previous LoRA adapter path is not a directory: {previous_dir}")
-        if tmp_output.exists() and not tmp_output.is_dir():
-            raise RuntimeError(f"Temporary LoRA adapter path is not a directory: {tmp_output}")
-        if tmp_output.is_dir():
-            if final_dir.exists():
-                os.rename(final_dir, previous_dir)
-            os.rename(tmp_output, final_dir)
-        if previous_dir.exists():
-            shutil.rmtree(previous_dir)
-        return final_dir.is_dir()
+        return _recover_recorded_lora_adapter(final_dir, previous_dir, tmp_output)
+    return _restore_previous_lora_adapter(final_dir, previous_dir)
+
+
+def _recover_recorded_lora_adapter(
+    final_dir: Path,
+    previous_dir: Path,
+    tmp_output: Path,
+) -> bool:
+    _require_lora_adapter_directory(final_dir, "LoRA adapter")
+    _require_lora_adapter_directory(previous_dir, "Previous LoRA adapter")
+    _require_lora_adapter_directory(tmp_output, "Temporary LoRA adapter")
+    if tmp_output.is_dir():
+        if final_dir.exists():
+            os.rename(final_dir, previous_dir)
+        os.rename(tmp_output, final_dir)
+    if previous_dir.exists():
+        shutil.rmtree(previous_dir)
+    return final_dir.is_dir()
+
+
+def _restore_previous_lora_adapter(final_dir: Path, previous_dir: Path) -> bool:
     if not previous_dir.exists():
         return final_dir.is_dir()
     if final_dir.exists():
-        if not final_dir.is_dir():
-            raise RuntimeError(f"LoRA adapter path is not a directory: {final_dir}")
+        _require_lora_adapter_directory(final_dir, "LoRA adapter")
         shutil.rmtree(previous_dir)
     else:
         os.rename(previous_dir, final_dir)
     return final_dir.is_dir()
+
+
+def _require_lora_adapter_directory(path: Path, description: str) -> None:
+    if path.exists() and not path.is_dir():
+        raise RuntimeError(f"{description} path is not a directory: {path}")
 
 
 def cleanup_failed_lora(
@@ -798,6 +878,16 @@ def log_orphaned_lora_work_dirs(
     with db_factory() as session:
         active_ids = {lora.id for lora in list_active_user_loras(session)}
 
+    orphaned = _find_orphaned_lora_work_dirs(loras_root, active_ids)
+    if orphaned:
+        log.warning(
+            "Found %d orphaned LoRA work dir(s): %s",
+            len(orphaned),
+            ", ".join(str(path) for path in orphaned[:10]),
+        )
+
+
+def _find_orphaned_lora_work_dirs(loras_root: Path, active_ids: set[str]) -> list[Path]:
     orphaned: list[Path] = []
     for user_dir in loras_root.iterdir():
         if not user_dir.is_dir():
@@ -812,13 +902,7 @@ def log_orphaned_lora_work_dirs(
                 work_dir = lora_dir / work_dirname
                 if work_dir.exists():
                     orphaned.append(work_dir)
-
-    if orphaned:
-        log.warning(
-            "Found %d orphaned LoRA work dir(s): %s",
-            len(orphaned),
-            ", ".join(str(path) for path in orphaned[:10]),
-        )
+    return orphaned
 
 
 def _log_failed_lora_cleanup(
@@ -848,66 +932,31 @@ def reconcile_crashed_loras(
         completed_model_mode: str | None = None
         try:
             with db_factory() as session:
-                candidates = list_active_user_loras(
-                    session,
-                    reconcilable_only=True,
-                    excluded_ids=excluded_ids,
-                    limit=1,
-                )
-                if not candidates:
+                lora = _next_reconcilable_lora(session, excluded_ids)
+                if lora is None:
                     return reconciled
-                lora = candidates[0]
                 lora_id = lora.id
                 user_id = lora.user_id
-                completed_mode_record = _read_completed_training_model_mode(
+                completed_model_mode = _completed_model_mode_for_lora(
                     audio_dir,
                     user_id,
                     lora_id,
+                    lora.training_job_id,
                 )
-                if (
-                    completed_mode_record is not None
-                    and completed_mode_record.job_id == lora.training_job_id
-                ):
-                    completed_model_mode = completed_mode_record.model_mode
-                elif completed_mode_record is not None:
-                    log.warning(
-                        "Ignoring stale completed LoRA training mode record for job %s",
-                        completed_mode_record.job_id,
-                    )
                 recovered_adapter = _recover_complete_lora_adapter(
                     audio_dir,
                     user_id,
                     lora_id,
                     completed_model_mode,
                 )
-                if recovered_adapter:
-                    storage_rel = str(
-                        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-                    )
-                    update_user_lora(
-                        session,
-                        lora_id,
-                        status=LoraStatus.READY,
-                        storage_path=storage_rel,
-                        completed_at=datetime.now(timezone.utc),
-                        model_mode=completed_model_mode,
-                        clear_error=True,
-                    )
-                    record_audit(
-                        session,
-                        user_id,
-                        AuditAction.TRAIN_LORA,
-                        ResourceType.LORA,
-                        lora_id,
-                        "ready: recovered complete adapter after interrupted training",
-                    )
-                else:
-                    cleanup_failed_lora(
-                        session=session,
-                        lora_id=lora_id,
-                        user_id=user_id,
-                        error_message=error_message,
-                    )
+                _persist_crashed_lora_reconciliation(
+                    session,
+                    lora_id,
+                    user_id,
+                    completed_model_mode,
+                    recovered_adapter,
+                    error_message,
+                )
                 session.commit()
         except Exception:
             if lora_id is None:
@@ -922,6 +971,72 @@ def reconcile_crashed_loras(
             _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
         if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
             _log_failed_lora_cleanup(db_factory, audio_dir)
+
+
+def _next_reconcilable_lora(session: Session, excluded_ids: set[str]):
+    candidates = list_active_user_loras(
+        session,
+        reconcilable_only=True,
+        excluded_ids=excluded_ids,
+        limit=1,
+    )
+    return candidates[0] if candidates else None
+
+
+def _completed_model_mode_for_lora(
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
+    training_job_id: str | None,
+) -> str | None:
+    completed_mode_record = _read_completed_training_model_mode(audio_dir, user_id, lora_id)
+    if completed_mode_record is None:
+        return None
+    if completed_mode_record.job_id == training_job_id:
+        return completed_mode_record.model_mode
+    log.warning(
+        "Ignoring stale completed LoRA training mode record for job %s",
+        completed_mode_record.job_id,
+    )
+    return None
+
+
+def _persist_crashed_lora_reconciliation(
+    session: Session,
+    lora_id: str,
+    user_id: str,
+    completed_model_mode: str | None,
+    recovered_adapter: bool,
+    error_message: str,
+) -> None:
+    if not recovered_adapter:
+        cleanup_failed_lora(
+            session=session,
+            lora_id=lora_id,
+            user_id=user_id,
+            error_message=error_message,
+        )
+        return
+    storage_rel = str(
+        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
+    )
+    update_user_lora(
+        session,
+        lora_id,
+        status=LoraStatus.READY,
+        storage_path=storage_rel,
+        completed_at=datetime.now(timezone.utc),
+        model_mode=completed_model_mode,
+        clear_error=True,
+    )
+    record_audit(
+        session,
+        user_id,
+        AuditAction.TRAIN_LORA,
+        ResourceType.LORA,
+        lora_id,
+        "ready: recovered complete adapter after interrupted training",
+    )
 
 
 async def run_lora_training_job(
