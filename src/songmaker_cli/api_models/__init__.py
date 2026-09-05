@@ -37,6 +37,8 @@ from songmaker_cli.api_models.jobs import JobResponse
 from songmaker_cli.api_models.library import (
     LIBRARY_SORT_VALUES,
     LibraryAlbumHit,
+    LibraryContinueItem,
+    LibraryContinueResponse,
     LibrarySearchHit,
     LibrarySearchResponse,
     LibrarySongHit,
@@ -280,6 +282,8 @@ __all__ = [
     "LIBRARY_SORT_VALUES",
     "LastFailedGenerationResponse",
     "LibraryAlbumHit",
+    "LibraryContinueItem",
+    "LibraryContinueResponse",
     "LibrarySearchHit",
     "LibrarySearchResponse",
     "LibrarySongHit",
