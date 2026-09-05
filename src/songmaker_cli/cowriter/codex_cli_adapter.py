@@ -63,8 +63,9 @@ from songmaker_cli.cowriter.tool_loop import (
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
-_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE: Final = (
-    "Code Mode is unavailable because code-mode host is disabled."
+# Codex appends version-specific remediation after this stable isolation notice.
+_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX: Final = (
+    "Code Mode is unavailable because code-mode host is disabled"
 )
 _BLOCKED_ITEM_TYPES: Final = frozenset({
     "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
@@ -894,7 +895,7 @@ def _completed_error_item_message(event: dict[str, object]) -> str:
 
 def _is_code_mode_host_disabled_isolation_notice(message: str) -> bool:
     """Recognize the one Codex notice caused by this adapter's isolation."""
-    return message == _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE
+    return message.startswith(_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX)
 
 
 def _item_type(event: dict[str, object]) -> str:

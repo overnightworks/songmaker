@@ -242,15 +242,20 @@ def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monk
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize("fixture_name", (
+    "codex-tool-code-mode-host-disabled.jsonl",
+    "codex-tool-code-mode-host-disabled-without-remediation.jsonl",
+))
 def test_codex_tool_transport_ignores_its_code_mode_host_isolation_notice(
     monkeypatch, caplog,
+    fixture_name: str,
 ) -> None:
     calls: list = []
     monkeypatch.setattr(
         codex_cli_adapter,
         "run_cli_bounded",
         _runner(
-            _fixture_lines("codex-tool-code-mode-host-disabled.jsonl"),
+            _fixture_lines(fixture_name),
             _outcome(),
             calls,
         ),
