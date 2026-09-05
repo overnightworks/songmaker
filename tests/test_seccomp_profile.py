@@ -31,10 +31,10 @@ def test_web_seccomp_profile_only_adds_the_bubblewrap_setup_extension() -> None:
     web_syscalls = web_profile["syscalls"]
 
     assert isinstance(web_syscalls, list)
-    assert {
+    assert docker_default == {
         **web_profile,
         "syscalls": web_syscalls[:-2],
-    } == docker_default
+    }
     assert web_syscalls[-2:] == [
         {
             "names": _BUBBLEWRAP_SYSCALLS,

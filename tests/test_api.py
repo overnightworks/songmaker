@@ -3634,8 +3634,9 @@ def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
             with pytest.raises(HTTPException) as exc_info:
                 check_song_access_including_deleted(object(), "s1", user)
     elif case == "sample-without-parent":
+        sample = SimpleNamespace(user_lora=None)
         with pytest.raises(HTTPException) as exc_info:
-            check_lora_sample_access(SimpleNamespace(user_lora=None), user)
+            check_lora_sample_access(sample, user)
     else:
         generation = SimpleNamespace(
             song=SimpleNamespace(album=SimpleNamespace(created_by="other")),
