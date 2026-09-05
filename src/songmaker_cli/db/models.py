@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -30,7 +31,11 @@ from songmaker_cli.api_models.generation_params import (
     StoredGenerationParams,
 )
 from songmaker_cli.api_models.whisper import stored_whisper_cues
-from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
+from songmaker_cli.constants import (
+    LORA_TRAINING_MODEL_MODES,
+    MODEL_DEFAULT_MODE,
+    JobStatus,
+)
 
 SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220
@@ -611,6 +616,12 @@ class UserLora(Base):
 
     __tablename__ = "user_loras"
     __table_args__ = (
+        CheckConstraint(
+            "model_mode IN (" + ", ".join(
+                repr(mode) for mode in sorted(LORA_TRAINING_MODEL_MODES)
+            ) + ")",
+            name="ck_user_loras_model_mode",
+        ),
         UniqueConstraint("user_id", "slug", name="uq_user_lora_user_slug"),
     )
 
@@ -620,6 +631,9 @@ class UserLora(Base):
     )
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(LORA_SLUG_MAX_LENGTH))
+    model_mode: Mapped[str] = mapped_column(
+        String(10), default=MODEL_DEFAULT_MODE,
+    )
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tensor_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
