@@ -131,28 +131,35 @@ def _keyset_clause(model, sort: str, cursor: LibraryCursor | None, item_type: st
     same_type = item_type == cursor.item_type
     type_after = item_type > cursor.item_type
     if sort == LIBRARY_SORT_TITLE:
-        key = func.lower(model.title)
-        sv = cursor.sort_value
-        if type_after:
-            return or_(key > sv, key == sv)
-        if same_type:
-            return or_(key > sv, and_(key == sv, model.id > cursor.id))
-        return key > sv
-    ts = _parse_sort_datetime(cursor.sort_value)
-    key = model.created_at
+        return _ascending_keyset_clause(
+            func.lower(model.title), cursor.sort_value, model.id, cursor.id, same_type, type_after,
+        )
+    timestamp = _parse_sort_datetime(cursor.sort_value)
     if sort == LIBRARY_SORT_OLDEST:
-        if type_after:
-            return or_(key > ts, key == ts)
-        if same_type:
-            return or_(key > ts, and_(key == ts, model.id > cursor.id))
-        return key > ts
+        return _ascending_keyset_clause(
+            model.created_at, timestamp, model.id, cursor.id, same_type, type_after,
+        )
     if sort == LIBRARY_SORT_NEWEST:
-        if type_after:
-            return or_(key < ts, key == ts)
-        if same_type:
-            return or_(key < ts, and_(key == ts, model.id < cursor.id))
-        return key < ts
+        return _descending_keyset_clause(
+            model.created_at, timestamp, model.id, cursor.id, same_type, type_after,
+        )
     raise ValueError(f"Unknown library sort: {sort}")
+
+
+def _ascending_keyset_clause(key, value, model_id, cursor_id, same_type: bool, type_after: bool):
+    if type_after:
+        return or_(key > value, key == value)
+    if same_type:
+        return or_(key > value, and_(key == value, model_id > cursor_id))
+    return key > value
+
+
+def _descending_keyset_clause(key, value, model_id, cursor_id, same_type: bool, type_after: bool):
+    if type_after:
+        return or_(key < value, key == value)
+    if same_type:
+        return or_(key < value, and_(key == value, model_id < cursor_id))
+    return key < value
 
 
 def _parse_sort_datetime(value: str) -> datetime:
