@@ -29,12 +29,48 @@ beforeEach(() => {
 
 describe('playlist API contract', () => {
 	it.each([
-		['creates a playlist', () => createPlaylist('Night drive'), '/api/playlists', 'POST', { title: 'Night drive' }],
-		['renames a playlist', () => updatePlaylist('p-1', 'Night drive'), '/api/playlists/p-1', 'PUT', { title: 'Night drive' }],
-		['adds a generation', () => addGenerationToPlaylist('p-1', 'g-1'), '/api/playlists/p-1/entries/generation', 'POST', { generation_id: 'g-1' }],
-		['adds a song', () => addSongToPlaylist('p-1', 's-1'), '/api/playlists/p-1/entries/song', 'POST', { song_id: 's-1' }],
-		['adds an album', () => addAlbumToPlaylist('p-1', 'a-1'), '/api/playlists/p-1/entries/album', 'POST', { album_id: 'a-1' }],
-		['reorders an entry', () => reorderPlaylistEntry('p-1', 'e-1', 4), '/api/playlists/p-1/entries/e-1/position', 'PATCH', { new_position: 4 }]
+		[
+			'creates a playlist',
+			() => createPlaylist('Night drive'),
+			'/api/playlists',
+			'POST',
+			{ title: 'Night drive' }
+		],
+		[
+			'renames a playlist',
+			() => updatePlaylist('p-1', 'Night drive'),
+			'/api/playlists/p-1',
+			'PUT',
+			{ title: 'Night drive' }
+		],
+		[
+			'adds a generation',
+			() => addGenerationToPlaylist('p-1', 'g-1'),
+			'/api/playlists/p-1/entries/generation',
+			'POST',
+			{ generation_id: 'g-1' }
+		],
+		[
+			'adds a song',
+			() => addSongToPlaylist('p-1', 's-1'),
+			'/api/playlists/p-1/entries/song',
+			'POST',
+			{ song_id: 's-1' }
+		],
+		[
+			'adds an album',
+			() => addAlbumToPlaylist('p-1', 'a-1'),
+			'/api/playlists/p-1/entries/album',
+			'POST',
+			{ album_id: 'a-1' }
+		],
+		[
+			'reorders an entry',
+			() => reorderPlaylistEntry('p-1', 'e-1', 4),
+			'/api/playlists/p-1/entries/e-1/position',
+			'PATCH',
+			{ new_position: 4 }
+		]
 	])('%s through the matching public request', async (_name, send, url, method, payload) => {
 		await send();
 		const [actualUrl, init] = request();

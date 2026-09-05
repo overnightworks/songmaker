@@ -76,21 +76,42 @@ describe('generation API contract', () => {
 		});
 		let [, init] = request();
 		expect(JSON.parse(String(init.body))).toEqual({
-			src_generation_id: 'gen-1', repainting_start: 12, repainting_end: 24, model: 'acestep',
-			lyrics: '', prompt: 'warmer', seed: 0, version_id: 'version-1', count: 3,
-			repaint_mode: 'replace', repaint_strength: 0.4, repaint_latent_crossfade_frames: 8,
+			src_generation_id: 'gen-1',
+			repainting_start: 12,
+			repainting_end: 24,
+			model: 'acestep',
+			lyrics: '',
+			prompt: 'warmer',
+			seed: 0,
+			version_id: 'version-1',
+			count: 3,
+			repaint_mode: 'replace',
+			repaint_strength: 0.4,
+			repaint_latent_crossfade_frames: 8,
 			repaint_wav_crossfade_sec: 1.2
 		});
 
 		mockFetch.mockClear();
 		await coverGeneration('gen-1', 0.7, {
-			model: 'acestep', lyrics: '', prompt: 'brighter', seed: 0, versionId: 'version-1',
-			count: 2, coverNoiseStrength: 0.25
+			model: 'acestep',
+			lyrics: '',
+			prompt: 'brighter',
+			seed: 0,
+			versionId: 'version-1',
+			count: 2,
+			coverNoiseStrength: 0.25
 		});
 		[, init] = request();
 		expect(JSON.parse(String(init.body))).toEqual({
-			src_generation_id: 'gen-1', audio_cover_strength: 0.7, model: 'acestep', lyrics: '',
-			prompt: 'brighter', seed: 0, version_id: 'version-1', count: 2, cover_noise_strength: 0.25
+			src_generation_id: 'gen-1',
+			audio_cover_strength: 0.7,
+			model: 'acestep',
+			lyrics: '',
+			prompt: 'brighter',
+			seed: 0,
+			version_id: 'version-1',
+			count: 2,
+			cover_noise_strength: 0.25
 		});
 	});
 });

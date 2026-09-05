@@ -61,9 +61,9 @@ describe('album cover suggestions API', () => {
 describe('album API contract', () => {
 	it('serializes paging, search, sorting and archived filters without empty query values', async () => {
 		mockOk({ items: [], total: 0 });
-		await fetchAlbums(10, 25, { q: 'night drive', sort: 'recent', archived: true });
+		await fetchAlbums(10, 25, { q: 'night drive', sort: 'newest', archived: true });
 		expect(mockFetch.mock.calls[0]?.[0]).toBe(
-			'/api/albums?offset=10&limit=25&q=night+drive&sort=recent&archived=true'
+			'/api/albums?offset=10&limit=25&q=night+drive&sort=newest&archived=true'
 		);
 	});
 

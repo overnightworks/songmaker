@@ -279,14 +279,30 @@ describe('saveStream', () => {
 
 		await saveStream(makeManifest(), progress, pin);
 
-		expect(progress).toHaveBeenCalledWith({ downloaded: 4, total: 10, done: false, error: undefined });
-		expect(progress).toHaveBeenCalledWith({ downloaded: 10, total: 10, done: true, error: undefined });
+		expect(progress).toHaveBeenCalledWith({
+			downloaded: 4,
+			total: 10,
+			done: false,
+			error: undefined
+		});
+		expect(progress).toHaveBeenCalledWith({
+			downloaded: 10,
+			total: 10,
+			done: true,
+			error: undefined
+		});
 		expect(pin).toHaveBeenCalledWith('snap-1');
 	});
 
 	it('surfaces the service worker cache error to the caller', async () => {
 		mockController.postMessage.mockImplementation((_msg, ports: MessagePort[]) => {
-			ports[0].postMessage({ type: 'CACHE_PROGRESS', cached: 0, total: null, done: true, error: 'disk full' });
+			ports[0].postMessage({
+				type: 'CACHE_PROGRESS',
+				cached: 0,
+				total: null,
+				done: true,
+				error: 'disk full'
+			});
 		});
 
 		await expect(saveStream(makeManifest())).rejects.toThrow('disk full');
@@ -376,7 +392,10 @@ describe('playlist offline metadata', () => {
 	it.each([
 		['an older version', { ...playlistOfflineMeta('pl-1', 'snap-1'), version: 0 }],
 		['an empty snapshot id', { ...playlistOfflineMeta('pl-1', 'snap-1'), snapshot_id: '' }],
-		['a missing manifest URL', { ...playlistOfflineMeta('pl-1', 'snap-1'), manifest_url: undefined }],
+		[
+			'a missing manifest URL',
+			{ ...playlistOfflineMeta('pl-1', 'snap-1'), manifest_url: undefined }
+		],
 		['a non-object value', 'not metadata']
 	])('does not treat %s as reusable offline playlist metadata', (_name, candidate) => {
 		expect(isOfflinePlaylistStreamMeta(candidate)).toBe(false);

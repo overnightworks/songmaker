@@ -30,10 +30,10 @@ describe('song API adapter', () => {
 			json: () => Promise.resolve({ items: [{ id: 'song-1' }], total: 1 })
 		});
 
-		const result = await fetchSongs('album-1', 10, 25, { q: 'night drive', sort: 'recent' });
+		const result = await fetchSongs('album-1', 10, 25, { q: 'night drive', sort: 'newest' });
 
 		expect(mockFetch.mock.calls[0]?.[0]).toBe(
-			'/api/songs?offset=10&limit=25&album_id=album-1&q=night+drive&sort=recent'
+			'/api/songs?offset=10&limit=25&album_id=album-1&q=night+drive&sort=newest'
 		);
 		expect(result.items[0]?.generations).toEqual([]);
 	});
