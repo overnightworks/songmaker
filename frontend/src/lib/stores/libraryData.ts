@@ -67,7 +67,7 @@ export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadSta
 
 export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	const inflight = albumSongLoads.get(albumId);
-	if (inflight) return inflight;
+	if (inflight !== undefined) return inflight;
 	const generation = albumSongsGeneration;
 	albumSongsLoad.update((state) => ({
 		...state,
@@ -179,7 +179,7 @@ export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 }
 
 function loadAllAlbums(): Promise<boolean> {
-	if (allAlbumsInflight) return allAlbumsInflight;
+	if (allAlbumsInflight !== null) return allAlbumsInflight;
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
 		try {
