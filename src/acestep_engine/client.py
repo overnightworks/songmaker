@@ -65,6 +65,7 @@ _AUDIO_UPLOAD_FIELDS: Final[tuple[tuple[str, str], ...]] = (
     ("src_audio_path", "ctx_audio"),
     ("reference_audio_path", "ref_audio"),
 )
+_JSON_CONTENT_TYPE: Final[str] = "application/json"
 
 
 def _completed_poll_result(entry: TaskQueryEntry, started_at: float) -> _PollResult:
@@ -148,7 +149,7 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
 
 
 ALLOWED_AUDIO_PATH_RE = re.compile(
-    r"^(?:(?:/v1/audio\b)|(?:[a-zA-Z0-9_./ -]+$))"
+    r"^(?:/v1/audio\b|[a-zA-Z0-9_./ -]+$)"
 )
 
 
@@ -396,7 +397,7 @@ class AceStepClient:
             req = Request(
                 f"{self.base_url}/v1/lora/load",
                 data=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": _JSON_CONTENT_TYPE},
                 method="POST",
             )
             with urlopen(req, timeout=30) as resp:
@@ -412,7 +413,7 @@ class AceStepClient:
             req = Request(
                 f"{self.base_url}/v1/lora/unload",
                 data=b"",
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": _JSON_CONTENT_TYPE},
                 method="POST",
             )
             with urlopen(req, timeout=30) as resp:
@@ -464,7 +465,7 @@ class AceStepClient:
         multipart = _encode_multipart_submit_payload(payload)
         if multipart is None:
             data = json.dumps(payload).encode()
-            content_type = "application/json"
+            content_type = _JSON_CONTENT_TYPE
         else:
             data, content_type = multipart
         req = Request(
@@ -546,7 +547,7 @@ class AceStepClient:
         req = Request(
             f"{self.base_url}/query_result",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": _JSON_CONTENT_TYPE},
             method="POST",
         )
         with urlopen(req, timeout=10) as resp:
