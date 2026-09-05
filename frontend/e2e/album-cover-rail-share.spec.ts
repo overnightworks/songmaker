@@ -48,6 +48,16 @@ async function postCover(page: Page, albumId: string): Promise<void> {
 	expect(response.ok(), `Cover upload failed: ${await response.text()}`).toBeTruthy();
 }
 
+async function deleteOwnedAlbum(page: Page, albumId: string): Promise<void> {
+	const response = await page.request.delete(`/api/albums/${albumId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(
+		response.ok(),
+		`DELETE /api/albums/${albumId} failed: ${await response.text()}`
+	).toBeTruthy();
+}
+
 async function openRail(page: Page, isMobile: boolean) {
 	if (isMobile) {
 		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
@@ -70,57 +80,61 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 		title: albumTitle,
 		artist: 'E2E Cover Artist'
 	});
-	const song = await postJson<CreatedResource>(page, '/api/songs', {
-		title: `E2E Cover Song ${marker}`,
-		album_id: album.id,
-		lyrics: 'A cover belongs to this album.',
-		prompt: 'quiet test song'
-	});
-	const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
-		headers: await csrfHeaders(page),
-		multipart: {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-		}
-	});
-	expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
-	const take = (await reimport.json()) as CreatedResource;
-	await postCover(page, album.id);
-
-	const [albumShare, songShare, takeShare] = await Promise.all([
-		postJson<ShareResult>(page, `/api/albums/${album.id}/share`, {}),
-		postJson<ShareResult>(page, `/api/songs/${song.id}/share`, {}),
-		postJson<ShareResult>(page, `/api/generations/${take.id}/share`, {})
-	]);
-
-	await page.goto('/');
-	const wallTile = page.locator('.wall-tile').filter({ hasText: albumTitle });
-	await expect(wallTile.locator('.tile-cover img')).toBeVisible();
-	await expect(wallTile.locator('.tile-cover img')).toHaveAttribute('alt', `Album ${albumTitle}`);
-
-	await page.goto(`/album/${album.id}`);
-	await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
-	const rail = await openRail(page, Boolean(isMobile));
-	const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${RAIL_LIBRARY_LABEL}`) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	const railAlbum = rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('listitem')
-		.filter({ hasText: albumTitle });
-	await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
-
-	const publicContext = await browser.newContext({ storageState: undefined });
 	try {
-		for (const share of [albumShare, songShare, takeShare]) {
-			const publicPage = await publicContext.newPage();
-			await publicPage.goto(share.share_url);
-			await expect(publicPage.locator('.header-cover img')).toBeVisible();
-			await expect(publicPage.locator('.header-cover img')).toHaveAttribute(
-				'alt',
-				`Album ${albumTitle}`
-			);
-			await publicPage.close();
+		const song = await postJson<CreatedResource>(page, '/api/songs', {
+			title: `E2E Cover Song ${marker}`,
+			album_id: album.id,
+			lyrics: 'A cover belongs to this album.',
+			prompt: 'quiet test song'
+		});
+		const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
+			headers: await csrfHeaders(page),
+			multipart: {
+				mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+			}
+		});
+		expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
+		const take = (await reimport.json()) as CreatedResource;
+		await postCover(page, album.id);
+
+		const [albumShare, songShare, takeShare] = await Promise.all([
+			postJson<ShareResult>(page, `/api/albums/${album.id}/share`, {}),
+			postJson<ShareResult>(page, `/api/songs/${song.id}/share`, {}),
+			postJson<ShareResult>(page, `/api/generations/${take.id}/share`, {})
+		]);
+
+		await page.goto('/');
+		const wallTile = page.locator('.wall-tile').filter({ hasText: albumTitle });
+		await expect(wallTile.locator('.tile-cover img')).toBeVisible();
+		await expect(wallTile.locator('.tile-cover img')).toHaveAttribute('alt', `Album ${albumTitle}`);
+
+		await page.goto(`/album/${album.id}`);
+		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
+		const rail = await openRail(page, Boolean(isMobile));
+		const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${RAIL_LIBRARY_LABEL}`) });
+		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+		const railAlbum = rail
+			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+			.getByRole('listitem')
+			.filter({ hasText: albumTitle });
+		await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
+
+		const publicContext = await browser.newContext({ storageState: undefined });
+		try {
+			for (const share of [albumShare, songShare, takeShare]) {
+				const publicPage = await publicContext.newPage();
+				await publicPage.goto(share.share_url);
+				await expect(publicPage.locator('.header-cover img')).toBeVisible();
+				await expect(publicPage.locator('.header-cover img')).toHaveAttribute(
+					'alt',
+					`Album ${albumTitle}`
+				);
+				await publicPage.close();
+			}
+		} finally {
+			await publicContext.close();
 		}
 	} finally {
-		await publicContext.close();
+		await deleteOwnedAlbum(page, album.id);
 	}
 });
