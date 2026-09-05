@@ -82,8 +82,10 @@ CLAUDE_CLI_UNAVAILABLE_DETAIL: Final = "Claude CLI is unavailable. Check server 
 # prompt that begins with `/`, so this flag removes that surface rather than
 # relying on our own prompt always starting with trusted system text.
 _TOOL_ISOLATION_FLAGS: Final = (
-    "--tools", _NO_BUILTIN_TOOLS,
-    "--setting-sources", _NO_SETTING_SOURCES,
+    "--tools",
+    _NO_BUILTIN_TOOLS,
+    "--setting-sources",
+    _NO_SETTING_SOURCES,
     "--strict-mcp-config",
     "--disable-slash-commands",
 )
@@ -96,11 +98,20 @@ _TOOL_ISOLATION_FLAGS: Final = (
 # server's own registration; a dedicated drift test compares the two sets so
 # this list cannot go stale without a test failing.
 _EXPECTED_MCP_TOOL_NAMES: Final[frozenset[str]] = frozenset(
-    f"{COWRITER_TOOL_PREFIX}{name}" for name in (
-        "list_albums", "list_songs", "search_songs", "get_song",
-        "get_version", "get_generation", "create_song",
-        "update_song_lyrics", "update_song_prompt", "update_song_style",
-        "rename_song", "suggest_album_cover",
+    f"{COWRITER_TOOL_PREFIX}{name}"
+    for name in (
+        "list_albums",
+        "list_songs",
+        "search_songs",
+        "get_song",
+        "get_version",
+        "get_generation",
+        "create_song",
+        "update_song_lyrics",
+        "update_song_prompt",
+        "update_song_style",
+        "rename_song",
+        "suggest_album_cover",
     )
 )
 _NO_TOOLS_EXPECTED: Final[frozenset[str]] = frozenset()
@@ -174,6 +185,7 @@ class ClaudeResponse:
 
 class StreamEvent(BaseModel):
     """Base class for all streamed Claude events."""
+
     type: str
 
 
@@ -286,7 +298,8 @@ async def acall_claude_with_mcp(
             raise CliBinaryUnavailableError(CLAUDE_CLI_BINARY_NOT_FOUND_DETAIL)
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(stdin_body.encode()), timeout=timeout_seconds,
+                proc.communicate(stdin_body.encode()),
+                timeout=timeout_seconds,
             )
             _release_zombie_reservation(proc.pid)
         except asyncio.TimeoutError:
@@ -370,7 +383,8 @@ async def acall_claude_with_mcp_stream(
 
 
 async def _consume_stream(
-    proc: asyncio.subprocess.Process, timeout_seconds: int,
+    proc: asyncio.subprocess.Process,
+    timeout_seconds: int,
 ) -> AsyncIterator[StreamEvent]:
     text_chunks: list[str] = []
     final_text: str | None = None
@@ -392,9 +406,6 @@ async def _consume_stream(
             raise UnavailableError(
                 f"Claude CLI timed out after {timeout_seconds}s",
             )
-        except BaseException:
-            raise
-
         await proc.wait()
         stderr_size = await stderr_task
         if proc.returncode != 0:
@@ -416,7 +427,8 @@ async def _consume_stream(
 
 
 async def _iter_lines(
-    stdout: asyncio.StreamReader | None, timeout_seconds: int,
+    stdout: asyncio.StreamReader | None,
+    timeout_seconds: int,
 ) -> AsyncIterator[bytes]:
     if stdout is None:
         return
@@ -425,10 +437,7 @@ async def _iter_lines(
         remaining = deadline - asyncio.get_event_loop().time()
         if remaining <= 0:
             raise asyncio.TimeoutError()
-        try:
-            line = await asyncio.wait_for(stdout.readline(), timeout=remaining)
-        except asyncio.TimeoutError:
-            raise
+        line = await asyncio.wait_for(stdout.readline(), timeout=remaining)
         if not line:
             return
         yield line
@@ -462,7 +471,8 @@ def _safe_json_loads(raw_line: bytes) -> dict | None:
 
 
 def _parse_stream_event(
-    payload: dict, text_chunks: list[str],
+    payload: dict,
+    text_chunks: list[str],
 ) -> StreamEvent | None:
     kind = payload.get("type")
     if kind == "assistant":
@@ -478,7 +488,8 @@ def _parse_stream_event(
 
 
 def _parse_assistant_event(
-    payload: dict, text_chunks: list[str],
+    payload: dict,
+    text_chunks: list[str],
 ) -> StreamEvent | None:
     message = payload.get("message") or {}
     blocks = message.get("content") or []
@@ -504,9 +515,7 @@ def _parse_user_event(payload: dict) -> StreamEvent | None:
         if block.get("type") == "tool_result":
             content = block.get("content")
             if isinstance(content, list):
-                texts = [
-                    c.get("text", "") for c in content if isinstance(c, dict)
-                ]
+                texts = [c.get("text", "") for c in content if isinstance(c, dict)]
                 content_str = "".join(texts)
             elif isinstance(content, str):
                 content_str = content
@@ -587,7 +596,10 @@ def _parse_cli_model_aliases(stdout: str) -> list[str]:
 
 
 def _build_api_kwargs(
-    prompt: str, system: str | None, model: str, max_tokens: int,
+    prompt: str,
+    system: str | None,
+    model: str,
+    max_tokens: int,
     messages: list[dict[str, str]] | None,
 ) -> dict:
     if messages is not None:
@@ -622,13 +634,17 @@ def _flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str
 
 
 def _build_cli_cmd(
-    binary: str, model: str,
+    binary: str,
+    model: str,
 ) -> list[str]:
     """Command for a single-turn completion that needs no tools at all."""
     return [
-        binary, "-p",
-        "--model", model,
-        "--output-format", "json",
+        binary,
+        "-p",
+        "--model",
+        model,
+        "--output-format",
+        "json",
         *_TOOL_ISOLATION_FLAGS,
     ]
 
@@ -685,7 +701,9 @@ def _unlink_quiet(path: str) -> None:
 
 
 def _build_mcp_cli_cmd(
-    binary: str, model: str, config_path: str,
+    binary: str,
+    model: str,
+    config_path: str,
     *,
     stream: bool = False,
 ) -> list[str]:
@@ -698,12 +716,17 @@ def _build_mcp_cli_cmd(
     """
     output_format = "stream-json" if stream else "json"
     cmd = [
-        binary, "-p",
-        "--model", model,
-        "--output-format", output_format,
+        binary,
+        "-p",
+        "--model",
+        model,
+        "--output-format",
+        output_format,
         *_TOOL_ISOLATION_FLAGS,
-        "--allowedTools", MCP_ALLOWED_TOOLS,
-        "--mcp-config", config_path,
+        "--allowedTools",
+        MCP_ALLOWED_TOOLS,
+        "--mcp-config",
+        config_path,
     ]
     if stream:
         cmd.append("--verbose")
@@ -830,7 +853,8 @@ class _ToolSurfaceFailure:
 
     def ttl_seconds(self) -> float:
         return (
-            CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS if self.is_zombie
+            CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS
+            if self.is_zombie
             else CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS
         )
 
@@ -855,6 +879,7 @@ _tool_surface_inflight_async: dict[_ToolSurfaceKey, asyncio.Future[_ToolSurfaceM
 _tool_surface_inflight_sync: dict[
     _ToolSurfaceKey, concurrent.futures.Future[_ToolSurfaceMismatch]
 ] = {}
+
 
 @dataclass(eq=False)
 class _ZombieReservation:
@@ -960,11 +985,14 @@ async def verify_cli_tool_surface() -> str:
     state always reflects this gate's most recent answer rather than a
     value frozen at boot.
     """
+
     async def probe(deadline: float) -> _AnnouncedSurface:
         config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
         try:
             return await _probe_cli_surface_async(
-                build.path, mcp_config_path=config_path, deadline=deadline,
+                build.path,
+                mcp_config_path=config_path,
+                deadline=deadline,
             )
         finally:
             _unlink_quiet(config_path)
@@ -972,7 +1000,10 @@ async def verify_cli_tool_surface() -> str:
     try:
         build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
         result = await _verify_tool_surface_async(
-            build, key, probe, timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+            build,
+            key,
+            probe,
+            timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
         )
     except CliToolSurfaceError:
         _record_tool_surface_health("drift")
@@ -990,11 +1021,16 @@ async def averify_no_builtin_cli_tools() -> str:
 
     async def probe(deadline: float) -> _AnnouncedSurface:
         return await _probe_cli_surface_async(
-            build.path, mcp_config_path=None, deadline=deadline,
+            build.path,
+            mcp_config_path=None,
+            deadline=deadline,
         )
 
     return await _verify_tool_surface_async(
-        build, key, probe, timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+        build,
+        key,
+        probe,
+        timeout_seconds=CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     )
 
 
@@ -1009,11 +1045,15 @@ def verify_no_builtin_cli_tools() -> str:
 
     def probe(probe_deadline: float) -> _AnnouncedSurface:
         return _probe_cli_surface_sync(
-            build.path, mcp_config_path=None, deadline=probe_deadline,
+            build.path,
+            mcp_config_path=None,
+            deadline=probe_deadline,
         )
 
     return _verify_tool_surface_sync(
-        build, key, probe,
+        build,
+        key,
+        probe,
     )
 
 
@@ -1021,9 +1061,11 @@ def verify_no_builtin_cli_tools() -> str:
 
 
 async def _verify_tool_surface_async(
-    build: BinaryBuild, key: _ToolSurfaceKey,
+    build: BinaryBuild,
+    key: _ToolSurfaceKey,
     probe: Callable[[float], Awaitable[_AnnouncedSurface]],
-    *, timeout_seconds: float,
+    *,
+    timeout_seconds: float,
 ) -> str:
     """Single-flight through a published future, never a held lock.
 
@@ -1081,18 +1123,24 @@ async def _run_probe_and_resolve_async(
     except UnavailableError as exc:
         if not isinstance(exc, _ClaudeCliProcessPoolSaturated):
             _record_tool_surface_failure(
-                key, str(exc), is_zombie=isinstance(exc, _ZombieProbeError),
+                key,
+                str(exc),
+                is_zombie=isinstance(exc, _ZombieProbeError),
             )
         _resolve_inflight_async(key, future, exception=exc)
         return
-    except BaseException as exc:
+    except asyncio.CancelledError as exc:
+        _resolve_inflight_async(key, future, exception=_follower_safe_exception(build, exc))
+        raise
+    except Exception as exc:
         _resolve_inflight_async(key, future, exception=_follower_safe_exception(build, exc))
         return
     _resolve_inflight_async(key, future, result=mismatch)
 
 
 async def _await_follower_result_async(
-    build: BinaryBuild, future: asyncio.Future[_ToolSurfaceMismatch],
+    build: BinaryBuild,
+    future: asyncio.Future[_ToolSurfaceMismatch],
     probe_timeout_seconds: float,
 ) -> _ToolSurfaceMismatch:
     follower_budget = _follower_wait_budget_seconds(probe_timeout_seconds)
@@ -1121,8 +1169,11 @@ def _claim_or_join_inflight_async(
 
 
 def _resolve_inflight_async(
-    key: _ToolSurfaceKey, future: asyncio.Future[_ToolSurfaceMismatch],
-    *, result: _ToolSurfaceMismatch | None = None, exception: BaseException | None = None,
+    key: _ToolSurfaceKey,
+    future: asyncio.Future[_ToolSurfaceMismatch],
+    *,
+    result: _ToolSurfaceMismatch | None = None,
+    exception: BaseException | None = None,
 ) -> None:
     with _tool_surface_lock:
         _tool_surface_inflight_async.pop(key, None)
@@ -1147,7 +1198,9 @@ def _resolve_inflight_async(
 
 
 def _verify_tool_surface_sync(
-    build: BinaryBuild, key: _ToolSurfaceKey, probe: Callable[[float], _AnnouncedSurface],
+    build: BinaryBuild,
+    key: _ToolSurfaceKey,
+    probe: Callable[[float], _AnnouncedSurface],
 ) -> str:
     """Sync twin of ``_verify_tool_surface_async`` — a
     ``concurrent.futures.Future`` instead of an ``asyncio.Future``, since
@@ -1180,7 +1233,9 @@ def _verify_tool_surface_sync(
             _record_tool_surface_failure(key, str(exc), is_zombie=True)
         if not is_zombie and not isinstance(exc, _ClaudeCliProcessPoolSaturated):
             _record_tool_surface_failure(
-                key, str(exc), is_zombie=False,
+                key,
+                str(exc),
+                is_zombie=False,
             )
         _resolve_inflight_sync(key, future, exception=exc)
         raise exc
@@ -1204,8 +1259,11 @@ def _claim_or_join_inflight_sync(
 
 
 def _resolve_inflight_sync(
-    key: _ToolSurfaceKey, future: concurrent.futures.Future[_ToolSurfaceMismatch],
-    *, result: _ToolSurfaceMismatch | None = None, exception: BaseException | None = None,
+    key: _ToolSurfaceKey,
+    future: concurrent.futures.Future[_ToolSurfaceMismatch],
+    *,
+    result: _ToolSurfaceMismatch | None = None,
+    exception: BaseException | None = None,
 ) -> None:
     with _tool_surface_lock:
         _tool_surface_inflight_sync.pop(key, None)
@@ -1287,7 +1345,8 @@ def _record_tool_surface_failure(key: _ToolSurfaceKey, message: str, *, is_zombi
 
 
 def _evaluate_tool_surface(
-    key: _ToolSurfaceKey, surface: _AnnouncedSurface,
+    key: _ToolSurfaceKey,
+    surface: _AnnouncedSurface,
 ) -> _ToolSurfaceMismatch:
     """Remembered per (binary build, expectation), not per process: the CLI
     is a bind-mounted install that updates itself under a running container,
@@ -1347,8 +1406,11 @@ def _binary_build(binary: str) -> BinaryBuild:
 
 def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list[str]:
     cmd = [
-        binary, "-p",
-        "--output-format", "stream-json", "--verbose",
+        binary,
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--verbose",
         "--no-session-persistence",
         *_TOOL_ISOLATION_FLAGS,
     ]
@@ -1361,7 +1423,10 @@ def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list
 
 
 async def _probe_cli_surface_async(
-    binary: str, *, mcp_config_path: str | None, deadline: float,
+    binary: str,
+    *,
+    mcp_config_path: str | None,
+    deadline: float,
 ) -> _AnnouncedSurface:
     """What a session built like ``cmd`` announces it can reach.
 
@@ -1384,7 +1449,10 @@ async def _probe_cli_surface_async(
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(
-                _probe_cli_surface_sync, binary, mcp_config_path=mcp_config_path, deadline=deadline,
+                _probe_cli_surface_sync,
+                binary,
+                mcp_config_path=mcp_config_path,
+                deadline=deadline,
             ),
             timeout=remaining + _cleanup_margin_seconds(),
         )
@@ -1396,7 +1464,10 @@ async def _probe_cli_surface_async(
 
 
 def _probe_cli_surface_sync(
-    binary: str, *, mcp_config_path: str | None, deadline: float,
+    binary: str,
+    *,
+    mcp_config_path: str | None,
+    deadline: float,
 ) -> _AnnouncedSurface:
     """Run one tool-surface probe through the shared bounded CLI runner."""
     if deadline <= time.monotonic():
@@ -1453,7 +1524,8 @@ def _probe_cli_surface_sync(
     if outcome.reason is not agent_cli.CliRunReason.COMPLETE:
         raise RuntimeError(f"Unexpected Claude CLI probe outcome: {outcome.reason}")
     return _parse_announced_surface(
-        outcome.stdout.encode(), mcp_attached=mcp_config_path is not None,
+        outcome.stdout.encode(),
+        mcp_attached=mcp_config_path is not None,
     )
 
 
@@ -1521,7 +1593,7 @@ async def _reap_process_group(proc: asyncio.subprocess.Process) -> bool:
     except ProcessLookupError:
         return await _confirm_exit_or_track_zombie(proc)
 
-    if await _bounded_wait(proc, CLAUDE_CLI_SIGTERM_GRACE_SECONDS):
+    if await _wait_for_sigterm_exit(proc):
         _release_zombie_reservation(proc.pid)
         return False
 
@@ -1533,16 +1605,26 @@ async def _reap_process_group(proc: asyncio.subprocess.Process) -> bool:
     return await _confirm_exit_or_track_zombie(proc)
 
 
-async def _bounded_wait(proc: asyncio.subprocess.Process, timeout: float) -> bool:
+async def _wait_for_sigterm_exit(proc: asyncio.subprocess.Process) -> bool:
     try:
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        async with asyncio.timeout(CLAUDE_CLI_SIGTERM_GRACE_SECONDS):
+            await proc.wait()
         return True
-    except asyncio.TimeoutError:
+    except TimeoutError:
+        return False
+
+
+async def _wait_for_zombie_reap(proc: asyncio.subprocess.Process) -> bool:
+    try:
+        async with asyncio.timeout(CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS):
+            await proc.wait()
+        return True
+    except TimeoutError:
         return False
 
 
 async def _confirm_exit_or_track_zombie(proc: asyncio.subprocess.Process) -> bool:
-    if await _bounded_wait(proc, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS):
+    if await _wait_for_zombie_reap(proc):
         _release_zombie_reservation(proc.pid)
         return False
     return _track_zombie_reap_async(proc)
@@ -1551,7 +1633,8 @@ async def _confirm_exit_or_track_zombie(proc: asyncio.subprocess.Process) -> boo
 def _track_zombie_reap_async(proc: asyncio.subprocess.Process) -> bool:
     log.error(
         "Claude CLI process group %d did not exit within %ds of SIGKILL",
-        proc.pid, CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+        proc.pid,
+        CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
     )
     task = asyncio.create_task(_reap_in_background(proc))
     with _zombie_registry_lock:
@@ -1619,7 +1702,8 @@ def _release_zombie_reservation(reservation: _ZombieReservation | int | None) ->
 
 
 async def _spawn_reserved_async_cli_process(
-    *cmd: str, **kwargs: object,
+    *cmd: str,
+    **kwargs: object,
 ) -> asyncio.subprocess.Process:
     reservation = _reserve_zombie_admission()
     if reservation is None:
@@ -1698,21 +1782,24 @@ def _require_claude_binary() -> str:
 def _require_anthropic():
     try:
         import anthropic
+
         return anthropic
     except ImportError:
-        raise UnavailableError(
-            "anthropic package not installed. Run: pip install anthropic"
-        )
+        raise UnavailableError("anthropic package not installed. Run: pip install anthropic")
 
 
 # ── API backends ───────────────────────────────────────────────────
 
 
 def _call_api(
-    prompt: str, api_key: str, system: str | None,
-    model: str, max_tokens: int,
+    prompt: str,
+    api_key: str,
+    system: str | None,
+    model: str,
+    max_tokens: int,
     messages: list[dict[str, str]] | None = None,
-    *, deadline: float | None = None,
+    *,
+    deadline: float | None = None,
 ) -> ClaudeResponse:
     anthropic = _require_anthropic()
     with _client_lock:
@@ -1723,7 +1810,8 @@ def _call_api(
     kwargs = _build_api_kwargs(prompt, system, model, max_tokens, messages)
     request_client = (
         client.with_options(
-            timeout=_remaining_judge_timeout(deadline), max_retries=0,
+            timeout=_remaining_judge_timeout(deadline),
+            max_retries=0,
         )
         if deadline is not None
         else client
@@ -1747,8 +1835,11 @@ def _remaining_judge_timeout(deadline: float) -> float:
 
 
 async def _acall_api(
-    prompt: str, api_key: str, system: str | None,
-    model: str, max_tokens: int,
+    prompt: str,
+    api_key: str,
+    system: str | None,
+    model: str,
+    max_tokens: int,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     anthropic = _require_anthropic()
@@ -1768,9 +1859,12 @@ async def _acall_api(
 
 
 def _call_cli(
-    prompt: str, system: str | None = None, model: str | None = None,
+    prompt: str,
+    system: str | None = None,
+    model: str | None = None,
     messages: list[dict[str, str]] | None = None,
-    *, deadline: float | None = None,
+    *,
+    deadline: float | None = None,
 ) -> ClaudeResponse:
     """The tool-free CLI backend behind both ``call_claude()`` and the
     lyrical-coherence judge (``claude_adapter.call_claude_once``).
@@ -1831,7 +1925,9 @@ def _call_cli(
 
 
 async def _acall_cli(
-    prompt: str, system: str | None = None, model: str | None = None,
+    prompt: str,
+    system: str | None = None,
+    model: str | None = None,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     """Async twin of ``_call_cli`` — the tool-free CLI backend behind
@@ -1860,7 +1956,8 @@ async def _acall_cli(
         )
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(stdin_body.encode()), timeout=120,
+                proc.communicate(stdin_body.encode()),
+                timeout=120,
             )
             _release_zombie_reservation(proc.pid)
         except asyncio.TimeoutError:

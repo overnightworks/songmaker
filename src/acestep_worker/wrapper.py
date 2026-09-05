@@ -216,7 +216,7 @@ class _WorkerRoutes:
         if not hmac.compare_digest(x_internal_token, self._deps.internal_token):
             raise HTTPException(status_code=401, detail="Invalid internal token")
 
-    async def health(self) -> HealthResponse:
+    def health(self) -> HealthResponse:
         if not self._deps.registered:
             raise HTTPException(status_code=503, detail="awaiting control plane registration")
         gpu_health = self._deps.gpu_health_checker()
@@ -282,7 +282,7 @@ class _WorkerRoutes:
         snapshot = self._deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    async def restart(self) -> RestartResponse:
+    def restart(self) -> RestartResponse:
         log.info("Restart requested via /restart endpoint")
         pid = os.getpid()
         asyncio.get_running_loop().call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))

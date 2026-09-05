@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-_DIFFUSION_STEP_PATTERN = re.compile(r"(\d++)/(\d++)\s*+\[")
+_DIFFUSION_STEP_PATTERN = re.compile(r"(\d+)/(\d+)\s*\[")
 
 
 def parse_step_fraction(progress_text: str) -> float | None:
