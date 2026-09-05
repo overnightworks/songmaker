@@ -43,7 +43,9 @@
 		aspect-ratio: 1;
 		flex: 0 0 var(--playlist-cover-size);
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1px;
+		grid-template-rows: repeat(2, minmax(0, 1fr));
+		gap: var(--playlist-cover-gap, 1px);
+		padding: var(--playlist-cover-padding, 0);
 		overflow: hidden;
 		border-radius: 3px;
 		background: var(--surface);
@@ -66,6 +68,7 @@
 
 	.playlist-cover-initials {
 		color: var(--text-subtle);
+		font-family: var(--font-display);
 		font-size: calc(var(--playlist-cover-size) * 0.32);
 		font-weight: 600;
 		line-height: 1;
