@@ -1,4 +1,4 @@
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, GenerationParams, SongItem } from '$lib/api/types';
 import {
 	DIT_BOOL_FIELDS,
 	DIT_NUMBER_FIELDS,
@@ -29,7 +29,8 @@ export interface RecipeGroup {
 	entries: RecipeEntry[];
 }
 
-type ParamEntries = Map<string, unknown>;
+type GenerationParamValue = GenerationParams[keyof GenerationParams] | undefined;
+type ParamEntries = Map<string, GenerationParamValue>;
 
 // Every generation_params key ParamControls exposes an editor for, in the
 // order ParamControls renders them, next to the exact label it edits it
@@ -70,11 +71,11 @@ const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; label
 //     would still bury it away from the number it's a reduction of.
 const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed', 'delivered_batch_size']);
 
-function formatParamValue(key: string, rawValue: unknown): string | null {
+function formatParamValue(key: string, rawValue: GenerationParamValue): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
 	if (typeof rawValue === 'boolean') return rawValue ? 'On' : 'Off';
 	if (key === 'audio_duration' && typeof rawValue === 'number') return formatTime(rawValue);
-	return typeof rawValue === 'object' ? JSON.stringify(rawValue) : String(rawValue);
+	return String(rawValue);
 }
 
 // "cfg_interval_start" -> "Cfg Interval Start" — a generic fallback for a

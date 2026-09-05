@@ -96,7 +96,7 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
     assert f"CODEX_HOME={proof.SANDBOX_CODEX_HOME}" in sandbox
     reference = next(command for command in commands if command[:2] == ("docker", "run"))
     assert f"apparmor={proof.DEFAULT_DOCKER_PROFILE}" in reference
-    assert ("--network", "none") == reference[3:5]
+    assert reference[3:5] == ("--network", "none")
     assert "no-new-privileges:true" in reference
     assert reference[-len(proof._BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS):] == (
         proof._BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS

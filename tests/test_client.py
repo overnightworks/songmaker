@@ -279,9 +279,9 @@ def test_poll_result_failure_caps_the_cause_and_logs_it_in_full(
     assert any(long_cause in record.getMessage() for record in caplog.records)
 
 
-def test_validate_audio_path_valid() -> None:
-    validate_audio_path("/v1/audio?path=test.wav")
-    validate_audio_path("output/song.wav")
+@pytest.mark.parametrize("audio_path", ["/v1/audio?path=test.wav", "output/song.wav"])
+def test_validate_audio_path_valid(audio_path: str) -> None:
+    validate_audio_path(audio_path)
 
 
 def test_validate_audio_path_traversal() -> None:
