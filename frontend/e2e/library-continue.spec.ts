@@ -4,14 +4,15 @@ import { FlowGuard, shellOf, type Shell } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
- * A green run against a clean stack measures this full cold-start flow at
- * 32 requests on desktop and 28 on mobile. The two shells share one IP
- * rate-limit window, so new round trips are a regression to find rather than
- * a budget to raise.
+ * A full green suite run measures 42 requests on desktop and 36 on mobile.
+ * Earlier flows create enough albums to cross the library's pagination
+ * boundary; this flow itself adds no requests for that data. The two shells
+ * share one IP rate-limit window, so new round trips are a regression to find
+ * rather than a budget to raise.
  */
 const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 35,
-	mobile: 35
+	desktop: 45,
+	mobile: 40
 };
 
 test('Continue shows up to six tagged entries and moves a played song to the front after reload', async ({
@@ -21,8 +22,10 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	const shell = shellOf(testInfo);
 	if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 375, height: 844 });
 	const library = readSeededLibrary();
-	const listenedSong =
-		shell === 'mobile' ? library.continueReorderSongTitle : library.pickedSongTitle;
+	const listenedSong = {
+		id: library.continueReorderSongId,
+		title: library.continueReorderSongTitle
+	};
 
 	// AudioPlayer owns a detached Audio object, which headless Chromium does
 	// not advance far enough to emit `playing`. Preserve the real playback
@@ -52,20 +55,27 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	await page.locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
 	const listenReport = page.waitForResponse(
 		(response) =>
-			response.request().method() === 'POST' && /\/api\/songs\/[^/]+\/listen$/.test(response.url())
+			response.request().method() === 'POST' &&
+			new URL(response.url()).pathname === `/api/songs/${listenedSong.id}/listen`
 	);
 	await page
-		.getByRole('button', { name: collectionRowPlayLabel(listenedSong), exact: true })
+		.getByRole('button', { name: collectionRowPlayLabel(listenedSong.title), exact: true })
 		.click();
 	await expect(
 		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 	).toBeVisible();
-	await listenReport;
+	expect((await listenReport).status()).toBe(200);
 
+	const continueAfterListen = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'GET' &&
+			new URL(response.url()).pathname === '/api/library/continue'
+	);
 	await page.goto('/');
+	expect((await continueAfterListen).status()).toBe(200);
 	await page.reload();
 	const playedSong = continueRow.getByRole('button', {
-		name: `Open song ${listenedSong}`,
+		name: `Open song ${listenedSong.title}`,
 		exact: true
 	});
 	await expect(playedSong).toBeVisible();
@@ -75,7 +85,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	expect(after).not.toEqual(before);
 
 	await playedSong.click();
-	await expect(page.getByRole('heading', { name: listenedSong })).toBeVisible();
+	await expect(page.getByRole('heading', { name: listenedSong.title })).toBeVisible();
 
 	console.log(`Continue flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
