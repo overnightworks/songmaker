@@ -161,7 +161,6 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
 
 
 def _optional_submit_payload(config: AceStepConfig) -> dict[str, object]:
-    """Return protocol fields that are sent only for an enabled option."""
     payload: dict[str, object] = {}
     optional_values = {
         "lm_negative_prompt": config.lm_negative_prompt,
@@ -197,18 +196,14 @@ def _repaint_submit_payload(config: AceStepConfig) -> dict[str, object]:
         "repainting_start": config.repainting_start,
         "repainting_end": config.repainting_end,
     }
-    optional_values = {
-        "repaint_mode": config.repaint_mode,
-        "repaint_strength": config.repaint_strength if config.repaint_strength != 0.5 else None,
-        "repaint_latent_crossfade_frames": (
-            config.repaint_latent_crossfade_frames
-            if config.repaint_latent_crossfade_frames > 0 else None
-        ),
-        "repaint_wav_crossfade_sec": (
-            config.repaint_wav_crossfade_sec if config.repaint_wav_crossfade_sec > 0 else None
-        ),
-    }
-    payload.update({key: value for key, value in optional_values.items() if value is not None})
+    if config.repaint_mode:
+        payload["repaint_mode"] = config.repaint_mode
+    if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
+        payload["repaint_strength"] = config.repaint_strength
+    if config.repaint_latent_crossfade_frames > 0:
+        payload["repaint_latent_crossfade_frames"] = config.repaint_latent_crossfade_frames
+    if config.repaint_wav_crossfade_sec > 0:
+        payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
     return payload
 
 

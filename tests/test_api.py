@@ -2183,9 +2183,22 @@ def test_song_chat_http_error_marks_job_failed_without_exception_log(
 def test_song_chat_builds_context(client: TestClient) -> None:
     from songmaker_cli.chat_api import CHAT_ROLE
 
+    with client.app.state.ctx.db() as session:
+        session.add(Song(
+            id="s2", title="Rain", album_id="rock", track_number=2, slug="rain",
+        ))
+        session.add(Version(
+            id="v2", song_id="s2", version_number=1, lyrics="drizzle", prompt="ballad",
+        ))
+        session.commit()
+
     patcher, mock_fn = _mock_acall()
     with patcher:
-        resp = client.post("/api/songs/s1/chat", json={"message": "write a verse"})
+        resp = client.post("/api/songs/s1/chat", json={
+            "message": "write a verse",
+            "mentioned_song_ids": ["s2"],
+            "mentioned_version_ids": ["v1"],
+        })
 
     assert resp.status_code == 200
     system_arg = mock_fn.call_args.kwargs["system"]
@@ -2194,6 +2207,11 @@ def test_song_chat_builds_context(client: TestClient) -> None:
     user_msg = messages_arg[-1]["content"]
     assert "<song_context>" in user_msg
     assert "Thunder" in user_msg
+    assert "Rain" in user_msg
+    assert "--- Referenced versions ---" in user_msg
+    assert "[Version 1]" in user_msg
+    assert "Style: hard rock" in user_msg
+    assert "Lyrics:\nboom" in user_msg
 
 
 def test_song_chat_requires_auth(unauthed_client: TestClient) -> None:
