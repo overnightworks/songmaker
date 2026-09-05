@@ -12,14 +12,22 @@ WORKDIR /app
 # wrapper vs ACE-Step model subprocess). The wrapper image stays small.
 COPY --chown=songmaker pyproject.toml uv.lock ./
 # The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source
-# distribution. Every other dependency must be an already-built wheel.
-RUN uv export --frozen --no-dev --no-emit-project --extra acestep-worker --format requirements.txt -o /tmp/requirements.txt && \
+# distribution. Every other dependency must be an already-built wheel. The
+# dependencies are frozen and hash-verified; nvidia-ml-py3 is the sole locked
+# source distribution.
+RUN uv export --frozen --no-dev --no-emit-project \
+    --extra acestep-worker --format requirements.txt -o /tmp/requirements.txt && \
     uv venv .venv && \
-    uv --no-config pip install --python .venv/bin/python --require-hashes --only-binary :all: --no-binary nvidia-ml-py3 -r /tmp/requirements.txt # NOSONAR Dependencies are frozen and hash-verified; nvidia-ml-py3 is the sole locked source distribution.
+    uv --no-config pip install --python .venv/bin/python \
+    --require-hashes --only-binary :all: --no-binary nvidia-ml-py3 \
+    -r /tmp/requirements.txt # NOSONAR
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
-RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable . # NOSONAR The local project adds no resolved dependencies and cannot change locked versions.
+# The local project adds no resolved dependencies and cannot change locked
+# versions.
+RUN uv pip install --python .venv/bin/python --no-deps --no-build \
+    --editable . # NOSONAR
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
