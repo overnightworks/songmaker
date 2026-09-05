@@ -35,7 +35,9 @@
 	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
 	import {
 		initRailCollapsed,
+		initRailWidth,
 		railCollapsed,
+		railWidth,
 		sidebarOpen,
 		toggleSidebar,
 		initTheme
@@ -137,6 +139,7 @@
 	$effect(() => {
 		initTheme();
 		initRailCollapsed();
+		initRailWidth();
 		initAuth();
 		if (!dev && browser && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/service-worker.js').catch(() => {
@@ -254,7 +257,12 @@
 			>
 		</header>
 		<RailDrawer>
-			<Rail username={me.username} onlogout={handleLogout} showCollapseControl={false} />
+			<Rail
+				username={me.username}
+				onlogout={handleLogout}
+				showCollapseControl={false}
+				showResizeHandle={false}
+			/>
 		</RailDrawer>
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
@@ -265,6 +273,7 @@
 			class="shell-row"
 			class:has-player={hasPrivatePlayer}
 			class:rail-collapsed={$railCollapsed}
+			style:--rail-expanded-width={`${$railWidth}px`}
 		>
 			<Rail username={me.username} onlogout={handleLogout} collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
@@ -345,6 +354,7 @@
 		display: flex;
 		height: 100dvh;
 		overflow: hidden;
+		--rail-width: var(--rail-expanded-width);
 	}
 
 	.shell-row.has-player {

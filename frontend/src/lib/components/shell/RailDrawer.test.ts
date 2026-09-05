@@ -11,8 +11,15 @@ vi.mock('$app/navigation', () => ({
 }));
 
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
-import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import {
+	closeSidebar,
+	railWidth,
+	RAIL_WIDTH_STORAGE_KEY,
+	sidebarOpen,
+	toggleSidebar
+} from '$lib/stores/ui';
 import RailDrawer from './RailDrawer.svelte';
+import railDrawerSource from './RailDrawer.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -32,6 +39,8 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	closeSidebar();
+	railWidth.set(264);
+	localStorage.removeItem(RAIL_WIDTH_STORAGE_KEY);
 	afterNavigateCb = undefined;
 });
 
@@ -51,6 +60,19 @@ describe('RailDrawer', () => {
 		// The drawer is one of several overlays the shell can open, so a flow
 		// scopes to it by name rather than by "the open dialog".
 		expect(panel.getAttribute('aria-label')).toBe(RAIL_DRAWER_LABEL);
+	});
+
+	it('uses the remembered rail width but never exceeds 84vw', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(RailDrawer, { target, props: { children } });
+		railWidth.set(360);
+		toggleSidebar();
+		await tick();
+
+		const panel = requireElement<HTMLElement>(document.body, '.drawer-panel');
+		expect(panel.style.getPropertyValue('--rail-width')).toBe('360px');
+		expect(railDrawerSource).toContain('width: min(var(--rail-width), 84vw)');
 	});
 
 	it('closes on backdrop click and traps focus inside', async () => {
