@@ -56,6 +56,22 @@ def test_voice_capacity_defaults_are_configured() -> None:
     assert settings.max_queued_lora_training_jobs == 2
 
 
+def test_codex_process_caps_default_to_the_single_pool_contract() -> None:
+    settings = Settings(**_required_settings())
+
+    assert settings.codex_cli_max_concurrent_processes == 8
+    assert settings.cover_max_concurrent_runs == 1
+
+
+def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
+    with pytest.raises(ValidationError, match="Cover process cap"):
+        Settings(
+            **_required_settings(),
+            codex_cli_max_concurrent_processes=1,
+            cover_max_concurrent_runs=2,
+        )
+
+
 @pytest.mark.parametrize(
     "setting",
     ["max_user_loras", "max_queued_lora_training_jobs"],

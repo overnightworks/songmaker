@@ -14,7 +14,12 @@ import pytest
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.cowriter import codex_cli_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
+from songmaker_cli.cowriter.errors import (
+    CodexProcessPoolSaturatedError,
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+)
 
 _RECORDED_STREAM = Path(__file__).parent / "fixtures" / "codex_cli_real_stream.jsonl"
 _REDACTED_CODEX_LOGIN = {
@@ -35,6 +40,12 @@ def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror = tmp_path / "auth.json"
     mirror.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(mirror))
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    monkeypatch.setattr(
+        codex_cli_adapter,
+        "get_codex_process_pool",
+        lambda: process_pool,
+    )
     return mirror
 
 
@@ -61,6 +72,8 @@ def _runner(lines: list[bytes], outcome: CliRunOutcome, calls: list) -> object:
             if not kwargs["stdout_line_channel"]._send(line):
                 break
         kwargs["stdout_line_channel"]._close(outcome)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
         return outcome
 
     return run_cli_bounded
@@ -142,6 +155,62 @@ def test_codex_cli_accepts_the_recorded_real_stream_and_returns_one_final(monkey
         AssistantTextEvent(text="OK"),
         FinalEvent(text="OK"),
     ]
+
+
+def test_codex_cli_turn_names_pool_saturation_without_starting_a_runner(monkeypatch) -> None:
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
+    process_pool.reserve(CodexProcessKind.TEXT)
+    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    runner_called = False
+
+    def fake_runner(*_args, **_kwargs):
+        nonlocal runner_called
+        runner_called = True
+        raise AssertionError("a saturated pool must reject before spawning")
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        asyncio.run(_collect())
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED
+    assert not runner_called
+
+
+def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch) -> None:
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
+    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    callbacks: dict[str, object] = {}
+
+    def fake_runner(_command, **kwargs):
+        callbacks.update(kwargs)
+        return CliRunOutcome(
+            started=False,
+            spawn_error=None,
+            returncode=None,
+            stdout="",
+            stderr="",
+            complete=False,
+            became_zombie=False,
+            reason=CliRunReason.DEADLINE_BEFORE_SPAWN,
+        )
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    reservation = process_pool.reserve(CodexProcessKind.TEXT)
+
+    codex_cli_adapter._run_reserved_codex_cli(
+        reservation,
+        ("codex", "exec"),
+        stdin_payload=b"prompt",
+        read="all",
+        deadline=10_000_000,
+    )
+
+    with pytest.raises(CodexProcessPoolSaturatedError):
+        process_pool.reserve(CodexProcessKind.TEXT)
+    callbacks["on_spawned"](41)
+    callbacks["on_reaped"](41, True)
+    assert process_pool.reservation_count() == 0
 
 
 @pytest.mark.parametrize("event_type", sorted(codex_cli_adapter._ITEM_EVENT_TYPES))
@@ -399,6 +468,8 @@ def test_closing_a_codex_stream_requests_runner_cancellation_and_waits_for_reap(
         aborted.set()
         outcome = _outcome(complete=False)
         channel._close(outcome)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
         return outcome
 
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)

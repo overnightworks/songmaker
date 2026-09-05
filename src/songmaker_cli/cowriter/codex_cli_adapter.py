@@ -36,7 +36,13 @@ from songmaker_cli.constants import (
     COVER_PNG_MAGIC,
     COWRITER_CLI_TIMEOUT_SECONDS,
 )
+from songmaker_cli.cowriter.codex_process_pool import (
+    CodexProcessKind,
+    CodexProcessReservation,
+    get_codex_process_pool,
+)
 from songmaker_cli.cowriter.errors import (
+    CodexProcessPoolSaturatedError,
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
@@ -151,8 +157,18 @@ async def stream_codex_cli_turn(
             "cli",
             normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
         ) from exc
+    try:
+        reservation = get_codex_process_pool().reserve(CodexProcessKind.TEXT)
+    except CodexProcessPoolSaturatedError as exc:
+        turn_directory.cleanup()
+        raise ProviderUnavailableError(
+            "codex",
+            "cli",
+            normalize_route_failure(SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED),
+        ) from exc
     runner = asyncio.create_task(asyncio.to_thread(
-        run_cli_bounded,
+        _run_reserved_codex_cli,
+        reservation,
         _build_codex_cli_command(model),
         stdin_payload=prompt,
         read="all",
@@ -275,9 +291,11 @@ def _run_codex_image_cli(
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
     event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    reservation = get_codex_process_pool().reserve(CodexProcessKind.COVER)
 
     def run() -> None:
-        result = run_cli_bounded(
+        result = _run_reserved_codex_cli(
+            reservation,
             _build_codex_image_command(),
             stdin_payload=prompt.encode("utf-8"),
             read="all",
@@ -310,6 +328,39 @@ def _run_codex_image_cli(
         if runner.is_alive():
             channel.request_abort()
             runner.join()
+
+
+def _run_reserved_codex_cli(
+    reservation: CodexProcessReservation,
+    command: tuple[str, ...],
+    **kwargs,
+) -> CliRunOutcome:
+    """Run one already-admitted CLI process through the bounded runner."""
+    process_pool = get_codex_process_pool()
+
+    def on_spawned(process_id: int) -> None:
+        process_pool.bind(reservation, process_id)
+
+    def on_spawn_failed() -> None:
+        process_pool.abandon_unspawned(reservation)
+
+    def on_reaped(process_id: int, _became_zombie: bool) -> None:
+        process_pool.reap(reservation, process_id)
+
+    try:
+        outcome = run_cli_bounded(
+            command,
+            on_spawned=on_spawned,
+            on_spawn_failed=on_spawn_failed,
+            on_reaped=on_reaped,
+            **kwargs,
+        )
+    except BaseException:
+        process_pool.abandon_unspawned(reservation)
+        raise
+    if outcome.reason is CliRunReason.SPAWN_FAILED:
+        process_pool.abandon_unspawned(reservation)
+    return outcome
 
 
 def _copy_codex_login_mirror(codex_home: Path) -> None:
