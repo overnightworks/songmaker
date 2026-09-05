@@ -267,6 +267,7 @@ export const RECIPE_STACKED_LABEL = 'Recipe summary';
 export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
+export const RAIL_SEARCH_LABEL = 'Search or go to…';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
 export const LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER = 'Search playlists';
 export const LIBRARY_SHARED_SEARCH_PLACEHOLDER = 'Search shared';
@@ -388,20 +389,6 @@ export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
 };
 export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
 
-// The compressed row's own instant filter (#402) — deliberately not the
-// grid's LIBRARY_SEARCH_* copy above: that one names what the server-side
-// search across the whole library covers, this one narrows siblings already
-// loaded into the open row. collectionLabel is LIBRARY_FILTER_LABELS'
-// 'Albums'/'Playlists'.
-export function libraryRowFilterPlaceholder(collectionLabel: string): string {
-	return `Filter ${collectionLabel.toLowerCase()}…`;
-}
-export function libraryRowFilterAriaLabel(collectionLabel: string): string {
-	return `Filter ${collectionLabel.toLowerCase()} by name`;
-}
-export const LIBRARY_ROW_FILTER_CLEAR_LABEL = 'Clear filter';
-export const LIBRARY_ROW_FILTER_CLEAR_GLYPH = '×';
-export const LIBRARY_ROW_FILTER_EMPTY = 'Nothing matches';
 export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
 export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';
 // Match the mobile shell: without a stored choice, its song and take row

@@ -225,7 +225,7 @@ describe('LibraryWall filter chips', () => {
 		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
 		await tick();
 		expect(root.textContent).toContain('Night Drive');
-		expect(root.querySelector('.search')).not.toBeNull();
+		expect(root.querySelector('.search')).toBeNull();
 	});
 
 	it('shows an empty state for a filter with nothing in it', async () => {
@@ -573,7 +573,7 @@ describe('LibraryWall shared filter', () => {
 });
 
 describe('LibraryWall toolbar consistency', () => {
-	it('keeps chips, sort, and search in the same order for every filter', async () => {
+	it('keeps search out of the wall for every filter', async () => {
 		playlistList.set([playlist()]);
 		fetchShares.mockResolvedValue({
 			items: [shareItem()],
@@ -588,21 +588,11 @@ describe('LibraryWall toolbar consistency', () => {
 			requireElement<HTMLButtonElement>(root, `#library-filter-${id}`).click();
 			await tick();
 			await tick();
-			const controls = requireElement<HTMLElement>(root, '.wall-controls');
-			const order = Array.from(controls.children).map((child) =>
-				child.matches('.filter-chips')
-					? 'chips'
-					: child.matches('.sort-select')
-						? 'sort'
-						: child.matches('.search')
-							? 'search'
-							: 'other'
-			);
-			expect(order.slice(0, 3), `order for ${id}`).toEqual(['chips', 'sort', 'search']);
+			expect(root.querySelector('.search'), `wall search for ${id}`).toBeNull();
 		}
 	});
 
-	it('filters playlists by title', async () => {
+	it.skip('filters playlists by title', async () => {
 		playlistList.set([
 			playlist({ id: 'p1', title: 'Night Drive' }),
 			playlist({ id: 'p2', title: 'Sunrise' })
@@ -620,7 +610,7 @@ describe('LibraryWall toolbar consistency', () => {
 		expect(root.textContent).not.toContain('Night Drive');
 	});
 
-	it('filters the Shared inventory rows by name', async () => {
+	it.skip('filters the Shared inventory rows by name', async () => {
 		fetchShares.mockResolvedValue({
 			items: [
 				shareItem({ id: 'a-local', title: 'Local Album' }),
@@ -646,7 +636,7 @@ describe('LibraryWall toolbar consistency', () => {
 	});
 });
 
-describe('LibraryWall search', () => {
+describe.skip('LibraryWall search, moved to RailSearch in 2B', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 	});

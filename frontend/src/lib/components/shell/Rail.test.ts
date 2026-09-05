@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
+import { railTreeQuery } from '$lib/stores/filter';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import {
 	buildAlbum as album,
@@ -79,6 +80,7 @@ async function openRailGroup(root: ParentNode, index: number): Promise<void> {
 beforeEach(() => {
 	localStorage.clear();
 	resetLibraryContextForTests();
+	railTreeQuery.set('');
 	albumList.set([]);
 	history.replaceState(null, '', '/');
 });
@@ -86,6 +88,7 @@ beforeEach(() => {
 afterEach(async () => {
 	await cleanup();
 	resetLibraryContextForTests();
+	railTreeQuery.set('');
 	resetPlaylists();
 	vi.unstubAllGlobals();
 });
@@ -105,6 +108,14 @@ describe('Rail', () => {
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
 		expect(target.textContent).toContain('felix');
+	});
+
+	it('renders the only search field directly beneath the brand', async () => {
+		const target = await render();
+		const searchFields = target.querySelectorAll('input[type="search"]');
+		expect(searchFields).toHaveLength(1);
+		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
+		expect(target.querySelector('.rail-top + .rail-search')).not.toBeNull();
 	});
 
 	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {

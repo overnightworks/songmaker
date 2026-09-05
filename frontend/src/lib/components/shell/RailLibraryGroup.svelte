@@ -10,6 +10,7 @@
 		songList
 	} from '$lib/stores/libraryData';
 	import { selectedSongId } from '$lib/stores/player';
+	import { railTreeQuery } from '$lib/stores/filter';
 	import {
 		compareAlbumTracks,
 		openAlbum,
@@ -55,9 +56,20 @@
 	const current = $derived(audioPlayer.current);
 	const playing = $derived(audioPlayer.status === 'playing');
 	const openAlbumId = $derived(collection?.kind === 'album' ? collection.id : null);
+	const query = $derived($railTreeQuery.trim().toLowerCase());
+	const filtering = $derived(query.length > 0);
 	const isAlbumDetail = $derived(surface === 'detail' && openAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadError = $derived($allAlbumsLoad.error);
+	const visibleAlbums = $derived.by(() =>
+		albums.filter((album) => {
+			if (!filtering || album.id === openAlbumId) return true;
+			if (album.title.toLowerCase().includes(query)) return true;
+			return (songsByAlbum.get(album.id) ?? []).some((song) =>
+				song.title.toLowerCase().includes(query)
+			);
+		})
+	);
 
 	// ensureAllAlbumsLoaded is route-independent (#304) -- the rail needs the
 	// complete album list regardless of which library page, or which non-library
@@ -113,6 +125,18 @@
 
 	function isAlbumExpanded(albumId: string): boolean {
 		return expandedAlbumId === albumId;
+	}
+
+	function visibleSongsForAlbum(albumId: string): SongItem[] {
+		const albumSongs = songsByAlbum.get(albumId) ?? [];
+		if (!filtering) return albumSongs;
+		return albumSongs.filter(
+			(song) => song.id === currentSongId || song.title.toLowerCase().includes(query)
+		);
+	}
+
+	function hasMatchingSong(albumId: string): boolean {
+		return filtering && visibleSongsForAlbum(albumId).length > 0;
 	}
 
 	// True once this album's songs are already in songList -- re-expanding an
@@ -186,7 +210,7 @@
 		groupId="rail-library-group"
 		storageKey={LIBRARY_OPEN_STORAGE_KEY}
 		count={albums.length}
-		expandTrigger={isAlbumDetail || loadStatus === 'error'}
+		expandTrigger={isAlbumDetail || loadStatus === 'error' || filtering}
 		{icon}
 	>
 		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
@@ -199,28 +223,30 @@
 				</div>
 			{/if}
 			<ul class="album-list">
-				<li>
-					<button type="button" class={RAIL_ALL_ALBUMS_ITEM_CLASS} onclick={openAllAlbums}>
-						<svg
-							class="caret"
-							width="10"
-							height="10"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="3"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							aria-hidden="true"
-						>
-							<polyline points="9 6 15 12 9 18" />
-						</svg>
-						<span class="row-title">{RAIL_ALL_ALBUMS_LABEL}</span>
-						<span class="row-meta">{albums.length}</span>
-					</button>
-				</li>
-				{#each albums as album (album.id)}
-					{@const expanded = isAlbumExpanded(album.id)}
+				{#if !filtering}
+					<li>
+						<button type="button" class={RAIL_ALL_ALBUMS_ITEM_CLASS} onclick={openAllAlbums}>
+							<svg
+								class="caret"
+								width="10"
+								height="10"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="3"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<polyline points="9 6 15 12 9 18" />
+							</svg>
+							<span class="row-title">{RAIL_ALL_ALBUMS_LABEL}</span>
+							<span class="row-meta">{albums.length}</span>
+						</button>
+					</li>
+				{/if}
+				{#each visibleAlbums as album (album.id)}
+					{@const expanded = isAlbumExpanded(album.id) || hasMatchingSong(album.id)}
 					<li>
 						<button
 							type="button"
@@ -264,7 +290,7 @@
 							<div class="album-songs-content">
 								{#if expanded}
 									<ul>
-										{#each [...(songsByAlbum.get(album.id) ?? [])].sort(compareAlbumTracks) as song (song.id)}
+										{#each [...visibleSongsForAlbum(album.id)].sort(compareAlbumTracks) as song (song.id)}
 											<li>
 												<button
 													type="button"
