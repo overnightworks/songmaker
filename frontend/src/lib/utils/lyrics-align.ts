@@ -235,7 +235,10 @@ function repeatsOfWinner(
 	return repeats;
 }
 
-function candidateBounds(candidates: Candidate[], winner: Candidate): {
+function candidateBounds(
+	candidates: Candidate[],
+	winner: Candidate
+): {
 	earliestStart: number;
 	latestEnd: number;
 } {

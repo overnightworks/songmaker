@@ -85,13 +85,7 @@ function findMatchesEndingAt(
 	return lengths;
 }
 
-function extendMatchBackwards(
-	a: string,
-	b: string,
-	alo: number,
-	blo: number,
-	match: Match
-): void {
+function extendMatchBackwards(a: string, b: string, alo: number, blo: number, match: Match): void {
 	while (match.a > alo && match.b > blo && a[match.a - 1] === b[match.b - 1]) {
 		match.a -= 1;
 		match.b -= 1;
@@ -99,13 +93,7 @@ function extendMatchBackwards(
 	}
 }
 
-function extendMatchForwards(
-	a: string,
-	b: string,
-	ahi: number,
-	bhi: number,
-	match: Match
-): void {
+function extendMatchForwards(a: string, b: string, ahi: number, bhi: number, match: Match): void {
 	while (
 		match.a + match.size < ahi &&
 		match.b + match.size < bhi &&
@@ -132,7 +120,9 @@ function findMatchingBlocks(
 		found.push(match);
 		enqueueMatchGaps(queue, match, alo, ahi, blo, bhi);
 	}
-	return found.sort((left, right) => left.a - right.a || left.b - right.b || left.size - right.size);
+	return found.sort(
+		(left, right) => left.a - right.a || left.b - right.b || left.size - right.size
+	);
 }
 
 function enqueueMatchGaps(
