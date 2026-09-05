@@ -414,41 +414,21 @@ def _run_cli_bounded(
     extra_env: Mapping[str, str] | None,
     unset_env: Collection[str],
 ) -> None:
-    process: subprocess.Popen[bytes] | None = None
-    prompt_file_path: str | None = None
-    outcome: CliRunOutcome | None = None
+    process, prompt_file_path, outcome = _start_bounded_cli(
+        argv,
+        stderr,
+        on_spawn_failed,
+        prompt_file_bytes,
+        prompt_file_arg_index,
+        cwd,
+        extra_env,
+        unset_env,
+    )
     output = _CliOutput(
         bytearray(), bytearray(), complete=False, reason=CliRunReason.IO_ERROR,
     )
     try:
-        try:
-            command, prompt_file_path = _with_private_prompt_file(
-                argv,
-                prompt_file_bytes,
-                prompt_file_arg_index,
-            )
-            process = subprocess.Popen(
-                command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
-                env=_child_env(extra_env, unset_env),
-                start_new_session=True,
-                cwd=cwd,
-            )
-        except BaseException as error:
-            _notify_spawn_failed(on_spawn_failed)
-            outcome = CliRunOutcome(
-                started=False,
-                spawn_error=error,
-                returncode=None,
-                stdout="",
-                stderr="",
-                complete=False,
-                became_zombie=False,
-                reason=CliRunReason.SPAWN_FAILED,
-            )
-        else:
+        if process is not None:
             state.started.set()
             _notify_spawned(on_spawned, process.pid)
             output = _exchange_bounded(
@@ -461,48 +441,110 @@ def _run_cli_bounded(
             )
     finally:
         if process is not None:
-            became_zombie = _reap_process_group(process)
-            if became_zombie and on_reaped is not None:
-                threading.Thread(
-                    target=_reap_in_background,
-                    args=(process, on_reaped),
-                    daemon=True,
-                ).start()
-            else:
-                _notify_reaped(on_reaped, process.pid, became_zombie=False)
-            outcome = CliRunOutcome(
-                started=True,
-                spawn_error=None,
-                returncode=process.returncode,
-                stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
-                stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
-                complete=output.complete,
-                became_zombie=became_zombie,
-                reason=output.reason,
-                io_error=output.io_error,
-            )
-        if prompt_file_path is not None:
-            try:
-                _unlink_prompt_file(prompt_file_path)
-            except OSError as error:
-                if outcome is None:
-                    raise RuntimeError("bounded CLI runner exited without an outcome")
-                outcome = CliRunOutcome(
-                    started=outcome.started,
-                    spawn_error=outcome.spawn_error,
-                    returncode=outcome.returncode,
-                    stdout=outcome.stdout,
-                    stderr=outcome.stderr,
-                    complete=False,
-                    became_zombie=outcome.became_zombie,
-                    reason=CliRunReason.IO_ERROR,
-                    io_error=error,
-                )
+            outcome = _finished_bounded_cli_run(process, output, on_reaped)
+        outcome = _cleanup_bounded_cli_prompt_file(prompt_file_path, outcome)
         if outcome is None:
             raise RuntimeError("bounded CLI runner exited without an outcome")
         _publish_bounded_outcome(state, outcome)
         if stdout_line_channel is not None:
             stdout_line_channel._close(outcome)
+
+
+def _start_bounded_cli(
+    argv: tuple[str, ...],
+    stderr: Literal["capture", "devnull"],
+    on_spawn_failed: Callable[[], None] | None,
+    prompt_file_bytes: bytes | None,
+    prompt_file_arg_index: int | None,
+    cwd: str | None,
+    extra_env: Mapping[str, str] | None,
+    unset_env: Collection[str],
+) -> tuple[subprocess.Popen[bytes] | None, str | None, CliRunOutcome | None]:
+    prompt_file_path: str | None = None
+    try:
+        command, prompt_file_path = _with_private_prompt_file(
+            argv,
+            prompt_file_bytes,
+            prompt_file_arg_index,
+        )
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
+            env=_child_env(extra_env, unset_env),
+            start_new_session=True,
+            cwd=cwd,
+        )
+    except BaseException as error:
+        _notify_spawn_failed(on_spawn_failed)
+        return None, prompt_file_path, _spawn_failure_outcome(error)
+    return process, prompt_file_path, None
+
+
+def _spawn_failure_outcome(error: BaseException) -> CliRunOutcome:
+    return CliRunOutcome(
+        started=False,
+        spawn_error=error,
+        returncode=None,
+        stdout="",
+        stderr="",
+        complete=False,
+        became_zombie=False,
+        reason=CliRunReason.SPAWN_FAILED,
+    )
+
+
+def _finished_bounded_cli_run(
+    process: subprocess.Popen[bytes],
+    output: _CliOutput,
+    on_reaped: Callable[[int, bool], None] | None,
+) -> CliRunOutcome:
+    became_zombie = _reap_process_group(process)
+    if became_zombie and on_reaped is not None:
+        threading.Thread(
+            target=_reap_in_background,
+            args=(process, on_reaped),
+            daemon=True,
+        ).start()
+    else:
+        _notify_reaped(on_reaped, process.pid, became_zombie=False)
+    return CliRunOutcome(
+        started=True,
+        spawn_error=None,
+        returncode=process.returncode,
+        stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
+        stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
+        complete=output.complete,
+        became_zombie=became_zombie,
+        reason=output.reason,
+        io_error=output.io_error,
+    )
+
+
+def _cleanup_bounded_cli_prompt_file(
+    prompt_file_path: str | None,
+    outcome: CliRunOutcome | None,
+) -> CliRunOutcome | None:
+    if prompt_file_path is None:
+        return outcome
+    try:
+        _unlink_prompt_file(prompt_file_path)
+    except OSError as error:
+        if outcome is None:
+            raise RuntimeError("bounded CLI runner exited without an outcome")
+        return CliRunOutcome(
+            started=outcome.started,
+            spawn_error=outcome.spawn_error,
+            returncode=outcome.returncode,
+            stdout=outcome.stdout,
+            stderr=outcome.stderr,
+            complete=False,
+            became_zombie=outcome.became_zombie,
+            reason=CliRunReason.IO_ERROR,
+            io_error=error,
+        )
+    return outcome
 
 
 def _child_env(
