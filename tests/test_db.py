@@ -2573,6 +2573,33 @@ def test_whisper_cues_migration_adds_nullable_column(tmp_path: Path) -> None:
     assert cols["whisper_cues"]["nullable"] is True
 
 
+def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.05a349e664e2_add_last_played_at_to_songs",
+    )
+    db_path = tmp_path / "last-played-at.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"]: column for column in inspect(engine).get_columns("songs")}
+    engine.dispose()
+    assert columns["last_played_at"]["nullable"] is True
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"] for column in inspect(engine).get_columns("songs")}
+    engine.dispose()
+    assert "last_played_at" not in columns
+
+
 # ── Claude model settings ───────────────────────────────────────────
 
 

@@ -496,6 +496,65 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         assert session.query(Song).filter_by(id="s-other").first().title == "Their Song"
 
 
+def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
+    before = datetime.now(timezone.utc)
+
+    resp = client.post("/api/songs/s1/listen")
+
+    after = datetime.now(timezone.utc)
+    assert resp.status_code == 200
+    with client.app.state.ctx.db() as session:
+        song = session.get(Song, "s1")
+        assert song is not None
+        assert song.last_played_at is not None
+        played_at = song.last_played_at.replace(tzinfo=timezone.utc)
+        assert before <= played_at <= after
+
+
+def test_listen_song_rejects_an_unplayable_song(client: TestClient) -> None:
+    with client.app.state.ctx.db() as session:
+        for generation in session.query(Generation).filter_by(song_id="s1"):
+            generation.mp3_path = ""
+        session.commit()
+
+    resp = client.post("/api/songs/s1/listen")
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Song is not playable"
+    with client.app.state.ctx.db() as session:
+        song = session.get(Song, "s1")
+        assert song is not None
+        assert song.last_played_at is None
+
+
+def test_listen_song_hides_a_foreign_song(tmp_path: Path) -> None:
+    client = _make_authed_client(tmp_path)
+    with client.app.state.ctx.db() as session:
+        session.add(User(
+            id="u-other", username="other_user", password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="other", title="Other Album", artist="Them", created_by="u-other",
+        ))
+        session.add(Song(
+            id="s-other", title="Their Song", album_id="other", track_number=1,
+        ))
+        session.add(Generation(
+            id="g-other", song_id="s-other", generation_number=1,
+            mp3_path="u-other/g-other.mp3",
+        ))
+        session.commit()
+
+    resp = client.post("/api/songs/s-other/listen")
+
+    assert resp.status_code == 404
+    with client.app.state.ctx.db() as session:
+        song = session.get(Song, "s-other")
+        assert song is not None
+        assert song.last_played_at is None
+
+
 def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:

@@ -57,11 +57,13 @@ def _add_album(
 def _add_song(
     session, *, song_id: str, title: str, album_id: str, created_at: datetime,
     track_number: int = 1, updated_at: datetime | None = None,
+    last_played_at: datetime | None = None,
 ) -> Song:
     song = Song(
         id=song_id, title=title, album_id=album_id,
         track_number=track_number, created_at=created_at,
-        updated_at=updated_at or created_at, slug=slugify(title),
+        updated_at=updated_at or created_at, last_played_at=last_played_at,
+        slug=slugify(title),
     )
     session.add(song)
     session.add(Version(
@@ -274,6 +276,39 @@ def test_continue_mixes_owned_songs_and_albums_in_stable_activity_order(
     assert all(item["id"] not in {"foreign-continue", "foreign-continue-song"} for item in items)
     assert items[1]["album_id"] == "continue-first"
     assert items[1]["album_title"] == "First"
+
+
+def test_continue_orders_by_a_newer_listen_than_an_edit(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="listened", title="Listened", owner=USER_A,
+            created_at=_ts(100),
+        )
+        _add_song(
+            session, song_id="listened-song", title="Listened Song",
+            album_id="listened", created_at=_ts(100), updated_at=_ts(100),
+            last_played_at=_ts(1000),
+        )
+        _add_album(
+            session, album_id="edited", title="Edited", owner=USER_A,
+            created_at=_ts(200),
+        )
+        _add_song(
+            session, song_id="edited-song", title="Edited Song",
+            album_id="edited", created_at=_ts(200), updated_at=_ts(900),
+        )
+        session.commit()
+
+    resp = client.get("/api/library/continue")
+
+    assert resp.status_code == 200
+    assert [(item["type"], item["id"]) for item in resp.json()["items"]][:4] == [
+        ("album", "listened"),
+        ("song", "listened-song"),
+        ("album", "edited"),
+        ("song", "edited-song"),
+    ]
 
 
 def test_continue_uses_one_song_query_and_one_album_query(tmp_path: Path) -> None:

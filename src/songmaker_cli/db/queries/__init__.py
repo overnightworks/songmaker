@@ -429,6 +429,9 @@ from songmaker_cli.db.queries.songs import list_song_ids_for_albums as list_song
 from songmaker_cli.db.queries.songs import list_song_ids_for_owner as list_song_ids_for_owner
 from songmaker_cli.db.queries.songs import list_songs as list_songs
 from songmaker_cli.db.queries.songs import move_song as move_song
+from songmaker_cli.db.queries.songs import (
+    record_song_listen as record_song_listen,
+)
 from songmaker_cli.db.queries.songs import rename_song as rename_song
 from songmaker_cli.db.queries.songs import restore_song as restore_song
 from songmaker_cli.db.queries.songs import set_song_cover_key as set_song_cover_key
