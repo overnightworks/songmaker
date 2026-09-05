@@ -902,16 +902,21 @@ def _find_orphaned_lora_work_dirs(loras_root: Path, active_ids: set[str]) -> lis
         if not user_dir.is_dir():
             continue
         for lora_dir in user_dir.iterdir():
-            if not lora_dir.is_dir() or lora_dir.name in active_ids:
-                continue
-            for work_dirname in (
-                USER_LORA_DATASET_DIRNAME,
-                USER_LORA_TRAINING_TMP_DIRNAME,
-            ):
-                work_dir = lora_dir / work_dirname
-                if work_dir.exists():
-                    orphaned.append(work_dir)
+            orphaned.extend(_orphaned_lora_work_dirs(lora_dir, active_ids))
     return orphaned
+
+
+def _orphaned_lora_work_dirs(lora_dir: Path, active_ids: set[str]) -> list[Path]:
+    if not lora_dir.is_dir() or lora_dir.name in active_ids:
+        return []
+    return [
+        work_dir
+        for work_dirname in (
+            USER_LORA_DATASET_DIRNAME,
+            USER_LORA_TRAINING_TMP_DIRNAME,
+        )
+        if (work_dir := lora_dir / work_dirname).exists()
+    ]
 
 
 def _log_failed_lora_cleanup(
