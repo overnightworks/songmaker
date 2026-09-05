@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import slugify
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
+from songmaker_cli.constants import (
+    COVER_JPEG_MAGIC,
+    COVER_MAX_BYTES,
+    COVER_PNG_EXTENSION,
+    COVER_TOO_LARGE,
+    COVER_UNSUPPORTED_TYPE,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+    COVER_VARIANT_ORIGINAL,
+    PLAYLIST_COVER_DIRNAME,
+)
+from songmaker_cli.covers import write_playlist_cover
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -39,11 +54,18 @@ from songmaker_cli.db.queries import (
     list_playlists,
     remove_from_playlist,
     reorder_playlist_entry,
+    set_playlist_cover_key,
     update_playlist,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 _DEFAULT_USER_ID = "u-test"
+
+
+def _png_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (32, 24), (40, 80, 200)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def _create_playlist(session: Session, title: str, user_id: str = _DEFAULT_USER_ID) -> Playlist:
@@ -215,11 +237,12 @@ def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_
         response = next(item for item in playlists if item.id == playlist.id)
         from songmaker_cli.api_models.playlists import PlaylistResponse
 
-        album_covers = PlaylistResponse.from_orm(response).album_covers
+        playlist_response = PlaylistResponse.from_orm(response)
     finally:
         event.remove(engine, "before_cursor_execute", handle)
 
-    assert [cover.card for cover in album_covers] == [
+    assert playlist_response.cover is None
+    assert [cover.card for cover in playlist_response.album_covers] == [
         "/api/albums/a1/cover?variant=card&v=one.png",
         "/api/albums/a2/cover?variant=card&v=two.png",
         "/api/albums/a3/cover?variant=card&v=three.png",
@@ -228,6 +251,32 @@ def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_
         "expected one joined playlist query including entry album covers, "
         f"got {len(queries)}: {queries}"
     )
+
+
+def test_playlist_response_reports_own_cover_beside_album_cover_mosaic(
+    seeded_session: Session,
+) -> None:
+    seeded_session.query(Album).filter_by(id="a1").update({"cover_key": "album.png"})
+    playlist = _create_playlist(seeded_session, "Own cover")
+    add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    set_playlist_cover_key(seeded_session, playlist.id, "playlist.png")
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert loaded is not None
+    from songmaker_cli.api_models.playlists import PlaylistResponse
+
+    response = PlaylistResponse.from_orm(loaded)
+    assert response.cover is not None
+    assert response.cover.card == "/api/playlists/{}/cover?variant=card&v=playlist.png".format(
+        playlist.id,
+    )
+    assert response.cover.detail == "/api/playlists/{}/cover?variant=detail&v=playlist.png".format(
+        playlist.id,
+    )
+    assert [cover.card for cover in response.album_covers] == [
+        "/api/albums/a1/cover?variant=card&v=album.png",
+    ]
 
 
 def test_playlist_response_omits_coverless_albums_and_limits_covers_to_four(
@@ -518,6 +567,95 @@ def test_api_get_playlist(client: TestClient) -> None:
     assert resp.json()["entries"] == []
 
 
+def test_api_uploads_playlist_cover_variants_and_remove_restores_mosaic(
+    client: TestClient, tmp_path: Path,
+) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        album = session.query(Album).filter_by(id="a1").one()
+        album.cover_key = "album.png"
+        session.commit()
+
+    created = client.post("/api/playlists", json={"title": "Covers"})
+    playlist_id = created.json()["id"]
+    client.post(
+        f"/api/playlists/{playlist_id}/entries/generation",
+        json={"generation_id": "g1"},
+    )
+    before_upload = client.get(f"/api/playlists/{playlist_id}")
+    assert before_upload.json()["cover"] is None
+    assert before_upload.json()["album_covers"] == [{
+        "card": "/api/albums/a1/cover?variant=card&v=album.png",
+        "detail": "/api/albums/a1/cover?variant=detail&v=album.png",
+    }]
+
+    uploaded = client.post(
+        f"/api/playlists/{playlist_id}/cover",
+        files={"file": ("cover.png", _png_bytes(), "image/png")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    cover = uploaded.json()["cover"]
+    assert cover is not None
+    cover_dir = tmp_path / "audio" / PLAYLIST_COVER_DIRNAME / playlist_id
+    assert (cover_dir / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}").is_file()
+    assert (cover_dir / f"{COVER_VARIANT_CARD}.jpg").is_file()
+    assert (cover_dir / f"{COVER_VARIANT_DETAIL}.jpg").is_file()
+    assert client.get(cover["card"]).headers["content-type"].startswith("image/jpeg")
+    assert client.get(cover["detail"]).status_code == 200
+    assert client.get(
+        f"/api/playlists/{playlist_id}/cover?variant={COVER_VARIANT_ORIGINAL}",
+    ).headers["content-type"].startswith("image/png")
+
+    deleted = client.delete(f"/api/playlists/{playlist_id}/cover")
+    assert deleted.status_code == 200
+    assert deleted.json()["cover"] is None
+    assert deleted.json()["album_covers"] == before_upload.json()["album_covers"]
+    assert not cover_dir.exists()
+    assert client.get(cover["detail"]).status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("payload", "media_type", "status_code", "detail"),
+    [
+        (b"<svg xmlns='http://www.w3.org/2000/svg'></svg>", "image/svg+xml", 422,
+         COVER_UNSUPPORTED_TYPE),
+        (COVER_JPEG_MAGIC + b"\\x00" * COVER_MAX_BYTES, "image/jpeg", 413,
+         COVER_TOO_LARGE),
+    ],
+)
+def test_api_rejects_invalid_playlist_covers(
+    client: TestClient, payload: bytes, media_type: str, status_code: int, detail: str,
+) -> None:
+    playlist_id = client.post("/api/playlists", json={"title": "Rejected"}).json()["id"]
+
+    response = client.post(
+        f"/api/playlists/{playlist_id}/cover",
+        files={"file": ("cover", payload, media_type)},
+    )
+
+    assert response.status_code == status_code
+    assert response.json()["detail"] == detail
+    assert client.get(f"/api/playlists/{playlist_id}").json()["cover"] is None
+
+
+def test_foreign_playlist_cover_routes_are_not_found(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(User(id="foreign-user", username="foreign", password_hash="x", role="user"))
+        session.flush()
+        session.add(Playlist(
+            id="foreign-playlist", title="Foreign", slug="foreign", created_by="foreign-user",
+        ))
+        session.commit()
+
+    path = "/api/playlists/foreign-playlist/cover"
+    assert client.get(path).status_code == 404
+    assert client.post(
+        path, files={"file": ("cover.png", _png_bytes(), "image/png")},
+    ).status_code == 404
+    assert client.delete(path).status_code == 404
+
+
 def test_api_update_playlist(client: TestClient) -> None:
     resp = client.post("/api/playlists", json={"title": "Old"})
     pid = resp.json()["id"]
@@ -546,6 +684,36 @@ def test_api_delete_playlist(client: TestClient) -> None:
 
     resp = client.get(f"/api/playlists/{pid}")
     assert resp.status_code == 404
+
+
+def test_api_delete_playlist_removes_its_cover_after_commit(
+    client: TestClient,
+) -> None:
+    playlist_id = client.post("/api/playlists", json={"title": "Doomed"}).json()["id"]
+    cover_dir = client.app.state.ctx.audio_dir / PLAYLIST_COVER_DIRNAME / playlist_id
+    write_playlist_cover(client.app.state.ctx.audio_dir, playlist_id, _png_bytes())
+
+    response = client.delete(f"/api/playlists/{playlist_id}")
+
+    assert response.status_code == 200
+    assert not cover_dir.exists()
+
+
+def test_api_delete_playlist_keeps_its_cover_when_commit_fails(
+    client: TestClient,
+) -> None:
+    playlist_id = client.post("/api/playlists", json={"title": "Doomed"}).json()["id"]
+    cover_dir = client.app.state.ctx.audio_dir / PLAYLIST_COVER_DIRNAME / playlist_id
+    write_playlist_cover(client.app.state.ctx.audio_dir, playlist_id, _png_bytes())
+
+    with patch(
+        "songmaker_cli.playlist_api.Session.commit",
+        side_effect=RuntimeError("commit failed"),
+    ):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            client.delete(f"/api/playlists/{playlist_id}")
+
+    assert cover_dir.is_dir()
 
 
 def test_api_add_generation_to_playlist(client: TestClient) -> None:
@@ -807,7 +975,7 @@ def test_playlist_response_logs_warning_when_entries_is_none(
 
     fake_playlist = SimpleNamespace(
         id="pl-broken", title="T", slug="t", entries=None,
-        is_shared=False, share_slug=None,
+        is_shared=False, share_slug=None, cover_key=None,
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     with caplog.at_level("WARNING", logger="songmaker_cli.api_models.playlists"):

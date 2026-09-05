@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.constants import JOB_TERMINAL_STATUSES, LORA_ACTIVE_STATUSES, LoraStatus
+from songmaker_cli.constants import (
+    JOB_TERMINAL_STATUSES,
+    LORA_ACTIVE_STATUSES,
+    LORA_TRAINING_MODEL_MODES,
+    MODEL_DEFAULT_MODE,
+    LoraStatus,
+)
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 
 log = logging.getLogger(__name__)
@@ -16,9 +22,15 @@ log = logging.getLogger(__name__)
 
 def create_user_lora(
     session: Session, user_id: str, name: str, slug: str,
+    *, model_mode: str = MODEL_DEFAULT_MODE,
 ) -> UserLora:
+    _validate_lora_training_model_mode(model_mode)
     lora = UserLora(
-        user_id=user_id, name=name, slug=slug, status=LoraStatus.DRAFT,
+        user_id=user_id,
+        name=name,
+        slug=slug,
+        model_mode=model_mode,
+        status=LoraStatus.DRAFT,
     )
     session.add(lora)
     session.flush()
@@ -75,6 +87,7 @@ def update_user_lora(
     training_job_id: str | None = None,
     error: str | None = None,
     completed_at: datetime | None = None,
+    model_mode: str | None = None,
     clear_error: bool = False,
 ) -> UserLora:
     lora = session.query(UserLora).filter_by(id=lora_id).first()
@@ -94,8 +107,17 @@ def update_user_lora(
         lora.error = None
     if completed_at is not None:
         lora.completed_at = completed_at
+    if model_mode is not None:
+        _validate_lora_training_model_mode(model_mode)
+        lora.model_mode = model_mode
     session.flush()
     return lora
+
+
+def _validate_lora_training_model_mode(model_mode: str) -> None:
+    if model_mode not in LORA_TRAINING_MODEL_MODES:
+        msg = f"Unsupported LoRA training model mode: {model_mode}"
+        raise ValueError(msg)
 
 
 def soft_delete_user_lora(session: Session, lora_id: str) -> datetime:

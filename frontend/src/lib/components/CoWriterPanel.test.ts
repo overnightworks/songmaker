@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
 import type { SongItem } from '$lib/api/types';
+import { ApiError } from '$lib/api/fetch';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
@@ -116,6 +117,15 @@ async function sendMessage(target: HTMLElement, message: string): Promise<void> 
 	await tick();
 }
 
+async function sendTurn(target: HTMLElement, message: string): Promise<void> {
+	const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
+	if (!input) throw new Error('Expected the chat textarea');
+	input.value = message;
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+	await tick();
+	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
+}
+
 describe('CoWriterPanel', () => {
 	it('renders without a Close button (its lifecycle is owned by the Editor header toggle)', async () => {
 		const target = await render();
@@ -135,6 +145,56 @@ describe('CoWriterPanel', () => {
 		const root = target.querySelector('.cowriter');
 		expect(root).not.toBeNull();
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
+	});
+});
+
+describe('CoWriterPanel failed turns', () => {
+	it('names a 503 below the user message, ends typing, and retries the retained message', async () => {
+		streamCoWriterTurn.mockReturnValueOnce(
+			(async function* () {
+				yield* [];
+				throw new ApiError(503, 'Codex CLI is temporarily unavailable', '/api/chat/turn');
+			})()
+		);
+		streamCoWriterTurn.mockReturnValueOnce(
+			turnEvents([
+				{
+					type: 'final',
+					conversation_id: 'c1',
+					user_message: {
+						id: 'u1',
+						role: 'user',
+						content: 'write a chorus',
+						created_at: '2026-01-01T00:00:00+00:00'
+					},
+					assistant_message: {
+						id: 'a1',
+						role: 'assistant',
+						content: 'Here is a chorus',
+						created_at: '2026-01-01T00:00:00+00:00'
+					}
+				}
+			])
+		);
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const target = await render();
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'Codex CLI is temporarily unavailable'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
+
+		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
+
+		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.turn-error')).toBeNull());
+		expect(target.textContent).toContain('Here is a chorus');
 	});
 });
 

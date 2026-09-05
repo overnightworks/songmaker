@@ -24,6 +24,9 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
+JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = (
+    "Selected voice is unavailable for this generation"
+)
 JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
     "Codex CLI is not logged in. Sign in on the operator host, then try again."
 )
@@ -59,6 +62,7 @@ MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
     "xl-base",
 })
 MODEL_DEFAULT_MODE: Final[str] = "sft"
+LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
@@ -544,6 +548,7 @@ REIMPORT_BODY_MAX_BYTES = (2 * AUDIO_UPLOAD_FILE_MAX_BYTES) + MULTIPART_ENVELOPE
 COVER_DIRNAME: Final[str] = "covers"
 ALBUM_COVER_SUGGESTIONS_DIRNAME: Final[str] = "cover-suggestions"
 SONG_COVER_DIRNAME: Final[str] = "song-covers"
+PLAYLIST_COVER_DIRNAME: Final[str] = "playlist-covers"
 COVER_MAX_BYTES: Final[int] = 8 * 1024 * 1024
 COVER_MAX_PIXELS: Final[int] = 20_000_000
 COVER_CARD_MAX_EDGE: Final[int] = 512
@@ -580,6 +585,7 @@ COVER_SUGGESTION_NOT_FOUND: Final[str] = "Album not found"
 COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
 COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
 COVER_INVALID_SONG_ID: Final[str] = "Invalid song id for cover storage"
+COVER_INVALID_PLAYLIST_ID: Final[str] = "Invalid playlist id for cover storage"
 COVER_OLD_DIRNAME_SUFFIX: Final[str] = ".old"
 COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
 

@@ -11,6 +11,7 @@ from songmaker_cli.auth import hash_password
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     AUDIO_UPLOAD_FILE_MAX_BYTES,
+    COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     REFERENCE_AUDIO_MAX_BYTES,
     REIMPORT_BODY_MAX_BYTES,
@@ -27,12 +28,14 @@ def test_is_large_upload_path_is_exact() -> None:
     assert is_large_upload_path("/api/audio/upload")
     assert is_large_upload_path("/api/loras/abc-id/samples")
     assert is_large_upload_path("/api/songs/song-id/reimport")
+    assert is_large_upload_path("/api/playlists/playlist-id/cover")
     assert not is_large_upload_path("/api/loras/abc-id/samples/extra")
     assert not is_large_upload_path("/api/other/samples")
     assert not is_large_upload_path("/api/loras//samples")
     assert not is_large_upload_path("/api/songs//reimport")
     assert not is_large_upload_path("/api/other/song-id/reimport")
     assert not is_large_upload_path("/api/songs/song-id/reimport/extra")
+    assert not is_large_upload_path("/api/playlists//cover")
 
 
 def test_body_limits_keep_json_small_and_uploads_larger() -> None:
@@ -40,6 +43,7 @@ def test_body_limits_keep_json_small_and_uploads_larger() -> None:
     assert body_limit_for_path("/api/audio/upload") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert body_limit_for_path("/api/loras/x/samples") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert body_limit_for_path("/api/songs/x/reimport") == REIMPORT_BODY_MAX_BYTES
+    assert body_limit_for_path("/api/playlists/x/cover") == COVER_UPLOAD_BODY_MAX_BYTES
     assert REIMPORT_BODY_MAX_BYTES == 2 * AUDIO_UPLOAD_FILE_MAX_BYTES + 1024 * 1024
     assert AUDIO_UPLOAD_BODY_MAX_BYTES > REFERENCE_AUDIO_MAX_BYTES
 

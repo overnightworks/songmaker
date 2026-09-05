@@ -9,6 +9,7 @@ import pytest
 from conftest import mock_http_response
 
 from acestep_engine.client import AceStepClient
+from acestep_engine.errors import TaskSubmissionError
 from acestep_engine.models import AceStepConfig, AceStepResult
 from acestep_engine.training_client import AceStepTrainingClient, TrainingResponseError
 
@@ -89,7 +90,7 @@ def test_generate_loads_and_unloads_when_lora_set() -> None:
     assert calls == ["load:/tmp/my-lora", "unload"]
 
 
-def test_generate_does_not_unload_if_load_failed() -> None:
+def test_generate_ends_before_submission_if_lora_load_failed() -> None:
     client = _make_client()
     config = _config(lora_path="/tmp/bad")
 
@@ -105,7 +106,7 @@ def test_generate_does_not_unload_if_load_failed() -> None:
     with (
         patch.object(AceStepClient, "_ensure_lora_loaded", fake_ensure),
         patch.object(AceStepClient, "_unload_lora_best_effort", fake_unload),
-        patch.object(AceStepClient, "_submit_task", return_value="t"),
+        patch.object(AceStepClient, "_submit_task") as submit_task,
         patch.object(
             AceStepClient, "_poll_result", return_value=_fake_poll_result(),
         ),
@@ -114,9 +115,14 @@ def test_generate_does_not_unload_if_load_failed() -> None:
             return_value=AceStepResult(wav_bytes=b"\x00" * 44, seed=42),
         ),
     ):
-        client.generate(config)
+        with pytest.raises(
+            TaskSubmissionError,
+            match="Failed to load configured LoRA adapter: /tmp/bad",
+        ):
+            client.generate(config)
 
     assert calls == ["load-failed"]
+    submit_task.assert_not_called()
 
 
 def test_ensure_lora_loaded_idempotent_uses_sha_adapter_name() -> None:

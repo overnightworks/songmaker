@@ -120,6 +120,11 @@
 				value={$editLyrics}
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
+		{#if compact}
+			<div class="compact-takes">
+				<TakeStrip {song} />
+			</div>
+		{/if}
 	</div>
 {/if}
 
@@ -128,6 +133,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+
+	.compact-takes {
+		min-width: 0;
 	}
 
 	.edit-field {
@@ -181,6 +190,17 @@
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;
+	}
+
+	@media (max-width: 768px) {
+		/* Write owns the one compact take surface. Its desktop-sized textarea
+		   pushed that surface behind the fixed Generate bar, so the first take
+		   could be seen but not reached at 375px. Keep the usable default short;
+		   people can still grow it with the textarea's native resize handle. */
+		.write-mode .lyrics-area {
+			min-height: 8rem;
+			height: 8rem;
+		}
 	}
 
 	/* Filling a fixed height only works where every part has a column of its

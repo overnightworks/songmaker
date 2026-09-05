@@ -2417,6 +2417,88 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     assert tables == expected
 
 
+def test_user_lora_model_mode_migration_backfills_constrains_and_removes(
+    tmp_path: Path,
+) -> None:
+    from alembic import command
+    from sqlalchemy import MetaData, Table, create_engine, inspect, text
+    from sqlalchemy.exc import IntegrityError
+
+    from songmaker_cli.constants import MODEL_DEFAULT_MODE
+    from songmaker_cli.db.migrations.versions import (
+        f41ebd8f5103_add_model_mode_to_user_loras as migration,
+    )
+
+    url = f"sqlite:///{tmp_path / 'user-lora-model-mode.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+
+    engine = create_engine(url)
+    metadata = MetaData()
+    users = Table("users", metadata, autoload_with=engine)
+    user_loras = Table("user_loras", metadata, autoload_with=engine)
+    now = datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        conn.execute(
+            users.insert(),
+            {
+                "id": "user-1",
+                "username": "voice-owner",
+                "password_hash": "hash",
+                "role": "user",
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        conn.execute(
+            user_loras.insert(),
+            {
+                "id": "lora-1",
+                "user_id": "user-1",
+                "name": "Existing Voice",
+                "slug": "existing-voice",
+                "status": "draft",
+                "created_at": now,
+            },
+        )
+    engine.dispose()
+
+    command.upgrade(config, migration.revision)
+
+    engine = create_engine(url)
+    inspector = inspect(engine)
+    columns = {column["name"]: column for column in inspector.get_columns("user_loras")}
+    checks = {
+        check["name"]: check["sqltext"]
+        for check in inspector.get_check_constraints("user_loras")
+    }
+    assert columns["model_mode"]["nullable"] is False
+    assert checks["ck_user_loras_model_mode"] == "model_mode IN ('sft', 'turbo')"
+    with engine.begin() as conn:
+        model_mode = conn.execute(text("SELECT model_mode FROM user_loras")).scalar_one()
+        assert model_mode == MODEL_DEFAULT_MODE
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                text(
+                    "INSERT INTO user_loras "
+                    "(id, user_id, name, slug, status, model_mode, created_at) "
+                    "VALUES ('lora-2', 'user-1', 'Invalid Voice', 'invalid-voice', "
+                    "'draft', 'xl-sft', CURRENT_TIMESTAMP)"
+                ),
+            )
+    engine.dispose()
+
+    command.downgrade(config, migration.down_revision)
+
+    engine = create_engine(url)
+    columns_after_downgrade = {
+        column["name"] for column in inspect(engine).get_columns("user_loras")
+    }
+    assert "model_mode" not in columns_after_downgrade
+    engine.dispose()
+
+
 def test_training_epoch_migration_up_and_down(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -2640,6 +2722,33 @@ def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Pat
     columns = {column["name"] for column in inspect(engine).get_columns("songs")}
     engine.dispose()
     assert "last_played_at" not in columns
+
+
+def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.889dfb248896_add_playlist_cover_key",
+    )
+    db_path = tmp_path / "playlist-cover-key.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"]: column for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert columns["cover_key"]["nullable"] is True
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"] for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert "cover_key" not in columns
 
 
 # ── Claude model settings ───────────────────────────────────────────
@@ -2986,9 +3095,8 @@ def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path:
     from alembic import command
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import IntegrityError
-    from sqlalchemy.orm import sessionmaker
 
-    from songmaker_cli.db.models import PLAYLIST_SLUG_MAX_LENGTH, Playlist
+    from songmaker_cli.db.models import PLAYLIST_SLUG_MAX_LENGTH
 
     url = f"sqlite:///{tmp_path / 'playlist_slugs.db'}"
     cfg = _alembic_config(url)
@@ -3025,11 +3133,16 @@ def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path:
     assert len(cjk_slug) <= PLAYLIST_SLUG_MAX_LENGTH
 
     engine = create_engine(url)
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add(Playlist(id="p4", title="Dup", slug="favorites"))
+    with engine.begin() as conn:
         with pytest.raises(IntegrityError):
-            session.commit()
+            conn.execute(
+                text(
+                    "INSERT INTO playlists "
+                    "(id, title, slug, is_shared, created_at, updated_at) "
+                    "VALUES ('p4', 'Dup', 'favorites', 0, CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                )
+            )
     engine.dispose()
 
     command.downgrade(cfg, "c9d4a2f18e37")

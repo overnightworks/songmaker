@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import JobStatus, JobType, LoraStatus
+from songmaker_cli.constants import (
+    MODEL_DEFAULT_MODE,
+    JobStatus,
+    JobType,
+    LoraStatus,
+)
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User
 from songmaker_cli.db.queries import (
@@ -45,8 +50,30 @@ def test_create_lora_defaults_to_draft(session: Session) -> None:
     session.commit()
     assert lora.id
     assert lora.status == LoraStatus.DRAFT
+    assert lora.model_mode == MODEL_DEFAULT_MODE
     assert lora.deleted_at is None
     assert lora.storage_path is None
+
+
+@pytest.mark.parametrize("model_mode", ["sft", "turbo"])
+def test_create_lora_accepts_training_model_modes(session: Session, model_mode: str) -> None:
+    lora = create_user_lora(
+        session,
+        _USER_A,
+        "My Voice",
+        f"my-voice-{model_mode}",
+        model_mode=model_mode,
+    )
+
+    assert lora.model_mode == model_mode
+
+
+@pytest.mark.parametrize("model_mode", ["xl-sft", "xl-turbo", "xl-base"])
+def test_create_lora_rejects_non_training_model_modes(
+    session: Session, model_mode: str,
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported LoRA training model mode"):
+        create_user_lora(session, _USER_A, "My Voice", "my-voice", model_mode=model_mode)
 
 
 def test_get_user_lora_hides_soft_deleted_by_default(session: Session) -> None:
@@ -100,6 +127,7 @@ def test_update_user_lora_sets_fields(session: Session) -> None:
         training_job_id="job-xyz",
         error="transient",
         completed_at=completed,
+        model_mode="turbo",
     )
     session.commit()
     fresh = get_user_lora(session, lora.id)
@@ -110,6 +138,7 @@ def test_update_user_lora_sets_fields(session: Session) -> None:
     assert fresh.error == "transient"
     assert fresh.completed_at is not None
     assert fresh.completed_at.replace(tzinfo=timezone.utc) == completed
+    assert fresh.model_mode == "turbo"
 
     update_user_lora(session, lora.id, status=LoraStatus.READY, clear_error=True)
     session.commit()
