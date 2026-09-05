@@ -803,6 +803,36 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
 	});
+
+	it('keeps a newer song selection when an earlier dead-link lookup finishes late', async () => {
+		let rejectLookup: ((reason: Error) => void) | undefined;
+		songList.set([
+			song({
+				id: 's1',
+				generation_count: 2,
+				generations: [generation()]
+			})
+		]);
+		fetchSong.mockImplementationOnce(
+			() =>
+				new Promise((_, reject) => {
+					rejectLookup = reject;
+				})
+		);
+		selectedSongId.set('s1');
+
+		const loadingDeadLink = loadSongContext('s1');
+		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
+		selectedSongId.set('s2');
+		if (!rejectLookup) {
+			throw new Error('Expected the song lookup to expose its rejection callback');
+		}
+		rejectLookup(new ApiError(404, 'Song not found', '/api/songs/s1'));
+		await expect(loadingDeadLink).resolves.toBeUndefined();
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(toasts)).toHaveLength(0);
+	});
 });
 
 describe('selectNeighborSong', () => {
@@ -1011,6 +1041,18 @@ describe('goBack', () => {
 		librarySurface.set('create');
 		goBack();
 		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('keeps the create surface while the browser returns to its predecessor', () => {
+		history.replaceState({ ...libraryRootState(), index: 1, surface: 'create' }, '', '/');
+		librarySurface.set('create');
+		const backSpy = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+
+		goBack();
+
+		expect(backSpy).toHaveBeenCalledTimes(1);
+		expect(get(librarySurface)).toBe('create');
+		backSpy.mockRestore();
 	});
 });
 
