@@ -22,9 +22,11 @@ cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 
 ## Static analysis (SonarCloud)
 
-SonarCloud Automatic Analysis reads the repository-root [`.sonarcloud.properties`](../.sonarcloud.properties) file. Product sources are `src`, `frontend/src`, `scripts`, `docker`, and `.github`; `tests` and frontend test files are declared as test scope so test rules are applied correctly. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=FlexOr2_songmaker) shows the analysis results.
+GitHub CI runs SonarCloud analysis from the repository-root [`sonar-project.properties`](../sonar-project.properties). The `backend` and `frontend` jobs produce pytest XML and Vitest lcov coverage reports; the advisory `sonar` job downloads both reports and scans the same commit. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
 
-The scope excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+Before the first CI scan, an operator must disable **Automatic Analysis** in the SonarCloud project. SonarCloud rejects CI-based analysis while that setting remains enabled; until then the scan is advisory and may fail without blocking CI.
+
+The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
 ### Parallel Execution
 
