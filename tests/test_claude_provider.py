@@ -2597,8 +2597,9 @@ def test_public_claude_stream_names_a_nonzero_cli_exit(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
+    events = _collect_stream_events(stream)
     with pytest.raises(UnavailableError, match="unavailable"):
-        asyncio.run(_collect_stream_events(stream))
+        asyncio.run(events)
 
 
 def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
@@ -2611,8 +2612,9 @@ def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
+    events = _collect_stream_events(stream)
     with pytest.raises(provider.CliBinaryUnavailableError, match="not found"):
-        asyncio.run(_collect_stream_events(stream))
+        asyncio.run(events)
 
 
 def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) -> None:
