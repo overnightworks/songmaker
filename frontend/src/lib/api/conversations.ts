@@ -21,7 +21,12 @@ export type CoWriterStreamEvent =
 			user_message: ChatMessageItem;
 			assistant_message: ChatMessageItem;
 	  }
-	| { type: 'error'; status: number; message: string };
+	| {
+			type: 'error';
+			status: number;
+			message?: string;
+			reason?: { message?: string };
+	  };
 
 export interface CoWriterTurnRequest {
 	message: string;

@@ -149,6 +149,46 @@ describe('CoWriterPanel', () => {
 });
 
 describe('CoWriterPanel failed turns', () => {
+	it('names a server error frame below the retained user message', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			turnEvents([
+				{
+					type: 'error',
+					status: 503,
+					reason: { message: 'Selected route failed.' }
+				}
+			])
+		);
+		const target = await render();
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'Selected route failed.'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
+	});
+
+	it('names a stream that ends before its final event', async () => {
+		streamCoWriterTurn.mockReturnValue(turnEvents([]));
+		const target = await render();
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+	});
+
 	it('names a 503 below the user message, ends typing, and retries the retained message', async () => {
 		streamCoWriterTurn.mockReturnValueOnce(
 			(async function* () {
