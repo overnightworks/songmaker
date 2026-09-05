@@ -115,7 +115,7 @@ describe('Rail', () => {
 		const searchFields = target.querySelectorAll('input[type="search"]');
 		expect(searchFields).toHaveLength(1);
 		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
-		expect(target.querySelector('.rail-top + .rail-search')).not.toBeNull();
+		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
 	});
 
 	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {

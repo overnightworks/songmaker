@@ -141,4 +141,22 @@ describe('RailSearch', () => {
 		await tick();
 		expect(root.querySelector('[role="alert"]')?.textContent).toContain('Offline');
 	});
+
+	it('keeps local page results available while the server search fails', async () => {
+		railTreeQuery.set('playback');
+		railSearch.set({ query: 'playback', status: 'error', error: 'Offline', hits: [] });
+		const root = await render();
+
+		expect(root.querySelector('[role="alert"]')?.textContent).toContain('Offline');
+		expect(root.textContent).toContain('Playback');
+		requireElement<HTMLInputElement>(root, 'input').dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+		);
+		await tick();
+
+		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({
+			kind: 'page',
+			href: '/settings/playback'
+		});
+	});
 });

@@ -1150,6 +1150,19 @@ describe('initNavigation', () => {
 });
 
 describe('openRailSearchTarget', () => {
+	it('uses the Library action for the Library page target', async () => {
+		history.replaceState(null, '', '/');
+		selectedSongId.set('s1');
+		librarySurface.set('detail');
+		toggleSidebar();
+
+		await openRailSearchTarget({ kind: 'page', href: '/' });
+
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(sidebarOpen)).toBe(false);
+	});
+
 	it('opens one page target and closes the rail drawer', async () => {
 		history.replaceState(null, '', '/');
 		toggleSidebar();

@@ -14,7 +14,8 @@ import {
 	railSearch,
 	resetRailSearchForTests,
 	retryRailSearch,
-	syncRailSearch
+	syncRailSearch,
+	visibleRailSearchPages
 } from './railSearch';
 import type { RailSearchState } from './railSearch';
 
@@ -124,6 +125,14 @@ describe('syncRailSearch', () => {
 });
 
 describe('groupRailSearchResults', () => {
+	it('excludes admin-only pages for non-administrators', () => {
+		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Admin');
+		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Cleanup');
+		expect(visibleRailSearchPages(true).map((page) => page.label)).toEqual(
+			expect.arrayContaining(['Admin', 'Cleanup'])
+		);
+	});
+
 	it('groups library, playlist, and page targets without giving a result two actions', () => {
 		const state: RailSearchState = {
 			query: 'stadion',

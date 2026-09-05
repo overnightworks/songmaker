@@ -254,6 +254,10 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openPlaylist(target.id);
 		return;
 	}
+	if (target.href === '/') {
+		await openLibraryWall();
+		return;
+	}
 	closeSidebar();
 	await goto(resolve(target.href));
 }

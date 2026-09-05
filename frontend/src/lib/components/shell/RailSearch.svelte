@@ -1,19 +1,22 @@
 <script lang="ts">
 	import { RAIL_SEARCH_LABEL } from '$lib/constants';
+	import { isAdmin } from '$lib/stores/auth';
 	import { railTreeQuery } from '$lib/stores/filter';
 	import {
 		firstRailSearchTarget,
 		groupRailSearchResults,
 		railSearch,
 		retryRailSearch,
-		syncRailSearch
+		syncRailSearch,
+		visibleRailSearchPages
 	} from '$lib/stores/railSearch';
 	import { openRailSearchTarget } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 
 	const query = $derived($railTreeQuery);
 	const state = $derived($railSearch);
-	const groups = $derived(groupRailSearchResults(state, $playlistList));
+	const pages = $derived(visibleRailSearchPages($isAdmin));
+	const groups = $derived(groupRailSearchResults(state, $playlistList, pages));
 	const hasQuery = $derived(state.query.length > 0);
 
 	function onInput(event: Event): void {
@@ -29,8 +32,8 @@
 			syncRailSearch('');
 			return;
 		}
-		if (event.key !== 'Enter' || !hasQuery || state.status !== 'ready') return;
-		const target = firstRailSearchTarget(state, $playlistList);
+		if (event.key !== 'Enter' || !hasQuery) return;
+		const target = firstRailSearchTarget(state, $playlistList, pages);
 		if (!target) return;
 		event.preventDefault();
 		void openRailSearchTarget(target);
@@ -76,16 +79,20 @@
 					<p>{state.error ?? 'Search failed'}</p>
 					<button type="button" onclick={retryRailSearch}>Retry</button>
 				</div>
-			{:else if groups.length === 0}
-				<p class="rail-search-status">No results for “{state.query}”.</p>
-			{:else}
+			{/if}
+
+			{#if groups.length > 0}
 				{#each groups as group (group.label)}
 					<section class="rail-search-group" aria-label={`${group.label} results`}>
 						<h2>{group.label}</h2>
 						<ul>
 							{#each group.results as result (result.id)}
 								<li>
-									<button type="button" class="rail-search-result" onclick={() => selectResult(result.target)}>
+									<button
+										type="button"
+										class="rail-search-result"
+										onclick={() => selectResult(result.target)}
+									>
 										<span>{result.label}</span>
 										{#if result.meta}<small>{result.meta}</small>{/if}
 									</button>
@@ -94,6 +101,8 @@
 						</ul>
 					</section>
 				{/each}
+			{:else if state.status === 'ready'}
+				<p class="rail-search-status">No results for “{state.query}”.</p>
 			{/if}
 		</div>
 	{/if}

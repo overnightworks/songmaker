@@ -28,6 +28,7 @@ export interface RailSearchPage {
 	label: string;
 	href: RailSearchPageHref;
 	keywords: readonly string[];
+	adminOnly?: boolean;
 }
 
 export interface RailSearchResult {
@@ -55,8 +56,8 @@ export const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
 	{ label: 'Playback', href: '/settings/playback', keywords: ['settings'] },
 	{ label: 'Voices', href: '/settings/voices', keywords: ['settings'] },
 	{ label: 'Account', href: '/settings/account', keywords: ['settings'] },
-	{ label: 'Admin', href: '/settings/users', keywords: ['settings'] },
-	{ label: 'Cleanup', href: '/settings/cleanup', keywords: ['settings'] },
+	{ label: 'Admin', href: '/settings/users', keywords: ['settings'], adminOnly: true },
+	{ label: 'Cleanup', href: '/settings/cleanup', keywords: ['settings'], adminOnly: true },
 	{ label: 'Legal', href: '/settings/legal', keywords: ['settings'] }
 ];
 
@@ -84,7 +85,8 @@ export function syncRailSearch(rawQuery: string): void {
 		return;
 	}
 	const current = get(railSearch);
-	if (current.query === query && (current.status === 'loading' || current.status === 'ready')) return;
+	if (current.query === query && (current.status === 'loading' || current.status === 'ready'))
+		return;
 	setRailSearchLoading(query);
 	searchTimer = setTimeout(() => {
 		searchTimer = null;
@@ -133,6 +135,10 @@ export function groupRailSearchResults(
 		{ label: 'Pages', results: pageResults }
 	];
 	return groups.filter((group) => group.results.length > 0);
+}
+
+export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[] {
+	return RAIL_SEARCH_PAGES.filter((page) => !page.adminOnly || admin);
 }
 
 export function firstRailSearchTarget(

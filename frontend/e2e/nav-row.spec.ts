@@ -2,7 +2,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL
 } from '../src/lib/constants';
@@ -19,7 +18,7 @@ async function openRail(page: Page, mobile: boolean): Promise<Locator> {
 	return scope.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
-test('the single rail search narrows the known tree and keeps the open album on desktop and 375 px', async ({
+test('the rail search finds a server song and closes the drawer on desktop and 375 px', async ({
 	page,
 	isMobile
 }) => {
@@ -37,20 +36,10 @@ test('the single rail search narrows the known tree and keeps the open album on 
 	await expect(surface.locator('.search')).toHaveCount(0);
 
 	await search.fill(library.secondAlbumSongTitle);
-	const libraryTree = rail.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
-	await expect(
-		libraryTree.getByRole('button', { name: nameStartingWith(library.albumTitle) })
-	).toBeVisible();
-	await expect(
-		libraryTree.getByRole('button', { name: nameStartingWith(library.secondAlbumSongTitle) })
-	).toBeVisible();
-
-	await search.press('Escape');
-	await expect(search).toHaveValue('');
-	if (isMobile) await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeVisible();
-	await expect(
-		libraryTree.getByRole('button', { name: nameStartingWith('All albums') })
-	).toBeVisible();
+	await expect(rail.locator('[aria-label="Library results"]')).toBeVisible();
+	await rail.getByRole('button', { name: nameStartingWith(library.secondAlbumSongTitle) }).click();
+	await expect(surface.getByRole('heading', { name: library.secondAlbumSongTitle })).toBeVisible();
+	if (isMobile) await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	guard.assertClean();
 });
 
