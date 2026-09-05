@@ -845,6 +845,34 @@ describe('admin models tab', () => {
 		);
 	});
 
+	it('uses the selected provider card default and cannot save a model from another card', async () => {
+		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
+		api.updateCowriterSettings.mockResolvedValue(
+			routeAwareCowriterSettings({ provider: 'grok', model: 'grok-cli' })
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const claudeModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude');
+		const grokModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok');
+
+		buttonNamed(cowriter, 'Grok').click();
+		await tick();
+
+		expect(grokModel.value).toBe('grok-cli');
+		expect(claudeModel.disabled).toBe(true);
+		expect(grokModel.disabled).toBe(false);
+
+		buttonNamed(cowriter, 'Save Co-Writer').click();
+		await flush();
+
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith('grok', 'grok-cli', 8000, {
+			claude: 'cli',
+			codex: 'cli',
+			grok: 'cli'
+		});
+	});
+
 	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {
 		api.fetchCowriterSettings.mockResolvedValue(
 			routeAwareCowriterSettings({

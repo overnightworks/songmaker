@@ -139,6 +139,7 @@ def api_delete_playlist(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     _check_playlist_access(session, playlist_id, user)
     try:
@@ -147,6 +148,7 @@ def api_delete_playlist(
         raise HTTPException(404, "Playlist not found")
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
+    remove_playlist_cover_files(ctx.audio_dir, playlist_id)
     return StatusResponse()
 
 
