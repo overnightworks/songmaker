@@ -94,14 +94,14 @@ def _outcome(
     )
 
 
-def _image_event_stream(codex_home: Path, work_dir: Path) -> str:
+def _image_event_stream(codex_home: Path) -> str:
     return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text().replace(
         "{CODEX_HOME}", str(codex_home.resolve()),
-    ).replace("{WORK_DIR}", str(work_dir.resolve()))
+    )
 
 
-def _image_event_records(codex_home: Path, work_dir: Path) -> list[dict]:
-    return [json.loads(line) for line in _image_event_stream(codex_home, work_dir).splitlines()]
+def _image_event_records(codex_home: Path) -> list[dict]:
+    return [json.loads(line) for line in _image_event_stream(codex_home).splitlines()]
 
 
 @pytest.fixture()
@@ -158,7 +158,7 @@ def _install_fake_codex_cli(
             artifact = home / "generated_images" / "thread" / "cover.png"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(_png_bytes())
-        result = outcome or _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        result = outcome or _outcome(stdout=_image_event_stream(home))
         _reap_fake_codex_process(kwargs)
         return result
 
@@ -228,6 +228,12 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
     "mutate",
     (
         lambda records: records[3]["item"].update(command="/bin/bash -lc \"id\""),
+        lambda records: records[3]["item"].update(
+            command=records[3]["item"]["command"].replace("SKILL.md", "OTHER.md"),
+        ),
+        lambda records: records[3]["item"].update(
+            command=records[3]["item"]["command"].replace("-lc", "-c"),
+        ),
         lambda records: records[3]["item"].update(cwd="/outside-the-private-root"),
         lambda records: records[3]["item"].update(type="file_change"),
         lambda records: records[3]["item"].update(type="mcp_tool_call"),
@@ -239,17 +245,14 @@ def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
     tmp_path: Path, mutate,
 ) -> None:
     codex_home = tmp_path / "codex-home"
-    work_dir = tmp_path / "work"
     codex_home.mkdir()
-    work_dir.mkdir()
-    records = _image_event_records(codex_home, work_dir)
+    records = _image_event_records(codex_home)
     mutate(records)
 
     with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
         codex_cli_adapter._validate_codex_image_events(
             "\n".join(json.dumps(record) for record in records),
             codex_home=codex_home,
-            work_dir=work_dir,
         )
 
 
@@ -263,7 +266,7 @@ def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
     def fake_runner(_command, **kwargs):
         channel = kwargs["stdout_line_channel"]
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
-        records = _image_event_records(home, Path(kwargs["cwd"]))
+        records = _image_event_records(home)
         records[3]["item"]["type"] = "web_search"
         assert channel._send((json.dumps(records[3]) + "\n").encode())
         if channel._abort_requested.wait(timeout=1):
@@ -295,7 +298,7 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
         artifact = home / "generated_images" / "thread" / "cover.png"
         artifact.parent.mkdir(parents=True)
         artifact.write_bytes(_png_bytes())
-        stream = _image_event_stream(home, Path(kwargs["cwd"]))
+        stream = _image_event_stream(home)
         for line in stream.splitlines(keepends=True):
             assert channel._send(line.encode())
         result = _outcome(stdout=stream)
@@ -335,7 +338,7 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
     def fake_runner(_command, **kwargs):
         channel = kwargs["stdout_line_channel"]
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
-        records = _image_event_records(home, Path(kwargs["cwd"]))
+        records = _image_event_records(home)
         mutate(records)
         for record in records:
             if not channel._send((json.dumps(record) + "\n").encode()):
@@ -494,7 +497,7 @@ def test_codex_image_ignores_non_generated_png_assets(
         bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
         bundled_asset.parent.mkdir(parents=True)
         bundled_asset.write_bytes(_png_bytes())
-        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        result = _outcome(stdout=_image_event_stream(home))
         _reap_fake_codex_process(kwargs)
         return result
 
@@ -517,9 +520,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        result = _outcome(stdout=_image_event_stream(
-            homes[-1], Path(kwargs["cwd"]),
-        ))
+        result = _outcome(stdout=_image_event_stream(homes[-1]))
         _reap_fake_codex_process(kwargs)
         return result
 
@@ -547,7 +548,7 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
         homes.append(home)
         (home / "generated_images").symlink_to(outside, target_is_directory=True)
-        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        result = _outcome(stdout=_image_event_stream(home))
         _reap_fake_codex_process(kwargs)
         return result
 
