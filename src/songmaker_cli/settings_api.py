@@ -676,12 +676,8 @@ def api_set_cowriter_settings(
         )
     stored_settings = get_raw_stored_cowriter_settings(session)
     active_settings = get_active_cowriter_settings(session)
-    try:
-        stored_routes = get_effective_provider_routes(session)
-        routes = req.provider_routes or stored_routes
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    provider_or_model_changed = not _matches_complete_stored_provider_and_model(
+    stored_routes, routes = _cowriter_routes(session, req)
+    settings_changed = not _matches_complete_stored_provider_and_model(
         stored_settings.provider,
         stored_settings.model,
         req.provider,
@@ -689,40 +685,8 @@ def api_set_cowriter_settings(
         stored_routes,
         routes,
     )
-    if provider_or_model_changed:
-        from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshot
-
-        snapshot = provider_snapshot(req.provider)
-        statuses = _route_statuses(
-            req.provider,
-            snapshot,
-            None,
-            ProviderSurface.CO_WRITER,
-        )
-        selected_status = statuses[routes[req.provider]]
-        if selected_status.readiness.state != "ready":
-            reason = (
-                selected_status.readiness.reason
-                or selected_status.catalogue_failure
-            )
-            raise HTTPException(
-                422,
-                reason.model_dump(mode="json") if reason else "Selected route is unverified",
-            )
-        allowed, catalog_error = _models_for_provider(
-            req.provider,
-            active_settings.model
-            if active_settings is not None and req.provider == active_settings.provider
-            else None,
-            routes[req.provider],
-        )
-        if catalog_error:
-            raise HTTPException(503, catalog_error)
-        if req.model not in allowed:
-            raise HTTPException(
-                422,
-                f"Unknown {req.provider} model '{req.model}'",
-            )
+    if settings_changed:
+        _validate_cowriter_selection(req, active_settings, routes)
     set_cowriter_settings(session, req.provider, req.model, routes)
     if req.tail_token_budget is not None:
         try:
@@ -738,6 +702,58 @@ def api_set_cowriter_settings(
     )
     session.commit()
     return _cowriter_response(session)
+
+
+def _cowriter_routes(
+    session: Session,
+    req: CowriterSettingsRequest,
+) -> tuple[dict[str, str], dict[str, str]]:
+    try:
+        stored_routes = get_effective_provider_routes(session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return stored_routes, req.provider_routes or stored_routes
+
+
+def _validate_cowriter_selection(
+    req: CowriterSettingsRequest,
+    active_settings,
+    routes: dict[str, str],
+) -> None:
+    from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshot
+
+    selected_route = routes[req.provider]
+    statuses = _route_statuses(
+        req.provider,
+        provider_snapshot(req.provider),
+        None,
+        ProviderSurface.CO_WRITER,
+    )
+    _require_ready_route(statuses[selected_route])
+    current_model = (
+        active_settings.model
+        if active_settings is not None and req.provider == active_settings.provider
+        else None
+    )
+    allowed_models, catalog_error = _models_for_provider(
+        req.provider,
+        current_model,
+        selected_route,
+    )
+    if catalog_error:
+        raise HTTPException(503, catalog_error)
+    if req.model not in allowed_models:
+        raise HTTPException(422, f"Unknown {req.provider} model '{req.model}'")
+
+
+def _require_ready_route(selected_status) -> None:
+    if selected_status.readiness.state == "ready":
+        return
+    reason = selected_status.readiness.reason or selected_status.catalogue_failure
+    raise HTTPException(
+        422,
+        reason.model_dump(mode="json") if reason else "Selected route is unverified",
+    )
 
 
 # ── Judge (lyrical-coherence) provider settings ─────────────────────
