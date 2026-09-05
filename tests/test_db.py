@@ -2642,6 +2642,33 @@ def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Pat
     assert "last_played_at" not in columns
 
 
+def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.889dfb248896_add_playlist_cover_key",
+    )
+    db_path = tmp_path / "playlist-cover-key.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"]: column for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert columns["cover_key"]["nullable"] is True
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"] for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert "cover_key" not in columns
+
+
 # ── Claude model settings ───────────────────────────────────────────
 
 
