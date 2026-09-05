@@ -302,4 +302,32 @@ describe('LoraDetail', () => {
 		await vi.waitFor(() => expect(removeJob).toHaveBeenCalledWith(runningJob.id));
 		expect(target.textContent).toContain('Training cancelled');
 	});
+
+	it('renders the complete server queue-limit detail inline and keeps retry available at 375 px', async () => {
+		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+		const detail =
+			'Training queue is full\n2 trainings are already waiting. Try again when one training starts or finishes.';
+		trainLora.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras/l1/train'));
+		const target = await render(
+			lora({
+				status: 'failed',
+				error: 'The worker restarted before epoch 31 could finish.',
+				samples: [
+					{ id: 's1', caption: 'one', lyrics: 'one', position: 0 },
+					{ id: 's2', caption: 'two', lyrics: 'two', position: 1 },
+					{ id: 's3', caption: 'three', lyrics: 'three', position: 2 }
+				]
+			})
+		);
+
+		target.querySelector<HTMLButtonElement>('.train-btn')?.click();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.training-error')?.textContent).toBe(detail)
+		);
+		expect(target.querySelector('.banner.error')?.textContent).toContain(
+			'The worker restarted before epoch 31 could finish.'
+		);
+		expect(target.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe('Train again');
+	});
 });

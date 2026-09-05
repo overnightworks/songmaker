@@ -140,4 +140,86 @@ describe('voices page', () => {
 		);
 		expect(mocks.createLora).toHaveBeenCalledWith('My Tenor');
 	});
+
+	it('shows the server-stored failure reason and retry after a voices-page reload', async () => {
+		const failureReason =
+			'The worker restarted before epoch 31 could finish. Your samples are unchanged.';
+		const failedVoice = {
+			id: 'l1',
+			user_id: 'u1',
+			name: 'My Tenor',
+			slug: 'my-tenor',
+			status: 'failed',
+			error: failureReason,
+			created_at: '2026-09-05T00:00:00Z',
+			deleted_at: null,
+			samples: [0, 1, 2].map((position) => ({
+				id: `s${position + 1}`,
+				user_lora_id: 'l1',
+				audio_path: `user_loras/u1/l1/samples/s${position + 1}.wav`,
+				caption: `sample ${position + 1}`,
+				lyrics: `lyrics ${position + 1}`,
+				position,
+				created_at: '2026-09-05T00:00:00Z',
+				updated_at: '2026-09-05T00:00:00Z'
+			}))
+		};
+		mocks.loadLoras.mockImplementation(async () => {
+			loras.set([failedVoice]);
+			return [failedVoice];
+		});
+
+		const firstTarget = document.createElement('div');
+		document.body.append(firstTarget);
+		mounted = mount(VoicesPage, { target: firstTarget });
+		await vi.waitFor(() => expect(firstTarget.querySelector('.lora-row')).not.toBeNull());
+		firstTarget.querySelector<HTMLButtonElement>('.lora-row')?.click();
+		await vi.waitFor(() => expect(firstTarget.textContent).toContain(failureReason));
+		expect(firstTarget.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe(
+			'Train again'
+		);
+		expect(firstTarget.querySelector<HTMLButtonElement>('.train-btn')).not.toBeDisabled();
+
+		await unmount(mounted);
+		mounted = undefined;
+		loras.set([]);
+
+		const reloadedTarget = document.createElement('div');
+		document.body.append(reloadedTarget);
+		mounted = mount(VoicesPage, { target: reloadedTarget });
+		await vi.waitFor(() => expect(reloadedTarget.querySelector('.lora-row')).not.toBeNull());
+		reloadedTarget.querySelector<HTMLButtonElement>('.lora-row')?.click();
+		await vi.waitFor(() => expect(reloadedTarget.textContent).toContain(failureReason));
+		expect(reloadedTarget.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe(
+			'Train again'
+		);
+		expect(reloadedTarget.querySelector<HTMLButtonElement>('.train-btn')).not.toBeDisabled();
+	});
+
+	it('keeps the full voice-limit detail visible at 375 px', async () => {
+		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+		const detail =
+			'Could not create voice\nYou have reached the limit of 10 voices. Delete a voice before creating another.';
+		mocks.createLora.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras'));
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(VoicesPage, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		await tick();
+		const input = target.querySelector<HTMLInputElement>('.create-panel input');
+		if (!input) throw new Error('Expected voice name input');
+		input.value = 'My Tenor';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		target.querySelector<HTMLButtonElement>('.create-panel .primary')?.click();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('[role="alert"]')?.textContent).toBe(detail)
+		);
+		expect(target.querySelector<HTMLButtonElement>('.create-panel .primary')?.textContent).toBe(
+			'Create'
+		);
+	});
 });
