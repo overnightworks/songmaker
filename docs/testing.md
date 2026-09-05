@@ -231,7 +231,9 @@ flock /tmp/songmaker-probe.lock env \
   ADMIN_PASSWORD='E2eCiSmoke#2026!' \
   PUBLIC_BASE_URL=http://localhost:18080 \
   docker compose -f docker-compose.yml -f docker-compose.ci.yml \
-  -f docker-compose.e2e-voices.yml up -d --build --wait
+  -f docker-compose.e2e-voices.yml up -d --build --wait \
+  postgres redis migrate songmaker-web songmaker-music-worker \
+  songmaker-voices-e2e-worker
 ```
 
 The fake worker uses the same internal worker registration, Redis heartbeat,
