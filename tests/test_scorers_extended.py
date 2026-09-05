@@ -185,12 +185,32 @@ def test_clean_lyrics() -> None:
     assert clean_lyrics("street-lights") == "street lights"
 
 
-def test_is_vocalization() -> None:
+@pytest.mark.parametrize(
+    "line",
+    (
+        "oh oh oh",
+        "la la la",
+        "ah na da hey yeah eh",
+        "oo ooh hm hmm mm mmm wo woo wooh",
+        "OH, YEAH",
+    ),
+)
+def test_is_vocalization_recognizes_supported_vocalizations(line: str) -> None:
     from songmaker_cli.scoring.text_accuracy import _is_vocalization
 
-    assert _is_vocalization("oh oh oh") is True
-    assert _is_vocalization("la la la") is True
-    assert _is_vocalization("hello world") is False
+    assert _is_vocalization(line) is True
+
+
+@pytest.mark.parametrize("line", ("o", "h", "m", "who", "hello world"))
+def test_is_vocalization_rejects_lyrics_and_partial_vocalizations(line: str) -> None:
+    from songmaker_cli.scoring.text_accuracy import _is_vocalization
+
+    assert _is_vocalization(line) is False
+
+
+def test_is_vocalization_accepts_an_empty_line() -> None:
+    from songmaker_cli.scoring.text_accuracy import _is_vocalization
+
     assert _is_vocalization("") is True
 
 

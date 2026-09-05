@@ -750,8 +750,8 @@ def _fail_job(ctx: AppContext, job_id: str) -> None:
             update_job_status(session, job_id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
             session.commit()
     except Exception:
-        log.error(
+        log.exception(
             "Failed to mark job %s as failed after enqueue error — "
             "job will remain in 'queued' until stale-job recovery picks it up",
-            job_id, exc_info=True,
+            job_id,
         )

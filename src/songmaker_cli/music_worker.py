@@ -200,7 +200,7 @@ class MusicWorkerSettings:
     cron_jobs = [
         cron(
             _music_worker.cleanup_files_cron,
-            minute={i for i in range(0, 60, 2)},
+            minute=set(range(0, 60, 2)),
             second={0},
         ),
         cron(

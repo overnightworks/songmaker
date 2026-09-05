@@ -1060,7 +1060,7 @@ def _persist_crashed_lora_reconciliation(
 
 
 async def run_lora_training_job(
-    ctx,
+    _ctx,
     job_id: str,
     lora_id: str,
     user_id: str,
@@ -1111,7 +1111,7 @@ async def run_lora_training_job(
     except PreviousAdapterRestoredError as exc:
         _keep_restored_lora_adapter(db_factory, audio_dir, exc, job_id, lora_id, user_id)
     except LoraTrainingModelModeError as exc:
-        log.error("LoRA training job %s returned an invalid model mode: %s", job_id, exc)
+        log.exception("LoRA training job %s returned an invalid model mode: %s", job_id, exc)
         _fail_lora_training(db_factory, audio_dir, exc, exc.error_type, job_id, lora_id, user_id)
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)

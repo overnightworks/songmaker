@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Final
+from typing import Any, Final, cast
 
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
@@ -214,7 +214,7 @@ def _apply_user_lora_path(
         ):
             raise GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
         lora_path = str((audio_dir / lora.storage_path).resolve())
-    return replace(ace_config, lora_path=lora_path)
+    return cast(AceStepConfig, replace(ace_config, lora_path=lora_path))
 
 
 def _build_generation_context(
@@ -694,7 +694,7 @@ def _apply_repaint_overrides(
     raw_wav = _resolve_raw_wav(params.src_wav_path)
     audio_duration = ctx.ace_config.audio_duration
 
-    overrides: dict = {
+    overrides: dict[str, Any] = {
         "task_type": "repaint",
         "src_audio_path": _copy_to_shared_tmp(params.src_wav_path, ctx.audio_dir),
         "prompt": params.prompt or ctx.ace_config.prompt,
@@ -713,7 +713,7 @@ def _apply_repaint_overrides(
 
     new_ctx = replace(
         ctx,
-        ace_config=replace(ctx.ace_config, **overrides),
+        ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
         src_generation_id=params.src_generation_id,
     )
     if raw_wav:
@@ -728,7 +728,7 @@ def _apply_cover_overrides(
     ctx: GenerationContext,
     params: CoverTaskParams,
 ) -> GenerationContext:
-    overrides: dict = {
+    overrides: dict[str, Any] = {
         "task_type": "cover",
         "src_audio_path": _copy_to_shared_tmp(params.src_wav_path, ctx.audio_dir),
         "prompt": params.prompt or ctx.ace_config.prompt,
@@ -740,7 +740,7 @@ def _apply_cover_overrides(
 
     return replace(
         ctx,
-        ace_config=replace(ctx.ace_config, **overrides),
+        ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
         src_generation_id=params.src_generation_id,
     )
 
@@ -771,7 +771,12 @@ async def run_generation_job(
         song_id=song_id,
     )
 
-    task_type = "cover" if cover_params else ("repaint" if repaint_params else "generate")
+    if cover_params:
+        task_type = "cover"
+    elif repaint_params:
+        task_type = "repaint"
+    else:
+        task_type = "generate"
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     admitted_worker = None

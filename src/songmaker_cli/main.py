@@ -346,7 +346,7 @@ def main() -> None:
     try:
         app.meta()
     except (SongmakerError, ServerError) as exc:
-        log.error("%s", exc)
+        log.exception("%s", exc)
         sys.exit(1)
 
 

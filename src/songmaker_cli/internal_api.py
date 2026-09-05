@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
@@ -43,7 +44,7 @@ router = APIRouter(
 @router.post("/workers/register")
 def register_worker_endpoint(
     req: WorkerRegisterRequest,
-    db: Session = Depends(get_db_session),
+    db: Annotated[Session, Depends(get_db_session)],
 ) -> WorkerRegisterResponse:
     worker = register_worker(
         db,

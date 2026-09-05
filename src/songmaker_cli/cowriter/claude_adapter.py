@@ -116,7 +116,6 @@ async def stream_claude_api_turn(
     except Exception as exc:
         log.warning("Claude API co-writer failed class=%s", type(exc).__name__)
         raise _sdk_failure(anthropic, exc) from exc
-    return
 
 
 class _ClaudeApiTransport:
@@ -261,16 +260,11 @@ def call_claude_once(
         settings.anthropic_api_key.get_secret_value()
         if settings.anthropic_api_key else None
     )
-    try:
-        response = call_claude(
-            prompt,
-            api_key=api_key,
-            system=system,
-            model=model,
-            timeout_seconds=timeout,
-        )
-    except UnavailableError:
-        # The API-only judge owns its established failure detail (for example
-        # ``judge_timeout``); the co-writer route never calls this adapter.
-        raise
+    response = call_claude(
+        prompt,
+        api_key=api_key,
+        system=system,
+        model=model,
+        timeout_seconds=timeout,
+    )
     return response.text
