@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -30,6 +31,8 @@ from songmaker_cli.settings import get_settings
 from ._runtime import JudgeFailureError, _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
+
+SCORING_JOB_TERMINAL_LOG: Final = "Scoring job %s stopping because job is terminal"
 
 
 def _split_by_host(scorers: list[str] | None) -> tuple[list[str] | None, bool]:
@@ -81,12 +84,12 @@ def run_scoring_job(
 
     try:
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         with db_factory() as session:
@@ -140,7 +143,7 @@ def run_scoring_job(
             _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
 
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         song_scores = scorer.score(
@@ -148,7 +151,7 @@ def run_scoring_job(
             on_progress=_score_progress,
         )
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         if judge_coherence:
@@ -166,7 +169,7 @@ def run_scoring_job(
         with db_factory() as session:
             from songmaker_cli.db.models import Generation as GenModel
             if lock_active_job(session, job_id) is None:
-                log.info("Scoring job %s stopping because job is terminal", job_id)
+                log.info(SCORING_JOB_TERMINAL_LOG, job_id)
                 return
             save_scores(
                 session, gen_id, scores_dict,

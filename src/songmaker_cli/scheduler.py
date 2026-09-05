@@ -26,7 +26,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import TypeVar
+from typing import Final, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -61,6 +61,7 @@ log = logging.getLogger(__name__)
 ProgressCallback = Callable[[float], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
+NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
 
 
 class NoCapacityError(RuntimeError):
@@ -171,7 +172,7 @@ async def _list_online_workers(
 
 def _pick_from(workers: list[_PickedWorker], target_mode: str) -> _PickedWorker:
     if not workers:
-        raise NoCapacityError("No online ACE-Step workers")
+        raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     loaded = [w for w in workers if target_mode in w.loaded_modes]
     pool = loaded if loaded else workers
     return min(pool, key=lambda w: w.queue_depth)
@@ -184,7 +185,7 @@ async def pick_worker(
 ) -> _PickedWorker:
     workers = await _list_online_workers(db, redis)
     if not workers:
-        raise NoCapacityError("No online ACE-Step workers")
+        raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     available = [worker for worker in workers if not await redis.exists(gpu_hold_key(worker.id))]
     if not available:
         raise AllWorkersHeld("All online ACE-Step workers are held for LoRA training")
@@ -197,7 +198,7 @@ async def pick_any_online_worker(
 ) -> _PickedWorker:
     workers = await _list_online_workers(db, redis)
     if not workers:
-        raise NoCapacityError("No online ACE-Step workers")
+        raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     return min(workers, key=lambda w: w.id)
 
 

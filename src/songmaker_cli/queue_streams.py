@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
@@ -60,6 +60,12 @@ def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
 
 FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
 QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
+QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
+QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
+QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
+QUEUE_STREAM_CONCAT_SUFFIX: Final = ".concat.txt"
+QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
+QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 
 
 class PinnedBytesExceededError(Exception):
@@ -394,7 +400,7 @@ def _find_reusable_snapshot(
         return None
     now = datetime.now(timezone.utc)
     manifests = sorted(
-        stream_dir.glob("*.json"),
+        stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -420,13 +426,13 @@ def _find_reusable_snapshot(
 
 def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     manifest_path = _stream_dir(ctx) / f"{snapshot_id}.json"
     if not manifest_path.exists():
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     manifest = QueueStreamManifest.load(manifest_path)
     if manifest is None:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
     now = datetime.now(timezone.utc)
     if manifest.expires_at < now and not _is_active_pin(manifest, now):
@@ -435,13 +441,13 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStream
 
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     if not audio_path.exists():
-        raise HTTPException(404, "Queue stream audio not found")
+        raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)
     return manifest
 
 
 def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:
     if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     path = (_stream_dir(ctx) / f"{snapshot_id}.mp3").resolve()
     root = _stream_dir(ctx).resolve()
     if not path.is_relative_to(root):
@@ -455,7 +461,7 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
         return
     now = datetime.now(timezone.utc)
     live_snapshot_ids: set[str] = set()
-    for manifest_path in stream_dir.glob("*.json"):
+    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         snapshot_id = manifest_path.stem
         manifest = QueueStreamManifest.load(manifest_path)
         if manifest is not None and manifest.expires_at >= now:
@@ -487,7 +493,12 @@ def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
     if not _valid_snapshot_id(snapshot_id):
         return
     root = _stream_dir(ctx)
-    for suffix in (".json", ".mp3", ".tmp.mp3", ".concat.txt"):
+    for suffix in (
+        QUEUE_STREAM_MANIFEST_SUFFIX,
+        ".mp3",
+        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
+        QUEUE_STREAM_CONCAT_SUFFIX,
+    ):
         (root / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
 
 
@@ -655,12 +666,23 @@ def _enforce_cache_quota(
 def delete_snapshot_files_from_dir(stream_dir: Path, snapshot_id: str) -> None:
     if not _valid_snapshot_id(snapshot_id):
         return
-    for suffix in (".json", ".mp3", ".tmp.mp3", ".concat.txt"):
+    for suffix in (
+        QUEUE_STREAM_MANIFEST_SUFFIX,
+        ".mp3",
+        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
+        QUEUE_STREAM_CONCAT_SUFFIX,
+    ):
         (stream_dir / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
 
 
 def _snapshot_id_from_cache_file(path: Path) -> str | None:
-    for suffix in (".tmp.mp3", ".concat.txt", ".json.tmp", ".json", ".mp3"):
+    for suffix in (
+        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
+        QUEUE_STREAM_CONCAT_SUFFIX,
+        ".json.tmp",
+        QUEUE_STREAM_MANIFEST_SUFFIX,
+        ".mp3",
+    ):
         if not path.name.endswith(suffix):
             continue
         snapshot_id = path.name[: -len(suffix)]
@@ -686,7 +708,7 @@ def _is_active_pin(manifest: QueueStreamManifest, now: datetime) -> bool:
 def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
     """Return the IDs of all snapshots that are currently pinned and not abandoned."""
     pinned: set[str] = set()
-    for manifest_path in stream_dir.glob("*.json"):
+    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
             continue
@@ -698,7 +720,7 @@ def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
 def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
     """Sum the audio bytes of all currently pinned, non-abandoned snapshots."""
     total = 0
-    for manifest_path in stream_dir.glob("*.json"):
+    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
             continue
@@ -719,14 +741,14 @@ def pin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     Idempotent: returns the current manifest state when already pinned.
     """
     if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     stream_dir = _stream_dir(ctx)
     manifest_path = stream_dir / f"{snapshot_id}.json"
     if not manifest_path.exists():
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     manifest = QueueStreamManifest.load(manifest_path)
     if manifest is None:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
     if manifest.pinned:
         return manifest  # Already pinned — idempotent fast-path (no lock needed)
@@ -735,18 +757,18 @@ def pin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
         # Re-read under the lock: another thread may have pinned between the check above and here
         manifest = QueueStreamManifest.load(manifest_path)
         if manifest is None:
-            raise HTTPException(404, "Queue stream not found")
+            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
         if manifest.pinned:
             return manifest  # Already pinned — idempotent
 
         audio_path = stream_dir / f"{snapshot_id}.mp3"
         if not audio_path.exists():
-            raise HTTPException(404, "Queue stream audio not found")
+            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)
         try:
             new_bytes = audio_path.stat().st_size
         except OSError as exc:
-            raise HTTPException(404, "Queue stream audio not found") from exc
+            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc
 
         now = datetime.now(timezone.utc)
         if _sum_pinned_bytes(stream_dir, now) + new_bytes > QUEUE_STREAM_PINNED_MAX_BYTES:
@@ -763,14 +785,14 @@ def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     Idempotent: has no effect when the snapshot is already unpinned.
     """
     if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     stream_dir = _stream_dir(ctx)
     manifest_path = stream_dir / f"{snapshot_id}.json"
     if not manifest_path.exists():
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     manifest = QueueStreamManifest.load(manifest_path)
     if manifest is None:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
     manifest = manifest.model_copy(update={"pinned": False, "pinned_at": None})
     manifest.save(manifest_path)

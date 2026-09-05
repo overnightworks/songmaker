@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Final
 
 import httpx
 
@@ -17,6 +18,8 @@ log = logging.getLogger(__name__)
 
 DEFAULT_SERVER = "http://localhost:8080"
 POLL_INTERVAL = 2.0
+
+AUTHENTICATION_REQUIRED_DETAIL: Final = "Not authenticated. Run 'songmaker login' first."
 
 SESSION_DIR = Path.home() / ".songmaker"
 SESSION_FILE = SESSION_DIR / "session.json"
@@ -126,7 +129,7 @@ def api_get(server: str, path: str) -> dict | list:
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
     if resp.status_code == 401:
-        raise ServerError("Not authenticated. Run 'songmaker login' first.")
+        raise ServerError(AUTHENTICATION_REQUIRED_DETAIL)
     if not resp.is_success:
         raise ServerError(f"GET {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -143,7 +146,7 @@ def api_post(server: str, path: str, json: dict | None = None) -> dict:
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
     if resp.status_code == 401:
-        raise ServerError("Not authenticated. Run 'songmaker login' first.")
+        raise ServerError(AUTHENTICATION_REQUIRED_DETAIL)
     if not resp.is_success:
         raise ServerError(f"POST {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -160,7 +163,7 @@ def api_put(server: str, path: str, json: dict) -> dict:
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
     if resp.status_code == 401:
-        raise ServerError("Not authenticated. Run 'songmaker login' first.")
+        raise ServerError(AUTHENTICATION_REQUIRED_DETAIL)
     if not resp.is_success:
         raise ServerError(f"PUT {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -179,7 +182,7 @@ def api_upload(
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
     if resp.status_code == 401:
-        raise ServerError("Not authenticated. Run 'songmaker login' first.")
+        raise ServerError(AUTHENTICATION_REQUIRED_DETAIL)
     if not resp.is_success:
         raise ServerError(f"POST {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()

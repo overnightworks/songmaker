@@ -180,6 +180,9 @@ _BACKGROUND_REAP_POLL_SECONDS: Final = 0.1
 
 log = logging.getLogger(__name__)
 
+GROK_CLI_CREDENTIALS_INVALID_DETAIL: Final = "could not parse Grok CLI credentials"
+CODEX_CLI_CREDENTIALS_INVALID_DETAIL: Final = "could not parse Codex CLI credentials"
+
 
 def scrubbed_env() -> dict[str, str]:
     """Return the inherited environment without application secrets."""
@@ -1074,17 +1077,17 @@ def grok_cli_token_is_present() -> bool:
     try:
         document = json.loads(raw_auth)
     except json.JSONDecodeError as exc:
-        raise AgentCliUnavailableError("could not parse Grok CLI credentials") from exc
+        raise AgentCliUnavailableError(GROK_CLI_CREDENTIALS_INVALID_DETAIL) from exc
     if not isinstance(document, dict):
-        raise AgentCliUnavailableError("could not parse Grok CLI credentials")
+        raise AgentCliUnavailableError(GROK_CLI_CREDENTIALS_INVALID_DETAIL)
     for realm in document.values():
         if not isinstance(realm, dict):
-            raise AgentCliUnavailableError("could not parse Grok CLI credentials")
+            raise AgentCliUnavailableError(GROK_CLI_CREDENTIALS_INVALID_DETAIL)
         key = realm.get("key")
         if key is None:
             continue
         if not isinstance(key, str):
-            raise AgentCliUnavailableError("could not parse Grok CLI credentials")
+            raise AgentCliUnavailableError(GROK_CLI_CREDENTIALS_INVALID_DETAIL)
         if key:
             return True
     return False
@@ -1101,19 +1104,19 @@ def codex_cli_access_token_is_present() -> bool:
     try:
         document = json.loads(raw_auth)
     except json.JSONDecodeError as exc:
-        raise AgentCliUnavailableError("could not parse Codex CLI credentials") from exc
+        raise AgentCliUnavailableError(CODEX_CLI_CREDENTIALS_INVALID_DETAIL) from exc
     if not isinstance(document, dict):
-        raise AgentCliUnavailableError("could not parse Codex CLI credentials")
+        raise AgentCliUnavailableError(CODEX_CLI_CREDENTIALS_INVALID_DETAIL)
     if "tokens" not in document:
         return False
     tokens = document["tokens"]
     if not isinstance(tokens, dict):
-        raise AgentCliUnavailableError("could not parse Codex CLI credentials")
+        raise AgentCliUnavailableError(CODEX_CLI_CREDENTIALS_INVALID_DETAIL)
     if "access_token" not in tokens:
         return False
     access_token = tokens["access_token"]
     if not isinstance(access_token, str):
-        raise AgentCliUnavailableError("could not parse Codex CLI credentials")
+        raise AgentCliUnavailableError(CODEX_CLI_CREDENTIALS_INVALID_DETAIL)
     return bool(access_token)
 
 

@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, NoReturn, TypeVar
+from typing import TYPE_CHECKING, Annotated, Final, NoReturn, TypeVar
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -79,6 +79,11 @@ _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
 COVER_SUGGESTIONS_LOCK_ID = 7
 _LORA_CAPACITY_LOCK_ID = 8
+
+SONG_NOT_FOUND_DETAIL: Final = "Song not found"
+LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
+LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
+GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
@@ -470,11 +475,11 @@ def check_song_access(
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
     if not song:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     if user.role != ROLE_ADMIN:
         album = song.album
         if not album or album.created_by != user.id:
-            raise HTTPException(404, "Song not found")
+            raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
 
 
@@ -489,19 +494,19 @@ def check_song_access_including_deleted(
     """
     song = get_song(session, song_id, include_deleted_rows=True)
     if not song:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     if user.role != ROLE_ADMIN:
         album = get_album(session, song.album_id, include_deleted_rows=True)
         if not album or album.created_by != user.id:
-            raise HTTPException(404, "Song not found")
+            raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
 
 
 def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLora:
     if not lora:
-        raise HTTPException(404, "LoRA not found")
+        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
     if lora.user_id != user.id:
-        raise HTTPException(404, "LoRA not found")
+        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
     return lora
 
 
@@ -521,9 +526,9 @@ def check_lora_ready_for_generation(
         return None
     lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)
     if not lora:
-        raise HTTPException(404, "LoRA not found")
+        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
     if lora.user_id != user.id:
-        raise HTTPException(404, "LoRA not found")
+        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
     if lora.deleted_at is not None:
         raise HTTPException(422, "LoRA is deleted")
     if lora.status != LoraStatus.READY:
@@ -537,12 +542,12 @@ def check_lora_sample_access(
     sample: UserLoraSample | None, user: AuthenticatedUser,
 ) -> UserLoraSample:
     if not sample:
-        raise HTTPException(404, "LoRA sample not found")
+        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
     parent = sample.user_lora
     if not parent:
-        raise HTTPException(404, "LoRA sample not found")
+        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
     if parent.user_id != user.id:
-        raise HTTPException(404, "LoRA sample not found")
+        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
     return sample
 
 
@@ -552,11 +557,11 @@ def check_generation_access(
     """Load a generation and verify ownership. Returns the generation or raises 404."""
     gen = get_generation(session, gen_id)
     if not gen:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     if user.role != ROLE_ADMIN:
         album = gen.song.album if gen.song else None
         if not album or album.created_by != user.id:
-            raise HTTPException(404, "Generation not found")
+            raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     return gen
 
 
@@ -573,7 +578,7 @@ def check_own_generation_access(
     gen = check_generation_access(session, gen_id, user)
     album = gen.song.album if gen.song else None
     if not album or album.created_by != user.id:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     return gen
 
 

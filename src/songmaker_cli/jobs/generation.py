@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Final
 
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
@@ -74,6 +75,8 @@ from ._runtime import (
 )
 
 log = logging.getLogger(__name__)
+
+GENERATION_JOB_TERMINAL_LOG: Final = "Generation job %s stopping because job is terminal"
 
 _PROGRESS_THROTTLE_SECONDS = 2.0
 
@@ -777,7 +780,7 @@ async def run_generation_job(
 
     try:
         if _job_is_terminal(db_factory, job_id):
-            log.info("Generation job %s stopping because job is terminal", job_id)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
 
         try:
@@ -837,7 +840,7 @@ async def run_generation_job(
 
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
         if _job_is_terminal(db_factory, job_id):
-            log.info("Generation job %s stopping because job is terminal", job_id)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
 
         tmp_copies: list[str] = []
@@ -854,7 +857,7 @@ async def run_generation_job(
 
             for i in range(count):
                 if _job_is_terminal(db_factory, job_id):
-                    log.info("Generation job %s stopping because job is terminal", job_id)
+                    log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
                     return
                 _update_job(db_factory, job_id, JobStatus.RUNNING, progress=i / count)
                 on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
@@ -871,7 +874,7 @@ async def run_generation_job(
                     if _job_is_terminal(db_factory, job_id):
                         _discard_worker_audio(worker_result.audio_path)
                         log.info(
-                            "Generation job %s stopping because job is terminal",
+                            GENERATION_JOB_TERMINAL_LOG,
                             job_id,
                         )
                         return

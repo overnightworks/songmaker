@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 import structlog
 from fastapi import Depends, HTTPException, Request
@@ -23,6 +24,8 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 SESSION_COOKIE = "session_id"
+
+SESSION_EXPIRED_DETAIL: Final = "Session expired"
 
 
 @dataclass(frozen=True)
@@ -84,7 +87,7 @@ def _try_redis_auth(
 
     settings = get_settings()
     if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
-        raise HTTPException(401, "Session expired")
+        raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     if not cached.is_active:
         raise HTTPException(403, "Account disabled")
@@ -139,12 +142,12 @@ def get_current_user(
 
     expires_at = user_session.expires_at.replace(tzinfo=timezone.utc) if user_session else None
     if not user_session or expires_at < now:
-        raise HTTPException(401, "Session expired")
+        raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     settings = get_settings()
     created_at = user_session.created_at.replace(tzinfo=timezone.utc)
     if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
-        raise HTTPException(401, "Session expired")
+        raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     if not user_session.user.is_active:
         raise HTTPException(403, "Account disabled")

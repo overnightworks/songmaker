@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -95,6 +96,8 @@ def _require_owned_reference_audio(
         raise HTTPException(404, "Reference audio not found") from exc
 
 router = APIRouter()
+
+SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 
 
 @router.get("/songs")
@@ -192,7 +195,7 @@ def api_update_song(
     try:
         version = update_song(session, song_id, **kwargs)
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
@@ -201,7 +204,7 @@ def api_update_song(
 @router.put(
     "/songs/{song_id}/title",
     responses={
-        404: {"description": "Song not found"},
+        404: {"description": SONG_NOT_FOUND_DETAIL},
         422: {"description": "Song title is required"},
     },
 )
@@ -222,7 +225,7 @@ def api_rename_song(
             session, song_id, title, slug=slug, force_new_version=True,
         )
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -257,7 +260,7 @@ def api_move_song(
 
 @router.delete(
     "/songs/{song_id}",
-    responses={404: {"description": "Song not found"}},
+    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
 )
 def api_delete_song(
     song_id: str,
@@ -268,7 +271,7 @@ def api_delete_song(
     try:
         soft_delete_song(session, song_id)
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
@@ -277,7 +280,7 @@ def api_delete_song(
 @router.post(
     "/songs/{song_id}/restore",
     responses={
-        404: {"description": "Song not found"},
+        404: {"description": SONG_NOT_FOUND_DETAIL},
         410: {"description": "Song restore window has expired"},
     },
 )
@@ -335,7 +338,7 @@ def api_cleanup_song(
 
 @router.post(
     "/songs/{song_id}/share",
-    responses={404: {"description": "Song not found"}},
+    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
 )
 def api_share_song(
     song_id: str,
@@ -347,7 +350,7 @@ def api_share_song(
     try:
         song = enable_song_sharing(session, song_id)
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.SONG, song_id)
     session.commit()
     return ShareResponse(
@@ -421,7 +424,7 @@ def api_delete_song_cover(
 
 @router.delete(
     "/songs/{song_id}/share",
-    responses={404: {"description": "Song not found"}},
+    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
 )
 def api_unshare_song(
     song_id: str,
@@ -432,7 +435,7 @@ def api_unshare_song(
     try:
         disable_song_sharing(session, song_id)
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()

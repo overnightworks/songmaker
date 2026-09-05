@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -51,6 +52,8 @@ from songmaker_cli.queue_streams import (
 from songmaker_cli.redis_client import RedisRateLimiter
 
 router = APIRouter()
+
+QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
 
 
@@ -398,7 +401,7 @@ def api_get_queue_stream_audio(
 ) -> FileResponse:
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     if manifest.scope != "auth" or manifest.scope_id != user.id:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
@@ -420,7 +423,7 @@ def api_pin_queue_stream(
     check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     if manifest.scope != "auth" or manifest.scope_id != user.id:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     try:
         updated = pin_snapshot(ctx, snapshot_id)
     except PinnedBytesExceededError:
@@ -445,7 +448,7 @@ def api_unpin_queue_stream(
     check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     if manifest.scope != "auth" or manifest.scope_id != user.id:
-        raise HTTPException(404, "Queue stream not found")
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     updated = unpin_snapshot(ctx, snapshot_id)
     return QueueStreamPinResponse(
         snapshot_id=snapshot_id,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -76,6 +77,8 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 
 
 def _lora_capacity_error(
@@ -477,7 +480,7 @@ async def api_train_lora(
         )
     except ConnectionError:
         _fail_training_job(ctx, job.id, lora_id)
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     refreshed = get_user_lora(session, lora_id)
     return UserLoraResponse.from_orm(refreshed)
@@ -487,11 +490,11 @@ def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
     try:
         with ctx.db() as session:
             update_job_status(
-                session, job_id, JobStatus.FAILED, error="Job queue unavailable",
+                session, job_id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL,
             )
             update_user_lora(
                 session, lora_id,
-                status=LoraStatus.FAILED, error="Job queue unavailable",
+                status=LoraStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL,
             )
             session.commit()
     except Exception:

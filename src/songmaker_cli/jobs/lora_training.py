@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Final
 
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
@@ -70,6 +71,11 @@ def _sanitize_training_error(exc: Exception, job_id: str) -> str:
         return JOB_ERROR_WORKER_TRAINING_FAILED
     return message
 
+
+WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL: Final = (
+    "Worker progress event has invalid training start time"
+)
+LORA_ADAPTER_DESCRIPTION: Final = "LoRA adapter"
 
 _LORA_PROGRESS_THROTTLE_SECONDS = 2.0
 _LORA_SUBMIT_TIMEOUT_SECONDS = 30.0
@@ -142,15 +148,15 @@ def _worker_training_started_at(value: object) -> datetime | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise WorkerProtocolError("Worker progress event has invalid training start time")
+        raise WorkerProtocolError(WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL)
     try:
         training_started_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise WorkerProtocolError(
-            "Worker progress event has invalid training start time",
+            WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL,
         ) from exc
     if training_started_at.tzinfo is None:
-        raise WorkerProtocolError("Worker progress event has invalid training start time")
+        raise WorkerProtocolError(WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL)
     return training_started_at
 
 
@@ -790,7 +796,7 @@ def _recover_recorded_lora_adapter(
     previous_dir: Path,
     tmp_output: Path,
 ) -> bool:
-    _require_lora_adapter_directory(final_dir, "LoRA adapter")
+    _require_lora_adapter_directory(final_dir, LORA_ADAPTER_DESCRIPTION)
     _require_lora_adapter_directory(previous_dir, "Previous LoRA adapter")
     _require_lora_adapter_directory(tmp_output, "Temporary LoRA adapter")
     if tmp_output.is_dir():
@@ -806,7 +812,7 @@ def _restore_previous_lora_adapter(final_dir: Path, previous_dir: Path) -> bool:
     if not previous_dir.exists():
         return final_dir.is_dir()
     if final_dir.exists():
-        _require_lora_adapter_directory(final_dir, "LoRA adapter")
+        _require_lora_adapter_directory(final_dir, LORA_ADAPTER_DESCRIPTION)
         shutil.rmtree(previous_dir)
     else:
         os.rename(previous_dir, final_dir)
@@ -1388,7 +1394,7 @@ def _stage_current_lora_adapter(final_dir: Path, previous_dir: Path) -> None:
     if previous_dir.exists():
         raise RuntimeError(f"Previous LoRA adapter handoff is still pending at {previous_dir}")
     if final_dir.exists():
-        _require_lora_adapter_directory(final_dir, "LoRA adapter")
+        _require_lora_adapter_directory(final_dir, LORA_ADAPTER_DESCRIPTION)
         os.rename(final_dir, previous_dir)
 
 
