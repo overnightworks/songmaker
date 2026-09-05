@@ -8,8 +8,6 @@
 	import {
 		addAlbumToList,
 		albumList,
-		albumSongsLoad,
-		loadSongsForAlbum,
 		songList,
 		updateAlbumInList,
 		updateGenerationInList,
@@ -51,7 +49,6 @@
 		SongItem,
 		SongSummaryResponse
 	} from '$lib/api/types';
-	import { searchQuery } from '$lib/stores/filter';
 	import {
 		createNewPlaylist,
 		playlistList,
@@ -61,24 +58,17 @@
 	} from '$lib/stores/playlists';
 	import { openCollection } from '$lib/stores/collection';
 	import {
-		albumIsExpanded,
 		captureLibraryScroll,
 		libraryFilter,
 		libraryScrollAnchor
 	} from '$lib/stores/libraryContext';
 	import {
 		changeLibrarySort,
-		groupSearchHits,
 		libraryBrowse,
-		librarySearch,
 		librarySort,
-		loadLibraryBrowse,
-		loadMoreLibrarySearch,
-		retryLibrarySearch,
-		syncLibrarySearch
+		loadLibraryBrowse
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
-	import AlbumNode from './AlbumNode.svelte';
 	import Icon from './Icon.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
@@ -106,14 +96,7 @@
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_RETRY_LABEL,
-		LIBRARY_SEARCH_EMPTY,
 		LIBRARY_SEARCH_ERROR,
-		LIBRARY_SEARCH_LOADING,
-		LIBRARY_SEARCH_PLACEHOLDER,
-		LIBRARY_PLAYLISTS_SEARCH_EMPTY,
-		LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER,
-		LIBRARY_SHARED_SEARCH_EMPTY,
-		LIBRARY_SHARED_SEARCH_PLACEHOLDER,
 		LIBRARY_SHARES_ALL_LABEL,
 		LIBRARY_SHARES_FILTER_LABEL,
 		LIBRARY_SHARES_COPY_LABEL,
@@ -136,17 +119,13 @@
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
-	const search = $derived($searchQuery);
 	const playlists = $derived($playlistList);
 	const currentCollection = $derived($openCollection);
 	const createdSort = $derived($librarySort);
-	const searchState = $derived($librarySearch);
 	const browseState = $derived($libraryBrowse);
 	const filter = $derived($libraryFilter);
-	const searching = $derived(filter === 'albums' && search.trim().length > 0);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
-	const albumLoads = $derived($albumSongsLoad);
 	const sharesState = $derived($shareInventory);
 	const sharesCount = $derived($shareCount);
 	let pendingUnshare = $state<ShareInventoryItem | null>(null);
@@ -168,20 +147,12 @@
 		return watchShareView();
 	});
 
-	$effect(() => {
-		if (filter !== 'albums') return;
-		syncLibrarySearch(search);
-	});
-
 	interface AlbumGroup {
 		album: AlbumItem;
 		songs: Array<SongItem | SongSummaryResponse>;
 	}
 
 	const albumGroups = $derived.by(() => {
-		if (searching) {
-			return groupSearchHits(searchState.items);
-		}
 		const orderedAlbums = [...albums].sort((a, b) => compareByCreatedAt(a, b, createdSort));
 		const groups: AlbumGroup[] = [];
 		for (const album of orderedAlbums) {
@@ -195,25 +166,6 @@
 
 	const orderedPlaylists = $derived(
 		[...playlists].sort((a, b) => compareByCreatedAt(a, b, createdSort))
-	);
-	const filteredPlaylists = $derived(
-		search.trim()
-			? orderedPlaylists.filter((p) => p.title.toLowerCase().includes(search.trim().toLowerCase()))
-			: orderedPlaylists
-	);
-	const filteredShareItems = $derived(
-		search.trim()
-			? sharesState.items.filter((item) =>
-					shareRowLabel(item).toLowerCase().includes(search.trim().toLowerCase())
-				)
-			: sharesState.items
-	);
-	const searchPlaceholder = $derived(
-		filter === 'playlists'
-			? LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER
-			: filter === 'shared'
-				? LIBRARY_SHARED_SEARCH_PLACEHOLDER
-				: LIBRARY_SEARCH_PLACEHOLDER
 	);
 
 	let browseEl = $state<HTMLElement | null>(null);
@@ -310,14 +262,7 @@
 
 	function onSortChange(event: Event): void {
 		const option = (event.target as HTMLSelectElement).value as (typeof CREATED_SORTS)[number];
-		changeLibrarySort(option, search);
-		persistLibraryHistory();
-	}
-
-	function onSearchInput(event: Event): void {
-		const value = (event.target as HTMLInputElement).value;
-		searchQuery.set(value);
-		if (filter === 'albums') syncLibrarySearch(value);
+		changeLibrarySort(option, '');
 		persistLibraryHistory();
 	}
 
@@ -397,7 +342,7 @@
 			? librarySharesStatusLabel(sharesCount.total)
 			: LIBRARY_FILTER_LABELS.shared
 	);
-	const panelSection = $derived(searching ? 'search' : filter);
+	const panelSection = $derived(filter);
 	const sharesPageComplete = $derived(sharesState.status === 'ready' && !sharesState.hasMore);
 </script>
 
@@ -433,28 +378,16 @@
 					<option value={option}>{CREATED_SORT_LABELS[option]}</option>
 				{/each}
 			</select>
-			<input
-				class="search"
-				data-hitbox="text"
-				type="text"
-				placeholder={searchPlaceholder}
-				value={search}
-				oninput={onSearchInput}
-				aria-label={searchPlaceholder}
-				aria-busy={searching && searchState.status === 'loading'}
-			/>
 			{#if filter === 'albums'}
-				{#if !searching}
-					<button
-						class="filter-chip"
-						data-hitbox="frequent"
-						class:active={archivedOpen}
-						aria-pressed={archivedOpen}
-						onclick={toggleArchived}
-					>
-						{LIBRARY_ARCHIVED_TOGGLE_LABEL}
-					</button>
-				{/if}
+				<button
+					class="filter-chip"
+					data-hitbox="frequent"
+					class:active={archivedOpen}
+					aria-pressed={archivedOpen}
+					onclick={toggleArchived}
+				>
+					{LIBRARY_ARCHIVED_TOGGLE_LABEL}
+				</button>
 				<button
 					class="new-btn"
 					data-hitbox="frequent"
@@ -482,43 +415,7 @@
 		bind:this={browseEl}
 		onscroll={onBrowseScroll}
 	>
-		{#if searching}
-			{#each albumGroups as group (group.album.id)}
-				<AlbumNode
-					album={group.album}
-					songs={group.songs}
-					showCreatedAge={group.songs.length === 0}
-					expanded={albumIsExpanded({ searching: true, songHits: group.songs.length })}
-					selected={currentCollection?.kind === 'album' && currentCollection.id === group.album.id}
-					loadState={albumLoads[group.album.id]}
-					onselect={() => hydrateAndOpenAlbum(group.album)}
-					onretry={() => loadSongsForAlbum(group.album.id)}
-				/>
-			{/each}
-
-			{#if searchState.status === 'loading' && searchState.items.length === 0}
-				<p class="empty" role="status">{LIBRARY_SEARCH_LOADING}</p>
-			{:else if searchState.status === 'error'}
-				<p class="empty" role="alert">{searchState.error || LIBRARY_SEARCH_ERROR}</p>
-				<button class="retry-btn" onclick={() => retryLibrarySearch()}>{LIBRARY_RETRY_LABEL}</button
-				>
-			{:else if albumGroups.length === 0}
-				<p class="empty">{LIBRARY_SEARCH_EMPTY}</p>
-			{/if}
-
-			{#if searchState.hasMore}
-				<button
-					class="load-more"
-					onclick={async () => {
-						await loadMoreLibrarySearch();
-						persistLibraryHistory();
-					}}
-					disabled={searchState.status === 'loading'}
-				>
-					{LIBRARY_LOAD_MORE}
-				</button>
-			{/if}
-		{:else if filter === 'shared'}
+		{#if filter === 'shared'}
 			<div class="share-filters" role="radiogroup" aria-label={LIBRARY_SHARES_FILTER_LABEL}>
 				<button
 					class="filter-chip"
@@ -556,10 +453,8 @@
 						? LIBRARY_SHARES_TYPE_EMPTY[sharesState.typeFilter]
 						: LIBRARY_SHARED_EMPTY}
 				</p>
-			{:else if sharesPageComplete && search.trim() && filteredShareItems.length === 0}
-				<p class="empty">{LIBRARY_SHARED_SEARCH_EMPTY}</p>
 			{:else}
-				{#each filteredShareItems as item (item.type + item.id)}
+				{#each sharesState.items as item (item.type + item.id)}
 					<div class="share-row">
 						<button
 							class="share-open"
@@ -713,9 +608,9 @@
 				>
 			{/if}
 		{:else if filter === 'playlists'}
-			{#if filteredPlaylists.length > 0}
+			{#if orderedPlaylists.length > 0}
 				<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
-					{#each filteredPlaylists as playlist (playlist.id)}
+					{#each orderedPlaylists as playlist (playlist.id)}
 						<div
 							class="wall-tile"
 							class:selected={currentCollection?.kind === 'playlist' &&
@@ -750,8 +645,6 @@
 			{:else if playlistStatus.status === 'error'}
 				<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 				<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
-			{:else if search.trim() && orderedPlaylists.length > 0}
-				<p class="empty">{LIBRARY_PLAYLISTS_SEARCH_EMPTY}</p>
 			{:else}
 				<p class="empty">{LIBRARY_PLAYLISTS_EMPTY}</p>
 			{/if}
@@ -835,27 +728,6 @@
 		border-radius: 4px;
 		color: var(--text);
 		font-size: 0.8rem;
-	}
-
-	.search {
-		flex: 1;
-		min-width: 160px;
-		padding: 6px 10px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text);
-		font-size: var(--label-font-size);
-		outline: none;
-	}
-
-	.search:focus {
-		border-color: var(--accent);
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
-	}
-
-	.search::placeholder {
-		color: var(--text-subtle);
 	}
 
 	.new-btn {
@@ -1057,11 +929,6 @@
 	@media (max-width: 768px) {
 		.wall-toolbar {
 			padding: 12px 12px 6px;
-		}
-
-		.search {
-			font-size: 1rem;
-			padding: 8px 12px;
 		}
 
 		.tile-grid {

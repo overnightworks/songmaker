@@ -6,14 +6,10 @@ import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib
 import {
 	LIBRARY_ALBUMS_EMPTY,
 	LIBRARY_PLAYLISTS_EMPTY,
-	LIBRARY_RETRY_LABEL,
-	LIBRARY_SEARCH_DEBOUNCE_MS,
-	LIBRARY_SEARCH_EMPTY,
 	LIBRARY_SHARES_OPEN_LABEL,
 	LIBRARY_SHARES_UNSHARE_LABEL,
 	collectionRowPlayLabel
 } from '$lib/constants';
-import { searchQuery } from '$lib/stores/filter';
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
@@ -24,7 +20,6 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
 
-const searchLibrary = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchShares = vi.fn();
 const fetchAlbum = vi.fn();
@@ -37,7 +32,6 @@ const unarchiveAlbum = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
 	fetchShares: (...args: unknown[]) => fetchShares(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
@@ -152,7 +146,6 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 }
 
 beforeEach(() => {
-	searchLibrary.mockReset().mockResolvedValue({ items: [], next_cursor: null, has_more: false });
 	fetchPlaylists.mockReset().mockResolvedValue([]);
 	fetchShares
 		.mockReset()
@@ -171,7 +164,6 @@ beforeEach(() => {
 	resetLibrarySearchForTests();
 	resetShares();
 	resetPlaylists();
-	searchQuery.set('');
 	albumList.set([album()]);
 	songList.set([]);
 	playlistList.set([]);
@@ -225,7 +217,7 @@ describe('LibraryWall filter chips', () => {
 		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
 		await tick();
 		expect(root.textContent).toContain('Night Drive');
-		expect(root.querySelector('.search')).not.toBeNull();
+		expect(root.querySelector('.search')).toBeNull();
 	});
 
 	it('shows an empty state for a filter with nothing in it', async () => {
@@ -573,7 +565,7 @@ describe('LibraryWall shared filter', () => {
 });
 
 describe('LibraryWall toolbar consistency', () => {
-	it('keeps chips, sort, and search in the same order for every filter', async () => {
+	it('keeps search out of the wall for every filter', async () => {
 		playlistList.set([playlist()]);
 		fetchShares.mockResolvedValue({
 			items: [shareItem()],
@@ -588,195 +580,8 @@ describe('LibraryWall toolbar consistency', () => {
 			requireElement<HTMLButtonElement>(root, `#library-filter-${id}`).click();
 			await tick();
 			await tick();
-			const controls = requireElement<HTMLElement>(root, '.wall-controls');
-			const order = Array.from(controls.children).map((child) =>
-				child.matches('.filter-chips')
-					? 'chips'
-					: child.matches('.sort-select')
-						? 'sort'
-						: child.matches('.search')
-							? 'search'
-							: 'other'
-			);
-			expect(order.slice(0, 3), `order for ${id}`).toEqual(['chips', 'sort', 'search']);
+			expect(root.querySelector('.search'), `wall search for ${id}`).toBeNull();
 		}
-	});
-
-	it('filters playlists by title', async () => {
-		playlistList.set([
-			playlist({ id: 'p1', title: 'Night Drive' }),
-			playlist({ id: 'p2', title: 'Sunrise' })
-		]);
-		const root = await render();
-		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
-		await tick();
-
-		const input = requireElement<HTMLInputElement>(root, '.search');
-		input.value = 'sun';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		expect(root.textContent).toContain('Sunrise');
-		expect(root.textContent).not.toContain('Night Drive');
-	});
-
-	it('filters the Shared inventory rows by name', async () => {
-		fetchShares.mockResolvedValue({
-			items: [
-				shareItem({ id: 'a-local', title: 'Local Album' }),
-				shareItem({ id: 'a-other', title: 'Other Record' })
-			],
-			total: 2,
-			offset: 0,
-			limit: 50,
-			has_more: false
-		});
-		const root = await render();
-		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
-		await tick();
-		await tick();
-
-		const input = requireElement<HTMLInputElement>(root, '.search');
-		input.value = 'other';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		expect(root.textContent).toContain('Other Record');
-		expect(root.textContent).not.toContain('Local Album');
-	});
-});
-
-describe('LibraryWall search', () => {
-	beforeEach(() => {
-		vi.useFakeTimers();
-	});
-
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
-	async function typeSearch(root: HTMLElement, query: string): Promise<void> {
-		const input = requireElement<HTMLInputElement>(root, '.search');
-		input.value = query;
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		await tick();
-		await Promise.resolve();
-		await tick();
-	}
-
-	it('searches the server instead of filtering the loaded song list', async () => {
-		albumList.set([album({ id: 'a-local', title: 'Local Only' })]);
-		searchLibrary.mockResolvedValue({
-			items: [{ type: 'album', album: album({ id: 'nachtstrom', title: 'Nachtstrom' }) }],
-			next_cursor: null,
-			has_more: false
-		});
-		const root = await render();
-		await typeSearch(root, 'Nachtstrom');
-
-		expect(searchLibrary).toHaveBeenCalled();
-		expect(root.textContent).toContain('Nachtstrom');
-		expect(root.textContent).not.toContain('Local Only');
-	});
-
-	it('shows search empty copy distinct from the browse empty copy when the server returns no hits', async () => {
-		const root = await render();
-		await typeSearch(root, 'missing');
-
-		expect(root.textContent).toContain(LIBRARY_SEARCH_EMPTY);
-		expect(root.textContent).not.toContain(LIBRARY_ALBUMS_EMPTY);
-	});
-
-	it('shows a retry action that re-runs the same query when search fails', async () => {
-		searchLibrary.mockRejectedValue(new Error('offline'));
-		const root = await render();
-		await typeSearch(root, 'Tide');
-
-		expect(root.textContent).toContain('offline');
-		const retry = requireElement<HTMLButtonElement>(root, '.retry-btn');
-		expect(retry.textContent).toBe(LIBRARY_RETRY_LABEL);
-
-		searchLibrary.mockResolvedValueOnce({
-			items: [{ type: 'album', album: album({ id: 'nachtstrom', title: 'Nachtstrom' }) }],
-			next_cursor: null,
-			has_more: false
-		});
-		retry.click();
-		await Promise.resolve();
-		await tick();
-		expect(root.textContent).toContain('Nachtstrom');
-	});
-
-	it('renders a song search hit without generations under its album', async () => {
-		searchLibrary.mockResolvedValue({
-			items: [
-				{ type: 'album', album: album({ id: 'a-collapsed', title: 'Collapsed' }) },
-				{
-					type: 'song',
-					song: {
-						id: 's-tide',
-						slug: 'tide',
-						title: 'Tide',
-						album_id: 'a-expanded',
-						album_title: 'Expanded',
-						artist: 'Artist',
-						track_number: 1,
-						vocal_language: 'en',
-						lyrics: '',
-						prompt: '',
-						bpm: null,
-						audio_duration: null,
-						key_scale: null,
-						generation_params: null,
-						version_count: 1,
-						generation_count: 0,
-						is_shared: false,
-						share_slug: null,
-						best_scores: null,
-						best_rating: null,
-						cover: null,
-						created_at: '2026-01-01T00:00:00+00:00'
-					},
-					album_id: 'a-expanded',
-					album_title: 'Expanded'
-				}
-			],
-			next_cursor: null,
-			has_more: false
-		});
-		const root = await render();
-		await typeSearch(root, 'Tide');
-
-		const cards = Array.from(root.querySelectorAll('.album-card'));
-		expect(cards).toHaveLength(2);
-		expect(root.querySelector('.song-row')?.textContent).toContain('Tide');
-	});
-
-	it('persists search pagination to history after Load more', async () => {
-		searchLibrary
-			.mockResolvedValueOnce({
-				items: [{ type: 'album', album: album({ id: 'a1', title: 'One' }) }],
-				next_cursor: 'cursor-1',
-				has_more: true
-			})
-			.mockResolvedValueOnce({
-				items: [{ type: 'album', album: album({ id: 'a2', title: 'Two' }) }],
-				next_cursor: null,
-				has_more: false
-			});
-		const root = await render();
-		await typeSearch(root, 'Catalog');
-		expect(root.textContent).toContain('One');
-
-		requireElement<HTMLButtonElement>(root, '.load-more').click();
-		await Promise.resolve();
-		await Promise.resolve();
-		await tick();
-
-		expect(root.textContent).toContain('Two');
-		expect((history.state as { searchLoadedCount: number }).searchLoadedCount).toBe(2);
 	});
 });
 
