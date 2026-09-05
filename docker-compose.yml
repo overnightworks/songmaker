@@ -162,6 +162,11 @@ services:
           create_host_path: false
     cap_drop:
       - ALL
+    # Bubblewrap needs an explicit user-namespace permission; the custom
+    # profile retains Docker's default denials and permits only its setup mounts.
+    security_opt:
+      - apparmor=songmaker-web
+      - no-new-privileges:true
 
   songmaker-music-worker:
     build:
