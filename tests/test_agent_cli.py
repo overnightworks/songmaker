@@ -14,6 +14,8 @@ import pytest
 
 from songmaker_cli import agent_cli
 from songmaker_cli.agent_cli import (
+    CODEX_CLI_CREDENTIALS_INVALID_DETAIL,
+    GROK_CLI_CREDENTIALS_INVALID_DETAIL,
     AgentCliUnavailableError,
     CachedProbe,
     CliLineChannel,
@@ -1336,3 +1338,33 @@ def test_cancelling_a_line_channel_discards_unread_output() -> None:
     channel._close(outcome)
 
     assert channel.receive(timeout=1) == outcome
+
+
+@pytest.mark.parametrize(
+    ("checker", "payload", "detail"),
+    [
+        ("grok", "not json", GROK_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("grok", "[]", GROK_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("grok", '{"realm": []}', GROK_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("grok", '{"realm": {"key": 3}}', GROK_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("codex", "not json", CODEX_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("codex", "[]", CODEX_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("codex", '{"tokens": []}', CODEX_CLI_CREDENTIALS_INVALID_DETAIL),
+        ("codex", '{"tokens": {"access_token": 3}}', CODEX_CLI_CREDENTIALS_INVALID_DETAIL),
+    ],
+)
+def test_credential_probe_names_malformed_mounted_credentials(
+    tmp_path, monkeypatch, checker: str, payload: str, detail: str,
+) -> None:
+    credential_file = tmp_path / f"{checker}.json"
+    credential_file.write_text(payload)
+    function = (
+        agent_cli.grok_cli_token_is_present
+        if checker == "grok"
+        else agent_cli.codex_cli_access_token_is_present
+    )
+    constant = "GROK_CLI_AUTH_FILE" if checker == "grok" else "CODEX_CLI_AUTH_FILE"
+    monkeypatch.setattr(agent_cli, constant, credential_file)
+
+    with pytest.raises(AgentCliUnavailableError, match=detail):
+        function()

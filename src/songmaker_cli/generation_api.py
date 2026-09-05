@@ -84,6 +84,10 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
+WORKER_NOT_RUNNING_DETAIL: Final = "Worker not running"
+JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+
 
 def _check_model_active(session: Session, model: str) -> None:
     active_ids = {m.id for m in list_active_models(session)}
@@ -242,7 +246,7 @@ def api_delete_generation(
     try:
         paths = delete_generation(session, gen_id)
     except ValueError:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
@@ -323,7 +327,7 @@ async def api_generate_song(
         pool = get_arq_pool()
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "Worker not running")
+            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
             raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
@@ -334,7 +338,7 @@ async def api_generate_song(
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -417,7 +421,7 @@ async def api_repaint_generation(
         pool = get_arq_pool()
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "Worker not running")
+            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
             raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
@@ -440,7 +444,7 @@ async def api_repaint_generation(
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -490,7 +494,7 @@ async def api_cover_generation(
         pool = get_arq_pool()
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "Worker not running")
+            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
             raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
@@ -509,7 +513,7 @@ async def api_cover_generation(
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -541,14 +545,14 @@ async def api_score_generation(
     try:
         if not await is_scoring_worker_healthy():
             _fail_job(ctx, job.id)
-            raise HTTPException(503, "Worker not running")
+            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
         await get_arq_pool().enqueue_job(
             JobFunction.SCORE, job.id, gen_id, req.scorers,
             _queue_name=ARQ_SCORING_QUEUE_NAME,
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -580,7 +584,7 @@ def _toggle_generation(
     try:
         action(session, gen_id)
     except ValueError:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     session.commit()
     return StatusResponse()
 
@@ -659,7 +663,7 @@ def api_share_generation(
     try:
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return ShareResponse(
@@ -681,7 +685,7 @@ def api_unshare_generation(
     try:
         disable_generation_sharing(session, gen_id)
     except ValueError:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return StatusResponse()
@@ -743,7 +747,7 @@ def api_remaster_generation(
 def _fail_job(ctx: AppContext, job_id: str) -> None:
     try:
         with ctx.db() as session:
-            update_job_status(session, job_id, JobStatus.FAILED, error="Job queue unavailable")
+            update_job_status(session, job_id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
             session.commit()
     except Exception:
         log.error(

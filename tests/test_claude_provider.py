@@ -560,6 +560,45 @@ def test_acall_cli_strips_secrets_from_child_env(
     assert child_env["PATH"] == "/usr/bin"
 
 
+@pytest.mark.parametrize("failure", ["missing", "nonzero"])
+def test_acall_cli_surfaces_a_missing_or_failed_binary(
+    _no_tool_gate_open,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    monkeypatch.setattr(provider, "averify_no_builtin_cli_tools", AsyncMock(return_value="claude"))
+    if failure == "missing":
+        spawn = AsyncMock(side_effect=FileNotFoundError())
+    else:
+        process = MagicMock(pid=1, returncode=1)
+        process.communicate = AsyncMock(return_value=(b"", b"failed"))
+        spawn = AsyncMock(return_value=process)
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+
+    with pytest.raises(UnavailableError, match="Claude CLI (binary not found|is unavailable)"):
+        asyncio.run(_acall_cli("hello"))
+
+
+@pytest.mark.parametrize("failure", ["missing", "nonzero"])
+def test_cowriter_cli_surfaces_a_missing_or_failed_binary(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
+    if failure == "missing":
+        spawn = AsyncMock(side_effect=FileNotFoundError())
+    else:
+        process = MagicMock(pid=1, returncode=1)
+        process.communicate = AsyncMock(return_value=(b"", b"failed"))
+        spawn = AsyncMock(return_value=process)
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+
+    with pytest.raises(UnavailableError, match="Claude CLI (binary not found|is unavailable)"):
+        asyncio.run(provider.acall_claude_with_mcp("hello", user_id="user-1"))
+
+
 def test_call_cli_passes_model(_no_tool_gate_open) -> None:
     mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
 
@@ -2596,10 +2635,10 @@ def test_public_claude_stream_names_a_nonzero_cli_exit(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
+    stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
+    events = _collect_stream_events(stream)
     with pytest.raises(UnavailableError, match="unavailable"):
-        asyncio.run(_collect_stream_events(
-            acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
-        ))
+        asyncio.run(events)
 
 
 def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
@@ -2611,10 +2650,10 @@ def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
+    stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
+    events = _collect_stream_events(stream)
     with pytest.raises(provider.CliBinaryUnavailableError, match="not found"):
-        asyncio.run(_collect_stream_events(
-            acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
-        ))
+        asyncio.run(events)
 
 
 def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) -> None:

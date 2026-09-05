@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
@@ -55,6 +56,8 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
 
 
 
@@ -133,7 +136,7 @@ def setup(
 ) -> UserResponse:
     _begin_exclusive(db)
     if user_count(db) > 0:
-        raise HTTPException(403, "Setup already completed")
+        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
 
     ip = resolve_client_ip(request)
     ua = _client_user_agent(request)
@@ -142,7 +145,7 @@ def setup(
         db.flush()
         if user_count(db) > 1:
             db.rollback()
-            raise HTTPException(403, "Setup already completed")
+            raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
         expires = datetime.now(timezone.utc) + timedelta(
             seconds=get_settings().session_max_age_seconds,
         )
@@ -153,7 +156,7 @@ def setup(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(403, "Setup already completed")
+        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     _set_session_cookie(response, user_session.id, ctx, request)

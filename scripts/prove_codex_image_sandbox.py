@@ -13,9 +13,27 @@ WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
 EMPTY_CAPABILITY_MASK = "0000000000000000"
 SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
-
-_SANDBOX_ASSERTIONS = """set -eu
-mkdir -p "$CODEX_HOME"
+SANDBOX_WORKDIR = "/tmp/songmaker-codex-sandbox-probe/workdir"
+CODEX_BINARY = "/usr/local/bin/codex"
+_PROTECTED_CODEX_HOME_PATHS = (".git", ".agents", ".codex")
+_NAMESPACE_DENIAL_OUTPUTS = (
+    "No permissions to create a new namespace",
+    "Operation not permitted",
+    "EPERM",
+)
+_BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS = (
+    "--unshare-user",
+    "--unshare-net",
+    "--ro-bind", "/", "/",
+    "/bin/true",
+)
+CODEX_READ_ONLY_PERMISSION_PROFILE = (
+    '{"type":"managed","file_system":{"type":"restricted","entries":['
+    '{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},'
+    f'{{"path":{{"type":"path","path":"{SANDBOX_CODEX_HOME}"}},"access":"write"}}'
+    ']},"network":"restricted"}'
+)
+_SANDBOX_ASSERTIONS = f"""set -eu
 : > "$CODEX_HOME/allowed"
 if : > /app/songmaker-sandbox-write-probe; then
   echo 'sandbox wrote outside CODEX_HOME' >&2
@@ -25,8 +43,8 @@ if : > /tmp/outside-codex-home; then
   echo 'sandbox wrote outside CODEX_HOME' >&2
   exit 1
 fi
-test "$(awk '/^NoNewPrivs:/ { print $2 }' /proc/self/status)" = 1
-test "$(awk '/^CapEff:/ { print $2 }' /proc/self/status)" = "${EMPTY_CAPABILITY_MASK}"
+test "$(awk '/^NoNewPrivs:/ {{ print $2 }}' /proc/self/status)" = 1
+test "$(awk '/^CapEff:/ {{ print $2 }}' /proc/self/status)" = "{EMPTY_CAPABILITY_MASK}"
 """ + """/app/.venv/bin/python - <<'PY'
 import socket
 
@@ -53,38 +71,40 @@ CommandRunner = Callable[[Sequence[str]], CommandResult]
 
 
 def bubblewrap_probe_command() -> tuple[str, ...]:
-    """Build the smallest Bubblewrap command that exercises the profile."""
-    return (
+    """Build Codex's traced read-only execution form with G4 assertions."""
+    command = [
         "bwrap",
+        "--new-session",
+        "--die-with-parent",
+        "--ro-bind", "/", "/",
+        "--dev", "/dev",
+        "--bind", SANDBOX_CODEX_HOME, SANDBOX_CODEX_HOME,
+    ]
+    for protected_path in _PROTECTED_CODEX_HOME_PATHS:
+        path = f"{SANDBOX_CODEX_HOME}/{protected_path}"
+        command.extend(("--perms", "555", "--tmpfs", path, "--remount-ro", path))
+    command.extend((
         "--unshare-user",
-        "--unshare-all",
-        "--ro-bind",
-        "/",
-        "/",
-        "--proc",
-        "/proc",
-        "--dev",
-        "/dev",
-        "--tmpfs",
-        "/tmp",
-        "--dir",
-        SANDBOX_CODEX_HOME,
-        "--bind",
-        SANDBOX_CODEX_HOME,
-        SANDBOX_CODEX_HOME,
-        "--remount-ro",
-        "/tmp",
-        "--setenv",
-        "CODEX_HOME",
-        SANDBOX_CODEX_HOME,
-        "--setenv",
-        "EMPTY_CAPABILITY_MASK",
-        EMPTY_CAPABILITY_MASK,
+        "--unshare-pid",
+        "--unshare-net",
+        "--proc", "/proc",
+        "--argv0",
+        "codex-linux-sandbox",
+        "--",
+        CODEX_BINARY,
+        "--sandbox-policy-cwd",
+        SANDBOX_WORKDIR,
+        "--command-cwd",
+        SANDBOX_WORKDIR,
+        "--permission-profile",
+        CODEX_READ_ONLY_PERMISSION_PROFILE,
+        "--apply-seccomp-then-exec",
         "--",
         "/bin/sh",
         "-ec",
         _SANDBOX_ASSERTIONS,
-    )
+    ))
+    return tuple(command)
 
 
 def _run(command: Sequence[str]) -> CommandResult:
@@ -118,12 +138,19 @@ def _verify_web_profile(run: CommandRunner) -> None:
 def _verify_sandbox(run: CommandRunner) -> None:
     prepare = run((
         "docker", "compose", "exec", "-T", WEB_SERVICE,
-        "/bin/mkdir", "-p", SANDBOX_CODEX_HOME,
+        "/bin/mkdir", "-p",
+        SANDBOX_WORKDIR,
+        *(f"{SANDBOX_CODEX_HOME}/{path}" for path in _PROTECTED_CODEX_HOME_PATHS),
     ))
     _required_output(prepare, "preparing the private CODEX_HOME probe directory")
     try:
-        result = run(("docker", "compose", "exec", "-T", WEB_SERVICE, *bubblewrap_probe_command()))
-        _required_output(result, "Bubblewrap sandbox probe")
+        result = run((
+            "docker", "compose", "exec", "-T",
+            "-e", f"CODEX_HOME={SANDBOX_CODEX_HOME}",
+            WEB_SERVICE,
+            *bubblewrap_probe_command(),
+        ))
+        _required_output(result, "Codex read-only sandbox proof")
     finally:
         run((
             "docker", "compose", "exec", "-T", WEB_SERVICE,
@@ -142,6 +169,8 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         "docker",
         "run",
         "--rm",
+        "--network",
+        "none",
         "--user",
         "songmaker",
         "--cap-drop=ALL",
@@ -152,10 +181,15 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         "--entrypoint",
         "bwrap",
         image,
-        *bubblewrap_probe_command()[1:],
+        *_BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS,
     ))
     if result.returncode == 0:
         raise RuntimeError("Bubblewrap unexpectedly ran under docker-default")
+    if not any(denial in result.stderr for denial in _NAMESPACE_DENIAL_OUTPUTS):
+        raise RuntimeError(
+            "docker-default Bubblewrap probe did not fail while creating a namespace:\n"
+            f"{result.stderr.strip()}"
+        )
 
 
 def prove(run: CommandRunner = _run) -> None:

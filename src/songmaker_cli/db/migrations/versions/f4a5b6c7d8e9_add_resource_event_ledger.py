@@ -6,6 +6,7 @@ Create Date: 2026-08-21
 """
 
 from collections.abc import Sequence
+from typing import Final
 
 import sqlalchemy as sa
 from alembic import op
@@ -14,6 +15,8 @@ revision: str = "f4a5b6c7d8e9"
 down_revision: str | Sequence[str] | None = "40a1c2d3e4f5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+USERS_ID: Final = "users.id"
 
 
 def upgrade() -> None:
@@ -26,7 +29,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="0",
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [USERS_ID], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("user_id"),
     )
     op.execute(
@@ -45,7 +48,7 @@ def upgrade() -> None:
         sa.Column("resource_id", sa.String(length=64), nullable=False),
         sa.Column("generation_id", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [USERS_ID], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "kind",
@@ -91,7 +94,7 @@ def downgrade() -> None:
         "user_resource_cursors",
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("high_water_mark", sa.BigInteger(), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [USERS_ID], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("user_id"),
     )
     op.create_table(
@@ -103,7 +106,7 @@ def downgrade() -> None:
         sa.Column("song_id", sa.String(length=36), nullable=False),
         sa.Column("generation_id", sa.String(length=36), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], [USERS_ID], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "sequence", name="uq_user_resource_event_seq"),
         sa.UniqueConstraint("generation_id", name="uq_user_resource_event_generation"),

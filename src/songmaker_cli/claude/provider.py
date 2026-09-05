@@ -66,6 +66,8 @@ MCP_ALLOWED_TOOLS: Final = f"{COWRITER_TOOL_PREFIX}*"
 _NO_BUILTIN_TOOLS: Final = ""
 _NO_SETTING_SOURCES: Final = ""
 CLAUDE_CLI_MODEL_CATALOG_ERROR: Final = "Claude CLI could not list models."
+CLAUDE_CLI_BINARY_NOT_FOUND_DETAIL: Final = "Claude CLI binary not found"
+CLAUDE_CLI_UNAVAILABLE_DETAIL: Final = "Claude CLI is unavailable. Check server logs for details."
 
 # The CLI is a bind-mounted, self-updating binary reading a prompt that carries
 # untrusted content (lyrics, @-mentions, tool results). These flags make its
@@ -281,7 +283,7 @@ async def acall_claude_with_mcp(
                 start_new_session=True,
             )
         except FileNotFoundError:
-            raise CliBinaryUnavailableError("Claude CLI binary not found")
+            raise CliBinaryUnavailableError(CLAUDE_CLI_BINARY_NOT_FOUND_DETAIL)
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(stdin_body.encode()), timeout=timeout_seconds,
@@ -306,7 +308,7 @@ async def acall_claude_with_mcp(
             len(stderr_bytes),
         )
         raise UnavailableError(
-            "Claude CLI is unavailable. Check server logs for details.",
+            CLAUDE_CLI_UNAVAILABLE_DETAIL,
         )
 
     text = _parse_cli_output(stdout)
@@ -353,7 +355,7 @@ async def acall_claude_with_mcp_stream(
                 limit=_STREAM_BUFFER_LIMIT,
             )
         except FileNotFoundError:
-            raise CliBinaryUnavailableError("Claude CLI binary not found")
+            raise CliBinaryUnavailableError(CLAUDE_CLI_BINARY_NOT_FOUND_DETAIL)
         try:
             if proc.stdin is not None:
                 proc.stdin.write(stdin_body.encode())
@@ -402,7 +404,7 @@ async def _consume_stream(
                 stderr_size,
             )
             raise UnavailableError(
-                "Claude CLI is unavailable. Check server logs for details.",
+                CLAUDE_CLI_UNAVAILABLE_DETAIL,
             )
 
         assembled = final_text if final_text is not None else "".join(text_chunks)
@@ -1817,7 +1819,7 @@ def _call_cli(
                 proc.returncode,
                 len(proc.stderr),
             )
-            raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
+            raise UnavailableError(CLAUDE_CLI_UNAVAILABLE_DETAIL)
 
         text = _parse_cli_output(proc.stdout)
         log.debug("Claude CLI response: %d chars", len(text))
@@ -1868,7 +1870,7 @@ async def _acall_cli(
             await _reap_process_group(proc)
             raise
     except FileNotFoundError:
-        raise UnavailableError("Claude CLI binary not found")
+        raise UnavailableError(CLAUDE_CLI_BINARY_NOT_FOUND_DETAIL)
 
     stdout = stdout_bytes.decode()
     if proc.returncode != 0:
@@ -1877,7 +1879,7 @@ async def _acall_cli(
             proc.returncode,
             len(stderr_bytes),
         )
-        raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
+        raise UnavailableError(CLAUDE_CLI_UNAVAILABLE_DETAIL)
 
     text = _parse_cli_output(stdout)
     log.debug("Claude async CLI response: %d chars", len(text))

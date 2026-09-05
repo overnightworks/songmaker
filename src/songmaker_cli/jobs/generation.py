@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Final
 
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
@@ -74,6 +75,8 @@ from ._runtime import (
 )
 
 log = logging.getLogger(__name__)
+
+GENERATION_JOB_TERMINAL_LOG: Final = "Generation job %s stopping because job is terminal"
 
 _PROGRESS_THROTTLE_SECONDS = 2.0
 
@@ -808,7 +811,7 @@ async def run_generation_job(
 
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
         if _job_is_terminal(db_factory, job_id):
-            log.info("Generation job %s stopping because job is terminal", job_id)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
 
         tmp_copies = _temporary_generation_audio_paths(ctx)
@@ -863,7 +866,7 @@ async def _admit_generation_worker_or_requeue(
     cover_params: CoverTaskParams | None,
 ):
     if _job_is_terminal(db_factory, job_id):
-        log.info("Generation job %s stopping because job is terminal", job_id)
+        log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
         return None
     try:
         return await jobs.admit_generation_worker(
@@ -971,7 +974,7 @@ async def _generate_variants(
     last_error: Exception | None = None
     for index in range(count):
         if _job_is_terminal(db_factory, job_id):
-            log.info("Generation job %s stopping because job is terminal", job_id)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
         persisted_gen_id, error = await _generate_variant(
             admitted_worker,
@@ -1011,7 +1014,7 @@ async def _generate_variant(
         )
         if _job_is_terminal(db_factory, job_id):
             _discard_worker_audio(worker_result.audio_path)
-            log.info("Generation job %s stopping because job is terminal", job_id)
+            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return None, None
         persisted_gen_id = await asyncio.to_thread(
             jobs.post_process_generation,

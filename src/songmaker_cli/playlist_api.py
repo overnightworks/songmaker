@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -73,15 +74,18 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+PLAYLIST_NOT_FOUND_DETAIL: Final = "Playlist not found"
+ALBUM_NOT_FOUND_DETAIL: Final = "Album not found"
+
 
 def _check_playlist_access(
     session: Session, playlist_id: str, user: AuthenticatedUser,
 ) -> Playlist:
     playlist = get_playlist(session, playlist_id)
     if not playlist:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     if user.role != ROLE_ADMIN and playlist.created_by != user.id:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     return playlist
 
 
@@ -109,7 +113,7 @@ def api_create_playlist(
 
 @router.get(
     "/playlists/{playlist_id}",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_get_playlist(
     playlist_id: str,
@@ -122,7 +126,7 @@ def api_get_playlist(
 
 @router.put(
     "/playlists/{playlist_id}",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_update_playlist(
     playlist_id: str,
@@ -135,14 +139,14 @@ def api_update_playlist(
     try:
         playlist = update_playlist(session, playlist_id, req.title, slug=slug)
     except ValueError:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     session.commit()
     return PlaylistResponse.from_orm(playlist)
 
 
 @router.delete(
     "/playlists/{playlist_id}",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_delete_playlist(
     playlist_id: str,
@@ -154,7 +158,7 @@ def api_delete_playlist(
     try:
         delete_playlist(session, playlist_id)
     except ValueError:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     remove_playlist_cover_files(ctx.audio_dir, playlist_id)
@@ -196,7 +200,7 @@ def api_get_playlist_cover(
 
 @router.put(
     "/playlists/{playlist_id}/cover",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 async def api_upload_playlist_cover(
     playlist_id: str,
@@ -219,7 +223,7 @@ async def api_upload_playlist_cover(
 
 @router.delete(
     "/playlists/{playlist_id}/cover",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_delete_playlist_cover(
     playlist_id: str,
@@ -306,9 +310,9 @@ def api_add_album_to_playlist(
     _check_playlist_access(session, playlist_id, user)
     album = get_album(session, req.album_id)
     if not album:
-        raise HTTPException(404, "Album not found")
+        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
     if user.role != ROLE_ADMIN and album.created_by != user.id:
-        raise HTTPException(404, "Album not found")
+        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
 
     def _readable(generation: Generation) -> bool:
         try:
@@ -322,7 +326,7 @@ def api_add_album_to_playlist(
             session, playlist_id, req.album_id, is_readable=_readable
         )
     except ValueError:
-        raise HTTPException(404, "Album not found")
+        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
     session.commit()
     return AddAlbumToPlaylistResponse(
         added_count=len(result.entries),
@@ -379,7 +383,7 @@ def api_reorder_playlist_entry(
 
 @router.post(
     "/playlists/{playlist_id}/share",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_share_playlist(
     playlist_id: str,
@@ -391,7 +395,7 @@ def api_share_playlist(
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
     except ValueError:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return ShareResponse(
@@ -402,7 +406,7 @@ def api_share_playlist(
 
 @router.delete(
     "/playlists/{playlist_id}/share",
-    responses={404: {"description": "Playlist not found"}},
+    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_unshare_playlist(
     playlist_id: str,
@@ -413,7 +417,7 @@ def api_unshare_playlist(
     try:
         disable_playlist_sharing(session, playlist_id)
     except ValueError:
-        raise HTTPException(404, "Playlist not found")
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()

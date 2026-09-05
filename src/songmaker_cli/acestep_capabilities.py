@@ -71,6 +71,8 @@ class AceStepProfile(BaseModel):
         return int(upper) if upper is not None else 200
 
 
+GUIDANCE_SCALE_NOTE: Final = "Honored when guidance_scale > 1.0."
+
 _TURBO_GUIDANCE_OFF = ParamSupport(
     supported=False,
     note="Engine forces guidance_scale=1.0 on turbo distillation.",
@@ -137,14 +139,14 @@ def _make_sft_or_base(
         guidance_scale=ParamSupport(supported=True, min=0.0, max=20.0),
         shift=ParamSupport(supported=True, min=1.0, max=5.0),
         infer_method=ParamSupport(supported=True),
-        use_adg=ParamSupport(supported=True, note="Honored when guidance_scale > 1.0."),
+        use_adg=ParamSupport(supported=True, note=GUIDANCE_SCALE_NOTE),
         cfg_interval_start=ParamSupport(
             supported=True, min=0.0, max=1.0,
-            note="Honored when guidance_scale > 1.0.",
+            note=GUIDANCE_SCALE_NOTE,
         ),
         cfg_interval_end=ParamSupport(
             supported=True, min=0.0, max=1.0,
-            note="Honored when guidance_scale > 1.0.",
+            note=GUIDANCE_SCALE_NOTE,
         ),
         **_shared_profile_params(),
     )

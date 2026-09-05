@@ -10,7 +10,7 @@ export function mentionQueryAtCursor(
 	cursor: number
 ): { query: string; atIndex: number } | null {
 	const before = text.slice(0, cursor);
-	const match = before.match(/@([^@\n]*)$/);
+	const match = /@([^@\n]*)$/.exec(before);
 	if (!match) return null;
 	return { query: match[1], atIndex: before.lastIndexOf('@') };
 }
@@ -40,7 +40,7 @@ export function filterMentionItems(args: {
 	}
 
 	if (VERSION_MENTION_RE.test(query)) {
-		const prefix = query.match(VERSION_MENTION_RE)?.[1] ?? '';
+		const prefix = VERSION_MENTION_RE.exec(query)?.[1] ?? '';
 		const mentioned = new Set(args.mentionedVersionIds);
 		results.push(
 			...args.versions

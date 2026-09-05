@@ -437,36 +437,95 @@ The host remains the only refresh owner: the mounted Codex document keeps
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
-The web service alone runs under the host profile `songmaker-web`. An operator
-loads it for the current host boot with `sudo scripts/apparmor/install.sh` and
-then recreates the service with `docker compose up -d songmaker-web`; the script
-does not install the profile under `/etc/apparmor.d/`, so the operator must load
-it again after a host reboot. Loading changes the host kernel policy, so the
-script deliberately requires root. The profile derives
+The web service alone runs under the host profile `songmaker-web` and the
+repository's `scripts/seccomp/songmaker-web.json`. The seccomp file is a pinned
+copy of Docker's default profile with only Bubblewrap's namespace and mount
+setup syscalls freed from Docker's `CAP_SYS_ADMIN` filter; its adjacent README
+names the Moby revision and the test proves the exact diff. It grants no
+capability. AppArmor remains the mount-shape boundary inside the nested user
+and mount namespaces, while Compose still drops every container capability and
+sets `no-new-privileges:true`; neither profile replaces the other.
+
+An operator loads the AppArmor policy for the current host boot with
+`sudo scripts/apparmor/install.sh` and then recreates the service with
+`docker compose up -d songmaker-web`. The script does not install the profile
+under `/etc/apparmor.d/`, so the operator must load it again after a host reboot.
+Loading changes the host kernel policy, so the script deliberately requires
+root. The profile derives
 Docker Engine 29.1.3's `docker-default` template (Moby
 `profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
 adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
-Bubblewrap 0.9.0's private-root setup operations: recursive-slave propagation,
-construction and sandbox tmpfs mounts, root and private-home binds and
-remounts, both `pivot_root` calls, fresh `proc`, writable-proc covers, and
-minimal `dev`/`devpts`. It accepts Bubblewrap's optional `silent` flag only
-where its mount syscall uses it, preserves the observed inherited mount flags
-during remounts, and permits private homes only below the cover, Co-Writer,
-and post-rollout-probe directory prefixes. Compose applies the profile only to
-`songmaker-web`, drops every container capability, and sets
-`no-new-privileges:true`.
+Bubblewrap 0.12.0's private-root setup operations: recursive-slave propagation,
+construction and sandbox tmpfs mounts, root binds and remounts, both
+`pivot_root` calls, the retained-proc bind from `/oldroot/proc/` to `/proc/`,
+fresh `proc`, writable-proc covers, and minimal `dev`/`devpts`. The retained
+proc bind is the first mount denied in the kernel audit for the observed Codex
+form. The allowlist also names only the three traced protected-home overlays
+(`.git`, `.agents`, and `.codex`) below the cover, Co-Writer, and post-rollout
+probe home prefixes: Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`,
+after preparing each target with `--perms 555`, and then read-only remounts it.
+It accepts Bubblewrap's optional `silent` flag only where its mount syscall
+uses it and preserves the observed inherited mount flags during remounts. Compose applies
+the profile only to `songmaker-web`, drops every container capability, and
+sets `no-new-privileges:true`.
 
-`scripts/prove_codex_image_sandbox.py` is the post-rollout proof. It verifies
-the container label, starts Bubblewrap with `--unshare-user --unshare-all`,
-`--ro-bind / /`, `--proc`, `--dev`, and a private `CODEX_HOME` bind under the
-sandbox's `/tmp` tmpfs, then
-checks that writes outside that home, network egress, new privileges, and
-effective capabilities are unavailable. The probe remounts the scratch tmpfs
-read-only after binding its private home, so no other scratch path is writable.
-Its negative control starts the same
-image under `docker-default` and must fail. The profile is syntax-checked in
-this repository with `apparmor_parser -Q -K`; loading it and the live proof
-require the operator's root access and belong to the next rollout slice.
+Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
+`CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
+
+Do not use `apparmor=unconfined` as a Sandbox diagnostic on this Ubuntu host.
+With `kernel.apparmor_restrict_unprivileged_userns=1`, an unconfined process is
+blocked before it can create the required user namespace; that result says
+nothing about the confined `songmaker-web` profile or its seccomp policy. The
+confined profile explicitly permits `userns`, so its child can create the
+namespace with the capabilities it needs inside that namespace.
+
+Unprivileged user namespaces enlarge the kernel attack surface; this is the
+deliberate #666 trade-off because the alternative is Option 2.
+
+`lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin two different
+Codex Bubblewrap forms because they answer different questions:
+
+- The **boot check** is Codex's startup capability probe, not a cover-command
+  execution. Its literal argv is `bwrap --unshare-user --unshare-net --ro-bind
+  / / /bin/true`. Source: the Codex 0.147.0 Linux binary's embedded string,
+  confirmed by the boot check's direct `subprocess.run` assertion. It asks only
+  whether Bubblewrap can create the namespace and read-only root at all.
+- The **post-rollout proof** uses the real read-only command form, with its
+  terminal command replaced by G4 assertions. Source: `strace -f -e
+  trace=execve -s 400` of `codex sandbox --sandbox-state-json … -- /bin/true`
+  in the throwaway `songmaker-songmaker-web` container with `--network none`,
+  `--cap-drop ALL`, `no-new-privileges:true`, `apparmor=songmaker-web`, and
+  `seccomp=scripts/seccomp/songmaker-web.json`. The traced argv is:
+
+  ```text
+  bwrap --new-session --die-with-parent --ro-bind / / --dev /dev --bind /tmp/songmaker-codex-sandbox-probe/codex-home /tmp/songmaker-codex-sandbox-probe/codex-home --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.git --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.git --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --unshare-user --unshare-pid --unshare-net --proc /proc --argv0 codex-linux-sandbox -- /usr/local/bin/codex --sandbox-policy-cwd /tmp/songmaker-codex-sandbox-probe/workdir --command-cwd /tmp/songmaker-codex-sandbox-probe/workdir --permission-profile {"type":"managed","file_system":{"type":"restricted","entries":[{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},{"path":{"type":"path","path":"/tmp/songmaker-codex-sandbox-probe/codex-home"},"access":"write"}]},"network":"restricted"} --apply-seccomp-then-exec -- /bin/true
+  ```
+
+  The proof pins the complete Bubblewrap setup and Codex helper re-exec through
+  `--apply-seccomp-then-exec`, including the only writable `CODEX_HOME` bind
+  and Codex's three protected-home tmpfs overlays; it replaces only the traced
+  terminal `/bin/true` with G4 assertions. It must allow writing only below
+  `CODEX_HOME`, reject writes to `/app` and the rest of `/tmp`, have no
+  network, retain `NoNewPrivs: 1`, and expose an empty `CapEff`. The G4 shell
+  snippet compares `CapEff` to the literal `0000000000000000` that Python
+  embeds while building the snippet; the traced Bubblewrap argv therefore
+  gains no environment-setting argument. Its `docker-default` control runs the
+  same prepared form and must fail.
+
+The AppArmor audit of that traced form currently reaches the known first
+denial, `bwrap: mounting proc: Permission denied`, under `songmaker-web`;
+there is no evidence for later mount shapes until an operator loads the next
+policy candidate and reruns the throwaway-container proof. Before that load,
+the checked-in rule and `apparmor_parser -Q -K` prove only the source and
+syntax.
+
+An operator runs the rollout and proof in this exact order:
+
+```sh
+sudo scripts/apparmor/install.sh
+docker compose up -d songmaker-web
+python scripts/prove_codex_image_sandbox.py
+```
 
 Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use

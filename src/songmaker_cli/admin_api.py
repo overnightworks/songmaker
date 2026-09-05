@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+from typing import Final
 
 import httpx
 from arq.connections import ArqRedis
@@ -95,6 +96,9 @@ from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
+USER_NOT_FOUND_DETAIL: Final = "User not found"
+JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -166,7 +170,7 @@ def update_user_endpoint(
 ) -> UserResponse:
     user = get_user(db, user_id)
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
 
     if user_id == admin.id and req.is_active is False:
         raise HTTPException(400, "Cannot deactivate your own account")
@@ -210,7 +214,7 @@ def deactivate_user_endpoint(
 ) -> StatusResponse:
     user = get_user(db, user_id)
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
 
     if user_id == admin.id:
         raise HTTPException(400, "Cannot deactivate your own account")
@@ -242,7 +246,7 @@ def hard_delete_user_endpoint(
 ) -> StatusResponse:
     user = get_user(db, user_id)
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
 
     if user_id == admin.id:
         raise HTTPException(400, "Cannot delete your own account")
@@ -517,9 +521,9 @@ async def load_model_on_worker_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, JobStatus.FAILED, error="Job queue unavailable")
+        update_job_status(db, job.id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
         db.commit()
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
@@ -714,9 +718,9 @@ async def download_model_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, JobStatus.FAILED, error="Job queue unavailable")
+        update_job_status(db, job.id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
         db.commit()
-        raise HTTPException(503, "Job queue unavailable")
+        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
