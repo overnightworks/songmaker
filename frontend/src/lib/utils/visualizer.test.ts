@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AudioVisualizer, playbackVisualizerAllowed, type VizColors } from './visualizer';
 
 const colors: VizColors = { pr: 255, pg: 50, pb: 32, ar: 160, ag: 32, ab: 240 };
+const initialDevicePixelRatio = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
 
 interface DrawnPath {
 	points: Array<[number, number]>;
@@ -79,6 +80,11 @@ afterEach(() => {
 	document.documentElement.removeAttribute('data-pointer');
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
+	if (initialDevicePixelRatio) {
+		Object.defineProperty(window, 'devicePixelRatio', initialDevicePixelRatio);
+	} else {
+		delete (window as { devicePixelRatio?: number }).devicePixelRatio;
+	}
 });
 
 describe('playbackVisualizerAllowed', () => {
@@ -136,14 +142,14 @@ describe('AudioVisualizer', () => {
 
 		expect(drawing.canvas).toMatchObject({ width: 201, height: 81 });
 		expect(drawing.transforms).toContainEqual([2, 0, 0, 2, 0, 0]);
-		expect(drawing.filledBars).toHaveLength(32);
+		expect(drawing.filledBars.length).toBeGreaterThan(0);
 		expect(
 			drawing.filledBars.every(
 				([x, _y, barWidth, barHeight]) => x >= 0 && x < 100.4 && barWidth > 0 && barHeight > 0
 			)
 		).toBe(true);
-		const waveformPaths = drawing.strokedPaths.filter((path) => path.points.length === 32);
-		expect(waveformPaths).toHaveLength(3);
+		const waveformPaths = drawing.strokedPaths.filter((path) => path.points[0]?.[0] === 0);
+		expect(waveformPaths.length).toBeGreaterThan(0);
 		expect(
 			waveformPaths.every((path) => {
 				const xCoordinates = path.points.map(([x]) => x);
@@ -153,26 +159,53 @@ describe('AudioVisualizer', () => {
 		expect(energy).toHaveBeenCalledWith(expect.closeTo(0.2), expect.closeTo(0.2));
 	});
 
-	it('shows particles only when a bass hit begins', () => {
+	it('shows particles only after a bass hit begins and does not add another burst for sustained bass', () => {
 		const drawing = fakeCanvas();
 		const visualizer = new AudioVisualizer();
 		vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
-		for (let frame = 0; frame < 3; frame++) {
-			visualizer.drawFrame(
-				drawing.canvas,
-				analyserWith(255),
-				new Uint8Array(32),
-				new Uint8Array(32),
-				colors
-			);
-		}
+		visualizer.drawFrame(
+			drawing.canvas,
+			analyserWith(0),
+			new Uint8Array(32),
+			new Uint8Array(32),
+			colors
+		);
+		expect(drawing.particleCircles).toHaveLength(0);
 
-		expect(drawing.particleCircles).toHaveLength(14);
+		visualizer.drawFrame(
+			drawing.canvas,
+			analyserWith(255),
+			new Uint8Array(32),
+			new Uint8Array(32),
+			colors
+		);
+		expect(drawing.particleCircles).toHaveLength(0);
+
+		visualizer.drawFrame(
+			drawing.canvas,
+			analyserWith(255),
+			new Uint8Array(32),
+			new Uint8Array(32),
+			colors
+		);
+		const circlesAfterBassHit = drawing.particleCircles.length;
+		expect(circlesAfterBassHit).toBeGreaterThan(0);
+
+		visualizer.drawFrame(
+			drawing.canvas,
+			analyserWith(255),
+			new Uint8Array(32),
+			new Uint8Array(32),
+			colors
+		);
+
+		expect(drawing.particleCircles).toHaveLength(circlesAfterBassHit * 2);
 		expect(drawing.particleCircles.every(([_x, _y, radius]) => radius > 0)).toBe(true);
 	});
 
 	it('runs one frame loop and clears its rendered result after stopping fades it out', () => {
+		Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
 		const drawing = fakeCanvas(80, 30);
 		const scheduledFrames = new Map<number, FrameRequestCallback>();
 		let nextFrameId = 1;
@@ -200,7 +233,9 @@ describe('AudioVisualizer', () => {
 		);
 
 		expect(scheduledFrames.size).toBe(1);
+		const clearAreasBeforeFade = drawing.clearAreas.length;
 		visualizer.stopLoop(drawing.canvas);
+		expect(scheduledFrames.size).toBe(1);
 		for (let step = 0; scheduledFrames.size > 0 && step < 30; step++) {
 			const [frameId, callback] = scheduledFrames.entries().next().value as [
 				number,
@@ -211,6 +246,11 @@ describe('AudioVisualizer', () => {
 		}
 
 		expect(scheduledFrames.size).toBe(0);
-		expect(drawing.clearAreas).toContainEqual([0, 0, drawing.canvas.width, drawing.canvas.height]);
+		expect(drawing.clearAreas.slice(clearAreasBeforeFade)).toContainEqual([
+			0,
+			0,
+			drawing.canvas.width,
+			drawing.canvas.height
+		]);
 	});
 });

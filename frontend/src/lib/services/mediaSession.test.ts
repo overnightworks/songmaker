@@ -67,6 +67,8 @@ function invoke(
 }
 
 afterEach(() => {
+	const removeCleanupHandlers = setupMediaSessionHandlers(callbacks('cleanup', []));
+	removeCleanupHandlers();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
