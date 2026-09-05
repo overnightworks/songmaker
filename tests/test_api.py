@@ -3689,6 +3689,25 @@ def test_presets_include_shared_flag(client: TestClient) -> None:
         assert "is_shared" in p
 
 
+def test_setting_a_preset_as_default_replaces_the_previous_default(client: TestClient) -> None:
+    first = client.post("/api/settings/presets", json={
+        "name": "first", "model_mode": "sft", "params": {"inference_steps": 50},
+        "is_default": True,
+    })
+    second = client.post("/api/settings/presets", json={
+        "name": "second", "model_mode": "sft", "params": {"inference_steps": 70},
+    })
+    assert first.status_code == second.status_code == 200
+
+    selected = client.post(f"/api/settings/presets/{second.json()['id']}/set-default")
+
+    assert selected.status_code == 200
+    assert selected.json()["is_default"] is True
+    presets_by_id = {preset["id"]: preset for preset in client.get("/api/settings/presets").json()}
+    assert presets_by_id[first.json()["id"]]["is_default"] is False
+    assert presets_by_id[second.json()["id"]]["is_default"] is True
+
+
 # ── Available models ─────────────────────────────────────────────────
 
 
@@ -3737,6 +3756,34 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
     with factory() as session:
         session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
         session.commit()
+
+
+# ── Rate limits ───────────────────────────────────────────────────────
+
+
+def test_deleting_user_rate_limits_restores_the_effective_defaults(tmp_path: Path) -> None:
+    admin_client = _make_authed_client(tmp_path, role="admin")
+    override_values = {"generation_rate_limit": 1, "chat_rate_limit": 2}
+
+    saved = admin_client.put(
+        "/api/settings/rate-limits/user/u-test", json={"settings": override_values},
+    )
+    assert saved.status_code == 200
+    assert {
+        item["setting_key"]: item["value"] for item in saved.json()["overrides"]
+    } == override_values
+
+    deleted = admin_client.delete("/api/settings/rate-limits/user/u-test")
+
+    assert deleted.status_code == 200
+    restored = admin_client.get("/api/settings/rate-limits/user/u-test")
+    assert restored.status_code == 200
+    assert restored.json()["overrides"] == []
+    effective = {
+        item["setting_key"]: item for item in restored.json()["effective"]
+    }
+    assert effective["generation_rate_limit"]["is_override"] is False
+    assert effective["chat_rate_limit"]["is_override"] is False
 
 
 # ── Claude model settings ───────────────────────────────────────────
