@@ -104,6 +104,7 @@ describe('fromSharedPlaylist', () => {
 	it('maps a playlist payload to a collection view carrying per-entry artist', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
+			album_covers: [],
 			entries: [
 				{
 					entry_id: 'e1',
@@ -282,6 +283,7 @@ describe('trackPlaybackInfo', () => {
 	it('uses the entry artist for a playlist track', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
+			album_covers: [],
 			entries: [
 				{
 					entry_id: 'e1',
@@ -340,6 +342,7 @@ describe('collectionSubtitle', () => {
 	it('shows the track count for a playlist', () => {
 		const view = fromSharedPlaylist({
 			title: 'Mix',
+			album_covers: [],
 			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'Second', '/b.mp3')]
 		});
 		expect(collectionSubtitle(view)).toBe('2 tracks');
@@ -348,6 +351,7 @@ describe('collectionSubtitle', () => {
 	it('excludes unplayable entries from the playlist track count', () => {
 		const view = fromSharedPlaylist({
 			title: 'Mix',
+			album_covers: [],
 			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'No pick yet', null)]
 		});
 		expect(collectionSubtitle(view)).toBe('1 track');

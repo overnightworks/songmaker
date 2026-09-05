@@ -122,6 +122,15 @@ def song_cover_file_exists(audio_dir: Path, song_id: str, cover_key: str | None)
     )
 
 
+def playlist_cover_file_exists(
+    audio_dir: Path, playlist_id: str, cover_key: str | None,
+) -> bool:
+    return _cover_file_exists(
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, cover_key,
+        COVER_INVALID_PLAYLIST_ID,
+    )
+
+
 def resolve_cover_file(
     audio_dir: Path, album_id: str, cover_key: str | None, variant: str,
 ) -> Path:
