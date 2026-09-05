@@ -38,6 +38,7 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
@@ -527,6 +528,54 @@ describe('resource sync owner', () => {
 		const before = fetchCalls.length;
 		await controller.handleVisibility();
 		expect(fetchCalls.slice(before)).toEqual(['s1']);
+	});
+
+	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
+		const ids = Array.from(
+			{ length: RESOURCE_SYNC_FETCH_CONCURRENCY + 1 },
+			(_, index) => `s${index + 1}`
+		);
+		const inFlight = new Set<string>();
+		const maxInFlight: number[] = [];
+		const responses = new Map<string, ReturnType<typeof deferred<SongItem>>>();
+		const { controller, sources, upserted } = setup({
+			listPrioritySongIds: () => ids,
+			fetchSong: (songId) => {
+				inFlight.add(songId);
+				maxInFlight.push(inFlight.size);
+				const response = deferred<SongItem>();
+				responses.set(songId, response);
+				return response.promise.finally(() => inFlight.delete(songId));
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+
+		const refresh = controller.handleVisibility();
+		await vi.waitFor(() => expect(responses.size).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY));
+		expect(inFlight.size).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY);
+		for (const songId of inFlight) {
+			const response = responses.get(songId);
+			if (!response) throw new Error(`Missing response for ${songId}`);
+			response.resolve(
+				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+			);
+		}
+		await vi.waitFor(() => expect(responses.size).toBe(ids.length));
+		for (const songId of inFlight) {
+			const response = responses.get(songId);
+			if (!response) throw new Error(`Missing response for ${songId}`);
+			response.resolve(
+				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+			);
+		}
+		await refresh;
+
+		expect(Math.max(...maxInFlight)).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY);
+		expect(upserted).toHaveLength(ids.length);
+		expect(upserted.map((item) => item.id)).toEqual(expect.arrayContaining(ids));
 	});
 
 	it('refresh errors are visible and retryable', async () => {
