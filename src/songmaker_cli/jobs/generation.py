@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final, TypeVar, cast
 
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
@@ -94,6 +94,23 @@ class GenerationContext:
     base_params: dict = field(default_factory=dict)
     src_generation_id: str | None = None
     raw_src_audio: str | None = None
+
+
+GenerationContextT = TypeVar("GenerationContextT", bound=GenerationContext)
+
+
+def _with_generation_context_overrides(
+    ctx: GenerationContextT,
+    **overrides: Any,
+) -> GenerationContextT:
+    return type(ctx)(**(vars(ctx) | overrides))
+
+
+def _with_ace_config_overrides(
+    config: AceStepConfig,
+    **overrides: Any,
+) -> AceStepConfig:
+    return AceStepConfig(**(vars(config) | overrides))
 
 
 @dataclass(frozen=True)
@@ -711,13 +728,13 @@ def _apply_repaint_overrides(
     if params.repaint_wav_crossfade_sec is not None:
         overrides["repaint_wav_crossfade_sec"] = params.repaint_wav_crossfade_sec
 
-    new_ctx: GenerationContext = replace(
+    new_ctx = _with_generation_context_overrides(
         ctx,
-        ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
+        ace_config=_with_ace_config_overrides(ctx.ace_config, **overrides),
         src_generation_id=params.src_generation_id,
     )
     if raw_wav:
-        new_ctx = replace(
+        new_ctx = _with_generation_context_overrides(
             new_ctx,
             raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
         )
@@ -738,9 +755,9 @@ def _apply_cover_overrides(
     if params.cover_noise_strength is not None:
         overrides["cover_noise_strength"] = params.cover_noise_strength
 
-    new_ctx: GenerationContext = replace(
+    new_ctx = _with_generation_context_overrides(
         ctx,
-        ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
+        ace_config=_with_ace_config_overrides(ctx.ace_config, **overrides),
         src_generation_id=params.src_generation_id,
     )
     return new_ctx

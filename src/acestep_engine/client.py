@@ -149,7 +149,7 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
 
 
 ALLOWED_AUDIO_PATH_RE = re.compile(
-    r"^(?:/v1/audio\b|[a-zA-Z0-9_./ -]+$)"
+    r"^(?:/v1/audio\b.*|[a-zA-Z0-9_./ -]+)$"
 )
 
 
