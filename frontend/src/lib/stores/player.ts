@@ -981,98 +981,107 @@ export async function playPlaylistEntryAndShowNowPlaying(
 	});
 }
 
-export async function playNextSong(): Promise<void> {
-	if (audioPlayer.mode === 'stream') {
-		audioPlayer.nextStreamTrack();
+type QueueDirection = -1 | 1;
+
+function playStreamInDirection(direction: QueueDirection): boolean {
+	if (audioPlayer.mode !== 'stream') return false;
+	if (direction === 1) audioPlayer.nextStreamTrack();
+	else audioPlayer.prevStreamTrack();
+	return true;
+}
+
+function playPlaylistInDirection(
+	ctx: Extract<QueueContext, { type: 'playlist' }>,
+	direction: QueueDirection
+): void {
+	if (ctx.entries.length <= 1) return;
+	const currentIndex = currentPlaylistIndex(ctx);
+	playPlaylistIndex(ctx, (currentIndex + direction + ctx.entries.length) % ctx.entries.length);
+}
+
+function playNativeTakesInDirection(
+	ctx: Exclude<QueueContext, { type: 'playlist' }>,
+	direction: QueueDirection
+): void {
+	const index = nativeTakeIndex(ctx, audioPlayer.current);
+	if (index < 0 || ctx.takes === undefined) return;
+	if (
+		direction === 1 &&
+		ctx.type === 'library' &&
+		index === ctx.takes.length - 1 &&
+		!get(libraryQueueSkippedComplete)
+	) {
+		windowEnded.set(true);
 		return;
 	}
-	const ctx = get(queueContext);
+	if (ctx.takes.length <= 1) return;
+	playNativeIndex(ctx, (index + direction + ctx.takes.length) % ctx.takes.length);
+}
+
+function playContextInDirection(ctx: QueueContext, direction: QueueDirection): boolean {
 	if (ctx.type === 'playlist') {
-		const currentIndex = currentPlaylistIndex(ctx);
-		if (ctx.entries.length <= 1) return;
-		playPlaylistIndex(ctx, (currentIndex + 1) % ctx.entries.length);
-		return;
+		playPlaylistInDirection(ctx, direction);
+		return true;
 	}
 	if (ctx.takes && ctx.takes.length > 0) {
-		const index = nativeTakeIndex(ctx, audioPlayer.current);
-		if (index < 0) return;
-		const atWindowEnd =
-			ctx.type === 'library' && index === ctx.takes.length - 1 && !get(libraryQueueSkippedComplete);
-		if (atWindowEnd) {
-			windowEnded.set(true);
-			return;
-		}
-		if (ctx.takes.length <= 1) return;
-		playNativeIndex(ctx, (index + 1) % ctx.takes.length);
-		return;
+		playNativeTakesInDirection(ctx, direction);
+		return true;
 	}
-	if (ctx.type === 'library') return;
-	const cur = audioPlayer.current;
-	if (!cur) return;
-	const songs = queueSongs();
-	const idx = songs.findIndex((s) => s.id === cur.songId);
-	if (get(shuffleEnabled)) {
-		const candidates = songs.filter((s) => s.id !== cur.songId && s.generation_count > 0);
-		while (candidates.length > 0) {
-			const next = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0]; // NOSONAR S2245: shuffle has no security context.
-			await ensureGenerationsLoaded(next.id);
-			const fresh = get(songList).find((s) => s.id === next.id);
-			const gen = fresh ? bestGen(fresh) : undefined;
-			if (gen && fresh) {
-				playGeneration(gen, fresh);
-				return;
-			}
-		}
-		return;
-	}
-	for (let offset = 1; offset <= songs.length; offset++) {
-		const song = songs[(idx + offset + songs.length) % songs.length];
-		if (!song || song.id === cur.songId || song.generation_count === 0) continue;
-		await ensureGenerationsLoaded(song.id);
-		const fresh = get(songList).find((s) => s.id === song.id);
-		const gen = fresh ? bestGen(fresh) : undefined;
-		if (gen && fresh) {
-			playGeneration(gen, fresh);
-			return;
-		}
+	return ctx.type === 'library';
+}
+
+async function playSongCandidate(song: SongItem): Promise<boolean> {
+	await ensureGenerationsLoaded(song.id);
+	const fresh = get(songList).find((item) => item.id === song.id);
+	const gen = fresh ? bestGen(fresh) : undefined;
+	if (!gen || !fresh) return false;
+	playGeneration(gen, fresh);
+	return true;
+}
+
+async function playRandomNextSong(songs: SongItem[], currentSongId: string): Promise<void> {
+	const candidates = songs.filter((song) => song.id !== currentSongId && song.generation_count > 0);
+	while (candidates.length > 0) {
+		const index = Math.floor(Math.random() * candidates.length); // NOSONAR S2245: shuffle has no security context.
+		const [next] = candidates.splice(index, 1);
+		if (await playSongCandidate(next)) return;
 	}
 }
 
-export async function playPrevSong(): Promise<void> {
-	if (audioPlayer.mode === 'stream') {
-		audioPlayer.prevStreamTrack();
-		return;
-	}
-	const ctx = get(queueContext);
-	if (ctx.type === 'playlist') {
-		const currentIndex = currentPlaylistIndex(ctx);
-		if (ctx.entries.length > 1) {
-			playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length);
-		}
-		return;
-	}
-	if (ctx.takes && ctx.takes.length > 0) {
-		const index = nativeTakeIndex(ctx, audioPlayer.current);
-		if (index < 0 || ctx.takes.length <= 1) return;
-		playNativeIndex(ctx, (index - 1 + ctx.takes.length) % ctx.takes.length);
-		return;
-	}
-	if (ctx.type === 'library') return;
-	const cur = audioPlayer.current;
-	if (!cur) return;
-	const songs = queueSongs();
-	const idx = songs.findIndex((s) => s.id === cur.songId);
+async function playAdjacentSong(
+	songs: SongItem[],
+	currentSongId: string,
+	direction: QueueDirection
+): Promise<void> {
+	const currentIndex = songs.findIndex((song) => song.id === currentSongId);
 	for (let offset = 1; offset <= songs.length; offset++) {
-		const song = songs[(idx - offset + songs.length) % songs.length];
-		if (!song || song.id === cur.songId || song.generation_count === 0) continue;
-		await ensureGenerationsLoaded(song.id);
-		const fresh = get(songList).find((s) => s.id === song.id);
-		const gen = fresh ? bestGen(fresh) : undefined;
-		if (gen && fresh) {
-			playGeneration(gen, fresh);
-			return;
-		}
+		const song = songs[(currentIndex + direction * offset + songs.length) % songs.length];
+		if (!song || song.id === currentSongId || song.generation_count === 0) continue;
+		if (await playSongCandidate(song)) return;
 	}
+}
+
+export async function playNextSong(): Promise<void> {
+	if (playStreamInDirection(1)) return;
+	const ctx = get(queueContext);
+	if (playContextInDirection(ctx, 1)) return;
+	const current = audioPlayer.current;
+	if (!current) return;
+	const songs = queueSongs();
+	if (get(shuffleEnabled)) {
+		await playRandomNextSong(songs, current.songId);
+		return;
+	}
+	await playAdjacentSong(songs, current.songId, 1);
+}
+
+export async function playPrevSong(): Promise<void> {
+	if (playStreamInDirection(-1)) return;
+	const ctx = get(queueContext);
+	if (playContextInDirection(ctx, -1)) return;
+	const current = audioPlayer.current;
+	if (!current) return;
+	await playAdjacentSong(queueSongs(), current.songId, -1);
 }
 
 // The album's opening take, which is not always the opening track's:
