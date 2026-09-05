@@ -743,9 +743,11 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
         messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
         job = session.query(Job).filter_by(type="chat").one()
 
-        assert song is not None and song.latest_version is not None
+        assert song is not None
+        assert song.latest_version is not None
         assert song.latest_version.lyrics == "API-written lyrics"
-        assert foreign_song is not None and foreign_song.latest_version is None
+        assert foreign_song is not None
+        assert foreign_song.latest_version is None
         assert [message.role for message in messages] == ["user", "assistant"]
         assert [message.content for message in messages] == [
             "Please revise the lyrics.",

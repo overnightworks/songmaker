@@ -311,7 +311,8 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
     assert codex_cli_adapter.generate_codex_cover_image(
         "prompt", deadline=10_000_000,
     ).startswith(b"\x89PNG")
-    assert channels and all(not channel.abort_requested() for channel in channels)
+    assert channels
+    assert all(not channel.abort_requested() for channel in channels)
 
 
 @pytest.mark.parametrize(
@@ -531,7 +532,8 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
     assert outside.exists()
-    assert homes and all(not home.exists() for home in homes)
+    assert homes
+    assert all(not home.exists() for home in homes)
 
 
 def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home(
@@ -559,7 +561,8 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
     assert (outside / "cover.png").exists()
-    assert homes and all(not home.exists() for home in homes)
+    assert homes
+    assert all(not home.exists() for home in homes)
 
 
 def test_codex_image_timeout_cleans_its_private_directory(
@@ -584,7 +587,8 @@ def test_codex_image_timeout_cleans_its_private_directory(
     with pytest.raises(codex_cli_adapter.CodexImageTimeoutError):
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
-    assert homes and all(not home.exists() for home in homes)
+    assert homes
+    assert all(not home.exists() for home in homes)
 
 
 @pytest.mark.parametrize(

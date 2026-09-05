@@ -1351,7 +1351,8 @@ def test_running_update_failure_releases_the_new_lora_hold(seeded, db_factory) -
         )
 
     release.assert_awaited_once()
-    assert renew_task is not None and renew_task.cancelled()
+    assert renew_task is not None
+    assert renew_task.cancelled()
 
 
 def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
@@ -1505,7 +1506,8 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
 
     release.assert_awaited_once()
     materialize.assert_not_called()
-    assert renew_task is not None and renew_task.cancelled()
+    assert renew_task is not None
+    assert renew_task.cancelled()
 
 
 def test_cancel_before_handover_releases_the_job_hold() -> None:

@@ -185,7 +185,9 @@ def test_claude_api_streams_deltas_and_carries_tool_errors_back_to_the_model(mon
         FinalEvent(text="draftdone"),
     ]
     assert constructions == [{"api_key": "test-key", "timeout": 600, "max_retries": 0}]
-    assert client.closed and first.closed and second.closed
+    assert client.closed
+    assert first.closed
+    assert second.closed
     assert client.messages.requests[1]["messages"] == [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": first._message.content},
@@ -294,7 +296,8 @@ def test_closing_claude_api_stream_closes_the_http_stream_and_client(monkeypatch
 
     asyncio.run(_close())
 
-    assert stream.closed and client.closed
+    assert stream.closed
+    assert client.closed
 
 
 def test_claude_api_tool_loop_persists_an_owned_write_and_refuses_a_foreign_one(

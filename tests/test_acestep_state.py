@@ -133,10 +133,11 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
 
     state = _state_from_dict(payload, queue_depth=0)
     assert state is not None
-    assert len(state.loaded) == 1 and state.loaded[0].mode == "sft", (
+    assert len(state.loaded) == 1, (
         f"writer/reader key mismatch: payload has keys {sorted(payload.keys())}, "
         f"reader expects 'loaded' as list[LoadedModelDetail]"
     )
+    assert state.loaded[0].mode == "sft"
     assert state.loaded[0].size_gb == 6.0
     assert state.vram_used_gb == 6.0
     assert state.target_loading is None

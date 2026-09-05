@@ -269,7 +269,9 @@ def test_reorder_sample_backward_and_clamp(session: Session) -> None:
     session.commit()
     fresh = get_user_lora(session, lora.id)
     positions = {s.id: s.position for s in fresh.samples}
-    assert positions[s1.id] == 0 and positions[s2.id] == 1 and positions[s3.id] == 2
+    assert positions[s1.id] == 0
+    assert positions[s2.id] == 1
+    assert positions[s3.id] == 2
 
     update_user_lora_sample(session, s3.id, position=0)
     session.commit()

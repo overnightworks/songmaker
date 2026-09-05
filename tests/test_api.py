@@ -2107,7 +2107,8 @@ def test_song_chat_attaches_messages_to_active_conversation(
     with patcher:
         r1 = client.post("/api/songs/s1/chat", json={"message": "first"})
         r2 = client.post("/api/songs/s1/chat", json={"message": "second"})
-    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.status_code == 200
+    assert r2.status_code == 200
 
     factory = client.app.state.ctx.db
     with factory() as session:
