@@ -2,7 +2,7 @@
 	import { tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { RAIL_DRAWER_CLOSE_LABEL, RAIL_DRAWER_LABEL } from '$lib/constants';
-	import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
+	import { closeSidebar, railWidth, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
 	let { children }: { children: Snippet } = $props();
@@ -38,6 +38,7 @@
 		<div
 			bind:this={panel}
 			class="drawer-panel"
+			style:--rail-width={`${$railWidth}px`}
 			role="dialog"
 			aria-modal="true"
 			aria-label={RAIL_DRAWER_LABEL}
