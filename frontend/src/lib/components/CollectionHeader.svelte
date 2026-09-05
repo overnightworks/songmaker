@@ -6,7 +6,12 @@
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
-	import { ALBUM_ADD_SONG_GLYPH, ALBUM_ADD_SONG_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
+	import {
+		ALBUM_ADD_SONG_GLYPH,
+		ALBUM_ADD_SONG_LABEL,
+		RAIL_LIBRARY_LABEL,
+		RAIL_PLAYLISTS_LABEL
+	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
 
 	interface Props {
@@ -80,7 +85,10 @@
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
 	const breadcrumbItems = $derived([
-		{ label: RAIL_LIBRARY_LABEL, onclick: () => void openLibraryWall() },
+		{
+			label: kind === 'playlist' ? RAIL_PLAYLISTS_LABEL : RAIL_LIBRARY_LABEL,
+			onclick: () => void openLibraryWall()
+		},
 		{ label: title }
 	]);
 
