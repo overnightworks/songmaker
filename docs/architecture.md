@@ -591,12 +591,14 @@ route and returns one normalized route failure instead of trying its sibling.
 `cowriter/catalog.py` refreshes both routes per provider independently, and
 the settings responses project the selected route for legacy callers while
 also returning the route-keyed readiness and catalogue snapshots. The Judge
-remains API-only. Claude's API route and Grok's CLI route own the same shared
-co-writer tool loop; Grok carries calls and results in its strict text
-protocol, while the CLI itself remains denied all built-in tools. Claude's CLI
-route continues to use the MCP transport. The shared loop delegates each call
-to the authorized tool executor and emits normalized SSE tool-call and
-tool-result events.
+remains API-only. Claude's API route plus Grok's and Codex's CLI routes own the
+same shared co-writer tool loop; the CLI routes carry calls and results in the
+strict text protocol while their built-in tools remain unavailable. Codex starts
+one private thread and resumes it for each result round, with the read-only
+sandbox and its event gate enforced on every process. Claude's CLI route
+continues to use the MCP transport. The shared loop delegates each call to the
+authorized tool executor and emits normalized SSE tool-call and tool-result
+events.
 
 ### Engine packages (`src/`)
 

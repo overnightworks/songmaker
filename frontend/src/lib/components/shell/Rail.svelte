@@ -4,6 +4,7 @@
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
+	import RailSearch from './RailSearch.svelte';
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 	import { RAIL_ITEM_SELECTOR } from './rail-item-selector';
@@ -17,6 +18,7 @@
 			>{APP_NAME}</button
 		>
 	</div>
+	<RailSearch />
 
 	<div class="rail-scroll" use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}>
 		<RailLibraryGroup />

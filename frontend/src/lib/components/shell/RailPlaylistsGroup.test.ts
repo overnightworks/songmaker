@@ -12,6 +12,7 @@ import {
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { railTreeQuery } from '$lib/stores/filter';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
@@ -49,6 +50,7 @@ beforeEach(() => {
 	fetchPlaylists.mockClear().mockResolvedValue([]);
 	fetchPlaylist.mockReset();
 	playlistList.set([playlist()]);
+	railTreeQuery.set('');
 	queueContext.set({ type: 'library' });
 	closeNowPlaying();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
@@ -65,6 +67,7 @@ afterEach(async () => {
 	await cleanup();
 	resetPlaylists();
 	resetLibraryContextForTests();
+	railTreeQuery.set('');
 });
 
 describe('RailPlaylistsGroup', () => {
@@ -105,6 +108,23 @@ describe('RailPlaylistsGroup', () => {
 		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Night Drive', 'Favorites']);
 		const counts = target.querySelectorAll('.playlist-label .row-meta');
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '12']);
+	});
+
+	it('narrows playlists by title without hiding the open playlist', async () => {
+		playlistList.set([
+			playlist({ id: 'p-open', title: 'Night Drive' }),
+			playlist({ id: 'p-match', title: 'Stadium nights' }),
+			playlist({ id: 'p-hidden', title: 'Quiet hour' })
+		]);
+		setOpenCollection({ kind: 'playlist', id: 'p-open' });
+		railTreeQuery.set('stadium');
+
+		const target = await render();
+		await tick();
+
+		expect(target.textContent).toContain('Night Drive');
+		expect(target.textContent).toContain('Stadium nights');
+		expect(target.textContent).not.toContain('Quiet hour');
 	});
 
 	it.each([

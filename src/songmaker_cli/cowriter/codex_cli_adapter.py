@@ -1,4 +1,4 @@
-"""Codex subscription CLI transport for one tool-free co-writer turn."""
+"""Codex subscription CLI transports for co-writer tools and cover images."""
 
 from __future__ import annotations
 
@@ -26,9 +26,6 @@ from songmaker_cli.agent_cli import (
     scrubbed_env,
 )
 from songmaker_cli.claude.provider import (
-    AssistantTextEvent,
-    FinalEvent,
-    StreamEvent,
     _flatten_messages,
     _stdin_prompt,
 )
@@ -164,118 +161,6 @@ class CodexImageTimeoutError(CodexImageError):
 
 class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
-
-
-async def stream_codex_cli_turn(
-    *, system: str, model: str, messages: list[dict[str, str]],
-) -> AsyncIterator[StreamEvent]:
-    """Yield Codex text events only after its subscription CLI accepts the turn."""
-    prompt = _stdin_prompt(system, _flatten_messages("", messages)).encode()
-    channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
-    deadline = time.monotonic() + COWRITER_CLI_TIMEOUT_SECONDS
-    turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-codex-cli-")
-    codex_home = Path(turn_directory.name) / "codex-home"
-    try:
-        codex_home.mkdir()
-        _copy_codex_login_mirror(codex_home)
-    except _CodexLoginMirrorError as exc:
-        turn_directory.cleanup()
-        raise ProviderUnavailableError(
-            "codex",
-            "cli",
-            normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
-        ) from exc
-    try:
-        reservation = get_codex_process_pool().reserve(CodexProcessKind.TEXT)
-    except CodexProcessPoolSaturatedError as exc:
-        turn_directory.cleanup()
-        raise ProviderUnavailableError(
-            "codex",
-            "cli",
-            normalize_route_failure(SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED),
-        ) from exc
-    runner = asyncio.create_task(asyncio.to_thread(
-        _run_reserved_codex_cli,
-        reservation,
-        _build_codex_cli_command(model),
-        stdin_payload=prompt,
-        read="all",
-        deadline=deadline,
-        output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
-        stdout_line_channel=channel,
-        cwd=turn_directory.name,
-        extra_env={"CODEX_HOME": str(codex_home)},
-    ))
-    text_chunks: list[str] = []
-    saw_success = False
-    error_message: str | None = None
-    completed_error_item_message: str | None = None
-    try:
-        while True:
-            line_or_outcome = await asyncio.to_thread(channel.receive)
-            if isinstance(line_or_outcome, CliRunOutcome):
-                outcome = line_or_outcome
-                break
-            if saw_success:
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-            event_type, event = _parse_codex_line(line_or_outcome)
-            if event_type in _INFORMATIONAL_EVENT_TYPES:
-                continue
-            if event_type in _ITEM_EVENT_TYPES:
-                item_type = _item_type(event)
-                if item_type in _BLOCKED_ITEM_TYPES:
-                    raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                if event_type == "item.completed" and item_type == "error":
-                    completed_error_item_message = _completed_error_item_message(event)
-                    _log_completed_error_item(completed_error_item_message)
-                    continue
-                if item_type not in _INFORMATIONAL_ITEM_TYPES:
-                    raise _unsupported_stream_event(event_type, item_type)
-                if event_type == "item.completed" and item_type == "agent_message":
-                    text = _completed_agent_message(event)
-                    text_chunks.append(text)
-                    yield AssistantTextEvent(text=text)
-                continue
-            if event_type == "turn.completed":
-                _completed_turn(event)
-                saw_success = True
-                continue
-            if event_type == "error":
-                error_message = _top_level_error_message(event)
-                channel.request_abort()
-                continue
-            if event_type == "turn.failed":
-                error_message = _failed_turn_message(event)
-                channel.request_abort()
-                continue
-            raise _unsupported_stream_event(event_type)
-        await asyncio.shield(runner)
-        _raise_for_codex_outcome(
-            outcome,
-            saw_success,
-            error_message,
-            completed_error_item_message,
-        )
-        yield FinalEvent(text="".join(text_chunks))
-    except _CodexCliStreamFailure as exc:
-        channel.request_abort()
-        await asyncio.shield(runner)
-        reason = (
-            SafeRouteReasonCode.TOOL_EXECUTION_FAILED
-            if exc.code == "codex_cli_tool_call_blocked"
-            else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
-        )
-        raise ProviderUnavailableError(
-            "codex",
-            "cli",
-            normalize_route_failure(reason),
-        ) from exc
-    finally:
-        channel.request_abort()
-        try:
-            await asyncio.shield(runner)
-        finally:
-            turn_directory.cleanup()
 
 
 class CodexCliToolTransport:
@@ -827,11 +712,6 @@ def _normalize_generated_png(source: Path) -> bytes:
         raise CodexImageArtifactError() from exc
 
 
-def _build_codex_cli_command(model: str) -> tuple[str, ...]:
-    """Return the fixed, tool-free Codex command for a single streamed turn."""
-    return _build_codex_command(sandbox="read-only", model=model)
-
-
 def _build_codex_tool_command(
     model: str,
     *,
@@ -996,24 +876,6 @@ def _completed_error_item_message(event: dict[str, object]) -> str:
     return message
 
 
-def _log_completed_error_item(message: str) -> None:
-    log.warning(
-        "Codex CLI error item (message_class=%s)",
-        _error_message_class(message),
-    )
-
-
-def _error_message_class(message: str) -> str:
-    words: list[str] = []
-    for word in message.split():
-        if not word.isalpha() or len(word) > 24:
-            break
-        words.append(word.lower())
-        if len(words) == 4:
-            break
-    return "_".join(words) or "unclassified"
-
-
 def _item_type(event: dict[str, object]) -> str:
     item_type = _item(event).get("type")
     if not isinstance(item_type, str):
@@ -1026,20 +888,6 @@ def _item(event: dict[str, object]) -> dict[str, object]:
     if not isinstance(item, dict):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return item
-
-
-def _unsupported_stream_event(
-    event_type: str, item_type: str | None = None,
-) -> _CodexCliStreamFailure:
-    if item_type is None:
-        log.warning("Codex CLI stream protocol error (event_type=%s)", event_type)
-    else:
-        log.warning(
-            "Codex CLI stream protocol error (event_type=%s, item_type=%s)",
-            event_type,
-            item_type,
-        )
-    return _CodexCliStreamFailure("codex_cli_stream_protocol_error")
 
 
 def _completed_turn(event: dict[str, object]) -> None:
