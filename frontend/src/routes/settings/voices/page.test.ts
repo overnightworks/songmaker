@@ -63,6 +63,80 @@ afterEach(async () => {
 });
 
 describe('voices page', () => {
+	it('shows the model mode on every ready voice', async () => {
+		loras.set([
+			{
+				id: 'ready-sft',
+				user_id: 'u1',
+				name: 'My Tenor',
+				slug: 'my-tenor',
+				status: 'ready',
+				model_mode: 'sft',
+				created_at: '2026-09-05T00:00:00Z',
+				deleted_at: null,
+				samples: []
+			},
+			{
+				id: 'ready-turbo',
+				user_id: 'u1',
+				name: 'Dry Spoken Word',
+				slug: 'dry-spoken-word',
+				status: 'ready',
+				model_mode: 'turbo',
+				created_at: '2026-09-05T00:00:00Z',
+				deleted_at: null,
+				samples: []
+			},
+			{
+				id: 'draft',
+				user_id: 'u1',
+				name: 'New Voice',
+				slug: 'new-voice',
+				status: 'draft',
+				model_mode: 'sft',
+				created_at: '2026-09-05T00:00:00Z',
+				deleted_at: null,
+				samples: []
+			}
+		]);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(VoicesPage, { target });
+		await tick();
+
+		expect(
+			Array.from(target.querySelectorAll('.model-mode')).map((chip) => chip.textContent)
+		).toEqual(['sft', 'turbo']);
+	});
+
+	it('explains what remains when deleting a used voice', async () => {
+		const voice = {
+			id: 'ready-sft',
+			user_id: 'u1',
+			name: 'My Tenor',
+			slug: 'my-tenor',
+			status: 'ready',
+			model_mode: 'sft',
+			created_at: '2026-09-05T00:00:00Z',
+			deleted_at: null,
+			samples: []
+		};
+		loras.set([voice]);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(VoicesPage, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>('.danger')?.click();
+		await tick();
+		expect(target.querySelector('.warning')?.textContent).toBe(
+			'My Tenor will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.'
+		);
+
+		target.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
+		await vi.waitFor(() => expect(mocks.softDeleteLora).toHaveBeenCalledWith(voice.id));
+	});
+
 	it('shows the copied take metadata after the voice refreshes', async () => {
 		const voice = {
 			id: 'l1',

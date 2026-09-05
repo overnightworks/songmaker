@@ -174,6 +174,9 @@
 					>
 						<span class="lora-name">{lora.name}</span>
 						<span class="status-badge {tone}">{lora.status}</span>
+						{#if lora.status === 'ready'}
+							<span class="model-mode">{lora.model_mode}</span>
+						{/if}
 						<span class="sample-count">{lora.samples.length} samples</span>
 						<span class="arrow" class:open={expandedId === lora.id}>▸</span>
 					</button>
@@ -205,7 +208,7 @@
 	<ConfirmDeleteDialog
 		title="Delete voice?"
 		items={[loraPendingDelete.name]}
-		warning="The voice will be hidden. Training outputs will be kept for now."
+		warning={`${loraPendingDelete.name} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`}
 		confirmLabel="Delete"
 		onconfirm={confirmDelete}
 		oncancel={() => (loraPendingDelete = null)}
@@ -359,7 +362,7 @@
 
 	.lora-row {
 		display: grid;
-		grid-template-columns: 1fr auto auto auto;
+		grid-template-columns: 1fr auto auto auto auto;
 		gap: 0.8rem;
 		align-items: center;
 		background: transparent;
@@ -402,6 +405,18 @@
 	.status-badge.neutral {
 		background: var(--border);
 		color: var(--text-muted);
+	}
+
+	.model-mode {
+		padding: 0.15rem 0.5rem;
+		border: 1px solid var(--accent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--accent) 16%, transparent);
+		color: var(--text);
+		font-family: var(--font-display);
+		font-size: 0.7rem;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
 	}
 
 	.sample-count {
@@ -467,7 +482,7 @@
 
 	@media (max-width: 640px) {
 		.lora-row {
-			grid-template-columns: 1fr auto auto;
+			grid-template-columns: 1fr auto auto auto;
 			font-size: 0.85rem;
 		}
 
