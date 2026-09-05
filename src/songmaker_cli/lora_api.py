@@ -344,6 +344,7 @@ async def api_add_sample(
     "/loras/{lora_id}/samples/{sample_id}",
     responses={
         404: {"description": "Sample does not exist"},
+        409: {"description": "LoRA cannot be modified during training"},
         422: {"description": "Sample update is invalid"},
     },
 )
@@ -377,7 +378,10 @@ def api_patch_sample(
 
 @router.delete(
     "/loras/{lora_id}/samples/{sample_id}",
-    responses={404: {"description": "Sample does not exist"}},
+    responses={
+        404: {"description": "Sample does not exist"},
+        409: {"description": "LoRA cannot be modified during training"},
+    },
 )
 def api_delete_sample(
     lora_id: str,
