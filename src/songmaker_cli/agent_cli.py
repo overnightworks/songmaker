@@ -18,7 +18,7 @@ from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Final, Literal, Sequence
+from typing import Any, Final, Literal, NotRequired, Required, Sequence, TypedDict, Unpack
 
 from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
@@ -247,7 +247,9 @@ class CachedProbe[T]:
             self._inflight = None
 
     def _run_and_resolve(
-        self, future: concurrent.futures.Future[T], generation: int,
+        self,
+        future: concurrent.futures.Future[T],
+        generation: int,
     ) -> None:
         try:
             result = self._probe()
@@ -306,56 +308,83 @@ def run_cli(binary: str, args: tuple[str, ...]) -> CliRun | None:
     )
 
 
+class _CliRunKeywordArgs(TypedDict, total=False):
+    stdin_payload: Required[bytes | None]
+    read: Required[Literal["all", "first_line"]]
+    deadline: Required[float]
+    stderr: NotRequired[Literal["capture", "devnull"]]
+    output_read_limit_bytes: NotRequired[int | None]
+    cleanup_margin_seconds: NotRequired[float | None]
+    on_spawned: NotRequired[Callable[[int], None] | None]
+    on_spawn_failed: NotRequired[Callable[[], None] | None]
+    on_reaped: NotRequired[Callable[[int, bool], None] | None]
+    stdout_line_channel: NotRequired[CliLineChannel | None]
+    prompt_file_bytes: NotRequired[bytes | None]
+    prompt_file_arg_index: NotRequired[int | None]
+    cwd: NotRequired[str | None]
+    extra_env: NotRequired[Mapping[str, str] | None]
+    unset_env: NotRequired[Collection[str]]
+
+
+@dataclass(frozen=True)
+class _CliRunRequest:
+    stdin_payload: bytes | None
+    read: Literal["all", "first_line"]
+    deadline: float
+    stderr: Literal["capture", "devnull"]
+    output_read_limit_bytes: int
+    on_spawned: Callable[[int], None] | None
+    on_spawn_failed: Callable[[], None] | None
+    on_reaped: Callable[[int, bool], None] | None
+    stdout_line_channel: CliLineChannel | None
+    prompt_file_bytes: bytes | None
+    prompt_file_arg_index: int | None
+    cwd: str | None
+    extra_env: Mapping[str, str] | None
+    unset_env: Collection[str]
+
+
 def run_cli_bounded(
     argv: Sequence[str],
-    *,
-    stdin_payload: bytes | None,
-    read: Literal["all", "first_line"],
-    deadline: float,
-    stderr: Literal["capture", "devnull"] = "capture",
-    output_read_limit_bytes: int | None = None,
-    cleanup_margin_seconds: float | None = None,
-    on_spawned: Callable[[int], None] | None = None,
-    on_spawn_failed: Callable[[], None] | None = None,
-    on_reaped: Callable[[int, bool], None] | None = None,
-    stdout_line_channel: CliLineChannel | None = None,
-    prompt_file_bytes: bytes | None = None,
-    prompt_file_arg_index: int | None = None,
-    cwd: str | None = None,
-    extra_env: Mapping[str, str] | None = None,
-    unset_env: Collection[str] = (),
+    **options: Unpack[_CliRunKeywordArgs],
 ) -> CliRunOutcome:
     """Run a CLI with bounded input, output, and caller cleanup waits.
 
     The child deliberately receives no terminal stdin: its pipe is closed
     immediately when no input payload is supplied.
     """
-    if output_read_limit_bytes is None:
-        output_read_limit_bytes = CLI_OUTPUT_READ_LIMIT_BYTES
+    output_read_limit_bytes = options.get("output_read_limit_bytes")
+    request = _CliRunRequest(
+        stdin_payload=options["stdin_payload"],
+        read=options["read"],
+        deadline=options["deadline"],
+        stderr=options.get("stderr", "capture"),
+        output_read_limit_bytes=(
+            CLI_OUTPUT_READ_LIMIT_BYTES
+            if output_read_limit_bytes is None
+            else output_read_limit_bytes
+        ),
+        on_spawned=options.get("on_spawned"),
+        on_spawn_failed=options.get("on_spawn_failed"),
+        on_reaped=options.get("on_reaped"),
+        stdout_line_channel=options.get("stdout_line_channel"),
+        prompt_file_bytes=options.get("prompt_file_bytes"),
+        prompt_file_arg_index=options.get("prompt_file_arg_index"),
+        cwd=options.get("cwd"),
+        extra_env=options.get("extra_env"),
+        unset_env=tuple(options.get("unset_env", ())),
+    )
     state = _BoundedRunState()
     threading.Thread(
         target=_run_cli_bounded,
         args=(
             state,
             tuple(argv),
-            stdin_payload,
-            read,
-            deadline,
-            stderr,
-            output_read_limit_bytes,
-            on_spawned,
-            on_spawn_failed,
-            on_reaped,
-            stdout_line_channel,
-            prompt_file_bytes,
-            prompt_file_arg_index,
-            cwd,
-            extra_env,
-            tuple(unset_env),
+            request,
         ),
         daemon=True,
     ).start()
-    if not state.completed.wait(timeout=max(deadline - time.monotonic(), 0)):
+    if not state.completed.wait(timeout=max(request.deadline - time.monotonic(), 0)):
         if not state.started.is_set():
             return CliRunOutcome(
                 started=False,
@@ -367,11 +396,10 @@ def run_cli_bounded(
                 became_zombie=False,
                 reason=CliRunReason.DEADLINE_BEFORE_SPAWN,
             )
-        cleanup_margin = cleanup_margin_seconds
+        cleanup_margin = options.get("cleanup_margin_seconds")
         if cleanup_margin is None:
             cleanup_margin = (
-                (2 * CLI_TERMINATION_GRACE_SECONDS)
-                + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
+                2 * CLI_TERMINATION_GRACE_SECONDS + CLI_PROBE_CALLER_TIMEOUT_MARGIN_SECONDS
             )
         if not state.completed.wait(timeout=cleanup_margin):
             return CliRunOutcome(
@@ -410,55 +438,45 @@ class _CliExchange:
 def _run_cli_bounded(
     state: _BoundedRunState,
     argv: tuple[str, ...],
-    stdin_payload: bytes | None,
-    read: Literal["all", "first_line"],
-    deadline: float,
-    stderr: Literal["capture", "devnull"],
-    output_read_limit_bytes: int,
-    on_spawned: Callable[[int], None] | None,
-    on_spawn_failed: Callable[[], None] | None,
-    on_reaped: Callable[[int, bool], None] | None,
-    stdout_line_channel: CliLineChannel | None,
-    prompt_file_bytes: bytes | None,
-    prompt_file_arg_index: int | None,
-    cwd: str | None,
-    extra_env: Mapping[str, str] | None,
-    unset_env: Collection[str],
+    request: _CliRunRequest,
 ) -> None:
     process, prompt_file_path, outcome = _start_bounded_cli(
         argv,
-        stderr,
-        on_spawn_failed,
-        prompt_file_bytes,
-        prompt_file_arg_index,
-        cwd,
-        extra_env,
-        unset_env,
+        request.stderr,
+        request.on_spawn_failed,
+        request.prompt_file_bytes,
+        request.prompt_file_arg_index,
+        request.cwd,
+        request.extra_env,
+        request.unset_env,
     )
     output = _CliOutput(
-        bytearray(), bytearray(), complete=False, reason=CliRunReason.IO_ERROR,
+        bytearray(),
+        bytearray(),
+        complete=False,
+        reason=CliRunReason.IO_ERROR,
     )
     try:
         if process is not None:
             state.started.set()
-            _notify_spawned(on_spawned, process.pid)
+            _notify_spawned(request.on_spawned, process.pid)
             output = _exchange_bounded(
                 process,
-                stdin_payload,
-                read,
-                deadline,
-                output_read_limit_bytes,
-                stdout_line_channel,
+                request.stdin_payload,
+                request.read,
+                request.deadline,
+                request.output_read_limit_bytes,
+                request.stdout_line_channel,
             )
     finally:
         if process is not None:
-            outcome = _finished_bounded_cli_run(process, output, on_reaped)
+            outcome = _finished_bounded_cli_run(process, output, request.on_reaped)
         outcome = _cleanup_bounded_cli_prompt_file(prompt_file_path, outcome)
         if outcome is None:
             raise RuntimeError("bounded CLI runner exited without an outcome")
         _publish_bounded_outcome(state, outcome)
-        if stdout_line_channel is not None:
-            stdout_line_channel._close(outcome)
+        if request.stdout_line_channel is not None:
+            request.stdout_line_channel._close(outcome)
 
 
 def _start_bounded_cli(
@@ -487,7 +505,7 @@ def _start_bounded_cli(
             start_new_session=True,
             cwd=cwd,
         )
-    except BaseException as error:
+    except Exception as error:
         _notify_spawn_failed(on_spawn_failed)
         return None, prompt_file_path, _spawn_failure_outcome(error)
     return process, prompt_file_path, None
@@ -604,10 +622,12 @@ def _unlink_prompt_file(path: str) -> None:
         return
 
 
-_DEADLINE_REASONS = frozenset({
-    CliRunReason.DEADLINE_WHILE_WRITING,
-    CliRunReason.DEADLINE_WHILE_READING,
-})
+_DEADLINE_REASONS = frozenset(
+    {
+        CliRunReason.DEADLINE_WHILE_WRITING,
+        CliRunReason.DEADLINE_WHILE_READING,
+    }
+)
 
 
 def _publish_bounded_outcome(state: _BoundedRunState, outcome: CliRunOutcome) -> None:
@@ -845,7 +865,7 @@ def _first_line_output(
     newline = chunk.find(b"\n")
     if newline < 0:
         return None
-    stdout.extend(chunk[:newline + 1])
+    stdout.extend(chunk[: newline + 1])
     return _CliOutput(stdout, stderr, complete=True, reason=CliRunReason.COMPLETE)
 
 
@@ -1138,7 +1158,7 @@ def _parse_grok_model_names(output: str) -> tuple[str, ...]:
     for index, line in enumerate(lines):
         if line.strip() != GROK_CLI_MODEL_LIST_MARKER:
             continue
-        names = tuple(_grok_model_names_under(lines[index + 1:]))
+        names = tuple(_grok_model_names_under(lines[index + 1 :]))
         if names:
             return names
         break

@@ -17,7 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Final
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 
 from songmaker_cli.agent_cli import (
     CliLineChannel,
@@ -70,10 +70,16 @@ _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX: Final = (
 _CODEX_APPROVAL_POLICY_NEVER_CONFIG: Final = 'approval_policy="never"'
 _CODEX_EMPTY_MCP_SERVERS_CONFIG: Final = "mcp_servers={}"
 _CODEX_ITEM_COMPLETED_EVENT: Final = "item.completed"
-_BLOCKED_ITEM_TYPES: Final = frozenset({
-    "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
-    "mcp_tool_call", "web_search",
-})
+_BLOCKED_ITEM_TYPES: Final = frozenset(
+    {
+        "collab_agent_tool_call",
+        "command_execution",
+        "file_change",
+        "image_generation",
+        "mcp_tool_call",
+        "web_search",
+    }
+)
 _CODEX_CLI_ISOLATION_ARGS: Final = (
     "--skip-git-repo-check",
     "--ignore-user-config",
@@ -124,12 +130,20 @@ _CODEX_IMAGE_ISOLATION_ARGS: Final = (
     "-c",
     'web_search="disabled"',
 )
-_INFORMATIONAL_ITEM_TYPES: Final = frozenset({
-    "agent_message", "reasoning", "todo_list",
-})
-_ITEM_EVENT_TYPES: Final = frozenset({
-    "item.started", "item.updated", _CODEX_ITEM_COMPLETED_EVENT,
-})
+_INFORMATIONAL_ITEM_TYPES: Final = frozenset(
+    {
+        "agent_message",
+        "reasoning",
+        "todo_list",
+    }
+)
+_ITEM_EVENT_TYPES: Final = frozenset(
+    {
+        "item.started",
+        "item.updated",
+        _CODEX_ITEM_COMPLETED_EVENT,
+    }
+)
 _INFORMATIONAL_EVENT_TYPES: Final = frozenset({"thread.started", "turn.started"})
 log = logging.getLogger(__name__)
 
@@ -260,16 +274,18 @@ class CodexCliToolTransport:
                 "cli",
                 normalize_route_failure(SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED),
             ) from exc
-        runner = asyncio.create_task(asyncio.to_thread(
-            _run_codex_tool_round,
-            reservation=reservation,
-            command=command,
-            prompt=prompt,
-            deadline=self._deadline,
-            channel=channel,
-            cwd=str(self._work_directory),
-            codex_home=self._codex_home,
-        ))
+        runner = asyncio.create_task(
+            asyncio.to_thread(
+                _run_codex_tool_round,
+                reservation=reservation,
+                command=command,
+                prompt=prompt,
+                deadline=self._deadline,
+                channel=channel,
+                cwd=str(self._work_directory),
+                codex_home=self._codex_home,
+            )
+        )
         parser = TextToolStreamParser()
         state = _CodexToolRoundState()
         started_at = time.monotonic()
@@ -490,22 +506,32 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
         id_token = tokens.get("id_token")
         account_id = tokens.get("account_id")
         last_refresh = document.get("last_refresh")
-        if not all(isinstance(value, str) and value for value in (
-            auth_mode, id_token, account_id, last_refresh,
-        )):
+        if not all(
+            isinstance(value, str) and value
+            for value in (
+                auth_mode,
+                id_token,
+                account_id,
+                last_refresh,
+            )
+        ):
             raise _CodexLoginMirrorError()
         redacted_refresh_token = access_token[:0]
-        target.write_text(json.dumps({
-            "auth_mode": auth_mode,
-            "OPENAI_API_KEY": None,
-            "last_refresh": last_refresh,
-            "tokens": {
-                "id_token": id_token,
-                "access_token": access_token,
-                "account_id": account_id,
-                "refresh_token": redacted_refresh_token,
-            },
-        }))
+        target.write_text(
+            json.dumps(
+                {
+                    "auth_mode": auth_mode,
+                    "OPENAI_API_KEY": None,
+                    "last_refresh": last_refresh,
+                    "tokens": {
+                        "id_token": id_token,
+                        "access_token": access_token,
+                        "account_id": account_id,
+                        "refresh_token": redacted_refresh_token,
+                    },
+                }
+            )
+        )
         target.chmod(0o600)
     except _CodexLoginMirrorError:
         raise
@@ -614,17 +640,18 @@ class _CodexImageEventGate:
             if self.command_id is not None and self.saw_completed_command:
                 return
             raise ImageToolBlockedError()
-        if self.completed_error_item_message is not None:
-            if _codex_cli_failure_reason(
-                self.completed_error_item_message,
-            ) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
-                raise CodexImageLoginError()
+        if (
+            self.completed_error_item_message is not None
+            and _codex_cli_failure_reason(self.completed_error_item_message)
+            is SafeRouteReasonCode.CLI_AUTH_REJECTED
+        ):
+            raise CodexImageLoginError()
         raise CodexImageCliError()
 
 
 def _expected_image_skill_command(codex_home: Path) -> str:
     skill_path = codex_home.resolve() / "skills" / ".system" / "imagegen" / "SKILL.md"
-    return f'/bin/bash -lc "sed -n \'1,240p\' {skill_path}"'
+    return f"/bin/bash -lc \"sed -n '1,240p' {skill_path}\""
 
 
 def _validate_image_skill_command(
@@ -667,7 +694,8 @@ def _find_only_generated_png(codex_home: Path) -> Path:
     if root.is_symlink():
         raise CodexImageArtifactError()
     candidates = [
-        path for path in root.glob("**/*.png")
+        path
+        for path in root.glob("**/*.png")
         if path.is_file() and path.resolve().is_relative_to(root)
     ]
     if not candidates:
@@ -694,7 +722,7 @@ def _normalize_generated_png(source: Path) -> bytes:
         return payload
     except CodexImageArtifactError:
         raise
-    except (OSError, UnidentifiedImageError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         raise CodexImageArtifactError() from exc
 
 
@@ -762,7 +790,7 @@ def _run_codex_tool_round(
             cwd=cwd,
             extra_env=_codex_cli_env(codex_home),
         )
-    except BaseException as exc:
+    except Exception as exc:
         get_codex_process_pool().abandon_unspawned(reservation)
         outcome = CliRunOutcome(
             started=False,
@@ -849,9 +877,7 @@ def _record_codex_thread_id(
     state: _CodexToolRoundState,
 ) -> None:
     thread_id = _thread_started_id(event)
-    if state.received_thread_id is not None or (
-        is_resume and thread_id != expected_thread_id
-    ):
+    if state.received_thread_id is not None or (is_resume and thread_id != expected_thread_id):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     state.received_thread_id = thread_id
 
@@ -936,8 +962,7 @@ def _log_codex_tool_round(
 ) -> None:
     duration_ms = round((time.monotonic() - started_at) * 1000)
     log.info(
-        "Co-writer Codex CLI provider=codex route=cli round=%s duration_ms=%s "
-        "tool=%s is_error=%s",
+        "Co-writer Codex CLI provider=codex route=cli round=%s duration_ms=%s tool=%s is_error=%s",
         round_index,
         duration_ms,
         tool_name or "none",
@@ -1030,12 +1055,11 @@ def _raise_for_codex_outcome(
         _raise_codex_cli_failure(outcome, error_message)
     if not outcome.complete or outcome.returncode != 0:
         _raise_codex_cli_failure(outcome, None)
-    if not saw_success:
-        raise ProviderUnavailableError(
-            "codex",
-            "cli",
-            normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
-        )
+    raise ProviderUnavailableError(
+        "codex",
+        "cli",
+        normalize_route_failure(SafeRouteReasonCode.CLI_PROTOCOL_ERROR),
+    )
 
 
 def _raise_codex_cli_failure(outcome: CliRunOutcome, error_message: str | None) -> None:
