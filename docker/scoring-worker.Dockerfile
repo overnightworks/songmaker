@@ -41,7 +41,7 @@ RUN install -d /home/songmaker/.claude
 # mounts it first — as root when that image lacks the directory. Every
 # image that mounts it must carry it, owned by songmaker.
 USER root
-RUN chown root:root /app && chmod 755 /app && \
+RUN chown root:root /app && chown -R root:root src && chmod 755 /app && \
     chmod -R a-w src alembic.ini scripts && \
     install -d -o songmaker -g songmaker /app/data/audio
 USER songmaker
