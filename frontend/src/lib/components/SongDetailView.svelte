@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
+	import { onMount } from 'svelte';
 	import {
 		fetchSong,
 		generateSong,
@@ -63,7 +64,7 @@
 		savedSongData
 	} from '$lib/stores/editor';
 	import { activeModels, loadActiveModels } from '$lib/stores/presets';
-	import { loras } from '$lib/stores/loras';
+	import { loras, loadLoras } from '$lib/stores/loras';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import {
@@ -328,6 +329,10 @@
 		void loadActiveModels();
 	});
 
+	onMount(() => {
+		void loadLoras(true).catch(() => {});
+	});
+
 	$effect(() => {
 		seedRecipeModel($activeModels.map((m) => m.id));
 	});
@@ -383,7 +388,9 @@
 
 	function resolveVoiceLabel(loraId: string | null): string {
 		if (!loraId) return 'None';
-		return $loras.find((l) => l.id === loraId)?.name ?? 'Custom';
+		const voice = $loras.find((l) => l.id === loraId);
+		if (!voice) return 'Custom';
+		return voice.deleted_at ? `${voice.name} — voice deleted` : voice.name;
 	}
 
 	setGenerationActions({
@@ -774,6 +781,7 @@
 						{@render expiryDigest()}
 						<TakesList
 							{song}
+							voices={$loras}
 							loadStatus={takesStatus}
 							loadError={takesError}
 							{dirty}
