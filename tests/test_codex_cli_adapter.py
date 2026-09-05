@@ -131,6 +131,41 @@ async def _collect_tool_events(stream) -> list[object]:
     return [event async for event in stream]
 
 
+def test_codex_tool_command_pins_read_only_isolation_for_start_and_resume() -> None:
+    model = "codex-test"
+    thread_id = "52700000-0000-4000-8000-000000000000"
+    common = (
+        "--json",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-c", "approval_policy=\"never\"",
+        "-c", "mcp_servers={}",
+        "-c", "features.shell_tool=false",
+        "-c", "features.unified_exec=false",
+        "-c", "features.browser_use=false",
+        "-c", "features.computer_use=false",
+        "-c", "features.multi_agent=false",
+        "-c", "features.image_generation=false",
+        "-c", "features.plugins=false",
+        "-c", "features.hooks=false",
+        "-c", 'web_search="disabled"',
+        "-c", "features.code_mode_host=false",
+        "-c", "features.code_mode=false",
+        "-c", "features.code_mode_only=false",
+        "-c", 'sandbox_mode="read-only"',
+        "--model", model,
+    )
+
+    assert codex_cli_adapter._build_codex_tool_command(model) == (
+        "codex", "exec", "--sandbox", "read-only", *common, "-",
+    )
+    assert codex_cli_adapter._build_codex_tool_command(
+        model,
+        thread_id=thread_id,
+    ) == ("codex", "exec", "resume", *common, thread_id, "-")
+
+
 @pytest.mark.acceptance("ACC-COWRITER-12")
 def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(monkeypatch) -> None:
     calls: list = []
@@ -229,11 +264,12 @@ def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monk
 
     async def reject_batch() -> None:
         assert [item async for item in transport.stream(InitialTurn("system", []))]
+        batch = ToolResultBatch((
+            ToolResult("one", "1", False),
+            ToolResult("two", "2", False),
+        ))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(ToolResultBatch((
-                ToolResult("one", "1", False),
-                ToolResult("two", "2", False),
-            ))):
+            async for _ in transport.stream(batch):
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
         await transport.aclose()
@@ -296,8 +332,9 @@ def test_codex_tool_transport_aborts_for_an_unrelated_completed_error_item(monke
     transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
 
     async def collect() -> None:
+        turn = transport.stream(InitialTurn("system", []))
         with pytest.raises(ProviderUnavailableError) as raised:
-            async for _ in transport.stream(InitialTurn("system", [])):
+            async for _ in turn:
                 pass
         assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
 

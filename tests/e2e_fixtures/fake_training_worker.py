@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import io
+import json
 import os
+import struct
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,7 +17,7 @@ from redis.asyncio import Redis
 
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import LoadedModel, ModelCache
-from acestep_worker.models import TrainLoraRequest, TrainLoraTaskResult
+from acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
@@ -25,6 +30,7 @@ DEFAULT_PROGRESS_PAUSE_SECONDS = 1.0
 # retries a failed voice. This makes the configured queue-capacity evidence
 # deterministic without seeding a queue state.
 FAKE_GENERATION_OCCUPANCY_SECONDS = 15.0
+FAKE_GENERATION_OCCUPANCY_PROMPT = "E2E voices occupancy prompt"
 FAKE_FAILED_TRAINING_CAPTION = "e2e fake training failure"
 FAKE_WORKER_ID = "voices-e2e-training-worker"
 FAKE_WORKER_HOST = "songmaker-voices-e2e-worker"
@@ -42,6 +48,7 @@ class FakeTrainingWorkerSettings:
     worker_id: str = FAKE_WORKER_ID
     worker_host: str = FAKE_WORKER_HOST
     port: int = DEFAULT_PORT
+    generation_occupancy_prompt: str = FAKE_GENERATION_OCCUPANCY_PROMPT
 
     @classmethod
     def from_environment(cls) -> FakeTrainingWorkerSettings:
@@ -53,6 +60,9 @@ class FakeTrainingWorkerSettings:
             worker_id=os.environ.get("WORKER_ID", FAKE_WORKER_ID),
             worker_host=os.environ.get("WORKER_HOST", FAKE_WORKER_HOST),
             port=int(os.environ.get("WORKER_PORT", DEFAULT_PORT)),
+            generation_occupancy_prompt=os.environ.get(
+                "FAKE_GENERATION_OCCUPANCY_PROMPT", FAKE_GENERATION_OCCUPANCY_PROMPT
+            ),
         )
 
 
@@ -64,15 +74,59 @@ async def _discard_model(_: LoadedModel) -> None:
     return None
 
 
+def fake_generation_wav_bytes(prompt: str, seed: int, lora_path: str | None) -> bytes:
+    """Build the deterministic one-second WAV used by the Voices browser proof."""
+    payload = json.dumps(
+        [prompt, seed, lora_path or ""], ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    digest = hashlib.sha256(payload).digest()
+    samples = ((digest[index % len(digest)] - 128) * 256 for index in range(8_000))
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(8_000)
+        wav.writeframes(struct.pack("<8000h", *samples))
+    return output.getvalue()
+
+
+def _is_occupancy_generation(config: object, occupancy_prompt: str) -> bool:
+    return getattr(config, "prompt", None) == occupancy_prompt
+
+
 async def _queued_generate_runner(
     task_store: TaskStore,
     task_id: str,
+    *,
+    config: object,
+    audio_output_dir: Path,
+    occupancy_prompt: str = FAKE_GENERATION_OCCUPANCY_PROMPT,
     **_: object,
 ) -> None:
-    """Occupy the worker long enough for the Voices flow to show its queue state."""
+    """Occupy only the named S5 proof; every other request gets a fake WAV."""
     await task_store.mark_running(task_id)
-    await asyncio.sleep(FAKE_GENERATION_OCCUPANCY_SECONDS)
-    await task_store.fail(task_id, "E2E fake generation released the training worker")
+    if _is_occupancy_generation(config, occupancy_prompt):
+        await asyncio.sleep(FAKE_GENERATION_OCCUPANCY_SECONDS)
+        await task_store.fail(task_id, "E2E fake generation released the training worker")
+        return
+
+    prompt = getattr(config, "prompt", "")
+    seed = getattr(config, "seed", -1)
+    lora_path = getattr(config, "lora_path", None)
+    is_valid_config = (
+        isinstance(prompt, str)
+        and isinstance(seed, int)
+        and isinstance(lora_path, str | None)
+    )
+    if not is_valid_config:
+        raise TypeError("Fake generation requires prompt, seed, and lora_path on its config")
+    audio_output_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = audio_output_dir / f"{task_id}.wav"
+    audio_path.write_bytes(fake_generation_wav_bytes(prompt, seed, lora_path))
+    await task_store.complete(
+        task_id,
+        GenerationTaskResult(mode=FAKE_MODEL_MODE, audio_path=str(audio_path), seed=seed),
+    )
 
 
 async def _fake_train_lora_runner(
@@ -148,7 +202,12 @@ def build_fake_worker_deps(
         ),
         checkpoint_dir=settings.audio_dir,
         audio_output_dir=settings.audio_dir,
-        generate_runner=_queued_generate_runner,
+        generate_runner=lambda task_store, task_id, **kwargs: _queued_generate_runner(
+            task_store,
+            task_id,
+            occupancy_prompt=settings.generation_occupancy_prompt,
+            **kwargs,
+        ),
         internal_token=settings.internal_token,
         shared_audio_root=settings.audio_dir,
         train_lora_runner=_fake_train_lora_runner,

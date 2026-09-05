@@ -354,10 +354,10 @@ def test_stream_nonzero_exit_raises(monkeypatch) -> None:
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
+    stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u")
+    collected = _collect(stream)
     with pytest.raises(UnavailableError):
-        asyncio.run(_collect(
-            acall_claude_with_mcp_stream(prompt="hi", user_id="u"),
-        ))
+        asyncio.run(collected)
 
 
 def test_stream_binary_missing_raises(monkeypatch) -> None:
@@ -370,10 +370,10 @@ def test_stream_binary_missing_raises(monkeypatch) -> None:
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
+    stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u")
+    collected = _collect(stream)
     with pytest.raises(UnavailableError):
-        asyncio.run(_collect(
-            acall_claude_with_mcp_stream(prompt="hi", user_id="u"),
-        ))
+        asyncio.run(collected)
 
 
 def test_stream_timeout_kills_subprocess(monkeypatch) -> None:
@@ -400,12 +400,12 @@ def test_stream_timeout_kills_subprocess(monkeypatch) -> None:
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
     monkeypatch.setattr(provider.os, "killpg", _killpg)
 
+    stream = acall_claude_with_mcp_stream(
+        prompt="hi", user_id="u", timeout_seconds=0.1,
+    )
+    collected = _collect(stream)
     with pytest.raises(UnavailableError):
-        asyncio.run(_collect(
-            acall_claude_with_mcp_stream(
-                prompt="hi", user_id="u", timeout_seconds=0.1,
-            ),
-        ))
+        asyncio.run(collected)
     assert killed["value"] is True
 
 

@@ -41,6 +41,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	openLibraryWall,
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
@@ -154,19 +155,6 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 		await page.keyboard.press('Escape');
 	}
 	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
-}
-
-/** Back to the wall through LIBRARY's first child, in both rail shells. */
-async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	await rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('button', { name: nameStartingWith('All albums') })
-		.click();
-	if (shell === 'mobile')
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
 /**
@@ -330,12 +318,12 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		]);
 
 		await entryRows
-			.first()
-			.getByRole('button', { name: nameStartingWith(secondPlaylistSong) })
+			.last()
+			.getByRole('button', { name: nameStartingWith(firstPlaylistSong) })
 			.click();
-		await expectTakeShownInNowPlaying(page, shell, secondPlaylistSong);
+		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSong);
 		await expect(
-			shellTransport(page, shell, secondPlaylistSong).getByRole('button', {
+			shellTransport(page, shell, firstPlaylistSong).getByRole('button', {
 				name: TRANSPORT_PAUSE_LABEL,
 				exact: true
 			})

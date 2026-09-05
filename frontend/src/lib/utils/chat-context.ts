@@ -12,8 +12,61 @@ export interface ApplyData {
 	title?: string;
 }
 
+const SONGMAKER_FENCE = '```songmaker';
+const CLOSING_FENCE = '```';
+
+interface SongmakerBlock {
+	start: number;
+	end: number;
+	content: string;
+}
+
 export function cleanDisplayText(text: string): string {
-	return text.replaceAll(/```songmaker\s*\n[\s\S]*?```/g, '').trim();
+	const blocks = findSongmakerBlocks(text);
+	if (blocks.length === 0) return text.trim();
+
+	let cleanedText = '';
+	let previousEnd = 0;
+	for (const block of blocks) {
+		cleanedText += text.slice(previousEnd, block.start);
+		previousEnd = block.end;
+	}
+	return (cleanedText + text.slice(previousEnd)).trim();
+}
+
+function findSongmakerBlocks(text: string): SongmakerBlock[] {
+	const blocks: SongmakerBlock[] = [];
+	let searchStart = 0;
+	while (searchStart < text.length) {
+		const start = text.indexOf(SONGMAKER_FENCE, searchStart);
+		if (start === -1) break;
+
+		const contentStart = songmakerContentStart(text, start + SONGMAKER_FENCE.length);
+		if (contentStart === undefined) {
+			searchStart = start + SONGMAKER_FENCE.length;
+			continue;
+		}
+
+		const closingStart = text.indexOf(CLOSING_FENCE, contentStart);
+		if (closingStart === -1) break;
+		blocks.push({
+			start,
+			end: closingStart + CLOSING_FENCE.length,
+			content: text.slice(contentStart, closingStart)
+		});
+		searchStart = closingStart + CLOSING_FENCE.length;
+	}
+	return blocks;
+}
+
+function songmakerContentStart(text: string, start: number): number | undefined {
+	let lastNewline = -1;
+	let index = start;
+	while (index < text.length && text[index].trim() === '') {
+		if (text[index] === '\n') lastNewline = index;
+		index++;
+	}
+	return lastNewline === -1 ? undefined : lastNewline + 1;
 }
 
 function parseSongmakerBlock(
@@ -84,11 +137,9 @@ export function extractAllApplyData(
 	allSongs: SongItem[]
 ): ApplyData[] {
 	const results: ApplyData[] = [];
-	const re = /```songmaker\s*\n([\s\S]*?)```/g;
-	let match;
-	while ((match = re.exec(text)) !== null) {
+	for (const block of findSongmakerBlocks(text)) {
 		try {
-			const raw = JSON.parse(match[1].trim());
+			const raw = JSON.parse(block.content.trim());
 			const data = parseSongmakerBlock(raw, currentAlbumId, allSongs);
 			if (data) results.push(data);
 		} catch {

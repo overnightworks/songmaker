@@ -114,8 +114,9 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
     monkeypatch.setattr("songmaker_cli.jobs._auto_score_generation", failing_auto_score)
 
+    loop = lifecycle.score_backfill_loop(app)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(lifecycle.score_backfill_loop(app))
+        asyncio.run(loop)
 
     health = registry.loop_health()[BackgroundLoopName.SCORE_BACKFILL]
     failing_auto_score.assert_awaited_once()
@@ -331,8 +332,9 @@ def test_provider_status_loop_marks_the_sweep_failed_but_continues_refreshing(
     monkeypatch.setattr(lifecycle.asyncio, "to_thread", refresh)
     monkeypatch.setattr(lifecycle.asyncio, "sleep", stop_after_sweep)
 
+    loop = lifecycle.provider_status_refresh_loop(app)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(lifecycle.provider_status_refresh_loop(app))
+        asyncio.run(loop)
 
     health = registry.loop_health()[BackgroundLoopName.PROVIDER_STATUS_REFRESH]
     assert refreshed == list(COWRITER_PROVIDERS)

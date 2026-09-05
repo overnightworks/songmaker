@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import wave
+from io import BytesIO
 from pathlib import Path
 
 import fakeredis.aioredis
@@ -27,6 +29,7 @@ FAKE_WORKER_ID = _fixture_module.FAKE_WORKER_ID
 FakeTrainingWorkerSettings = _fixture_module.FakeTrainingWorkerSettings
 build_fake_worker_deps = _fixture_module.build_fake_worker_deps
 create_fake_training_worker_app = _fixture_module.create_fake_training_worker_app
+fake_generation_wav_bytes = _fixture_module.fake_generation_wav_bytes
 
 
 def _training_request(dataset_dir: Path, output_dir: Path, hold_token: str) -> dict[str, object]:
@@ -143,3 +146,26 @@ def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) 
     done = next(data for event_type, data in events if event_type == "done")
     assert done["result"]["adapter_dir"] == str(output_dir)
     assert (output_dir / "adapter_model.safetensors").is_file()
+
+
+def test_fake_generation_wav_is_deterministic_and_binds_every_input() -> None:
+    prompt = "warm e2e tenor"
+    seed = 1234
+    adapter_a = "/app/data/audio/user_loras/u1/a/output"
+    adapter_b = "/app/data/audio/user_loras/u1/b/output"
+
+    baseline = fake_generation_wav_bytes(prompt, seed, None)
+    assert baseline == fake_generation_wav_bytes(prompt, seed, "")
+    assert baseline == fake_generation_wav_bytes(prompt, seed, None)
+    assert baseline != fake_generation_wav_bytes("different prompt", seed, None)
+    assert baseline != fake_generation_wav_bytes(prompt, seed + 1, None)
+    assert baseline != fake_generation_wav_bytes(prompt, seed, adapter_a)
+    assert fake_generation_wav_bytes(prompt, seed, adapter_a) != fake_generation_wav_bytes(
+        prompt, seed, adapter_b
+    )
+
+    with wave.open(BytesIO(baseline), "rb") as wav:
+        assert wav.getnchannels() == 1
+        assert wav.getsampwidth() == 2
+        assert wav.getframerate() == 8_000
+        assert wav.getnframes() == 8_000

@@ -44,12 +44,12 @@ export function lerpColor(c: VizColors, t: number): { r: number; g: number; b: n
 export function readVizColors(): VizColors {
 	const s = getComputedStyle(document.documentElement);
 	return {
-		pr: parseInt(s.getPropertyValue('--viz-primary-r')) || 255,
-		pg: parseInt(s.getPropertyValue('--viz-primary-g')) || 50,
-		pb: parseInt(s.getPropertyValue('--viz-primary-b')) || 32,
-		ar: parseInt(s.getPropertyValue('--viz-accent-r')) || 160,
-		ag: parseInt(s.getPropertyValue('--viz-accent-g')) || 32,
-		ab: parseInt(s.getPropertyValue('--viz-accent-b')) || 240
+		pr: Number.parseInt(s.getPropertyValue('--viz-primary-r')) || 255,
+		pg: Number.parseInt(s.getPropertyValue('--viz-primary-g')) || 50,
+		pb: Number.parseInt(s.getPropertyValue('--viz-primary-b')) || 32,
+		ar: Number.parseInt(s.getPropertyValue('--viz-accent-r')) || 160,
+		ag: Number.parseInt(s.getPropertyValue('--viz-accent-g')) || 32,
+		ab: Number.parseInt(s.getPropertyValue('--viz-accent-b')) || 240
 	};
 }
 

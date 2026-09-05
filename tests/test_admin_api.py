@@ -15,7 +15,7 @@ from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.middleware import SESSION_COOKIE
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
     yield client

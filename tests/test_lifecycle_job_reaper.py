@@ -44,7 +44,7 @@ from songmaker_cli.worker_liveness import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(tmp_path: Path) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -360,8 +360,9 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
 
     monkeypatch.setattr("songmaker_cli.lifecycle.asyncio.sleep", fake_sleep)
 
+    loop = stale_job_reaper_loop(app)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(stale_job_reaper_loop(app))
+        asyncio.run(loop)
 
     health = registry.loop_health()[BackgroundLoopName.STALE_JOB_REAPER]
     assert health.status is BackgroundLoopStatus.FAILING

@@ -15,11 +15,9 @@ def _run(coro):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_pool():
-    saved = pool_mod._pool
-    pool_mod._pool = None
+def _isolate_pool(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(pool_mod, "_pool", None)
     yield
-    pool_mod._pool = saved
 
 
 # ── init_arq_pool ─────────────────────────────────────────────────
@@ -39,9 +37,9 @@ def test_init_arq_pool_creates_pool() -> None:
 # ── get_arq_pool ──────────────────────────────────────────────────
 
 
-def test_get_arq_pool_returns_existing() -> None:
+def test_get_arq_pool_returns_existing(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_pool = AsyncMock()
-    pool_mod._pool = mock_pool
+    monkeypatch.setattr(pool_mod, "_pool", mock_pool)
     result = pool_mod.get_arq_pool()
     assert result is mock_pool
 
@@ -54,9 +52,9 @@ def test_get_arq_pool_raises_when_not_initialized() -> None:
 # ── close_arq_pool ─────────────────────────────────────────────────
 
 
-def test_close_arq_pool() -> None:
+def test_close_arq_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_pool = AsyncMock()
-    pool_mod._pool = mock_pool
+    monkeypatch.setattr(pool_mod, "_pool", mock_pool)
 
     _run(pool_mod.close_arq_pool())
 
@@ -64,9 +62,8 @@ def test_close_arq_pool() -> None:
     assert pool_mod._pool is None
 
 
-def test_close_arq_pool_noop_when_none() -> None:
-    pool_mod._pool = None
+def test_close_arq_pool_noop_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pool_mod, "_pool", None)
     _run(pool_mod.close_arq_pool())
-
 
 
