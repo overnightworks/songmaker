@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { ApiError } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
+import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
 
@@ -10,6 +11,22 @@ import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants'
 // view is picked everywhere else without a refetch.
 export const albumList = writable<AlbumItem[]>([]);
 export const songList = writable<SongItem[]>([]);
+
+let libraryContinueItemsRequest: Promise<LibraryContinueItem[]> | null = null;
+
+export function loadLibraryContinueItems(): Promise<LibraryContinueItem[]> {
+	libraryContinueItemsRequest ??= fetchLibraryContinue()
+		.then((response) => response.items)
+		.catch((error: unknown) => {
+			libraryContinueItemsRequest = null;
+			throw error;
+		});
+	return libraryContinueItemsRequest;
+}
+
+export function resetLibraryContinueItems(): void {
+	libraryContinueItemsRequest = null;
+}
 
 export function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
 	if (!current) return incoming;
