@@ -26,7 +26,7 @@ import {
 	resetPlaylists,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
-import { resetShares, sharesViewOpen } from '$lib/stores/shares';
+import { openSharesInventory, resetShares, sharesViewOpen } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -100,9 +100,7 @@ import {
 	resolveLegacySongQueryAddress,
 	libraryRootState,
 	libraryScrollAnchor,
-	libraryFilter,
 	resetLibraryContextForTests,
-	setLibraryFilter,
 	snapshotLibraryHistory,
 	writeLibraryHistory
 } from './libraryContext';
@@ -260,8 +258,7 @@ describe('albumIsExpanded', () => {
 });
 
 describe('library history snapshot', () => {
-	it('round-trips filter, query, sort, collection, and scroll', () => {
-		setLibraryFilter('playlists');
+	it('round-trips the mixed library query, sort, collection, and scroll', () => {
 		searchQuery.set('Tide');
 		librarySort.set('oldest');
 		selectedSongId.set('s1');
@@ -279,7 +276,6 @@ describe('library history snapshot', () => {
 		expect(snap).toMatchObject({
 			kind: LIBRARY_HISTORY_KIND,
 			index: 3,
-			filter: 'playlists',
 			surface: 'browse',
 			query: 'Tide',
 			sort: 'oldest',
@@ -317,8 +313,8 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(null)).toBe(false);
 		expect(
 			isLibraryHistoryState({
-				...libraryRootState(),
-				filter: undefined,
+				kind: LIBRARY_HISTORY_KIND,
+				index: 0,
 				section: 'albums',
 				browseTrackAlbumId: null
 			})
@@ -334,29 +330,16 @@ describe('library history snapshot', () => {
 			isLibraryHistoryState({ ...libraryRootState(), collection: { kind: 'album', id: 'a1' } })
 		).toBe(true);
 	});
-});
 
-describe('setLibraryFilter', () => {
-	it('replaces the filter without touching the open collection', () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
-		setLibraryFilter('playlists');
-		expect(get(libraryFilter)).toBe('playlists');
-		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
-	});
+	it('keeps the shares inventory outside the mixed library history', async () => {
+		openSharesInventory();
+		const state = { ...snapshotLibraryHistory(2), scrollAnchor: 240 };
 
-	it('opens the shares inventory for the shared filter and closes it otherwise', () => {
-		setLibraryFilter('shared');
+		await applyLibraryHistory(state);
+
 		expect(get(sharesViewOpen)).toBe(true);
-		setLibraryFilter('albums');
-		expect(get(sharesViewOpen)).toBe(false);
-	});
-
-	it('restores the remembered scroll position per filter', () => {
-		libraryScrollAnchor.set(120);
-		setLibraryFilter('playlists');
-		captureLibraryScroll(0);
-		setLibraryFilter('albums');
-		expect(get(libraryScrollAnchor)).toBe(120);
+		expect(get(libraryScrollAnchor)).toBe(240);
+		expect(state).not.toHaveProperty('filter');
 	});
 });
 

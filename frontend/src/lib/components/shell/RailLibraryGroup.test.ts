@@ -9,11 +9,7 @@ import {
 	RAIL_PLAYING_MARKER_LABEL
 } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
-import {
-	libraryFilter,
-	librarySurface,
-	resetLibraryContextForTests
-} from '$lib/stores/libraryContext';
+import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/filter';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
@@ -94,13 +90,11 @@ describe('RailLibraryGroup', () => {
 
 	it('toggles the LIBRARY group without navigating when its label is clicked', async () => {
 		librarySurface.set('detail');
-		libraryFilter.set('playlists');
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
 		requireElement<HTMLSpanElement>(toggle, '.group-title').click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(get(libraryFilter)).toBe('playlists');
 		expect(get(librarySurface)).toBe('detail');
 	});
 

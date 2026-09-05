@@ -6,31 +6,19 @@ import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong, fetchSongs } from '$lib/api/songs';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
-import {
-	LIBRARY_DEFAULT_FILTER,
-	LIBRARY_HISTORY_KIND,
-	LIBRARY_SONG_PAGE_SIZE,
-	type LibraryFilter
-} from '$lib/constants';
+import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
 import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
-import { closeSharesInventory, openSharesInventory } from '$lib/stores/shares';
 import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
 	librarySearch,
 	librarySort,
 	restoreLibraryBrowse,
-	restoreLibrarySearch,
-	syncLibrarySearch
+	restoreLibrarySearch
 } from '$lib/stores/librarySearch';
 import { albumList, loadSongsForAlbum, songList, upsertSongInList } from '$lib/stores/libraryData';
 import { ensureGenerationsLoaded, selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import {
-	deselectPlaylist,
-	ensurePlaylistsLoaded,
-	loadPlaylistDetail,
-	playlistList
-} from '$lib/stores/playlists';
+import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
 import {
 	albumRoutePath,
 	legacySongRoutePath,
@@ -56,7 +44,6 @@ type CollectionSnapshot = OpenCollection | null;
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
 	index: number;
-	filter: LibraryFilter;
 	surface: LibrarySurface;
 	query: string;
 	sort: LibrarySort;
@@ -75,7 +62,6 @@ export interface LibraryHistoryState {
 // way in, and writing is what the editor is for (#141/13).
 const DEFAULT_DETAIL_TAB: DetailTab = 'write';
 
-export const libraryFilter = writable<LibraryFilter>(LIBRARY_DEFAULT_FILTER);
 export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
@@ -87,18 +73,12 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 	edit: 'write',
 	chat: 'write'
 };
-const FILTERS: ReadonlySet<string> = new Set(['albums', 'playlists', 'shared']);
-
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
-
-export function isLibraryFilter(value: unknown): value is LibraryFilter {
-	return typeof value === 'string' && FILTERS.has(value);
-}
 
 export function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -117,7 +97,6 @@ function hasValidHistoryMetadata(state: Record<string, unknown>): boolean {
 }
 
 function hasValidHistoryBrowseState(state: Record<string, unknown>): boolean {
-	if (!isLibraryFilter(state.filter)) return false;
 	if (!isLibrarySurface(state.surface)) return false;
 	if (typeof state.query !== 'string') return false;
 	if (!isLibrarySort(state.sort)) return false;
@@ -149,7 +128,6 @@ export function libraryRootState(): LibraryHistoryState {
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index: 0,
-		filter: LIBRARY_DEFAULT_FILTER,
 		surface: 'browse',
 		query: '',
 		sort: 'newest',
@@ -674,7 +652,6 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index,
-		filter: get(libraryFilter),
 		surface: get(librarySurface),
 		query,
 		sort: get(librarySort),
@@ -692,10 +669,6 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
 	const generation = ++historyApplyGeneration;
-	if (state.filter === 'shared') openSharesInventory();
-	else closeSharesInventory();
-	libraryFilter.set(state.filter);
-	if (state.filter === 'playlists') syncLibrarySearch('');
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
@@ -705,12 +678,9 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.filter === 'playlists') {
-		void ensurePlaylistsLoaded();
-	}
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.query.trim() && state.filter !== 'playlists') {
+	if (state.query.trim()) {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
 	if (generation !== historyApplyGeneration) return false;
@@ -831,49 +801,12 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return get(libraryBrowse).status !== 'error';
 }
 
-const EMPTY_FILTER_SCROLL: Record<LibraryFilter, number> = {
-	albums: 0,
-	playlists: 0,
-	shared: 0
-};
-
-export const libraryScrollByFilter = writable<Record<LibraryFilter, number>>({
-	...EMPTY_FILTER_SCROLL
-});
-
-function rememberLibraryScroll(filter: LibraryFilter): void {
-	libraryScrollByFilter.update((anchors) => ({
-		...anchors,
-		[filter]: get(libraryScrollAnchor)
-	}));
-}
-
-function restoreLibraryScroll(filter: LibraryFilter): void {
-	libraryScrollAnchor.set(get(libraryScrollByFilter)[filter] ?? 0);
-}
-
-export function setLibraryFilter(filter: LibraryFilter): LibraryHistoryState {
-	const previous = get(libraryFilter);
-	const index = libraryHistoryIndex();
-	if (previous === filter) {
-		return snapshotLibraryHistory(index);
-	}
-	rememberLibraryScroll(previous);
-	if (filter === 'shared') openSharesInventory();
-	else closeSharesInventory();
-	libraryFilter.set(filter);
-	restoreLibraryScroll(filter);
-	if (filter === 'playlists') void ensurePlaylistsLoaded();
-	return snapshotLibraryHistory(index);
-}
-
 export function setLibrarySurface(surface: LibrarySurface): void {
 	librarySurface.set(surface);
 }
 
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
-	rememberLibraryScroll(get(libraryFilter));
 }
 
 export function albumIsExpanded(options: { searching: boolean; songHits: number }): boolean {
@@ -885,17 +818,10 @@ export function resetLibraryContextForTests(): void {
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
-	libraryFilter.set(LIBRARY_DEFAULT_FILTER);
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	libraryScrollAnchor.set(0);
-	libraryScrollByFilter.set({ ...EMPTY_FILTER_SCROLL });
 	setOpenCollection(null);
-}
-
-function libraryHistoryIndex(): number {
-	const state = currentLibraryHistoryState();
-	return isLibraryHistoryState(state) ? state.index : 0;
 }
 
 function isLibrarySurface(value: unknown): value is LibrarySurface {

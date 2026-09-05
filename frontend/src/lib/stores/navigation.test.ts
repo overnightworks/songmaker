@@ -5,8 +5,10 @@ import { goto } from '$app/navigation';
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import {
+	captureLibraryScroll,
 	detailTab,
 	isLibraryHistoryState,
+	libraryScrollAnchor,
 	librarySurface,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
@@ -93,7 +95,6 @@ import {
 	resetNavigationForTests,
 	revealPlayingSong,
 	revealSharedTake,
-	selectLibraryFilter,
 	selectNeighborSong,
 	selectSong
 } from './navigation';
@@ -284,15 +285,16 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(history.state.surface).toBe('browse');
 	});
 
-	it('writes the frequent churn inside one route straight to history', async () => {
+	it('writes the mixed library scroll position inside one route straight to history', async () => {
 		await selectSong('s1');
 		vi.mocked(goto).mockClear();
 
-		selectLibraryFilter('playlists');
+		captureLibraryScroll(240);
 		persistLibraryHistory();
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
-		expect(history.state.filter).toBe('playlists');
+		expect(history.state.scrollAnchor).toBe(240);
+		expect(history.state).not.toHaveProperty('filter');
 	});
 
 	it('keeps a second write behind the crossing one it follows', async () => {
@@ -551,6 +553,21 @@ describe("a rename pulls the open playlist's address along (issue #286)", () => 
 });
 
 describe('openAlbum / openPlaylist', () => {
+	it.each([
+		['album', () => openAlbum('a1')],
+		['playlist', () => openPlaylist('p1')]
+	])('returns from a %s to the same mixed library and its saved scroll', async (_kind, open) => {
+		captureLibraryScroll(240);
+
+		await open();
+		await openLibraryWall();
+
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(libraryScrollAnchor)).toBe(240);
+		expect(history.state).toMatchObject({ surface: 'browse', scrollAnchor: 240 });
+		expect(history.state).not.toHaveProperty('filter');
+	});
+
 	it('opens an album collection and pushes one history entry', async () => {
 		const before = history.state?.index ?? 0;
 		await openAlbum('a1');
@@ -994,14 +1011,6 @@ describe('goBack', () => {
 		librarySurface.set('create');
 		goBack();
 		expect(get(librarySurface)).toBe('browse');
-	});
-});
-
-describe('selectLibraryFilter', () => {
-	it('replaces history instead of pushing', () => {
-		const before = history.state?.index ?? 0;
-		selectLibraryFilter('playlists');
-		expect(history.state.index).toBe(before);
 	});
 });
 
