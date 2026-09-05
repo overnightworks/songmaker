@@ -230,7 +230,11 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await page.goto('/');
 	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 
-	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
+	await surface
+		.locator('.library-wall .tile-grid')
+		.locator('.wall-tile-body')
+		.filter({ hasText: library.albumTitle })
+		.click();
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	if (shell === 'mobile') await expectHeaderReadsAtNarrowest(page, library.albumTitle);
 
@@ -287,7 +291,11 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 		await openLibraryWall(page, shell);
-		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+		await surface
+			.locator('.library-wall .tile-grid')
+			.locator('.wall-tile-body')
+			.filter({ hasText: playlist.title })
+			.click();
 
 		const entryRows = playlistEntryRows(page);
 		await expect(entryRows).toHaveText([
