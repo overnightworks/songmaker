@@ -67,6 +67,9 @@ _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
 _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX: Final = (
     "Code Mode is unavailable because code-mode host is disabled"
 )
+_CODEX_APPROVAL_POLICY_NEVER_CONFIG: Final = 'approval_policy="never"'
+_CODEX_EMPTY_MCP_SERVERS_CONFIG: Final = "mcp_servers={}"
+_CODEX_ITEM_COMPLETED_EVENT: Final = "item.completed"
 _BLOCKED_ITEM_TYPES: Final = frozenset({
     "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
     "mcp_tool_call", "web_search",
@@ -83,13 +86,13 @@ _CODEX_CLI_ISOLATION_ARGS: Final = (
     "--disable",
     "code_mode_only",
     "-c",
-    'approval_policy="never"',
+    _CODEX_APPROVAL_POLICY_NEVER_CONFIG,
     "-c",
-    "mcp_servers={}",
+    _CODEX_EMPTY_MCP_SERVERS_CONFIG,
 )
 _CODEX_TOOL_ISOLATION_CONFIGS: Final = (
-    'approval_policy="never"',
-    "mcp_servers={}",
+    _CODEX_APPROVAL_POLICY_NEVER_CONFIG,
+    _CODEX_EMPTY_MCP_SERVERS_CONFIG,
     "features.shell_tool=false",
     "features.unified_exec=false",
     "features.browser_use=false",
@@ -115,9 +118,9 @@ _CODEX_IMAGE_ISOLATION_ARGS: Final = (
     "--disable",
     "code_mode_only",
     "-c",
-    'approval_policy="never"',
+    _CODEX_APPROVAL_POLICY_NEVER_CONFIG,
     "-c",
-    "mcp_servers={}",
+    _CODEX_EMPTY_MCP_SERVERS_CONFIG,
     "-c",
     'web_search="disabled"',
 )
@@ -125,7 +128,7 @@ _INFORMATIONAL_ITEM_TYPES: Final = frozenset({
     "agent_message", "reasoning", "todo_list",
 })
 _ITEM_EVENT_TYPES: Final = frozenset({
-    "item.started", "item.updated", "item.completed",
+    "item.started", "item.updated", _CODEX_ITEM_COMPLETED_EVENT,
 })
 _INFORMATIONAL_EVENT_TYPES: Final = frozenset({"thread.started", "turn.started"})
 log = logging.getLogger(__name__)
@@ -290,7 +293,7 @@ class CodexCliToolTransport:
                     item_type = _item_type(event)
                     if item_type in _BLOCKED_ITEM_TYPES:
                         raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                    if event_type == "item.completed" and item_type == "error":
+                    if event_type == _CODEX_ITEM_COMPLETED_EVENT and item_type == "error":
                         completed_error = _completed_error_item_message(event)
                         if _is_code_mode_host_disabled_isolation_notice(completed_error):
                             log.info("Codex CLI ignored its code-mode-host isolation notice")
@@ -300,7 +303,10 @@ class CodexCliToolTransport:
                         continue
                     if item_type not in _INFORMATIONAL_ITEM_TYPES:
                         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-                    if event_type == "item.completed" and item_type == "agent_message":
+                    if (
+                        event_type == _CODEX_ITEM_COMPLETED_EVENT
+                        and item_type == "agent_message"
+                    ):
                         text = parser.feed(_completed_agent_message(event))
                         if text:
                             yield TextDelta(text)
@@ -619,7 +625,7 @@ class _CodexImageEventGate:
             if event_type not in _ITEM_EVENT_TYPES:
                 raise ImageToolBlockedError()
             item_type = _item_type(event)
-            if event_type == "item.completed" and item_type == "error":
+            if event_type == _CODEX_ITEM_COMPLETED_EVENT and item_type == "error":
                 self.completed_error_item_message = _completed_error_item_message(event)
                 return
             if item_type == "command_execution":
@@ -680,7 +686,7 @@ def _validate_image_skill_command(
         ):
             raise ImageToolBlockedError()
         return item_id, False
-    if event_type == "item.completed":
+    if event_type == _CODEX_ITEM_COMPLETED_EVENT:
         if (
             command_id != item_id
             or saw_completed_command
