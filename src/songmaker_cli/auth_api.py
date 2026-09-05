@@ -179,40 +179,8 @@ def login(
     ip = resolve_client_ip(request)
     settings = get_settings()
 
-    lockout_failures = count_recent_failed_attempts(
-        db, ip, settings.login_lockout_window_seconds, username=req.username,
-    )
-    if lockout_failures >= settings.login_lockout_threshold:
-        raise HTTPException(
-            429,
-            "Account temporarily locked due to repeated failed attempts. Try again later.",
-            headers={"Retry-After": str(settings.login_lockout_window_seconds)},
-        )
-
-    ip_failures = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
-    user_failures = count_recent_failed_attempts(
-        db, ip, LOGIN_RATE_WINDOW_SECONDS, username=req.username,
-    )
-    if ip_failures >= settings.login_rate_limit or user_failures >= settings.login_rate_limit:
-        raise HTTPException(
-            429,
-            "Too many login attempts. Try again later.",
-            headers={"Retry-After": str(LOGIN_RATE_WINDOW_SECONDS)},
-        )
-
-    user = get_user_by_username(db, req.username)
-    password_valid = verify_password_constant_time(
-        req.password, user.password_hash if user else None,
-    )
-    if not user or not password_valid:
-        record_login_attempt(db, ip, req.username, success=False)
-        db.commit()
-        raise HTTPException(401, "Invalid username or password")
-
-    if not user.is_active:
-        record_login_attempt(db, ip, req.username, success=False)
-        db.commit()
-        raise HTTPException(401, "Invalid username or password")
+    _check_login_attempt_limits(db, ip, req.username, settings)
+    user = _authenticate_login(db, ip, req)
 
     assert not db.new and not db.dirty and not db.deleted, (
         "login: session has uncommitted mutations — "
@@ -255,6 +223,40 @@ def login(
 
     _set_session_cookie(response, user_session.id, ctx, request)
     return UserResponse.from_orm(user)
+
+
+def _check_login_attempt_limits(db: Session, ip: str, username: str, settings) -> None:
+    lockout_failures = count_recent_failed_attempts(
+        db, ip, settings.login_lockout_window_seconds, username=username,
+    )
+    if lockout_failures >= settings.login_lockout_threshold:
+        raise HTTPException(
+            429,
+            "Account temporarily locked due to repeated failed attempts. Try again later.",
+            headers={"Retry-After": str(settings.login_lockout_window_seconds)},
+        )
+    ip_failures = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
+    user_failures = count_recent_failed_attempts(
+        db, ip, LOGIN_RATE_WINDOW_SECONDS, username=username,
+    )
+    if ip_failures >= settings.login_rate_limit or user_failures >= settings.login_rate_limit:
+        raise HTTPException(
+            429,
+            "Too many login attempts. Try again later.",
+            headers={"Retry-After": str(LOGIN_RATE_WINDOW_SECONDS)},
+        )
+
+
+def _authenticate_login(db: Session, ip: str, req: LoginRequest):
+    user = get_user_by_username(db, req.username)
+    password_valid = verify_password_constant_time(
+        req.password, user.password_hash if user else None,
+    )
+    if user is not None and password_valid and user.is_active:
+        return user
+    record_login_attempt(db, ip, req.username, success=False)
+    db.commit()
+    raise HTTPException(401, "Invalid username or password")
 
 
 @router.delete("/session")

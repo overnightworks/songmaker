@@ -86,27 +86,7 @@ def compact_conversation(
             windowed=False,
         )
 
-    already_summarized_id = (
-        existing.last_summarized_message_id if existing else None
-    )
-    if already_summarized_id:
-        prefix_done = []
-        remainder = []
-        seen_boundary = False
-        for msg in ordered:
-            if not seen_boundary:
-                prefix_done.append(msg)
-                if msg.id == already_summarized_id:
-                    seen_boundary = True
-                continue
-            remainder.append(msg)
-        if not seen_boundary:
-            remainder = ordered
-            prefix_done = []
-            already_summarized_id = None
-    else:
-        prefix_done = []
-        remainder = ordered
+    already_summarized_id, remainder = _unsummarized_messages(ordered, existing)
 
     tail = _newest_fitting_tail(remainder, budget)
     to_fold = remainder[: len(remainder) - len(tail)] if tail else remainder
@@ -142,6 +122,19 @@ def compact_conversation(
         last_summarized_message_id=last_id,
         windowed=True,
     )
+
+
+def _unsummarized_messages(
+    messages: list[ChatMessage],
+    existing: ConversationSummary | None,
+) -> tuple[str | None, list[ChatMessage]]:
+    boundary_id = existing.last_summarized_message_id if existing else None
+    if boundary_id is None:
+        return None, messages
+    for index, message in enumerate(messages):
+        if message.id == boundary_id:
+            return boundary_id, messages[index + 1:]
+    return None, messages
 
 
 def fold_summary(
