@@ -265,13 +265,15 @@ def tool_rename_song(
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
-    song = db_rename_song(
+    db_rename_song(
         session, song_id=song_id, title=title, slug=slug, force_new_version=True,
     )
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
-        message=f"Renamed song to '{title}' in v{song.latest_version.version_number}",
+        message=(
+            f"Renamed song to '{title}' in v{refreshed.latest_version.version_number}"
+        ),
         song=SongDetail.from_orm(refreshed),
     )
 
