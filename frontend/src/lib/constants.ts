@@ -40,6 +40,39 @@ export const LORA_SAMPLE_ADDING = 'Adding...';
 export const LORA_SAMPLE_COPY_FAILED = 'Could not add take';
 export const LORA_SAMPLE_UPLOAD_FAILED = 'Upload failed';
 export const LORA_CREATE_FAILED = 'Could not create voice';
+export const LORA_TRAINING_QUEUED_TOAST = 'Training queued';
+export const LORA_TRAINING_STARTING = 'Starting...';
+export const LORA_TRAINING_CANCEL_LABEL = 'Cancel';
+export const LORA_TRAINING_CANCELLED = 'Training cancelled';
+export const LORA_TRAINING_CANCEL_FAILED = 'Could not cancel training';
+export const LORA_TRAINING_PROGRESS_LOAD_FAILED = 'Could not load training progress';
+export const LORA_TRAINING_PROGRESS_LABEL = 'Training progress';
+export const LORA_TRAINING_STATUS_LABEL = 'Training';
+export const LORA_TRAINING_WAITING_LABEL = 'Waiting';
+export const LORA_TRAINING_WAITING_DEFAULT_REASON = 'Waiting for the worker.';
+export const LORA_TRAINING_QUEUE_POSITION_TEMPLATE = 'Position {position} in the queue';
+export const LORA_TRAINING_EPOCH_TEMPLATE = 'Epoch {current} of {total}';
+export const LORA_TRAINING_REMAINING_CALCULATING = 'Calculating remaining time...';
+export const LORA_TRAINING_REMAINING_TEMPLATE = '~ {time} remaining';
+
+export function loraTrainingQueuePositionLabel(position: number): string {
+	return LORA_TRAINING_QUEUE_POSITION_TEMPLATE.replace('{position}', String(position));
+}
+
+export function loraTrainingEpochLabel(current: number, total: number): string {
+	return LORA_TRAINING_EPOCH_TEMPLATE.replace('{current}', String(current)).replace(
+		'{total}',
+		String(total)
+	);
+}
+
+export function loraTrainingRemainingLabel(seconds: number): string {
+	const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	const time = hours > 0 ? `${hours}h ${minutes}m` : `${Math.max(minutes, 1)}m`;
+	return LORA_TRAINING_REMAINING_TEMPLATE.replace('{time}', time);
+}
 
 export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
