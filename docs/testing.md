@@ -28,6 +28,8 @@ Before the first CI scan, an operator must disable **Automatic Analysis** in the
 
 The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
+The profile deliberately ignores two repository-wide smells. `python:S9100` is ignored for `tests/**` because these pytest fixtures use `yield` as setup syntax without teardown; changing them to `return` would only optimize a test-style diagnostic and add no product value. `docker:S7031` is ignored for `**/Dockerfile*` because separate `RUN` instructions mark intentional install, cache, permission, and model-warmup boundaries. These exceptions are limited to their named paths and rules; other Sonar findings remain visible.
+
 ### Parallel Execution
 
 Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
