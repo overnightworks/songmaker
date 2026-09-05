@@ -12,6 +12,7 @@
 	import { formatTime, titleInitials } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import CollectionHeaderFrame from '$lib/components/CollectionHeaderFrame.svelte';
+	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
 	import TransportBarFrame from '$lib/components/TransportBarFrame.svelte';
 	import NowPlayingFrame from '$lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '$lib/components/NowPlayingQueue.svelte';
@@ -85,6 +86,17 @@
 	{#if view}<p class="header-subtitle">{collectionSubtitle(view)}</p>{/if}
 {/snippet}
 
+{#snippet playlistCover()}
+	{#if view?.kind === 'playlist'}
+		<PlaylistCover
+			title={view.title}
+			covers={view.playlistCovers ?? []}
+			cover={view.cover}
+			size="56px"
+		/>
+	{/if}
+{/snippet}
+
 {#snippet trackInfo(titleGlowStyle: string)}
 	<span class="track-cover" aria-hidden="true">
 		{#if coverUrl}
@@ -127,13 +139,14 @@
 	{:else if view}
 		<CollectionHeaderFrame
 			{coverUrl}
-			showCover={Boolean(coverUrl)}
+			showCover={view.kind !== 'playlist' && Boolean(coverUrl)}
 			onCoverError={() => (coverFailed = true)}
 			{coverAlt}
 			initials={titleInitials(view.title)}
 			artFill={null}
 			onplay={onHeaderPlay}
 			{titleArea}
+			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
 		/>
 
 		{#if tracks.length === 0}
