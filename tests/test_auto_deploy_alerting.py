@@ -111,6 +111,7 @@ class Checkout:
         self._clock_file.write_text(str(CLOCK_START_EPOCH))
         self._commits_pushed = 0
         self._active_job_count = 0
+        self._base_images_present = True
         self._prune_exit_code = 0
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
@@ -134,7 +135,7 @@ class Checkout:
         _git(self.root, "config", "user.name", "Test")
 
         (self.root / "scripts").mkdir()
-        for source in (DEPLOY_SCRIPT, ALERT_CONFIG_LIB):
+        for source in (DEPLOY_SCRIPT, ALERT_CONFIG_LIB, REPO_ROOT / "scripts" / "build_images.sh"):
             copy = self.root / "scripts" / source.name
             copy.write_text(source.read_text())
             copy.chmod(source.stat().st_mode)
@@ -175,6 +176,11 @@ class Checkout:
     def set_active_jobs(self, count: int) -> None:
         """Stand in for `docker compose exec postgres psql …`."""
         self._active_job_count = count
+        self._write_docker_stub()
+
+    def set_base_images_present(self, present: bool) -> None:
+        """Control whether the fake Docker host has both local base images."""
+        self._base_images_present = present
         self._write_docker_stub()
 
     def set_prune_exit_code(self, exit_code: int) -> None:
@@ -273,6 +279,13 @@ class Checkout:
             'if [[ "$1" == "inspect" ]]; then\n'
             '    echo sha256:previous-songmaker-web\n'
             "    exit 0\n"
+            "fi\n"
+            'if [[ "$1" == "image" && "$2" == "inspect" ]]; then\n'
+            '    if [[ "$DOCKER_BASE_IMAGES_PRESENT" == "true" ]]; then\n'
+            '        echo sha256:base-image\n'
+            "        exit 0\n"
+            "    fi\n"
+            "    exit 1\n"
             "fi\n"
             'if [[ "$1" == "kill" && "$2" == "-s" && "$3" == "HUP" '
             f'&& "$4" == {shlex.quote(self._prometheus_container)} ]]; then\n'
@@ -401,6 +414,20 @@ class Checkout:
         _git(clone, "commit", "-m", "change Prometheus config")
         _git(clone, "push", "origin", "main")
 
+    def move_main_forward_with_changed_base_image(self) -> None:
+        clone = self.root.parent / "pusher"
+        if not clone.exists():
+            _git(self.root.parent, "clone", str(self.origin), str(clone))
+            _git(clone, "config", "user.email", "test@example.com")
+            _git(clone, "config", "user.name", "Test")
+        _git(clone, "pull", "--ff-only", "origin", "main")
+        base_dockerfile = clone / "docker" / "base" / "acestep-base.Dockerfile"
+        base_dockerfile.parent.mkdir(parents=True)
+        base_dockerfile.write_text("# changed by deploy test\n")
+        _git(clone, "add", "docker/base/acestep-base.Dockerfile")
+        _git(clone, "commit", "-m", "change base image")
+        _git(clone, "push", "origin", "main")
+
     def move_main_forward_after_check_lookup(self) -> None:
         """Advance origin after the deploy script has checked its current SHA."""
         clone = self.root.parent / "pusher"
@@ -498,6 +525,7 @@ class Checkout:
                 ),
                 "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
                 "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
+                "DOCKER_BASE_IMAGES_PRESENT": str(self._base_images_present).lower(),
                 "DOCKER_COMPOSE_PROJECT_NAME": self._compose_project_name,
                 "DOCKER_COMPOSE_STDERR": self.compose_stderr,
             },
@@ -662,10 +690,61 @@ def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_pa
     assert [
         call for call in checkout.docker_calls.splitlines() if " prune " in call
     ] == [
-        "image prune --force --filter until=48h",
+        "image prune --force --filter until=48h --filter label!=songmaker.base-image=true",
         "builder prune --all --force --filter until=48h",
     ]
     assert "pruned unreferenced Docker images and build cache older than 48h" in checkout.journal
+
+
+def test_a_missing_base_image_is_built_before_compose(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    checkout.set_base_images_present(False)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    docker_calls = checkout.docker_calls.splitlines()
+    base_builds = [call for call in docker_calls if call.startswith("build -f docker/base/")]
+    assert base_builds == [
+        "build -f docker/base/gpu-torch-base.Dockerfile --label "
+        "songmaker.base-image=true -t songmaker/gpu-torch-base:latest .",
+        "build -f docker/base/acestep-base.Dockerfile --label "
+        "songmaker.base-image=true -t songmaker/acestep-base:latest .",
+    ]
+    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
+    assert "base image songmaker/gpu-torch-base:latest is missing" in checkout.journal
+
+
+def test_a_changed_base_image_is_built_before_compose(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward_with_changed_base_image()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    docker_calls = checkout.docker_calls.splitlines()
+    base_builds = [call for call in docker_calls if call.startswith("build -f docker/base/")]
+    assert len(base_builds) == 2
+    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
+    assert "docker/base changed since deployed revision" in checkout.journal
+
+
+def test_an_unchanged_base_image_is_not_built(tmp_path: Path) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "compose build" in checkout.docker_calls
+    assert "build -f docker/base/" not in checkout.docker_calls
 
 
 def test_recreate_preserves_each_running_service_image_with_a_previous_tag(
