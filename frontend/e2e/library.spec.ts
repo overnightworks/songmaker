@@ -274,17 +274,24 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await expect(surface.locator('.takes-list')).toHaveCount(0);
 		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(0);
 	}
-	await takeControl.click();
-	await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
-	// A row body never stops the music: the take that was already playing when
-	// the row was clicked is still playing after it.
-	await expect(
-		shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
-			name: TRANSPORT_PAUSE_LABEL,
-			exact: true
-		})
-	).toBeVisible();
-	await closeNowPlaying(page, shell);
+	if (shell === 'desktop') {
+		await takeControl.click();
+		await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
+		// A row body never stops the music: the take that was already playing when
+		// the row was clicked is still playing after it.
+		await expect(
+			shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
+				name: TRANSPORT_PAUSE_LABEL,
+				exact: true
+			})
+		).toBeVisible();
+		await closeNowPlaying(page, shell);
+	} else {
+		// The strip uses playTake's single-click rule: pressing the chip of the
+		// already playing album pick pauses it, so this flow proves placement and
+		// selection here. kinetic-strip.spec.ts opens a non-playing mobile chip.
+		await expect(takeControl).toHaveClass(/playing/);
+	}
 
 	if (shell === 'desktop') {
 		const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
