@@ -18,6 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from songmaker_cli.mcp_server import auth, tools
 from songmaker_cli.mcp_server.schemas import (
     AlbumSummary,
+    CoverSuggestionRequestResult,
     GenerationDetail,
     SongDetail,
     SongSummary,
@@ -34,7 +35,7 @@ SERVER_NAME = "songmaker"
 SERVER_INSTRUCTIONS = (
     "Songmaker tools for reading and editing the authenticated user's songs "
     "and albums. Read tools return full DB state; write tools commit "
-    "immediately and return the resulting song state. Before each write, "
+    "immediately and return their resulting state. Before each write, "
     "verbalize what you're about to change so the user can revert if needed."
 )
 
@@ -207,6 +208,17 @@ def build_server(
             return tools.tool_rename_song(
                 session, user, song_id=song_id, title=title,
             )
+
+    @mcp.tool(
+        description=(
+            "Request three album cover suggestions. Returns the queued job ID "
+            "and status."
+        ),
+    )
+    def suggest_album_cover(album_id: str) -> CoverSuggestionRequestResult:
+        with session_scope(write=True) as session:
+            user = resolved_user(session)
+            return tools.tool_suggest_album_cover(session, user, album_id=album_id)
 
     return mcp
 
