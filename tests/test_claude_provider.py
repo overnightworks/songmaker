@@ -594,8 +594,9 @@ def test_acall_cli_surfaces_a_missing_or_failed_binary(
         spawn = AsyncMock(return_value=process)
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
 
+    call = _acall_cli("hello")
     with pytest.raises(UnavailableError, match="Claude CLI (binary not found|is unavailable)"):
-        asyncio.run(_acall_cli("hello"))
+        asyncio.run(call)
 
 
 @pytest.mark.parametrize("failure", ["missing", "nonzero"])
@@ -614,8 +615,9 @@ def test_cowriter_cli_surfaces_a_missing_or_failed_binary(
         spawn = AsyncMock(return_value=process)
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
 
+    call = provider.acall_claude_with_mcp("hello", user_id="user-1")
     with pytest.raises(UnavailableError, match="Claude CLI (binary not found|is unavailable)"):
-        asyncio.run(provider.acall_claude_with_mcp("hello", user_id="user-1"))
+        asyncio.run(call)
 
 
 def test_call_cli_passes_model(_no_tool_gate_open) -> None:

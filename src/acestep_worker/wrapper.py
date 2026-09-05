@@ -76,6 +76,7 @@ log = logging.getLogger(__name__)
 
 GenerateRunner = Any
 TrainLoraRunner = Any
+GPU_HOLD_TOKEN_INVALID_DETAIL = "GPU hold token is invalid"
 
 
 @dataclass
@@ -321,14 +322,14 @@ class _WorkerRoutes:
             req.token,
             DEFAULT_TTL_SECONDS,
         ):
-            raise HTTPException(status_code=409, detail="GPU hold token is invalid")
+            raise HTTPException(status_code=409, detail=GPU_HOLD_TOKEN_INVALID_DETAIL)
 
     async def release_hold(self, req: GpuHoldTokenRequest) -> None:
         async with self._deps.gpu_hold_handover_lock:
             if req.token in self._deps.gpu_hold_handover_tokens:
                 raise HTTPException(status_code=409, detail="GPU hold is owned by a training task")
             if not await release_gpu_hold(self._deps.redis, self._deps.worker_id, req.token):
-                raise HTTPException(status_code=409, detail="GPU hold token is invalid")
+                raise HTTPException(status_code=409, detail=GPU_HOLD_TOKEN_INVALID_DETAIL)
 
     async def hold_handover(self, req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
         async with self._deps.gpu_hold_handover_lock:
@@ -651,7 +652,7 @@ def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
         methods=["POST"],
         status_code=204,
         dependencies=authenticated,
-        responses={409: {"description": "GPU hold token is invalid"}},
+        responses={409: {"description": GPU_HOLD_TOKEN_INVALID_DETAIL}},
     )
     router.add_api_route(
         "/gpu_hold/release",

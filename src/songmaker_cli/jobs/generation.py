@@ -711,7 +711,7 @@ def _apply_repaint_overrides(
     if params.repaint_wav_crossfade_sec is not None:
         overrides["repaint_wav_crossfade_sec"] = params.repaint_wav_crossfade_sec
 
-    new_ctx = replace(
+    new_ctx: GenerationContext = replace(
         ctx,
         ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
         src_generation_id=params.src_generation_id,
@@ -738,11 +738,12 @@ def _apply_cover_overrides(
     if params.cover_noise_strength is not None:
         overrides["cover_noise_strength"] = params.cover_noise_strength
 
-    return replace(
+    new_ctx: GenerationContext = replace(
         ctx,
         ace_config=cast(AceStepConfig, replace(ctx.ace_config, **overrides)),
         src_generation_id=params.src_generation_id,
     )
+    return new_ctx
 
 
 async def run_generation_job(
