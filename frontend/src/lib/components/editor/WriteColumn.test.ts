@@ -133,7 +133,7 @@ describe('WriteColumn Co-Writer mode', () => {
 		expect(target.querySelector('.mobile-subtabs')).toBeNull();
 	});
 
-	it('splits Chat | Lyrics into tabs and drops the take strip on mobile', async () => {
+	it('splits Chat | Lyrics into tabs and leaves the take strip out of the Co-Writer sheet on mobile', async () => {
 		setDraftLyrics('verse one');
 		const { target } = await render({ coWriterOpen: true, compact: true });
 		expect(target.querySelector('.mobile-subtabs')).not.toBeNull();
@@ -148,6 +148,11 @@ describe('WriteColumn Co-Writer mode', () => {
 		await tick();
 		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
 		expect(target.querySelector('.cowriter-chat')).toBeNull();
+	});
+
+	it('shows the kinetic take strip in compact Write mode only', async () => {
+		const { target } = await render({ compact: true });
+		expect(target.querySelector('.compact-takes .take-strip')).not.toBeNull();
 	});
 
 	it('plays a take from the strip on click without opening Now Playing', async () => {
