@@ -7,6 +7,7 @@ import { librarySurface, resetLibraryContextForTests } from '$lib/stores/library
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/filter';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
@@ -71,6 +72,23 @@ function fireClick(target: EventTarget): void {
 	target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 }
 
+function fireRailResizePointer(
+	target: EventTarget,
+	type: 'pointerdown' | 'pointermove' | 'pointerup',
+	clientX: number
+): void {
+	target.dispatchEvent(
+		new PointerEvent(type, {
+			pointerId: 1,
+			pointerType: 'mouse',
+			button: 0,
+			bubbles: true,
+			cancelable: true,
+			clientX
+		})
+	);
+}
+
 function stubMomentumTiming(): void {
 	vi.stubGlobal(
 		'requestAnimationFrame',
@@ -91,6 +109,7 @@ async function openRailGroup(root: ParentNode, index: number): Promise<void> {
 
 beforeEach(() => {
 	localStorage.clear();
+	railWidth.set(264);
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	albumList.set([]);
@@ -151,6 +170,43 @@ describe('Rail', () => {
 		expect(
 			requireElement<HTMLAnchorElement>(rail, '.collapsed-account').getAttribute('aria-label')
 		).toBe('Account');
+		expect(rail.querySelector('input[type="range"]')).toBeNull();
+	});
+
+	it('resizes from its accessible handle without moving focus or the rail scroll anchor', async () => {
+		const target = await render();
+		const handle = requireElement<HTMLInputElement>(target, 'input[type="range"]');
+		const scroll = requireElement<HTMLElement>(target, '.rail-scroll');
+		scroll.scrollTop = 48;
+
+		expect(handle.getAttribute('aria-label')).toBe('Resize rail');
+		expect(handle.min).toBe(String(RAIL_MIN_WIDTH_PX));
+		expect(handle.max).toBe(String(RAIL_MAX_WIDTH_PX));
+		handle.focus();
+		fireRailResizePointer(handle, 'pointerdown', 264);
+		fireRailResizePointer(window, 'pointermove', RAIL_MAX_WIDTH_PX + 40);
+		fireRailResizePointer(window, 'pointerup', RAIL_MAX_WIDTH_PX + 40);
+		await tick();
+
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
+		expect(document.activeElement).toBe(handle);
+		expect(scroll.scrollTop).toBe(48);
+	});
+
+	it('resizes in keyboard steps and clamps the focused handle', async () => {
+		const target = await render();
+		const handle = requireElement<HTMLInputElement>(target, 'input[type="range"]');
+		railWidth.set(RAIL_MAX_WIDTH_PX);
+		handle.focus();
+
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX - 8);
+		railWidth.set(RAIL_MIN_WIDTH_PX);
+		handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		expect(get(railWidth)).toBe(RAIL_MIN_WIDTH_PX);
+		expect(document.activeElement).toBe(handle);
 	});
 
 	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {
