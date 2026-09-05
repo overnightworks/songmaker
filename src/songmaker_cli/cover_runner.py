@@ -112,7 +112,7 @@ def recover_web_cover_jobs(
             album_id for _job_id, album_id in interrupted_jobs if album_id is not None
         }
         staging_dirs = [
-            suggestion_png_path(audio_dir, album_id, "staging").parent / f".{job_id}.staging"
+            _staging_path(audio_dir, album_id, job_id)
             for job_id, album_id in interrupted_jobs
             if album_id is not None
         ]
@@ -334,11 +334,15 @@ def _load_cover_prompt(db_factory, job_id: str) -> tuple[str, str]:
 
 
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
-    root = suggestion_png_path(audio_dir, album_id, "staging").parent.parent
-    root.mkdir(parents=True, exist_ok=True)
-    staging_dir = root / f".{job_id}.staging"
+    staging_dir = _staging_path(audio_dir, album_id, job_id)
+    staging_dir.parent.mkdir(parents=True, exist_ok=True)
     staging_dir.mkdir()
     return staging_dir
+
+
+def _staging_path(audio_dir: Path, album_id: str, job_id: str) -> Path:
+    root = suggestion_png_path(audio_dir, album_id, "staging").parent.parent
+    return root / f".{job_id}.staging"
 
 
 def _write_staged_png(staging_dir: Path, suggestion_id: str, payload: bytes) -> None:

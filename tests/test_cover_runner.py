@@ -138,7 +138,9 @@ def test_web_recovery_fails_interrupted_work_cleans_its_group_and_leaves_queue_f
     interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
     interrupted_png.parent.mkdir(parents=True)
     interrupted_png.write_bytes(_png_bytes())
-    interrupted_staging_dir = interrupted_png.parent / f".{running_job_id}.staging"
+    interrupted_staging_dir = cover_runner._staging_path(
+        audio_dir, "album", running_job_id,
+    )
     interrupted_staging_dir.mkdir()
     (interrupted_staging_dir / "partial.png").write_bytes(_png_bytes())
     with factory() as session:
