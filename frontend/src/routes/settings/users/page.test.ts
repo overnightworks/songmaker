@@ -683,6 +683,7 @@ describe('admin models tab', () => {
 	});
 
 	it('activates Codex with its CLI catalog and names its source', async () => {
+		const codexCatalog = ['gpt-5.6-terra', 'gpt-5.6'];
 		api.fetchCowriterSettings.mockResolvedValue({
 			provider: 'claude',
 			model: 'claude-sonnet',
@@ -691,7 +692,7 @@ describe('admin models tab', () => {
 			allowed_models: ['claude-sonnet'],
 			models_by_provider: {
 				claude: ['claude-sonnet'],
-				codex: ['gpt-5.6-terra', 'gpt-5.6'],
+				codex: codexCatalog,
 				grok: []
 			},
 			models_errors: {},
@@ -705,7 +706,9 @@ describe('admin models tab', () => {
 		await tick();
 
 		expect(cowriter.textContent).toContain('known models for the CLI route');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('gpt-5.6-terra');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
+			codexCatalog[0]
+		);
 		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
 	});
 
