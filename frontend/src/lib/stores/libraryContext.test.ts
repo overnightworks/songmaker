@@ -8,6 +8,7 @@ import type {
 	PlaylistItem,
 	SongItem
 } from '$lib/api/types';
+import { ApiError } from '$lib/api/fetch';
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { searchQuery } from '$lib/stores/filter';
@@ -409,6 +410,50 @@ describe('applyLibraryHistory', () => {
 		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
 	});
 
+	it('keeps a newer restore collection when an earlier album resolution finishes late', async () => {
+		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
+		fetchAlbum.mockImplementationOnce(
+			() =>
+				new Promise<AlbumItem>((resolve) => {
+					resolveAlbum = resolve;
+				})
+		);
+
+		const first = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: 'a1' }
+		});
+		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
+		const second = applyLibraryHistory(libraryRootState());
+		await second;
+		resolveAlbum?.(album({ id: 'a1' }));
+		await expect(first).resolves.toBe(false);
+
+		expect(get(openCollection)).toBeNull();
+		expect(get(albumList).some((item) => item.id === 'a1')).toBe(false);
+	});
+
+	it('keeps a newer selected song when an earlier song lookup finishes late', async () => {
+		let rejectSong: ((reason: Error) => void) | undefined;
+		fetchSong.mockImplementationOnce(
+			() =>
+				new Promise((_, reject) => {
+					rejectSong = reject;
+				})
+		);
+		fetchSong.mockResolvedValueOnce(song({ id: 's2', album_id: 'a9' }));
+
+		const first = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's1' });
+		await vi.waitFor(() => expect(rejectSong).toBeTypeOf('function'));
+		const second = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's2' });
+		await expect(second).resolves.toBe(true);
+		rejectSong?.(new ApiError(404, 'gone', '/api/songs/s1'));
+		await expect(first).resolves.toBe(false);
+
+		expect(get(selectedSongId)).toBe('s2');
+	});
+
 	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
 		songList.set([
 			song({
@@ -692,6 +737,31 @@ describe('openSongAddress', () => {
 		expect(history.state.songId).toBe('s9');
 		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
 		expect(get(selectedSongId)).toBe('s9');
+	});
+
+	it('finds a later song page and restores its canonical address', async () => {
+		fetchSongs
+			.mockResolvedValueOnce({
+				items: [song({ id: 's-other', slug: 'other', album_id: 'a9' })],
+				total: 2,
+				offset: 0,
+				limit: 200,
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })],
+				total: 2,
+				offset: 200,
+				limit: 200,
+				has_more: false
+			});
+		history.replaceState(null, '', '/album/a9/tide');
+
+		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
+
+		expect(window.location.pathname).toBe('/album/a9/tide');
+		expect(get(selectedSongId)).toBe('s9');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a9' });
 	});
 
 	it('reports an unknown song slug within a known album, without opening anything', async () => {
