@@ -16,6 +16,7 @@ from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_REAPER_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
+    LORA_TRAINING_MODEL_MODES,
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
     STALE_JOB_THRESHOLDS,
@@ -35,6 +36,11 @@ from songmaker_cli.settings import Settings
 
 def test_default_model_mode_is_in_available() -> None:
     assert MODEL_DEFAULT_MODE in MODEL_AVAILABLE_MODES
+
+
+def test_lora_training_model_modes_are_available() -> None:
+    assert LORA_TRAINING_MODEL_MODES == {"sft", "turbo"}
+    assert LORA_TRAINING_MODEL_MODES <= MODEL_AVAILABLE_MODES
 
 
 def test_builtin_defaults_keys_match_available_modes() -> None:

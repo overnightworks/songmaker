@@ -59,6 +59,7 @@ MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
     "xl-base",
 })
 MODEL_DEFAULT_MODE: Final[str] = "sft"
+LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
