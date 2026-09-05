@@ -189,6 +189,25 @@ describe('CoWriterPanel failed turns', () => {
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
 	});
 
+	it('names a timed out stream below the retained user message', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+			})()
+		);
+		const target = await render();
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+	});
+
 	it('names a 503 below the user message, ends typing, and retries the retained message', async () => {
 		streamCoWriterTurn.mockReturnValueOnce(
 			(async function* () {

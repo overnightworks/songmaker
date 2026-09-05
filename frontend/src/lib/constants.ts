@@ -178,6 +178,8 @@ export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 export const EDITOR_TAB_WRITE_LABEL = 'Write';
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
+
+export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
