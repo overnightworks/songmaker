@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 import threading
 import time
 from unittest.mock import patch
@@ -1251,6 +1252,70 @@ def test_bounded_runner_creates_no_prompt_file_without_prompt_bytes() -> None:
 
     assert outcome.stdout == "ready"
     create_prompt_file.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("prompt_file_bytes", "prompt_file_arg_index", "message"),
+    (
+        (None, 0, "requires prompt bytes"),
+        (b"private prompt", None, "require a prompt file index"),
+        (b"private prompt", -1, "outside the CLI command"),
+        (b"private prompt", 3, "outside the CLI command"),
+    ),
+)
+def test_bounded_runner_rejects_an_invalid_private_prompt_contract(
+    prompt_file_bytes: bytes | None,
+    prompt_file_arg_index: int | None,
+    message: str,
+) -> None:
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", ":"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        prompt_file_bytes=prompt_file_bytes,
+        prompt_file_arg_index=prompt_file_arg_index,
+    )
+
+    assert outcome.started is False
+    assert outcome.reason is CliRunReason.SPAWN_FAILED
+    assert isinstance(outcome.spawn_error, ValueError)
+    assert message in str(outcome.spawn_error)
+
+
+def test_bounded_runner_removes_a_private_prompt_file_when_writing_it_fails(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    created_paths: list[str] = []
+    real_mkstemp = tempfile.mkstemp
+
+    def create_prompt_file(*, prefix: str) -> tuple[int, str]:
+        descriptor, path = real_mkstemp(dir=tmp_path, prefix=prefix)
+        created_paths.append(path)
+        return descriptor, path
+
+    def fail_to_open(descriptor: int, *_args, **_kwargs):
+        os.close(descriptor)
+        raise OSError("cannot write private prompt")
+
+    monkeypatch.setattr(agent_cli.tempfile, "mkstemp", create_prompt_file)
+    monkeypatch.setattr(agent_cli.os, "fdopen", fail_to_open)
+
+    outcome = run_cli_bounded(
+        ("/bin/sh", "-c", ":", "placeholder"),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + 1,
+        prompt_file_bytes=b"private prompt",
+        prompt_file_arg_index=3,
+    )
+
+    assert outcome.started is False
+    assert outcome.reason is CliRunReason.SPAWN_FAILED
+    assert isinstance(outcome.spawn_error, OSError)
+    assert created_paths
+    assert not os.path.exists(created_paths[0])
 
 
 def test_cancelling_a_line_channel_discards_unread_output() -> None:
