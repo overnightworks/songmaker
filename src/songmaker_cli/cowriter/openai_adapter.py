@@ -213,6 +213,10 @@ async def _post_chat(
             "api",
             normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         ) from exc
+    return _response_payload(response, provider)
+
+
+def _response_payload(response: httpx.Response, provider: str) -> dict[str, Any]:
     if response.status_code >= 400:
         raise ProviderUnavailableError(
             provider,
@@ -293,26 +297,7 @@ def call_openai_compatible_once(
             "api",
             normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
         ) from exc
-    if response.status_code >= 400:
-        raise ProviderUnavailableError(
-            provider,
-            "api",
-            normalize_route_failure(SafeRouteReasonCode.API_HTTP_ERROR),
-        )
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise ProviderUnavailableError(
-            provider,
-            "api",
-            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
-        ) from exc
-    if not isinstance(payload, dict):
-        raise ProviderUnavailableError(
-            provider,
-            "api",
-            normalize_route_failure(SafeRouteReasonCode.API_PROTOCOL_ERROR),
-        )
+    payload = _response_payload(response, provider)
     message = _assistant_message(payload, provider)
     content = message.get("content")
     if not isinstance(content, str) or not content:

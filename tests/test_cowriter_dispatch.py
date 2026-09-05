@@ -264,7 +264,16 @@ def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
     assert results[2].content == "Song not found"
     assert transport.closed
     with factory() as session:
-        assert session.get(Version, "owned-version").lyrics == "new lyrics"
+        owned_versions = (
+            session.query(Version)
+            .filter_by(song_id="owned-song")
+            .order_by(Version.version_number)
+            .all()
+        )
+        assert [(version.version_number, version.lyrics) for version in owned_versions] == [
+            (1, "old"),
+            (2, "new lyrics"),
+        ]
         assert session.get(Version, "other-version").lyrics == "private"
 
 

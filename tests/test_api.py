@@ -300,6 +300,7 @@ def test_rename_song(client: TestClient) -> None:
     assert resp.json()["title"] == "Storm"
     after = client.get("/api/songs/s1")
     assert after.json()["title"] == "Storm"
+    assert after.json()["version_count"] == 2
 
 
 def test_rename_song_strips_whitespace(client: TestClient) -> None:

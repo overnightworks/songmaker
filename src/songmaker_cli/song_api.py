@@ -218,7 +218,9 @@ def api_rename_song(
         session, song.album_id, title, exclude_song_id=song_id,
     )
     try:
-        song = rename_song(session, song_id, title, slug=slug)
+        song = rename_song(
+            session, song_id, title, slug=slug, force_new_version=True,
+        )
     except ValueError:
         raise HTTPException(404, "Song not found")
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
