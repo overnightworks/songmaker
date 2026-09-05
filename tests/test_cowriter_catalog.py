@@ -48,6 +48,16 @@ def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
     assert list_provider_models("claude", ProviderRoute.CLI) == ["opus", "sonnet"]
 
 
+def test_codex_cli_catalog_defaults_to_terra_without_removing_gpt_5_6():
+    assert list_provider_models("codex", ProviderRoute.CLI) == [
+        "gpt-5.6-terra",
+        "gpt-5.6",
+        "gpt-5.6-sol",
+        "gpt-5.6-luna",
+        "gpt-6-astra",
+    ]
+
+
 def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     response = MagicMock(status_code=200)

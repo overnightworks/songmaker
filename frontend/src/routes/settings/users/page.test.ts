@@ -691,7 +691,7 @@ describe('admin models tab', () => {
 			allowed_models: ['claude-sonnet'],
 			models_by_provider: {
 				claude: ['claude-sonnet'],
-				codex: ['gpt-5.6', 'gpt-5.6-terra'],
+				codex: ['gpt-5.6-terra', 'gpt-5.6'],
 				grok: []
 			},
 			models_errors: {},
@@ -705,7 +705,7 @@ describe('admin models tab', () => {
 		await tick();
 
 		expect(cowriter.textContent).toContain('known models for the CLI route');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('gpt-5.6');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('gpt-5.6-terra');
 		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
 	});
 
