@@ -35,6 +35,12 @@ QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS: Final = 4 * 60 * 60
 _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
     1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
 )
+_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
+    "--unshare-user",
+    "--unshare-net",
+    "--ro-bind", "/", "/",
+    "/bin/true",
+)
 
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
@@ -119,14 +125,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
         result = subprocess.run(
             (
                 bubblewrap,
-                "--unshare-user",
-                "--uid", "0",
-                "--gid", "0",
-                "--ro-bind", "/", "/",
-                "--proc", "/proc",
-                "--dev", "/dev",
-                "--",
-                "/usr/bin/true",
+                *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS,
             ),
             check=False,
             stdin=subprocess.DEVNULL,

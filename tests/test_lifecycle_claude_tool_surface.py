@@ -85,3 +85,19 @@ def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
 
     assert status == "ready"
     assert "Codex cover image sandbox runtime verified" in caplog.text
+
+
+def test_codex_cover_startup_probe_uses_codex_embedded_bubblewrap_argv() -> None:
+    completed = subprocess.CompletedProcess(args=(), returncode=0)
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", return_value=completed,
+    ) as run:
+        report_codex_image_sandbox_runtime()
+
+    assert run.call_args.args[0] == (
+        "/usr/bin/bwrap",
+        "--unshare-user",
+        "--unshare-net",
+        "--ro-bind", "/", "/",
+        "/bin/true",
+    )
