@@ -59,7 +59,7 @@ from songmaker_cli.constants import (
     JobType,
     ResourceType,
 )
-from songmaker_cli.db.models import Generation
+from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries import (
     bulk_delete_generations,
     delete_generation,
@@ -149,6 +149,18 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> P
     session.flush()
 
     return wav
+
+
+def _generation_version_or_error(gen: Generation, version_id: str | None) -> Version:
+    if version_id:
+        version = next((v for v in gen.song.versions if v.id == version_id), None)
+        if not version:
+            raise HTTPException(404, "Version not found")
+    else:
+        version = gen.version
+    if not version:
+        raise HTTPException(400, "Generation has no linked version")
+    return version
 
 
 # ── Reference audio upload ───────────────────────────────────────────
@@ -378,15 +390,7 @@ async def api_repaint_generation(
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
-    if req.version_id:
-        version = next((v for v in song.versions if v.id == req.version_id), None)
-        if not version:
-            raise HTTPException(404, "Version not found")
-    else:
-        version = gen.version
-
-    if not version:
-        raise HTTPException(400, "Generation has no linked version")
+    version = _generation_version_or_error(gen, req.version_id)
 
     if req.repainting_start >= req.repainting_end:
         raise HTTPException(400, "repainting_start must be less than repainting_end")
@@ -462,15 +466,7 @@ async def api_cover_generation(
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
-    if req.version_id:
-        version = next((v for v in song.versions if v.id == req.version_id), None)
-        if not version:
-            raise HTTPException(404, "Version not found")
-    else:
-        version = gen.version
-
-    if not version:
-        raise HTTPException(400, "Generation has no linked version")
+    version = _generation_version_or_error(gen, req.version_id)
 
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)

@@ -53,40 +53,53 @@ def _migrate_json_column(table: str, col: str, *, forward: bool) -> None:
     bind = op.get_bind()
     rows = bind.execute(sa.text(f"SELECT id, {col} FROM {table}")).fetchall()  # nosec B608
     for row in rows:
-        raw = row[1]
-        if raw is None:
+        data = _json_mapping(row[1])
+        if data is None:
             continue
-        if isinstance(raw, str):
-            try:
-                data = json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        elif isinstance(raw, dict):
-            data = dict(raw)
-        else:
-            continue
-        if not isinstance(data, dict):
-            continue
-
-        changed = False
-        renames = _KEY_RENAMES_FORWARD if forward else _KEY_RENAMES_REVERSE
-        for old, new in renames.items():
-            if old in data and new not in data:
-                data[new] = data.pop(old)
-                changed = True
-
-        if forward and "think_mode" in data:
-            data["thinking"] = data.pop("think_mode") == "deep"
-            changed = True
-        elif not forward and "thinking" in data:
-            data["think_mode"] = "deep" if data.pop("thinking") else "off"
-            changed = True
-
-        if changed:
+        if _migrate_json_keys(data, forward=forward):
             bind.execute(
                 sa.text(f"UPDATE {table} SET {col} = :p WHERE id = :id"),  # nosec B608
                 {"p": json.dumps(data), "id": row[0]},
             )
+
+
+def _json_mapping(raw: object) -> dict | None:
+    if isinstance(raw, dict):
+        return dict(raw)
+    if not isinstance(raw, str):
+        return None
+    try:
+        decoded = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _migrate_json_keys(data: dict, *, forward: bool) -> bool:
+    renames = _KEY_RENAMES_FORWARD if forward else _KEY_RENAMES_REVERSE
+    renamed = _rename_json_keys(data, renames)
+    return _migrate_thinking_value(data, forward=forward) or renamed
+
+
+def _rename_json_keys(data: dict, renames: dict[str, str]) -> bool:
+    changed = False
+    for old, new in renames.items():
+        if old in data and new not in data:
+            data[new] = data.pop(old)
+            changed = True
+    return changed
+
+
+def _migrate_thinking_value(data: dict, *, forward: bool) -> bool:
+    source, target = ("think_mode", "thinking") if forward else ("thinking", "think_mode")
+    if source not in data:
+        return False
+    value = data.pop(source)
+    if forward:
+        data[target] = value == "deep"
+    else:
+        data[target] = "deep" if value else "off"
+    return True
 
 
 def upgrade() -> None:
