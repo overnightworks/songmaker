@@ -479,6 +479,9 @@ nothing about the confined `songmaker-web` profile or its seccomp policy. The
 confined profile explicitly permits `userns`, so its child can create the
 namespace with the capabilities it needs inside that namespace.
 
+Unprivileged user namespaces enlarge the kernel attack surface; this is the
+deliberate #666 trade-off because the alternative is Option 2.
+
 `lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin two different
 Codex Bubblewrap forms because they answer different questions:
 

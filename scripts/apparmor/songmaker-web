@@ -63,9 +63,7 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # --dev exposes only Bubblewrap's six standard device nodes from oldroot.
   mount options=(rw rbind) options in (silent) /oldroot/dev/{null,zero,full,random,urandom,tty} -> /newroot/dev/{null,zero,full,random,urandom,tty},
   mount options=(rw remount bind nosuid silent) -> /newroot/dev/{null,zero,full,random,urandom,tty},
-  # --tmpfs /tmp supplies the sandbox scratch mount.
-  mount fstype=tmpfs options=(rw nosuid nodev) options in (silent) tmpfs -> /newroot/tmp/,
-  # The private Codex home is the sole writable bind below that scratch mount.
+  # The private Codex home is the sole writable bind below Bubblewrap's inherited /tmp.
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-cover-codex-*/codex-home/ -> /newroot/tmp/songmaker-cover-codex-*/codex-home/,
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-tool-*/codex-home/ -> /newroot/tmp/songmaker-codex-tool-*/codex-home/,
   mount options=(rw rbind) options in (silent) /oldroot/tmp/songmaker-codex-sandbox-probe/codex-home/ -> /newroot/tmp/songmaker-codex-sandbox-probe/codex-home/,
