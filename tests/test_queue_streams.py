@@ -1699,62 +1699,38 @@ def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None
     assert unpin_data["pinned_at"] is None
 
 
-def test_user_cannot_unpin_another_users_snapshot(
+@pytest.mark.parametrize("method", [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")])
+@pytest.mark.parametrize("scope", [pytest.param("foreign"), pytest.param("shared")])
+def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    scope: str,
 ) -> None:
-    """Unpinning a different user's authenticated snapshot remains hidden."""
-    from unittest.mock import MagicMock, patch
-
-    from songmaker_cli.queue_stream_api import api_unpin_queue_stream
+    """Pinning controls hide foreign and shared snapshots behind a 404."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
+    if scope == "foreign":
+        stream_resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+        other_client = TestClient(client.app, cookies={})
+        login_and_csrf(other_client, "other", "pass1234")
+        request_client = other_client
+    else:
+        share = client.post("/api/playlists/pl1/share")
+        slug = share.json()["share_slug"]
+        public = TestClient(client.app, cookies={})
+        stream_resp = public.post(f"/shared/playlist/{slug}/stream")
+        request_client = client
 
-    other_user = AuthenticatedUser(
-        id="other-id", username="other", role="user", is_active=True,
-    )
-
-    with patch("songmaker_cli.queue_stream_api.check_queue_stream_rate_limit"):
-        with pytest.raises(HTTPException) as exc_info:
-            api_unpin_queue_stream(snapshot_id, MagicMock(), other_user, client.app.state.ctx)
-
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Queue stream not found"
-
-
-def test_shared_scope_snapshot_unpin_returns_404(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Unpinning a shared snapshot returns 404, not 403."""
-    from unittest.mock import MagicMock, patch
-
-    from songmaker_cli.queue_stream_api import api_unpin_queue_stream
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner", "pass1234")
-    share = client.post("/api/playlists/pl1/share")
-    slug = share.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
-
-    stream_resp = public.post(f"/shared/playlist/{slug}/stream")
     assert stream_resp.status_code == 200
     snapshot_id = stream_resp.json()["snapshot_id"]
 
-    owner = AuthenticatedUser(id="owner-id", username="owner", role="user", is_active=True)
-    with patch("songmaker_cli.queue_stream_api.check_queue_stream_rate_limit"):
-        with pytest.raises(HTTPException) as exc_info:
-            api_unpin_queue_stream(snapshot_id, MagicMock(), owner, client.app.state.ctx)
+    response = getattr(request_client, method)(f"/api/queue-streams/{snapshot_id}/pin")
 
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Queue stream not found"
+    assert response.status_code == 404
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
