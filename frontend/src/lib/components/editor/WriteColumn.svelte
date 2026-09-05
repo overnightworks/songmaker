@@ -192,6 +192,16 @@
 		resize: vertical;
 	}
 
+	@media (max-width: 768px) {
+		/* Write owns the one compact take surface. Its desktop-sized textarea
+		   pushed that surface behind the fixed Generate bar, so the first take
+		   could be seen but not reached at 375px. Keep the usable default short;
+		   people can still grow it with the textarea's native resize handle. */
+		.write-mode .lyrics-area {
+			height: 200px;
+		}
+	}
+
 	/* Filling a fixed height only works where every part has a column of its
 	   own to scroll in: the compact sheet, which shows one at a time, and the
 	   editor above its two-up floor. Stacked, they run on and the workspace
