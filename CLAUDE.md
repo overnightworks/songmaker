@@ -80,12 +80,12 @@ API models.
 **Full suite is CI only** (or when the operator explicitly asks):
 
 ```bash
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
 python scripts/generate_types.py --check
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-- CI enforces 90% backend coverage (`songmaker_cli` + engines + `acestep_worker`; scoring modules excluded — require GPU extras) and a 70% frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
+- CI enforces 93% backend coverage (`songmaker_cli` + engines + `acestep_worker`; scoring modules excluded — require GPU extras) and 90% statements / 93% lines for the frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
 - Docs (`docs/`) must stay accurate after changes
 - Open work lives in GitHub Issues with a milestone. Do not add items to a markdown backlog.
 
