@@ -131,6 +131,11 @@ DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
+BASE_IMAGE_LABEL="songmaker.base-image=true"
+BASE_IMAGES=(
+    "songmaker/gpu-torch-base:latest"
+    "songmaker/acestep-base:latest"
+)
 PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
 PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
 PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
@@ -365,7 +370,10 @@ prune_docker_resources() {
     local prune_failed=false
     local prune_exit_code
 
-    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter"; then
+    # Docker accepts a negated label filter for image prune. Keep the base
+    # images even when they become unreferenced, because compose leaf builds
+    # need them locally and Docker Hub does not host them.
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter" --filter "label!=${BASE_IMAGE_LABEL}"; then
         :
     else
         prune_exit_code=$?
@@ -386,6 +394,39 @@ prune_docker_resources() {
     fi
 
     return 0
+}
+
+# Returns 0 when the candidate needs its bases rebuilt, 1 when the existing
+# bases match the deployed revision, and 2 when the comparison cannot be made.
+base_images_need_build() {
+    local deployed_sha="$1"
+    local candidate_sha="$2"
+    local base_image
+    local changed_base_files
+
+    for base_image in "${BASE_IMAGES[@]}"; do
+        if ! docker image inspect "$base_image" >/dev/null 2>&1; then
+            log_info "base image $base_image is missing; rebuilding base images before compose build"
+            return 0
+        fi
+    done
+
+    if [[ -z "$deployed_sha" ]]; then
+        log_info "deployed revision is unknown; rebuilding base images before compose build"
+        return 0
+    fi
+
+    if ! changed_base_files="$(safe_git diff --name-only "$deployed_sha..$candidate_sha" -- docker/base/ 2>&1)"; then
+        log_err "cannot compare docker/base changes between deployed $deployed_sha and candidate $candidate_sha: $changed_base_files"
+        return 2
+    fi
+
+    if [[ -n "$changed_base_files" ]]; then
+        log_info "docker/base changed since deployed revision $deployed_sha; rebuilding base images before compose build"
+        return 0
+    fi
+
+    return 1
 }
 
 reload_prometheus_rules() {
@@ -1079,6 +1120,24 @@ fi
 if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
     log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
     fail_tick "checked out commit differs from verified commit"
+fi
+
+# Base images are local-only. Check the selected candidate against the revision
+# that is actually running, rather than against the checkout's previous HEAD:
+# a prior build-only deferral may already have advanced this checkout.
+if base_images_need_build "$DEPLOYED_SHA" "$DEPLOY_COMMIT"; then
+    if "$SCRIPT_DIR/build_images.sh" bases; then
+        :
+    else
+        BASE_BUILD_EXIT_CODE=$?
+        log_err "base image build failed in $REPO_ROOT (exit $BASE_BUILD_EXIT_CODE)"
+        fail_tick "base image build failed"
+    fi
+else
+    BASE_IMAGE_CHECK_EXIT_CODE=$?
+    if ((BASE_IMAGE_CHECK_EXIT_CODE != 1)); then
+        fail_tick "cannot determine whether base images need rebuilding"
+    fi
 fi
 
 if compose build; then

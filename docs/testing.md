@@ -7,6 +7,11 @@ Agents and subagents run **only the tests that prove the change** and omit
 the full suite remains its responsibility (atelier-2 rule: local = targeted,
 land gate = CI).
 
+The auto-deploy subprocess tests fake Docker and GitHub: they prove that a
+missing base image or a `docker/base/**` change rebuilds bases before Compose,
+that an unchanged candidate does not, and that the post-deploy image prune
+excludes the base-image label.
+
 ```bash
 # Backend — targeted (local / agents)
 pytest tests/test_api.py -q --tb=short
