@@ -89,8 +89,6 @@ def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
         cot_caption=kwargs.get("worker_cot_caption", ""),
         cot_lyrics=kwargs.get("worker_cot_lyrics", ""),
         delivered_batch_size=kwargs.get("worker_delivered_batch_size"),
-        mp3_path=Path(f"/tmp/{generation_id}.mp3"),
-        wav_path=Path(f"/tmp/{generation_id}.wav"),
         job_id=kwargs["job_id"],
     )
 

@@ -572,7 +572,7 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified
     try:
         await verify_cli_tool_surface()
     except CliToolSurfaceError as exc:
-        log.error("Claude CLI co-writer disabled: %s", exc)
+        log.exception("Claude CLI co-writer disabled: %s", exc)
         return "drift"
     except UnavailableError as exc:
         log.info("Claude CLI tool surface not verified: %s", exc)
@@ -677,9 +677,9 @@ async def session_sync_loop(app: FastAPI) -> None:
         except Exception as exc:
             consecutive_failures = registry.record_failure(BackgroundLoopName.SESSION_SYNC, exc)
             if consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
-                log.error(
+                log.exception(
                     "Session sync failed %d consecutive times",
-                    consecutive_failures, exc_info=True,
+                    consecutive_failures,
                 )
             else:
                 log.warning("Session sync failed", exc_info=True)

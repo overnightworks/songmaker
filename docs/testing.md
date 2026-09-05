@@ -2,9 +2,10 @@
 
 ## Running Tests
 
-Agents and subagents run **only the tests that prove the change**. The full
-suite belongs to GitHub CI so it does not saturate this machine (atelier-2
-rule: local = targeted, land gate = CI).
+Agents and subagents run **only the tests that prove the change** and omit
+`-n auto`; GitHub CI explicitly sets `-n auto` for parallel test runs, while
+the full suite remains its responsibility (atelier-2 rule: local = targeted,
+land gate = CI).
 
 ```bash
 # Backend — targeted (local / agents)
@@ -28,9 +29,11 @@ Before the first CI scan, an operator must disable **Automatic Analysis** in the
 
 The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
+The profile deliberately ignores two repository-wide smells. `python:S9100` is ignored for `tests/**` because these pytest fixtures use `yield` as setup syntax without teardown; changing them to `return` would only optimize a test-style diagnostic and add no product value. `docker:S7031` is ignored for `**/*Dockerfile*` because separate `RUN` instructions mark intentional install, cache, permission, and model-warmup boundaries; the pattern covers both `Dockerfile` and the repository's `*.Dockerfile` names. These exceptions are limited to their named paths and rules; other Sonar findings remain visible.
+
 ### Parallel Execution
 
-Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
+CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` and SQLite database
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state

@@ -312,7 +312,7 @@ describe('playlist offline metadata', () => {
 
 		const loaded = await loadSavedOfflinePlaylist('pl-1');
 
-		expect(sessionStorage.length).toBe(0);
+		expect(sessionStorage).toHaveLength(0);
 		expect(loaded).toEqual(meta);
 		expect(loaded?.version).toBe(OFFLINE_STREAM_META_VERSION);
 	});

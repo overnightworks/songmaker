@@ -183,7 +183,10 @@ def _build_song_context(
     return "\n\n".join(parts)
 
 
-@router.post("/songs/{song_id}/chat")
+@router.post(
+    "/songs/{song_id}/chat",
+    responses={503: {"description": "Claude is currently unavailable"}},
+)
 async def api_song_chat(
     song_id: str,
     req: SendChatRequest,

@@ -549,6 +549,6 @@ describe('applySyncedSong', () => {
 		const afterStop = seen.length;
 		songList.set([]);
 		selectedSongId.set('s-watch');
-		expect(seen.length).toBe(afterStop);
+		expect(seen).toHaveLength(afterStop);
 	});
 });

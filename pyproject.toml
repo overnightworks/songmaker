@@ -138,7 +138,6 @@ skips = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-n auto"
 markers = [
     "acceptance(identifier): exact Acceptance evidence claim.",
 ]

@@ -207,7 +207,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         if not hmac.compare_digest(x_internal_token, deps.internal_token):
             raise HTTPException(status_code=401, detail="Invalid internal token")
 
-    @router.get("/health", response_model=HealthResponse)
+    @router.get(
+        "/health",
+        response_model=HealthResponse,
+        responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
+    )
     async def health() -> HealthResponse:
         if not deps.registered:
             raise HTTPException(
@@ -245,7 +249,15 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             pinned=list(snapshot.pinned),
         )
 
-    @router.post("/load_model", response_model=LoadModelResponse)
+    @router.post(
+        "/load_model",
+        response_model=LoadModelResponse,
+        responses={
+            400: {"description": "Requested model mode is unknown"},
+            409: {"description": "Insufficient capacity to load the model"},
+            502: {"description": "Model subprocess could not be started"},
+        },
+    )
     async def load_model(req: LoadModelRequest) -> LoadModelResponse:
         try:
             result = await deps.cache.load(req.mode)
@@ -262,7 +274,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             target_loading=deps.cache.target_loading,
         )
 
-    @router.post("/evict_model", response_model=EvictModelResponse)
+    @router.post(
+        "/evict_model",
+        response_model=EvictModelResponse,
+        responses={409: {"description": "Model cannot be evicted"}},
+    )
     async def evict_model(req: EvictModelRequest) -> EvictModelResponse:
         try:
             evicted = await deps.cache.evict(req.mode)
@@ -273,7 +289,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             evicted=evicted,
         )
 
-    @router.post("/pin_model", response_model=PinModelResponse)
+    @router.post(
+        "/pin_model",
+        response_model=PinModelResponse,
+        responses={409: {"description": "Model must be loaded before it can be pinned"}},
+    )
     async def pin_model(req: PinModelRequest) -> PinModelResponse:
         try:
             await deps.cache.pin(req.mode)
@@ -300,6 +320,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         "/generate",
         response_model=TaskCreatedResponse,
         dependencies=[Depends(verify_internal_token)],
+        responses={409: {"description": "GPU is held or the requested model is not loaded"}},
     )
     async def generate(req: GenerateRequest) -> TaskCreatedResponse:
         async with deps.gpu_hold_admission_lock:
@@ -352,6 +373,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         "/gpu_hold/reserve",
         response_model=GpuHoldResponse,
         dependencies=[Depends(verify_internal_token)],
+        responses={409: {"description": "GPU is busy or already held"}},
     )
     async def reserve_hold() -> GpuHoldResponse:
         token = str(uuid4())
@@ -371,6 +393,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         "/gpu_hold/renew",
         status_code=204,
         dependencies=[Depends(verify_internal_token)],
+        responses={409: {"description": "GPU hold token is invalid"}},
     )
     async def renew_hold(req: GpuHoldTokenRequest) -> None:
         if not await renew_gpu_hold(
@@ -385,6 +408,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         "/gpu_hold/release",
         status_code=204,
         dependencies=[Depends(verify_internal_token)],
+        responses={409: {"description": "GPU hold token is invalid or owned by training"}},
     )
     async def release_hold(req: GpuHoldTokenRequest) -> None:
         async with deps.gpu_hold_handover_lock:
@@ -413,6 +437,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         "/tasks/train_lora",
         response_model=TaskCreatedResponse,
         dependencies=[Depends(verify_internal_token)],
+        responses={
+            409: {"description": "GPU hold or requested model is unavailable"},
+            422: {"description": "Training request is invalid"},
+            501: {"description": "Worker does not support LoRA training"},
+        },
     )
     async def train_lora(req: TrainLoraRequest) -> TaskCreatedResponse:
         try:
@@ -536,14 +565,21 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         )
         return TaskCreatedResponse(task_id=task_id)
 
-    @router.get("/tasks/{task_id}", response_model=TaskSnapshot)
+    @router.get(
+        "/tasks/{task_id}",
+        response_model=TaskSnapshot,
+        responses={404: {"description": "Task does not exist"}},
+    )
     async def get_task(task_id: str) -> TaskSnapshot:
         snapshot = await deps.task_store.get(task_id)
         if snapshot is None:
             raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
         return snapshot
 
-    @router.get("/tasks/{task_id}/stream")
+    @router.get(
+        "/tasks/{task_id}/stream",
+        responses={404: {"description": "Task does not exist"}},
+    )
     async def stream_task(task_id: str) -> StreamingResponse:
         snapshot = await deps.task_store.get(task_id)
         if snapshot is None:
@@ -608,11 +644,7 @@ async def default_train_lora_runner(
     training_workspace_dirname: str,
 ) -> None:
     from acestep_engine.models import LoraTrainingConfig
-    from acestep_engine.training_client import (
-        AceStepTrainingClient,
-        TrainingRequestError,
-        TrainingResponseError,
-    )
+    from acestep_engine.training_client import AceStepTrainingClient
     from acestep_worker.models import TrainLoraTaskResult
 
     await task_store.mark_running(task_id)
@@ -729,7 +761,7 @@ async def default_train_lora_runner(
     except asyncio.CancelledError:
         try:
             await asyncio.to_thread(client.stop_training)
-        except (TrainingRequestError, TrainingResponseError, Exception):
+        except Exception:
             log.warning("Failed to stop training during cancel", exc_info=True)
         await task_store.fail(task_id, "cancelled")
         raise

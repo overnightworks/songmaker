@@ -29,7 +29,7 @@ class ScoringWorker(WorkerBase):
     recovery_lock_key = RECOVERY_LOCK_SCORING_KEY
     queue_name = ARQ_SCORING_QUEUE_NAME
 
-    async def score(self, ctx, job_id, gen_id, scorers):
+    async def score(self, _ctx, job_id, gen_id, scorers):
         if not self.check_job_still_valid(job_id):
             return
 

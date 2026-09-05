@@ -29,6 +29,8 @@ export interface RecipeGroup {
 	entries: RecipeEntry[];
 }
 
+type ParamEntries = Map<string, unknown>;
+
 // Every generation_params key ParamControls exposes an editor for, in the
 // order ParamControls renders them, next to the exact label it edits it
 // under. Reading this instead of a second hand-written list is what keeps a
@@ -89,8 +91,21 @@ function prettifyParamKey(key: string): string {
 
 export function buildTakeRecipe(generation: GenerationItem, song: SongItem): RecipeGroup[] {
 	const params = generation.generation_params ?? {};
-	const paramEntries = new Map(Object.entries(params));
+	const paramEntries: ParamEntries = new Map(Object.entries(params));
+	const groups: RecipeGroup[] = [
+		{ label: RECIPE_TAKE_GROUP_MODEL_LABEL, entries: buildModelEntries(generation, paramEntries) },
+		{
+			label: RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL,
+			entries: buildReproducibilityEntries(generation, paramEntries)
+		},
+		{ label: RECIPE_TAKE_GROUP_VERSION_LABEL, entries: buildVersionEntries(song, paramEntries) },
+		{ label: RECIPE_TAKE_GROUP_OTHER_LABEL, entries: buildOtherEntries(paramEntries) }
+	];
 
+	return groups.filter((group) => group.entries.length > 0);
+}
+
+function buildModelEntries(generation: GenerationItem, paramEntries: ParamEntries): RecipeEntry[] {
 	const modelEntries: RecipeEntry[] = [];
 	if (generation.model_mode) {
 		modelEntries.push({ label: 'Model', value: generation.model_mode });
@@ -109,7 +124,13 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	if (deliveredBatchSize !== null) {
 		modelEntries.push({ label: 'Delivered Batch Size', value: deliveredBatchSize });
 	}
+	return modelEntries;
+}
 
+function buildReproducibilityEntries(
+	generation: GenerationItem,
+	paramEntries: ParamEntries
+): RecipeEntry[] {
 	const reproducibilityEntries: RecipeEntry[] = [];
 	if (generation.seed != null) {
 		reproducibilityEntries.push({ label: 'Seed', value: String(generation.seed) });
@@ -121,7 +142,10 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	if (typeof requestedSeed === 'number' && requestedSeed !== generation.seed) {
 		reproducibilityEntries.push({ label: 'Requested Seed', value: String(requestedSeed) });
 	}
+	return reproducibilityEntries;
+}
 
+function buildVersionEntries(song: SongItem, paramEntries: ParamEntries): RecipeEntry[] {
 	const versionEntries: RecipeEntry[] = [];
 	for (const field of VERSION_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
@@ -130,7 +154,10 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	if (song.vocal_language) {
 		versionEntries.push({ label: 'Language', value: song.vocal_language });
 	}
+	return versionEntries;
+}
 
+function buildOtherEntries(paramEntries: ParamEntries): RecipeEntry[] {
 	const accountedForKeys = new Set<string>([
 		...KNOWN_PARAM_FIELDS.map((field) => field.key),
 		...VERSION_PARAM_FIELDS.map((field) => field.key),
@@ -142,13 +169,5 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 		const value = formatParamValue(key, rawValue);
 		if (value !== null) otherEntries.push({ label: prettifyParamKey(key), value });
 	}
-
-	const groups: RecipeGroup[] = [
-		{ label: RECIPE_TAKE_GROUP_MODEL_LABEL, entries: modelEntries },
-		{ label: RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL, entries: reproducibilityEntries },
-		{ label: RECIPE_TAKE_GROUP_VERSION_LABEL, entries: versionEntries },
-		{ label: RECIPE_TAKE_GROUP_OTHER_LABEL, entries: otherEntries }
-	];
-
-	return groups.filter((group) => group.entries.length > 0);
+	return otherEntries;
 }
