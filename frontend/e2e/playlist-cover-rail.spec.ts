@@ -97,7 +97,9 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		});
 		await postJson(page, `/api/albums/${album.id}/archive`, {});
 
-		let coverRequests = 0;
+		let wallCoverRequests = 0;
+		let railCoverRequests = 0;
+		let measuringRailCoverRequests = false;
 		page.on('request', (request) => {
 			const url = new URL(request.url());
 			if (
@@ -105,11 +107,16 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 				url.pathname === `/api/albums/${album.id}/cover` &&
 				url.searchParams.get('variant') === 'card'
 			) {
-				coverRequests += 1;
+				if (measuringRailCoverRequests) railCoverRequests += 1;
+				else wallCoverRequests += 1;
 			}
 		});
 
 		await page.goto('/');
+		const wallPlaylistTile = page
+			.locator('.library-wall .tile-grid')
+			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true });
+		await expect(wallPlaylistTile.locator('.playlist-cover-cell img')).toHaveCount(1);
 		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 		const rail = isMobile
 			? page
@@ -123,7 +130,11 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'false');
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell img')).toHaveCount(0);
-		expect(coverRequests).toBe(0);
+		// The visible 6C wall tile legitimately consumes one lazy image request.
+		// Count it separately: the collapsed rail has no image element and must not request a cover.
+		expect(wallCoverRequests).toBe(1);
+		measuringRailCoverRequests = true;
+		expect(railCoverRequests).toBe(0);
 		if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
 			await playlistsGroup.click();
 		const row = rail
@@ -133,7 +144,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
-		await expect.poll(() => coverRequests).toBeGreaterThan(0);
+		expect(railCoverRequests).toBe(0);
 		await expect(row.locator('.playlist-cover-initials')).toHaveCount(3);
 		await row.getByRole('button', { name: new RegExp(`^${playlistTitle}`) }).click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
