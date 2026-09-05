@@ -420,13 +420,19 @@ def get_cowriter_model(session: Session, provider: str) -> str:
     stored = _get_claude_model_row(session, SETTING_COWRITER_MODEL)
     if stored:
         return stored
-    if provider == "claude":
-        return get_claude_chat_model(session)
-    return ""
+    return _cowriter_default_model(session, provider)
+
+
+def _cowriter_default_model(session: Session, provider: str) -> str:
+    return get_claude_chat_model(session) if provider == "claude" else ""
 
 
 def get_cowriter_models_by_provider(session: Session) -> dict[str, str]:
-    """Return every provider's saved model, retaining the legacy active pair."""
+    """Return every provider card's saved model or default.
+
+    The legacy global pair remains authoritative for its active provider until
+    that provider is saved through the per-provider setting.
+    """
     active_provider = get_cowriter_provider(session)
     stored_models = {
         str(setting_key).removeprefix(SETTING_COWRITER_PROVIDER_MODEL_PREFIX): value_text
@@ -448,7 +454,7 @@ def get_cowriter_models_by_provider(session: Session) -> dict[str, str]:
         provider: (
             get_cowriter_model(session, provider)
             if provider == active_provider
-            else stored_models.get(provider) or ""
+            else stored_models.get(provider) or _cowriter_default_model(session, provider)
         )
         for provider in sorted(COWRITER_PROVIDERS)
     }
@@ -460,6 +466,14 @@ def set_cowriter_settings(
     model: str,
     routes: dict[str, str] | None = None,
 ) -> None:
+    previous_settings = get_raw_stored_cowriter_settings(session)
+    previous_provider = previous_settings.provider or COWRITER_DEFAULT_PROVIDER
+    if previous_provider in COWRITER_PROVIDERS and previous_settings.model:
+        set_claude_model(
+            session,
+            f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{previous_provider}",
+            previous_settings.model,
+        )
     set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
     set_claude_model(session, SETTING_COWRITER_MODEL, model)
     set_claude_model(session, f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{provider}", model)

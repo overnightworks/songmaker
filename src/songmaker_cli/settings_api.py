@@ -551,7 +551,7 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
             errors[name] = error
         if selected.catalog_source is not None:
             sources[name] = selected.catalog_source
-        selected_models_by_provider[name] = saved_models[name] or (models[0] if models else "")
+        selected_models_by_provider[name] = saved_models[name]
         if selected.retained_model_id is not None:
             current_models_not_in_catalog[name] = saved_models[name]
     return CowriterSettingsResponse(

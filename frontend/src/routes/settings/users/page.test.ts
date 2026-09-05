@@ -871,6 +871,8 @@ describe('admin models tab', () => {
 			codex: 'cli',
 			grok: 'cli'
 		});
+		expect(cowriter.textContent).toContain('Saved.');
+		expect(cowriter.textContent).not.toContain('Nothing changed.');
 	});
 
 	it('keeps the saved card model when switching away and back', async () => {
