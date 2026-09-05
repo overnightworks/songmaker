@@ -16,7 +16,7 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
  * What the library flow costs the API per shell, measured on a green run
- * against `library.spec.ts`'s own first test: 34 requests per shell against
+ * against `library.spec.ts`'s own first test: 40 requests per shell against
  * a clean stack, budgeted at 40. Both projects share one IP rate-limit
  * window, so a flow that suddenly needs more round trips is a regression —
  * find the extra requests instead of raising this number. Every other
@@ -33,8 +33,8 @@ export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 
 /**
  * What the rail's own disclosure/pin flow (`library.spec.ts`'s second test)
- * costs the API per shell, measured on a green run against a clean stack: 28
- * on desktop, 25 on mobile. One shared ceiling for both, matching
+ * costs the API per shell, measured on a green run against a clean stack: 32
+ * on desktop, 29 on mobile. One shared ceiling for both, matching
  * LIBRARY_FLOW_API_REQUEST_BUDGET's own convention -- a separate budget from
  * it, for a different flow, sharing only the one IP rate-limit window both
  * tests already share.
