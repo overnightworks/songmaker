@@ -220,7 +220,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			.toBe('running');
 		await voice.getByRole('button', { name: 'Train voice', exact: true }).click();
 		await expect(voice.getByText('Waiting', { exact: true })).toBeVisible({ timeout: 15_000 });
-		await expect(voice).toContainText('Waiting for the worker.');
+		await expect(voice).toContainText('Waiting for queued generations on this GPU.');
 		await expect(voice).toContainText('Position 1 in the queue');
 		await expect(voice.getByText(/^Epoch \d+ of \d+$/)).toBeVisible({ timeout: 35_000 });
 		await expect(voice.getByText('ready', { exact: true })).toBeVisible({ timeout: 40_000 });
