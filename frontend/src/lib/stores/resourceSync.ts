@@ -277,19 +277,19 @@ export class ResourceSyncController {
 		this.queuedGenerationIds.clear();
 	}
 
-	private onHello = (event: Event): void => {
+	private readonly onHello = (event: Event): void => {
 		void this.handleHello(event as MessageEvent);
 	};
 
-	private onResync = (event: Event): void => {
+	private readonly onResync = (event: Event): void => {
 		void this.handleResync(event as MessageEvent);
 	};
 
-	private onGenerationCreated = (event: Event): void => {
+	private readonly onGenerationCreated = (event: Event): void => {
 		void this.handleGenerationCreated(event as MessageEvent);
 	};
 
-	private onError = (): void => {
+	private readonly onError = (): void => {
 		void this.handleStreamError();
 	};
 
@@ -654,7 +654,7 @@ export class ResourceSyncController {
 		}
 	}
 
-	private onVisibility = (): void => {
+	private readonly onVisibility = (): void => {
 		this.clearVisibilityTimer();
 		this.visibilityTimer = setTimeout(() => {
 			this.visibilityTimer = null;
@@ -679,7 +679,7 @@ export class ResourceSyncController {
 		this.loadedNotifyQueued = false;
 	}
 
-	private onLoadedSongsChanged = (): void => {
+	private readonly onLoadedSongsChanged = (): void => {
 		if (this.loadedNotifyQueued) return;
 		this.loadedNotifyQueued = true;
 		void Promise.resolve().then(() => {
