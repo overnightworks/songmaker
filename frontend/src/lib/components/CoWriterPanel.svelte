@@ -86,6 +86,12 @@
 		error?: string;
 	}
 
+	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
+
+	function isAbortedStream(error: unknown): boolean {
+		return error instanceof Error && error.name === 'AbortError';
+	}
+
 	let messages: Message[] = $state([]);
 	let input = $state('');
 	let loading = $state(false);
@@ -240,6 +246,7 @@
 		loading = true;
 
 		let streamError: string | null = null;
+		let turnCompleted = false;
 		try {
 			const playing = audioPlayer.current;
 			const currentGenerationId = playerTakeIdForSong(
@@ -256,10 +263,11 @@
 			})) {
 				applyStreamEvent(assistantIndex, event);
 				if (event.type === 'error') {
-					streamError = event.message;
+					streamError = event.message ?? event.reason?.message ?? INCOMPLETE_TURN_MESSAGE;
 					break;
 				}
 				if (event.type === 'final') {
+					turnCompleted = true;
 					messages = messages.filter((message) => !message.error);
 					if (activeConversationId !== event.conversation_id) {
 						activeConversationId = event.conversation_id;
@@ -270,8 +278,11 @@
 				}
 				void scrollToBottom();
 			}
+			if (!turnCompleted && !streamError) streamError = INCOMPLETE_TURN_MESSAGE;
 		} catch (e) {
-			if (e instanceof ApiError && e.status === 503) {
+			if (isAbortedStream(e)) {
+				streamError = INCOMPLETE_TURN_MESSAGE;
+			} else if (e instanceof ApiError && e.status === 503) {
 				streamError = e.detail || cowriterUnavailableLabel(providerName);
 			} else {
 				streamError = e instanceof Error ? e.message : 'Chat failed';

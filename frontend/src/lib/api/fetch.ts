@@ -8,7 +8,6 @@ import {
 import { addToast, toasts } from '$lib/stores/toast';
 
 export const API_TIMEOUT_MS = 30_000;
-export const CHAT_TIMEOUT_MS = 600_000;
 
 export class ApiError extends Error {
 	constructor(
