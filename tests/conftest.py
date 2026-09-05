@@ -96,6 +96,16 @@ def _reset_settings_cache():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_codex_process_pool():
+    """Keep each test independent of Codex CLI process reservations."""
+    import songmaker_cli.cowriter.codex_process_pool as pool_mod
+
+    pool_mod._process_pool = None
+    yield
+    pool_mod._process_pool = None
+
+
+@pytest.fixture(autouse=True)
 def _no_claude_cli_tool_surface_probe():
     """Never let a test spawn the real Claude CLI to read its tool surface.
 

@@ -50,6 +50,11 @@ _REDACTED_CODEX_LOGIN = {
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def _reap_fake_codex_process(kwargs: dict) -> None:
+    kwargs["on_spawned"](1)
+    kwargs["on_reaped"](1, False)
+
+
 @pytest.fixture(autouse=True)
 def codex_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
@@ -154,8 +159,7 @@ def _install_fake_codex_cli(
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(_png_bytes())
         result = outcome or _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
-        kwargs["on_spawned"](1)
-        kwargs["on_reaped"](1, False)
+        _reap_fake_codex_process(kwargs)
         return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
@@ -264,7 +268,9 @@ def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
         assert channel._send((json.dumps(records[3]) + "\n").encode())
         if channel._abort_requested.wait(timeout=1):
             observed_abort.set()
-        return _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        result = _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -292,7 +298,9 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
         stream = _image_event_stream(home, Path(kwargs["cwd"]))
         for line in stream.splitlines(keepends=True):
             assert channel._send(line.encode())
-        return _outcome(stdout=stream)
+        result = _outcome(stdout=stream)
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -334,7 +342,9 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
                 break
         if channel._abort_requested.wait(timeout=1):
             observed_abort.set()
-        return _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        result = _outcome(complete=False, reason=CliRunReason.CANCELLED)
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -484,7 +494,9 @@ def test_codex_image_ignores_non_generated_png_assets(
         bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
         bundled_asset.parent.mkdir(parents=True)
         bundled_asset.write_bytes(_png_bytes())
-        return _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -505,9 +517,11 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        return _outcome(stdout=_image_event_stream(
+        result = _outcome(stdout=_image_event_stream(
             homes[-1], Path(kwargs["cwd"]),
         ))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -533,7 +547,9 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
         homes.append(home)
         (home / "generated_images").symlink_to(outside, target_is_directory=True)
-        return _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        result = _outcome(stdout=_image_event_stream(home, Path(kwargs["cwd"])))
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
@@ -554,10 +570,12 @@ def test_codex_image_timeout_cleans_its_private_directory(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        return _outcome(
+        result = _outcome(
             complete=False,
             reason=CliRunReason.DEADLINE_WHILE_READING,
         )
+        _reap_fake_codex_process(kwargs)
+        return result
 
     monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
