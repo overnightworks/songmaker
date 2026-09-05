@@ -31,6 +31,7 @@ from songmaker_cli.db.models import (
     AvailableModel,
     ChatMessage,
     Conversation,
+    Generation,
     Job,
     Song,
     User,
@@ -682,6 +683,76 @@ def test_chat_turn_reuses_active_conversation_across_turns(client):
     with factory() as session:
         assert session.query(Conversation).count() == 1
         assert session.query(ChatMessage).count() == 4
+
+
+@pytest.mark.acceptance("ACC-COWRITER-16")
+def test_chat_turn_provider_change_preserves_conversation_context(client):
+    c, factory = client
+    with factory() as session:
+        session.add(Generation(
+            id="gen1",
+            song_id="s1",
+            version_id="v1",
+            generation_number=1,
+            mp3_path="take.mp3",
+            whisper_text="a sung take",
+        ))
+        session.commit()
+
+    assert c.put("/api/memory/user", json={"body": "prefers vivid imagery"}).status_code == 200
+    assert c.put("/api/memory/songs/s1", json={"body": "chorus is locked"}).status_code == 200
+    assert c.put("/api/memory/albums/alb1", json={"body": "album is nocturnal"}).status_code == 200
+
+    captured: list[dict[str, object]] = []
+
+    async def _capture(**kwargs) -> AsyncIterator[StreamEvent]:
+        captured.append(kwargs)
+        yield FinalEvent(text="ok")
+
+    turn_request = {
+        "message": "keep the context",
+        "current_song_id": "s1",
+        "mentioned_version_ids": ["v1"],
+        "current_generation_id": "gen1",
+    }
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _capture):
+        first = c.post("/api/chat/turn", json=turn_request)
+
+    first_final = _final_event(_stream_events(first))
+    with factory() as session:
+        from songmaker_cli.db.queries.settings import set_cowriter_settings
+
+        set_cowriter_settings(
+            session,
+            "grok",
+            "grok-4.6",
+            routes={"claude": "api", "grok": "api", "codex": "cli"},
+        )
+        session.commit()
+
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _capture):
+        second = c.post("/api/chat/turn", json=turn_request)
+
+    second_final = _final_event(_stream_events(second))
+    assert second_final["conversation_id"] == first_final["conversation_id"]
+    assert len(captured) == 2
+    second_context = "\n".join(
+        str(message["content"])
+        for message in captured[1]["messages"]
+        if message["role"] == "user"
+    )
+    assert "prefers vivid imagery" in second_context
+    assert "chorus is locked" in second_context
+    assert "album is nocturnal" in second_context
+    assert "v1" in second_context
+    assert "gen1" in second_context
+
+    with factory() as session:
+        messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
+        assert [message.content for message in messages[:2]] == [
+            "keep the context",
+            "ok",
+        ]
 
 
 def test_chat_turn_injects_current_song_block(client):
