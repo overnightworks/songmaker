@@ -95,7 +95,6 @@ async def stream_openai_compatible_turn(
             "api",
             normalize_route_failure(SafeRouteReasonCode.TOOL_EXECUTION_FAILED),
         ) from exc
-    return
 
 
 class _OpenAITransport:
