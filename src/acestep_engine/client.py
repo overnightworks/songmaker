@@ -156,31 +156,25 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         "audio_format": "wav",
         "batch_size": config.batch_size,
     }
-    if config.lm_negative_prompt:
-        payload["lm_negative_prompt"] = config.lm_negative_prompt
-    if config.src_audio_path:
-        payload["src_audio_path"] = config.src_audio_path
+    payload.update(_optional_submit_payload(config))
+    return payload
+
+
+def _optional_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    """Return protocol fields that are sent only for an enabled option."""
+    payload: dict[str, object] = {}
+    optional_values = {
+        "lm_negative_prompt": config.lm_negative_prompt,
+        "src_audio_path": config.src_audio_path,
+        "reference_audio_path": config.reference_audio_path,
+        "timesteps": config.timesteps,
+        "model": config.model,
+    }
+    payload.update({key: value for key, value in optional_values.items() if value})
     if config.task_type == "repaint":
-        payload["repainting_start"] = config.repainting_start
-        payload["repainting_end"] = config.repainting_end
-        if config.repaint_mode:
-            payload["repaint_mode"] = config.repaint_mode
-        if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
-            payload["repaint_strength"] = config.repaint_strength
-        if config.repaint_latent_crossfade_frames > 0:
-            payload["repaint_latent_crossfade_frames"] = (
-                config.repaint_latent_crossfade_frames
-            )
-        if config.repaint_wav_crossfade_sec > 0:
-            payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
+        payload.update(_repaint_submit_payload(config))
     if config.task_type == "cover":
-        payload["audio_cover_strength"] = config.audio_cover_strength
-        if config.cover_noise_strength > 0:
-            payload["cover_noise_strength"] = config.cover_noise_strength
-    if config.reference_audio_path:
-        payload["reference_audio_path"] = config.reference_audio_path
-    if config.timesteps:
-        payload["timesteps"] = config.timesteps
+        payload.update(_cover_submit_payload(config))
     if not config.use_cot_caption:
         payload["use_cot_caption"] = False
     if not config.use_cot_language:
@@ -195,8 +189,33 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["cfg_interval_start"] = config.cfg_interval_start
     if config.cfg_interval_end < 1.0:
         payload["cfg_interval_end"] = config.cfg_interval_end
-    if config.model:
-        payload["model"] = config.model
+    return payload
+
+
+def _repaint_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "repainting_start": config.repainting_start,
+        "repainting_end": config.repainting_end,
+    }
+    optional_values = {
+        "repaint_mode": config.repaint_mode,
+        "repaint_strength": config.repaint_strength if config.repaint_strength != 0.5 else None,
+        "repaint_latent_crossfade_frames": (
+            config.repaint_latent_crossfade_frames
+            if config.repaint_latent_crossfade_frames > 0 else None
+        ),
+        "repaint_wav_crossfade_sec": (
+            config.repaint_wav_crossfade_sec if config.repaint_wav_crossfade_sec > 0 else None
+        ),
+    }
+    payload.update({key: value for key, value in optional_values.items() if value is not None})
+    return payload
+
+
+def _cover_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    payload: dict[str, object] = {"audio_cover_strength": config.audio_cover_strength}
+    if config.cover_noise_strength > 0:
+        payload["cover_noise_strength"] = config.cover_noise_strength
     return payload
 
 
