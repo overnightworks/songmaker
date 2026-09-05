@@ -406,12 +406,22 @@ function* phrasesContainingRun(
 		let phrase = opening === '' ? run.text : `${opening} ${run.text}`;
 		if (phrase.length > maxPhraseLength) break;
 
-		for (let last = run.to; last < wordTexts.length; last++) {
-			if (last > run.to) phrase = `${phrase} ${wordTexts[last]}`;
-			if (phrase.length > maxPhraseLength) break;
-			if (first === run.from && last === run.to) continue;
-			yield phrase;
-		}
+		yield* phraseExtensionsAfterRun(wordTexts, run, first, phrase, maxPhraseLength);
+	}
+}
+
+function* phraseExtensionsAfterRun(
+	wordTexts: string[],
+	run: Candidate,
+	first: number,
+	phrase: string,
+	maxPhraseLength: number
+): Iterable<string> {
+	for (let last = run.to; last < wordTexts.length; last++) {
+		if (last > run.to) phrase = `${phrase} ${wordTexts[last]}`;
+		if (phrase.length > maxPhraseLength) break;
+		if (first === run.from && last === run.to) continue;
+		yield phrase;
 	}
 }
 
