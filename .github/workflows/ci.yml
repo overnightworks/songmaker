@@ -238,7 +238,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
         with:
           name: sonar-coverage-frontend
-          path: reports/frontend-coverage/lcov.info
+          # Upload the reports root so the scan job restores the lcov file at
+          # reports/frontend-coverage/lcov.info, its configured path.
+          path: reports
           if-no-files-found: error
           retention-days: 7
           overwrite: true
