@@ -30,7 +30,7 @@ from songmaker_cli.scoring.silence_detection import _find_gaps, score_silence
 SR = 22050
 
 
-@pytest.fixture()
+@pytest.fixture
 def wav_file(tmp_path: Path) -> Callable[..., Path]:
     """Factory: write a WAV file from a numpy array."""
 

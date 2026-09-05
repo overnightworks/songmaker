@@ -127,7 +127,7 @@ def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClien
     return client, factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
 

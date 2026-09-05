@@ -85,12 +85,12 @@ class _InMemoryRedis:
         raise AssertionError(f"Unexpected Redis script: {script}")
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     yield init_db(tmp_path / "scheduler.db")
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(db_factory):
     session = db_factory()
     yield session

@@ -21,7 +21,7 @@ from songmaker_cli.mcp_server import auth, server, tools
 from songmaker_cli.middleware.auth import AuthenticatedUser
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "mcp.db")
     session = factory()
@@ -29,7 +29,7 @@ def db_session(tmp_path: Path) -> Session:
     session.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_test_db(tmp_path / "mcp_e2e.db")
 
@@ -443,7 +443,7 @@ def test_write_tools_block_other_users(db_session: Session):
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def e2e_setup(db_factory, monkeypatch):
     with db_factory() as session:
         owner_id, stranger_id, album_id, song_id, _ = _seed(session)

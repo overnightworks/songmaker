@@ -52,7 +52,7 @@ def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
     return client, audio_dir
 
 
-@pytest.fixture()
+@pytest.fixture
 def sharing_app(tmp_path: Path) -> TestClient:
     client, _ = _make_sharing_app(tmp_path)
     login_and_csrf(client, "admin", "admin12345")
@@ -1822,7 +1822,7 @@ def _seed_song_with_two_takes(session) -> None:
     session.add(PlaylistEntry(id="e1", playlist_id="pl1", generation_id="g1", position=0))
 
 
-@pytest.fixture()
+@pytest.fixture
 def two_take_app(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_song_with_two_takes)
     login_and_csrf(client, "admin", "admin12345")
