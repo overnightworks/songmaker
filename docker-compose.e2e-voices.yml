@@ -1,0 +1,56 @@
+x-service-logging: &service-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Test-only override for the Voices browser flow.  It deliberately adds the
+# fake worker here instead of changing docker-compose.ci.yml, so library E2E
+# runs never start it.
+services:
+  alertmanager:
+    profiles: ["gpu"]
+
+  songmaker-music-worker:
+    profiles: !reset []
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/app/.venv/bin/arq"]
+    command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
+
+  songmaker-voices-e2e-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/app/.venv/bin/python", "/app/tests/e2e_fixtures/fake_training_worker.py"]
+    restart: "no"
+    logging: *service-logging
+    healthcheck:
+      test:
+        ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+      songmaker-web:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:?set SONGMAKER_INTERNAL_TOKEN}"
+      CONTROL_PLANE_URL: http://songmaker-web:8080
+      AUDIO_DIR: /app/data/audio
+      WORKER_ID: voices-e2e-training-worker
+      WORKER_HOST: songmaker-voices-e2e-worker
+      WORKER_PORT: "8001"
+    volumes:
+      - audiofiles:/app/data/audio
+      - type: bind
+        source: ./tests/e2e_fixtures
+        target: /app/tests/e2e_fixtures
+        read_only: true
+        bind:
+          create_host_path: false
