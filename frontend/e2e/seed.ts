@@ -57,6 +57,9 @@ const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
 const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
 const RAIL_FILLER_ALBUM_COUNT = 30;
 const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
+export const VOICES_OCCUPANCY_PROMPT = 'E2E voices occupancy prompt';
+const VOICE_ADAPTER_COMPARISON_PROMPT = 'E2E adapter comparison prompt';
+const VOICE_ADAPTER_COMPARISON_LYRICS = 'E2E adapter comparison lyrics';
 
 function runMarker(): string {
 	return Date.now().toString(36);
@@ -71,8 +74,16 @@ export interface SeededTake {
 export interface SeededVoiceTake {
 	songTitle: string;
 	songId: string;
+	versionId: string;
 	caption: string;
 	lyrics: string;
+}
+
+export interface SeededVoiceProofSong {
+	albumId: string;
+	songId: string;
+	songSlug: string;
+	versionId: string;
 }
 
 export interface QueuedJob {
@@ -82,7 +93,14 @@ export interface QueuedJob {
 
 interface VoiceLifecycle {
 	status: string;
+	deleted_at: string | null;
 }
+
+interface CreatedSong extends CreatedResource {
+	slug: string;
+}
+
+interface VersionResource extends CreatedResource {}
 
 /** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
@@ -257,6 +275,14 @@ class SeedApi {
 		return this.send<T>(url, { multipart });
 	}
 
+	async getJson<T>(url: string): Promise<T> {
+		const response = await this.api.get(url);
+		if (!response.ok()) {
+			throw new Error(`GET ${url} failed: ${response.status()} ${await response.text()}`);
+		}
+		return (await response.json()) as T;
+	}
+
 	async delete(url: string): Promise<void> {
 		const response = await this.api.delete(url, {
 			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL }
@@ -360,7 +386,7 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 	const seed = await SeedApi.fromSession(api);
 	const marker = runMarker();
 	const songTitle = `E2E Voice Source ${marker}`;
-	const caption = 'warm e2e tenor';
+	const caption = VOICES_OCCUPANCY_PROMPT;
 	const lyrics = 'E2E source lyrics';
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `E2E Voice Album ${marker}`,
@@ -395,10 +421,76 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 		const songId = stdout.trim();
 		if (!songId)
 			throw new Error('seed_e2e_song_takes.py printed no song id for the Voices source take');
-		return { songTitle, songId, caption, lyrics };
+		const versions = await seed.getJson<VersionResource[]>(`/api/songs/${songId}/versions`);
+		const versionId = versions.at(-1)?.id;
+		if (!versionId) throw new Error(`Voices source song ${songId} has no version`);
+		return { songTitle, songId, versionId, caption, lyrics };
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Seeding the voices source take failed: ${detail}`, { cause: err });
+	}
+}
+
+/** Creates one ordinary version per adapter comparison side through the public API. */
+export async function seedVoiceAdapterComparisonSong(
+	api: APIRequestContext,
+	userLoraId: string | null
+): Promise<SeededVoiceProofSong> {
+	const seed = await SeedApi.fromSession(api);
+	const marker = runMarker();
+	const album = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `E2E Voice Adapter Album ${marker}`,
+		artist: ALBUM_ARTIST
+	});
+	const song = await seed.postJson<CreatedSong>('/api/songs', {
+		title: userLoraId ? `E2E With Voice ${marker}` : `E2E Without Voice ${marker}`,
+		album_id: album.id,
+		lyrics: VOICE_ADAPTER_COMPARISON_LYRICS,
+		prompt: VOICE_ADAPTER_COMPARISON_PROMPT,
+		generation_params: userLoraId ? { user_lora_id: userLoraId } : null
+	});
+	const versions = await seed.getJson<VersionResource[]>(`/api/songs/${song.id}/versions`);
+	const versionId = versions.at(-1)?.id;
+	if (!versionId) throw new Error(`Voice comparison song ${song.id} has no version`);
+	return { albumId: album.id, songId: song.id, songSlug: song.slug, versionId };
+}
+
+/**
+ * The foreign-mode proof reuses a genuinely trained adapter, then changes only
+ * its declared model mode in the isolated E2E database. It never seeds a
+ * ready state or an adapter storage path.
+ */
+export async function setVoiceProofModelMode(voiceId: string, modelMode: 'sft' | 'turbo'): Promise<void> {
+	const script = [
+		'from songmaker_cli.db.engine import connect_db, resolve_database_url',
+		'from songmaker_cli.db.queries import get_user_lora, update_user_lora',
+		'import sys',
+		'factory = connect_db(resolve_database_url())',
+		'with factory() as session:',
+		'    voice = get_user_lora(session, sys.argv[1], include_deleted_rows=True)',
+		'    if voice is None: raise SystemExit(f"Voice {sys.argv[1]} was not found")',
+		'    update_user_lora(session, voice.id, model_mode=sys.argv[2])',
+		'    session.commit()'
+	].join('\n');
+	try {
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'-c',
+				script,
+				voiceId,
+				modelMode
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Setting the trained voice model mode failed: ${detail}`, { cause: err });
 	}
 }
 
@@ -422,15 +514,23 @@ export async function deleteVoiceProofData(
 ): Promise<void> {
 	const seed = await SeedApi.fromSession(api);
 	for (const voiceId of voiceIds) {
+		const response = await api.get(`/api/loras/${voiceId}`);
+		if (!response.ok()) {
+			throw new Error(`GET /api/loras/${voiceId} failed: ${response.status()}`);
+		}
+		const voice = (await response.json()) as VoiceLifecycle;
+		if (voice.deleted_at !== null) continue;
 		await expect
 			.poll(
 				async () => {
-					const response = await api.get(`/api/loras/${voiceId}`);
-					if (!response.ok()) {
-						throw new Error(`GET /api/loras/${voiceId} failed: ${response.status()}`);
+					const current = await api.get(`/api/loras/${voiceId}`);
+					if (!current.ok()) {
+						throw new Error(`GET /api/loras/${voiceId} failed: ${current.status()}`);
 					}
-					const voice = (await response.json()) as VoiceLifecycle;
-					return !['queued', 'preprocessing', 'training', 'exporting'].includes(voice.status);
+					const currentVoice = (await current.json()) as VoiceLifecycle;
+					return !['queued', 'preprocessing', 'training', 'exporting'].includes(
+						currentVoice.status
+					);
 				},
 				{ timeout: 40_000 }
 			)
@@ -442,12 +542,30 @@ export async function deleteVoiceProofData(
 /** A real Generate job occupies the fake worker while the Voices flow waits. */
 export async function queueGenerateForVoiceProof(
 	api: APIRequestContext,
-	songId: string
+	songId: string,
+	versionId: string
 ): Promise<QueuedJob> {
 	const seed = await SeedApi.fromSession(api);
 	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
 		count: 1,
-		model: 'sft'
+		model: 'sft',
+		version_id: versionId
+	});
+}
+
+/** Queues a normal, non-occupying generation for the deterministic adapter comparison. */
+export async function queueVoiceAdapterComparison(
+	api: APIRequestContext,
+	songId: string,
+	versionId: string,
+	seedValue: number
+): Promise<QueuedJob> {
+	const seed = await SeedApi.fromSession(api);
+	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
+		count: 1,
+		model: 'sft',
+		version_id: versionId,
+		seed: seedValue
 	});
 }
 

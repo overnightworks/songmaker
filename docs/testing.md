@@ -226,7 +226,7 @@ Run it under the probe lock with the isolated project and port:
 
 ```bash
 flock /tmp/songmaker-probe.lock env \
-  COMPOSE_PROJECT_NAME=songmaker-i607-probe \
+  COMPOSE_PROJECT_NAME=songmaker-i689-probe \
   WEB_PORT=18080 \
   POSTGRES_PASSWORD=e2e-ci-postgres-password \
   SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else \
@@ -234,6 +234,7 @@ flock /tmp/songmaker-probe.lock env \
   ADMIN_USERNAME=e2e-ci-admin \
   ADMIN_PASSWORD='E2eCiSmoke#2026!' \
   PUBLIC_BASE_URL=http://localhost:18080 \
+  E2E_BASE_URL=http://localhost:18080 \
   docker compose -f docker-compose.yml -f docker-compose.ci.yml \
   -f docker-compose.e2e-voices.yml up -d --build --wait \
   postgres redis migrate songmaker-web songmaker-music-worker \
@@ -250,8 +251,17 @@ E2E_VOICES_STACK=1 E2E_BASE_URL=http://localhost:18080 pnpm exec playwright test
 
 The fake worker uses the same internal worker registration, Redis heartbeat,
 GPU-hold, task-SSE, and adapter-result contracts as the ACE-Step worker. It
-only replaces model training; ARQ, job, and database handling remain in the
-application. Tear the isolated stack down afterwards with the same environment
+only replaces model training and generation output; ARQ, job, and database
+handling remain in the application. The two S5 occupancy jobs target one
+dedicated song/version whose existing prompt exactly equals
+`FAKE_GENERATION_OCCUPANCY_PROMPT`; no generation request carries a prompt.
+All other fake generations produce a deterministic 1-second mono WAV from the
+exact tuple `(prompt, seed, adapter path)`. The browser proof trains its voices
+through the normal lifecycle, then proves the ready-mode chip, a foreign-mode
+picker option named `not available for this model`, distinct WAV bytes with and
+without the adapter, and that deleting the used voice leaves a playable take
+named `voice deleted` after reload. It does not seed a ready status or adapter
+storage path. Tear the isolated stack down afterwards with the same environment
 and `docker compose ... down -v`.
 
 ## Test Structure
