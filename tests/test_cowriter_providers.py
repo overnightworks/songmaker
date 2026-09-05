@@ -860,6 +860,23 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
         assert song.slug == "renamed-track"
 
 
+def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client):
+    _, factory = admin_client
+    user = AuthenticatedUser(
+        id="u-test", username="u-u-test", role="admin", is_active=True,
+    )
+    with factory() as session:
+        via_catalog, err = execute_cowriter_tool(
+            session, user, "suggest_album_cover", {"album_id": "alb1"},
+        )
+        assert err is False
+        assert '"status": "queued"' in via_catalog
+
+    with factory() as session:
+        job = session.query(Job).filter_by(album_id="alb1").one()
+        assert job.type == "cover"
+
+
 def test_cowriter_provider_switch_keeps_scoring_model(
     admin_client, every_provider_is_configured,
 ):

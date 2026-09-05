@@ -13,7 +13,7 @@
 		// effect below for why the previous value must NOT be `$state`.
 		expandTrigger?: boolean;
 		icon?: Snippet;
-		children: Snippet;
+		children: Snippet<[open: boolean]>;
 	}
 
 	let {
@@ -106,7 +106,7 @@
 	</div>
 	<div class="rail-group-panel" data-open={open} id={groupId} inert={!open}>
 		<div class="rail-group-content">
-			{@render children()}
+			{@render children(open)}
 		</div>
 	</div>
 </div>

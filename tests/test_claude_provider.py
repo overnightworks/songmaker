@@ -2840,4 +2840,5 @@ def test_expected_mcp_tool_names_matches_the_registered_mcp_server() -> None:
     registered = asyncio.run(server.list_tools())
     registered_names = {f"{provider.COWRITER_TOOL_PREFIX}{tool.name}" for tool in registered}
 
+    assert len(registered_names) == 12
     assert registered_names == provider._EXPECTED_MCP_TOOL_NAMES

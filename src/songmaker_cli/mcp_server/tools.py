@@ -24,6 +24,10 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     unique_song_slug,
 )
+from songmaker_cli.cover_suggestions import (
+    CoverSuggestionRequestError,
+    request_cover_suggestions,
+)
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import get_album, list_albums
 from songmaker_cli.db.queries.songs import (
@@ -45,6 +49,7 @@ from songmaker_cli.db.queries.songs import (
 from songmaker_cli.db.queries.versions import get_version
 from songmaker_cli.mcp_server.schemas import (
     AlbumSummary,
+    CoverSuggestionRequestResult,
     GenerationDetail,
     SongDetail,
     SongSummary,
@@ -264,6 +269,21 @@ def tool_rename_song(
         song_id=song_id,
         message=f"Renamed song to '{title}'",
         song=SongDetail.from_orm(refreshed),
+    )
+
+
+def tool_suggest_album_cover(
+    session: Session, user: AuthenticatedUser, album_id: str,
+) -> CoverSuggestionRequestResult:
+    """Queue three cover suggestions through the album admission owner."""
+    try:
+        request = request_cover_suggestions(session, album_id, user)
+    except CoverSuggestionRequestError as exc:
+        raise MCPToolError(str(exc)) from exc
+    return CoverSuggestionRequestResult(
+        job_id=request.job.id,
+        status=request.job.status,
+        message="Cover suggestions queued.",
     )
 
 
