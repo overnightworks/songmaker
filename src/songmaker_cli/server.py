@@ -338,7 +338,7 @@ def create_app(
     sk_index = sveltekit_dir / "index.html"
 
     @app.exception_handler(404)
-    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse:
+    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse | JSONResponse:
         if (
             not request.url.path.startswith("/api/")
             and not request.url.path.startswith("/audio/")
