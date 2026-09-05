@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import tempfile
 import threading
 import time
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from io import BytesIO
@@ -21,6 +23,7 @@ from songmaker_cli.agent_cli import (
     CliRunOutcome,
     CliRunReason,
     run_cli_bounded,
+    scrubbed_env,
 )
 from songmaker_cli.claude.provider import (
     AssistantTextEvent,
@@ -47,6 +50,15 @@ from songmaker_cli.cowriter.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
+from songmaker_cli.cowriter.tool_loop import (
+    FinalText,
+    InitialTurn,
+    TextDelta,
+    ToolCall,
+    ToolCallBatch,
+    ToolResultBatch,
+    TransportResponse,
+)
 
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
@@ -71,6 +83,18 @@ _CODEX_CLI_ISOLATION_ARGS: Final = (
     "-c",
     "mcp_servers={}",
 )
+_CODEX_TOOL_ISOLATION_CONFIGS: Final = (
+    'approval_policy="never"',
+    "mcp_servers={}",
+    "features.shell_tool=false",
+    'web_search="disabled"',
+    "features.code_mode_host=false",
+    "features.code_mode=false",
+    "features.code_mode_only=false",
+)
+_TOOL_TRANSPORT_BLOCKED_ITEM_TYPES: Final = frozenset({
+    "command_execution", "file_change", "mcp_tool_call", "web_search",
+})
 _CODEX_IMAGE_ISOLATION_ARGS: Final = (
     "--skip-git-repo-check",
     "--ignore-user-config",
@@ -248,6 +272,185 @@ async def stream_codex_cli_turn(
             await asyncio.shield(runner)
         finally:
             turn_directory.cleanup()
+
+
+class CodexCliToolTransport:
+    """One private, resumable Codex CLI session for the shared tool loop.
+
+    Codex receives each round through a private prompt file whose contents are
+    forwarded on stdin because ``codex exec`` has no prompt-file option.  The
+    file, private home, and the persisted session are all scoped to this one
+    co-writer turn and removed by :meth:`aclose`.
+    """
+
+    def __init__(self, *, model: str) -> None:
+        self._model = model
+        self._turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-codex-tool-")
+        os.chmod(self._turn_directory.name, 0o700)
+        self._codex_home = Path(self._turn_directory.name) / "codex-home"
+        self._codex_home.mkdir(mode=0o700)
+        try:
+            _copy_codex_login_mirror(self._codex_home)
+        except _CodexLoginMirrorError:
+            self._turn_directory.cleanup()
+            raise ProviderUnavailableError(
+                "codex",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_AUTH_REJECTED),
+            ) from None
+        self._deadline = time.monotonic() + COWRITER_CLI_TIMEOUT_SECONDS
+        self._thread_id: str | None = None
+        self._round_index = 0
+        self._closed = False
+
+    async def stream(
+        self,
+        message: InitialTurn | ToolResultBatch,
+    ) -> AsyncIterator[TransportResponse]:
+        """Stream one response, retaining only the server-issued thread ID."""
+        if self._closed:
+            raise RuntimeError("Codex CLI tool transport is closed")
+        from songmaker_cli.cowriter.text_tool_protocol import (
+            FinalText as ParsedFinalText,
+        )
+        from songmaker_cli.cowriter.text_tool_protocol import (
+            TextToolCall,
+            TextToolProtocolError,
+            TextToolStreamParser,
+        )
+
+        try:
+            prompt = _tool_transport_prompt(message)
+        except TextToolProtocolError:
+            raise ProviderUnavailableError(
+                "codex",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
+            ) from None
+        is_resume = self._thread_id is not None
+        command = _build_codex_tool_command(
+            self._model,
+            thread_id=self._thread_id,
+        )
+        self._round_index += 1
+        channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
+        try:
+            reservation = get_codex_process_pool().reserve(CodexProcessKind.TEXT)
+        except CodexProcessPoolSaturatedError as exc:
+            raise ProviderUnavailableError(
+                "codex",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED),
+            ) from exc
+        runner = asyncio.create_task(asyncio.to_thread(
+            _run_codex_tool_round,
+            reservation=reservation,
+            command=command,
+            prompt=prompt,
+            deadline=self._deadline,
+            channel=channel,
+            cwd=self._turn_directory.name,
+            codex_home=self._codex_home,
+        ))
+        parser = TextToolStreamParser()
+        saw_success = False
+        error_message: str | None = None
+        received_thread_id: str | None = None
+        started_at = time.monotonic()
+        try:
+            while True:
+                item = await asyncio.to_thread(channel.receive)
+                if isinstance(item, CliRunOutcome):
+                    outcome = item
+                    break
+                event_type, event = _parse_codex_line(item)
+                if saw_success:
+                    raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                if event_type == "thread.started":
+                    thread_id = _thread_started_id(event)
+                    if received_thread_id is not None or (
+                        is_resume and thread_id != self._thread_id
+                    ):
+                        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                    received_thread_id = thread_id
+                    continue
+                if event_type == "turn.started":
+                    continue
+                if event_type in _ITEM_EVENT_TYPES:
+                    item_type = _item_type(event)
+                    if item_type in _TOOL_TRANSPORT_BLOCKED_ITEM_TYPES:
+                        raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
+                    if event_type == "item.completed" and item_type == "error":
+                        error_message = _completed_error_item_message(event)
+                        channel.request_abort()
+                        continue
+                    if item_type not in _INFORMATIONAL_ITEM_TYPES:
+                        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                    if event_type == "item.completed" and item_type == "agent_message":
+                        text = parser.feed(_completed_agent_message(event))
+                        if text:
+                            yield TextDelta(text)
+                    continue
+                if event_type == "turn.completed":
+                    _completed_turn(event)
+                    saw_success = True
+                    continue
+                if event_type == "error":
+                    error_message = _top_level_error_message(event)
+                    channel.request_abort()
+                    continue
+                if event_type == "turn.failed":
+                    error_message = _failed_turn_message(event)
+                    channel.request_abort()
+                    continue
+                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+            await asyncio.shield(runner)
+            _raise_for_codex_outcome(outcome, saw_success, error_message, None)
+            if not is_resume and received_thread_id is None:
+                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+            if received_thread_id is not None:
+                self._thread_id = received_thread_id
+            parsed = parser.finish()
+            if isinstance(parsed, TextToolCall):
+                call = ToolCall(str(uuid.uuid4()), parsed.name, parsed.arguments)
+                _log_codex_tool_round(self._round_index, started_at, call.name)
+                yield ToolCallBatch((call,))
+            elif isinstance(parsed, ParsedFinalText):
+                _log_codex_tool_round(self._round_index, started_at, None)
+                yield FinalText(parsed.text)
+            else:  # pragma: no cover - TypeAlias keeps this branch unreachable.
+                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+        except TextToolProtocolError:
+            channel.request_abort()
+            await asyncio.shield(runner)
+            raise ProviderUnavailableError(
+                "codex",
+                "cli",
+                normalize_route_failure(SafeRouteReasonCode.TOOL_PROTOCOL_ERROR),
+            ) from None
+        except _CodexCliStreamFailure as exc:
+            channel.request_abort()
+            await asyncio.shield(runner)
+            reason = (
+                SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+                if exc.code == "codex_cli_tool_call_blocked"
+                else SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+            )
+            raise ProviderUnavailableError(
+                "codex",
+                "cli",
+                normalize_route_failure(reason),
+            ) from None
+        finally:
+            channel.request_abort()
+            await asyncio.shield(runner)
+
+    async def aclose(self) -> None:
+        """Remove all private session and prompt material after reaping a round."""
+        if self._closed:
+            return
+        self._closed = True
+        self._turn_directory.cleanup()
 
 
 def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
@@ -605,6 +808,150 @@ def _normalize_generated_png(source: Path) -> bytes:
 def _build_codex_cli_command(model: str) -> tuple[str, ...]:
     """Return the fixed, tool-free Codex command for a single streamed turn."""
     return _build_codex_command(sandbox="read-only", model=model)
+
+
+def _build_codex_tool_command(
+    model: str,
+    *,
+    thread_id: str | None = None,
+) -> tuple[str, ...]:
+    """Build a read-only start or resume command for one tool-loop round.
+
+    Codex CLI 0.147 exposes ``--sandbox`` only on ``exec``.  ``exec resume``
+    accepts the equivalent TOML override instead, so the sandbox is pinned on
+    every round even though the command spelling differs.
+    """
+    common = (
+        "--json",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        *(part for config in _CODEX_TOOL_ISOLATION_CONFIGS for part in ("-c", config)),
+        "-c",
+        'sandbox_mode="read-only"',
+        "--model",
+        model,
+    )
+    if thread_id is None:
+        return (
+            CODEX_CLI_BINARY,
+            "exec",
+            "--sandbox",
+            "read-only",
+            *common,
+            "-",
+        )
+    return (
+        CODEX_CLI_BINARY,
+        "exec",
+        "resume",
+        *common,
+        thread_id,
+        "-",
+    )
+
+
+def _run_codex_tool_round(
+    *,
+    reservation: CodexProcessReservation,
+    command: tuple[str, ...],
+    prompt: bytes,
+    deadline: float,
+    channel: CliLineChannel,
+    cwd: str,
+    codex_home: Path,
+) -> CliRunOutcome:
+    """Run one round from a private prompt file and reap its reservation."""
+    prompt_path: str | None = None
+    try:
+        descriptor, prompt_path = tempfile.mkstemp(prefix="prompt-", dir=cwd)
+        with os.fdopen(descriptor, "wb") as prompt_file:
+            prompt_file.write(prompt)
+        os.chmod(prompt_path, 0o600)
+        return _run_reserved_codex_cli(
+            reservation,
+            command,
+            stdin_payload=Path(prompt_path).read_bytes(),
+            read="all",
+            deadline=deadline,
+            output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
+            stdout_line_channel=channel,
+            cwd=cwd,
+            extra_env=_codex_cli_env(codex_home),
+        )
+    except BaseException as exc:
+        get_codex_process_pool().abandon_unspawned(reservation)
+        outcome = CliRunOutcome(
+            started=False,
+            spawn_error=exc,
+            returncode=None,
+            stdout="",
+            stderr="",
+            complete=False,
+            became_zombie=False,
+            reason=CliRunReason.IO_ERROR,
+            io_error=exc if isinstance(exc, OSError) else None,
+        )
+        channel._close(outcome)
+        return outcome
+    finally:
+        if prompt_path is not None:
+            try:
+                os.unlink(prompt_path)
+            except FileNotFoundError:
+                pass
+
+
+def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
+    """Render one initial prompt or exactly one completed tool result."""
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        TextToolProtocolError,
+        render_tool_result,
+    )
+
+    if isinstance(message, InitialTurn):
+        return _stdin_prompt(
+            message.system,
+            _flatten_messages("", message.messages),
+        ).encode()
+    if len(message.results) != 1:
+        raise TextToolProtocolError()
+    result = message.results[0]
+    try:
+        value = json.loads(result.content)
+    except json.JSONDecodeError:
+        value = result.content
+    return render_tool_result(value).encode()
+
+
+def _codex_cli_env(codex_home: Path) -> dict[str, str]:
+    """Pass a scrubbed environment and only this turn's private Codex home."""
+    environment = scrubbed_env()
+    environment["CODEX_HOME"] = str(codex_home)
+    return environment
+
+
+def _thread_started_id(event: dict[str, object]) -> str:
+    thread_id = event.get("thread_id")
+    if not isinstance(thread_id, str) or not thread_id:
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    return thread_id
+
+
+def _log_codex_tool_round(
+    round_index: int,
+    started_at: float,
+    tool_name: str | None,
+) -> None:
+    duration_ms = round((time.monotonic() - started_at) * 1000)
+    log.info(
+        "Co-writer Codex CLI provider=codex route=cli round=%s duration_ms=%s "
+        "tool=%s is_error=%s",
+        round_index,
+        duration_ms,
+        tool_name or "none",
+        False,
+    )
 
 
 def _parse_codex_line(line: bytes) -> tuple[str, dict[str, object]]:

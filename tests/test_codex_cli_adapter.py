@@ -12,13 +12,20 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
-from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
+from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.errors import (
     CodexProcessPoolSaturatedError,
     ProviderUnavailableError,
     SafeRouteReasonCode,
+)
+from songmaker_cli.cowriter.tool_loop import (
+    InitialTurn,
+    ToolCallBatch,
+    ToolResult,
+    ToolResultBatch,
+    stream_tool_loop,
 )
 
 _RECORDED_STREAM = Path(__file__).parent / "fixtures" / "codex_cli_real_stream.jsonl"
@@ -89,6 +96,21 @@ async def _collect():
     return [event async for event in _stream()]
 
 
+def _codex_tool_events(transport, executor):
+    return stream_tool_loop(
+        provider="codex",
+        route="cli",
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        transport=transport,
+        executor=executor,
+    )
+
+
+async def _collect_tool_events(stream) -> list[object]:
+    return [event async for event in stream]
+
+
 def _recorded_stream_lines() -> list[bytes]:
     events = [json.loads(line) for line in _RECORDED_STREAM.read_text().splitlines()]
     for event in events:
@@ -155,6 +177,198 @@ def test_codex_cli_accepts_the_recorded_real_stream_and_returns_one_final(monkey
         AssistantTextEvent(text="OK"),
         FinalEvent(text="OK"),
     ]
+
+
+def test_codex_tool_transport_starts_then_resumes_with_private_prompt_files(monkeypatch) -> None:
+    calls: list = []
+    prompts: list[bytes] = []
+    scrubbed_calls = 0
+    thread_id = "fixture-codex-thread-527"
+    rounds = iter([
+        [
+            json.dumps({"type": "thread.started", "thread_id": thread_id}).encode() + b"\n",
+            b'{"type":"item.completed","item":{"type":"agent_message","text":"<songmaker_tool_call>\\n{\\"name\\":\\"list_songs\\",\\"arguments\\":{}}\\n</songmaker_tool_call>"}}\n',
+            b'{"type":"turn.completed","usage":{}}\n',
+        ],
+        [
+            json.dumps({"type": "thread.started", "thread_id": thread_id}).encode() + b"\n",
+            b'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n',
+            b'{"type":"turn.completed","usage":{}}\n',
+        ],
+    ])
+
+    def run_cli_bounded(command, **kwargs):
+        calls.append((command, kwargs))
+        prompt_file = next(Path(kwargs["cwd"]).glob("prompt-*"))
+        prompts.append(prompt_file.read_bytes())
+        for line in next(rounds):
+            assert kwargs["stdout_line_channel"]._send(line)
+        outcome = _outcome()
+        kwargs["stdout_line_channel"]._close(outcome)
+        kwargs["on_spawned"](len(calls))
+        kwargs["on_reaped"](len(calls), False)
+        return outcome
+
+    def scrubbed_environment() -> dict[str, str]:
+        nonlocal scrubbed_calls
+        scrubbed_calls += 1
+        return {"PATH": "/test/bin"}
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_cli_adapter, "scrubbed_env", scrubbed_environment)
+    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    events = asyncio.run(_collect_tool_events(_codex_tool_events(
+        transport,
+        lambda _name, _arguments: ('{"songs":[]}', False),
+    )))
+
+    assert isinstance(events[0], ToolCallEvent)
+    assert events[-1] == FinalEvent(text="done")
+    first_command, first_kwargs = calls[0]
+    second_command, second_kwargs = calls[1]
+    assert first_command[:5] == ("codex", "exec", "--sandbox", "read-only", "--json")
+    assert second_command[:3] == ("codex", "exec", "resume")
+    assert second_command[-2:] == (thread_id, "-")
+    for command, kwargs in calls:
+        assert "--ephemeral" not in command
+        assert kwargs["stdin_payload"] in prompts
+        assert kwargs["output_read_limit_bytes"] == (
+            codex_cli_adapter.CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES
+        )
+        assert kwargs["deadline"] == first_kwargs["deadline"]
+        assert kwargs["extra_env"]["CODEX_HOME"].endswith("/codex-home")
+        assert kwargs["extra_env"]["PATH"] == "/test/bin"
+        for config in (
+            'approval_policy="never"',
+            "mcp_servers={}",
+            "features.shell_tool=false",
+            'web_search="disabled"',
+            'sandbox_mode="read-only"',
+        ):
+            assert config in command
+    assert prompts == [
+        b"system\n\nUser: hello",
+        b'<songmaker_tool_result>\n{"songs":[]}\n</songmaker_tool_result>',
+    ]
+    assert not Path(first_kwargs["cwd"]).exists()
+    assert first_kwargs["extra_env"] == second_kwargs["extra_env"]
+    assert scrubbed_calls == 2
+
+
+def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+        b'{"type":"thread.started","thread_id":"fixture-codex-thread-527"}\n',
+        b'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n',
+        b'{"type":"turn.completed","usage":{}}\n',
+    ], _outcome(), calls))
+    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+
+    async def reject_batch() -> None:
+        assert [item async for item in transport.stream(InitialTurn("system", []))]
+        with pytest.raises(ProviderUnavailableError) as raised:
+            async for _ in transport.stream(ToolResultBatch((
+                ToolResult("one", "1", False),
+                ToolResult("two", "2", False),
+            ))):
+                pass
+        assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
+        await transport.aclose()
+
+    asyncio.run(reject_batch())
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("item_type", (
+    "file_change", "command_execution", "mcp_tool_call", "web_search",
+))
+def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
+    monkeypatch,
+    item_type,
+) -> None:
+    aborted = threading.Event()
+
+    def run_cli_bounded(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        assert channel._send(json.dumps({
+            "type": "item.started", "item": {"type": item_type},
+        }).encode() + b"\n")
+        while not channel.abort_requested():
+            time.sleep(0.001)
+        aborted.set()
+        outcome = _outcome(complete=False)
+        channel._close(outcome)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    executed = False
+
+    def executor(_name, _arguments):
+        nonlocal executed
+        executed = True
+        return "unreachable", False
+
+    async def collect() -> None:
+        transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+        with pytest.raises(ProviderUnavailableError) as raised:
+            async for _ in _codex_tool_events(transport, executor):
+                pass
+        assert raised.value.reason.code is SafeRouteReasonCode.TOOL_EXECUTION_FAILED
+
+    asyncio.run(collect())
+    assert aborted.is_set()
+    assert not executed
+
+
+def test_codex_tool_transport_cleans_its_home_and_does_not_log_protocol_text(
+    monkeypatch,
+    caplog,
+) -> None:
+    calls: list = []
+    lyrics = "private lyrics"
+    song_id = "song-private"
+    protocol = (
+        "<songmaker_tool_call>\n"
+        f'{{"name":"update_song_lyrics","arguments":{{"song_id":"{song_id}","lyrics":"{lyrics}"}}}}\n'
+        "</songmaker_tool_call>"
+    )
+
+    def run_cli_bounded(command, **kwargs):
+        calls.append((command, kwargs))
+        home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        (home / "sessions").mkdir()
+        (home / "sessions" / "private.jsonl").write_text(protocol)
+        for line in (
+            b'{"type":"thread.started","thread_id":"fixture-codex-thread-527"}\n',
+            json.dumps({"type": "item.completed", "item": {
+                "type": "agent_message", "text": protocol,
+            }}).encode() + b"\n",
+            b'{"type":"turn.completed","usage":{}}\n',
+        ):
+            assert kwargs["stdout_line_channel"]._send(line)
+        outcome = _outcome(stderr="private stderr")
+        kwargs["stdout_line_channel"]._close(outcome)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    caplog.set_level("INFO", logger="songmaker_cli.cowriter.codex_cli_adapter")
+    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+
+    async def collect_and_close() -> None:
+        assert isinstance(
+            [item async for item in transport.stream(InitialTurn("system", []))][0],
+            ToolCallBatch,
+        )
+        await transport.aclose()
+
+    asyncio.run(collect_and_close())
+    assert not Path(calls[0][1]["cwd"]).exists()
+    for forbidden in (lyrics, song_id, protocol, "private stderr", "private.jsonl"):
+        assert forbidden not in caplog.text
 
 
 def test_codex_cli_turn_names_pool_saturation_without_starting_a_runner(monkeypatch) -> None:
