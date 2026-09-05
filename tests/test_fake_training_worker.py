@@ -102,7 +102,9 @@ def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path) -> None:
     heartbeat = asyncio.run(publish_and_read_heartbeat())
 
     assert heartbeat is not None
-    assert json.loads(heartbeat)["loaded"] == []
+    state = json.loads(heartbeat)
+    assert state["gpu_healthy"] is True
+    assert state["loaded"] == []
 
 
 def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) -> None:
