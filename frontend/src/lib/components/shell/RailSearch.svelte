@@ -31,6 +31,7 @@
 	</svg>
 	<input
 		type="search"
+		data-hitbox="text"
 		value={query}
 		placeholder={RAIL_SEARCH_LABEL}
 		aria-label={RAIL_SEARCH_LABEL}
