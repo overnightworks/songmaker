@@ -42,13 +42,13 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 		`/api/albums/${library.albumId}/cover-suggestions`
 	);
 	if (!suggestionsResponse.ok()) {
-		test.skip(true, 'The isolated stack cannot list cover suggestions.');
+		test.skip(true, 'The isolated stack cannot list cover suggestions.'); // NOSONAR S1607: this stack intentionally lacks the route.
 	}
 	const suggestions = (await suggestionsResponse.json()) as {
 		suggestions: Array<{ id: string; url: string }>;
 	};
 	if (suggestions.suggestions.length === 0) {
-		test.skip(true, 'The isolated stack has no API-seeded cover suggestion to select.');
+		test.skip(true, 'The isolated stack has no API-seeded cover suggestion to select.'); // NOSONAR S1607: the optional seed is unavailable here.
 	}
 
 	const surface = workspace(page);

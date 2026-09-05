@@ -13,7 +13,7 @@ export interface DiffIndex {
 }
 
 function trimTrailingEmpty(lines: string[]): string[] {
-	while (lines.length > 0 && lines[lines.length - 1] === '') {
+	while (lines.length > 0 && lines.at(-1) === '') {
 		lines.pop();
 	}
 	return lines;
