@@ -345,7 +345,7 @@ test.describe('kinetic take strip', () => {
 		browser,
 		isMobile
 	}) => {
-		test.skip(Boolean(isMobile), 'this test opens its own narrow desktop-width context');
+		test.skip(Boolean(isMobile), 'this test opens its own narrow desktop-width context'); // NOSONAR S1607: the test creates its own desktop context.
 		const context = await browser.newContext({ viewport: ROW_LAYOUT_VIEWPORT });
 		const page = await context.newPage();
 		guard = new FlowGuard(page);
@@ -434,7 +434,7 @@ test.describe('kinetic take strip', () => {
 		browser,
 		isMobile
 	}) => {
-		test.skip(
+		test.skip( // NOSONAR S1607: the test creates its own mobile-emulated context.
 			Boolean(isMobile),
 			'this test opens its own mobile-emulated context regardless of project'
 		);
