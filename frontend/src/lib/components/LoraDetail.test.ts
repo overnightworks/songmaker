@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/fetch';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const jobStore = vi.hoisted(() => {
 	let value: { job: Record<string, unknown> }[] = [];
@@ -69,6 +70,7 @@ vi.mock('$lib/stores/jobs', () => ({
 vi.mock('$lib/stores/toast', () => ({ addToast: (...args: unknown[]) => addToast(...args) }));
 
 import LoraDetail from './LoraDetail.svelte';
+import loraDetailSource from './LoraDetail.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -136,6 +138,7 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	clearComponentStyles();
 });
 
 describe('LoraDetail', () => {
@@ -303,8 +306,7 @@ describe('LoraDetail', () => {
 		expect(target.textContent).toContain('Training cancelled');
 	});
 
-	it('renders the complete server queue-limit detail inline and keeps retry available at 375 px', async () => {
-		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+	it('wraps the complete server queue-limit detail without truncation in a 375 px container', async () => {
 		const detail =
 			'Training queue is full\n2 trainings are already waiting. Try again when one training starts or finishes.';
 		trainLora.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras/l1/train'));
@@ -325,6 +327,15 @@ describe('LoraDetail', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.training-error')?.textContent).toBe(detail)
 		);
+		target.style.width = '375px';
+		const trainingError = target.querySelector<HTMLElement>('.training-error');
+		if (!trainingError) throw new Error('Expected inline training error');
+		injectComponentStyles(loraDetailSource, 'LoraDetail.svelte', trainingError);
+		const errorStyle = getComputedStyle(trainingError);
+		expect(errorStyle.overflowWrap).toBe('anywhere');
+		expect(errorStyle.whiteSpace).toBe('pre-line');
+		expect(errorStyle.overflow).not.toBe('hidden');
+		expect(errorStyle.textOverflow).not.toBe('ellipsis');
 		expect(target.querySelector('.banner.error')?.textContent).toContain(
 			'The worker restarted before epoch 31 could finish.'
 		);

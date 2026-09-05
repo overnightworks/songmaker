@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/fetch';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mocks = vi.hoisted(() => ({
 	loadLoras: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('$lib/stores/toast', async (importOriginal) => {
 });
 
 import VoicesPage from './+page.svelte';
+import voicesPageSource from './+page.svelte?raw';
 import { loras, lorasError, lorasLoading } from '$lib/stores/loras';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -57,6 +59,7 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	clearComponentStyles();
 });
 
 describe('voices page', () => {
@@ -196,12 +199,12 @@ describe('voices page', () => {
 		expect(reloadedTarget.querySelector<HTMLButtonElement>('.train-btn')).not.toBeDisabled();
 	});
 
-	it('keeps the full voice-limit detail visible at 375 px', async () => {
-		Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+	it('wraps the full voice-limit detail without truncation in a 375 px container', async () => {
 		const detail =
 			'Could not create voice\nYou have reached the limit of 10 voices. Delete a voice before creating another.';
 		mocks.createLora.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras'));
 		const target = document.createElement('div');
+		target.style.width = '375px';
 		document.body.append(target);
 		mounted = mount(VoicesPage, { target });
 		await tick();
@@ -218,6 +221,14 @@ describe('voices page', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="alert"]')?.textContent).toBe(detail)
 		);
+		const createError = target.querySelector<HTMLElement>('.create-error');
+		if (!createError) throw new Error('Expected inline create error');
+		injectComponentStyles(voicesPageSource, '+page.svelte', createError);
+		const errorStyle = getComputedStyle(createError);
+		expect(errorStyle.overflowWrap).toBe('anywhere');
+		expect(errorStyle.whiteSpace).toBe('pre-line');
+		expect(errorStyle.overflow).not.toBe('hidden');
+		expect(errorStyle.textOverflow).not.toBe('ellipsis');
 		expect(target.querySelector<HTMLButtonElement>('.create-panel .primary')?.textContent).toBe(
 			'Create'
 		);
