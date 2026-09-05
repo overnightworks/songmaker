@@ -121,7 +121,7 @@ describe('CollectionHeader', () => {
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
-	it('lists playlist entries: Share, Save offline, Rename, Delete — no Cover or Add to playlist', async () => {
+	it('lists playlist cover actions alongside its existing actions', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
 		const target = await render(props);
 		const menu = await openMenu(target);
@@ -129,7 +129,7 @@ describe('CollectionHeader', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
+		expect(items).toEqual(['Upload…', 'Save offline', 'Rename', 'Delete playlist']);
 	});
 
 	it('shares via the embedded ShareButton and copies the link, without duplicating the logic', async () => {
