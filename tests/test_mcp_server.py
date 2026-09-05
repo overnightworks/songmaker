@@ -21,7 +21,7 @@ from songmaker_cli.mcp_server import auth, server, tools
 from songmaker_cli.middleware.auth import AuthenticatedUser
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "mcp.db")
     session = factory()
@@ -29,7 +29,7 @@ def db_session(tmp_path: Path) -> Session:
     session.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_test_db(tmp_path / "mcp_e2e.db")
 
@@ -275,16 +275,27 @@ def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     assert stored.slug == "twin-2"
 
 
-def test_update_lyrics_in_place_when_no_generations(db_session: Session):
+def test_update_lyrics_always_creates_a_new_version_and_preserves_existing_take(
+    db_session: Session,
+):
     owner_id, _, _, song_id, version_id = _seed(db_session)
+    db_session.add(Generation(
+        id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
+        mp3_path="p/g1.mp3",
+    ))
+    db_session.commit()
     owner = _owner(db_session, owner_id)
     result = tools.tool_update_song_lyrics(
         db_session, owner, song_id=song_id, lyrics="brand new lyric",
     )
     assert result.song.current_lyrics == "brand new lyric"
-    # No new version — updated in place (no generations existed).
-    assert len(result.song.versions) == 1
-    assert result.song.latest_version_id == version_id
+    assert len(result.song.versions) == 2
+    assert result.song.latest_version_id != version_id
+    assert result.message == "Updated lyrics in v2"
+    existing_take = db_session.query(Generation).filter_by(id="gen1").one()
+    assert existing_take.version_id == version_id
+    original_version = db_session.query(Version).filter_by(id=version_id).one()
+    assert original_version.lyrics == "verse one"
 
 
 def test_update_lyrics_creates_new_version_when_generated(db_session: Session):
@@ -343,7 +354,7 @@ def test_update_style_with_duration(db_session: Session):
 
 
 def test_rename_song(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_rename_song(
         db_session, owner, song_id=song_id, title="Renamed Track",
@@ -351,6 +362,9 @@ def test_rename_song(db_session: Session):
     assert result.song.title == "Renamed Track"
     stored = db_session.query(Song).filter_by(id=song_id).one()
     assert stored.slug == "renamed-track"
+    assert len(stored.versions) == 2
+    assert stored.latest_version.id != version_id
+    assert result.message == "Renamed song to 'Renamed Track' in v2"
 
 
 def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
@@ -443,7 +457,7 @@ def test_write_tools_block_other_users(db_session: Session):
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def e2e_setup(db_factory, monkeypatch):
     with db_factory() as session:
         owner_id, stranger_id, album_id, song_id, _ = _seed(session)
@@ -504,11 +518,12 @@ def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
 def test_e2e_write_rolled_back_on_access_denied(e2e_setup, db_factory, monkeypatch):
     srv, _, stranger_id, _, song_id = e2e_setup
     monkeypatch.setenv(auth.USER_ID_ENV, stranger_id)
+    call_tool = srv.call_tool(
+        "update_song_lyrics",
+        {"song_id": song_id, "lyrics": "hijack"},
+    )
     with pytest.raises(Exception):
-        asyncio.run(srv.call_tool(
-            "update_song_lyrics",
-            {"song_id": song_id, "lyrics": "hijack"},
-        ))
+        asyncio.run(call_tool)
     # Ensure no change landed.
     with db_factory() as session:
         song = session.query(Song).filter_by(id=song_id).one()
@@ -518,8 +533,9 @@ def test_e2e_write_rolled_back_on_access_denied(e2e_setup, db_factory, monkeypat
 def test_e2e_missing_env_var_fails(db_factory, monkeypatch):
     monkeypatch.delenv(auth.USER_ID_ENV, raising=False)
     srv = server.build_server(session_factory=db_factory)
+    call_tool = srv.call_tool("list_albums", {})
     with pytest.raises(Exception):
-        asyncio.run(srv.call_tool("list_albums", {}))
+        asyncio.run(call_tool)
 
 
 def test_e2e_list_albums_returns_structured(e2e_setup):

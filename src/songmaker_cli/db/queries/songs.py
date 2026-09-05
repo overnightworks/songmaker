@@ -373,7 +373,14 @@ def update_song(
     audio_duration: int | None = None,
     key_scale: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
+    force_new_version: bool = False,
 ) -> Version:
+    """Apply song content changes, creating a version when required.
+
+    Editors keep a generation-free draft in place. Co-writer writes pass
+    ``force_new_version`` so each tool invocation leaves an immutable
+    snapshot for existing and future takes.
+    """
     song = get_song(session, song_id)
     if not song:
         raise ValueError(f"Song not found: {song_id}")
@@ -389,16 +396,40 @@ def update_song(
     else:
         new_gen_params = generation_params or None
 
-    new_lyrics = lyrics if lyrics is not None else (prev.lyrics if prev else "")
-    new_prompt = prompt if prompt is not None else (prev.prompt if prev else "")
-    new_bpm = bpm if bpm is not None else (prev.bpm if prev else 0)
-    new_audio_duration = (
-        audio_duration if audio_duration is not None
-        else (prev.audio_duration if prev else 180)
-    )
-    new_key_scale = (
-        key_scale if key_scale is not None else (prev.key_scale if prev else "")
-    )
+    if lyrics is not None:
+        new_lyrics = lyrics
+    elif prev:
+        new_lyrics = prev.lyrics
+    else:
+        new_lyrics = ""
+
+    if prompt is not None:
+        new_prompt = prompt
+    elif prev:
+        new_prompt = prev.prompt
+    else:
+        new_prompt = ""
+
+    if bpm is not None:
+        new_bpm = bpm
+    elif prev:
+        new_bpm = prev.bpm
+    else:
+        new_bpm = 0
+
+    if audio_duration is not None:
+        new_audio_duration = audio_duration
+    elif prev:
+        new_audio_duration = prev.audio_duration
+    else:
+        new_audio_duration = 180
+
+    if key_scale is not None:
+        new_key_scale = key_scale
+    elif prev:
+        new_key_scale = prev.key_scale
+    else:
+        new_key_scale = ""
 
     creative_changed = prev is None or (
         new_lyrics != prev.lyrics
@@ -408,7 +439,7 @@ def update_song(
         or new_key_scale != prev.key_scale
     )
 
-    if prev and (not prev.generations or not creative_changed):
+    if prev and not force_new_version and (not prev.generations or not creative_changed):
         prev.lyrics = new_lyrics
         prev.prompt = new_prompt
         prev.bpm = new_bpm
@@ -430,7 +461,7 @@ def update_song(
         key_scale=new_key_scale,
         generation_params=new_gen_params,
     )
-    session.add(version)
+    song.versions.append(version)
     session.flush()
     log.info("Updated song %s → v%d", song_id, next_num)
     return version
@@ -505,20 +536,32 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
-def rename_song(session: Session, song_id: str, title: str, slug: str) -> Song:
+def rename_song(
+    session: Session,
+    song_id: str,
+    title: str,
+    slug: str,
+    *,
+    force_new_version: bool = False,
+) -> Song:
     """Rename a song, moving its slug along in the same flush.
 
     ``slug`` (already reserved via unique_song_slug()) changes together
     with the title so both change atomically in one flush — setting it in
     a later, separate flush would briefly leave the row on its old slug,
-    next to whatever sibling has just claimed it.
+    next to whatever sibling has just claimed it. Co-writer and editor title
+    writes pass ``force_new_version`` to route their snapshot through
+    ``update_song`` too.
     """
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
     song.title = title
     song.slug = slug
-    session.flush()
+    if force_new_version:
+        update_song(session, song_id, force_new_version=True)
+    else:
+        session.flush()
     log.info("Renamed song %s to %r", song_id, title)
     return song
 

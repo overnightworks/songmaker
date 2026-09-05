@@ -286,6 +286,29 @@ def test_update_song(seeded_session: Session) -> None:
     assert ver.lyrics == "new lyrics"
 
 
+def test_update_song_force_new_version_keeps_a_generation_free_draft_immutable(
+    db_session: Session,
+) -> None:
+    db_session.add(Album(id="album", title="Album", artist="Artist"))
+    db_session.add(Song(id="song", title="Song", album_id="album", slug="song"))
+    db_session.add(Version(
+        id="v1", song_id="song", version_number=1, lyrics="draft lyrics",
+    ))
+    db_session.commit()
+
+    version = update_song(
+        db_session, "song", lyrics="co-written lyrics", force_new_version=True,
+    )
+
+    assert version.version_number == 2
+    song = get_song(db_session, "song")
+    assert song is not None
+    assert [(item.version_number, item.lyrics) for item in song.versions] == [
+        (1, "draft lyrics"),
+        (2, "co-written lyrics"),
+    ]
+
+
 def test_update_song_sets_updated_at(seeded_session: Session) -> None:
     song = get_song(seeded_session, "s1")
     assert song is not None

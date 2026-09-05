@@ -43,10 +43,12 @@ from songmaker_cli.db.models import (
     AuditLog,
     AvailableModel,
     ChatMessage,
+    Generation,
     Job,
     RateLimitSetting,
     Song,
     User,
+    Version,
 )
 from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
@@ -933,6 +935,41 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
         song = session.query(Song).filter_by(id="s1").one()
         assert song.title == "Renamed Track"
         assert song.slug == "renamed-track"
+
+
+def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_client):
+    """The Grok and Codex executor takes the same version-writing path as MCP."""
+    _, factory = admin_client
+    user = AuthenticatedUser(
+        id="u-test", username="u-u-test", role="admin", is_active=True,
+    )
+    with factory() as session:
+        original = Version(
+            id="v1", song_id="s1", version_number=1, lyrics="old lyrics",
+        )
+        session.add(original)
+        session.flush()
+        session.add(Generation(
+            id="g1", song_id="s1", version_id=original.id, generation_number=1,
+            mp3_path="u-test/g1.mp3",
+        ))
+        session.commit()
+
+    with factory() as session:
+        result, is_error = execute_cowriter_tool(
+            session, user, "update_song_lyrics",
+            {"song_id": "s1", "lyrics": "new lyrics"},
+        )
+
+    assert is_error is False
+    assert "Updated lyrics in v2" in result
+    with factory() as session:
+        song = session.query(Song).filter_by(id="s1").one()
+        assert [(version.version_number, version.lyrics) for version in song.versions] == [
+            (1, "old lyrics"),
+            (2, "new lyrics"),
+        ]
+        assert session.query(Generation).filter_by(id="g1").one().version_id == "v1"
 
 
 def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client):

@@ -78,12 +78,12 @@ def _pg_session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=engine)
 
 
-@pytest.fixture()
+@pytest.fixture
 def sqlite_factory(tmp_path: Path) -> sessionmaker[Session]:
     return init_test_db(tmp_path / "test.db")
 
 
-@pytest.fixture()
+@pytest.fixture
 def pg_factory():
     if not TEST_PG_URL.startswith("postgresql"):
         pytest.skip("No PostgreSQL URL")
