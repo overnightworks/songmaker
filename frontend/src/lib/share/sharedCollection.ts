@@ -44,6 +44,7 @@ export interface SharedCollectionView {
 	albumTitle: string | null;
 	year: string | null;
 	cover: AlbumCoverUrls | null;
+	playlistCovers?: AlbumCoverUrls[];
 	tracks: SharedTrack[];
 }
 
@@ -79,6 +80,7 @@ export function fromSharedAlbum(payload: SharedAlbumPayload): SharedCollectionVi
 		albumTitle: null,
 		year: payload.year || null,
 		cover: payload.cover ?? null,
+		playlistCovers: [],
 		tracks: payload.songs.map((song) => sharedTrack(song.id, song.title, null, song))
 	};
 }
@@ -90,7 +92,8 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		artist: '',
 		albumTitle: null,
 		year: null,
-		cover: null,
+		cover: payload.cover ?? null,
+		playlistCovers: payload.album_covers,
 		tracks: payload.entries.map((entry) =>
 			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry)
 		)
@@ -107,6 +110,7 @@ export function fromSharedSong(payload: SharedSongPayload): SharedCollectionView
 		albumTitle: payload.album_title || null,
 		year: null,
 		cover: payload.album_cover ?? null,
+		playlistCovers: [],
 		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }
@@ -119,6 +123,7 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 		albumTitle: payload.album_title || null,
 		year: null,
 		cover: payload.album_cover ?? null,
+		playlistCovers: [],
 		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }
