@@ -34,7 +34,7 @@ _USER_A = "u-a"
 _USER_B = "u-b"
 
 
-@pytest.fixture()
+@pytest.fixture
 def session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "loras.db")
     s = factory()

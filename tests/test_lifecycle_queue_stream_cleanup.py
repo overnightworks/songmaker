@@ -17,7 +17,7 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.lifecycle import BackgroundLoopRegistry
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(tmp_path: Path) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

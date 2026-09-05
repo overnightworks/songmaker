@@ -21,7 +21,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries import conversations as q
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "conv.db")
     session = factory()

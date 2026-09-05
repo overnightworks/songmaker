@@ -20,7 +20,7 @@ _TRUSTED_PEER = "172.18.0.1"
 _UNTRUSTED_PEER = "203.0.113.50"
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
     yield client

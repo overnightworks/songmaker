@@ -43,7 +43,7 @@ def _fake_user(user_id: str, username: str, role: str):
     return lambda: user
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -76,7 +76,7 @@ def client(tmp_path: Path) -> TestClient:
     yield TestClient(app)
 
 
-@pytest.fixture()
+@pytest.fixture
 def unauthed_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -121,7 +121,7 @@ def _whisper_cues_payload(word_count: int) -> list[dict]:
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def gzip_client(tmp_path: Path) -> TestClient:
     """Same wiring as `client`, plus the real gzip middleware under test.
 

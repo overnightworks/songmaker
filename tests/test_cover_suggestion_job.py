@@ -104,7 +104,7 @@ def _image_event_records(codex_home: Path) -> list[dict]:
     return [json.loads(line) for line in _image_event_stream(codex_home).splitlines()]
 
 
-@pytest.fixture()
+@pytest.fixture
 def cover_job(tmp_path: Path):
     factory = init_test_db(tmp_path / "songmaker.db")
     with factory() as session:

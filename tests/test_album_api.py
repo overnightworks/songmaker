@@ -84,7 +84,7 @@ def _seed_pick_scenarios(session) -> None:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def picks_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_pick_scenarios)
     login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
@@ -217,7 +217,7 @@ def _seed_metadata_scenarios(session) -> None:
     ))
 
 
-@pytest.fixture()
+@pytest.fixture
 def metadata_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_metadata_scenarios)
     login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
@@ -324,7 +324,7 @@ def _seed_archive_scenarios(session) -> None:
     session.add(Album(id="already-archived", title="Already Archived", artist="A"))
 
 
-@pytest.fixture()
+@pytest.fixture
 def archive_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_archive_scenarios)
     login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
@@ -466,7 +466,7 @@ def test_archived_albums_share_link_stays_functional(archive_client) -> None:
 # ── Slug overflow (#271) ─────────────────────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def creation_client(tmp_path: Path):
     def _seed(session) -> None:
         session.add(User(

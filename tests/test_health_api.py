@@ -265,7 +265,7 @@ def _get_health(client, *, gpu_healthy: bool | None) -> dict:
     return resp.json()
 
 
-@pytest.fixture()
+@pytest.fixture
 def health_client(tmp_path, mock_arq_pool):
     client, _ = make_test_app(tmp_path, seed_db=_seed_one_worker)
     with client:

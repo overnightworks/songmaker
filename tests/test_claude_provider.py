@@ -91,7 +91,7 @@ class _IncrementingMonotonicClock:
         return current
 
 
-@pytest.fixture()
+@pytest.fixture
 def incrementing_monotonic_clock(monkeypatch: pytest.MonkeyPatch) -> _IncrementingMonotonicClock:
     clock = _IncrementingMonotonicClock(start=100.0, step=0.01)
     monkeypatch.setattr(provider.time, "monotonic", clock)

@@ -32,7 +32,7 @@ def _auth(user_id: str = USER_A, role: str = "user") -> AuthenticatedUser:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:

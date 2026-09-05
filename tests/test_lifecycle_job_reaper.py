@@ -44,7 +44,7 @@ from songmaker_cli.worker_liveness import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(tmp_path: Path) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

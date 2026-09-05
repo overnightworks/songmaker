@@ -65,12 +65,12 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded(db_factory, tmp_path: Path) -> dict:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -404,7 +404,7 @@ def test_lora_training_model_mode_error_types_fit_the_job_column() -> None:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_clock():
     class FakeClock:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)

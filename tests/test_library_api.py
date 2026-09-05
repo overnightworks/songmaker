@@ -166,24 +166,24 @@ def _seed_library(session) -> None:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def library_ctx(tmp_path: Path) -> tuple[object, object]:
     return _library_env(tmp_path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def alice(library_ctx: tuple[object, object]) -> TestClient:
     _factory, ctx = library_ctx
     return _client_for(ctx, USER_A)
 
 
-@pytest.fixture()
+@pytest.fixture
 def bob(library_ctx: tuple[object, object]) -> TestClient:
     _factory, ctx = library_ctx
     return _client_for(ctx, USER_B)
 
 
-@pytest.fixture()
+@pytest.fixture
 def admin(library_ctx: tuple[object, object]) -> TestClient:
     _factory, ctx = library_ctx
     return _client_for(ctx, ADMIN_ID, role="admin")

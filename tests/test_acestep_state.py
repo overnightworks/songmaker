@@ -36,14 +36,14 @@ from songmaker_cli.acestep_state import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def event_loop():
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def redis():
     return fakeredis.aioredis.FakeRedis()
 

@@ -97,7 +97,7 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session(tmp_path: Path) -> Session:
     factory = init_db(tmp_path / "test.db")
     session = factory()
@@ -105,7 +105,7 @@ def db_session(tmp_path: Path) -> Session:
     session.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded_session(db_session: Session) -> Session:
     album = Album(id="test", title="Test Album", artist="TestArtist")
     db_session.add(album)

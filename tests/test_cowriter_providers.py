@@ -162,7 +162,7 @@ def _seed(session, user_id: str) -> None:
     session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
