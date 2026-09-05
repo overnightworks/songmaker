@@ -47,6 +47,18 @@ describe('handleFocusTrapKeydown', () => {
 		container.remove();
 	});
 
+	it('leaves an Escape event consumed by a descendant alone', () => {
+		const container = buildContainer();
+		const onEscape = vi.fn();
+		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+		event.preventDefault();
+
+		handleFocusTrapKeydown(container, event, onEscape);
+
+		expect(onEscape).not.toHaveBeenCalled();
+		container.remove();
+	});
+
 	it('wraps Tab from the last element back to the first', () => {
 		const container = buildContainer();
 		const last = requireElement<HTMLElement>(container, '#last');
@@ -54,6 +66,20 @@ describe('handleFocusTrapKeydown', () => {
 		const event = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
 		handleFocusTrapKeydown(container, event, vi.fn());
 		expect(document.activeElement?.id).toBe('first');
+		container.remove();
+	});
+
+	it('includes an enabled search field in the tab order', () => {
+		const container = document.createElement('div');
+		container.innerHTML = '<input type="search"><button>Last</button>';
+		document.body.append(container);
+		const last = requireElement<HTMLElement>(container, 'button');
+		last.focus();
+		const event = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+
+		handleFocusTrapKeydown(container, event, vi.fn());
+
+		expect(document.activeElement).toBe(requireElement(container, 'input'));
 		container.remove();
 	});
 

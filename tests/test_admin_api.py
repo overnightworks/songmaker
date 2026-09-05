@@ -9,7 +9,7 @@ from conftest import make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.queries import create_user
+from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.middleware import SESSION_COOKIE
 
 
@@ -62,6 +62,46 @@ def test_list_users(client: TestClient) -> None:
     assert len(users) == 1
     assert users[0]["username"] == "admin"
     assert "password_hash" not in users[0]
+
+
+def test_admin_lists_every_musicians_active_voice(client: TestClient) -> None:
+    _login_as_admin(client)
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        musician = create_user(session, "musician", hash_password("user123456"))
+        warm_tenor = create_user_lora(session, musician.id, "Warm Tenor", "warm-tenor")
+        dry_spoken_word = create_user_lora(
+            session, musician.id, "Dry Spoken Word", "dry-spoken-word",
+        )
+        warm_tenor_id = warm_tenor.id
+        dry_spoken_word_id = dry_spoken_word.id
+        session.commit()
+
+    response = client.get("/api/admin/voices")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": dry_spoken_word_id,
+            "name": "Dry Spoken Word",
+            "owner_username": "musician",
+            "status": "draft",
+        },
+        {
+            "id": warm_tenor_id,
+            "name": "Warm Tenor",
+            "owner_username": "musician",
+            "status": "draft",
+        },
+    ]
+
+
+def test_non_admin_cannot_list_voices(client: TestClient) -> None:
+    _login_as_user(client)
+
+    response = client.get("/api/admin/voices")
+
+    assert response.status_code == 403
 
 
 # -- Create user --------------------------------------------------------------

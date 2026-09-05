@@ -158,7 +158,7 @@ describe('the library workspace', () => {
 		expect(target.querySelector('.library-root')).not.toBeNull();
 	});
 
-	it('keeps the album row above both a song and its take', async () => {
+	it('starts song and take content at the editor header without a sibling collection row', async () => {
 		streamLive();
 		openCollection.set({ kind: 'album', id: 'anfield' });
 		songList.set([song()]);
@@ -166,11 +166,17 @@ describe('the library workspace', () => {
 		const target = renderWorkspace();
 		await tick();
 
-		expect(target.querySelector('.library-row-scrim')).not.toBeNull();
-		expect(target.querySelector('[aria-label="Collapse albums"]')).not.toBeNull();
+		const workspace = target.querySelector('.main');
+		expect(workspace?.firstElementChild).toHaveClass('detail-panel');
+		expect(workspace?.querySelector('.detail-header')).not.toBeNull();
+		expect(workspace?.querySelector('[aria-label="Breadcrumb"]')).not.toBeNull();
+		expect(workspace?.querySelector('.library-row-scrim')).toBeNull();
 
 		selectedGenerationId.set('take-1');
 		await tick();
-		expect(target.querySelector('.library-row-scrim')).not.toBeNull();
+		expect(workspace?.firstElementChild).toHaveClass('detail-panel');
+		expect(workspace?.querySelector('.detail-header')).not.toBeNull();
+		expect(workspace?.querySelector('[aria-label="Breadcrumb"]')).not.toBeNull();
+		expect(workspace?.querySelector('.library-row-scrim')).toBeNull();
 	});
 });

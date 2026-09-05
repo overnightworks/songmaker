@@ -58,7 +58,7 @@ async function openRail(page: Page, isMobile: boolean) {
 	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
-test('a fresh album cover reaches wall, row, rail, and every share page at desktop and 375 px', async ({
+test('a fresh album cover reaches wall, album header, rail, and every share page at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
@@ -98,7 +98,7 @@ test('a fresh album cover reaches wall, row, rail, and every share page at deskt
 	await expect(wallTile.locator('.tile-cover img')).toHaveAttribute('alt', `Album ${albumTitle}`);
 
 	await page.goto(`/album/${album.id}`);
-	await expect(page.locator('.row-tile.active .tile-cover img')).toBeVisible();
+	await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
 	const rail = await openRail(page, Boolean(isMobile));
 	const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${RAIL_LIBRARY_LABEL}`) });
 	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();

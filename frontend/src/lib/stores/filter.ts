@@ -102,6 +102,12 @@ export interface ActiveFilter {
 }
 
 export const sortKey = writable('lyrical_coherence');
+// The rail owns the only visible library search field. Its query deliberately
+// stays in memory: returning to a page must restore navigation, not a stale
+// narrowed tree.
+export const railTreeQuery = writable('');
+// Retained for restoring existing library history until 2B moves the
+// server-search contract behind the rail field.
 export const searchQuery = writable('');
 export const activeFilters = writable<ActiveFilter[]>([]);
 
