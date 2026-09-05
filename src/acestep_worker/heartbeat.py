@@ -134,7 +134,7 @@ class HeartbeatLoop:
         if self._task is not None:
             try:
                 await self._task
-            except asyncio.CancelledError:  # NOSONAR: Shutdown accepts a cancelled heartbeat.
+            except asyncio.CancelledError:  # NOSONAR Shutdown accepts a cancelled heartbeat.
                 pass
             self._task = None
 
