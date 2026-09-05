@@ -342,7 +342,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The music worker selects the Codex CLI path only through the co-writer dispatch owner and never falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. The image command uses the fixed read-only image argv with Code Mode host enabled only for that run, no MCP servers, and web search disabled. Its streamed-event gate permits `image_gen` and exactly one measured `command_execution` start/completion pair that reads the bundled image skill; any other command or tool event fails the job with the fixed image-tool message. Pillow rewrites its exactly one accepted PNG as a metadata-free 1024×1024 RGB PNG. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
-All Codex text and cover CLI calls use one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps cover processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. Saturated Co-Writer calls return the named busy route error, and saturated cover jobs retain the musician-facing “Codex is busy. Try generating the cover again shortly.” error.
+All Codex text and cover CLI calls use one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps cover processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error, and saturated cover jobs retain the musician-facing “Codex is busy. Try generating the cover again shortly.” error.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
@@ -435,33 +435,32 @@ The host remains the only refresh owner: the mounted Codex document keeps
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
-Codex has two fixed one-turn commands. The tool-free Co-Writer command is
-`codex exec --json` with `--skip-git-repo-check`, `--ignore-user-config`,
-`--ignore-rules`, `--ephemeral`, `--disable code_mode_host`, `--disable
-code_mode`, `--disable code_mode_only`, `approval_policy="never"`,
+Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
+Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
+`codex exec resume`. Both command shapes apply `--skip-git-repo-check`,
+`--ignore-user-config`, `--ignore-rules`, `approval_policy="never"`,
 `mcp_servers={}`, disabled shell, unified-exec, browser, computer, multi-agent,
-image-generation, plugin, and hook features, and disabled web search in a
-read-only sandbox. The cover-image command also uses a
-read-only sandbox, but enables `code_mode_host` only for that image run and
-adds `web_search="disabled"`; its only permitted Code Mode command is the
-measured read of the bundled image skill. Each receives a private temporary
-working directory (which is deliberately not a Git repository), a stdin prompt
-rather than a prompt file, and the runner's secret-scrubbed environment, so
-`OPENAI_API_KEY` is never inherited. The Co-Writer JSONL gate permits only
-lifecycle observations, completed assistant text, and a completed turn with
-usage; it discards reasoning, aborts and refuses every reported command, MCP,
-web-search, or file-change item, and treats unknown or malformed items as
-`codex_cli_stream_protocol_error`. Only a completed `error` item is a named CLI
-failure when no completed turn follows; an error item that is started or updated
-remains a protocol failure. Event payloads, prompts, and stderr are not logged;
-failure logging contains only the return code and stderr length.
-`approval_policy="never"` means auto-approval within the sandbox, not that
-tools cannot run: the JSONL gate refuses a tool only after Codex reports the
-item, so these flags are defense in depth rather than the sole execution or
-network boundary. The resumable tool-loop transport uses the same isolation,
-requires a UUID from `thread.started` before it can resume, and runs from an
-empty `work/` sibling of its private `codex-home/`; prompts are passed only on
-stdin.
+image-generation, plugin, hook, and Code Mode features, and disabled web search.
+They deliberately omit `--ephemeral`: the CLI's persisted, server-issued thread
+is required for the next `resume` round. The transport runs from an empty private
+`work/` directory beside its private `codex-home/`, requires a UUID from
+`thread.started` before it can resume, and passes prompts only on stdin. The
+cover-image command also uses a read-only sandbox, but enables `code_mode_host`
+only for that image run and adds `web_search="disabled"`; its only permitted Code
+Mode command is the measured read of the bundled image skill. Each receives the
+runner's secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited.
+
+The Co-Writer JSONL gate refuses every native Codex command, MCP, web-search,
+file-change, or other non-text tool item. Completed assistant text is parsed as
+Songmaker's textual tool protocol; the shared server loop executes the owned
+Songmaker operation and supplies its result in the next CLI resume round. Unknown
+or malformed items are `codex_cli_stream_protocol_error`. Only a completed
+`error` item is a named CLI failure when no completed turn follows; an error item
+that is started or updated remains a protocol failure. Event payloads, prompts,
+and stderr are not logged; failure logging contains only the return code and
+stderr length. `approval_policy="never"` means auto-approval within the sandbox,
+not that tools cannot run, so the transport's reported-event gate and the shared
+tool loop remain the execution boundary.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
@@ -635,7 +634,7 @@ the `sed -n '1,240p' CODEX_HOME/skills/.system/imagegen/SKILL.md` command,
 that cwd in both events, and completed exit code 0. Any other command, cwd,
 file change, MCP call, web search, collaboration or unknown event requests
 abort and is reported as `ImageToolBlockedError`; the process is reaped before
-the route returns. The tool-free Co-Writer text turn keeps Code Mode disabled.
+the route returns. Every Co-Writer tool-loop round keeps Code Mode disabled.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and

@@ -287,6 +287,7 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
     ("provider", "route", "tools_available"),
     [
         ("grok", "cli", True),
+        ("codex", "cli", True),
         ("grok", "api", True),
         ("claude", "api", True),
     ],
@@ -305,7 +306,11 @@ def test_chat_turn_uses_the_selected_provider_route_capability(
         set_cowriter_settings(
             session,
             provider,
-            "claude-opus-4-6" if provider == "claude" else "grok-4.6",
+            (
+                "claude-opus-4-6" if provider == "claude"
+                else "gpt-5.6" if provider == "codex"
+                else "grok-4.6"
+            ),
             routes={
                 "claude": "api" if provider == "claude" else "cli",
                 "grok": route,
@@ -328,7 +333,7 @@ def test_chat_turn_uses_the_selected_provider_route_capability(
     assert isinstance(prompt, str)
     assert (COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS in prompt) is tools_available
     assert (COWRITER_TEXT_ONLY_INSTRUCTIONS in prompt) is (not tools_available)
-    if provider == "grok" and route == "cli":
+    if provider in {"grok", "codex"} and route == "cli":
         assert "<songmaker_tool_call>" in prompt
         assert "update_song_lyrics" in prompt
 
