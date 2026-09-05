@@ -233,12 +233,13 @@ def test_shared_queue_manifest_rejects_resources_that_no_longer_exist(scope: str
         total_duration=0,
         tracks=[],
     )
+    db = MagicMock()
     with (
         patch("songmaker_cli.sharing_api.get_playlist_by_slug", return_value=None),
         patch("songmaker_cli.sharing_api.get_album_by_slug", return_value=None),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            _validate_shared_queue_manifest(manifest, MagicMock())
+            _validate_shared_queue_manifest(manifest, db)
 
     expected_detail = "Not found" if scope != "unexpected" else "Queue stream not found"
     assert exc_info.value.status_code == 404
@@ -256,6 +257,7 @@ def test_shared_queue_manifest_rejects_resources_that_no_longer_exist(scope: str
 )
 def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
     import asyncio
+    from functools import partial
     from unittest.mock import MagicMock, patch
 
     from fastapi import HTTPException
@@ -270,6 +272,16 @@ def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
     request = MagicMock()
     db = MagicMock()
     ctx = MagicMock()
+    if endpoint == "album-stream":
+        action = partial(get_shared_album_stream, "missing", request, db, ctx)
+    elif endpoint == "song-cover":
+        coroutine = get_shared_song_cover("missing", request, db=db, ctx=ctx)
+        action = partial(asyncio.run, coroutine)
+    elif endpoint == "playlist-cover":
+        coroutine = get_shared_playlist_cover("missing", request, db=db, ctx=ctx)
+        action = partial(asyncio.run, coroutine)
+    else:
+        action = partial(get_shared_playlist_stream, "missing", request, db, ctx)
     with (
         patch("songmaker_cli.sharing_api._check_shared_rate_limit"),
         patch("songmaker_cli.sharing_api._check_shared_stream_rate_limit"),
@@ -278,14 +290,7 @@ def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
         patch("songmaker_cli.sharing_api.get_playlist_by_slug", return_value=None),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            if endpoint == "album-stream":
-                get_shared_album_stream("missing", request, db, ctx)
-            elif endpoint == "song-cover":
-                asyncio.run(get_shared_song_cover("missing", request, db=db, ctx=ctx))
-            elif endpoint == "playlist-cover":
-                asyncio.run(get_shared_playlist_cover("missing", request, db=db, ctx=ctx))
-            else:
-                get_shared_playlist_stream("missing", request, db, ctx)
+            action()
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Not found"
