@@ -240,6 +240,7 @@ class Playlist(ShareMixin, Base):
         String(PLAYLIST_SLUG_MAX_LENGTH), unique=True, index=True,
         default="", server_default="",
     )
+    cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

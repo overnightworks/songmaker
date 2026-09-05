@@ -574,6 +574,7 @@ export interface PlaylistDetailItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	cover?: AlbumCoverUrls | null;
 	album_covers: AlbumCoverUrls[];
 	created_at: string;
 	entries: PlaylistEntryItem[];
@@ -604,6 +605,7 @@ export interface PlaylistItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	cover?: AlbumCoverUrls | null;
 	album_covers: AlbumCoverUrls[];
 	created_at: string;
 }

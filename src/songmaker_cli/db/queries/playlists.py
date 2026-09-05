@@ -126,6 +126,18 @@ def update_playlist(session: Session, playlist_id: str, title: str, slug: str) -
     return playlist
 
 
+def set_playlist_cover_key(
+    session: Session, playlist_id: str, cover_key: str | None,
+) -> Playlist:
+    playlist = get_playlist(session, playlist_id)
+    if not playlist:
+        raise ValueError(f"Playlist not found: {playlist_id}")
+    playlist.cover_key = cover_key
+    session.flush()
+    log.info("Set playlist %s cover_key=%r", playlist_id, cover_key)
+    return playlist
+
+
 def _next_position(session: Session, playlist_id: str) -> int:
     max_pos = (
         session.query(PlaylistEntry.position)

@@ -2642,6 +2642,33 @@ def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Pat
     assert "last_played_at" not in columns
 
 
+def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.889dfb248896_add_playlist_cover_key",
+    )
+    db_path = tmp_path / "playlist-cover-key.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"]: column for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert columns["cover_key"]["nullable"] is True
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"] for column in inspect(engine).get_columns("playlists")}
+    engine.dispose()
+    assert "cover_key" not in columns
+
+
 # ── Claude model settings ───────────────────────────────────────────
 
 
@@ -2986,9 +3013,8 @@ def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path:
     from alembic import command
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import IntegrityError
-    from sqlalchemy.orm import sessionmaker
 
-    from songmaker_cli.db.models import PLAYLIST_SLUG_MAX_LENGTH, Playlist
+    from songmaker_cli.db.models import PLAYLIST_SLUG_MAX_LENGTH
 
     url = f"sqlite:///{tmp_path / 'playlist_slugs.db'}"
     cfg = _alembic_config(url)
@@ -3025,11 +3051,16 @@ def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(tmp_path:
     assert len(cjk_slug) <= PLAYLIST_SLUG_MAX_LENGTH
 
     engine = create_engine(url)
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add(Playlist(id="p4", title="Dup", slug="favorites"))
+    with engine.begin() as conn:
         with pytest.raises(IntegrityError):
-            session.commit()
+            conn.execute(
+                text(
+                    "INSERT INTO playlists "
+                    "(id, title, slug, is_shared, created_at, updated_at) "
+                    "VALUES ('p4', 'Dup', 'favorites', 0, CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                )
+            )
     engine.dispose()
 
     command.downgrade(cfg, "c9d4a2f18e37")
