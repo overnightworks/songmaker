@@ -163,16 +163,18 @@ def test_malformed_call_shapes_are_named_protocol_errors(response):
     ],
 )
 def test_schema_violations_are_named_protocol_errors_before_execution(payload):
+    response = _call(payload)
     with pytest.raises(TextToolProtocolError) as raised:
-        parse_text_tool_response(_call(payload))
+        parse_text_tool_response(response)
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
 
 @pytest.mark.parametrize("name", ["delete_everything"])
 def test_unknown_tool_is_a_named_protocol_error_before_execution(name):
+    response = _call(f'{{"name":"{name}","arguments":{{}}}}')
     with pytest.raises(TextToolProtocolError) as raised:
-        parse_text_tool_response(_call(f'{{"name":"{name}","arguments":{{}}}}'))
+        parse_text_tool_response(response)
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 

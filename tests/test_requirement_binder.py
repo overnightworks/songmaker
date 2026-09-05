@@ -339,11 +339,10 @@ def test_git_state_allows_only_one_unstaged_candidate(
 )
 def test_binder_candidate_path_is_a_safe_writer_subset(tmp_path: Path, path: str) -> None:
     project, _base, content, _client = prepare_genesis(tmp_path)
+    client = FakeClient("0001", digest(content))
 
     with pytest.raises(binder.RequirementBinderError, match="safe requirement subset"):
-        binder.bind_requirement_revision(
-            project, path, 41, 1001, FakeClient("0001", digest(content))
-        )
+        binder.bind_requirement_revision(project, path, 41, 1001, client)
 
 
 def test_git_children_never_receive_the_github_token(

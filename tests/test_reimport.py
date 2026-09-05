@@ -164,9 +164,9 @@ def test_reimport_event_failure_rolls_back_and_removes_files(
             "songmaker_cli.reimport.create_generation_created_event",
             side_effect=RuntimeError("event write failed"),
         ),
-        pytest.raises(RuntimeError, match="event write failed"),
     ):
-        reimport_files(session, audio_dir, USER_ID, SONG_ID, mp3_file=mp3_src)
+        with pytest.raises(RuntimeError, match="event write failed"):
+            reimport_files(session, audio_dir, USER_ID, SONG_ID, mp3_file=mp3_src)
         session.rollback()
 
     with seeded_db() as session:

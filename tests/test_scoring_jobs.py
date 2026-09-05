@@ -147,7 +147,7 @@ def _fake_user(user_id: str, role: str = "admin"):
     return lambda: user
 
 
-@pytest.fixture()
+@pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",

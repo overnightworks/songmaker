@@ -24,7 +24,7 @@ from songmaker_cli.middleware import (
 _TEST_SECRET = b"a" * 64
 
 
-@pytest.fixture()
+@pytest.fixture
 def _db(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
@@ -67,7 +67,7 @@ def _build_auth_app(_db, redis=None):
     return app
 
 
-@pytest.fixture()
+@pytest.fixture
 def auth_app(_db) -> TestClient:
     """Minimal FastAPI app with auth dependency — no middleware stack."""
     app = _build_auth_app(_db)
@@ -97,7 +97,7 @@ def _make_user_and_session(
         return user_session.id
 
 
-@pytest.fixture()
+@pytest.fixture
 def create_session_id(_db):
     from functools import partial
     return partial(_make_user_and_session, _db)
