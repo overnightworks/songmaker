@@ -40,9 +40,7 @@
 		openLibraryWall,
 		clearGenerationSelection,
 		persistLibraryHistory,
-		detailTab,
 		selectNeighborSong,
-		switchTab,
 		pendingDirtyNavigation
 	} from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
@@ -114,9 +112,6 @@
 		EDITOR_SAVE_ACCESSIBLE_LABEL,
 		EDITOR_SAVE_LABEL,
 		EDITOR_SELECT_MODEL_TITLE,
-		EDITOR_TAB_TAKES_LABEL,
-		EDITOR_TAB_WRITE_LABEL,
-		EDITOR_TABS_LABEL,
 		EDITOR_UNSAVED_TITLE,
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
@@ -205,7 +200,6 @@
 			: []
 	);
 	const jobs = $derived($activeJobs);
-	const tab = $derived($detailTab);
 	const dirty = $derived($isDirty);
 	// song.version_count is a *count* of surviving versions, not the highest
 	// version number — the two diverge once any version has been deleted, so
@@ -770,49 +764,7 @@
 			{/if}
 
 			{#if compact}
-				<div class="editor-tabs" role="tablist" aria-label={EDITOR_TABS_LABEL}>
-					<button
-						type="button"
-						class="tab-btn"
-						data-hitbox="text"
-						role="tab"
-						aria-selected={tab === 'write'}
-						class:active={tab === 'write'}
-						onclick={() => switchTab('write')}
-					>
-						{EDITOR_TAB_WRITE_LABEL}
-					</button>
-					<button
-						type="button"
-						class="tab-btn"
-						data-hitbox="text"
-						role="tab"
-						aria-selected={tab === 'takes'}
-						class:active={tab === 'takes'}
-						onclick={() => switchTab('takes')}
-					>
-						{EDITOR_TAB_TAKES_LABEL} · {song.generations.length}
-					</button>
-				</div>
-				{#if tab === 'write'}
-					{@render writeSurface(song, false, compact, () => {})}
-				{:else}
-					{@render expiryDigest()}
-					<TakesList
-						{song}
-						loadStatus={takesStatus}
-						loadError={takesError}
-						{dirty}
-						{draftVersionNumber}
-						{latestVersionNumber}
-						{generateJob}
-						onagain={applyAgain}
-						onsource={setSourceFromGeneration}
-						onretry={() => {
-							if (song) void refreshTakes(song.id);
-						}}
-					/>
-				{/if}
+				{@render writeSurface(song, false, compact, () => {})}
 			{:else if $coWriterOpen}
 				{@render writeSurface(song, true, compact, onTurnCompleted)}
 			{:else}
@@ -1016,34 +968,6 @@
 	.save-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
-	}
-
-	.editor-tabs {
-		display: flex;
-		gap: 2px;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.tab-btn {
-		padding: 0.55rem 1.1rem;
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.87rem;
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-
-	.tab-btn:hover {
-		color: var(--text);
-	}
-
-	.tab-btn.active {
-		color: var(--primary);
-		border-bottom: 2px solid var(--primary);
 	}
 
 	/* One column by default, two where the editor has the room for two — never

@@ -120,6 +120,11 @@
 				value={$editLyrics}
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
+		{#if compact}
+			<div class="compact-takes">
+				<TakeStrip {song} />
+			</div>
+		{/if}
 	</div>
 {/if}
 
@@ -128,6 +133,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+
+	.compact-takes {
+		min-width: 0;
 	}
 
 	.edit-field {

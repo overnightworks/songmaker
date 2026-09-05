@@ -21,8 +21,6 @@ import {
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	EDITOR_TAB_WRITE_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
@@ -482,37 +480,16 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('.takes-column')).not.toBeNull();
 	});
 
-	it('shows Write | Takes tabs and only one at a time when compact, defaulting to Takes', async () => {
+	it('shows the take strip in Write on compact layouts, with no second takes list', async () => {
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
-		const tablist = target.querySelector('[role="tablist"]');
-		expect(tablist?.textContent).toContain(EDITOR_TAB_WRITE_LABEL);
-		expect(tablist?.textContent).toContain(EDITOR_TAB_TAKES_LABEL);
 		expect(target.querySelector('.editor-columns')).toBeNull();
-		expect(get(detailTab)).toBe('takes');
-		expect(target.querySelector('.lyrics-area')).toBeNull();
-		expect(target.querySelector('.takes-list, .empty')).not.toBeNull();
-
-		clickNamed(target, EDITOR_TAB_WRITE_LABEL);
-		await tick();
-		expect(get(detailTab)).toBe('write');
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
 		expect(target.querySelector('.takes-list')).toBeNull();
+		expect(target.querySelector('.take-strip')).not.toBeNull();
+		expect(target.querySelector('[role="tablist"]')).toBeNull();
 	});
 
-	it('sizes the Write | Takes tabs to the frequent hitbox on a coarse pointer', async () => {
-		// #163/6: the tabs are how a phone moves through the editor at all.
-		injectHitboxStyles();
-		stubLibraryMedia({ narrow: false, compact: true });
-		const target = await renderView();
-		setPointer('coarse');
-
-		const tabs = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-		expect(tabs).toHaveLength(2);
-		for (const tab of tabs) {
-			expect(minHeightPx(tab, tab.textContent ?? 'tab')).toBe(HITBOX_FREQUENT_PX);
-		}
-	});
 });
 
 describe('SongDetailView adding a take to a playlist', () => {
@@ -1015,15 +992,15 @@ describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
 });
 
 describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
-	it('keeps the Write | Takes tabs underneath instead of replacing them', async () => {
+	it('keeps the Write surface underneath instead of replacing it', async () => {
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
-		expect(target.querySelector('.editor-tabs')).not.toBeNull();
+		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
 
 		coWriterOpen.set(true);
 		await tick();
 
-		expect(target.querySelector('.editor-tabs')).not.toBeNull();
+		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
 		expect(target.querySelector('.sheet-panel')).not.toBeNull();
 		expect(target.querySelector('.sheet-panel .cowriter-mode')).not.toBeNull();
 	});
