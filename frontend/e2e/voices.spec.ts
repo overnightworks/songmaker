@@ -125,7 +125,10 @@ async function readJob(request: APIRequestContext, jobId: string): Promise<Queue
 	return (await response.json()) as QueuedJob;
 }
 
-async function readGeneratedSong(request: APIRequestContext, songId: string): Promise<GeneratedSong> {
+async function readGeneratedSong(
+	request: APIRequestContext,
+	songId: string
+): Promise<GeneratedSong> {
 	const response = await request.get(`/api/songs/${songId}`);
 	expect(response.ok(), `GET song failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as GeneratedSong;
@@ -136,9 +139,9 @@ async function waitForGeneratedTake(
 	songId: string,
 	jobId: string
 ): Promise<GeneratedTake> {
-	await expect.poll(() => readJob(request, jobId).then((job) => job.status), { timeout: 40_000 }).toBe(
-		'completed'
-	);
+	await expect
+		.poll(() => readJob(request, jobId).then((job) => job.status), { timeout: 40_000 })
+		.toBe('completed');
 	await expect
 		.poll(() => readGeneratedSong(request, songId).then((song) => song.generations.at(0) ?? null))
 		.not.toBeNull();
@@ -277,7 +280,9 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const readyVoiceCard = page.locator('.lora-card').filter({ hasText: voiceName });
 		await readyVoiceCard.getByRole('button', { name: 'Delete', exact: true }).click();
 		const deleteDialog = page.getByRole('dialog');
-		await expect(deleteDialog.getByRole('heading', { name: 'Delete voice?', exact: true })).toBeVisible();
+		await expect(
+			deleteDialog.getByRole('heading', { name: 'Delete voice?', exact: true })
+		).toBeVisible();
 		await expect(deleteDialog).toContainText(
 			`${voiceName} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`
 		);

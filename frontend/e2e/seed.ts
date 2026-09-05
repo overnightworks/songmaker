@@ -100,7 +100,7 @@ interface CreatedSong extends CreatedResource {
 	slug: string;
 }
 
-interface VersionResource extends CreatedResource {}
+type VersionResource = CreatedResource;
 
 /** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
@@ -460,7 +460,10 @@ export async function seedVoiceAdapterComparisonSong(
  * its declared model mode in the isolated E2E database. It never seeds a
  * ready state or an adapter storage path.
  */
-export async function setVoiceProofModelMode(voiceId: string, modelMode: 'sft' | 'turbo'): Promise<void> {
+export async function setVoiceProofModelMode(
+	voiceId: string,
+	modelMode: 'sft' | 'turbo'
+): Promise<void> {
 	const script = [
 		'from songmaker_cli.db.engine import connect_db, resolve_database_url',
 		'from songmaker_cli.db.queries import get_user_lora, update_user_lora',
