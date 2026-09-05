@@ -36,6 +36,7 @@ JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
 )
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."
+CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE: Final[str] = "Codex cover generation is unavailable"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -252,6 +253,8 @@ GROK_CLI_MODEL_LIST_MARKER: Final[str] = "Available models:"
 GROK_CLI_MODEL_BULLETS: Final[tuple[str, ...]] = ("* ", "- ")
 CODEX_CLI_BINARY: Final[str] = "codex"
 CODEX_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.codex/auth.json"
+CODEX_CODE_MODE_HOST_BINARY: Final[str] = "/usr/local/bin/codex-code-mode-host"
+CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
 CODEX_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("login", "status")
 CODEX_CLI_LOGGED_IN_MARKER: Final[str] = "Logged in using "
 CODEX_CLI_LOGGED_OUT_MARKER: Final[str] = "Not logged in"
@@ -640,6 +643,10 @@ class CoverExecutor(StrEnum):
 
     MUSIC = "music"
     WEB = "web"
+
+
+DEFAULT_COVER_EXECUTOR: Final[CoverExecutor] = CoverExecutor.WEB
+"""Production owner for cover jobs; ``music`` remains a temporary rollback switch."""
 
 
 @dataclass(frozen=True)

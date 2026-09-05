@@ -165,6 +165,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
 ) -> None:
     import songmaker_cli.arq_pool as arq_pool
 
+    monkeypatch.setenv("COVER_EXECUTOR", "music")
     monkeypatch.setattr(arq_pool, "is_music_worker_healthy", AsyncMock(return_value=True))
     monkeypatch.setattr(arq_pool, "is_scoring_worker_healthy", AsyncMock(return_value=True))
     client, _ = make_test_app(tmp_path)

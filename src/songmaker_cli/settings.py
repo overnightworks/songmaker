@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
     COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     COVER_MAX_CONCURRENT_RUNS,
     COVER_UPLOAD_BODY_MAX_BYTES,
+    DEFAULT_COVER_EXECUTOR,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
@@ -217,7 +218,7 @@ class Settings(BaseSettings):
         default=CODEX_CLI_MAX_CONCURRENT_PROCESSES, ge=1,
     )
     cover_max_concurrent_runs: int = Field(default=COVER_MAX_CONCURRENT_RUNS, ge=1)
-    cover_executor: CoverExecutor = CoverExecutor.MUSIC
+    cover_executor: CoverExecutor = DEFAULT_COVER_EXECUTOR
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120

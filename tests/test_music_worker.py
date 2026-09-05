@@ -263,7 +263,7 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         ])
         session.commit()
 
-    worker = MusicWorker()
+    worker = MusicWorker(_settings(CoverExecutor.MUSIC))
     worker.get_db_factory = MagicMock(return_value=factory)
     worker.audio_dir = MagicMock(return_value=audio_dir)
     redis = AsyncMock()
@@ -386,21 +386,25 @@ def test_music_worker_settings_functions() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
     func_names = {f.name for f in MusicWorkerSettings.functions}
     assert JobFunction.GENERATE in func_names
-    assert JobFunction.COVER in func_names
+    assert JobFunction.COVER not in func_names
     assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.LORA_TRAINING in func_names
-    assert len(MusicWorkerSettings.functions) == 5
+    assert len(MusicWorkerSettings.functions) == 4
 
 
-def test_default_production_compose_keeps_the_music_cover_argv_and_mounts() -> None:
+def test_production_compose_switches_every_cover_owner_to_web() -> None:
     compose = (Path(__file__).parents[1] / "docker-compose.yml").read_text()
+    web_service = compose.split("  songmaker-web:\n", maxsplit=1)[1].split(
+        "  songmaker-music-worker:\n", maxsplit=1,
+    )[0]
     music_service = compose.split("  songmaker-music-worker:\n", maxsplit=1)[1].split(
         "  songmaker-acestep-worker-0:\n", maxsplit=1,
     )[0]
 
     assert "command: [\"songmaker_cli.music_worker.MusicWorkerSettings\"]" in music_service
-    assert "COVER_EXECUTOR" not in music_service
+    assert 'COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"' in web_service
+    assert 'COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"' in music_service
     assert "target: /usr/local/bin/codex" in music_service
     assert "target: /home/songmaker/.codex/auth.json" in music_service
 
@@ -432,7 +436,7 @@ def test_music_worker_functions_registered_under_job_function_names() -> None:
         return set(worker.functions.keys())
 
     registered = asyncio.run(_build_and_inspect())
-    assert JobFunction.COVER in registered
+    assert JobFunction.COVER not in registered
     assert JobFunction.GENERATE in registered
     assert JobFunction.LOAD_MODEL_ON_WORKER in registered
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in registered

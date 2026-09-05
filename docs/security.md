@@ -340,7 +340,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 `POST /api/albums/{album_id}/cover` and `POST /api/songs/{song_id}/cover` accept JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Album files live at `{audio_dir}/covers/{album_id}/`; song files live at `{audio_dir}/song-covers/{song_id}/`. Authenticated GET/POST/DELETE use `check_album_access` / `check_song_access` (foreign resources 404). Authenticated and public song cover endpoints stream only that song's files — 404 when the song has no own cover, even if the parent album has one. Public bytes use the matching share slug. The song-cover body budget is the cover ceiling; it is not the `/api/songs/{id}/reimport` ceiling.
 
-Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The music worker selects the Codex CLI path only through the co-writer dispatch owner and never falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. The image command uses the fixed read-only image argv with Code Mode host enabled only for that run, no MCP servers, and web search disabled. Its streamed-event gate permits `image_gen` and exactly one measured `command_execution` start/completion pair that reads the bundled image skill; any other command or tool event fails the job with the fixed image-tool message. Pillow rewrites its exactly one accepted PNG as a metadata-free 1024×1024 RGB PNG. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
+Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole production cover executor: its runner claims queued jobs, owns recovery, and selects the Codex CLI path only through the co-writer dispatch owner; it never falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. The image command uses the fixed read-only image argv with Code Mode host enabled only for that run, no MCP servers, and web search disabled. Its streamed-event gate permits `image_gen` and exactly one measured `command_execution` start/completion pair that reads the bundled image skill; any other command or tool event fails the job with the fixed image-tool message. Pillow rewrites its exactly one accepted PNG as a metadata-free 1024×1024 RGB PNG. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
 All Codex text and cover CLI calls use one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps cover processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error, and saturated cover jobs retain the musician-facing “Codex is busy. Try generating the cover again shortly.” error.
 
@@ -402,9 +402,10 @@ being in place.
 ## Agent-CLI Mounts
 
 `songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
-credential mirrors read-only. The music worker mounts the Codex binary and
-redacted credential mirror read-only because it executes private cover jobs.
-The scoring worker mounts only Claude's binary and credential mirror; it does
+credential mirrors read-only. The music worker does not register, recover, or
+execute cover jobs: `COVER_EXECUTOR=web` makes the web runner the sole owner.
+Its obsolete Codex mounts remain only until W5 removes them. The scoring worker
+mounts only Claude's binary and credential mirror; it does
 not mount Grok or Codex (`docker-compose.yml:246-259`).
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
@@ -521,8 +522,9 @@ in `.env`: the preflight reads its values from the exported environment and
 does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
 mounts `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and
-`SONGMAKER_CODEX_CLI` into `songmaker-web`; the Codex binary and redacted
-`codex.json` mirror are also mounted read-only into `songmaker-music-worker`.
+`SONGMAKER_CODEX_CLI` into `songmaker-web`. The music worker's remaining
+read-only Codex binary and `codex.json` mirror have no execution path after the
+cutover and are removed by W5.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -619,8 +621,9 @@ run with a private `0700` working directory and their own session tree, both
 removed after success or abort; prompts and tool results reach the CLI only
 through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
-abort the turn. The Codex binary and mirror are also mounted into
-`songmaker-music-worker`, not into the scoring worker.
+abort the turn. The music worker's temporary Codex mounts have no execution
+path after the cover cutover; W5 removes them. The scoring worker does not
+mount Codex.
 
 The cover-image route starts Codex with the fixed read-only image
 argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
