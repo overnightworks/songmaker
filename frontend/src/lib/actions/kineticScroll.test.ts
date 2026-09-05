@@ -37,19 +37,23 @@ function runFrame(dtMs: number) {
 }
 
 function stubReducedMotion(matches: boolean) {
+	let onChange: (() => void) | undefined;
 	vi.stubGlobal(
 		'matchMedia',
 		vi.fn(() => ({
 			matches,
 			media: '(prefers-reduced-motion: reduce)',
 			onchange: null,
-			addEventListener: vi.fn(),
+			addEventListener: vi.fn((event: string, callback: () => void) => {
+				if (event === 'change') onChange = callback;
+			}),
 			removeEventListener: vi.fn(),
 			addListener: vi.fn(),
 			removeListener: vi.fn(),
 			dispatchEvent: vi.fn()
 		}))
 	);
+	return () => onChange?.();
 }
 
 function buildStrip(axis: KineticScrollAxis, itemCount = 4) {
@@ -282,6 +286,37 @@ describe('kineticScroll', () => {
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[0]);
 	});
 
+	it('suppresses the drag click and the momentum-catching click separately', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		const onOpen = vi.fn();
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+
+		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
+		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1040 });
+		firePointer(container, 'pointerup', { pos: 150, axis: 'x', t: 1040 });
+		fireClick(items[0]);
+
+		firePointer(container, 'pointerdown', { pos: 150, axis: 'x', t: 1100 });
+		firePointer(container, 'pointermove', {
+			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			axis: 'x',
+			t: 1110
+		});
+		firePointer(container, 'pointerup', {
+			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			axis: 'x',
+			t: 1110
+		});
+
+		fireClick(items[0]);
+		fireClick(items[0]);
+		expect(onOpen).not.toHaveBeenCalled();
+
+		fireClick(items[0]);
+		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[0]);
+	});
+
 	it('accelerates on repeated wheel ticks instead of restarting the swing', () => {
 		stubBrowserTiming();
 		const { container: single } = buildStrip('x');
@@ -403,6 +438,19 @@ describe('kineticScroll', () => {
 
 		expect(container.scrollLeft).toBe(50);
 		expect(pendingFrame).toBeNull();
+	});
+
+	it('stops an in-flight scroll when the motion preference changes', () => {
+		stubBrowserTiming();
+		const notifyMotionChange = stubReducedMotion(false);
+		const { container } = buildStrip('x');
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+		fireWheel(container, 0, 100);
+		notifyMotionChange();
+		runFrame(16);
+
+		expect(container.scrollLeft).toBe(0);
 	});
 
 	it('moves focus between items with the arrow keys and scrolls the target into view', () => {

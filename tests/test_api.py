@@ -3439,10 +3439,11 @@ def test_create_song_gen_param_thinking_accepts_bool(client: TestClient) -> None
 
 def test_score_request_invalid_scorer_name(client: TestClient) -> None:
     import pytest
+    from pydantic import ValidationError
 
     from songmaker_cli.api_models import ScoreRequest
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match="Unknown scorers"):
         ScoreRequest(scorers=["nonexistent_scorer"])
 
 

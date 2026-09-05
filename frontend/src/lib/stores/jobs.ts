@@ -87,11 +87,17 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 const eventSources = new Map<string, EventSource>();
 const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+function isTerminalJobStatus(status: JobStatus['status']): boolean {
+	return (
+		status === 'completed' || status === 'partial' || status === 'failed' || status === 'cancelled'
+	);
+}
+
 export function trackJob(
 	job: JobStatus,
 	context: { songId?: string; albumId?: string; genId?: string; workerId?: string; mode?: string }
 ): void {
-	const existing = get(activeJobs).find((active) => active.job.id === job.id);
+	const existing = get(activeJobs).some((active) => active.job.id === job.id);
 	if (existing) {
 		activeJobs.update((jobs) =>
 			jobs.map((active) => (active.job.id === job.id ? { ...active, ...context, job } : active))
@@ -142,12 +148,7 @@ function streamJob(jobId: string, attempt = 0): void {
 
 		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
 
-		if (
-			updated.status === 'completed' ||
-			updated.status === 'partial' ||
-			updated.status === 'failed' ||
-			updated.status === 'cancelled'
-		) {
+		if (isTerminalJobStatus(updated.status)) {
 			source.close();
 			eventSources.delete(jobId);
 			const songId = get(activeJobs).find((j) => j.job.id === jobId)?.songId;

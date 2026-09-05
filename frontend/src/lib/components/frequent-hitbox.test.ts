@@ -14,7 +14,7 @@ import {
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
 } from '$lib/constants';
-import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
@@ -84,7 +84,6 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 		openLibraryCreate: vi.fn(),
 		openLibraryWall: vi.fn(),
 		openPlaylist: vi.fn(),
-		selectLibraryFilter: vi.fn(),
 		selectSong: vi.fn(),
 		persistLibraryHistory: vi.fn()
 	};
@@ -129,7 +128,6 @@ import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
-import LibraryWall from './LibraryWall.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 import RailSearch from './shell/RailSearch.svelte';
@@ -137,7 +135,6 @@ import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
-import libraryWallSource from './LibraryWall.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
@@ -154,7 +151,6 @@ const COMPONENT_STYLE_SOURCES = {
 	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
-	LibraryWall: { source: libraryWallSource, filename: 'LibraryWall.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
@@ -200,16 +196,6 @@ const INVENTORY = [
 		component: 'AlbumDetailView'
 	},
 	{
-		name: 'new-album',
-		selector: '[data-hitbox="frequent"][aria-label="New album"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'wall-tile-play',
-		selector: '.wall-tile-play[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
 		name: 'playlist-picker-add',
 		selector: '.picker-add[data-hitbox="frequent"]',
 		component: 'PlaylistPicker'
@@ -223,16 +209,6 @@ const INVENTORY = [
 		name: 'collection-menu',
 		selector: '.menu-trigger[data-hitbox="frequent"]',
 		component: 'CollectionMenu'
-	},
-	{
-		name: 'library-filter-chip',
-		selector: '.filter-chip[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'library-sort-select',
-		selector: '.sort-select[data-hitbox="frequent"]',
-		component: 'LibraryWall'
 	},
 	{
 		name: 'rail-search',
@@ -260,8 +236,7 @@ const INVENTORY = [
 
 // Each inventory target's own component owns the scope class the DOM already
 // carries, so its stylesheet only needs compiling and injecting once per
-// component even though several targets can share one file (e.g. the three
-// LibraryWall targets). A target with no scope class at all (drawer-trigger:
+// component even though several targets can share one file. A target with no scope class at all (drawer-trigger:
 // nothing in +layout.svelte's <style> matches it) has no scoped rule reaching
 // it either, so it is skipped rather than treated as a missing measurement.
 function injectInventoryComponentStyles(
@@ -511,7 +486,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const themeTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
 	const albumTarget = document.createElement('div');
-	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const railSearchTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
@@ -520,7 +494,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 		themeTarget,
 		playlistTarget,
 		albumTarget,
-		songTarget,
 		pickerTarget,
 		railSearchTarget,
 		layoutTarget,
@@ -534,7 +507,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	// The album interior is asked for by id rather than by opening it, since the
 	// playlist interior above needs the open collection to stay its own.
 	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
-	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
 		mount(PlaylistPicker, {
 			target: pickerTarget,
@@ -674,27 +646,6 @@ describe('frequent action hitboxes', () => {
 				}
 			}
 		}
-	});
-
-	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
-		const { root } = await renderInventory();
-		libraryFilter.set('playlists');
-		await tick();
-		const newPlaylistBtn = requireButton(
-			root,
-			'new-playlist',
-			'[data-hitbox="frequent"][aria-label="New playlist"]'
-		);
-
-		setPointer('coarse');
-		const coarse = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
-		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
-
-		setPointer('fine');
-		const fine = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
-		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
 	it('keeps reorder and remove on the same button hitbox for pointer and keyboard', async () => {

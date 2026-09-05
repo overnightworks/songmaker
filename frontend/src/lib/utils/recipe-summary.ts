@@ -74,7 +74,7 @@ function formatParamValue(key: string, rawValue: unknown): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
 	if (typeof rawValue === 'boolean') return rawValue ? 'On' : 'Off';
 	if (key === 'audio_duration' && typeof rawValue === 'number') return formatTime(rawValue);
-	return String(rawValue);
+	return typeof rawValue === 'object' ? JSON.stringify(rawValue) : String(rawValue);
 }
 
 // "cfg_interval_start" -> "Cfg Interval Start" — a generic fallback for a

@@ -284,10 +284,10 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const matchingVoice = options.getByRole('option', { name: new RegExp(voiceName) });
 		const foreignVoiceOption = options.getByRole('option', { name: new RegExp(foreignVoiceName) });
 		await expect(matchingVoice).toContainText('sft');
-		expect(await matchingVoice.isDisabled()).toBe(false);
+		await expect(matchingVoice).toBeEnabled();
 		await expect(foreignVoiceOption).toContainText('turbo');
 		await expect(foreignVoiceOption).toContainText('not available for this model');
-		expect(await foreignVoiceOption.isDisabled()).toBe(true);
+		await expect(foreignVoiceOption).toBeDisabled();
 
 		await page.goto('/settings/voices');
 		const readyVoiceCard = page.locator('.lora-card').filter({ hasText: voiceName });
@@ -317,7 +317,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			.getByRole('listbox', { name: 'Your Voice', exact: true })
 			.getByRole('option', { name: new RegExp(`${voiceName}.*voice deleted`) });
 		await expect(deletedVoiceOption).toContainText(`${voiceName} — voice deleted`);
-		expect(await deletedVoiceOption.isDisabled()).toBe(true);
+		await expect(deletedVoiceOption).toBeDisabled();
 		await deletedPicker.click();
 		if (isMobile) {
 			await page.getByRole('button', { name: 'Collapse ˄', exact: true }).click();

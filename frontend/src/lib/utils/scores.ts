@@ -17,7 +17,8 @@ export const SCORE_THRESHOLDS: Record<string, ScoreThreshold> = {
 export function scoreColor(key: string, value: number): string {
 	const t = SCORE_THRESHOLDS[key];
 	if (!t) return 'ok';
-	return value >= t.good ? 'good' : value >= t.ok ? 'ok' : 'bad';
+	if (value >= t.good) return 'good';
+	return value >= t.ok ? 'ok' : 'bad';
 }
 
 export type ScoreKey =

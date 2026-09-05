@@ -90,13 +90,13 @@ export class ResourceSyncController {
 	private watermark: string | null = null;
 	private buffer: GenerationCreatedResourceEvent[] = [];
 	private deferred: GenerationCreatedResourceEvent[] = [];
-	private pendingSongIds = new Set<string>();
-	private failedSongIds = new Set<string>();
-	private queuedGenerationIds = new Set<string>();
-	private seenGenerationIds = new Set<string>();
-	private songRevisions = new Map<string, number>();
+	private readonly pendingSongIds = new Set<string>();
+	private readonly failedSongIds = new Set<string>();
+	private readonly queuedGenerationIds = new Set<string>();
+	private readonly seenGenerationIds = new Set<string>();
+	private readonly songRevisions = new Map<string, number>();
 	private flushing: Promise<void> | null = null;
-	private readyWaiters: Array<(ok: boolean) => void> = [];
+	private readonly readyWaiters: Array<(ok: boolean) => void> = [];
 	private visibilityBound = false;
 	private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
 	private loadedWatchUnsub: (() => void) | null = null;
@@ -387,7 +387,7 @@ export class ResourceSyncController {
 
 	private async recoverLiveConnection(): Promise<void> {
 		this.promoteDeferredSongs();
-		for (const songId of [...this.failedSongIds]) {
+		for (const songId of this.failedSongIds) {
 			this.invalidateSong(songId);
 		}
 		if (this.pendingSongIds.size > 0) {
@@ -755,9 +755,7 @@ function librarySyncDeps(): ResourceSyncDeps {
 let libraryController: ResourceSyncController | null = null;
 
 function libraryOwner(): ResourceSyncController {
-	if (libraryController === null) {
-		libraryController = new ResourceSyncController(librarySyncDeps());
-	}
+	libraryController ??= new ResourceSyncController(librarySyncDeps());
 	return libraryController;
 }
 

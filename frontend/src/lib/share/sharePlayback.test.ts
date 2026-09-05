@@ -318,6 +318,31 @@ describe('stream playback', () => {
 		expect(fetchStream).toHaveBeenCalledTimes(1);
 		playback.stop();
 	});
+
+	it('rebuilds a shared stream after its snapshot expires', async () => {
+		setQueuePlaybackMode('stream');
+		const freshManifest = { ...streamManifest(false), stream_url: '/shared-stream-fresh.mp3' };
+		const fetchStream = vi
+			.fn()
+			.mockResolvedValueOnce(streamManifest(false))
+			.mockResolvedValueOnce(freshManifest);
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, fetchStream);
+
+		playback.toggle(view.tracks[0]);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+		fakeAudio.currentTime = 4;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('error');
+
+		await vi.waitFor(() => expect(fakeAudio.src).toBe('/shared-stream-fresh.mp3'));
+
+		expect(fetchStream).toHaveBeenCalledTimes(2);
+		expect(playback.currentTrack?.key).toBe('s1');
+		playback.stop();
+	});
 });
 
 describe('shuffle', () => {

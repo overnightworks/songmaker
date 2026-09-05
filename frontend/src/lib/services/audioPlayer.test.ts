@@ -563,6 +563,26 @@ describe('stream playback', () => {
 		expect(fakeAudio.currentTime).toBe(12);
 	});
 
+	it('surfaces a missing-stream error when its snapshot cannot be rebuilt', async () => {
+		vi.useFakeTimers();
+		fetchMock.mockResolvedValue({ ok: false, status: 404 });
+		const onStreamRebuild = vi.fn().mockResolvedValue(null);
+		audioPlayer.swapCallbacks(callbacks({ onStreamRebuild }));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5000);
+		await Promise.resolve();
+
+		expect(onStreamRebuild).toHaveBeenCalledOnce();
+		expect(audioPlayer.mode).toBe('stream');
+		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.error).toMatch(/not found/i);
+	});
+
 	it('resumes the same generation after a rebuilt snapshot rotates order', async () => {
 		vi.useFakeTimers();
 		fetchMock.mockResolvedValue({ ok: false, status: 404 });
@@ -726,6 +746,7 @@ describe('error handling', () => {
 	it('handleMediaError without current returns early', async () => {
 		audioPlayer.destroy();
 		await new Promise((r) => setTimeout(r, 0));
+		expect(audioPlayer.error).toBeNull();
 	});
 
 	it('pause() leaves status at paused (no abort-as-error path)', () => {
@@ -906,6 +927,7 @@ describe('seek()', () => {
 	it('does nothing when duration is 0', () => {
 		audioPlayer.destroy();
 		audioPlayer.seek(10);
+		expect(fakeAudio.currentTime).toBe(0);
 	});
 });
 

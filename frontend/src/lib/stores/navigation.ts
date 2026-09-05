@@ -26,7 +26,7 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
@@ -38,7 +38,6 @@ import {
 	librarySurface,
 	libraryRootState,
 	libraryWallStateFrom,
-	setLibraryFilter,
 	setLibrarySurface,
 	snapshotLibraryHistory,
 	writeLibraryHistory,
@@ -86,8 +85,7 @@ function pushLibraryHistory(): Promise<void> {
 				searchCursor: leaving.searchCursor,
 				searchLoadedCount: leaving.searchLoadedCount,
 				query: leaving.query,
-				sort: leaving.sort,
-				filter: leaving.filter
+				sort: leaving.sort
 			},
 			urlFromState(current),
 			'replace'
@@ -95,12 +93,6 @@ function pushLibraryHistory(): Promise<void> {
 	}
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	return writeLibraryHistory(next, urlFromState(next), 'push');
-}
-
-export function selectLibraryFilter(filter: LibraryFilter): void {
-	const next = setLibraryFilter(filter);
-	if (suppressPush) return;
-	void writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
 export function persistLibraryHistory(): void {
@@ -305,16 +297,6 @@ export async function openLibraryWall(): Promise<void> {
 		closeSidebar();
 		await pushLibraryHistory();
 	});
-}
-
-// A rail group title's own destination (issue #323, ruled sentence 5 of
-// #302): LIBRARY opens the grid on the Albums tab, PLAYLISTS on the
-// Playlists tab. Composes openLibraryWall with the existing tab machinery
-// rather than a new address -- the tab lives in `history.state`
-// (selectLibraryFilter above), so no route needs to exist for it.
-export async function openLibraryFilter(filter: LibraryFilter): Promise<void> {
-	await openLibraryWall();
-	selectLibraryFilter(filter);
 }
 
 export interface AlbumTrackNeighbors {

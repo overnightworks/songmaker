@@ -240,9 +240,9 @@ export const PROVIDER_ROUTE_TURN_BLOCKED_LABEL = 'Turn blocked';
 export const PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP = 'Choose a ready route to continue.';
 
 export function providerRouteModelLabel(route: 'cli' | 'api' | undefined): string {
-	return route
-		? `${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} ${PROVIDER_ROUTE_MODEL_LABEL}`
-		: 'Model';
+	if (!route) return 'Model';
+	const routeLabel = route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL;
+	return `${routeLabel} ${PROVIDER_ROUTE_MODEL_LABEL}`;
 }
 
 export function providerRouteBlockedDetail(
@@ -442,16 +442,6 @@ export const RAIL_PLAYING_MARKER_LABEL = 'Playing';
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
-
-export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
-export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
-export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
-export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
-	albums: 'Albums',
-	playlists: 'Playlists',
-	shared: 'Shared'
-};
-export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
 
 export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
 export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';

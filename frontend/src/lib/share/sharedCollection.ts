@@ -10,9 +10,7 @@ import type {
 	AlbumCoverUrls,
 	GenerationItem,
 	SharedAlbumPayload,
-	SharedAlbumSongPayload,
 	SharedGenerationPayload,
-	SharedPlaylistEntryPayload,
 	SharedPlaylistPayload,
 	SharedSongPayload,
 	WhisperCue
@@ -21,12 +19,11 @@ import type { PlaybackInfo } from '$lib/services/playbackTypes';
 
 export type {
 	SharedAlbumPayload,
-	SharedAlbumSongPayload,
 	SharedGenerationPayload,
-	SharedPlaylistEntryPayload,
 	SharedPlaylistPayload,
 	SharedSongPayload
 };
+export type { SharedAlbumSongPayload, SharedPlaylistEntryPayload } from '$lib/api/types';
 
 export type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
 
