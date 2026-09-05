@@ -63,6 +63,9 @@ from songmaker_cli.cowriter.tool_loop import (
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
+_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE: Final = (
+    "Code Mode is unavailable because code-mode host is disabled."
+)
 _BLOCKED_ITEM_TYPES: Final = frozenset({
     "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
     "mcp_tool_call", "web_search",
@@ -287,7 +290,11 @@ class CodexCliToolTransport:
                     if item_type in _BLOCKED_ITEM_TYPES:
                         raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
                     if event_type == "item.completed" and item_type == "error":
-                        error_message = _completed_error_item_message(event)
+                        completed_error = _completed_error_item_message(event)
+                        if _is_code_mode_host_disabled_isolation_notice(completed_error):
+                            log.info("Codex CLI ignored its code-mode-host isolation notice")
+                            continue
+                        error_message = completed_error
                         channel.request_abort()
                         continue
                     if item_type not in _INFORMATIONAL_ITEM_TYPES:
@@ -883,6 +890,11 @@ def _completed_error_item_message(event: dict[str, object]) -> str:
     if not isinstance(message, str):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return message
+
+
+def _is_code_mode_host_disabled_isolation_notice(message: str) -> bool:
+    """Recognize the one Codex notice caused by this adapter's isolation."""
+    return message == _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE
 
 
 def _item_type(event: dict[str, object]) -> str:
