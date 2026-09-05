@@ -368,7 +368,14 @@ async def _leased_resource_event_generator(
         _schedule_stream_lease_release(limiter, user_id, lease_token)
 
 
-@router.get(_ROUTE_PATH)
+@router.get(
+    _ROUTE_PATH,
+    responses={
+        400: {"description": "Last event ID is invalid"},
+        429: {"description": "Too many open resource event streams"},
+        503: {"description": "Resource event stream capacity is unavailable"},
+    },
+)
 def api_stream_resource_events(request: Request) -> StreamingResponse:
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:

@@ -159,7 +159,10 @@ class ReferenceAudioResponse(BaseModel):
     filename: str
 
 
-@router.post("/audio/upload")
+@router.post(
+    "/audio/upload",
+    responses={400: {"description": "Reference audio upload is invalid"}},
+)
 async def api_upload_reference_audio(
     file: UploadFile,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -213,7 +216,10 @@ def api_get_generation(
     return GenerationResponse.from_orm(gen)
 
 
-@router.delete("/generations/{gen_id}")
+@router.delete(
+    "/generations/{gen_id}",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_delete_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -231,7 +237,10 @@ def api_delete_generation(
     return StatusResponse()
 
 
-@router.post("/generations/bulk-delete")
+@router.post(
+    "/generations/bulk-delete",
+    responses={404: {"description": "One or more generations do not exist"}},
+)
 def api_bulk_delete_generations(
     req: BulkDeleteRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -257,7 +266,14 @@ def api_bulk_delete_generations(
 # ── Generation + Scoring ─────────────────────────────────────────────
 
 
-@router.post("/songs/{song_id}/generate")
+@router.post(
+    "/songs/{song_id}/generate",
+    responses={
+        400: {"description": "Generation request is invalid"},
+        404: {"description": "Version does not exist"},
+        503: {"description": "Generation worker or job queue is unavailable"},
+    },
+)
 async def api_generate_song(
     song_id: str,
     req: GenerateRequest,
@@ -341,7 +357,15 @@ def api_last_failed_generation(
     return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 
 
-@router.post("/generations/{gen_id}/repaint")
+@router.post(
+    "/generations/{gen_id}/repaint",
+    responses={
+        400: {"description": "Repaint request or source audio is invalid"},
+        404: {"description": "Version does not exist"},
+        500: {"description": "Source audio conversion failed"},
+        503: {"description": "Generation worker or job queue is unavailable"},
+    },
+)
 async def api_repaint_generation(
     gen_id: str,
     req: RepaintRequest,
@@ -417,7 +441,15 @@ async def api_repaint_generation(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.post("/generations/{gen_id}/cover")
+@router.post(
+    "/generations/{gen_id}/cover",
+    responses={
+        400: {"description": "Cover request or source audio is invalid"},
+        404: {"description": "Version does not exist"},
+        500: {"description": "Source audio conversion failed"},
+        503: {"description": "Generation worker or job queue is unavailable"},
+    },
+)
 async def api_cover_generation(
     gen_id: str,
     req: CoverRequest,
@@ -491,7 +523,10 @@ def api_scoring_schema() -> ScoringSchemaResponse:
     return ScoringSchemaResponse.from_registry()
 
 
-@router.post("/generations/{gen_id}/score")
+@router.post(
+    "/generations/{gen_id}/score",
+    responses={503: {"description": "Scoring worker or job queue is unavailable"}},
+)
 async def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
@@ -554,7 +589,10 @@ def _toggle_generation(
     return StatusResponse()
 
 
-@router.post("/generations/{gen_id}/pick")
+@router.post(
+    "/generations/{gen_id}/pick",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_pick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -563,7 +601,10 @@ def api_pick_generation(
     return _toggle_generation(gen_id, user, session, pick_generation)
 
 
-@router.post("/generations/{gen_id}/unpick")
+@router.post(
+    "/generations/{gen_id}/unpick",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_unpick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -572,7 +613,10 @@ def api_unpick_generation(
     return _toggle_generation(gen_id, user, session, unpick_generation)
 
 
-@router.post("/generations/{gen_id}/keep")
+@router.post(
+    "/generations/{gen_id}/keep",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_keep_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -581,7 +625,10 @@ def api_keep_generation(
     return _toggle_generation(gen_id, user, session, keep_generation)
 
 
-@router.post("/generations/{gen_id}/unkeep")
+@router.post(
+    "/generations/{gen_id}/unkeep",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_unkeep_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -590,7 +637,10 @@ def api_unkeep_generation(
     return _toggle_generation(gen_id, user, session, unkeep_generation)
 
 
-@router.post("/generations/{gen_id}/unarchive")
+@router.post(
+    "/generations/{gen_id}/unarchive",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_unarchive_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -599,7 +649,10 @@ def api_unarchive_generation(
     return _toggle_generation(gen_id, user, session, unarchive_generation)
 
 
-@router.post("/generations/{gen_id}/share")
+@router.post(
+    "/generations/{gen_id}/share",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_share_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -619,7 +672,10 @@ def api_share_generation(
     )
 
 
-@router.delete("/generations/{gen_id}/share")
+@router.delete(
+    "/generations/{gen_id}/share",
+    responses={404: {"description": "Generation does not exist"}},
+)
 def api_unshare_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -635,7 +691,10 @@ def api_unshare_generation(
     return StatusResponse()
 
 
-@router.post("/generations/{gen_id}/remaster")
+@router.post(
+    "/generations/{gen_id}/remaster",
+    responses={404: {"description": "Raw WAV does not exist for this generation"}},
+)
 def api_remaster_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

@@ -52,7 +52,10 @@ _LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 _JOB_STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 
 
-@router.get("/jobs/{job_id}")
+@router.get(
+    "/jobs/{job_id}",
+    responses={404: {"description": "Job does not exist"}},
+)
 def api_get_job(
     job_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -62,7 +65,14 @@ def api_get_job(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.get("/jobs/{job_id}/stream")
+@router.get(
+    "/jobs/{job_id}/stream",
+    responses={
+        404: {"description": "Job does not exist"},
+        429: {"description": "Too many open job streams"},
+        503: {"description": "Job stream limiter is unavailable"},
+    },
+)
 def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
     # No `Depends()` at all here on purpose (#331 Findings 1/2, review
     # round 2, 2026-09-02): the first attempt only dropped
@@ -255,7 +265,13 @@ async def _leased_job_event_generator(
         _schedule_job_stream_lease_release(limiter, user_id, lease_token)
 
 
-@router.post("/jobs/{job_id}/cancel")
+@router.post(
+    "/jobs/{job_id}/cancel",
+    responses={
+        404: {"description": "Job does not exist"},
+        409: {"description": "Job is not queued or running"},
+    },
+)
 def api_cancel_job(
     job_id: str,
     request: Request,

@@ -345,7 +345,10 @@ def resolve_library_pool_membership(
     )
 
 
-@router.post("/queue-streams/library")
+@router.post(
+    "/queue-streams/library",
+    responses={422: {"description": "Library has no playable starting take"}},
+)
 def api_create_library_queue_stream(
     req: QueueStreamLibraryRequest,
     request: Request,
@@ -384,7 +387,10 @@ def api_create_library_queue_stream(
     return snapshot
 
 
-@router.get("/queue-streams/{snapshot_id}/audio")
+@router.get(
+    "/queue-streams/{snapshot_id}/audio",
+    responses={404: {"description": "Queue stream does not exist"}},
+)
 def api_get_queue_stream_audio(
     snapshot_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -398,7 +404,13 @@ def api_get_queue_stream_audio(
     return FileResponse(audio_path, media_type=media_type)
 
 
-@router.post("/queue-streams/{snapshot_id}/pin")
+@router.post(
+    "/queue-streams/{snapshot_id}/pin",
+    responses={
+        404: {"description": "Queue stream does not exist"},
+        409: {"description": "Pinned storage cap is reached"},
+    },
+)
 def api_pin_queue_stream(
     snapshot_id: str,
     request: Request,
@@ -420,7 +432,10 @@ def api_pin_queue_stream(
     )
 
 
-@router.delete("/queue-streams/{snapshot_id}/pin")
+@router.delete(
+    "/queue-streams/{snapshot_id}/pin",
+    responses={404: {"description": "Queue stream does not exist"}},
+)
 def api_unpin_queue_stream(
     snapshot_id: str,
     request: Request,
