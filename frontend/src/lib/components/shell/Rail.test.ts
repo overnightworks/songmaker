@@ -1,4 +1,4 @@
-import { tick } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -28,6 +28,18 @@ import Rail from './Rail.svelte';
 
 const onlogout = vi.fn();
 const { render, cleanup } = createComponentMount(Rail, { username: 'felix', onlogout });
+let collapsedMounted: ReturnType<typeof mount> | undefined;
+
+async function renderCollapsedRail(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	collapsedMounted = mount(Rail, {
+		target,
+		props: { username: 'felix', onlogout, collapsed: true }
+	});
+	await tick();
+	return target;
+}
 
 function findButtonByText(root: ParentNode, text: string): HTMLButtonElement {
 	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((candidate) =>
@@ -87,6 +99,8 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await cleanup();
+	if (collapsedMounted) await unmount(collapsedMounted);
+	collapsedMounted = undefined;
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	resetPlaylists();
@@ -116,6 +130,27 @@ describe('Rail', () => {
 		expect(searchFields).toHaveLength(1);
 		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
 		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
+	});
+
+	it('reduces the rail to labelled group icons when collapsed', async () => {
+		const target = await renderCollapsedRail();
+		const rail = requireElement<HTMLElement>(target, '.rail');
+
+		expect(rail.classList.contains('rail-collapsed')).toBe(true);
+		expect(
+			requireElement<HTMLButtonElement>(rail, '.rail-collapse').getAttribute('aria-label')
+		).toBe('Expand rail');
+		expect(rail.querySelector('.rail-search-region')).not.toBeNull();
+		expect(rail.querySelectorAll<HTMLInputElement>('input[type="search"]')).toHaveLength(1);
+		for (const label of ['Library', 'Playlists', 'Settings']) {
+			const group = Array.from(rail.querySelectorAll<HTMLButtonElement>('.disclose')).find(
+				(button) => button.getAttribute('aria-label') === label
+			);
+			expect(group?.getAttribute('title')).toBe(label);
+		}
+		expect(
+			requireElement<HTMLAnchorElement>(rail, '.collapsed-account').getAttribute('aria-label')
+		).toBe('Account');
 	});
 
 	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {

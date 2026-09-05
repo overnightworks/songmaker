@@ -15,6 +15,7 @@ from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
+    CoverExecutor,
     JobFunction,
     JobType,
 )
@@ -30,7 +31,7 @@ from songmaker_cli.jobs import (
     run_lora_training_job,
 )
 from songmaker_cli.jobs.lora_training import reconcile_crashed_loras
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_base import WorkerBase, build_redis_settings
 
 log = logging.getLogger(__name__)
@@ -38,7 +39,6 @@ log = logging.getLogger(__name__)
 
 class MusicWorker(WorkerBase):
     job_types = (
-        JobType.COVER,
         JobType.GENERATE,
         JobType.LORA_TRAINING,
         JobType.LOAD_MODEL_ON_WORKER,
@@ -46,6 +46,11 @@ class MusicWorker(WorkerBase):
     )
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        super().__init__(settings)
+        if self._settings.cover_executor is CoverExecutor.MUSIC:
+            self.job_types = (JobType.COVER, *self.job_types)
 
     async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
         if not recovered.get(JobType.LORA_TRAINING):
@@ -152,22 +157,31 @@ _settings = get_settings()
 _music_worker = MusicWorker(_settings)
 
 
-class MusicWorkerSettings:
+def _music_worker_functions(worker: MusicWorker, settings: Settings):
     functions = [
+        func(worker.generate, name=JobFunction.GENERATE),
+        func(worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
+        func(worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
         func(
-            _music_worker.generate_cover_suggestions,
-            name=JobFunction.COVER,
-            timeout=_settings.cover_job_budget_seconds,
-        ),
-        func(_music_worker.generate, name=JobFunction.GENERATE),
-        func(_music_worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
-        func(_music_worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
-        func(
-            _music_worker.train_lora,
+            worker.train_lora,
             name=JobFunction.LORA_TRAINING,
-            timeout=_settings.lora_training_job_timeout,
+            timeout=settings.lora_training_job_timeout,
         ),
     ]
+    if settings.cover_executor is CoverExecutor.MUSIC:
+        functions.insert(
+            0,
+            func(
+                worker.generate_cover_suggestions,
+                name=JobFunction.COVER,
+                timeout=settings.cover_job_budget_seconds,
+            ),
+        )
+    return functions
+
+
+class MusicWorkerSettings:
+    functions = _music_worker_functions(_music_worker, _settings)
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown
     redis_settings = build_redis_settings(_settings)

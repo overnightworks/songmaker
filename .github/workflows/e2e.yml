@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep main runs queued so each landing can become a deploy candidate (2026-09-05).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   COMPOSE_FILES: -f docker-compose.yml -f docker-compose.ci.yml

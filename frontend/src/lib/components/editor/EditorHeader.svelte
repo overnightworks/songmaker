@@ -35,6 +35,11 @@
 		oncovererror: () => void;
 		breadcrumbItems: BreadcrumbItem[];
 		songRail: boolean;
+		albumTitle: string;
+		albumSongCount: number;
+		albumCoverUrl: string | null;
+		albumArtFill: string | null;
+		albumInitials: string;
 		previousDisabled: boolean;
 		nextDisabled: boolean;
 		onselectprevious: () => void;
@@ -74,6 +79,11 @@
 		oncovererror,
 		breadcrumbItems,
 		songRail,
+		albumTitle,
+		albumSongCount,
+		albumCoverUrl,
+		albumArtFill,
+		albumInitials,
 		previousDisabled,
 		nextDisabled,
 		onselectprevious,
@@ -159,8 +169,19 @@
 				/>
 			</div>
 			{#if songRail}
-				<div class="song-rail">
-					<Breadcrumb items={breadcrumbItems} />
+				<div class="mobile-album-line" aria-label="Album navigation">
+					<span class="album-line-cover" aria-hidden="true">
+						{#if albumCoverUrl}
+							<img src={albumCoverUrl} alt="" />
+						{:else if albumArtFill}
+							<span class="album-line-cover-fallback" style:background={albumArtFill}></span>
+						{:else}
+							<span class="album-line-cover-fallback album-line-cover-initials"
+								>{albumInitials}</span
+							>
+						{/if}
+					</span>
+					<span class="album-line-title">{albumTitle} · {albumSongCount} songs</span>
 					<div class="song-neighbors">
 						<button
 							type="button"
@@ -364,18 +385,49 @@
 		letter-spacing: 0.13rem;
 	}
 
-	.song-rail {
+	.mobile-album-line {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
+		align-items: center;
 		gap: 0.35rem;
 		min-width: 0;
 		max-width: 100%;
 	}
 
-	.song-rail :global(.breadcrumb) {
+	.album-line-cover,
+	.album-line-cover img,
+	.album-line-cover-fallback {
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+
+	.album-line-cover {
+		flex: 0 0 1.5rem;
+		overflow: hidden;
+		background: var(--surface-hover);
+	}
+
+	.album-line-cover img,
+	.album-line-cover-fallback {
+		display: block;
+		object-fit: cover;
+	}
+
+	.album-line-cover-initials {
+		display: grid;
+		place-items: center;
+		font-family: var(--font-display);
+		font-size: 0.65rem;
+		letter-spacing: 0.06em;
+	}
+
+	.album-line-title {
 		min-width: 0;
-		max-width: 100%;
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
 	}
 
 	.song-neighbors {
@@ -525,13 +577,6 @@
 
 		.song-title {
 			font-size: 1.1rem;
-		}
-
-		.song-rail {
-			flex-direction: row;
-			align-items: center;
-			justify-content: space-between;
-			gap: 0.5rem;
 		}
 
 		.editor-header-actions {

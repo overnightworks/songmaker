@@ -74,8 +74,10 @@
 		<button
 			type="button"
 			class="disclose"
+			aria-label={label}
 			aria-expanded={open}
 			aria-controls={groupId}
+			title={label}
 			onclick={toggleOpen}
 		>
 			<svg
