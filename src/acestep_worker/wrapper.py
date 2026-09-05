@@ -167,7 +167,7 @@ async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
         renew_task.cancel()
     try:
         await renew_task
-    except asyncio.CancelledError:  # NOSONAR: The owner cancels its renewal child.
+    except asyncio.CancelledError:  # NOSONAR The owner cancels its renewal child.
         pass
     except Exception:
         log.exception("GPU hold renewal failed while its owner cleaned up")
@@ -487,7 +487,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                     training_task.cancel()
                     try:
                         await training_task
-                    except asyncio.CancelledError:  # NOSONAR: The supervisor cancels this child.
+                    except asyncio.CancelledError:  # NOSONAR The supervisor cancels this child.
                         pass
                     await renew_task
                 await training_task
@@ -497,7 +497,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                         training_task.cancel()
                         try:
                             await training_task
-                        except asyncio.CancelledError:  # NOSONAR: Parent cancels child.
+                        except asyncio.CancelledError:  # NOSONAR The parent cancels this child.
                             pass
                 finally:
                     await _cancel_gpu_hold_renewal(renew_task)
