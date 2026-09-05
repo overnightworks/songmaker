@@ -577,7 +577,7 @@ async function saveDraft(songId: string): Promise<void> {
 }
 
 async function saveDirtyDraftBeforePopstate(): Promise<void> {
-	if (savingDraft) {
+	if (savingDraft !== null) {
 		await savingDraft;
 		return;
 	}
