@@ -6,6 +6,7 @@ import {
 	fetchLibraryPoolQueue,
 	fetchSong
 } from '$lib/api/client';
+import { recordSongListen } from '$lib/api/songs';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -1406,13 +1407,26 @@ export function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'):
 	void playNextSong();
 }
 
+const listenedTakeIds = new Set<string>();
+
+function recordFirstTakeListen(): void {
+	clearWindowEnd();
+	const current = audioPlayer.current;
+	if (!current || audioPlayer.status === 'error' || listenedTakeIds.has(current.generation.id))
+		return;
+	listenedTakeIds.add(current.generation.id);
+	void recordSongListen(current.songId).catch((error: unknown) => {
+		console.error('Could not record song listen:', error);
+	});
+}
+
 // The app's single callback set for the singleton audioPlayer, installed
 // once as one typed object (see AudioPlayerCallbacks) rather than five
 // scattered assignments — a share route swaps in its own set on mount and
 // restores this one on destroy.
 audioPlayer.swapCallbacks({
 	onEnded: handlePlaybackEnded,
-	onPlaybackStarted: clearWindowEnd,
+	onPlaybackStarted: recordFirstTakeListen,
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: updateMediaSessionMetadata
