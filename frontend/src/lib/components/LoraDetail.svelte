@@ -11,9 +11,11 @@
 		LORA_OWN_TAKES_CLOSE,
 		LORA_OWN_TAKES_EMPTY,
 		LORA_OWN_TAKES_LABEL,
+		LORA_OWN_TAKES_LOAD_FAILED,
 		LORA_OWN_TAKES_LOADING,
 		LORA_OWN_TAKES_OPEN,
 		LORA_OWN_TAKES_USE,
+		LORA_SAMPLE_ADDING,
 		LORA_SAMPLE_COPY_FAILED,
 		LORA_SAMPLE_UPLOAD_FAILED,
 		LORA_TAKE_LABEL_PREFIX
@@ -141,7 +143,7 @@
 			ownTakes = await listOwnPlayableTakes();
 		} catch (e) {
 			const message =
-				e instanceof ApiError ? e.detail || LORA_SAMPLE_COPY_FAILED : LORA_SAMPLE_COPY_FAILED;
+				e instanceof ApiError ? e.detail || LORA_OWN_TAKES_LOAD_FAILED : LORA_OWN_TAKES_LOAD_FAILED;
 			sampleError = message;
 			addToast(message, 'error');
 		} finally {
@@ -291,6 +293,7 @@
 						</label>
 					</span>
 				</div>
+				<p class="sample-sources">Your takes and uploads only.</p>
 				{#if newFile}
 					<p class="file-name">{newFile.name}</p>
 				{/if}
@@ -338,7 +341,9 @@
 										disabled={addingGenerationId !== null}
 										onclick={() => addOwnTake(take)}
 									>
-										{addingGenerationId === take.generation_id ? 'Adding...' : LORA_OWN_TAKES_USE}
+										{addingGenerationId === take.generation_id
+											? LORA_SAMPLE_ADDING
+											: LORA_OWN_TAKES_USE}
 									</button>
 								</li>
 							{/each}
@@ -612,6 +617,12 @@
 		border-radius: 4px;
 		color: var(--score-bad);
 		font-size: 0.85rem;
+	}
+
+	.sample-sources {
+		margin: 0.35rem 0 0;
+		font-size: 0.75rem;
+		color: var(--text-subtle);
 	}
 
 	.own-takes {

@@ -74,7 +74,7 @@ afterEach(async () => {
 });
 
 describe('LoraDetail', () => {
-	it('copies a selected own take and shows the take-derived sample after refresh', async () => {
+	it('copies a selected own take and refreshes its owner', async () => {
 		listOwnPlayableTakes.mockResolvedValueOnce([
 			{
 				generation_id: 'g1',
@@ -112,8 +112,7 @@ describe('LoraDetail', () => {
 				lyrics: 'A line from the take'
 			}
 		]);
-		const detail =
-			'You have reached the limit of 10 voices. Delete a voice before creating another.';
+		const detail = 'LoRA already has the maximum of 20 samples';
 		addLoraSampleFromGeneration.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras/l1'));
 		const target = await render();
 
