@@ -13,7 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
 DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
-DEFAULT_CONTAINER_BIND_HOST = "0.0.0.0"
+# The worker accepts control-plane traffic over the container network.
+DEFAULT_CONTAINER_BIND_HOST = "0.0.0.0"  # nosec B104
 
 
 class WorkerSettings(BaseSettings):
