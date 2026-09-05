@@ -15,15 +15,44 @@ sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
 
 
-def test_bubblewrap_probe_matches_the_observed_codex_argv() -> None:
-    assert proof.bubblewrap_probe_command() == (
+def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() -> None:
+    command = proof.bubblewrap_probe_command()
+
+    assert command[:11] == (
         "bwrap",
-        "--unshare-user",
-        "--unshare-net",
+        "--new-session",
+        "--die-with-parent",
         "--ro-bind", "/", "/",
-        "--",
-        "/bin/true",
+        "--dev", "/dev",
+        "--bind", proof.SANDBOX_CODEX_HOME, proof.SANDBOX_CODEX_HOME,
     )
+    expected_home_overlays = tuple(
+        argument
+        for protected_path in proof._PROTECTED_CODEX_HOME_PATHS
+        for argument in (
+            "--perms",
+            "555",
+            "--tmpfs",
+            f"{proof.SANDBOX_CODEX_HOME}/{protected_path}",
+            "--remount-ro",
+            f"{proof.SANDBOX_CODEX_HOME}/{protected_path}",
+        )
+    )
+    assert command[11:29] == expected_home_overlays
+    assert command[29:-4] == (
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-net",
+        "--proc", "/proc",
+    )
+    assert command[-4:-1] == ("--", "/bin/sh", "-ec")
+    assertions = command[-1]
+    assert "songmaker-sandbox-write-probe" in assertions
+    assert "outside-codex-home" in assertions
+    assert "NoNewPrivs:" in assertions
+    assert "CapEff:" in assertions
+    assert '"${EMPTY_CAPABILITY_MASK}"' in assertions
+    assert "1.1.1.1" in assertions
 
 
 def test_prove_checks_the_custom_profile_and_default_profile_negative_control() -> None:
@@ -43,7 +72,18 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
 
     proof.prove(run)
 
-    assert any(command[:4] == ("docker", "compose", "exec", "-T") for command in commands)
+    prepare = next(
+        command
+        for command in commands
+        if command[:4] == ("docker", "compose", "exec", "-T") and "/bin/mkdir" in command
+    )
+    assert f"{proof.SANDBOX_CODEX_HOME}/.codex" in prepare
+    sandbox = next(
+        command
+        for command in commands
+        if command[:4] == ("docker", "compose", "exec", "-T") and "CODEX_HOME=" in " ".join(command)
+    )
+    assert f"CODEX_HOME={proof.SANDBOX_CODEX_HOME}" in sandbox
     reference = next(command for command in commands if command[:2] == ("docker", "run"))
     assert f"apparmor={proof.DEFAULT_DOCKER_PROFILE}" in reference
     assert ("--network", "none") == reference[3:5]

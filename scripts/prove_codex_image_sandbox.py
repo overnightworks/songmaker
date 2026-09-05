@@ -11,13 +11,37 @@ from dataclasses import dataclass
 WEB_SERVICE = "songmaker-web"
 WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
-CODEX_READ_ONLY_BWRAP_ARGUMENTS = (
-    "--unshare-user",
-    "--unshare-net",
-    "--ro-bind", "/", "/",
-    "--",
-    "/bin/true",
+EMPTY_CAPABILITY_MASK = "0000000000000000"
+SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
+_PROTECTED_CODEX_HOME_PATHS = (".git", ".agents", ".codex")
+_PREPARE_AND_EXECUTE_BWRAP = (
+    'home=$1; shift; mkdir -p "$home/.git" "$home/.agents" "$home/.codex"; '
+    'exec bwrap "$@"'
 )
+
+_SANDBOX_ASSERTIONS = """set -eu
+: > "$CODEX_HOME/allowed"
+if : > /app/songmaker-sandbox-write-probe; then
+  echo 'sandbox wrote outside CODEX_HOME' >&2
+  exit 1
+fi
+if : > /tmp/outside-codex-home; then
+  echo 'sandbox wrote outside CODEX_HOME' >&2
+  exit 1
+fi
+test "$(awk '/^NoNewPrivs:/ { print $2 }' /proc/self/status)" = 1
+test "$(awk '/^CapEff:/ { print $2 }' /proc/self/status)" = "${EMPTY_CAPABILITY_MASK}"
+""" + """/app/.venv/bin/python - <<'PY'
+import socket
+
+try:
+    socket.create_connection(("1.1.1.1", 443), timeout=2)
+except OSError:
+    pass
+else:
+    raise SystemExit("sandbox network unexpectedly reachable")
+PY
+"""
 
 
 @dataclass(frozen=True)
@@ -33,8 +57,29 @@ CommandRunner = Callable[[Sequence[str]], CommandResult]
 
 
 def bubblewrap_probe_command() -> tuple[str, ...]:
-    """Build the Bubblewrap form embedded in Codex's Linux binary."""
-    return ("bwrap", *CODEX_READ_ONLY_BWRAP_ARGUMENTS)
+    """Build Codex's traced read-only execution form with G4 assertions."""
+    command = [
+        "bwrap",
+        "--new-session",
+        "--die-with-parent",
+        "--ro-bind", "/", "/",
+        "--dev", "/dev",
+        "--bind", SANDBOX_CODEX_HOME, SANDBOX_CODEX_HOME,
+    ]
+    for protected_path in _PROTECTED_CODEX_HOME_PATHS:
+        path = f"{SANDBOX_CODEX_HOME}/{protected_path}"
+        command.extend(("--perms", "555", "--tmpfs", path, "--remount-ro", path))
+    command.extend((
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-net",
+        "--proc", "/proc",
+        "--",
+        "/bin/sh",
+        "-ec",
+        _SANDBOX_ASSERTIONS,
+    ))
+    return tuple(command)
 
 
 def _run(command: Sequence[str]) -> CommandResult:
@@ -66,8 +111,25 @@ def _verify_web_profile(run: CommandRunner) -> None:
 
 
 def _verify_sandbox(run: CommandRunner) -> None:
-    result = run(("docker", "compose", "exec", "-T", WEB_SERVICE, *bubblewrap_probe_command()))
-    _required_output(result, "Codex Bubblewrap probe")
+    prepare = run((
+        "docker", "compose", "exec", "-T", WEB_SERVICE,
+        "/bin/mkdir", "-p",
+        *(f"{SANDBOX_CODEX_HOME}/{path}" for path in _PROTECTED_CODEX_HOME_PATHS),
+    ))
+    _required_output(prepare, "preparing the private CODEX_HOME probe directory")
+    try:
+        result = run((
+            "docker", "compose", "exec", "-T",
+            "-e", f"CODEX_HOME={SANDBOX_CODEX_HOME}",
+            WEB_SERVICE,
+            *bubblewrap_probe_command(),
+        ))
+        _required_output(result, "Codex read-only sandbox proof")
+    finally:
+        run((
+            "docker", "compose", "exec", "-T", WEB_SERVICE,
+            "/bin/rm", "-rf", SANDBOX_CODEX_HOME,
+        ))
 
 
 def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
@@ -90,9 +152,15 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         f"apparmor={DEFAULT_DOCKER_PROFILE}",
         "--security-opt",
         "no-new-privileges:true",
+        "--tmpfs",
+        "/tmp",
         "--entrypoint",
-        "bwrap",
+        "/bin/sh",
         image,
+        "-ec",
+        _PREPARE_AND_EXECUTE_BWRAP,
+        "bwrap-probe",
+        SANDBOX_CODEX_HOME,
         *bubblewrap_probe_command()[1:],
     ))
     if result.returncode == 0:

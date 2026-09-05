@@ -35,7 +35,7 @@ QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS: Final = 4 * 60 * 60
 _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
     1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
 )
-_CODEX_READ_ONLY_BWRAP_ARGUMENTS: Final = (
+_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
     "--unshare-user",
     "--unshare-net",
     "--ro-bind", "/", "/",
@@ -126,7 +126,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
         result = subprocess.run(
             (
                 bubblewrap,
-                *_CODEX_READ_ONLY_BWRAP_ARGUMENTS,
+                *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS,
             ),
             check=False,
             stdin=subprocess.DEVNULL,
