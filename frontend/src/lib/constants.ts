@@ -443,16 +443,6 @@ export const RAIL_PLAYING_MARKER_LABEL = 'Playing';
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
-export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
-export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
-export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
-export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
-	albums: 'Albums',
-	playlists: 'Playlists',
-	shared: 'Shared'
-};
-export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
-
 export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
 export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';
 // Match the mobile shell: without a stored choice, its song and take row

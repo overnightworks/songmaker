@@ -64,7 +64,11 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		expect.arrayContaining(['Album'])
 	);
 
-	await page.locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
+	await page
+		.locator('.library-wall .tile-grid')
+		.locator('.wall-tile-body')
+		.filter({ hasText: library.albumTitle })
+		.click();
 	const listenReport = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'POST' &&

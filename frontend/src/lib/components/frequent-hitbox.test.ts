@@ -84,7 +84,6 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 		openLibraryCreate: vi.fn(),
 		openLibraryWall: vi.fn(),
 		openPlaylist: vi.fn(),
-		selectLibraryFilter: vi.fn(),
 		selectSong: vi.fn(),
 		persistLibraryHistory: vi.fn()
 	};
@@ -129,7 +128,6 @@ import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
-import LibraryWall from './LibraryWall.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 import RailSearch from './shell/RailSearch.svelte';
@@ -137,7 +135,6 @@ import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
-import libraryWallSource from './LibraryWall.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
@@ -154,7 +151,6 @@ const COMPONENT_STYLE_SOURCES = {
 	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
-	LibraryWall: { source: libraryWallSource, filename: 'LibraryWall.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
@@ -240,8 +236,7 @@ const INVENTORY = [
 
 // Each inventory target's own component owns the scope class the DOM already
 // carries, so its stylesheet only needs compiling and injecting once per
-// component even though several targets can share one file (e.g. the three
-// LibraryWall targets). A target with no scope class at all (drawer-trigger:
+// component even though several targets can share one file. A target with no scope class at all (drawer-trigger:
 // nothing in +layout.svelte's <style> matches it) has no scoped rule reaching
 // it either, so it is skipped rather than treated as a missing measurement.
 function injectInventoryComponentStyles(
@@ -491,7 +486,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const themeTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
 	const albumTarget = document.createElement('div');
-	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const railSearchTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
@@ -500,7 +494,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 		themeTarget,
 		playlistTarget,
 		albumTarget,
-		songTarget,
 		pickerTarget,
 		railSearchTarget,
 		layoutTarget,
@@ -514,7 +507,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	// The album interior is asked for by id rather than by opening it, since the
 	// playlist interior above needs the open collection to stay its own.
 	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
-	mounted.push(mount(LibraryWall, { target: songTarget }));
 	mounted.push(
 		mount(PlaylistPicker, {
 			target: pickerTarget,
