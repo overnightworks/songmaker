@@ -575,7 +575,9 @@ async def api_chat_turn(
                     provider_route_capability(provider, route)
                     is ProviderRouteCapability.TOOLS_AVAILABLE
                 ),
-                text_tool_protocol=(provider == "grok" and route is ProviderRoute.CLI),
+                text_tool_protocol=(
+                    provider in {"grok", "codex"} and route is ProviderRoute.CLI
+                ),
             ),
             messages=api_messages,
             session=session,
