@@ -68,12 +68,14 @@ def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
             _consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
             _consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
         )
+
     return get_cached_limiter(request, "_queue_stream_limiter", _build)
 
 
 def check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
     enforce_rate_limit(
-        _get_queue_stream_limiter(request), user.id,
+        _get_queue_stream_limiter(request),
+        user.id,
         policy=_QUEUE_STREAM_LIMITER_FAILURE_POLICY,
         reject_detail="Too many queue stream requests",
         retry_after_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
@@ -254,7 +256,10 @@ def resolve_library_pool_membership(
     shuffle: bool,
 ) -> LibraryPoolMembership:
     songs = list_songs(
-        session, user_id=user.id, light=True, with_generations=True,
+        session,
+        user_id=user.id,
+        light=True,
+        with_generations=True,
         exclude_archived_albums=True,
     )
     songs = sorted(
@@ -277,7 +282,34 @@ def resolve_library_pool_membership(
         pool,
         start_gen,
     )
-    candidate_sources: list[QueueStreamSource] = [
+    candidate_sources = _library_candidate_sources(pool_generations)
+    canonical_rank = {source.generation.id: rank for rank, source in enumerate(candidate_sources)}
+    candidate_sources = _order_library_candidates(
+        candidate_sources,
+        start_gen,
+        shuffle,
+    )
+
+    skipped, playable_sources, unscanned_tail = _scan_library_candidates(
+        ctx,
+        candidate_sources,
+        start_gen,
+    )
+    if not playable_sources:
+        _raise_empty_library_pool(pool, unscanned_tail)
+
+    skipped.sort(key=lambda item: canonical_rank[item.generation_id])
+    sources = [replace(source, index=index) for index, source in enumerate(playable_sources)]
+    return LibraryPoolMembership(
+        pool=pool,
+        sources=sources,
+        skipped=skipped,
+        skipped_complete=not unscanned_tail,
+    )
+
+
+def _library_candidate_sources(pool_generations: list[Generation]) -> list[QueueStreamSource]:
+    return [
         track_source_from_generation(
             gen,
             key=gen.id,
@@ -287,24 +319,42 @@ def resolve_library_pool_membership(
         )
         for index, gen in enumerate(pool_generations)
     ]
-    canonical_rank = {source.generation.id: rank for rank, source in enumerate(candidate_sources)}
 
+
+def _order_library_candidates(
+    sources: list[QueueStreamSource],
+    start_gen: Generation | None,
+    shuffle: bool,
+) -> list[QueueStreamSource]:
     if shuffle:
-        candidate_sources = shuffle_library_sources(
-            candidate_sources, start_gen.id if start_gen is not None else None
-        )
-    elif start_gen is not None:
-        rotation_pos = next(
-            (
-                i
-                for i, source in enumerate(candidate_sources)
-                if source.generation.id == start_gen.id
-            ),
-            None,
-        )
-        if rotation_pos is not None:
-            candidate_sources = candidate_sources[rotation_pos:] + candidate_sources[:rotation_pos]
+        return shuffle_library_sources(sources, start_gen.id if start_gen is not None else None)
+    if start_gen is None:
+        return sources
+    return _rotate_sources_to_start(sources, start_gen.id)
 
+
+def _rotate_sources_to_start(
+    sources: list[QueueStreamSource],
+    start_generation_id: str,
+) -> list[QueueStreamSource]:
+    rotation_pos = next(
+        (
+            index
+            for index, source in enumerate(sources)
+            if source.generation.id == start_generation_id
+        ),
+        None,
+    )
+    if rotation_pos is None:
+        return sources
+    return sources[rotation_pos:] + sources[:rotation_pos]
+
+
+def _scan_library_candidates(
+    ctx: AppContext,
+    candidate_sources: list[QueueStreamSource],
+    start_gen: Generation | None,
+) -> tuple[list[QueueStreamSkipResponse], list[QueueStreamSource], bool]:
     skipped: list[QueueStreamSkipResponse] = []
     playable_sources: list[QueueStreamSource] = []
     scanned = 0
@@ -323,26 +373,13 @@ def resolve_library_pool_membership(
             skipped.append(skip)
         else:
             playable_sources.append(source)
+    return skipped, playable_sources, scanned < len(candidate_sources)
 
-    unscanned_tail = scanned < len(candidate_sources)
-    if not playable_sources:
-        if unscanned_tail:
-            raise HTTPException(422, "No playable takes in scanned library window")
-        raise HTTPException(
-            422,
-            f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{pool}'",
-        )
 
-    skipped.sort(key=lambda item: canonical_rank[item.generation_id])
-    sources = [
-        replace(source, index=new_index) for new_index, source in enumerate(playable_sources)
-    ]
-    return LibraryPoolMembership(
-        pool=pool,
-        sources=sources,
-        skipped=skipped,
-        skipped_complete=not unscanned_tail,
-    )
+def _raise_empty_library_pool(pool: LibraryTakePool, unscanned_tail: bool) -> None:
+    if unscanned_tail:
+        raise HTTPException(422, "No playable takes in scanned library window")
+    raise HTTPException(422, f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{pool}'")
 
 
 @router.post(

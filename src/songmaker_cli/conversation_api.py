@@ -13,6 +13,7 @@ This module owns the Phase 3 conversation-scoped chat API:
 The legacy per-song endpoints in ``chat_api.py`` remain for backwards
 compatibility during rollout.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -103,6 +105,9 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.db.queries.conversations import append_message
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
+if TYPE_CHECKING:
+    from songmaker_cli.cowriter.catalog import ProviderRoute
+
 log = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -157,7 +162,7 @@ COWRITER_MEMORY_INSTRUCTIONS = (
     "this song's concept, locked versus open decisions, names, and open "
     "questions; album_notes holds optional album-level notes. Do not copy "
     "full lyrics into memory. To propose a memory change, emit exactly:\n"
-    "<memory_proposal scope=\"user|song|album\" target_id=\"id-if-not-user\">\n"
+    '<memory_proposal scope="user|song|album" target_id="id-if-not-user">\n'
     "<current>\nexisting text\n</current>\n"
     "<proposed>\nnew text\n</proposed>\n"
     "</memory_proposal>\n"
@@ -165,8 +170,11 @@ COWRITER_MEMORY_INSTRUCTIONS = (
     "is stored. Do not write memory through tools."
 )
 
+
 def build_cowriter_system_prompt(
-    *, tools_available: bool, text_tool_protocol: bool = False,
+    *,
+    tools_available: bool,
+    text_tool_protocol: bool = False,
 ) -> str:
     """Build the route-honest co-writer instructions around shared context rules."""
     route_instructions = (
@@ -249,18 +257,27 @@ def compose_turn_context(
     """
     blocks: list[TurnContextBlock] = []
     if current_song is not None:
-        blocks.append(TurnContextBlock(
-            TURN_BLOCK_CURRENT_SONG, _format_current_song(current_song),
-        ))
+        blocks.append(
+            TurnContextBlock(
+                TURN_BLOCK_CURRENT_SONG,
+                _format_current_song(current_song),
+            )
+        )
     blocks.append(TurnContextBlock(TURN_BLOCK_USER_MEMORY, user_memory_body))
     if current_song is not None:
-        blocks.append(TurnContextBlock(
-            TURN_BLOCK_SONG_MEMORY, song_memory_body or "",
-        ))
+        blocks.append(
+            TurnContextBlock(
+                TURN_BLOCK_SONG_MEMORY,
+                song_memory_body or "",
+            )
+        )
         if album_notes_body:
-            blocks.append(TurnContextBlock(
-                TURN_BLOCK_ALBUM_NOTES, album_notes_body,
-            ))
+            blocks.append(
+                TurnContextBlock(
+                    TURN_BLOCK_ALBUM_NOTES,
+                    album_notes_body,
+                )
+            )
     blocks.extend(extra_blocks)
     names = [block.name for block in blocks]
     if len(names) != len(set(names)):
@@ -269,7 +286,9 @@ def compose_turn_context(
 
 
 def load_memory_for_turn(
-    session: Session, user_id: str, current_song: Song | None,
+    session: Session,
+    user_id: str,
+    current_song: Song | None,
 ) -> tuple[str, str | None, str | None]:
     user_row = get_user_memory(session, user_id)
     user_body = user_row.body if user_row else ""
@@ -363,9 +382,12 @@ def _mentioned_album_block(
     album = get_album(session, mentioned_album_id)
     check_album_access(album, user)
     tracks = list_songs(
-        session, album_id=album.id, user_id=owner_filter(user), light=True,
+        session,
+        album_id=album.id,
+        user_id=owner_filter(user),
+        light=True,
     )
-    body = f"id: {album.id}\n" f"title: {album.title}\ntracks:\n"
+    body = f"id: {album.id}\ntitle: {album.title}\ntracks:\n"
     return TurnContextBlock(
         TURN_BLOCK_MENTIONED_ALBUM,
         body + "\n\n".join(_format_current_song(song) for song in tracks),
@@ -429,7 +451,8 @@ def resolve_take_block(
         generation = check_generation_access(session, current_generation_id, user)
         if current_song is None or generation.song_id != current_song.id:
             raise HTTPException(
-                422, "Generation does not belong to the current song",
+                422,
+                "Generation does not belong to the current song",
             )
         if not _generation_is_playable(generation):
             raise HTTPException(422, "Generation is not playable")
@@ -447,6 +470,40 @@ def resolve_take_block(
 
 
 SSE_MEDIA_TYPE = "text/event-stream"
+
+
+@dataclass(frozen=True)
+class PreparedChatTurn:
+    provider: str
+    route: ProviderRoute
+    model: str
+    api_messages: list[dict[str, str]]
+    windowed: bool
+    tail_budget: int
+    job_id: str
+
+
+@dataclass
+class ChatTurnLifecycle:
+    session: Session
+    job_id: str
+    heartbeat_task: asyncio.Task[None] | None = None
+    finished: bool = False
+
+    async def finish(self, *, cancelled: bool) -> None:
+        from songmaker_cli.jobs._runtime import (
+            _cancel_chat_job,
+            _stop_chat_job_heartbeat,
+        )
+
+        if self.finished:
+            return
+        self.finished = True
+        assert self.heartbeat_task is not None
+        if cancelled:
+            await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
+            return
+        await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
 
 
 def _sse_format(event: StreamEvent | dict) -> str:
@@ -470,20 +527,53 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    from songmaker_cli.jobs._runtime import (
-        _cancel_chat_job,
-        _fail_chat_job,
-        _keep_chat_job_heartbeat,
-        _stop_chat_job_heartbeat,
-    )
+    from songmaker_cli.jobs._runtime import _keep_chat_job_heartbeat
 
     check_redis_health(request)
+    prepared = _prepare_chat_turn(req, request, user, session)
+    lifecycle = ChatTurnLifecycle(session, prepared.job_id)
+    lifecycle.heartbeat_task = asyncio.create_task(
+        _keep_chat_job_heartbeat(request.app.state.ctx.db, prepared.job_id),
+    )
 
-    current_song = None
-    if req.current_song_id is not None:
-        current_song = check_song_access(session, req.current_song_id, user)
+    return _ChatStreamingResponse(
+        _chat_event_generator(req, user, session, prepared, lifecycle),
+        abort_chat_turn=lambda: lifecycle.finish(cancelled=True),
+        media_type=SSE_MEDIA_TYPE,
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
-    mention_blocks = resolve_mention_blocks(
+
+def _prepare_chat_turn(
+    req: ChatTurnV2Request,
+    request: Request,
+    user: AuthenticatedUser,
+    session: Session,
+) -> PreparedChatTurn:
+    envelope = _chat_turn_context(req, user, session)
+    provider, route, model = _chat_turn_provider(session)
+    job = create_job_with_rate_limit(
+        session,
+        user,
+        JobType.CHAT,
+        redis=request.app.state.ctx.redis,
+    )
+    update_job_status(session, job.id, JobStatus.RUNNING)
+    session.commit()
+    return _prepare_chat_messages(req, user, session, envelope, provider, route, model, job.id)
+
+
+def _chat_turn_context(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    session: Session,
+) -> TurnContextEnvelope:
+    current_song = (
+        check_song_access(session, req.current_song_id, user)
+        if req.current_song_id is not None
+        else None
+    )
+    extra_blocks = resolve_mention_blocks(
         session,
         user,
         current_song,
@@ -491,16 +581,14 @@ async def api_chat_turn(
         req.mentioned_version_ids,
         req.mentioned_album_id,
     )
-    take_block = resolve_take_block(
-        session, user, current_song, req.current_generation_id,
-    )
-    extra_blocks = list(mention_blocks)
-    if take_block is not None:
+    if take_block := resolve_take_block(session, user, current_song, req.current_generation_id):
         extra_blocks.append(take_block)
     user_memory_body, song_memory_body, album_notes_body = load_memory_for_turn(
-        session, user.id, current_song,
+        session,
+        user.id,
+        current_song,
     )
-    envelope = compose_turn_context(
+    return compose_turn_context(
         current_song=current_song,
         user_memory_body=user_memory_body,
         song_memory_body=song_memory_body,
@@ -508,29 +596,32 @@ async def api_chat_turn(
         extra_blocks=extra_blocks,
     )
 
+
+def _chat_turn_provider(session: Session) -> tuple[str, ProviderRoute, str]:
+    from songmaker_cli.cowriter.catalog import ProviderRoute
+
     try:
         provider = get_cowriter_provider(session)
-        cowriter_model = get_cowriter_model(session, provider)
-        from songmaker_cli.cowriter.catalog import (
-            ProviderRoute,
-            ProviderRouteCapability,
-            provider_route_capability,
-        )
-
         route = ProviderRoute(get_effective_provider_routes(session)[provider])
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    if not cowriter_model:
-        raise HTTPException(
-            422, f"No co-writer model configured for {provider}",
-        )
+    model = get_cowriter_model(session, provider)
+    if not model:
+        raise HTTPException(422, f"No co-writer model configured for {provider}")
+    return provider, route, model
 
-    job = create_job_with_rate_limit(
-        session, user, JobType.CHAT, redis=request.app.state.ctx.redis,
-    )
-    job_id = job.id
-    update_job_status(session, job_id, JobStatus.RUNNING)
-    session.commit()
+
+def _prepare_chat_messages(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    session: Session,
+    envelope: TurnContextEnvelope,
+    provider: str,
+    route: ProviderRoute,
+    model: str,
+    job_id: str,
+) -> PreparedChatTurn:
+    from songmaker_cli.jobs._runtime import _fail_chat_job
 
     try:
         active = get_active_conversation(session, user.id)
@@ -542,28 +633,9 @@ async def api_chat_turn(
             existing=active.summary if active is not None else None,
             summarize=fold_summary,
         )
-        if (
-            active is not None
-            and compacted.windowed
-            and compacted.summary_text is not None
-        ):
-            upsert_summary(
-                session,
-                active.id,
-                compacted.summary_text,
-                compacted.last_summarized_message_id,
-                message_count=len(history),
-                token_count=(
-                    count_tokens(compacted.summary_text)
-                    + sum(count_tokens(msg.content) for msg in compacted.tail)
-                ),
-            )
-            session.commit()
+        _save_compacted_summary(session, active, history, compacted)
         api_messages = compacted.to_api_messages()
-        api_messages.append({
-            "role": "user",
-            "content": envelope.wrap_user_message(req.message),
-        })
+        api_messages.append({"role": "user", "content": envelope.wrap_user_message(req.message)})
     except asyncio.CancelledError:
         _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
         raise
@@ -571,142 +643,195 @@ async def api_chat_turn(
         log.exception("Co-writer chat setup failed")
         _fail_chat_job(session, job_id, "Chat setup failed", "setup_error")
         raise
+    return PreparedChatTurn(
+        provider,
+        route,
+        model,
+        api_messages,
+        compacted.windowed,
+        tail_budget,
+        job_id,
+    )
 
-    chat_turn_finished = False
 
-    async def finish_chat_turn(*, cancelled: bool) -> None:
-        """Persist a terminal chat state and stop its heartbeat once."""
-        nonlocal chat_turn_finished
-        if chat_turn_finished:
-            return
-        chat_turn_finished = True
-        if cancelled:
-            await _cancel_chat_job(session, heartbeat_task, job_id)
-        else:
-            await _stop_chat_job_heartbeat(heartbeat_task, job_id)
+def _save_compacted_summary(session: Session, active, history, compacted) -> None:
+    if active is None or not compacted.windowed or compacted.summary_text is None:
+        return
+    upsert_summary(
+        session,
+        active.id,
+        compacted.summary_text,
+        compacted.last_summarized_message_id,
+        message_count=len(history),
+        token_count=(
+            count_tokens(compacted.summary_text)
+            + sum(count_tokens(msg.content) for msg in compacted.tail)
+        ),
+    )
+    session.commit()
 
-    async def event_generator() -> AsyncIterator[str]:
-        turn_has_terminal_status = False
-        assistant_text = ""
-        started = time.monotonic()
-        stream = stream_cowriter_turn(
-            provider=provider,
-            route=route,
-            model=cowriter_model,
-            user_id=user.id,
-            system=build_cowriter_system_prompt(
-                tools_available=(
-                    provider_route_capability(provider, route)
-                    is ProviderRouteCapability.TOOLS_AVAILABLE
-                ),
-                text_tool_protocol=(
-                    provider in {"grok", "codex"} and route is ProviderRoute.CLI
-                ),
+
+async def _chat_event_generator(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    session: Session,
+    prepared: PreparedChatTurn,
+    lifecycle: ChatTurnLifecycle,
+) -> AsyncIterator[str]:
+    from songmaker_cli.cowriter.catalog import (
+        ProviderRoute,
+        ProviderRouteCapability,
+        provider_route_capability,
+    )
+
+    started = time.monotonic()
+    stream = stream_cowriter_turn(
+        provider=prepared.provider,
+        route=prepared.route,
+        model=prepared.model,
+        user_id=user.id,
+        system=build_cowriter_system_prompt(
+            tools_available=(
+                provider_route_capability(prepared.provider, prepared.route)
+                is ProviderRouteCapability.TOOLS_AVAILABLE
             ),
-            messages=api_messages,
-            session=session,
-            user=user,
-        )
+            text_tool_protocol=(
+                prepared.provider in {"grok", "codex"} and prepared.route is ProviderRoute.CLI
+            ),
+        ),
+        messages=prepared.api_messages,
+        session=session,
+        user=user,
+    )
+    terminal = False
+    try:
+        assistant_text = ""
         try:
-            try:
-                async for event in stream:
-                    if isinstance(event, FinalEvent):
-                        assistant_text = event.text
-                        break
-                    yield _sse_format(event)
-                log.info(
-                    "cowriter turn provider=%s windowed=%s duration_ms=%d tail_budget=%d",
-                    provider,
-                    compacted.windowed,
-                    int((time.monotonic() - started) * 1000),
-                    tail_budget,
-                )
-            except ProviderUnavailableError as e:
-                log.warning(
-                    "Co-writer unavailable provider=%s route=%s reason=%s",
-                    e.provider,
-                    e.route,
-                    e.reason.code if e.reason is not None else "route_failed",
-                )
-                _fail_chat_job(session, job_id, f"{e.provider} unavailable", "unavailable")
-                turn_has_terminal_status = True
-                yield _sse_format({
-                    "type": "error",
-                    "status": 503,
-                    "provider": e.provider,
-                    "route": e.route,
-                    "reason": (e.reason or normalize_route_failure(
-                        SafeRouteReasonCode.ROUTE_FAILED,
-                    )).model_dump(mode="json"),
-                })
-                return
-            except Exception as exc:
-                log.error("Co-writer chat failed (%s)", type(exc).__name__)
-                _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
-                turn_has_terminal_status = True
-                yield _sse_format({
-                    "type": "error",
-                    "status": 500,
-                    "message": "Chat request failed",
-                })
-                return
-
-            try:
-                conversation = get_or_create_active_conversation(session, user.id)
-                user_msg = append_message(
-                    session, conversation.id, "user", req.message,
-                    song_id=req.current_song_id,
-                )
-                assistant_msg = append_message(
-                    session, conversation.id, "assistant", assistant_text,
-                    song_id=req.current_song_id,
-                )
-                if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
-                    log.warning("Chat job %s was already terminal at completion", job_id)
-                session.commit()
-            except Exception:
-                log.exception("Co-writer chat completion failed")
-                _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
-                turn_has_terminal_status = True
-                yield _sse_format({
-                    "type": "error",
-                    "status": 500,
-                    "message": "Chat completion failed",
-                })
-                return
-
-            turn_has_terminal_status = True
-            yield _sse_format({
-                "type": "final",
-                "conversation_id": conversation.id,
-                "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
-                "assistant_message": ChatMessageResponse.from_orm(
-                    assistant_msg,
-                ).model_dump(),
-            })
+            async for event in stream:
+                if isinstance(event, FinalEvent):
+                    assistant_text = event.text
+                    break
+                yield _sse_format(event)
+            _log_chat_turn(prepared, started)
+        except ProviderUnavailableError as exc:
+            terminal = True
+            yield _provider_unavailable_event(session, prepared.job_id, exc)
+            return
+        except Exception as exc:
+            terminal = True
+            yield _chat_failure_event(session, prepared.job_id, exc)
+            return
+        try:
+            final_event = _complete_chat_turn(req, user, session, prepared.job_id, assistant_text)
+        except Exception:
+            terminal = True
+            yield _chat_completion_failure_event(session, prepared.job_id)
+            return
+        terminal = True
+        yield _sse_format(final_event)
+    finally:
+        try:
+            await stream.aclose()
         finally:
-            try:
-                await stream.aclose()
-            finally:
-                await finish_chat_turn(cancelled=not turn_has_terminal_status)
+            await lifecycle.finish(cancelled=not terminal)
 
-    heartbeat_task = asyncio.create_task(
-        _keep_chat_job_heartbeat(request.app.state.ctx.db, job_id),
+
+def _log_chat_turn(prepared: PreparedChatTurn, started: float) -> None:
+    log.info(
+        "cowriter turn provider=%s windowed=%s duration_ms=%d tail_budget=%d",
+        prepared.provider,
+        prepared.windowed,
+        int((time.monotonic() - started) * 1000),
+        prepared.tail_budget,
     )
 
-    return _ChatStreamingResponse(
-        event_generator(),
-        abort_chat_turn=lambda: finish_chat_turn(cancelled=True),
-        media_type=SSE_MEDIA_TYPE,
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+
+def _provider_unavailable_event(
+    session: Session,
+    job_id: str,
+    exc: ProviderUnavailableError,
+) -> str:
+    from songmaker_cli.jobs._runtime import _fail_chat_job
+
+    log.warning(
+        "Co-writer unavailable provider=%s route=%s reason=%s",
+        exc.provider,
+        exc.route,
+        exc.reason.code if exc.reason is not None else "route_failed",
     )
+    _fail_chat_job(session, job_id, f"{exc.provider} unavailable", "unavailable")
+    return _sse_format(
+        {
+            "type": "error",
+            "status": 503,
+            "provider": exc.provider,
+            "route": exc.route,
+            "reason": (
+                exc.reason
+                or normalize_route_failure(
+                    SafeRouteReasonCode.ROUTE_FAILED,
+                )
+            ).model_dump(mode="json"),
+        }
+    )
+
+
+def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
+    from songmaker_cli.jobs._runtime import _fail_chat_job
+
+    log.error("Co-writer chat failed (%s)", type(exc).__name__)
+    _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
+    return _sse_format({"type": "error", "status": 500, "message": "Chat request failed"})
+
+
+def _complete_chat_turn(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    session: Session,
+    job_id: str,
+    assistant_text: str,
+) -> dict:
+    conversation = get_or_create_active_conversation(session, user.id)
+    user_message = append_message(
+        session,
+        conversation.id,
+        "user",
+        req.message,
+        song_id=req.current_song_id,
+    )
+    assistant_message = append_message(
+        session,
+        conversation.id,
+        "assistant",
+        assistant_text,
+        song_id=req.current_song_id,
+    )
+    if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
+        log.warning("Chat job %s was already terminal at completion", job_id)
+    session.commit()
+    return {
+        "type": "final",
+        "conversation_id": conversation.id,
+        "user_message": ChatMessageResponse.from_orm(user_message).model_dump(),
+        "assistant_message": ChatMessageResponse.from_orm(assistant_message).model_dump(),
+    }
+
+
+def _chat_completion_failure_event(session: Session, job_id: str) -> str:
+    from songmaker_cli.jobs._runtime import _fail_chat_job
+
+    log.exception("Co-writer chat completion failed")
+    _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
+    return _sse_format({"type": "error", "status": 500, "message": "Chat completion failed"})
 
 
 # ── Conversation CRUD ────────────────────────────────────────────────
 
 
 def _verify_owns_conversation(
-    session: Session, conversation_id: str, user: AuthenticatedUser,
+    session: Session,
+    conversation_id: str,
+    user: AuthenticatedUser,
 ):
     conv = get_conversation(session, conversation_id)
     if conv is None or conv.user_id != user.id:
@@ -794,7 +919,9 @@ def api_get_memory(
         user=bundle.user,
         song=MemoryScopeResponse.from_orm(MEMORY_SCOPE_SONG, song.id, song_row),
         album=MemoryScopeResponse.from_orm(
-            MEMORY_SCOPE_ALBUM, song.album_id, album_row,
+            MEMORY_SCOPE_ALBUM,
+            song.album_id,
+            album_row,
         ),
     )
 
