@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { APIRequestContext } from '@playwright/test';
+import { expect, type APIRequestContext } from '@playwright/test';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
 const execFileAsync = promisify(execFile);
@@ -70,8 +70,18 @@ export interface SeededTake {
 /** A private, playable take for the Voices flow to select through its real catalogue. */
 export interface SeededVoiceTake {
 	songTitle: string;
+	songId: string;
 	caption: string;
 	lyrics: string;
+}
+
+export interface QueuedJob {
+	id: string;
+	status: string;
+}
+
+interface VoiceLifecycle {
+	status: string;
 }
 
 /** Seeded once per run: nothing the flows do mutates it. */
@@ -247,6 +257,15 @@ class SeedApi {
 		return this.send<T>(url, { multipart });
 	}
 
+	async delete(url: string): Promise<void> {
+		const response = await this.api.delete(url, {
+			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL }
+		});
+		if (!response.ok()) {
+			throw new Error(`DELETE ${url} failed: ${response.status()} ${await response.text()}`);
+		}
+	}
+
 	private async send<T>(
 		url: string,
 		body: { data?: unknown; multipart?: Record<string, MultipartFile> }
@@ -348,7 +367,7 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 		artist: ALBUM_ARTIST
 	});
 	try {
-		await execWithStdin(
+		const { stdout } = await execWithStdin(
 			'docker',
 			[
 				...COMPOSE_ARGS,
@@ -373,11 +392,63 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 			{ cwd: REPO_ROOT },
 			readFileSync(TAKE_FIXTURE)
 		);
+		const songId = stdout.trim();
+		if (!songId)
+			throw new Error('seed_e2e_song_takes.py printed no song id for the Voices source take');
+		return { songTitle, songId, caption, lyrics };
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Seeding the voices source take failed: ${detail}`, { cause: err });
 	}
-	return { songTitle, caption, lyrics };
+}
+
+/** Creates draft voices through the public API so the UI can prove the configured limit. */
+export async function seedVoiceDrafts(api: APIRequestContext, count: number): Promise<string[]> {
+	const seed = await SeedApi.fromSession(api);
+	const voiceIds: string[] = [];
+	for (let index = 0; index < count; index += 1) {
+		const voice = await seed.postJson<CreatedResource>('/api/loras', {
+			name: `E2E Voice Limit Filler ${runMarker()}-${index}`
+		});
+		voiceIds.push(voice.id);
+	}
+	return voiceIds;
+}
+
+/** Removes browser-proof voices so desktop and mobile exercise the same configured limit. */
+export async function deleteVoiceProofData(
+	api: APIRequestContext,
+	voiceIds: readonly string[]
+): Promise<void> {
+	const seed = await SeedApi.fromSession(api);
+	for (const voiceId of voiceIds) {
+		await expect
+			.poll(
+				async () => {
+					const response = await api.get(`/api/loras/${voiceId}`);
+					if (!response.ok()) {
+						throw new Error(`GET /api/loras/${voiceId} failed: ${response.status()}`);
+					}
+					const voice = (await response.json()) as VoiceLifecycle;
+					return !['queued', 'preprocessing', 'training', 'exporting'].includes(voice.status);
+				},
+				{ timeout: 40_000 }
+			)
+			.toBe(true);
+		await seed.delete(`/api/loras/${voiceId}`);
+	}
+}
+
+/** A real Generate job occupies the fake worker while the Voices flow waits. */
+export async function queueGenerateForVoiceProof(
+	api: APIRequestContext,
+	songId: string
+): Promise<QueuedJob> {
+	const seed = await SeedApi.fromSession(api);
+	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
+		count: 1,
+		model: 'sft'
+	});
 }
 
 function takeId(takes: Map<string, string>, songTitle: string): string {
