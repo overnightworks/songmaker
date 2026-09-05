@@ -1,13 +1,16 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist, persistLibraryHistory } from '$lib/stores/navigation';
-	import { playlistList, playlistLoad, loadPlaylists } from '$lib/stores/playlists';
-	import { openCollection } from '$lib/stores/collection';
 	import {
-		captureLibraryScroll,
-		libraryScrollAnchor
-	} from '$lib/stores/libraryContext';
+		ensurePlaylistsLoaded,
+		playlistList,
+		playlistLoad,
+		loadPlaylists
+	} from '$lib/stores/playlists';
+	import { openCollection } from '$lib/stores/collection';
+	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
 	import { libraryBrowse, librarySort, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
@@ -16,9 +19,7 @@
 	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
-	type WallItem =
-		| { type: 'album'; item: AlbumItem }
-		| { type: 'playlist'; item: PlaylistItem };
+	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
 
 	const albums = $derived($albumList);
 	const playlists = $derived($playlistList);
@@ -37,6 +38,10 @@
 	});
 
 	let browseEl = $state<HTMLElement | null>(null);
+
+	onMount(() => {
+		void ensurePlaylistsLoaded();
+	});
 
 	$effect(() => {
 		void wallItems.length;

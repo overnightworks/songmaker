@@ -95,17 +95,35 @@ async function render(): Promise<HTMLElement> {
 }
 
 function tileTitles(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.wall-tile .tile-title')].map((title) => title.textContent ?? '');
+	return [...root.querySelectorAll('.wall-tile .tile-title')].map(
+		(title) => title.textContent ?? ''
+	);
 }
 
 describe('LibraryWall', () => {
+	it('loads playlists when the wall mounts', async () => {
+		playlistLoad.set({ status: 'idle', error: null });
+		fetchPlaylists.mockResolvedValueOnce([playlist()]);
+
+		const root = await render();
+
+		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() =>
+			expect(root.querySelector('[aria-label="Open playlist Night Drive"]')).not.toBeNull()
+		);
+	});
+
 	it('shows albums and playlists in one chronological grid without filter chips', async () => {
 		albumList.set([
 			album({ id: 'a-new', title: 'New Album', created_at: '2026-03-03T00:00:00+00:00' }),
 			album({ id: 'a-old', title: 'Old Album', created_at: '2026-01-01T00:00:00+00:00' })
 		]);
 		playlistList.set([
-			playlist({ id: 'p-middle', title: 'Middle Playlist', created_at: '2026-02-02T00:00:00+00:00' })
+			playlist({
+				id: 'p-middle',
+				title: 'Middle Playlist',
+				created_at: '2026-02-02T00:00:00+00:00'
+			})
 		]);
 		const root = await render();
 
@@ -123,15 +141,15 @@ describe('LibraryWall', () => {
 		]);
 		const root = await render();
 
-		expect(root.querySelector<HTMLImageElement>('img[alt="Playlist cover for Night Drive"]')?.src).toContain(
-			'/covers/night-drive.jpg'
-		);
+		expect(
+			root.querySelector<HTMLImageElement>('img[alt="Playlist cover for Night Drive"]')?.src
+		).toContain('/covers/night-drive.jpg');
 		expect(root.querySelector('.playlist-cover')).toBeNull();
 	});
 
 	it('uses the 6B playlist mosaic when a playlist has no own cover', async () => {
 		playlistList.set([
-		playlist({ album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }] })
+			playlist({ album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }] })
 		]);
 		const root = await render();
 
@@ -142,7 +160,9 @@ describe('LibraryWall', () => {
 	it('opens the matching collection through the navigation store', async () => {
 		playlistList.set([playlist()]);
 		const root = await render();
-		const albumTile = root.querySelector<HTMLButtonElement>('[aria-label="Open album Local Album"]');
+		const albumTile = root.querySelector<HTMLButtonElement>(
+			'[aria-label="Open album Local Album"]'
+		);
 		const playlistTile = root.querySelector<HTMLButtonElement>(
 			'[aria-label="Open playlist Night Drive"]'
 		);
