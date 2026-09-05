@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-"""Bulk-seed a song with many reimported-style takes directly against the database.
+"""Bulk-seed a song with many playable takes directly against the database.
 
 ``frontend/e2e/kinetic-strip.spec.ts`` (issue #358) needs a song with dozens
 of takes to genuinely overflow the take strip's scrollable container, in
@@ -74,25 +74,27 @@ def seed_song_takes(
     title: str,
     take_count: int,
     owner_id: str,
+    lyrics: str = "",
+    prompt: str = "",
 ) -> str:
     """Create one song under ``album_id`` with ``take_count`` takes.
 
-    Mirrors ``reimport_files()`` field-for-field (same generated-id scheme,
-    same per-user audio path, the same ``generation.created`` event) so the
-    result is indistinguishable from ``take_count`` real reimports. Returns
-    the created song's id.
+    The default creates reimport-style takes. Passing lyrics and a prompt
+    links each take to the song's version, so consumers receive the same
+    metadata as a generated take. Returns the song's id.
     """
     slug = unique_song_slug(session, album_id, title)
-    song = create_song(session, title, album_id, slug)
+    song = create_song(session, title, album_id, slug, lyrics=lyrics, prompt=prompt)
+    version_id = song.latest_version.id if lyrics or prompt else None
 
     for _ in range(take_count):
         generation_id = str(uuid.uuid4())
         dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-        dst.write_bytes(mp3_bytes)  # NOSONAR: owner id plus generated UUID form the path
+        dst.write_bytes(mp3_bytes)  # NOSONAR Uses validated audio path.
         gen = create_generation(
             session,
             song_id=song.id,
-            version_id=None,
+            version_id=version_id,
             mp3_path=f"{owner_id}/{generation_id}.mp3",
             model_mode=MODEL_DEFAULT_MODE,
             generation_id=generation_id,
@@ -112,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", required=True)
     parser.add_argument("--take-count", type=int, required=True)
     parser.add_argument("--owner-username", required=True)
+    parser.add_argument("--lyrics", default="")
+    parser.add_argument("--prompt", default="")
     args = parser.parse_args(argv)
 
     mp3_bytes = sys.stdin.buffer.read()
@@ -133,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
             title=args.title,
             take_count=args.take_count,
             owner_id=owner.id,
+            lyrics=args.lyrics,
+            prompt=args.prompt,
         )
 
     print(song_id)

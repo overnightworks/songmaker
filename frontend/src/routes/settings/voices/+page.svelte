@@ -15,12 +15,13 @@
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import LoraDetail from '$lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
-	import { APP_NAME, LORA_POLL_INTERVAL_MS } from '$lib/constants';
+	import { APP_NAME, LORA_CREATE_FAILED, LORA_POLL_INTERVAL_MS } from '$lib/constants';
 	import type { UserLoraItem } from '$lib/api/types';
 
 	let showCreate = $state(false);
 	let creating = $state(false);
 	let newName = $state('');
+	let createError = $state<string | null>(null);
 	let showDeleted = $state(false);
 	let expandedId = $state<string | null>(null);
 	let loraPendingDelete = $state<UserLoraItem | null>(null);
@@ -70,6 +71,7 @@
 		const name = newName.trim();
 		if (!name) return;
 		creating = true;
+		createError = null;
 		try {
 			const created = await createLora(name);
 			newName = '';
@@ -77,7 +79,9 @@
 			expandedId = created.id;
 			addToast('Voice created', 'success');
 		} catch (e) {
-			addToast(e instanceof ApiError ? e.detail || 'Create failed' : 'Create failed', 'error');
+			const message = e instanceof ApiError ? e.detail || LORA_CREATE_FAILED : LORA_CREATE_FAILED;
+			createError = message;
+			addToast(message, 'error');
 		} finally {
 			creating = false;
 		}
@@ -145,6 +149,9 @@
 				{creating ? 'Creating...' : 'Create'}
 			</button>
 		</div>
+		{#if createError}
+			<p class="create-error" role="alert">{createError}</p>
+		{/if}
 	{/if}
 
 	{#if $lorasError}
@@ -284,6 +291,15 @@
 	.create-panel input:focus {
 		outline: none;
 		border-color: var(--accent);
+	}
+
+	.create-error {
+		margin: -0.5rem 0 1rem;
+		padding: 0.65rem 0.8rem;
+		border: 1px solid var(--score-bad);
+		border-radius: 4px;
+		color: var(--score-bad);
+		font-size: 0.85rem;
 	}
 
 	.primary {

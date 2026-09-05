@@ -28,6 +28,19 @@ export const LORA_MAX_SAMPLES = 20;
 
 export const LORA_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac'] as const;
 
+export const LORA_OWN_TAKES_LABEL = 'Your takes';
+export const LORA_OWN_TAKES_LOADING = 'Loading your takes...';
+export const LORA_OWN_TAKES_EMPTY = 'No playable takes yet.';
+export const LORA_OWN_TAKES_LOAD_FAILED = 'Could not load takes';
+export const LORA_OWN_TAKES_USE = 'Use as sample';
+export const LORA_OWN_TAKES_CLOSE = 'Close takes';
+export const LORA_OWN_TAKES_OPEN = 'Use a take';
+export const LORA_TAKE_LABEL_PREFIX = 'Take';
+export const LORA_SAMPLE_ADDING = 'Adding...';
+export const LORA_SAMPLE_COPY_FAILED = 'Could not add take';
+export const LORA_SAMPLE_UPLOAD_FAILED = 'Upload failed';
+export const LORA_CREATE_FAILED = 'Could not create voice';
+
 export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
 export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';

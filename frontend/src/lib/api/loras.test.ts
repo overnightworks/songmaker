@@ -12,8 +12,10 @@ import {
 	createLora,
 	softDeleteLora,
 	addLoraSample,
+	addLoraSampleFromGeneration,
 	patchLoraSample,
 	deleteLoraSample,
+	listOwnPlayableTakes,
 	trainLora
 } from './loras';
 import { ApiError } from './fetch';
@@ -107,6 +109,34 @@ describe('LoRA API client', () => {
 		await addLoraSample('l1', file, 'c', 'l', 3);
 		const form = mockFetch.mock.calls[0][1].body as FormData;
 		expect(form.get('position')).toBe('3');
+	});
+
+	it('lists only the caller-owned playable take catalogue', async () => {
+		mockOk({
+			takes: [
+				{
+					generation_id: 'g1',
+					song_title: 'Glass River',
+					generation_number: 4,
+					audio_url: '/audio/u1/g1.mp3',
+					caption: 'warm tenor',
+					lyrics: 'a line'
+				}
+			]
+		});
+		const takes = await listOwnPlayableTakes();
+		expect(takes[0]?.song_title).toBe('Glass River');
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/loras/own-takes');
+	});
+
+	it('copies an own take by generation id without uploading its audio again', async () => {
+		mockOk({ id: 's1', caption: 'warm tenor', lyrics: 'a line', position: 0 });
+		await addLoraSampleFromGeneration('l1', 'g1');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/loras/l1/samples/from-generation');
+		expect(init.method).toBe('POST');
+		expect(init.body).toBe(JSON.stringify({ generation_id: 'g1' }));
+		expect(init.body).not.toBeInstanceOf(FormData);
 	});
 
 	it('addLoraSample attaches CSRF token if cookie present', async () => {

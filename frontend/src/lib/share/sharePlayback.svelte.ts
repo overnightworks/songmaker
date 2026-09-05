@@ -36,7 +36,7 @@ function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null):
 	if (tracks.length <= 1) return [...tracks];
 	const rest = anchor ? tracks.filter((t) => t.key !== anchor.key) : [...tracks];
 	for (let i = rest.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
+		const j = Math.floor(Math.random() * (i + 1)); // NOSONAR Playback ordering does not generate secrets or security tokens.
 		[rest[i], rest[j]] = [rest[j], rest[i]];
 	}
 	return anchor ? [anchor, ...rest] : rest;

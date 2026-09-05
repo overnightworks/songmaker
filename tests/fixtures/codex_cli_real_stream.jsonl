@@ -1,4 +1,4 @@
-{"type":"thread.started","thread_id":"<redacted>"}
+{"type":"thread.started","thread_id":"fixture-codex-thread-527"}
 {"type":"turn.started"}
 {"type":"item.completed","item":{"id":"<redacted>","type":"agent_message","text":"<redacted>"}}
 {"type":"turn.completed","usage":{}}

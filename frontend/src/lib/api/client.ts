@@ -152,9 +152,11 @@ export {
 	createLora,
 	softDeleteLora,
 	addLoraSample,
+	addLoraSampleFromGeneration,
 	patchLoraSample,
 	deleteLoraSample,
 	trainLora,
+	listOwnPlayableTakes,
 	type LoraSamplePatch
 } from './loras';
 
