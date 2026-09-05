@@ -6,6 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -31,6 +32,8 @@ from songmaker_cli.settings import get_settings
 from ._runtime import JudgeFailureError, _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
+
+SCORING_JOB_TERMINAL_LOG: Final = "Scoring job %s stopping because job is terminal"
 
 
 @dataclass(frozen=True)
@@ -95,12 +98,12 @@ def run_scoring_job(
 
     try:
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         scoring_input = _load_scoring_input(db_factory, job_id, gen_id)
@@ -135,7 +138,7 @@ def run_scoring_job(
             _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
 
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         song_scores = scorer.score(
@@ -147,7 +150,7 @@ def run_scoring_job(
             on_progress=_score_progress,
         )
         if _job_is_terminal(db_factory, job_id):
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
         if judge_coherence:
@@ -242,7 +245,7 @@ def _persist_scores(
 
     with db_factory() as session:
         if lock_active_job(session, job_id) is None:
-            log.info("Scoring job %s stopping because job is terminal", job_id)
+            log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return False
         save_scores(
             session,

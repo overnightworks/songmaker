@@ -15,6 +15,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Final
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -65,6 +66,8 @@ from songmaker_cli.middleware import (
 from songmaker_cli.settings import CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
+
+NOT_FOUND_DETAIL: Final = "Not Found"
 
 
 def _record_background_loop_completion(
@@ -294,7 +297,7 @@ def create_app(
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:
         if not sw_path.exists():
-            raise HTTPException(status_code=404, detail="Not Found")
+            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
         return FileResponse(
             sw_path,
             media_type="application/javascript",
@@ -304,19 +307,19 @@ def create_app(
     @app.get("/manifest.webmanifest", include_in_schema=False)
     async def serve_webmanifest() -> FileResponse:
         if not manifest_path.exists():
-            raise HTTPException(status_code=404, detail="Not Found")
+            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
         return FileResponse(manifest_path, media_type="application/manifest+json")
 
     @app.get("/icon-192.png", include_in_schema=False)
     async def serve_icon_192() -> FileResponse:
         if not icon_192_path.exists():
-            raise HTTPException(status_code=404, detail="Not Found")
+            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
         return FileResponse(icon_192_path, media_type="image/png")
 
     @app.get("/icon-512.png", include_in_schema=False)
     async def serve_icon_512() -> FileResponse:
         if not icon_512_path.exists():
-            raise HTTPException(status_code=404, detail="Not Found")
+            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
         return FileResponse(icon_512_path, media_type="image/png")
 
     sk_index = sveltekit_dir / "index.html"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -90,6 +91,10 @@ from songmaker_cli.redis_client import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+
+NOT_FOUND_DETAIL: Final = "Not found"
+QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
+DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
 
 
 # Public, unauthenticated share endpoints fail open: blocking real listeners
@@ -214,30 +219,30 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
     if scope == "shared-playlist":
         playlist = get_playlist_by_slug(db, slug)
         if not playlist:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(404, NOT_FOUND_DETAIL)
         valid_tracks = {
             (entry.id, entry.generation.id)
             for entry in playlist.entries
             if entry.generation is not None and is_playable_take(entry.generation)
         }
         if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
-            raise HTTPException(404, "Queue stream not found")
+            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
         return
 
     if scope == "shared-album":
         album = get_album_by_slug(db, slug)
         if not album:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(404, NOT_FOUND_DETAIL)
         valid_tracks = {
             (song.id, gen.id)
             for song in album.songs
             if (gen := _picked_generation(song)) is not None
         }
         if any((track.song_id, track.generation_id) not in valid_tracks for track in tracks):
-            raise HTTPException(404, "Queue stream not found")
+            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
         return
 
-    raise HTTPException(404, "Queue stream not found")
+    raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
 
 @router.get(
@@ -256,7 +261,7 @@ async def get_audio(
         audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=False)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)
 
 
@@ -273,7 +278,7 @@ def get_shared_album(
 
     album = get_album_by_slug(db, slug)
     if not album:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
     picked_by_song = {s.id: _picked_generation(s) for s in songs}
@@ -316,7 +321,7 @@ async def get_shared_album_cover(
     _check_shared_rate_limit(request)
     album = get_album_by_slug(db, slug)
     if not album:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
 
 
@@ -334,7 +339,7 @@ def get_shared_album_stream(
     _check_shared_stream_rate_limit(request)
     album = get_album_by_slug(db, slug)
     if not album:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     sources = []
     songs = sorted(album.songs, key=lambda s: s.track_number)
     for index, song in enumerate(songs):
@@ -390,7 +395,7 @@ def get_shared_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)
 
 
@@ -407,7 +412,7 @@ def get_shared_song(
     _check_shared_rate_limit(request)
     song = get_song_by_slug(db, slug)
     if not song:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     gen = _picked_generation(song)
     media = share_pick_media(gen)
     cover = None
@@ -454,7 +459,7 @@ async def get_shared_song_album_cover(
     song = get_song_by_slug(db, slug)
     album = song.album if song else None
     if not album:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
 
 
@@ -473,7 +478,7 @@ async def get_shared_song_cover(
     _check_shared_rate_limit(request)
     song = get_song_by_slug(db, slug)
     if not song:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     if v is not None and v != song.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
@@ -509,7 +514,7 @@ def get_shared_song_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)
 
 
@@ -526,7 +531,7 @@ def get_shared_generation(
     _check_shared_rate_limit(request)
     gen = get_generation_by_slug(db, slug)
     if not gen:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     media = share_pick_media(gen)
     album = gen.song.album if gen.song else None
     album_cover = None
@@ -575,7 +580,7 @@ async def get_shared_generation_album_cover(
     generation = get_generation_by_slug(db, slug)
     album = generation.song.album if generation and generation.song else None
     if not album:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
 
 
@@ -604,7 +609,7 @@ def get_shared_gen_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)
 
 
@@ -621,7 +626,7 @@ def get_shared_playlist(
     _check_shared_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     entries = sorted(playlist.entries, key=lambda e: e.position)
     entry_items = _shared_playlist_entries(entries, slug)
     cover = _shared_playlist_cover(ctx, playlist, slug)
@@ -698,7 +703,7 @@ async def get_shared_playlist_cover(
     _check_shared_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     if v is not None and v != playlist.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
@@ -732,7 +737,7 @@ async def get_shared_playlist_album_cover(
     _check_shared_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     album = next((
         entry.generation.song.album
         for entry in playlist.entries
@@ -768,7 +773,7 @@ def get_shared_playlist_stream(
     _check_shared_stream_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, NOT_FOUND_DETAIL)
     sources = []
     entries = sorted(playlist.entries, key=lambda e: e.position)
     for entry in entries:
@@ -826,13 +831,13 @@ def get_shared_playlist_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)
 
 
 @router.get(
     "/shared/queue-streams/{snapshot_id}/audio",
-    responses={404: {"description": "Queue stream not found"}},
+    responses={404: {"description": QUEUE_STREAM_NOT_FOUND_DETAIL}},
 )
 def get_shared_queue_stream_audio(
     snapshot_id: str,
@@ -844,5 +849,5 @@ def get_shared_queue_stream_audio(
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     _validate_shared_queue_manifest(manifest, db)
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
     return FileResponse(audio_path, media_type=media_type)

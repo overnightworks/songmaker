@@ -1910,6 +1910,107 @@ def test_score_generation_redis_down(client: TestClient) -> None:
     assert "Job queue unavailable" in resp.json()["detail"]
 
 
+@pytest.mark.parametrize(
+    ("path", "payload", "health_check"),
+    [
+        pytest.param(
+            "/api/songs/s1/generate",
+            {"count": 1, "model": "sft"},
+            "is_music_worker_healthy",
+            id="generate",
+        ),
+        pytest.param(
+            "/api/generations/g1/repaint",
+            {
+                "src_generation_id": "g1",
+                "repainting_start": 0.2,
+                "repainting_end": 0.8,
+                "model": "sft",
+            },
+            "is_music_worker_healthy",
+            id="repaint",
+        ),
+        pytest.param(
+            "/api/generations/g1/cover",
+            {"src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft"},
+            "is_music_worker_healthy",
+            id="cover",
+        ),
+        pytest.param(
+            "/api/generations/g1/score",
+            {},
+            "is_scoring_worker_healthy",
+            id="score",
+        ),
+    ],
+)
+def test_worker_preflight_reports_an_unavailable_worker(
+    client: TestClient,
+    path: str,
+    payload: dict,
+    health_check: str,
+) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    with (
+        patch(
+            f"songmaker_cli.generation_api.{health_check}",
+            AsyncMock(return_value=False),
+        ),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=MagicMock()),
+    ):
+        response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Worker not running"
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        pytest.param(
+            "/api/generations/g1/repaint",
+            {
+                "src_generation_id": "g1",
+                "repainting_start": 0.2,
+                "repainting_end": 0.8,
+                "model": "sft",
+            },
+            id="repaint",
+        ),
+        pytest.param(
+            "/api/generations/g1/cover",
+            {"src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft"},
+            id="cover",
+        ),
+    ],
+)
+def test_repaint_and_cover_report_an_unavailable_job_queue(
+    client: TestClient,
+    path: str,
+    payload: dict,
+) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    pool = MagicMock()
+    pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
+    with (
+        patch(
+            "songmaker_cli.generation_api.is_music_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "songmaker_cli.generation_api._has_online_acestep_worker",
+            AsyncMock(return_value=True),
+        ),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool),
+    ):
+        response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Job queue unavailable"
+
+
 def test_scoring_schema_endpoint(client: TestClient) -> None:
     from songmaker_cli.scoring.registry import SCORERS
 
@@ -3407,6 +3508,144 @@ def test_update_song_value_error(client: TestClient) -> None:
         resp = client.put("/api/songs/s1", json={"lyrics": "x"})
 
     assert resp.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload", "target", "detail"),
+    [
+        pytest.param(
+            "put", "/api/playlists/{playlist_id}", {"title": "Renamed"},
+            "songmaker_cli.playlist_api.update_playlist", "Playlist not found",
+            id="playlist-update",
+        ),
+        pytest.param(
+            "delete", "/api/playlists/{playlist_id}", None,
+            "songmaker_cli.playlist_api.delete_playlist", "Playlist not found",
+            id="playlist-delete",
+        ),
+        pytest.param(
+            "post", "/api/playlists/{playlist_id}/entries/album", {"album_id": "rock"},
+            "songmaker_cli.playlist_api.add_album_to_playlist", "Album not found",
+            id="playlist-add-album",
+        ),
+        pytest.param(
+            "post", "/api/playlists/{playlist_id}/share", None,
+            "songmaker_cli.playlist_api.enable_playlist_sharing", "Playlist not found",
+            id="playlist-share",
+        ),
+        pytest.param(
+            "delete", "/api/playlists/{playlist_id}/share", None,
+            "songmaker_cli.playlist_api.disable_playlist_sharing", "Playlist not found",
+            id="playlist-unshare",
+        ),
+        pytest.param(
+            "put", "/api/songs/s1/title", {"title": "Renamed"},
+            "songmaker_cli.song_api.rename_song", "Song not found", id="song-rename",
+        ),
+        pytest.param(
+            "put", "/api/songs/s1/album", {"album_id": "rock"},
+            "songmaker_cli.song_api.move_song", "Song or album not found", id="song-move",
+        ),
+        pytest.param(
+            "delete", "/api/songs/s1", None,
+            "songmaker_cli.song_api.soft_delete_song", "Song not found", id="song-delete",
+        ),
+        pytest.param(
+            "post", "/api/songs/s1/share", None,
+            "songmaker_cli.song_api.enable_song_sharing", "Song not found", id="song-share",
+        ),
+        pytest.param(
+            "delete", "/api/songs/s1/share", None,
+            "songmaker_cli.song_api.disable_song_sharing", "Song not found", id="song-unshare",
+        ),
+        pytest.param(
+            "post", "/api/generations/g1/share", None,
+            "songmaker_cli.generation_api.enable_generation_sharing",
+            "Generation not found",
+            id="generation-share",
+        ),
+        pytest.param(
+            "delete", "/api/generations/g1/share", None,
+            "songmaker_cli.generation_api.disable_generation_sharing",
+            "Generation not found",
+            id="generation-unshare",
+        ),
+    ],
+)
+def test_mutations_hide_resources_deleted_after_the_access_check(
+    client: TestClient,
+    method: str,
+    path: str,
+    payload: dict | None,
+    target: str,
+    detail: str,
+) -> None:
+    from unittest.mock import patch
+
+    playlist = client.post("/api/playlists", json={"title": "Test playlist"})
+    playlist_id = playlist.json()["id"]
+
+    with patch(target, side_effect=ValueError(detail)):
+        response = client.request(
+            method.upper(),
+            path.format(playlist_id=playlist_id),
+            json=payload,
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == detail
+
+
+@pytest.mark.parametrize(
+    ("case", "detail"),
+    [
+        pytest.param("deleted-song", "Song not found", id="restore-deleted-song"),
+        pytest.param("deleted-album", "Song not found", id="restore-deleted-album"),
+        pytest.param("sample-without-parent", "LoRA sample not found", id="lora-sample-parent"),
+        pytest.param("foreign-private-take", "Generation not found", id="own-generation"),
+    ],
+)
+def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
+    case: str,
+    detail: str,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from fastapi import HTTPException
+
+    from songmaker_cli.api_helpers import (
+        check_lora_sample_access,
+        check_own_generation_access,
+        check_song_access_including_deleted,
+    )
+
+    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
+    if case == "deleted-song":
+        with patch("songmaker_cli.api_helpers.get_song", return_value=None):
+            with pytest.raises(HTTPException) as exc_info:
+                check_song_access_including_deleted(object(), "s1", user)
+    elif case == "deleted-album":
+        song = SimpleNamespace(album_id="a1")
+        with (
+            patch("songmaker_cli.api_helpers.get_song", return_value=song),
+            patch("songmaker_cli.api_helpers.get_album", return_value=None),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                check_song_access_including_deleted(object(), "s1", user)
+    elif case == "sample-without-parent":
+        with pytest.raises(HTTPException) as exc_info:
+            check_lora_sample_access(SimpleNamespace(user_lora=None), user)
+    else:
+        generation = SimpleNamespace(
+            song=SimpleNamespace(album=SimpleNamespace(created_by="other")),
+        )
+        with patch("songmaker_cli.api_helpers.check_generation_access", return_value=generation):
+            with pytest.raises(HTTPException) as exc_info:
+                check_own_generation_access(object(), "g1", user)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == detail
 
 
 def test_delete_version_value_error(client: TestClient) -> None:

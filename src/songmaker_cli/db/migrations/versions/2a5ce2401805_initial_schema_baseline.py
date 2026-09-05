@@ -8,7 +8,7 @@ Full schema creation. Replaces the original index-only baseline.
 All subsequent migrations build on top of this.
 """
 
-from typing import Sequence, Union
+from typing import Final, Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
@@ -17,6 +17,9 @@ revision: str = "2a5ce2401805"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+USERS_ID: Final = "users.id"
+SET_NULL: Final = "SET NULL"
 
 
 def upgrade() -> None:
@@ -42,7 +45,7 @@ def upgrade() -> None:
         sa.Column("colors", sa.JSON, nullable=False),
         sa.Column(
             "created_by", sa.String(36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+            sa.ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True,
         ),
         sa.Column("created_at", sa.DateTime, nullable=False),
     )
@@ -128,7 +131,7 @@ def upgrade() -> None:
         sa.Column("error_type", sa.String(30), nullable=True),
         sa.Column(
             "user_id", sa.String(36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+            sa.ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True,
         ),
         sa.Column("started_at", sa.DateTime, nullable=False),
         sa.Column("completed_at", sa.DateTime, nullable=True),
@@ -138,7 +141,7 @@ def upgrade() -> None:
     op.create_table(
         "user_sessions",
         sa.Column("id", sa.String(43), primary_key=True),
-        sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("user_id", sa.String(36), sa.ForeignKey(USERS_ID), nullable=False),
         sa.Column("created_at", sa.DateTime, nullable=False),
         sa.Column("expires_at", sa.DateTime, nullable=False),
         sa.Column("ip_address", sa.String(45), nullable=False),
@@ -163,7 +166,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column(
             "user_id", sa.String(36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+            sa.ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True,
         ),
         sa.Column("action", sa.String(30), nullable=False),
         sa.Column("resource_type", sa.String(30), nullable=False),
@@ -184,7 +187,7 @@ def upgrade() -> None:
         sa.Column("is_default", sa.Boolean, nullable=False),
         sa.Column(
             "created_by", sa.String(36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+            sa.ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True,
         ),
         sa.Column("created_at", sa.DateTime, nullable=False),
         sa.Column("updated_at", sa.DateTime, nullable=False),

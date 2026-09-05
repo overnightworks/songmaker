@@ -789,6 +789,31 @@ def test_api_add_album_to_playlist(client: TestClient) -> None:
     assert len(resp.json()["entries"]) == 2
 
 
+def test_api_add_album_to_playlist_hides_missing_and_foreign_albums(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(User(id="foreign-user", username="foreign", password_hash="x", role="user"))
+        session.flush()
+        session.add(
+            Album(
+                id="foreign-album",
+                title="Foreign",
+                artist="Other",
+                created_by="foreign-user",
+            ),
+        )
+        session.commit()
+
+    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
+    for album_id in ("missing-album", "foreign-album"):
+        response = client.post(
+            f"/api/playlists/{playlist_id}/entries/album",
+            json={"album_id": album_id},
+        )
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Album not found"
+
+
 def test_api_remove_entry(client: TestClient) -> None:
     resp = client.post("/api/playlists", json={"title": "Test"})
     pid = resp.json()["id"]

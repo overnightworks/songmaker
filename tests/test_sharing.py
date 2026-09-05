@@ -208,6 +208,89 @@ def test_shared_album_not_found(sharing_app: TestClient) -> None:
     assert resp.status_code == 404
 
 
+@pytest.mark.parametrize(
+    "scope",
+    [
+        pytest.param("shared-playlist", id="deleted-playlist"),
+        pytest.param("shared-album", id="deleted-album"),
+        pytest.param("unexpected", id="unexpected-scope"),
+    ],
+)
+def test_shared_queue_manifest_rejects_resources_that_no_longer_exist(scope: str) -> None:
+    from unittest.mock import MagicMock, patch
+
+    from fastapi import HTTPException
+
+    from songmaker_cli.queue_streams import QueueStreamManifest
+    from songmaker_cli.sharing_api import _validate_shared_queue_manifest
+
+    manifest = QueueStreamManifest.model_construct(
+        snapshot_id="snapshot",
+        scope=scope,
+        scope_id="shared-resource",
+        content_hash="hash",
+        expires_at=datetime.now(timezone.utc),
+        total_duration=0,
+        tracks=[],
+    )
+    with (
+        patch("songmaker_cli.sharing_api.get_playlist_by_slug", return_value=None),
+        patch("songmaker_cli.sharing_api.get_album_by_slug", return_value=None),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        _validate_shared_queue_manifest(manifest, MagicMock())
+
+    expected_detail = "Not found" if scope != "unexpected" else "Queue stream not found"
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == expected_detail
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        pytest.param("album-stream", id="album-stream"),
+        pytest.param("song-cover", id="song-cover"),
+        pytest.param("playlist-cover", id="playlist-cover"),
+        pytest.param("playlist-stream", id="playlist-stream"),
+    ],
+)
+def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
+    import asyncio
+    from unittest.mock import MagicMock, patch
+
+    from fastapi import HTTPException
+
+    from songmaker_cli.sharing_api import (
+        get_shared_album_stream,
+        get_shared_playlist_cover,
+        get_shared_playlist_stream,
+        get_shared_song_cover,
+    )
+
+    request = MagicMock()
+    db = MagicMock()
+    ctx = MagicMock()
+    with (
+        patch("songmaker_cli.sharing_api._check_shared_rate_limit"),
+        patch("songmaker_cli.sharing_api._check_shared_stream_rate_limit"),
+        patch("songmaker_cli.sharing_api.get_album_by_slug", return_value=None),
+        patch("songmaker_cli.sharing_api.get_song_by_slug", return_value=None),
+        patch("songmaker_cli.sharing_api.get_playlist_by_slug", return_value=None),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        if endpoint == "album-stream":
+            get_shared_album_stream("missing", request, db, ctx)
+        elif endpoint == "song-cover":
+            asyncio.run(get_shared_song_cover("missing", request, db=db, ctx=ctx))
+        elif endpoint == "playlist-cover":
+            asyncio.run(get_shared_playlist_cover("missing", request, db=db, ctx=ctx))
+        else:
+            get_shared_playlist_stream("missing", request, db, ctx)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Not found"
+
+
 def test_shared_album_after_revoke(sharing_app: TestClient) -> None:
     resp = sharing_app.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]

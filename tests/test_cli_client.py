@@ -68,11 +68,27 @@ def test_api_get_error_response() -> None:
             api_get("http://localhost:8080", "/api/songs/bad")
 
 
-def test_api_get_401_suggests_login() -> None:
+@pytest.mark.parametrize(
+    ("client_request", "args"),
+    [
+        pytest.param(api_get, ("/api/albums",), id="get"),
+        pytest.param(api_post, ("/api/songs/s1/generate",), id="post"),
+        pytest.param(api_put, ("/api/songs/s1", {"lyrics": "x"}), id="put"),
+        pytest.param(
+            "upload",
+            ("/api/audio/upload", [("file", ("clip.wav", b"audio", "audio/wav"))]),
+            id="upload",
+        ),
+    ],
+)
+def test_unauthenticated_requests_suggest_login(client_request, args: tuple) -> None:
+    from songmaker_cli.cli_client import api_upload
+
     client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
+    call = api_upload if client_request == "upload" else client_request
     with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="songmaker login"):
-            api_get("http://localhost:8080", "/api/albums")
+            call("http://localhost:8080", *args)
 
 
 # ── api_post ────────────────────────────────────────────────────────
@@ -533,20 +549,3 @@ def test_cli_logout_connection_error(tmp_path) -> None:
         cli_logout("http://localhost:8080")
     data = json.loads(sf.read_text())
     assert "http://localhost:8080" not in data
-
-
-# ── api_post / api_put 401 ─────────────────────────────────────────
-
-
-def test_api_post_401_suggests_login() -> None:
-    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
-    with patch("songmaker_cli.cli_client._build_client", return_value=client):
-        with pytest.raises(ServerError, match="songmaker login"):
-            api_post("http://localhost:8080", "/api/songs/s1/generate")
-
-
-def test_api_put_401_suggests_login() -> None:
-    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
-    with patch("songmaker_cli.cli_client._build_client", return_value=client):
-        with pytest.raises(ServerError, match="songmaker login"):
-            api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "x"})

@@ -354,6 +354,28 @@ def test_authenticated_queue_stream_snapshot_and_audio_range(
     assert audio.content == b"\xff\xfb\x90\x00"
 
 
+def test_queue_stream_audio_reports_missing_snapshot_audio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    stream = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    snapshot_id = stream.json()["snapshot_id"]
+    (tmp_path / "data" / "queue-streams" / f"{snapshot_id}.mp3").unlink()
+
+    from songmaker_cli.queue_streams import load_queue_stream_manifest
+
+    with pytest.raises(HTTPException) as exc_info:
+        load_queue_stream_manifest(client.app.state.ctx, snapshot_id)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Queue stream audio not found"
+
+
 def test_authenticated_queue_stream_rejects_inaccessible_generation(
     tmp_path: Path,
     monkeypatch,
@@ -1677,41 +1699,41 @@ def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None
     assert unpin_data["pinned_at"] is None
 
 
-def test_user_cannot_pin_another_users_snapshot(tmp_path: Path, monkeypatch) -> None:
-    """A user must not be able to pin a snapshot that belongs to another user."""
+@pytest.mark.parametrize(
+    "method",
+    [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")],
+)
+@pytest.mark.parametrize("scope", [pytest.param("foreign"), pytest.param("shared")])
+def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    scope: str,
+) -> None:
+    """Pinning controls hide foreign and shared snapshots behind a 404."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
+    if scope == "foreign":
+        stream_resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+        other_client = TestClient(client.app, cookies={})
+        login_and_csrf(other_client, "other", "pass1234")
+        request_client = other_client
+    else:
+        share = client.post("/api/playlists/pl1/share")
+        slug = share.json()["share_slug"]
+        public = TestClient(client.app, cookies={})
+        stream_resp = public.post(f"/shared/playlist/{slug}/stream")
+        request_client = client
 
-    client_other = TestClient(client.app, cookies={})
-    login_and_csrf(client_other, "other", "pass1234")
-
-    pin_resp = client_other.post(f"/api/queue-streams/{snapshot_id}/pin")
-
-    assert pin_resp.status_code == 404
-
-
-def test_shared_scope_snapshot_pin_returns_404(tmp_path: Path, monkeypatch) -> None:
-    """Pinning a shared-scope snapshot must return 404, not 403."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner", "pass1234")
-    share = client.post("/api/playlists/pl1/share")
-    slug = share.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
-
-    stream_resp = public.post(f"/shared/playlist/{slug}/stream")
     assert stream_resp.status_code == 200
     snapshot_id = stream_resp.json()["snapshot_id"]
 
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    assert pin_resp.status_code == 404
+    response = getattr(request_client, method)(f"/api/queue-streams/{snapshot_id}/pin")
+
+    assert response.status_code == 404
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
