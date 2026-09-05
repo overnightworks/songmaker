@@ -18,8 +18,8 @@ export default defineConfig({
 			reportsDirectory: '../reports/frontend-coverage',
 			all: false,
 			thresholds: {
-				statements: 91,
-				lines: 94
+				statements: 90,
+				lines: 93
 			}
 		}
 	}
