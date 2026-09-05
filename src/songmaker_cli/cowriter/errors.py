@@ -12,6 +12,7 @@ class SafeRouteReasonCode(StrEnum):
     CLI_LOGIN_NOT_CONFIGURED = "cli_login_not_configured"
     CLI_AUTH_REJECTED = "cli_auth_rejected"
     CLI_BINARY_UNAVAILABLE = "cli_binary_unavailable"
+    CLI_CAPACITY_EXHAUSTED = "cli_capacity_exhausted"
     CLI_PROTOCOL_ERROR = "cli_protocol_error"
     API_HTTP_ERROR = "api_http_error"
     API_PROTOCOL_ERROR = "api_protocol_error"
@@ -28,6 +29,7 @@ _SAFE_MESSAGES: dict[SafeRouteReasonCode, str] = {
     SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED: "CLI is not signed in.",
     SafeRouteReasonCode.CLI_AUTH_REJECTED: "CLI login was rejected or has expired.",
     SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE: "CLI is unavailable.",
+    SafeRouteReasonCode.CLI_CAPACITY_EXHAUSTED: "Codex is busy. Try again shortly.",
     SafeRouteReasonCode.CLI_PROTOCOL_ERROR: "CLI returned an invalid response.",
     SafeRouteReasonCode.API_HTTP_ERROR: "API request failed.",
     SafeRouteReasonCode.API_PROTOCOL_ERROR: "API returned an invalid response.",
@@ -77,3 +79,12 @@ class ProviderModelCatalogUnavailableError(ProviderError):
     ):
         self.reason = reason
         super().__init__(provider, reason.message if reason is not None else message)
+
+
+class CodexProcessPoolSaturatedError(Exception):
+    """Codex admission was refused before a CLI process could start."""
+
+    def __init__(self, *, kind: str, scope: str) -> None:
+        self.kind = kind
+        self.scope = scope
+        super().__init__(f"Codex {scope} process capacity is busy")

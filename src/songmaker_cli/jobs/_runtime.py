@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
+    JOB_ERROR_COVER_CLI_BUSY,
     JOB_ERROR_COVER_CLI_LOGIN,
     JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_ERROR_COVER_IMAGE_NOT_CREATED,
@@ -37,6 +38,7 @@ from songmaker_cli.cowriter.codex_cli_adapter import (
     CodexImageNotCreatedError,
     ImageToolBlockedError,
 )
+from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
     NoCapacityError,
@@ -84,6 +86,8 @@ def _sanitize_error(exc: Exception, job_id: str) -> str:
         return JOB_ERROR_WORKER_STREAM_SILENT
     if isinstance(exc, CodexImageLoginError):
         return JOB_ERROR_COVER_CLI_LOGIN
+    if isinstance(exc, CodexProcessPoolSaturatedError):
+        return JOB_ERROR_COVER_CLI_BUSY
     if isinstance(exc, ImageToolBlockedError):
         return JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED
     if isinstance(exc, CodexImageNotCreatedError):
