@@ -191,7 +191,7 @@ export class SharePlayback {
 
 	private advanceClassic(direction: 1 | -1): void {
 		if (this.playOrder.length <= 1) return;
-		const base = this.activeIndex >= 0 ? this.activeIndex : 0;
+		const base = Math.max(0, this.activeIndex);
 		const target = (base + direction + this.playOrder.length) % this.playOrder.length;
 		void this.playTrack(this.playOrder[target]);
 	}

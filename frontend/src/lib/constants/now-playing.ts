@@ -38,7 +38,7 @@ export interface TakeMetaParts {
 // (turbo, xl-turbo, xl-sft, sft, xl-base); this is where that would change if
 // it ever stopped being terse.
 export function takeModelModeLabel(modelMode: string | null | undefined): string | null {
-	return modelMode ? modelMode : null;
+	return modelMode || null;
 }
 
 // ACE-Step's VRAM guard can quietly cut a requested batch size down before

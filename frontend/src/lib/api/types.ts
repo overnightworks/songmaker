@@ -341,6 +341,8 @@ export interface GenerationItem {
 	created_at: string;
 }
 
+export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
+
 export interface GenerationParams {
 	inference_steps?: number | null;
 	guidance_scale?: number | null;
@@ -354,7 +356,7 @@ export interface GenerationParams {
 	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
 	reference_audio_path?: string | null;
-	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
+	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
 	use_cot_caption?: boolean | null;

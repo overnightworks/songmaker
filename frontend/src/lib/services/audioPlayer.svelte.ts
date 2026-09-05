@@ -54,7 +54,7 @@ class AudioPlayer {
 	private currentUrl: string | null = null;
 	private autoplayPending = false;
 	private listenersAttached = false;
-	private streamEngine = new QueueStreamEngine();
+	private readonly streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 	private recoveryAttempts = 0;
 	private pendingRecoverySeek: number | null = null;
@@ -639,7 +639,7 @@ class AudioPlayer {
 			if (fresh && fresh.tracks.length > 0) {
 				const currentId = track?.generation_id;
 				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
-				const index = matched >= 0 ? matched : 0;
+				const index = Math.max(0, matched);
 				const freshTrack = fresh.tracks[index];
 				const trackTime = Math.min(state.trackTime, freshTrack.duration);
 				this.loadStream(fresh, index, {

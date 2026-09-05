@@ -746,6 +746,7 @@ describe('error handling', () => {
 	it('handleMediaError without current returns early', async () => {
 		audioPlayer.destroy();
 		await new Promise((r) => setTimeout(r, 0));
+		expect(audioPlayer.error).toBeNull();
 	});
 
 	it('pause() leaves status at paused (no abort-as-error path)', () => {
@@ -926,6 +927,7 @@ describe('seek()', () => {
 	it('does nothing when duration is 0', () => {
 		audioPlayer.destroy();
 		audioPlayer.seek(10);
+		expect(fakeAudio.currentTime).toBe(0);
 	});
 });
 

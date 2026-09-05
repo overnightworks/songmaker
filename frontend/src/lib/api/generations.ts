@@ -3,7 +3,7 @@ import { apiFetch, type JobStatus } from './fetch';
 
 export async function generateSong(
 	songId: string,
-	count: number = 1,
+	count: number,
 	model: string,
 	versionId?: string | null,
 	seed?: number | null
