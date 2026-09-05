@@ -76,6 +76,10 @@ export async function restoreSong(songId: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}/restore`, { method: 'POST' });
 }
 
+export async function recordSongListen(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}/listen`, { method: 'POST' });
+}
+
 export async function moveSong(songId: string, albumId: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}/album`, {
 		method: 'PUT',
