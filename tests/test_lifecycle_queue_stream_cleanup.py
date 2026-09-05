@@ -17,7 +17,7 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.lifecycle import BackgroundLoopRegistry
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(tmp_path: Path) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -39,8 +39,9 @@ def _run_loop_for_n_ticks(monkeypatch, app: SimpleNamespace, n: int) -> None:
             raise asyncio.CancelledError()
 
     monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    loop = lifecycle.resource_event_cleanup_loop(app)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(lifecycle.resource_event_cleanup_loop(app))
+        asyncio.run(loop)
 
 
 def test_periodic_loop_runs_resource_event_cleanup_every_tick(ctx, monkeypatch) -> None:

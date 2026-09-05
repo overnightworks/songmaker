@@ -112,13 +112,13 @@ async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     factory = init_db(tmp_path / "test.db")
     yield factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
         session.add(User(id="u1", username="user1", password_hash="hash", role="user"))
@@ -1514,7 +1514,7 @@ def _scoring_result(
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def live_scorer_process():
     """A really spawned scorer child. Each test stubs the scoring call itself
     — the child's pid is the evidence here, not the scores."""

@@ -31,9 +31,9 @@ function expandHex(hex: string): string {
 export function hexToRgb(hex: string): readonly [number, number, number] {
 	const normalized = expandHex(hex);
 	return [
-		parseInt(normalized.slice(0, 2), 16),
-		parseInt(normalized.slice(2, 4), 16),
-		parseInt(normalized.slice(4, 6), 16)
+		Number.parseInt(normalized.slice(0, 2), 16),
+		Number.parseInt(normalized.slice(2, 4), 16),
+		Number.parseInt(normalized.slice(4, 6), 16)
 	];
 }
 

@@ -43,7 +43,7 @@ def _fake_user(user_id: str, username: str, role: str):
     return lambda: user
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -76,7 +76,7 @@ def client(tmp_path: Path) -> TestClient:
     yield TestClient(app)
 
 
-@pytest.fixture()
+@pytest.fixture
 def unauthed_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -121,7 +121,7 @@ def _whisper_cues_payload(word_count: int) -> list[dict]:
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def gzip_client(tmp_path: Path) -> TestClient:
     """Same wiring as `client`, plus the real gzip middleware under test.
 
@@ -2047,14 +2047,13 @@ def test_chat_heartbeat_timer_continues_after_a_write_failure() -> None:
         "_write_chat_job_heartbeat",
         side_effect=RuntimeError("database unavailable"),
     ) as write:
+        heartbeat = _runtime._keep_chat_job_heartbeat(
+            lambda: None,
+            "chat-heartbeat",
+            interval_seconds=0,
+        )
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(
-                _runtime._keep_chat_job_heartbeat(
-                    lambda: None,
-                    "chat-heartbeat",
-                    interval_seconds=0,
-                ),
-            )
+            asyncio.run(heartbeat)
 
     assert write.call_count == 1
     assert sleeps == 2
@@ -2108,7 +2107,8 @@ def test_song_chat_attaches_messages_to_active_conversation(
     with patcher:
         r1 = client.post("/api/songs/s1/chat", json={"message": "first"})
         r2 = client.post("/api/songs/s1/chat", json={"message": "second"})
-    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.status_code == 200
+    assert r2.status_code == 200
 
     factory = client.app.state.ctx.db
     with factory() as session:
