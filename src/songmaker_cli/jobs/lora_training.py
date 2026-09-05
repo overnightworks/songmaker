@@ -19,6 +19,7 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     GPU_HOLD_POLL_INTERVAL_SECONDS,
     JOB_ERROR_WORKER_TRAINING_FAILED,
+    LORA_TRAINING_MODEL_MODES,
     LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
     MODEL_DEFAULT_MODE,
     STALE_JOB_THRESHOLDS,
@@ -59,6 +60,11 @@ log = logging.getLogger(__name__)
 
 def _sanitize_training_error(exc: Exception, job_id: str) -> str:
     """Keep a worker failure truthful to the training task the musician started."""
+    if isinstance(
+        exc,
+        LoraTrainingModelModeError,
+    ):
+        return str(exc)
     message = _sanitize_error(exc, job_id)
     if isinstance(exc, WorkerTaskFailed):
         return JOB_ERROR_WORKER_TRAINING_FAILED
@@ -67,6 +73,7 @@ def _sanitize_training_error(exc: Exception, job_id: str) -> str:
 
 _LORA_PROGRESS_THROTTLE_SECONDS = 2.0
 _LORA_SUBMIT_TIMEOUT_SECONDS = 30.0
+_COMPLETED_TRAINING_MODE_FILENAME = "training_tmp.model_mode"
 
 
 class TrainLoraTaskResultDTO(BaseModel):
@@ -76,8 +83,31 @@ class TrainLoraTaskResultDTO(BaseModel):
     final_loss: float | None = None
 
 
+class CompletedLoraTrainingModeRecord(BaseModel):
+    job_id: str
+    model_mode: str
+
+
 class PreviousAdapterRestoredError(RuntimeError):
     pass
+
+
+class LoraTrainingModelModeError(ValueError):
+    """A completed training job did not preserve the voice's model identity."""
+
+    error_type: str
+
+
+class UnsupportedLoraTrainingModelModeError(LoraTrainingModelModeError):
+    """The worker completed training in a mode no voice can represent."""
+
+    error_type = "lora_mode_invalid"
+
+
+class LoraTrainingModelModeMismatchError(LoraTrainingModelModeError):
+    """The worker completed a different training mode than was requested."""
+
+    error_type = "lora_mode_mismatch"
 
 
 @dataclass
@@ -131,6 +161,82 @@ def _output_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
 
 def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
     return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
+
+
+def _completed_training_mode_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
+    return _lora_root(audio_dir, user_id, lora_id) / _COMPLETED_TRAINING_MODE_FILENAME
+
+
+def _completed_training_mode_tmp_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
+    path = _completed_training_mode_path(audio_dir, user_id, lora_id)
+    return path.with_name(f"{path.name}.new")
+
+
+def _record_completed_training_model_mode(
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
+    job_id: str,
+    model_mode: str,
+) -> None:
+    path = _completed_training_mode_path(audio_dir, user_id, lora_id)
+    temporary_path = _completed_training_mode_tmp_path(audio_dir, user_id, lora_id)
+    record = CompletedLoraTrainingModeRecord(job_id=job_id, model_mode=model_mode)
+    try:
+        temporary_path.write_text(record.model_dump_json(), encoding="utf-8")
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _read_completed_training_model_mode(
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
+) -> CompletedLoraTrainingModeRecord | None:
+    path = _completed_training_mode_path(audio_dir, user_id, lora_id)
+    if not path.exists():
+        return None
+    try:
+        record = CompletedLoraTrainingModeRecord.model_validate_json(
+            path.read_text(encoding="utf-8"),
+        )
+    except ValidationError as exc:
+        raise ValueError("Completed LoRA training mode record is invalid") from exc
+    if record.model_mode not in LORA_TRAINING_MODEL_MODES:
+        raise ValueError(
+            f"Completed LoRA training recorded invalid model mode: {record.model_mode!r}",
+        )
+    return record
+
+
+def _clear_completed_training_model_mode(
+    audio_dir: Path,
+    user_id: str,
+    lora_id: str,
+) -> None:
+    try:
+        _completed_training_mode_path(audio_dir, user_id, lora_id).unlink(missing_ok=True)
+    except OSError:
+        log.exception("Failed to remove completed LoRA training mode record")
+
+
+def _validate_completed_training_model_mode(
+    *,
+    requested_mode: str,
+    worker_mode: str,
+) -> str:
+    """Accept only a supported worker mode that preserves the request's identity."""
+    if worker_mode not in LORA_TRAINING_MODEL_MODES:
+        raise UnsupportedLoraTrainingModelModeError(
+            f"Worker completed LoRA training with unsupported model mode: {worker_mode!r}",
+        )
+    if worker_mode != requested_mode:
+        raise LoraTrainingModelModeMismatchError(
+            "Worker completed LoRA training with model mode "
+            f"{worker_mode!r}, expected {requested_mode!r}",
+        )
+    return worker_mode
 
 
 def _materialize_dataset(
@@ -574,10 +680,15 @@ def _cleanup_failed_lora_paths(
     for path in (
         _dataset_dir(audio_dir, user_id, lora_id),
         _tmp_training_dir(audio_dir, user_id, lora_id),
+        _completed_training_mode_path(audio_dir, user_id, lora_id),
+        _completed_training_mode_tmp_path(audio_dir, user_id, lora_id),
     ):
         try:
             if path.exists():
-                shutil.rmtree(path)
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
         except OSError:
             removed_cleanly = False
             log.exception("Failed to remove %s during LoRA cleanup", path)
@@ -588,9 +699,25 @@ def _recover_complete_lora_adapter(
     audio_dir: Path,
     user_id: str,
     lora_id: str,
+    completed_model_mode: str | None = None,
 ) -> bool:
     final_dir = _output_dir(audio_dir, user_id, lora_id)
     previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
+    tmp_output = _tmp_training_dir(audio_dir, user_id, lora_id)
+    if completed_model_mode is not None:
+        if final_dir.exists() and not final_dir.is_dir():
+            raise RuntimeError(f"LoRA adapter path is not a directory: {final_dir}")
+        if previous_dir.exists() and not previous_dir.is_dir():
+            raise RuntimeError(f"Previous LoRA adapter path is not a directory: {previous_dir}")
+        if tmp_output.exists() and not tmp_output.is_dir():
+            raise RuntimeError(f"Temporary LoRA adapter path is not a directory: {tmp_output}")
+        if tmp_output.is_dir():
+            if final_dir.exists():
+                os.rename(final_dir, previous_dir)
+            os.rename(tmp_output, final_dir)
+        if previous_dir.exists():
+            shutil.rmtree(previous_dir)
+        return final_dir.is_dir()
     if not previous_dir.exists():
         return final_dir.is_dir()
     if final_dir.exists():
@@ -718,6 +845,7 @@ def reconcile_crashed_loras(
         lora_id: str | None = None
         user_id: str | None = None
         recovered_adapter = False
+        completed_model_mode: str | None = None
         try:
             with db_factory() as session:
                 candidates = list_active_user_loras(
@@ -731,10 +859,26 @@ def reconcile_crashed_loras(
                 lora = candidates[0]
                 lora_id = lora.id
                 user_id = lora.user_id
+                completed_mode_record = _read_completed_training_model_mode(
+                    audio_dir,
+                    user_id,
+                    lora_id,
+                )
+                if (
+                    completed_mode_record is not None
+                    and completed_mode_record.job_id == lora.training_job_id
+                ):
+                    completed_model_mode = completed_mode_record.model_mode
+                elif completed_mode_record is not None:
+                    log.warning(
+                        "Ignoring stale completed LoRA training mode record for job %s",
+                        completed_mode_record.job_id,
+                    )
                 recovered_adapter = _recover_complete_lora_adapter(
                     audio_dir,
                     user_id,
                     lora_id,
+                    completed_model_mode,
                 )
                 if recovered_adapter:
                     storage_rel = str(
@@ -746,6 +890,7 @@ def reconcile_crashed_loras(
                         status=LoraStatus.READY,
                         storage_path=storage_rel,
                         completed_at=datetime.now(timezone.utc),
+                        model_mode=completed_model_mode,
                         clear_error=True,
                     )
                     record_audit(
@@ -773,6 +918,8 @@ def reconcile_crashed_loras(
             continue
 
         reconciled += 1
+        if recovered_adapter and completed_model_mode is not None:
+            _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
         if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
             _log_failed_lora_cleanup(db_factory, audio_dir)
 
@@ -813,6 +960,7 @@ async def run_lora_training_job(
 
     from songmaker_cli.db.queries import get_user_lora
 
+    previous_model_mode: str | None = None
     try:
         with db_factory() as session:
             lora = get_user_lora(session, lora_id, include_deleted_rows=True)
@@ -879,6 +1027,7 @@ async def run_lora_training_job(
                 job_id,
                 lora_id,
                 user_id,
+                target_mode,
                 _queue_name=ARQ_MUSIC_QUEUE_NAME,
                 _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
             )
@@ -917,6 +1066,10 @@ async def run_lora_training_job(
             )
             return
 
+        completed_model_mode = _validate_completed_training_model_mode(
+            requested_mode=target_mode,
+            worker_mode=worker_result.mode,
+        )
         adapter_src = _validate_export_path(
             audio_dir=audio_dir,
             user_id=user_id,
@@ -936,6 +1089,21 @@ async def run_lora_training_job(
             raise RuntimeError(
                 f"Worker reported adapter at {adapter_src} but it is not a directory",
             )
+        _record_completed_training_model_mode(
+            audio_dir,
+            user_id,
+            lora_id,
+            job_id,
+            completed_model_mode,
+        )
+        with db_factory() as session:
+            lora = get_user_lora(session, lora_id, include_deleted_rows=True)
+            if lora is None:
+                raise RuntimeError(f"LoRA disappeared before adapter adoption: {lora_id}")
+            previous_model_mode = lora.model_mode
+            update_user_lora(session, lora_id, model_mode=completed_model_mode)
+            session.commit()
+
         final_dir.parent.mkdir(parents=True, exist_ok=True)
         previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
         if previous_dir.exists():
@@ -965,6 +1133,7 @@ async def run_lora_training_job(
         except OSError:
             log.warning("Failed to remove dataset dir %s", dataset_dir)
 
+        _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
         storage_rel = str(
             Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
         )
@@ -975,6 +1144,7 @@ async def run_lora_training_job(
                 status=LoraStatus.READY,
                 storage_path=storage_rel,
                 completed_at=datetime.now(timezone.utc),
+                model_mode=completed_model_mode,
                 clear_error=True,
             )
             record_audit(
@@ -1013,12 +1183,15 @@ async def run_lora_training_job(
         storage_rel = str(
             Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
         )
+        if previous_model_mode is None:
+            raise RuntimeError("LoRA adapter restoration lost its previous model mode") from exc
         with db_factory() as session:
             update_user_lora(
                 session,
                 lora_id,
                 status=LoraStatus.READY,
                 storage_path=storage_rel,
+                model_mode=previous_model_mode,
                 clear_error=True,
             )
             record_audit(
@@ -1036,6 +1209,23 @@ async def run_lora_training_job(
             JobStatus.FAILED,
             error=_sanitize_training_error(exc, job_id),
             error_type="lora_training_error",
+        )
+    except LoraTrainingModelModeError as exc:
+        log.error("LoRA training job %s returned an invalid model mode: %s", job_id, exc)
+        sanitized_error = _sanitize_training_error(exc, job_id)
+        cleanup_failed_lora_with_factory(
+            lora_id=lora_id,
+            user_id=user_id,
+            audio_dir=audio_dir,
+            db_factory=db_factory,
+            error_message=sanitized_error,
+        )
+        _update_job(
+            db_factory,
+            job_id,
+            JobStatus.FAILED,
+            error=sanitized_error,
+            error_type=exc.error_type,
         )
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)

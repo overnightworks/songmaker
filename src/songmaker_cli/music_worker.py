@@ -14,6 +14,7 @@ from arq import cron, func
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
+    MODEL_DEFAULT_MODE,
     RECOVERY_LOCK_MUSIC_KEY,
     CoverExecutor,
     JobFunction,
@@ -106,7 +107,12 @@ class MusicWorker(WorkerBase):
         )
 
     async def train_lora(
-        self, ctx, job_id: str, lora_id: str, user_id: str,
+        self,
+        ctx,
+        job_id: str,
+        lora_id: str,
+        user_id: str,
+        target_mode: str = MODEL_DEFAULT_MODE,
     ) -> None:
         if not self.check_job_still_valid(job_id):
             return
@@ -121,6 +127,7 @@ class MusicWorker(WorkerBase):
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
             redis=ctx["redis"],
+            target_mode=target_mode,
             training_config=self._settings.lora_training_config,
         )
 

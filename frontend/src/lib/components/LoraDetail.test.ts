@@ -81,6 +81,7 @@ function lora(overrides: Record<string, unknown> = {}) {
 		name: 'My Tenor',
 		slug: 'my-tenor',
 		status: 'draft',
+		model_mode: 'sft',
 		created_at: '2026-09-05T00:00:00Z',
 		deleted_at: null,
 		samples: [],

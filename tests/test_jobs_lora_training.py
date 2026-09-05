@@ -296,6 +296,114 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
     ]
 
 
+def test_matching_worker_mode_is_recorded_when_training_completes(
+    seeded, db_factory,
+) -> None:
+    output_dir = (
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
+    )
+
+    async def turbo_training_events(*_args, **_kwargs):
+        yield (
+            "done",
+            {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}},
+        )
+
+    with _patch_worker_calls(str(output_dir), events=turbo_training_events):
+        _run(
+            run_lora_training_job(
+                {},
+                "job-1",
+                seeded["lora_id"],
+                seeded["user_id"],
+                db_factory=db_factory,
+                audio_dir=seeded["audio_dir"],
+                redis=MagicMock(),
+                target_mode="turbo",
+                training_config=TEST_LORA_TRAINING_CONFIG,
+            )
+        )
+
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        assert lora.status == LoraStatus.READY
+        assert lora.model_mode == "turbo"
+        assert get_job(session, "job-1").status == JobStatus.COMPLETED
+
+
+@pytest.mark.parametrize(
+    ("worker_mode", "expected_error", "expected_error_type"),
+    [
+        (
+            "turbo",
+            "Worker completed LoRA training with model mode 'turbo', expected 'sft'",
+            "lora_mode_mismatch",
+        ),
+        (
+            "xl-sft",
+            "Worker completed LoRA training with unsupported model mode: 'xl-sft'",
+            "lora_mode_invalid",
+        ),
+    ],
+)
+def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
+    seeded,
+    db_factory,
+    worker_mode: str,
+    expected_error: str,
+    expected_error_type: str,
+) -> None:
+    output_dir = (
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
+    )
+
+    async def invalid_mode_events(*_args, **_kwargs):
+        yield (
+            "done",
+            {"result": {"mode": worker_mode, "adapter_dir": "", "num_samples": 3}},
+        )
+
+    with _patch_worker_calls(str(output_dir), events=invalid_mode_events):
+        _run(
+            run_lora_training_job(
+                {},
+                "job-1",
+                seeded["lora_id"],
+                seeded["user_id"],
+                db_factory=db_factory,
+                audio_dir=seeded["audio_dir"],
+                redis=MagicMock(),
+                training_config=TEST_LORA_TRAINING_CONFIG,
+            )
+        )
+
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        job = get_job(session, "job-1")
+        assert lora.status == LoraStatus.FAILED
+        assert lora.model_mode == "sft"
+        assert lora.error == expected_error
+        assert job.status == JobStatus.FAILED
+        assert job.error == expected_error
+        assert job.error_type == expected_error_type
+    assert not (
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / USER_LORA_OUTPUT_DIRNAME
+    ).exists()
+
+
+def test_lora_training_model_mode_error_types_fit_the_job_column() -> None:
+    error_type_column = Job.__table__.c.error_type.type
+
+    assert error_type_column.length == 30
+    assert all(
+        len(error_type) <= error_type_column.length
+        for error_type in ("lora_mode_invalid", "lora_mode_mismatch")
+    )
+
+
 @pytest.fixture()
 def fake_clock():
     class FakeClock:
@@ -572,19 +680,14 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
 
 
 @pytest.mark.parametrize(
-    ("crash_point", "expected_adapter_file"),
-    [
-        ("after_first_rename", "adapter.txt"),
-        ("after_second_rename", "adapter_config.json"),
-        ("after_previous_cleanup", "adapter_config.json"),
-    ],
+    "crash_point",
+    ["after_first_rename", "after_second_rename", "after_previous_cleanup"],
 )
 def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
     seeded,
     db_factory,
     monkeypatch,
     crash_point: str,
-    expected_adapter_file: str,
 ) -> None:
     from songmaker_cli.jobs import lora_training
 
@@ -617,7 +720,13 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
 
     monkeypatch.setattr(lora_training.shutil, "rmtree", crash_after_previous_cleanup)
 
-    with _patch_worker_calls(str(temporary_dir)):
+    async def turbo_training_events(*_args, **_kwargs):
+        yield (
+            "done",
+            {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}},
+        )
+
+    with _patch_worker_calls(str(temporary_dir), events=turbo_training_events):
         with pytest.raises(SystemExit, match="simulated process crash"):
             _run(
                 run_lora_training_job(
@@ -628,6 +737,7 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
                     db_factory=db_factory,
                     audio_dir=seeded["audio_dir"],
                     redis=MagicMock(),
+                    target_mode="turbo",
                 )
             )
 
@@ -638,11 +748,70 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
         session.commit()
 
     assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == 1
-    assert (final_dir / expected_adapter_file).exists()
+    assert (final_dir / "adapter_config.json").exists()
     assert not previous_dir.exists()
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.READY
+        assert lora.model_mode == "turbo"
+
+
+def test_reconcile_ignores_a_stale_completion_mode_during_a_retrain_crash(
+    seeded,
+    db_factory,
+    monkeypatch,
+    caplog,
+) -> None:
+    from songmaker_cli.jobs import lora_training
+
+    lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
+    final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
+    final_dir.mkdir(parents=True)
+    (final_dir / "adapter_config.json").write_text("{}")
+    lora_training._record_completed_training_model_mode(
+        seeded["audio_dir"],
+        seeded["user_id"],
+        seeded["lora_id"],
+        "job-1",
+        "turbo",
+    )
+
+    with db_factory() as session:
+        get_job(session, "job-1").status = JobStatus.FAILED
+        session.commit()
+
+    original_clear = lora_training._clear_completed_training_model_mode
+    original_cleanup = lora_training._cleanup_failed_lora_paths
+    monkeypatch.setattr(lora_training, "_clear_completed_training_model_mode", lambda *_args: None)
+    monkeypatch.setattr(lora_training, "_cleanup_failed_lora_paths", lambda *_args: True)
+    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == 1
+    monkeypatch.setattr(lora_training, "_clear_completed_training_model_mode", original_clear)
+    monkeypatch.setattr(lora_training, "_cleanup_failed_lora_paths", original_cleanup)
+
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        lora.status = LoraStatus.QUEUED
+        lora.training_job_id = "job-2"
+        session.add(Job(id="job-2", type=JobType.LORA_TRAINING, status=JobStatus.FAILED))
+        session.commit()
+
+    temporary_dir = lora_root / "training_tmp"
+    temporary_dir.mkdir()
+    (temporary_dir / "partial-adapter").write_text("incomplete")
+
+    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == 1
+
+    assert (final_dir / "adapter_config.json").exists()
+    assert not (final_dir / "partial-adapter").exists()
+    assert not temporary_dir.exists()
+    assert not lora_training._completed_training_mode_path(
+        seeded["audio_dir"], seeded["user_id"], seeded["lora_id"],
+    ).exists()
+    assert "Ignoring stale completed LoRA training mode record for job job-1" in caplog.text
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        assert lora.status == LoraStatus.READY
+        assert lora.model_mode == "turbo"
 
 
 def test_adoption_stays_ready_when_previous_cleanup_fails(
@@ -863,12 +1032,19 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
                 redis=redis,
+                target_mode="turbo",
             )
         )
 
     redis.enqueue_job.assert_awaited_once()
     args, kwargs = redis.enqueue_job.await_args
-    assert args == (JobFunction.LORA_TRAINING, "job-1", seeded["lora_id"], seeded["user_id"])
+    assert args == (
+        JobFunction.LORA_TRAINING,
+        "job-1",
+        seeded["lora_id"],
+        seeded["user_id"],
+        "turbo",
+    )
     assert kwargs == {"_queue_name": ARQ_MUSIC_QUEUE_NAME, "_defer_by": 5}
     with db_factory() as session:
         job = get_job(session, "job-1")

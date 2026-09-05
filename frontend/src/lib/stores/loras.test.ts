@@ -37,6 +37,7 @@ function makeLora(over: Record<string, unknown> = {}) {
 		name: 'Voice',
 		slug: 'voice',
 		status: 'draft',
+		model_mode: 'sft',
 		created_at: '2026-01-01',
 		deleted_at: null,
 		samples: [],
