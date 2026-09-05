@@ -140,7 +140,7 @@ async function handleCacheStream(
 		}
 
 		const contentLengthHeader = response.headers.get('Content-Length');
-		const total = contentLengthHeader ? parseInt(contentLengthHeader, 10) : null;
+		const total = contentLengthHeader ? Number.parseInt(contentLengthHeader, 10) : null;
 		const contentType = response.headers.get('Content-Type') ?? 'audio/mpeg';
 
 		const reader = response.body.getReader();
