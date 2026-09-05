@@ -220,7 +220,7 @@ jobs:
       - name: Tests with coverage
         run: |
           set -o pipefail
-          pnpm test:coverage -- --coverage.reporter=lcov --coverage.reportsDirectory=../reports/frontend-coverage | tee vitest-output.txt
+          pnpm test:coverage | tee vitest-output.txt
 
       - name: Production build
         run: pnpm build
