@@ -9,14 +9,14 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/mnt/backup/songmaker}"
 
-if [ ! -d "$BACKUP_DIR" ]; then
+if [[ ! -d "$BACKUP_DIR" ]]; then
     echo "No backup directory at $BACKUP_DIR"
     exit 1
 fi
 
 SNAPSHOTS=$(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d | sort -r)
 
-if [ -z "$SNAPSHOTS" ]; then
+if [[ -z "$SNAPSHOTS" ]]; then
     echo "No backups found in $BACKUP_DIR"
     exit 0
 fi
@@ -26,7 +26,7 @@ printf "%-20s  %8s  %8s  %s\n" "--------" "--" "-----" "-----"
 
 for dir in $SNAPSHOTS; do
     name=$(basename "$dir")
-    if [ -f "$dir/manifest.txt" ]; then
+    if [[ -f "$dir/manifest.txt" ]]; then
         db_size=$(grep "^db_size=" "$dir/manifest.txt" | cut -d= -f2)
         audio_count=$(grep "^audio_files=" "$dir/manifest.txt" | cut -d= -f2)
         db_human=$(numfmt --to=iec "$db_size" 2>/dev/null || echo "${db_size}B")
