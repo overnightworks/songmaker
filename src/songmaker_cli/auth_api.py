@@ -120,7 +120,10 @@ def setup_required(db: Session = Depends(get_db_session)) -> SetupRequiredRespon
     return SetupRequiredResponse(required=user_count(db) == 0)
 
 
-@router.post("/setup")
+@router.post(
+    "/setup",
+    responses={403: {"description": "Initial setup is not available"}},
+)
 def setup(
     req: SetupRequest,
     request: Request,
@@ -158,7 +161,14 @@ def setup(
     return UserResponse.from_orm(user)
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    responses={
+        401: {"description": "Credentials are invalid"},
+        429: {"description": "Too many login attempts"},
+        503: {"description": "Session service is temporarily unavailable"},
+    },
+)
 def login(
     req: LoginRequest,
     request: Request,
@@ -282,7 +292,13 @@ def me(
     )
 
 
-@router.put("/password")
+@router.put(
+    "/password",
+    responses={
+        401: {"description": "Current password is incorrect"},
+        429: {"description": "Too many password change attempts"},
+    },
+)
 def change_password(
     req: ChangePasswordRequest,
     request: Request,
