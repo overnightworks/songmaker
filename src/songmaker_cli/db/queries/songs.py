@@ -373,7 +373,14 @@ def update_song(
     audio_duration: int | None = None,
     key_scale: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
+    force_new_version: bool = False,
 ) -> Version:
+    """Apply song content changes, creating a version when required.
+
+    Editors keep a generation-free draft in place. Co-writer writes pass
+    ``force_new_version`` so each tool invocation leaves an immutable
+    snapshot for existing and future takes.
+    """
     song = get_song(session, song_id)
     if not song:
         raise ValueError(f"Song not found: {song_id}")
@@ -408,7 +415,7 @@ def update_song(
         or new_key_scale != prev.key_scale
     )
 
-    if prev and (not prev.generations or not creative_changed):
+    if prev and not force_new_version and (not prev.generations or not creative_changed):
         prev.lyrics = new_lyrics
         prev.prompt = new_prompt
         prev.bpm = new_bpm
@@ -505,20 +512,32 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
-def rename_song(session: Session, song_id: str, title: str, slug: str) -> Song:
+def rename_song(
+    session: Session,
+    song_id: str,
+    title: str,
+    slug: str,
+    *,
+    force_new_version: bool = False,
+) -> Song:
     """Rename a song, moving its slug along in the same flush.
 
     ``slug`` (already reserved via unique_song_slug()) changes together
     with the title so both change atomically in one flush — setting it in
     a later, separate flush would briefly leave the row on its old slug,
-    next to whatever sibling has just claimed it.
+    next to whatever sibling has just claimed it. Co-writer and editor title
+    writes pass ``force_new_version`` to route their snapshot through
+    ``update_song`` too.
     """
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
     song.title = title
     song.slug = slug
-    session.flush()
+    if force_new_version:
+        update_song(session, song_id, force_new_version=True)
+    else:
+        session.flush()
     log.info("Renamed song %s to %r", song_id, title)
     return song
 

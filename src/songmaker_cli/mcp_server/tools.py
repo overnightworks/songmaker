@@ -151,11 +151,9 @@ def tool_get_generation(
 
 # ── Write tools ───────────────────────────────────────────────────────
 #
-# These delegate to existing DB queries. update_song() already does
-# the right thing semantically: it mutates the latest version in place
-# when that version has no generations (so Claude-driven edits to a
-# draft don't pollute version history), and creates a new version only
-# when the current one is already tied to audio.
+# These delegate to existing DB queries. Co-writer content writes always use
+# update_song()'s force_new_version path, while editor writes retain its draft
+# editing behavior.
 
 
 def tool_create_song(
@@ -193,11 +191,13 @@ def tool_update_song_lyrics(
         check_song_access(session, song_id, user)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
-    db_update_song(session, song_id=song_id, lyrics=lyrics)
+    version = db_update_song(
+        session, song_id=song_id, lyrics=lyrics, force_new_version=True,
+    )
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
-        message="Updated lyrics",
+        message=f"Updated lyrics in v{version.version_number}",
         song=SongDetail.from_orm(refreshed),
     )
 
@@ -209,11 +209,13 @@ def tool_update_song_prompt(
         check_song_access(session, song_id, user)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
-    db_update_song(session, song_id=song_id, prompt=prompt)
+    version = db_update_song(
+        session, song_id=song_id, prompt=prompt, force_new_version=True,
+    )
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
-        message="Updated style prompt",
+        message=f"Updated style prompt in v{version.version_number}",
         song=SongDetail.from_orm(refreshed),
     )
 
@@ -234,9 +236,9 @@ def tool_update_song_style(
         check_song_access(session, song_id, user)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
-    db_update_song(
+    version = db_update_song(
         session, song_id=song_id, bpm=bpm, key_scale=key_scale,
-        audio_duration=audio_duration,
+        audio_duration=audio_duration, force_new_version=True,
     )
     refreshed = _reload_song(session, song_id)
     parts = []
@@ -248,7 +250,7 @@ def tool_update_song_style(
         parts.append(f"duration={audio_duration}s")
     return WriteResult(
         song_id=song_id,
-        message=f"Updated style ({', '.join(parts)})",
+        message=f"Updated style ({', '.join(parts)}) in v{version.version_number}",
         song=SongDetail.from_orm(refreshed),
     )
 
@@ -263,11 +265,13 @@ def tool_rename_song(
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
-    db_rename_song(session, song_id=song_id, title=title, slug=slug)
+    song = db_rename_song(
+        session, song_id=song_id, title=title, slug=slug, force_new_version=True,
+    )
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
-        message=f"Renamed song to '{title}'",
+        message=f"Renamed song to '{title}' in v{song.latest_version.version_number}",
         song=SongDetail.from_orm(refreshed),
     )
 
