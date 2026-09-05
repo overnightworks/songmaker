@@ -460,10 +460,14 @@ construction and sandbox tmpfs mounts, root binds and remounts, both
 `pivot_root` calls, the retained-proc bind from `/oldroot/proc/` to `/proc/`,
 fresh `proc`, writable-proc covers, and minimal `dev`/`devpts`. The retained
 proc bind is the first mount denied in the kernel audit for the observed Codex
-form. It accepts Bubblewrap's optional `silent` flag only where its mount
-syscall uses it and preserves the observed inherited mount flags during
-remounts. Compose applies the profile only to `songmaker-web`, drops every
-container capability, and sets `no-new-privileges:true`.
+form. The allowlist also names only the three traced protected-home overlays
+(`.git`, `.agents`, and `.codex`) below the cover, Co-Writer, and post-rollout
+probe home prefixes: Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`,
+after preparing each target with `--perms 555`, and then read-only remounts it.
+It accepts Bubblewrap's optional `silent` flag only where its mount syscall
+uses it and preserves the observed inherited mount flags during remounts. Compose applies
+the profile only to `songmaker-web`, drops every container capability, and
+sets `no-new-privileges:true`.
 
 Do not use `apparmor=unconfined` as a Sandbox diagnostic on this Ubuntu host.
 With `kernel.apparmor_restrict_unprivileged_userns=1`, an unconfined process is
@@ -495,10 +499,12 @@ Codex Bubblewrap forms because they answer different questions:
   `--apply-seccomp-then-exec`, including the only writable `CODEX_HOME` bind
   and Codex's three protected-home tmpfs overlays; it replaces only the traced
   terminal `/bin/true` with G4 assertions. It must allow writing only below
-  `CODEX_HOME`, reject writes
-  to `/app` and the rest of `/tmp`, have no network, retain
-  `NoNewPrivs: 1`, and expose an empty `CapEff`. Its `docker-default` control
-  runs the same prepared form and must fail.
+  `CODEX_HOME`, reject writes to `/app` and the rest of `/tmp`, have no
+  network, retain `NoNewPrivs: 1`, and expose an empty `CapEff`. The G4 shell
+  snippet compares `CapEff` to the literal `0000000000000000` that Python
+  embeds while building the snippet; the traced Bubblewrap argv therefore
+  gains no environment-setting argument. Its `docker-default` control runs the
+  same prepared form and must fail.
 
 The AppArmor audit of that traced form currently reaches the known first
 denial, `bwrap: mounting proc: Permission denied`, under `songmaker-web`;
