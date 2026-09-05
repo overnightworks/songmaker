@@ -1,7 +1,14 @@
 <script lang="ts">
-	import type { OwnPlayableTakeResponse, UserLoraItem, UserLoraSampleItem } from '$lib/api/types';
+	import type {
+		JobItem,
+		OwnPlayableTakeResponse,
+		UserLoraItem,
+		UserLoraSampleItem
+	} from '$lib/api/types';
 	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '$lib/api/client';
+	import { cancelJob, fetchJob } from '$lib/api/jobs';
 	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '$lib/api/loras';
+	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
 	import { refreshLora, trainLora, isLoraActive } from '$lib/stores/loras';
 	import { addToast } from '$lib/stores/toast';
 	import {
@@ -18,7 +25,21 @@
 		LORA_SAMPLE_ADDING,
 		LORA_SAMPLE_COPY_FAILED,
 		LORA_SAMPLE_UPLOAD_FAILED,
-		LORA_TAKE_LABEL_PREFIX
+		LORA_TAKE_LABEL_PREFIX,
+		LORA_TRAINING_CANCEL_FAILED,
+		LORA_TRAINING_CANCEL_LABEL,
+		LORA_TRAINING_CANCELLED,
+		LORA_TRAINING_PROGRESS_LOAD_FAILED,
+		LORA_TRAINING_PROGRESS_LABEL,
+		LORA_TRAINING_QUEUED_TOAST,
+		LORA_TRAINING_REMAINING_CALCULATING,
+		LORA_TRAINING_STARTING,
+		LORA_TRAINING_STATUS_LABEL,
+		LORA_TRAINING_WAITING_DEFAULT_REASON,
+		LORA_TRAINING_WAITING_LABEL,
+		loraTrainingEpochLabel,
+		loraTrainingQueuePositionLabel,
+		loraTrainingRemainingLabel
 	} from '$lib/constants';
 
 	interface Props {
@@ -39,6 +60,9 @@
 	let ownTakesLoading = $state(false);
 	let addingGenerationId = $state<string | null>(null);
 	let sampleError = $state<string | null>(null);
+	let cancellingTraining = $state(false);
+	let cancelledTrainingJob = $state<JobItem | null>(null);
+	let fetchedTrainingJobId = $state<string | null>(null);
 
 	const samples = $derived([...lora.samples].sort((a, b) => a.position - b.position));
 	const active = $derived(isLoraActive(lora.status));
@@ -65,6 +89,44 @@
 	const canTrain = $derived(
 		!active && !deleted && sampleValidationProblems.length === 0 && !training
 	);
+	const trainingJob = $derived.by(() => {
+		const jobId = lora.training_job_id;
+		if (!jobId) return null;
+		return $activeJobs.find((entry) => entry.job.id === jobId)?.job ?? null;
+	});
+	const displayedTrainingJob = $derived(
+		trainingJob ?? (cancelledTrainingJob?.id === lora.training_job_id ? cancelledTrainingJob : null)
+	);
+	const waitingForWorker = $derived(
+		displayedTrainingJob?.status === 'queued' &&
+			(displayedTrainingJob.queue_reason !== null || displayedTrainingJob.queue_position !== null)
+	);
+	const epochProgress = $derived.by(() => {
+		const job = displayedTrainingJob;
+		if (!job?.train_epochs || job.current_epoch === null || job.current_epoch === undefined)
+			return 0;
+		return Math.min(100, Math.max(0, (job.current_epoch / job.train_epochs) * 100));
+	});
+
+	$effect(() => {
+		const jobId = active ? lora.training_job_id : null;
+		if (!jobId || fetchedTrainingJobId === jobId) return;
+		fetchedTrainingJobId = jobId;
+		void beginTrainingJobStream(jobId);
+	});
+
+	async function beginTrainingJobStream(jobId: string) {
+		try {
+			const job = await fetchJob(jobId);
+			if (job.status === 'cancelled') {
+				cancelledTrainingJob = job;
+				return;
+			}
+			if (job.status === 'queued' || job.status === 'running') trackJob(job, {});
+		} catch {
+			addToast(LORA_TRAINING_PROGRESS_LOAD_FAILED, 'error');
+		}
+	}
 
 	function acceptsAudio(file: File): boolean {
 		const name = file.name.toLowerCase();
@@ -190,8 +252,13 @@
 	async function startTraining() {
 		training = true;
 		try {
-			await trainLora(lora.id);
-			addToast('Training queued', 'success');
+			const updated = await trainLora(lora.id);
+			cancelledTrainingJob = null;
+			if (updated.training_job_id) {
+				fetchedTrainingJobId = updated.training_job_id;
+				void beginTrainingJobStream(updated.training_job_id);
+			}
+			addToast(LORA_TRAINING_QUEUED_TOAST, 'success');
 		} catch (e) {
 			addToast(
 				e instanceof ApiError ? e.detail || 'Training failed to start' : 'Training failed',
@@ -201,11 +268,33 @@
 			training = false;
 		}
 	}
+
+	async function cancelTraining() {
+		const job = trainingJob;
+		if (!job) return;
+		cancellingTraining = true;
+		try {
+			const cancelled = await cancelJob(job.id);
+			cancelledTrainingJob = cancelled;
+			removeJob(job.id);
+		} catch (e) {
+			addToast(
+				e instanceof ApiError
+					? e.detail || LORA_TRAINING_CANCEL_FAILED
+					: LORA_TRAINING_CANCEL_FAILED,
+				'error'
+			);
+		} finally {
+			cancellingTraining = false;
+		}
+	}
 </script>
 
 <div class="lora-detail" class:deleted>
 	{#if deleted}
 		<p class="banner warn">This voice has been deleted. Editing is disabled.</p>
+	{:else if displayedTrainingJob?.status === 'cancelled'}
+		<p class="banner info">{LORA_TRAINING_CANCELLED}</p>
 	{:else if active}
 		<p class="banner info">Voice is {lora.status} — editing is locked until training finishes.</p>
 	{:else if lora.status === 'failed' && lora.error}
@@ -356,9 +445,57 @@
 		{/if}
 	</section>
 
+	{#if displayedTrainingJob}
+		<section class="training-progress" aria-live="polite">
+			<div class="training-progress-head">
+				<strong
+					>{waitingForWorker ? LORA_TRAINING_WAITING_LABEL : LORA_TRAINING_STATUS_LABEL}</strong
+				>
+				{#if trainingJob}
+					<button
+						class="cancel-training-btn"
+						disabled={cancellingTraining}
+						onclick={cancelTraining}
+					>
+						{LORA_TRAINING_CANCEL_LABEL}
+					</button>
+				{/if}
+			</div>
+			{#if displayedTrainingJob.status === 'cancelled'}
+				<p>{LORA_TRAINING_CANCELLED}</p>
+			{:else if waitingForWorker}
+				<p>{displayedTrainingJob.queue_reason || LORA_TRAINING_WAITING_DEFAULT_REASON}</p>
+				{#if displayedTrainingJob.queue_position !== null && displayedTrainingJob.queue_position !== undefined}
+					<p class="training-detail">
+						{loraTrainingQueuePositionLabel(displayedTrainingJob.queue_position)}
+					</p>
+				{/if}
+			{:else}
+				<div class="progress-track" aria-label={LORA_TRAINING_PROGRESS_LABEL}>
+					<span style:width={`${epochProgress}%`}></span>
+				</div>
+				<div class="training-progress-meta">
+					{#if displayedTrainingJob.current_epoch !== null && displayedTrainingJob.current_epoch !== undefined && displayedTrainingJob.train_epochs}
+						<strong>
+							{loraTrainingEpochLabel(
+								displayedTrainingJob.current_epoch,
+								displayedTrainingJob.train_epochs
+							)}
+						</strong>
+					{/if}
+					{#if displayedTrainingJob.remaining_time_estimate === 'calculating'}
+						<span>{LORA_TRAINING_REMAINING_CALCULATING}</span>
+					{:else if typeof displayedTrainingJob.remaining_time_estimate === 'number'}
+						<span>{loraTrainingRemainingLabel(displayedTrainingJob.remaining_time_estimate)}</span>
+					{/if}
+				</div>
+			{/if}
+		</section>
+	{/if}
+
 	<section class="train-section">
 		<button class="train-btn" disabled={!canTrain} onclick={startTraining}>
-			{training ? 'Starting...' : active ? `Training (${lora.status})` : 'Train voice'}
+			{training ? LORA_TRAINING_STARTING : active ? `Training (${lora.status})` : 'Train voice'}
 		</button>
 		{#if sampleValidationProblems.length > 0 && !active && !deleted}
 			<ul class="problems">
@@ -617,6 +754,78 @@
 		border-radius: 4px;
 		color: var(--score-bad);
 		font-size: 0.85rem;
+	}
+
+	.training-progress {
+		padding: 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+	}
+
+	.training-progress-head,
+	.training-progress-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.training-progress-head strong {
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+	}
+
+	.training-progress p {
+		margin: 0.6rem 0 0;
+		color: var(--text-muted);
+	}
+
+	.training-detail {
+		font-size: 0.8rem;
+		color: var(--text-subtle) !important;
+	}
+
+	.progress-track {
+		height: 0.4rem;
+		margin: 0.8rem 0 0.55rem;
+		border-radius: 999px;
+		overflow: hidden;
+		background: var(--bg);
+	}
+
+	.progress-track span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		transition: width 180ms ease;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.progress-track span {
+			transition: none;
+		}
+	}
+
+	.cancel-training-btn {
+		padding: 0.3rem 0.75rem;
+		border: 1px solid var(--score-bad);
+		border-radius: var(--btn-radius-sm);
+		background: transparent;
+		color: var(--score-bad);
+		font-family: var(--font-display);
+		font-size: 0.75rem;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	.cancel-training-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.sample-sources {
