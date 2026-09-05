@@ -85,7 +85,7 @@ python scripts/generate_types.py --check
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-- CI enforces 93% backend coverage (`songmaker_cli` + engines + `acestep_worker`; scoring modules excluded — require GPU extras) and 91% statements / 94% lines for the frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
+- CI enforces 93% backend coverage (`songmaker_cli` + engines + `acestep_worker`; scoring modules excluded — require GPU extras) and 90% statements / 93% lines for the frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
 - Docs (`docs/`) must stay accurate after changes
 - Open work lives in GitHub Issues with a milestone. Do not add items to a markdown backlog.
 
