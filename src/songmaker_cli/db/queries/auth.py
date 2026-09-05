@@ -63,11 +63,7 @@ def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[st
         albums = session.query(Album).filter_by(created_by=user_id).all()
         album_ids = [album.id for album in albums]
         for album in albums:
-            for song in album.songs:
-                for gen in song.generations:
-                    for p in [gen.mp3_path, gen.wav_path]:
-                        if p:
-                            audio_paths.append(p)
+            audio_paths.extend(_album_audio_paths(album))
             session.delete(album)
 
     playlists = session.query(Playlist).filter_by(created_by=user_id).all()
@@ -82,6 +78,16 @@ def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[st
     session.flush()
     log.info("Hard-deleted user %s and %d album(s)", user_id, len(album_ids))
     return audio_paths, album_ids, playlist_ids
+
+
+def _album_audio_paths(album: Album) -> list[str]:
+    return [
+        path
+        for song in album.songs
+        for generation in song.generations
+        for path in (generation.mp3_path, generation.wav_path)
+        if path
+    ]
 
 
 def update_user(

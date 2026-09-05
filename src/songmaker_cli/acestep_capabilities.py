@@ -89,6 +89,27 @@ _TURBO_CFG_INTERVAL_END_OFF = ParamSupport(
 )
 
 
+def _shared_profile_params() -> dict[str, ParamSupport]:
+    return {
+        "sampler_mode": ParamSupport(supported=True),
+        "velocity_norm_threshold": ParamSupport(supported=True, min=0.0),
+        "velocity_ema_factor": ParamSupport(supported=True, min=0.0, max=1.0),
+        "latent_shift": ParamSupport(supported=True),
+        "latent_rescale": ParamSupport(supported=True, min=0.1),
+        "audio_cover_strength": ParamSupport(supported=True, min=0.0, max=1.0),
+        "thinking": ParamSupport(supported=True),
+        "lm_temperature": ParamSupport(supported=True, min=0.0, max=2.0),
+        "lm_top_k": ParamSupport(supported=True, min=0, max=200),
+        "lm_top_p": ParamSupport(supported=True, min=0.0, max=1.0),
+        "lm_cfg_scale": ParamSupport(supported=True, min=1.0, max=3.0),
+        "lm_negative_prompt": ParamSupport(supported=True),
+        "lm_repetition_penalty": ParamSupport(supported=True, min=0.5, max=5.0),
+        "use_cot_caption": ParamSupport(supported=True),
+        "use_cot_language": ParamSupport(supported=True),
+        "batch_size": ParamSupport(supported=True, min=1, max=8),
+    }
+
+
 def _make_turbo(*, mode: str, is_xl: bool) -> AceStepProfile:
     return AceStepProfile(
         mode=mode,
@@ -101,22 +122,7 @@ def _make_turbo(*, mode: str, is_xl: bool) -> AceStepProfile:
         use_adg=_TURBO_USE_ADG_OFF,
         cfg_interval_start=_TURBO_CFG_INTERVAL_START_OFF,
         cfg_interval_end=_TURBO_CFG_INTERVAL_END_OFF,
-        sampler_mode=ParamSupport(supported=True),
-        velocity_norm_threshold=ParamSupport(supported=True, min=0.0),
-        velocity_ema_factor=ParamSupport(supported=True, min=0.0, max=1.0),
-        latent_shift=ParamSupport(supported=True),
-        latent_rescale=ParamSupport(supported=True, min=0.1),
-        audio_cover_strength=ParamSupport(supported=True, min=0.0, max=1.0),
-        thinking=ParamSupport(supported=True),
-        lm_temperature=ParamSupport(supported=True, min=0.0, max=2.0),
-        lm_top_k=ParamSupport(supported=True, min=0, max=200),
-        lm_top_p=ParamSupport(supported=True, min=0.0, max=1.0),
-        lm_cfg_scale=ParamSupport(supported=True, min=1.0, max=3.0),
-        lm_negative_prompt=ParamSupport(supported=True),
-        lm_repetition_penalty=ParamSupport(supported=True, min=0.5, max=5.0),
-        use_cot_caption=ParamSupport(supported=True),
-        use_cot_language=ParamSupport(supported=True),
-        batch_size=ParamSupport(supported=True, min=1, max=8),
+        **_shared_profile_params(),
     )
 
 
@@ -140,22 +146,7 @@ def _make_sft_or_base(
             supported=True, min=0.0, max=1.0,
             note="Honored when guidance_scale > 1.0.",
         ),
-        sampler_mode=ParamSupport(supported=True),
-        velocity_norm_threshold=ParamSupport(supported=True, min=0.0),
-        velocity_ema_factor=ParamSupport(supported=True, min=0.0, max=1.0),
-        latent_shift=ParamSupport(supported=True),
-        latent_rescale=ParamSupport(supported=True, min=0.1),
-        audio_cover_strength=ParamSupport(supported=True, min=0.0, max=1.0),
-        thinking=ParamSupport(supported=True),
-        lm_temperature=ParamSupport(supported=True, min=0.0, max=2.0),
-        lm_top_k=ParamSupport(supported=True, min=0, max=200),
-        lm_top_p=ParamSupport(supported=True, min=0.0, max=1.0),
-        lm_cfg_scale=ParamSupport(supported=True, min=1.0, max=3.0),
-        lm_negative_prompt=ParamSupport(supported=True),
-        lm_repetition_penalty=ParamSupport(supported=True, min=0.5, max=5.0),
-        use_cot_caption=ParamSupport(supported=True),
-        use_cot_language=ParamSupport(supported=True),
-        batch_size=ParamSupport(supported=True, min=1, max=8),
+        **_shared_profile_params(),
     )
 
 
