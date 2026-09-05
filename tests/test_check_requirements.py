@@ -189,7 +189,7 @@ def test_repository_contract_and_honesty_boundary_pass() -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.startswith("Requirement contract: ")
-    assert "7 acceptance sentence(s)" in result.stdout
+    assert "9 acceptance sentence(s)" in result.stdout
     assert "does not fetch: GitHub" in result.stdout
 
 

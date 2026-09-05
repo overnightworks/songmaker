@@ -410,6 +410,7 @@ def test_cowriter_save_preserves_the_legacy_active_pair(
         }
 
 
+@pytest.mark.acceptance("ACC-COWRITER-15")
 def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
     admin_client, every_provider_is_configured,
 ):
@@ -418,6 +419,7 @@ def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
     response = client.get("/api/settings/cowriter")
 
     assert response.status_code == 200
+    assert response.json()["provider"] == "claude"
     assert response.json()["selected_models_by_provider"] == {
         "claude": "claude-opus-4-6",
         "codex": "",

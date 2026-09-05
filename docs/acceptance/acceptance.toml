@@ -43,6 +43,20 @@ proof_kind = "integration"
 critical = true
 
 [[acceptance]]
+id = "ACC-COWRITER-15"
+text = "When no Co-Writer provider is stored, the Co-Writer settings boundary returns Claude as the provider."
+requirements = ["REQ-COWRITER-10"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
+id = "ACC-COWRITER-16"
+text = "Changing the Co-Writer provider between chat turns preserves the active conversation, its history, memory, mentions, and take context."
+requirements = ["REQ-COWRITER-13"]
+proof_kind = "integration"
+critical = true
+
+[[acceptance]]
 id = "ACC-SHARE-18"
 text = "A public share audio request for an unknown share returns the same silent not-found response as a missing file."
 requirements = ["REQ-SHARE-18"]
