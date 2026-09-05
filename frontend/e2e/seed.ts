@@ -94,6 +94,11 @@ export interface SeededLibrary {
 	albumShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
+	/** The picked song's API id, used by the Continue reorder proof. */
+	pickedSongId: string;
+	/** A second playable song, so each viewport proves a fresh reorder. */
+	continueReorderSongTitle: string;
+	continueReorderSongId: string;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -294,6 +299,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		artist: ALBUM_ARTIST
 	});
 
+	const songIdByTitle = new Map<string, string>();
 	const takeBySongTitle = new Map<string, string>();
 	for (const title of SONG_TITLES) {
 		const song = await seed.postJson<CreatedResource>('/api/songs', {
@@ -305,10 +311,16 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		const take = await seed.postFile<CreatedResource>(`/api/songs/${song.id}/reimport`, {
 			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
 		});
+		songIdByTitle.set(title, song.id);
 		takeBySongTitle.set(title, take.id);
 	}
 
 	const [pickedSongTitle, ...playlistSongTitles] = SONG_TITLES;
+	const pickedSongId = songIdByTitle.get(pickedSongTitle);
+	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
+	const continueReorderSongTitle = playlistSongTitles[playlistSongTitles.length - 1];
+	const continueReorderSongId = songIdByTitle.get(continueReorderSongTitle);
+	if (!continueReorderSongId) throw new Error(`Missing seeded song ${continueReorderSongTitle}`);
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
@@ -340,6 +352,9 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
+		pickedSongId,
+		continueReorderSongTitle,
+		continueReorderSongId,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,
