@@ -918,13 +918,19 @@ describe('toggle / play / pause', () => {
 	});
 
 	it.each([
-		['an error', () => {
-			audioPlayer.status = 'error';
-		}],
-		['an ended track', () => {
-			audioPlayer.status = 'playing';
-			fakeAudio.ended = true;
-		}]
+		[
+			'an error',
+			() => {
+				audioPlayer.status = 'error';
+			}
+		],
+		[
+			'an ended track',
+			() => {
+				audioPlayer.status = 'playing';
+				fakeAudio.ended = true;
+			}
+		]
 	])('keeps the status when pausing after %s', (_caseName, arrange) => {
 		arrange();
 		const status = audioPlayer.status;
