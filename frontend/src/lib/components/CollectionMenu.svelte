@@ -155,7 +155,7 @@
 				<span class="menu-row-label">{shareLabel}</span>
 				<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
 			</div>
-			{#if kind === 'album' && oncover}
+			{#if oncover}
 				<button class="menu-item" onclick={() => runAndClose(oncover)}
 					>{ALBUM_COVER_UPLOAD_LABEL}</button
 				>
@@ -165,7 +165,7 @@
 					>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
 				>
 			{/if}
-			{#if kind === 'album' && hasCover && onremovecover}
+			{#if hasCover && onremovecover}
 				<button class="menu-item" onclick={() => runAndClose(onremovecover)}
 					>{COLLECTION_MENU_COVER_REMOVE_LABEL}</button
 				>

@@ -10,7 +10,9 @@ import {
 	addGenerationToPlaylist,
 	addSongToPlaylist,
 	createPlaylist,
+	deletePlaylistCover,
 	reorderPlaylistEntry,
+	uploadPlaylistCover,
 	updatePlaylist
 } from './playlists';
 
@@ -77,5 +79,22 @@ describe('playlist API contract', () => {
 		expect(actualUrl).toBe(url);
 		expect(init.method).toBe(method);
 		expect(JSON.parse(String(init.body))).toEqual(payload);
+	});
+
+	it('uploads a cover through the playlist cover endpoint', async () => {
+		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
+		await uploadPlaylistCover('p-1', file);
+		const [url, init] = request();
+		expect(url).toBe('/api/playlists/p-1/cover');
+		expect(init.method).toBe('PUT');
+		expect(init.body).toBeInstanceOf(FormData);
+		expect((init.body as FormData).get('file')).toBe(file);
+	});
+
+	it('removes a cover through the playlist cover endpoint', async () => {
+		await deletePlaylistCover('p-1');
+		const [url, init] = request();
+		expect(url).toBe('/api/playlists/p-1/cover');
+		expect(init.method).toBe('DELETE');
 	});
 });

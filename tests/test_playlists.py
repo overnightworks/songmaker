@@ -589,7 +589,7 @@ def test_api_uploads_playlist_cover_variants_and_remove_restores_mosaic(
         "detail": "/api/albums/a1/cover?variant=detail&v=album.png",
     }]
 
-    uploaded = client.post(
+    uploaded = client.put(
         f"/api/playlists/{playlist_id}/cover",
         files={"file": ("cover.png", _png_bytes(), "image/png")},
     )
@@ -628,7 +628,7 @@ def test_api_rejects_invalid_playlist_covers(
 ) -> None:
     playlist_id = client.post("/api/playlists", json={"title": "Rejected"}).json()["id"]
 
-    response = client.post(
+    response = client.put(
         f"/api/playlists/{playlist_id}/cover",
         files={"file": ("cover", payload, media_type)},
     )
@@ -650,7 +650,7 @@ def test_foreign_playlist_cover_routes_are_not_found(client: TestClient) -> None
 
     path = "/api/playlists/foreign-playlist/cover"
     assert client.get(path).status_code == 404
-    assert client.post(
+    assert client.put(
         path, files={"file": ("cover.png", _png_bytes(), "image/png")},
     ).status_code == 404
     assert client.delete(path).status_code == 404

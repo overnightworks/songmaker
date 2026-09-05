@@ -83,6 +83,30 @@ describe('CollectionHeader', () => {
 		expect(props.onplay).toHaveBeenCalledTimes(1);
 	});
 
+	it('uses the album art fill when an album has no cover', async () => {
+		const target = await render({ ...baseProps(), artFill: 'rgb(12, 34, 56)' });
+		const fallback = requireElement<HTMLElement>(target, '.header-cover-fallback');
+
+		expect(fallback.style.background).toBe('rgb(12, 34, 56)');
+	});
+
+	it('uses album initials when an album has neither cover nor art fill', async () => {
+		const target = await render(baseProps());
+		const fallback = requireElement<HTMLElement>(target, '.header-cover-initials');
+
+		expect(fallback.textContent).toBe('ND');
+	});
+
+	it('uses the playlist mosaic when a playlist has no own cover', async () => {
+		const target = await render({
+			...baseProps(),
+			kind: 'playlist' as const,
+			playlistCovers: []
+		});
+
+		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
+	});
+
 	it('opens the Library wall from the breadcrumb', async () => {
 		const target = await render(baseProps());
 		requireElement<HTMLButtonElement>(target, '.crumb-link').click();
@@ -121,7 +145,7 @@ describe('CollectionHeader', () => {
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
-	it('lists playlist entries: Share, Save offline, Rename, Delete — no Cover or Add to playlist', async () => {
+	it('lists playlist cover actions alongside its existing actions', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
 		const target = await render(props);
 		const menu = await openMenu(target);
@@ -129,7 +153,7 @@ describe('CollectionHeader', () => {
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
+		expect(items).toEqual(['Upload…', 'Save offline', 'Rename', 'Delete playlist']);
 	});
 
 	it('shares via the embedded ShareButton and copies the link, without duplicating the logic', async () => {
