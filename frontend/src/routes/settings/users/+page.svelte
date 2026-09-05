@@ -621,14 +621,6 @@
 	function selectCowriterProvider(provider: string): void {
 		cowriterProvider = provider;
 		const models = routeModels(provider, selectedCowriterRoute(provider));
-		if (
-			cowriterSettings &&
-			provider === cowriterSettings.provider &&
-			models.includes(cowriterSettings.model)
-		) {
-			cowriterModel = cowriterSettings.model;
-			return;
-		}
 		cowriterModel = models[0] ?? '';
 	}
 

@@ -83,6 +83,7 @@
 		role: 'user' | 'assistant';
 		text: string;
 		toolCalls?: ToolCall[];
+		error?: string;
 	}
 
 	let messages: Message[] = $state([]);
@@ -90,7 +91,6 @@
 	let loading = $state(false);
 	let historyLoading = $state(false);
 	let historyError = $state('');
-	let error = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
 
@@ -216,7 +216,14 @@
 	}
 
 	async function send(): Promise<void> {
-		const msg = input.trim();
+		await sendMessage(input.trim());
+	}
+
+	async function retry(message: string): Promise<void> {
+		await sendMessage(message);
+	}
+
+	async function sendMessage(msg: string): Promise<void> {
 		if (!msg || loading) return;
 		if (viewingConversationId !== null && viewingConversationId !== activeConversationId) {
 			addToast('Viewing an archived conversation — start a new one to reply', 'info');
@@ -224,7 +231,6 @@
 		}
 
 		input = '';
-		error = '';
 		const assistantIndex = messages.length + 1;
 		messages = [
 			...messages,
@@ -254,6 +260,7 @@
 					break;
 				}
 				if (event.type === 'final') {
+					messages = messages.filter((message) => !message.error);
 					if (activeConversationId !== event.conversation_id) {
 						activeConversationId = event.conversation_id;
 						viewingConversationId = event.conversation_id;
@@ -272,7 +279,10 @@
 		} finally {
 			loading = false;
 			if (streamError) {
-				error = streamError;
+				const failureMessage = streamError;
+				messages = messages.map((message, index) =>
+					index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
+				);
 				const current = messages[assistantIndex];
 				if (current && !current.text) {
 					messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
@@ -600,11 +610,16 @@
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
 						<span class="typing">{cowriterThinkingLabel(providerName)}</span>
 					{/if}
+					{#if msg.error}
+						<div class="turn-error" role="alert">
+							<span>{msg.error}</span>
+							<button type="button" class="retry-turn" onclick={() => retry(msg.text)}
+								>Try again</button
+							>
+						</div>
+					{/if}
 				</div>
 			{/each}
-			{#if error}
-				<div class="chat-error">{error}</div>
-			{/if}
 		</div>
 	{/if}
 
@@ -973,10 +988,26 @@
 		font-weight: 600;
 	}
 
-	.chat-error {
-		color: var(--score-bad);
+	.turn-error {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 6px;
 		font-size: 0.75rem;
-		padding: 4px 8px;
+	}
+
+	.retry-turn {
+		border: 1px solid currentColor;
+		border-radius: 4px;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		padding: 2px 6px;
+	}
+
+	.retry-turn:hover {
+		background: color-mix(in srgb, currentColor 15%, transparent);
 	}
 
 	.readonly-banner {
