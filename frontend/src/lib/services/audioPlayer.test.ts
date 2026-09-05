@@ -240,6 +240,32 @@ describe('load()', () => {
 		expect(fakeAudio.src).toBe('/audio/b.mp3');
 	});
 
+	it('publishes replacement takes while loading', () => {
+		const statuses: Array<[string, string]> = [];
+		audioPlayer.swapCallbacks(
+			callbacks({
+				onCurrentChange: (current) => {
+					if (current) statuses.push([current.generation.id, audioPlayer.status]);
+				}
+			})
+		);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('play');
+		statuses.length = 0;
+
+		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }), {
+			autoplay: false
+		});
+
+		expect(statuses).toEqual([['g2', 'loading']]);
+
+		fakeAudio.fire('play');
+		statuses.length = 0;
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+
+		expect(statuses).toEqual([['g1', 'loading']]);
+	});
+
 	it('clears prior error state on new load', () => {
 		audioPlayer.load(makeInfo());
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;

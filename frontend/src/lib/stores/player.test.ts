@@ -655,6 +655,35 @@ describe('playback dispatch', () => {
 		expect(recordSongListen).toHaveBeenNthCalledWith(2, secondSong.id);
 	});
 
+	it('does not record a replacement take until it starts playing', () => {
+		const firstSong = makeSong({ id: 's-replacement-listen-1' });
+		const secondSong = makeSong({ id: 's-replacement-listen-2' });
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-replacement-listen-1', song_id: firstSong.id }),
+			firstSong
+		);
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		vi.mocked(recordSongListen).mockClear();
+
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-replacement-listen-2', song_id: secondSong.id }),
+			secondSong
+		);
+		audioPlayer.status = 'loading';
+		audioPlayer.currentCallbacks.onCurrentChange?.(audioPlayer.current);
+		audioPlayer.status = 'error';
+
+		expect(recordSongListen).not.toHaveBeenCalled();
+
+		audioPlayer.status = 'playing';
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledOnce();
+		expect(recordSongListen).toHaveBeenCalledWith(secondSong.id);
+	});
+
 	it('logs a reporting failure without interrupting playback', async () => {
 		const song = makeSong({ id: 's-listen-error' });
 		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-error', song_id: song.id }), song);
