@@ -491,10 +491,11 @@ Codex Bubblewrap forms because they answer different questions:
   bwrap --new-session --die-with-parent --ro-bind / / --dev /dev --bind /tmp/songmaker-codex-sandbox-probe/codex-home /tmp/songmaker-codex-sandbox-probe/codex-home --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.git --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.git --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --unshare-user --unshare-pid --unshare-net --proc /proc --argv0 codex-linux-sandbox -- /usr/local/bin/codex --sandbox-policy-cwd /tmp/songmaker-codex-sandbox-probe/workdir --command-cwd /tmp/songmaker-codex-sandbox-probe/workdir --permission-profile {"type":"managed","file_system":{"type":"restricted","entries":[{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},{"path":{"type":"path","path":"/tmp/songmaker-codex-sandbox-probe/codex-home"},"access":"write"}]},"network":"restricted"} --apply-seccomp-then-exec -- /bin/true
   ```
 
-  The proof pins the complete Bubblewrap setup through `--proc /proc`, including
-  the only writable `CODEX_HOME` bind and Codex's three protected-home tmpfs
-  overlays; it then runs the same boundary with assertions in place of the
-  helper re-exec. It must allow writing only below `CODEX_HOME`, reject writes
+  The proof pins the complete Bubblewrap setup and Codex helper re-exec through
+  `--apply-seccomp-then-exec`, including the only writable `CODEX_HOME` bind
+  and Codex's three protected-home tmpfs overlays; it replaces only the traced
+  terminal `/bin/true` with G4 assertions. It must allow writing only below
+  `CODEX_HOME`, reject writes
   to `/app` and the rest of `/tmp`, have no network, retain
   `NoNewPrivs: 1`, and expose an empty `CapEff`. Its `docker-default` control
   runs the same prepared form and must fail.

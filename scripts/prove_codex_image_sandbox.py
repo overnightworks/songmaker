@@ -13,7 +13,15 @@ WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
 EMPTY_CAPABILITY_MASK = "0000000000000000"
 SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
+SANDBOX_WORKDIR = "/tmp/songmaker-codex-sandbox-probe/workdir"
+CODEX_BINARY = "/usr/local/bin/codex"
 _PROTECTED_CODEX_HOME_PATHS = (".git", ".agents", ".codex")
+CODEX_READ_ONLY_PERMISSION_PROFILE = (
+    '{"type":"managed","file_system":{"type":"restricted","entries":['
+    '{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},'
+    f'{{"path":{{"type":"path","path":"{SANDBOX_CODEX_HOME}"}},"access":"write"}}'
+    ']},"network":"restricted"}'
+)
 _PREPARE_AND_EXECUTE_BWRAP = (
     'home=$1; shift; mkdir -p "$home/.git" "$home/.agents" "$home/.codex"; '
     'exec bwrap "$@"'
@@ -74,6 +82,17 @@ def bubblewrap_probe_command() -> tuple[str, ...]:
         "--unshare-pid",
         "--unshare-net",
         "--proc", "/proc",
+        "--argv0",
+        "codex-linux-sandbox",
+        "--",
+        CODEX_BINARY,
+        "--sandbox-policy-cwd",
+        SANDBOX_WORKDIR,
+        "--command-cwd",
+        SANDBOX_WORKDIR,
+        "--permission-profile",
+        CODEX_READ_ONLY_PERMISSION_PROFILE,
+        "--apply-seccomp-then-exec",
         "--",
         "/bin/sh",
         "-ec",
@@ -114,6 +133,7 @@ def _verify_sandbox(run: CommandRunner) -> None:
     prepare = run((
         "docker", "compose", "exec", "-T", WEB_SERVICE,
         "/bin/mkdir", "-p",
+        SANDBOX_WORKDIR,
         *(f"{SANDBOX_CODEX_HOME}/{path}" for path in _PROTECTED_CODEX_HOME_PATHS),
     ))
     _required_output(prepare, "preparing the private CODEX_HOME probe directory")

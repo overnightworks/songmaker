@@ -44,6 +44,13 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
         "--unshare-pid",
         "--unshare-net",
         "--proc", "/proc",
+        "--argv0", "codex-linux-sandbox",
+        "--",
+        proof.CODEX_BINARY,
+        "--sandbox-policy-cwd", proof.SANDBOX_WORKDIR,
+        "--command-cwd", proof.SANDBOX_WORKDIR,
+        "--permission-profile", proof.CODEX_READ_ONLY_PERMISSION_PROFILE,
+        "--apply-seccomp-then-exec",
     )
     assert command[-4:-1] == ("--", "/bin/sh", "-ec")
     assertions = command[-1]
