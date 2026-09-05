@@ -806,6 +806,13 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 
 	it('keeps a newer song selection when an earlier dead-link lookup finishes late', async () => {
 		let rejectLookup: ((reason: Error) => void) | undefined;
+		songList.set([
+			song({
+				id: 's1',
+				generation_count: 2,
+				generations: [generation()]
+			})
+		]);
 		fetchSong.mockImplementationOnce(
 			() =>
 				new Promise((_, reject) => {
@@ -815,8 +822,9 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 		selectedSongId.set('s1');
 
 		const loadingDeadLink = loadSongContext('s1');
+		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
 		selectedSongId.set('s2');
-		rejectLookup?.(new ApiError(404, 'Song not found', '/api/songs/s1'));
+		rejectLookup!(new ApiError(404, 'Song not found', '/api/songs/s1'));
 		await expect(loadingDeadLink).resolves.toBeUndefined();
 
 		expect(get(selectedSongId)).toBe('s2');
