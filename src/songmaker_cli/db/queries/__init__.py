@@ -152,6 +152,7 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
+from songmaker_cli.db.queries.jobs import claim_next_cover_job as claim_next_cover_job
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since as count_cover_jobs_since
 from songmaker_cli.db.queries.jobs import (
     count_queued_generation_jobs as count_queued_generation_jobs,
@@ -215,6 +216,9 @@ from songmaker_cli.db.queries.loras import (
 )
 from songmaker_cli.db.queries.loras import (
     list_active_user_loras as list_active_user_loras,
+)
+from songmaker_cli.db.queries.loras import (
+    list_user_loras_for_admin as list_user_loras_for_admin,
 )
 from songmaker_cli.db.queries.loras import (
     list_user_loras_for_user as list_user_loras_for_user,

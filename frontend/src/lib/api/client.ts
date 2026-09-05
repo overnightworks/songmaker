@@ -127,6 +127,7 @@ export {
 } from './settings';
 export {
 	fetchUsers,
+	fetchAdminVoices,
 	createUser,
 	updateUser,
 	deactivateUser,

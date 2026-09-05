@@ -102,6 +102,22 @@ class UserLoraResponse(BaseModel):
         )
 
 
+class AdminUserLoraResponse(BaseModel):
+    id: str
+    name: str
+    owner_username: str
+    status: str
+
+    @classmethod
+    def from_orm(cls, lora: UserLora, owner_username: str) -> AdminUserLoraResponse:
+        return cls(
+            id=lora.id,
+            name=lora.name,
+            owner_username=owner_username,
+            status=lora.status,
+        )
+
+
 class UserLoraListResponse(BaseModel):
     loras: list[UserLoraResponse]
 

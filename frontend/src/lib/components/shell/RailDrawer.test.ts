@@ -17,7 +17,8 @@ import RailDrawer from './RailDrawer.svelte';
 let mounted: ReturnType<typeof mount> | undefined;
 
 const children = createRawSnippet(() => ({
-	render: () => `<div><a href="/">Library</a><button>Settings</button></div>`
+	render: () =>
+		`<div><input type="search" aria-label="Search or go to…"><a href="/">Library</a><button>Settings</button></div>`
 }));
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -72,6 +73,38 @@ describe('RailDrawer', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 		await tick();
 		expect(document.body.querySelector('.drawer-panel')).toBeNull();
+	});
+
+	it('keeps the drawer open when its search field consumes Escape', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(RailDrawer, { target, props: { children } });
+		toggleSidebar();
+		await tick();
+		const search = requireElement<HTMLInputElement>(document.body, 'input[type="search"]');
+		search.addEventListener('keydown', (event) => event.preventDefault());
+
+		search.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+		await tick();
+
+		expect(document.body.querySelector('.drawer-panel')).not.toBeNull();
+	});
+
+	it('wraps Tab from the last control back to the rail search field', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(RailDrawer, { target, props: { children } });
+		toggleSidebar();
+		await tick();
+		const search = requireElement<HTMLInputElement>(document.body, 'input[type="search"]');
+		const last = requireElement<HTMLButtonElement>(document.body, '.drawer-panel button');
+		last.focus();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+
+		expect(document.activeElement).toBe(search);
 	});
 
 	it('closes after navigation', async () => {
