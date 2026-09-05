@@ -4,7 +4,8 @@ import type {
 	ConversationListResponse,
 	ConversationMessagesResponse
 } from './types';
-import { apiFetch, sseFetch, CHAT_TIMEOUT_MS } from './fetch';
+import { COWRITER_TURN_TIMEOUT_MS } from '$lib/constants';
+import { apiFetch, sseFetch } from './fetch';
 
 export type CoWriterStreamEvent =
 	| { type: 'assistant_text'; text: string }
@@ -21,7 +22,12 @@ export type CoWriterStreamEvent =
 			user_message: ChatMessageItem;
 			assistant_message: ChatMessageItem;
 	  }
-	| { type: 'error'; status: number; message: string };
+	| {
+			type: 'error';
+			status: number;
+			message?: string;
+			reason?: { message?: string };
+	  };
 
 export interface CoWriterTurnRequest {
 	message: string;
@@ -47,7 +53,7 @@ export function streamCoWriterTurn(req: CoWriterTurnRequest): AsyncGenerator<CoW
 				current_generation_id: req.current_generation_id ?? null
 			})
 		},
-		CHAT_TIMEOUT_MS
+		COWRITER_TURN_TIMEOUT_MS
 	);
 }
 

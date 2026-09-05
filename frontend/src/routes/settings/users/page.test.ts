@@ -873,6 +873,25 @@ describe('admin models tab', () => {
 		});
 	});
 
+	it('keeps the saved card model when switching away and back', async () => {
+		const settings = routeAwareCowriterSettings({ provider: 'grok', model: 'grok-4.6' });
+		settings.provider_routes_status.grok.cli = routeStatus('ready', ['grok-4.5', 'grok-4.6']);
+		api.fetchCowriterSettings.mockResolvedValue(settings);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const grokModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok');
+
+		expect(grokModel.value).toBe('grok-4.6');
+		buttonNamed(cowriter, 'Claude').click();
+		await tick();
+		expect(grokModel.value).toBe('grok-4.6');
+
+		buttonNamed(cowriter, 'Grok').click();
+		await tick();
+		expect(grokModel.value).toBe('grok-4.6');
+	});
+
 	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {
 		api.fetchCowriterSettings.mockResolvedValue(
 			routeAwareCowriterSettings({
