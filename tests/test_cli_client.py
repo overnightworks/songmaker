@@ -550,3 +550,15 @@ def test_api_put_401_suggests_login() -> None:
     with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="songmaker login"):
             api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "x"})
+
+
+def test_upload_post_401_suggests_login() -> None:
+    from songmaker_cli.cli_client import api_upload
+
+    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
+        with pytest.raises(ServerError, match="songmaker login"):
+            api_upload(
+                "http://localhost:8080", "/api/audio/upload",
+                [("file", ("clip.wav", b"audio", "audio/wav"))],
+            )
