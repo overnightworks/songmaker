@@ -83,6 +83,15 @@ describe('CollectionHeader', () => {
 		expect(props.onplay).toHaveBeenCalledTimes(1);
 	});
 
+	it('shows a Playlists › title breadcrumb for a playlist', async () => {
+		const target = await render({ ...baseProps(), kind: 'playlist' as const });
+		const crumbs = Array.from(target.querySelectorAll('.crumb')).map(
+			(element) => element.textContent
+		);
+
+		expect(crumbs).toEqual(['Playlists', 'Night Drive']);
+	});
+
 	it('uses the album art fill when an album has no cover', async () => {
 		const target = await render({ ...baseProps(), artFill: 'rgb(12, 34, 56)' });
 		const fallback = requireElement<HTMLElement>(target, '.header-cover-fallback');
