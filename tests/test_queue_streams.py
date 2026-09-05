@@ -718,24 +718,56 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
     assert missing_response.json()["detail"] == "Not Found"
 
 
-def test_shared_playlist_queue_stream_revalidates_entries(
+@pytest.mark.parametrize(
+    ("share_endpoint", "stream_endpoint", "invalidates"),
+    [
+        pytest.param(
+            "/api/albums/a1/share", "/shared/{slug}/stream", "picked_take",
+            id="album-pick-changes",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share", "/shared/playlist/{slug}/stream", "playlist_entry",
+            id="playlist-entry-is-removed",
+        ),
+    ],
+)
+def test_shared_queue_stream_revalidates_tracks(
     tmp_path: Path,
     monkeypatch,
+    share_endpoint: str,
+    stream_endpoint: str,
+    invalidates: str,
 ) -> None:
     _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
-    share = client.post("/api/playlists/pl1/share")
+    share = client.post(share_endpoint)
     slug = share.json()["share_slug"]
     public = TestClient(client.app, cookies={})
 
-    resp = public.post(f"/shared/playlist/{slug}/stream")
+    resp = public.post(stream_endpoint.format(slug=slug))
     assert resp.status_code == 200
     data = resp.json()
 
-    remove = client.delete("/api/playlists/pl1/entries/pe1")
-    assert remove.status_code == 200
+    if invalidates == "picked_take":
+        with factory() as session:
+            session.add(Generation(
+                id="g1-replacement",
+                song_id="s1",
+                version_id="v1",
+                generation_number=2,
+                mp3_path="owner-id/g1-replacement.mp3",
+                seed=4,
+            ))
+            session.commit()
+        (tmp_path / "audio" / "owner-id" / "g1-replacement.mp3").write_bytes(b"source")
+
+        pick = client.post("/api/generations/g1-replacement/pick")
+        assert pick.status_code == 200
+    else:
+        remove = client.delete("/api/playlists/pl1/entries/pe1")
+        assert remove.status_code == 200
 
     audio = public.get(data["stream_url"], headers={"Range": "bytes=0-3"})
 
@@ -1458,6 +1490,30 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
 
 
 # ── Pinning tests ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "snapshot_id",
+    [
+        pytest.param("not-a-snapshot-id", id="non-hex"),
+        pytest.param("..", id="dot-segment"),
+        pytest.param("0" * 32, id="unknown-hex"),
+    ],
+)
+def test_queue_stream_audio_and_pinning_reject_unknown_snapshot_ids(
+    tmp_path: Path,
+    snapshot_id: str,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    login_and_csrf(client, "owner", "pass1234")
+
+    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio")
+    pin = client.post(f"/api/queue-streams/{snapshot_id}/pin")
+    unpin = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
+
+    assert audio.status_code == 404
+    assert pin.status_code == 404
+    assert unpin.status_code == 404
 
 
 def test_pinned_snapshot_survives_ttl_on_access(tmp_path: Path, monkeypatch) -> None:
