@@ -32,7 +32,7 @@ const CSRF_HEADER = 'x-csrf-token';
 const ALBUM_ARTIST = 'E2E Ensemble';
 // Fixed titles: only one album is ever open at a time, so they stay unique on
 // screen even when a local re-run seeds a second album.
-const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
+const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time', 'After Hours'] as const;
 // The album and the playlist are listed side by side with everything a
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
@@ -329,8 +329,9 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		takeBySongTitle.set(title, take.id);
 	}
 
-	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
-	const playlistSongTitles = [mobileContinueSongTitle, desktopContinueSongTitle];
+	const [pickedSongTitle, playlistSongTitle, desktopContinueSongTitle, mobileContinueSongTitle] =
+		SONG_TITLES;
+	const playlistSongTitles = [playlistSongTitle, desktopContinueSongTitle];
 	const pickedSongId = songIdByTitle.get(pickedSongTitle);
 	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
 	const continueReorderSongs = {
