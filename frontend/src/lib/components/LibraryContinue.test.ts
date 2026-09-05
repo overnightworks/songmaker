@@ -17,7 +17,7 @@ vi.mock('$lib/stores/navigation', () => ({
 	selectSong: (...args: unknown[]) => selectSong(...args)
 }));
 
-import LibraryContinue from './LibraryContinue.svelte';
+import LibraryContinue, { clearLibraryContinueCache } from './LibraryContinue.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -32,6 +32,7 @@ function item(overrides: Partial<LibraryContinueItem> = {}): LibraryContinueItem
 }
 
 beforeEach(() => {
+	clearLibraryContinueCache();
 	fetchLibraryContinue.mockReset();
 	openAlbum.mockReset().mockResolvedValue(undefined);
 	selectSong.mockReset().mockResolvedValue(undefined);
@@ -54,10 +55,26 @@ async function render(): Promise<HTMLElement> {
 
 async function settle(): Promise<void> {
 	await Promise.resolve();
+	await Promise.resolve();
 	await tick();
 }
 
 describe('LibraryContinue', () => {
+	it('shares one request across wall remounts in the same document', async () => {
+		fetchLibraryContinue.mockResolvedValue({ items: [item()] });
+		await render();
+		await settle();
+		const firstMount = mounted.pop();
+		if (!firstMount) throw new Error('Expected the first Continue mount');
+		await unmount(firstMount);
+
+		const target = await render();
+		await settle();
+
+		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
+		expect(target.querySelectorAll('.continue-item')).toHaveLength(1);
+	});
+
 	it('renders at most six tagged items with their cover and title', async () => {
 		fetchLibraryContinue.mockResolvedValue({
 			items: [

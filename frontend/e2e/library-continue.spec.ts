@@ -52,6 +52,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
 	await expect(entries.first()).toBeVisible();
+	expect(continueRequests).toBe(1);
 	const before = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
@@ -79,6 +80,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 
 	await page.goto('/');
 	await expect(entries.first()).toBeVisible();
+	expect(continueRequests).toBe(2);
 	const continueRequestsBeforeReload = continueRequests;
 	const continueCoverRequestsBeforeReload = continueCoverRequests;
 	const continueAfterReload = page.waitForResponse(
