@@ -51,10 +51,10 @@ def create_user(
     return user
 
 
-def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[str]]:
+def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[str], list[str]]:
     """Hard-delete a user and all their albums/songs/generations.
 
-    Returns relative audio file paths and album ids for post-commit cleanup.
+    Returns relative audio file paths plus album and playlist ids for post-commit cleanup.
     """
     from songmaker_cli.db.soft_delete import include_deleted
 
@@ -70,7 +70,9 @@ def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[st
                             audio_paths.append(p)
             session.delete(album)
 
-    for playlist in session.query(Playlist).filter_by(created_by=user_id).all():
+    playlists = session.query(Playlist).filter_by(created_by=user_id).all()
+    playlist_ids = [playlist.id for playlist in playlists]
+    for playlist in playlists:
         session.delete(playlist)
 
     user = session.query(User).filter_by(id=user_id).first()
@@ -79,7 +81,7 @@ def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[st
     session.delete(user)
     session.flush()
     log.info("Hard-deleted user %s and %d album(s)", user_id, len(album_ids))
-    return audio_paths, album_ids
+    return audio_paths, album_ids, playlist_ids
 
 
 def update_user(

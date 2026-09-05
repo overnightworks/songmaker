@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
+from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
 from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.middleware import SESSION_COOKIE
 
@@ -533,6 +535,17 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
         return user.id
 
 
+def _write_user_playlist_cover(client: TestClient, user_id: str) -> Path:
+    from songmaker_cli.db.queries import list_playlists
+
+    with client.app.state.ctx.db() as session:
+        playlist_id = list_playlists(session, user_id)[0].id
+    cover_dir = client.app.state.ctx.audio_dir / PLAYLIST_COVER_DIRNAME / playlist_id
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "original.png").write_bytes(b"playlist cover")
+    return cover_dir
+
+
 def test_hard_delete_user(client: TestClient) -> None:
     _login_as_admin(client)
     user_id = _create_user_with_data(client, "victim")
@@ -555,6 +568,29 @@ def test_hard_delete_user(client: TestClient) -> None:
         assert len(list_playlists(session, user_id)) == 0
 
     assert not (audio_dir / user_id).exists()
+
+
+def test_hard_delete_user_removes_playlist_cover_after_commit(client: TestClient) -> None:
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+    cover_dir = _write_user_playlist_cover(client, user_id)
+
+    response = client.delete(f"/api/admin/users/{user_id}/permanent")
+
+    assert response.status_code == 200
+    assert not cover_dir.exists()
+
+
+def test_hard_delete_user_keeps_playlist_cover_when_commit_fails(client: TestClient) -> None:
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+    cover_dir = _write_user_playlist_cover(client, user_id)
+
+    with patch("songmaker_cli.admin_api.Session.commit", side_effect=RuntimeError("commit failed")):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            client.delete(f"/api/admin/users/{user_id}/permanent")
+
+    assert cover_dir.is_dir()
 
 
 def test_hard_delete_user_no_data(client: TestClient) -> None:
