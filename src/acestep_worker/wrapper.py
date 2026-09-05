@@ -198,36 +198,34 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     }
 
 
-def build_router(deps: WorkerDeps) -> APIRouter:
-    router = APIRouter()
+@dataclass(frozen=True)
+class _TrainLoraResources:
+    loaded: Any
+    renew_task: asyncio.Task[None]
+    task_id: str
+
+
+class _WorkerRoutes:
+    def __init__(self, deps: WorkerDeps) -> None:
+        self._deps = deps
 
     def verify_internal_token(
+        self,
         x_internal_token: str = Header(..., alias="X-Internal-Token"),
     ) -> None:
-        if not hmac.compare_digest(x_internal_token, deps.internal_token):
+        if not hmac.compare_digest(x_internal_token, self._deps.internal_token):
             raise HTTPException(status_code=401, detail="Invalid internal token")
 
-    @router.get(
-        "/health",
-        responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
-    )
-    async def health() -> HealthResponse:
-        if not deps.registered:
-            raise HTTPException(
-                status_code=503,
-                detail="awaiting control plane registration",
-            )
-        gpu_health = deps.gpu_health_checker()
+    async def health(self) -> HealthResponse:
+        if not self._deps.registered:
+            raise HTTPException(status_code=503, detail="awaiting control plane registration")
+        gpu_health = self._deps.gpu_health_checker()
         if gpu_health.is_broken:
-            raise HTTPException(
-                status_code=503,
-                detail=f"GPU unavailable: {gpu_health.detail}",
-            )
+            raise HTTPException(status_code=503, detail=f"GPU unavailable: {gpu_health.detail}")
         return HealthResponse(status="ok")
 
-    @router.get("/loaded_models")
-    async def loaded_models() -> LoadedModelsResponse:
-        snapshot = deps.cache.snapshot()
+    async def loaded_models(self) -> LoadedModelsResponse:
+        snapshot = self._deps.cache.snapshot()
         return LoadedModelsResponse(
             loaded=[
                 LoadedModelDetailItem(mode=info.mode, size_gb=info.size_gb)
@@ -240,25 +238,17 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 else None
             ),
             loading_last_log_line=snapshot.loading_last_log_line,
-            queue_depth=await read_queue_depth(deps.redis, deps.worker_id),
+            queue_depth=await read_queue_depth(self._deps.redis, self._deps.worker_id),
             vram_used_gb=snapshot.vram_used_gb,
             vram_total_gb=snapshot.vram_total_gb,
             vram_measured=snapshot.vram_measured,
-            available_modes=list_available_modes(deps.checkpoint_dir),
+            available_modes=list_available_modes(self._deps.checkpoint_dir),
             pinned=list(snapshot.pinned),
         )
 
-    @router.post(
-        "/load_model",
-        responses={
-            400: {"description": "Requested model mode is unknown"},
-            409: {"description": "Insufficient capacity to load the model"},
-            502: {"description": "Model subprocess could not be started"},
-        },
-    )
-    async def load_model(req: LoadModelRequest) -> LoadModelResponse:
+    async def load_model(self, req: LoadModelRequest) -> LoadModelResponse:
         try:
-            result = await deps.cache.load(req.mode)
+            result = await self._deps.cache.load(req.mode)
         except UnknownModeError as exc:
             raise HTTPException(status_code=400, detail=f"Unknown mode: {exc}") from exc
         except CapacityError as exc:
@@ -269,320 +259,437 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         return LoadModelResponse(
             loaded=result.loaded,
             evicted=result.evicted,
-            target_loading=deps.cache.target_loading,
+            target_loading=self._deps.cache.target_loading,
         )
 
-    @router.post(
-        "/evict_model",
-        responses={409: {"description": "Model cannot be evicted"}},
-    )
-    async def evict_model(req: EvictModelRequest) -> EvictModelResponse:
+    async def evict_model(self, req: EvictModelRequest) -> EvictModelResponse:
         try:
-            evicted = await deps.cache.evict(req.mode)
+            evicted = await self._deps.cache.evict(req.mode)
         except CapacityError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return EvictModelResponse(
-            loaded=deps.cache.loaded_modes(),
-            evicted=evicted,
-        )
+        return EvictModelResponse(loaded=self._deps.cache.loaded_modes(), evicted=evicted)
 
-    @router.post(
-        "/pin_model",
-        responses={409: {"description": "Model must be loaded before it can be pinned"}},
-    )
-    async def pin_model(req: PinModelRequest) -> PinModelResponse:
+    async def pin_model(self, req: PinModelRequest) -> PinModelResponse:
         try:
-            await deps.cache.pin(req.mode)
+            await self._deps.cache.pin(req.mode)
         except ModelNotLoadedError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        snapshot = deps.cache.snapshot()
+        snapshot = self._deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    @router.post("/unpin_model")
-    async def unpin_model(req: UnpinModelRequest) -> PinModelResponse:
-        await deps.cache.unpin(req.mode)
-        snapshot = deps.cache.snapshot()
+    async def unpin_model(self, req: UnpinModelRequest) -> PinModelResponse:
+        await self._deps.cache.unpin(req.mode)
+        snapshot = self._deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    @router.post("/restart")
-    async def restart() -> RestartResponse:
+    async def restart(self) -> RestartResponse:
         log.info("Restart requested via /restart endpoint")
         pid = os.getpid()
-        loop = asyncio.get_running_loop()
-        loop.call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
+        asyncio.get_running_loop().call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
         return RestartResponse(status="restarting", pid=pid)
 
-    @router.post(
-        "/generate",
-        dependencies=[Depends(verify_internal_token)],
-        responses={409: {"description": "GPU is held or the requested model is not loaded"}},
-    )
-    async def generate(req: GenerateRequest) -> TaskCreatedResponse:
-        async with deps.gpu_hold_admission_lock:
-            if await deps.redis.exists(gpu_hold_key(deps.worker_id)):
-                raise HTTPException(status_code=409, detail="GPU is held for LoRA training")
-            loaded = await deps.cache.acquire_for_use(req.mode)
-            if loaded is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Mode {req.mode} not loaded; call /load_model first",
-                )
-            try:
-                task_id = await deps.task_store.create("generate")
-            except Exception:
-                await deps.cache.release(req.mode)
-                raise
-            deps.gpu_hold_generation_tasks.add(task_id)
-
-        async def _runner_with_release() -> None:
-            try:
-                await deps.generate_runner(
-                    deps.task_store,
-                    task_id,
-                    mode=req.mode,
-                    config=req.config,
-                    port=loaded.port,
-                    audio_output_dir=deps.audio_output_dir,
-                )
-            finally:
-                try:
-                    await deps.cache.release(req.mode)
-                finally:
-                    async with deps.gpu_hold_admission_lock:
-                        deps.gpu_hold_generation_tasks.discard(task_id)
-
-        runner_with_release = _runner_with_release()
+    async def generate(self, req: GenerateRequest) -> TaskCreatedResponse:
+        task_id, loaded = await _reserve_generation_task(self._deps, req)
+        runner = _run_generation_with_release(self._deps, req, task_id, loaded)
         try:
-            spawn_background(runner_with_release)
+            spawn_background(runner)
         except Exception:
-            runner_with_release.close()
-            try:
-                await deps.cache.release(req.mode)
-            finally:
-                async with deps.gpu_hold_admission_lock:
-                    deps.gpu_hold_generation_tasks.discard(task_id)
+            runner.close()
+            await _release_generation_task(self._deps, req.mode, task_id)
             raise
         return TaskCreatedResponse(task_id=task_id)
 
-    @router.post(
-        "/gpu_hold/reserve",
-        dependencies=[Depends(verify_internal_token)],
-        responses={409: {"description": "GPU is busy or already held"}},
-    )
-    async def reserve_hold() -> GpuHoldResponse:
+    async def reserve_hold(self) -> GpuHoldResponse:
         token = str(uuid4())
-        async with deps.gpu_hold_admission_lock:
-            if deps.gpu_hold_generation_tasks:
+        async with self._deps.gpu_hold_admission_lock:
+            if self._deps.gpu_hold_generation_tasks:
                 raise HTTPException(status_code=409, detail="GPU is busy or held")
             if not await reserve_gpu_hold(
-                deps.redis,
-                deps.worker_id,
+                self._deps.redis,
+                self._deps.worker_id,
                 token,
                 DEFAULT_TTL_SECONDS,
             ):
                 raise HTTPException(status_code=409, detail="GPU is busy or held")
         return GpuHoldResponse(token=token)
 
-    @router.post(
-        "/gpu_hold/renew",
-        status_code=204,
-        dependencies=[Depends(verify_internal_token)],
-        responses={409: {"description": "GPU hold token is invalid"}},
-    )
-    async def renew_hold(req: GpuHoldTokenRequest) -> None:
+    async def renew_hold(self, req: GpuHoldTokenRequest) -> None:
         if not await renew_gpu_hold(
-            deps.redis,
-            deps.worker_id,
+            self._deps.redis,
+            self._deps.worker_id,
             req.token,
             DEFAULT_TTL_SECONDS,
         ):
             raise HTTPException(status_code=409, detail="GPU hold token is invalid")
 
-    @router.post(
-        "/gpu_hold/release",
-        status_code=204,
-        dependencies=[Depends(verify_internal_token)],
-        responses={409: {"description": "GPU hold token is invalid or owned by training"}},
-    )
-    async def release_hold(req: GpuHoldTokenRequest) -> None:
-        async with deps.gpu_hold_handover_lock:
-            if req.token in deps.gpu_hold_handover_tokens:
-                raise HTTPException(
-                    status_code=409,
-                    detail="GPU hold is owned by a training task",
-                )
-            if not await release_gpu_hold(deps.redis, deps.worker_id, req.token):
+    async def release_hold(self, req: GpuHoldTokenRequest) -> None:
+        async with self._deps.gpu_hold_handover_lock:
+            if req.token in self._deps.gpu_hold_handover_tokens:
+                raise HTTPException(status_code=409, detail="GPU hold is owned by a training task")
+            if not await release_gpu_hold(self._deps.redis, self._deps.worker_id, req.token):
                 raise HTTPException(status_code=409, detail="GPU hold token is invalid")
 
-    @router.post(
-        "/gpu_hold/handover",
-        dependencies=[Depends(verify_internal_token)],
-    )
-    async def hold_handover(req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
-        async with deps.gpu_hold_handover_lock:
-            task_id = deps.gpu_hold_handover_tasks.get(req.token)
-            return GpuHoldHandoverResponse(
-                claimed=task_id is not None,
-                task_id=task_id,
-            )
+    async def hold_handover(self, req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
+        async with self._deps.gpu_hold_handover_lock:
+            task_id = self._deps.gpu_hold_handover_tasks.get(req.token)
+            return GpuHoldHandoverResponse(claimed=task_id is not None, task_id=task_id)
 
-    @router.post(
+    async def train_lora(self, req: TrainLoraRequest) -> TaskCreatedResponse:
+        validated_request = _validated_train_lora_request(req, self._deps.shared_audio_root)
+        runner = _configured_train_lora_runner(self._deps)
+        resources = await _acquire_train_lora_resources(self._deps, req)
+        await _spawn_train_lora_runner(
+            self._deps,
+            req,
+            validated_request,
+            runner,
+            resources,
+        )
+        return TaskCreatedResponse(task_id=resources.task_id)
+
+    async def download_model(self, req: DownloadModelRequest) -> TaskCreatedResponse:
+        task_id = await start_download(
+            self._deps.task_store,
+            mode=req.mode,
+            checkpoint_dir=self._deps.checkpoint_dir,
+        )
+        return TaskCreatedResponse(task_id=task_id)
+
+    async def get_task(self, task_id: str) -> TaskSnapshot:
+        snapshot = await self._deps.task_store.get(task_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
+        return snapshot
+
+    async def stream_task(self, task_id: str) -> StreamingResponse:
+        snapshot = await self._deps.task_store.get(task_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
+        return StreamingResponse(
+            _task_event_source(self._deps.task_store, task_id),
+            media_type="text/event-stream",
+        )
+
+
+async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tuple[str, Any]:
+    async with deps.gpu_hold_admission_lock:
+        if await deps.redis.exists(gpu_hold_key(deps.worker_id)):
+            raise HTTPException(status_code=409, detail="GPU is held for LoRA training")
+        loaded = await deps.cache.acquire_for_use(req.mode)
+        if loaded is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Mode {req.mode} not loaded; call /load_model first",
+            )
+        try:
+            task_id = await deps.task_store.create("generate")
+        except Exception:
+            await deps.cache.release(req.mode)
+            raise
+        deps.gpu_hold_generation_tasks.add(task_id)
+        return task_id, loaded
+
+
+async def _run_generation_with_release(
+    deps: WorkerDeps,
+    req: GenerateRequest,
+    task_id: str,
+    loaded: Any,
+) -> None:
+    try:
+        await deps.generate_runner(
+            deps.task_store,
+            task_id,
+            mode=req.mode,
+            config=req.config,
+            port=loaded.port,
+            audio_output_dir=deps.audio_output_dir,
+        )
+    finally:
+        await _release_generation_task(deps, req.mode, task_id)
+
+
+async def _release_generation_task(deps: WorkerDeps, mode: str, task_id: str) -> None:
+    try:
+        await deps.cache.release(mode)
+    finally:
+        async with deps.gpu_hold_admission_lock:
+            deps.gpu_hold_generation_tasks.discard(task_id)
+
+
+def _validated_train_lora_request(
+    request: TrainLoraRequest,
+    shared_audio_root: Path,
+) -> TrainLoraRequest:
+    try:
+        return _validate_train_lora_request(request, shared_audio_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _configured_train_lora_runner(deps: WorkerDeps) -> TrainLoraRunner:
+    if deps.train_lora_runner is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Worker not configured with a train_lora runner",
+        )
+    return deps.train_lora_runner
+
+
+async def _acquire_train_lora_resources(
+    deps: WorkerDeps,
+    request: TrainLoraRequest,
+) -> _TrainLoraResources:
+    loaded = None
+    renew_task = None
+    try:
+        loaded = await _acquire_training_model(deps, request.mode)
+        renew_task = await _renew_training_hold(deps, request.hold_token)
+        task_id = await _claim_training_handover(deps, request)
+    except BaseException:
+        await _clean_up_train_lora_setup(deps, request, loaded, renew_task)
+        raise
+    return _TrainLoraResources(loaded=loaded, renew_task=renew_task, task_id=task_id)
+
+
+async def _acquire_training_model(deps: WorkerDeps, mode: str) -> Any:
+    loaded = await deps.cache.acquire_for_use(mode)
+    if loaded is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Mode {mode} not loaded; call /load_model first",
+        )
+    return loaded
+
+
+async def _renew_training_hold(deps: WorkerDeps, token: str) -> asyncio.Task[None]:
+    try:
+        return await _start_gpu_hold_renewal(deps.redis, deps.worker_id, token)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _claim_training_handover(deps: WorkerDeps, request: TrainLoraRequest) -> str:
+    task_id = await _create_gpu_hold_handover_task(
+        deps,
+        request.hold_token,
+        train_epochs=request.train_epochs,
+    )
+    if task_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail="GPU hold token is invalid or already handed over",
+        )
+    return task_id
+
+
+async def _clean_up_train_lora_setup(
+    deps: WorkerDeps,
+    request: TrainLoraRequest,
+    loaded: Any | None,
+    renew_task: asyncio.Task[None] | None,
+) -> None:
+    try:
+        if renew_task is not None:
+            await _cancel_gpu_hold_renewal(renew_task)
+    finally:
+        try:
+            if loaded is not None:
+                await deps.cache.release(request.mode)
+        finally:
+            await _release_gpu_hold_handover(deps, request.hold_token)
+
+
+async def _spawn_train_lora_runner(
+    deps: WorkerDeps,
+    request: TrainLoraRequest,
+    validated_request: TrainLoraRequest,
+    runner: TrainLoraRunner,
+    resources: _TrainLoraResources,
+) -> None:
+    background_runner = _run_train_lora_with_cleanup(
+        deps,
+        request,
+        validated_request,
+        runner,
+        resources,
+    )
+    try:
+        spawn_background(background_runner)
+    except Exception:
+        background_runner.close()
+        await _clean_up_train_lora_run(deps, request, resources)
+        raise
+
+
+async def _run_train_lora_with_cleanup(
+    deps: WorkerDeps,
+    request: TrainLoraRequest,
+    validated_request: TrainLoraRequest,
+    runner: TrainLoraRunner,
+    resources: _TrainLoraResources,
+) -> None:
+    training_task = asyncio.create_task(
+        runner(
+            deps.task_store,
+            resources.task_id,
+            request=validated_request,
+            port=resources.loaded.port,
+            checkpoint_dir=deps.checkpoint_dir,
+            training_workspace_dirname=deps.training_workspace_dirname,
+        ),
+    )
+    try:
+        await _await_training_or_renewal(training_task, resources.renew_task)
+    finally:
+        await _cancel_training_task(training_task)
+        await _clean_up_train_lora_run(deps, request, resources)
+
+
+async def _await_training_or_renewal(
+    training_task: asyncio.Task[None],
+    renew_task: asyncio.Task[None],
+) -> None:
+    done, _ = await asyncio.wait(
+        {training_task, renew_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if renew_task in done:
+        await _cancel_training_task(training_task)
+        await renew_task
+    await training_task
+
+
+async def _cancel_training_task(training_task: asyncio.Task[None]) -> None:
+    if training_task.done():
+        return
+    training_task.cancel()
+    try:
+        await training_task
+    except asyncio.CancelledError:  # NOSONAR The parent owns this child task.
+        pass
+
+
+async def _clean_up_train_lora_run(
+    deps: WorkerDeps,
+    request: TrainLoraRequest,
+    resources: _TrainLoraResources,
+) -> None:
+    await _cancel_gpu_hold_renewal(resources.renew_task)
+    try:
+        await release_gpu_hold(deps.redis, deps.worker_id, request.hold_token)
+    finally:
+        try:
+            await deps.cache.release(request.mode)
+        finally:
+            await _release_gpu_hold_handover(deps, request.hold_token)
+
+
+async def _task_event_source(task_store: TaskStore, task_id: str) -> AsyncIterator[bytes]:
+    async for event in task_store.subscribe(task_id):
+        yield _format_sse(event)
+
+
+def build_router(deps: WorkerDeps) -> APIRouter:
+    router = APIRouter()
+    routes = _WorkerRoutes(deps)
+    _register_worker_routes(router, routes)
+    return router
+
+
+def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
+    authenticated = [Depends(routes.verify_internal_token)]
+    router.add_api_route(
+        "/health",
+        routes.health,
+        methods=["GET"],
+        responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
+    )
+    router.add_api_route("/loaded_models", routes.loaded_models, methods=["GET"])
+    router.add_api_route(
+        "/load_model",
+        routes.load_model,
+        methods=["POST"],
+        responses={
+            400: {"description": "Requested model mode is unknown"},
+            409: {"description": "Insufficient capacity to load the model"},
+            502: {"description": "Model subprocess could not be started"},
+        },
+    )
+    router.add_api_route(
+        "/evict_model",
+        routes.evict_model,
+        methods=["POST"],
+        responses={409: {"description": "Model cannot be evicted"}},
+    )
+    router.add_api_route(
+        "/pin_model",
+        routes.pin_model,
+        methods=["POST"],
+        responses={409: {"description": "Model must be loaded before it can be pinned"}},
+    )
+    router.add_api_route("/unpin_model", routes.unpin_model, methods=["POST"])
+    router.add_api_route("/restart", routes.restart, methods=["POST"])
+    router.add_api_route(
+        "/generate",
+        routes.generate,
+        methods=["POST"],
+        dependencies=authenticated,
+        responses={409: {"description": "GPU is held or the requested model is not loaded"}},
+    )
+    router.add_api_route(
+        "/gpu_hold/reserve",
+        routes.reserve_hold,
+        methods=["POST"],
+        dependencies=authenticated,
+        responses={409: {"description": "GPU is busy or already held"}},
+    )
+    router.add_api_route(
+        "/gpu_hold/renew",
+        routes.renew_hold,
+        methods=["POST"],
+        status_code=204,
+        dependencies=authenticated,
+        responses={409: {"description": "GPU hold token is invalid"}},
+    )
+    router.add_api_route(
+        "/gpu_hold/release",
+        routes.release_hold,
+        methods=["POST"],
+        status_code=204,
+        dependencies=authenticated,
+        responses={409: {"description": "GPU hold token is invalid or owned by training"}},
+    )
+    router.add_api_route(
+        "/gpu_hold/handover",
+        routes.hold_handover,
+        methods=["POST"],
+        dependencies=authenticated,
+    )
+    router.add_api_route(
         "/tasks/train_lora",
-        dependencies=[Depends(verify_internal_token)],
+        routes.train_lora,
+        methods=["POST"],
+        dependencies=authenticated,
         responses={
             409: {"description": "GPU hold or requested model is unavailable"},
             422: {"description": "Training request is invalid"},
             501: {"description": "Worker does not support LoRA training"},
         },
     )
-    async def train_lora(req: TrainLoraRequest) -> TaskCreatedResponse:
-        try:
-            validated_request = _validate_train_lora_request(
-                req,
-                deps.shared_audio_root,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        if deps.train_lora_runner is None:
-            raise HTTPException(
-                status_code=501,
-                detail="Worker not configured with a train_lora runner",
-            )
-        loaded = None
-        renew_task = None
-        task_id = None
-        try:
-            loaded = await deps.cache.acquire_for_use(req.mode)
-            if loaded is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Mode {req.mode} not loaded; call /load_model first",
-                )
-            try:
-                renew_task = await _start_gpu_hold_renewal(
-                    deps.redis,
-                    deps.worker_id,
-                    req.hold_token,
-                )
-            except RuntimeError as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
-            task_id = await _create_gpu_hold_handover_task(
-                deps,
-                req.hold_token,
-                train_epochs=req.train_epochs,
-            )
-            if task_id is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail="GPU hold token is invalid or already handed over",
-                )
-        except BaseException:
-            try:
-                if renew_task is not None:
-                    await _cancel_gpu_hold_renewal(renew_task)
-            finally:
-                try:
-                    if loaded is not None:
-                        await deps.cache.release(req.mode)
-                finally:
-                    await _release_gpu_hold_handover(deps, req.hold_token)
-            raise
-
-        async def _runner_with_release() -> None:
-            training_task = asyncio.create_task(
-                deps.train_lora_runner(
-                    deps.task_store,
-                    task_id,
-                    request=validated_request,
-                    port=loaded.port,
-                    checkpoint_dir=deps.checkpoint_dir,
-                    training_workspace_dirname=deps.training_workspace_dirname,
-                ),
-            )
-            try:
-                done, _ = await asyncio.wait(
-                    {training_task, renew_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                if renew_task in done:
-                    training_task.cancel()
-                    try:
-                        await training_task
-                    except asyncio.CancelledError:  # NOSONAR The supervisor cancels this child.
-                        pass
-                    await renew_task
-                await training_task
-            finally:
-                try:
-                    if not training_task.done():
-                        training_task.cancel()
-                        try:
-                            await training_task
-                        except asyncio.CancelledError:  # NOSONAR The parent cancels this child.
-                            pass
-                finally:
-                    await _cancel_gpu_hold_renewal(renew_task)
-                    try:
-                        await release_gpu_hold(deps.redis, deps.worker_id, req.hold_token)
-                    finally:
-                        try:
-                            await deps.cache.release(req.mode)
-                        finally:
-                            await _release_gpu_hold_handover(deps, req.hold_token)
-
-        runner_with_release = _runner_with_release()
-        try:
-            spawn_background(runner_with_release)
-        except Exception:
-            runner_with_release.close()
-            try:
-                await _cancel_gpu_hold_renewal(renew_task)
-            finally:
-                try:
-                    await release_gpu_hold(deps.redis, deps.worker_id, req.hold_token)
-                finally:
-                    try:
-                        await deps.cache.release(req.mode)
-                    finally:
-                        await _release_gpu_hold_handover(deps, req.hold_token)
-            raise
-        return TaskCreatedResponse(task_id=task_id)
-
-    @router.post("/download_model")
-    async def download_model(req: DownloadModelRequest) -> TaskCreatedResponse:
-        task_id = await start_download(
-            deps.task_store,
-            mode=req.mode,
-            checkpoint_dir=deps.checkpoint_dir,
-        )
-        return TaskCreatedResponse(task_id=task_id)
-
-    @router.get(
+    router.add_api_route("/download_model", routes.download_model, methods=["POST"])
+    router.add_api_route(
         "/tasks/{task_id}",
+        routes.get_task,
+        methods=["GET"],
         responses={404: {"description": "Task does not exist"}},
     )
-    async def get_task(task_id: str) -> TaskSnapshot:
-        snapshot = await deps.task_store.get(task_id)
-        if snapshot is None:
-            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
-        return snapshot
-
-    @router.get(
+    router.add_api_route(
         "/tasks/{task_id}/stream",
+        routes.stream_task,
+        methods=["GET"],
         responses={404: {"description": "Task does not exist"}},
     )
-    async def stream_task(task_id: str) -> StreamingResponse:
-        snapshot = await deps.task_store.get(task_id)
-        if snapshot is None:
-            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
-
-        async def event_source() -> AsyncIterator[bytes]:
-            async for event in deps.task_store.subscribe(task_id):
-                yield _format_sse(event)
-
-        return StreamingResponse(event_source(), media_type="text/event-stream")
-
-    return router
 
 
 @asynccontextmanager
