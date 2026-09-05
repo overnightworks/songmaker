@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
-from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
+from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.errors import (
@@ -38,6 +38,7 @@ _REDACTED_CODEX_LOGIN = {
         "refresh_token": "",
     },
 }
+_FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.mark.parametrize("missing", ("cli", "code_mode_host", "resources"))
@@ -109,6 +110,10 @@ def _runner(lines: list[bytes], outcome: CliRunOutcome, calls: list) -> object:
         return outcome
 
     return run_cli_bounded
+
+
+def _fixture_lines(name: str) -> list[bytes]:
+    return [line.encode() + b"\n" for line in (_FIXTURES / name).read_text().splitlines()]
 
 
 def _codex_tool_events(transport, executor):
@@ -235,6 +240,64 @@ def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monk
 
     asyncio.run(reject_batch())
     assert len(calls) == 1
+
+
+def test_codex_tool_transport_ignores_its_code_mode_host_isolation_notice(
+    monkeypatch, caplog,
+) -> None:
+    calls: list = []
+    monkeypatch.setattr(
+        codex_cli_adapter,
+        "run_cli_bounded",
+        _runner(
+            _fixture_lines("codex-tool-code-mode-host-disabled.jsonl"),
+            _outcome(),
+            calls,
+        ),
+    )
+    caplog.set_level("INFO", logger="songmaker_cli.cowriter.codex_cli_adapter")
+    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+
+    events = asyncio.run(_collect_tool_events(_codex_tool_events(
+        transport,
+        lambda _name, _arguments: ("unreachable", False),
+    )))
+
+    assert events == [
+        AssistantTextEvent(text="The open song is Midnight Drive."),
+        FinalEvent(text="The open song is Midnight Drive."),
+    ]
+    assert len(calls) == 1
+    assert "ignored its code-mode-host isolation notice" in caplog.text
+
+
+def test_codex_tool_transport_aborts_for_an_unrelated_completed_error_item(monkeypatch) -> None:
+    aborted = threading.Event()
+
+    def run_cli_bounded(_command, **kwargs):
+        channel = kwargs["stdout_line_channel"]
+        for line in _fixture_lines("codex-tool-unrelated-error.jsonl"):
+            assert channel._send(line)
+        while not channel.abort_requested():
+            time.sleep(0.001)
+        aborted.set()
+        outcome = _outcome(complete=False)
+        channel._close(outcome)
+        kwargs["on_spawned"](1)
+        kwargs["on_reaped"](1, False)
+        return outcome
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+
+    async def collect() -> None:
+        with pytest.raises(ProviderUnavailableError) as raised:
+            async for _ in transport.stream(InitialTurn("system", [])):
+                pass
+        assert raised.value.reason.code is SafeRouteReasonCode.CLI_PROTOCOL_ERROR
+
+    asyncio.run(collect())
+    assert aborted.is_set()
 
 
 @pytest.mark.parametrize("item_type", sorted(codex_cli_adapter._BLOCKED_ITEM_TYPES))

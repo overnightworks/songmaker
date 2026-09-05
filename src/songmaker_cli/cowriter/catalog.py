@@ -62,8 +62,8 @@ OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
 # ``codex exec --help`` accept ``--model <MODEL>`` but do not enumerate models.
 # Source: https://developers.openai.com/api/docs/guides/latest-model
 _CODEX_CLI_KNOWN_MODELS: Final = (
-    "gpt-5.6",
     "gpt-5.6-terra",
+    "gpt-5.6",
     "gpt-5.6-sol",
     "gpt-5.6-luna",
     "gpt-6-astra",
