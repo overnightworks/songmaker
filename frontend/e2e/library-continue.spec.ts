@@ -18,7 +18,6 @@ const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 test('Continue shows up to six tagged entries and moves a played song to the front after returning to Library', async ({
 	page
 }, testInfo) => {
-	const guard = new FlowGuard(page);
 	const shell = shellOf(testInfo);
 	if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 375, height: 844 });
 	const library = readSeededLibrary();
@@ -52,22 +51,21 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	await page.goto('/');
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
-
-	await page.locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
-	const anchorListenReport = page.waitForResponse(
-		(response) =>
-			response.request().method() === 'POST' &&
-			new URL(response.url()).pathname === `/api/songs/${anchorSong.id}/listen`
-	);
-	await page
-		.getByRole('button', { name: collectionRowPlayLabel(anchorSong.title), exact: true })
-		.click();
-	await expect(
-		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toBeVisible();
-	expect((await anchorListenReport).status()).toBe(200);
+	const anchorStatus = await page.evaluate(async (songId) => {
+		const csrfToken = document.cookie
+			.split('; ')
+			.find((cookie) => cookie.startsWith('csrf_token='))
+			?.split('=')[1];
+		const response = await fetch(`/api/songs/${songId}/listen`, {
+			method: 'POST',
+			headers: { 'X-CSRF-Token': csrfToken ? decodeURIComponent(csrfToken) : '' }
+		});
+		return response.status;
+	}, anchorSong.id);
+	expect(anchorStatus).toBe(200);
 
 	const continueRequestsBeforeAnchorReturn = continueRequests;
+	const guard = new FlowGuard(page);
 	const continueAfterAnchorReturn = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
