@@ -459,7 +459,12 @@ class CodexCliToolTransport:
         self._turn_directory.cleanup()
 
 
-def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
+def generate_codex_cover_image(
+    prompt: str,
+    *,
+    deadline: float,
+    abort_signal: threading.Event | None = None,
+) -> bytes:
     """Run one isolated Codex image turn and return its normalized PNG.
 
     The image route deliberately owns neither credentials nor process control:
@@ -483,6 +488,7 @@ def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
             deadline=deadline,
             codex_home=codex_home,
             work_dir=work_dir,
+            abort_signal=abort_signal,
         )
         _raise_for_codex_image_outcome(outcome)
         _validate_codex_image_events(
@@ -495,7 +501,12 @@ def generate_codex_cover_image(prompt: str, *, deadline: float) -> bytes:
 
 
 def _run_codex_image_cli(
-    *, prompt: str, deadline: float, codex_home: Path, work_dir: Path,
+    *,
+    prompt: str,
+    deadline: float,
+    codex_home: Path,
+    work_dir: Path,
+    abort_signal: threading.Event | None = None,
 ) -> CliRunOutcome:
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
@@ -520,7 +531,12 @@ def _run_codex_image_cli(
     runner.start()
     try:
         while True:
-            line_or_outcome = channel.receive()
+            if abort_signal is not None and abort_signal.is_set():
+                channel.request_abort()
+            try:
+                line_or_outcome = channel.receive(timeout=0.05)
+            except TimeoutError:
+                continue
             if isinstance(line_or_outcome, CliRunOutcome):
                 return line_or_outcome
             try:

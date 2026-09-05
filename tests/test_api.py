@@ -2431,6 +2431,28 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
     assert got.json()["error"] is None
 
 
+def test_cancel_running_cover_job_signals_the_web_runner(client: TestClient) -> None:
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.cover_runner import CoverJobCancellationRegistry
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, JobType.COVER, user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, JobStatus.RUNNING)
+        session.commit()
+        job_id = job.id
+    registry = CoverJobCancellationRegistry()
+    abort_signal = registry.register(job_id)
+    client.app.state.cover_job_cancellation_registry = registry
+
+    response = client.post(f"/api/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == JobStatus.CANCELLED
+    assert abort_signal.is_set()
+
+
 def test_cancel_job_not_found(client: TestClient) -> None:
     resp = client.post("/api/jobs/nonexistent/cancel")
     assert resp.status_code == 404

@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
+from threading import Event, Lock
 
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
@@ -39,10 +40,58 @@ from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 log = logging.getLogger(__name__)
 
 COVER_RUNNER_POLL_INTERVAL_SECONDS = 1.0
+_CODEX_COVER_IMAGE_GENERATOR = generate_codex_cover_image
+
+
+class CoverJobCancellationRegistry:
+    """Own the abort signals for web-runner jobs that are currently executing."""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._abort_signals: dict[str, Event] = {}
+
+    def register(self, job_id: str) -> Event:
+        """Create the one abort signal for a claimed web cover job."""
+        with self._lock:
+            if job_id in self._abort_signals:
+                raise RuntimeError(f"Cover job {job_id} is already executing")
+            abort_signal = Event()
+            self._abort_signals[job_id] = abort_signal
+            return abort_signal
+
+    def unregister(self, job_id: str, abort_signal: Event) -> None:
+        """Forget an execution only if it is still the registered one."""
+        with self._lock:
+            if self._abort_signals.get(job_id) is abort_signal:
+                del self._abort_signals[job_id]
+
+    def abort(self, job_id: str) -> bool:
+        """Request prompt process cleanup for an executing web cover job."""
+        with self._lock:
+            abort_signal = self._abort_signals.get(job_id)
+        if abort_signal is None:
+            return False
+        abort_signal.set()
+        return True
+
+
+def cover_job_cancellation_registry(app) -> CoverJobCancellationRegistry:
+    """Return the one web-runner cancellation owner for this application."""
+    return app.state.cover_job_cancellation_registry
+
+
+def abort_web_cover_job(app, job_id: str) -> bool:
+    """Signal a running web cover job after its DB cancellation commits."""
+    registry = getattr(app.state, "cover_job_cancellation_registry", None)
+    return registry is not None and registry.abort(job_id)
 
 
 async def run_next_cover_job(
-    *, db_factory, audio_dir: Path, settings: Settings | None = None,
+    *,
+    db_factory,
+    audio_dir: Path,
+    settings: Settings | None = None,
+    cancellation_registry: CoverJobCancellationRegistry | None = None,
 ) -> bool:
     """Claim and run one cover job when this process is the configured owner."""
     settings = settings or get_settings()
@@ -51,12 +100,22 @@ async def run_next_cover_job(
     job_id = await asyncio.to_thread(_claim_next_cover_job, db_factory)
     if job_id is None:
         return False
-    await run_claimed_cover_suggestion_job(
-        job_id,
-        db_factory=db_factory,
-        audio_dir=audio_dir,
-        settings=settings,
+    abort_signal = (
+        cancellation_registry.register(job_id)
+        if cancellation_registry is not None
+        else Event()
     )
+    try:
+        await run_claimed_cover_suggestion_job(
+            job_id,
+            db_factory=db_factory,
+            audio_dir=audio_dir,
+            settings=settings,
+            abort_signal=abort_signal,
+        )
+    finally:
+        if cancellation_registry is not None:
+            cancellation_registry.unregister(job_id, abort_signal)
     return True
 
 
@@ -69,12 +128,14 @@ async def cover_runner_loop(app) -> None:
         return
     ctx = app.state.ctx
     registry = background_loop_registry(app)
+    cancellation_registry = cover_job_cancellation_registry(app)
     while True:
         try:
             await run_next_cover_job(
                 db_factory=ctx.db,
                 audio_dir=ctx.audio_dir,
                 settings=settings,
+                cancellation_registry=cancellation_registry,
             )
         except Exception as exc:
             registry.record_failure(BackgroundLoopName.COVER_RUNNER, exc)
@@ -92,6 +153,7 @@ async def run_claimed_cover_suggestion_job(
     settings: Settings | None = None,
     image_generator: Callable[..., bytes] | None = None,
     provider_method: Callable[[], ProviderSetupMethod] | None = None,
+    abort_signal: Event | None = None,
 ) -> None:
     """Produce and publish one already-running group of three suggestions.
 
@@ -121,10 +183,11 @@ async def run_claimed_cover_suggestion_job(
             remaining = settings.cover_job_budget_seconds - (time.monotonic() - started)
             if remaining <= 0:
                 raise CodexImageTimeoutError()
-            payload = await asyncio.to_thread(
+            payload = await _generate_cover_image(
                 image_generator,
                 prompt,
                 deadline=time.monotonic() + min(settings.cover_cli_deadline_seconds, remaining),
+                abort_signal=abort_signal,
             )
             await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, payload)
             await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
@@ -145,15 +208,18 @@ async def run_claimed_cover_suggestion_job(
         staging_dir = None
         await asyncio.to_thread(_update_job, db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
     except asyncio.CancelledError:
+        if abort_signal is not None:
+            abort_signal.set()
         await asyncio.to_thread(_remove_partial_suggestions, audio_dir, created_paths, staging_dir)
-        await asyncio.to_thread(
-            _update_job,
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error=JOB_ERROR_COVER_IMAGE_FAILED,
-            error_type="timeout",
-        )
+        if abort_signal is None:
+            await asyncio.to_thread(
+                _update_job,
+                db_factory,
+                job_id,
+                JobStatus.FAILED,
+                error=JOB_ERROR_COVER_IMAGE_FAILED,
+                error_type="timeout",
+            )
         raise
     except Exception as exc:
         await asyncio.to_thread(_remove_partial_suggestions, audio_dir, created_paths, staging_dir)
@@ -212,7 +278,7 @@ def _claim_next_cover_job(db_factory) -> str | None:
 def _load_cover_prompt(db_factory, job_id: str) -> tuple[str, str]:
     with db_factory() as session:
         job = get_job(session, job_id)
-        if job is None or job.album_id is None:
+        if job is None or job.status != JobStatus.RUNNING or job.album_id is None:
             raise CoverSuggestionJobError()
         album = get_album(session, job.album_id)
         if album is None:
@@ -282,6 +348,31 @@ async def _keep_heartbeats(db_factory, job_id: str) -> None:
     while True:
         await asyncio.sleep(JOB_HEARTBEAT_INTERVAL_SECONDS)
         await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
+
+
+async def _generate_cover_image(
+    image_generator: Callable[..., bytes],
+    prompt: str,
+    *,
+    deadline: float,
+    abort_signal: Event | None,
+) -> bytes:
+    """Await one image generation and reap its CLI before task cancellation escapes."""
+    if abort_signal is None or image_generator is not _CODEX_COVER_IMAGE_GENERATOR:
+        return await asyncio.to_thread(image_generator, prompt, deadline=deadline)
+    generation = asyncio.create_task(asyncio.to_thread(
+        image_generator,
+        prompt,
+        deadline=deadline,
+        abort_signal=abort_signal,
+    ))
+    try:
+        return await generation
+    except asyncio.CancelledError:
+        abort_signal.set()
+        with suppress(Exception):
+            await asyncio.shield(generation)
+        raise
 
 
 async def _stop_heartbeats(task: asyncio.Task[None]) -> None:
