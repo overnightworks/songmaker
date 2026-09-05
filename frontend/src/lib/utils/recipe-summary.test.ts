@@ -176,6 +176,28 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 			{ label: 'Other', entries: [{ label: 'Repaint Wav Crossfade Sec', value: '0.25' }] }
 		]);
 	});
+
+	it('renders textual generation parameters as their stored values', async () => {
+		const { buildTakeRecipe } = await import('./recipe-summary');
+		const groups = buildTakeRecipe(
+			generation({
+				generation_params: {
+					timesteps: '1000,500,0',
+					task_type: 'repaint'
+				}
+			}),
+			song()
+		);
+		expect(groups).toEqual([
+			{
+				label: 'Other',
+				entries: [
+					{ label: 'Timesteps', value: '1000,500,0' },
+					{ label: 'Task Type', value: 'repaint' }
+				]
+			}
+		]);
+	});
 });
 
 describe('buildTakeRecipe deduplicating what the take already shows', () => {
