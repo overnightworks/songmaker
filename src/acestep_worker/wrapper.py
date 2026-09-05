@@ -282,9 +282,10 @@ class _WorkerRoutes:
         snapshot = self._deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    def restart(self) -> RestartResponse:
+    async def restart(self) -> RestartResponse:
         log.info("Restart requested via /restart endpoint")
         pid = os.getpid()
+        await asyncio.sleep(0)
         asyncio.get_running_loop().call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
         return RestartResponse(status="restarting", pid=pid)
 
