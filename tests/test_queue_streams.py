@@ -354,6 +354,28 @@ def test_authenticated_queue_stream_snapshot_and_audio_range(
     assert audio.content == b"\xff\xfb\x90\x00"
 
 
+def test_queue_stream_audio_reports_missing_snapshot_audio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    stream = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    snapshot_id = stream.json()["snapshot_id"]
+    (tmp_path / "data" / "queue-streams" / f"{snapshot_id}.mp3").unlink()
+
+    from songmaker_cli.queue_streams import load_queue_stream_manifest
+
+    with pytest.raises(HTTPException) as exc_info:
+        load_queue_stream_manifest(client.app.state.ctx, snapshot_id)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Queue stream audio not found"
+
+
 def test_authenticated_queue_stream_rejects_inaccessible_generation(
     tmp_path: Path,
     monkeypatch,
@@ -1677,8 +1699,14 @@ def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None
     assert unpin_data["pinned_at"] is None
 
 
-def test_user_cannot_pin_another_users_snapshot(tmp_path: Path, monkeypatch) -> None:
-    """A user must not be able to pin a snapshot that belongs to another user."""
+def test_user_cannot_unpin_another_users_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unpinning a different user's authenticated snapshot remains hidden."""
+    from unittest.mock import MagicMock, patch
+
+    from songmaker_cli.queue_stream_api import api_unpin_queue_stream
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
@@ -1688,16 +1716,26 @@ def test_user_cannot_pin_another_users_snapshot(tmp_path: Path, monkeypatch) -> 
     assert resp.status_code == 200
     snapshot_id = resp.json()["snapshot_id"]
 
-    client_other = TestClient(client.app, cookies={})
-    login_and_csrf(client_other, "other", "pass1234")
+    other_user = AuthenticatedUser(
+        id="other-id", username="other", role="user", is_active=True,
+    )
 
-    pin_resp = client_other.post(f"/api/queue-streams/{snapshot_id}/pin")
+    with patch("songmaker_cli.queue_stream_api.check_queue_stream_rate_limit"):
+        with pytest.raises(HTTPException) as exc_info:
+            api_unpin_queue_stream(snapshot_id, MagicMock(), other_user, client.app.state.ctx)
 
-    assert pin_resp.status_code == 404
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Queue stream not found"
 
 
-def test_shared_scope_snapshot_pin_returns_404(tmp_path: Path, monkeypatch) -> None:
-    """Pinning a shared-scope snapshot must return 404, not 403."""
+def test_shared_scope_snapshot_unpin_returns_404(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unpinning a shared snapshot returns 404, not 403."""
+    from unittest.mock import MagicMock, patch
+
+    from songmaker_cli.queue_stream_api import api_unpin_queue_stream
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
@@ -1710,8 +1748,13 @@ def test_shared_scope_snapshot_pin_returns_404(tmp_path: Path, monkeypatch) -> N
     assert stream_resp.status_code == 200
     snapshot_id = stream_resp.json()["snapshot_id"]
 
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    assert pin_resp.status_code == 404
+    owner = AuthenticatedUser(id="owner-id", username="owner", role="user", is_active=True)
+    with patch("songmaker_cli.queue_stream_api.check_queue_stream_rate_limit"):
+        with pytest.raises(HTTPException) as exc_info:
+            api_unpin_queue_stream(snapshot_id, MagicMock(), owner, client.app.state.ctx)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Queue stream not found"
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
