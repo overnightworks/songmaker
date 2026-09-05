@@ -411,7 +411,7 @@ def prepare_mirror_directory(mirror_directory: Path) -> None:
     # moment in which it is readable by anyone else.
     mirror_directory.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.mkdir(mirror_directory, MIRROR_DIR_MODE)  # NOSONAR: validated absolute target
+        os.mkdir(mirror_directory, MIRROR_DIR_MODE)  # NOSONAR Target validated after creation.
     except FileExistsError:
         pass
     info = mirror_directory.lstat()

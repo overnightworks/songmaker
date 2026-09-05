@@ -217,22 +217,22 @@ function spawnParticles(
 ): void {
 	for (let i = 0; i < Math.floor(bassE * 20); i++) {
 		if (particles.length >= MAX_PARTICLES) break;
-		const angle = Math.random() * Math.PI * 2;
+		const angle = Math.random() * Math.PI * 2; // NOSONAR Animation particles do not generate secrets or security tokens.
 		const speed = 2 + bassE * 8;
-		const dist = 10 + Math.random() * 30;
-		const pt = Math.random();
+		const dist = 10 + Math.random() * 30; // NOSONAR Animation particles do not generate secrets or security tokens.
+		const pt = Math.random(); // NOSONAR Animation particles do not generate secrets or security tokens.
 		const { r, g, b } = lerpColor(colors, pt * 0.4);
 		particles.push({
 			x: w / 2 + Math.cos(angle) * dist,
 			y: cy + Math.sin(angle) * dist * 0.6,
-			vx: Math.cos(angle) * speed * (0.5 + Math.random()),
-			vy: Math.sin(angle) * speed * 0.6 * (0.5 + Math.random()),
+			vx: Math.cos(angle) * speed * (0.5 + Math.random()), // NOSONAR Animation particles do not generate secrets or security tokens.
+			vy: Math.sin(angle) * speed * 0.6 * (0.5 + Math.random()), // NOSONAR Animation particles do not generate secrets or security tokens.
 			life: 1,
-			decay: 0.01 + Math.random() * 0.02,
+			decay: 0.01 + Math.random() * 0.02, // NOSONAR Animation particles do not generate secrets or security tokens.
 			r,
 			g,
 			b,
-			size: 1.5 + Math.random() * 3
+			size: 1.5 + Math.random() * 3 // NOSONAR Animation particles do not generate secrets or security tokens.
 		});
 	}
 }

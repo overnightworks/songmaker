@@ -104,11 +104,11 @@ def _set_session_cookie(
         path="/",
     )
     csrf_token = generate_csrf_token(session_id, ctx.session_secret)
-    response.set_cookie(
+    response.set_cookie(  # NOSONAR The client must read this CSRF token for double-submit.
         CSRF_COOKIE,
         csrf_token,
         max_age=max_age,
-        httponly=False,  # NOSONAR CSRF token must be browser-readable.
+        httponly=False,
         samesite="strict",
         secure=secure,
         path="/",
