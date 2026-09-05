@@ -353,8 +353,6 @@ def post_process_generation(
             cot_caption=worker_cot_caption,
             cot_lyrics=worker_cot_lyrics,
             delivered_batch_size=worker_delivered_batch_size,
-            mp3_path=mp3_path,
-            wav_path=wav_path,
             job_id=job_id,
         )
     finally:
@@ -373,8 +371,6 @@ def _persist_generation_row(
     cot_caption: str,
     cot_lyrics: str,
     delivered_batch_size: int | None,
-    mp3_path: Path,
-    wav_path: Path,
     job_id: str,
 ) -> str | None:
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
