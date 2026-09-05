@@ -24,6 +24,9 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
+JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = (
+    "Selected voice is unavailable for this generation"
+)
 JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
     "Codex CLI is not logged in. Sign in on the operator host, then try again."
 )

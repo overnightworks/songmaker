@@ -11,10 +11,11 @@ from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
-from songmaker_cli.constants import LoraStatus
+from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, UserLora, Version
 from songmaker_cli.db.queries import create_user_lora, update_user_lora
+from songmaker_cli.jobs._runtime import GenerationSetupError, _sanitize_error
 from songmaker_cli.jobs.generation import (
     _apply_user_lora_path,
     _extract_user_lora_id,
@@ -42,10 +43,15 @@ def db_factory(tmp_path: Path):
 
 
 def _make_ready_lora(
-    db_factory, user_id: str, storage_path: str = "user_loras/u/l/lora",
+    db_factory,
+    user_id: str,
+    storage_path: str = "user_loras/u/l/lora",
+    model_mode: str = "sft",
 ) -> str:
     with db_factory() as session:
-        lora = create_user_lora(session, user_id, "voice", "voice")
+        lora = create_user_lora(
+            session, user_id, "voice", "voice", model_mode=model_mode,
+        )
         update_user_lora(
             session, lora.id, status=LoraStatus.READY, storage_path=storage_path,
         )
@@ -165,22 +171,64 @@ def test_apply_user_lora_path_injects_absolute_path(db_factory, tmp_path) -> Non
     lora_id = _make_ready_lora(db_factory, USER_A, "user_loras/alice/L/lora")
     params = BaseGenerationParams(user_lora_id=lora_id)
     config = AceStepConfig(prompt="p", lyrics="L")
-    result = _apply_user_lora_path(config, params, db_factory, audio_dir)
+    result = _apply_user_lora_path(
+        config, params, db_factory, audio_dir, USER_A, "sft",
+    )
     assert result.lora_path.endswith("user_loras/alice/L/lora")
 
 
-def test_apply_user_lora_path_skips_when_not_ready(db_factory, tmp_path) -> None:
+@pytest.mark.parametrize(
+    "lora_state",
+    ["missing", "deleted", "not_ready", "wrong_model_mode"],
+)
+def test_apply_user_lora_path_rejects_unavailable_voice(
+    db_factory, tmp_path, lora_state: str,
+) -> None:
     from acestep_engine.models import AceStepConfig
 
-    with db_factory() as session:
-        lora = create_user_lora(session, USER_A, "x", "x")
-        lora_id = lora.id
-        session.commit()
+    if lora_state == "missing":
+        lora_id = "missing"
+    else:
+        model_mode = "turbo" if lora_state == "wrong_model_mode" else "sft"
+        lora_id = _make_ready_lora(db_factory, USER_A, model_mode=model_mode)
+        if lora_state == "deleted":
+            from datetime import datetime, timezone
+
+            with db_factory() as session:
+                lora = session.get(UserLora, lora_id)
+                assert lora is not None
+                lora.deleted_at = datetime.now(timezone.utc)
+                session.commit()
+        elif lora_state == "not_ready":
+            with db_factory() as session:
+                update_user_lora(session, lora_id, status=LoraStatus.TRAINING)
+                session.commit()
 
     params = BaseGenerationParams(user_lora_id=lora_id)
     config = AceStepConfig(prompt="p", lyrics="L")
-    result = _apply_user_lora_path(config, params, db_factory, tmp_path / "audio")
-    assert result.lora_path == ""
+    with pytest.raises(GenerationSetupError, match=JOB_ERROR_USER_LORA_UNAVAILABLE):
+        _apply_user_lora_path(
+            config, params, db_factory, tmp_path / "audio", USER_A, "sft",
+        )
+
+
+def test_apply_user_lora_path_rejects_another_users_voice(db_factory, tmp_path) -> None:
+    from acestep_engine.models import AceStepConfig
+
+    lora_id = _make_ready_lora(db_factory, USER_B)
+    params = BaseGenerationParams(user_lora_id=lora_id)
+    config = AceStepConfig(prompt="p", lyrics="L")
+
+    with pytest.raises(GenerationSetupError, match=JOB_ERROR_USER_LORA_UNAVAILABLE):
+        _apply_user_lora_path(
+            config, params, db_factory, tmp_path / "audio", USER_A, "sft",
+        )
+
+
+def test_unavailable_voice_setup_error_is_exposed_to_the_job() -> None:
+    error = GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
+
+    assert _sanitize_error(error, "job-1") == JOB_ERROR_USER_LORA_UNAVAILABLE
 
 
 def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
@@ -188,7 +236,9 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
 
     params = BaseGenerationParams()
     config = AceStepConfig(prompt="p", lyrics="L")
-    result = _apply_user_lora_path(config, params, db_factory, tmp_path / "audio")
+    result = _apply_user_lora_path(
+        config, params, db_factory, tmp_path / "audio", USER_A, "sft",
+    )
     assert result is config
 
 
