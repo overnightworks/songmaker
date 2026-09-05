@@ -139,13 +139,18 @@ async def _start_gpu_hold_renewal(
     return asyncio.create_task(_renew_gpu_hold_until_done(redis, worker_id, token))
 
 
-async def _create_gpu_hold_handover_task(deps: WorkerDeps, token: str) -> str | None:
+async def _create_gpu_hold_handover_task(
+    deps: WorkerDeps,
+    token: str,
+    *,
+    train_epochs: int,
+) -> str | None:
     async with deps.gpu_hold_handover_lock:
         if token in deps.gpu_hold_handover_tokens:
             return None
         if not await gpu_hold_matches(deps.redis, deps.worker_id, token):
             return None
-        task_id = await deps.task_store.create("train_lora")
+        task_id = await deps.task_store.create("train_lora", train_epochs=train_epochs)
         deps.gpu_hold_handover_tokens.add(token)
         deps.gpu_hold_handover_tasks[token] = task_id
         return task_id
@@ -440,7 +445,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 )
             except RuntimeError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
-            task_id = await _create_gpu_hold_handover_task(deps, req.hold_token)
+            task_id = await _create_gpu_hold_handover_task(
+                deps,
+                req.hold_token,
+                train_epochs=req.train_epochs,
+            )
             if task_id is None:
                 raise HTTPException(
                     status_code=409,
@@ -668,6 +677,7 @@ async def default_train_lora_runner(
             training_seed=request.training_seed,
             gradient_checkpointing=request.gradient_checkpointing,
         )
+        await task_store.mark_training_started(task_id)
         await asyncio.to_thread(client.start_lokr, lokr_config)
         await task_store.update_progress(task_id, 0.20)
 
@@ -680,7 +690,11 @@ async def default_train_lora_runner(
                 final_loss = training_status.current_loss
             epoch_progress = min(training_status.current_epoch / total_epochs, 1.0)
             fraction = 0.20 + 0.70 * epoch_progress
-            await task_store.update_progress(task_id, fraction)
+            await task_store.update_progress(
+                task_id,
+                fraction,
+                current_epoch=training_status.current_epoch,
+            )
             if training_status.error:
                 raise RuntimeError(f"Training failed: {training_status.error}")
             if not training_status.is_training:

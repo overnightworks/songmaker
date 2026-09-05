@@ -10,17 +10,17 @@ migrate container does not need to plumb unrelated Settings env vars
 from __future__ import annotations
 
 import os
-from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
+from songmaker_cli.db.migration_logging import configure_migration_logging
 from songmaker_cli.db.models import Base
 
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    configure_migration_logging()
 
 target_metadata = Base.metadata
 

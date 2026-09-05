@@ -22,6 +22,7 @@ from songmaker_cli.cli_client import (
     resolve_song,
 )
 from songmaker_cli.errors import SongmakerError
+from songmaker_cli.logging_config import configure_cli_logging
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def _launcher(
         level = logging.DEBUG
     else:
         level = logging.INFO
-    logging.basicConfig(level=level, format="%(name)s: %(message)s")
+    configure_cli_logging(level)
     global _server_url
     _server_url = server
     app(tokens)
