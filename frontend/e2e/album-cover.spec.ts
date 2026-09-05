@@ -28,14 +28,12 @@ test('Suggest cover names the isolated stack failure at desktop and 375 px', asy
 	await surface.getByRole('button', { name: 'Suggest cover' }).click();
 	const response = await failedSuggestion;
 	const body = (await response.json()) as { detail?: string };
-	const detail = body.detail;
-	if (response.ok() || !detail) {
-		throw new Error('The isolated stack was expected to return a named cover-suggestion failure');
-	}
+	expect(response.status()).toBe(503);
+	expect(body.detail).toBe('Codex cover generation is unavailable');
 
 	const failure = surface.getByRole('alert');
 	await expect(failure).toContainText('Couldn’t make cover suggestions');
-	await expect(failure).toContainText(detail);
+	await expect(failure).toContainText('Codex cover generation is unavailable');
 });
 
 test('an API-seeded suggestion can be chosen and its selected cover removed', async ({ page }) => {

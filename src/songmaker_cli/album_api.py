@@ -38,6 +38,7 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
+    CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE,
     COVER_MAX_BYTES,
     COVER_NOT_FOUND,
     COVER_SUGGESTION_NOT_FOUND,
@@ -63,6 +64,7 @@ from songmaker_cli.covers import (
     resolve_cover_file,
     write_album_cover,
 )
+from songmaker_cli.cowriter.codex_cli_adapter import codex_cover_image_capability_is_available
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     UNSET,
@@ -408,6 +410,11 @@ async def api_create_cover_suggestions(
     settings = get_settings()
     try:
         request = request_cover_suggestions(session, album_id, user)
+        if (
+            settings.cover_executor is CoverExecutor.WEB
+            and not codex_cover_image_capability_is_available()
+        ):
+            raise HTTPException(503, CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE)
         if (
             settings.cover_executor is CoverExecutor.MUSIC
             and not await is_music_worker_healthy()

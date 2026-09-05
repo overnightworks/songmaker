@@ -91,6 +91,7 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
       LOG_FORMAT: json
       HOST: "0.0.0.0"
     # Published to the loopback interface only: Docker's NAT chain bypasses
@@ -195,6 +196,7 @@ services:
       LORA_TRAINING_SAVE_EVERY_N_EPOCHS: "${LORA_TRAINING_SAVE_EVERY_N_EPOCHS:-5}"
       LORA_TRAINING_POLL_INTERVAL_SECONDS: "${LORA_TRAINING_POLL_INTERVAL_SECONDS:-5}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
       LOG_FORMAT: json
     volumes:
       - audiofiles:/app/data/audio

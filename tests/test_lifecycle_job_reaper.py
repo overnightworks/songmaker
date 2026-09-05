@@ -106,15 +106,16 @@ class TestLifecycleReaper:
             job = session.query(Job).filter_by(id="web-cover").one()
             assert job.error_type == "queued_too_long"
 
-    def test_music_cover_queue_keeps_worker_liveness_and_1100_second_guard(
+    def test_default_cover_queue_uses_the_web_age_guard_not_music_liveness(
         self, ctx, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
         monkeypatch.delenv("COVER_EXECUTOR", raising=False)
         get_settings.cache_clear()
         _add_job(
-            ctx, job_id="music-cover", job_type=JobType.COVER, status=JobStatus.QUEUED,
-            started_at=now - timedelta(seconds=1101), heartbeat_at=now,
+            ctx, job_id="default-web-cover", job_type=JobType.COVER, status=JobStatus.QUEUED,
+            started_at=now - timedelta(seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS + 1),
+            heartbeat_at=now,
         )
 
         recovered = reap_stale_jobs(
@@ -125,8 +126,8 @@ class TestLifecycleReaper:
 
         assert recovered == 1
         with ctx.db() as session:
-            job = session.query(Job).filter_by(id="music-cover").one()
-            assert job.error_type == "no_worker_alive"
+            job = session.query(Job).filter_by(id="default-web-cover").one()
+            assert job.error_type == "queued_too_long"
 
     def test_fails_an_old_queued_chat_job_when_no_worker_signal_exists(self, ctx) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)

@@ -9,25 +9,90 @@
 	import RailSettings from './RailSettings.svelte';
 	import UserRow from './UserRow.svelte';
 	import { RAIL_ITEM_SELECTOR } from './rail-item-selector';
-	import { toggleRailCollapsed } from '$lib/stores/ui';
+	import {
+		adjustRailWidth,
+		railWidth,
+		RAIL_MAX_WIDTH_PX,
+		RAIL_MIN_WIDTH_PX,
+		RAIL_WIDTH_STEP_PX,
+		setRailWidth,
+		toggleRailCollapsed
+	} from '$lib/stores/ui';
 
 	let {
 		username,
 		onlogout,
 		collapsed = false,
-		showCollapseControl = true
+		showCollapseControl = true,
+		showResizeHandle = true
 	}: {
 		username: string;
 		onlogout: () => void;
 		collapsed?: boolean;
 		showCollapseControl?: boolean;
+		showResizeHandle?: boolean;
 	} = $props();
 
 	const collapseRailLabel = 'Collapse rail';
 	const expandRailLabel = 'Expand rail';
+	const resizeRailLabel = 'Resize rail';
+	let rail: HTMLElement;
+	let resizing = $state(false);
+
+	function resizeFromPointer(clientX: number): void {
+		setRailWidth(clientX - rail.getBoundingClientRect().left);
+	}
+
+	function startResize(event: PointerEvent): void {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		if (event.currentTarget instanceof HTMLElement) {
+			event.currentTarget.focus({ preventScroll: true });
+		}
+		resizing = true;
+		resizeFromPointer(event.clientX);
+	}
+
+	function stopResize(): void {
+		resizing = false;
+	}
+
+	function handleWindowPointerMove(event: PointerEvent): void {
+		if (!resizing) return;
+		event.preventDefault();
+		resizeFromPointer(event.clientX);
+	}
+
+	function handleResizeKeydown(event: KeyboardEvent): void {
+		if (event.key === 'ArrowLeft') {
+			event.preventDefault();
+			adjustRailWidth(-RAIL_WIDTH_STEP_PX);
+		}
+		if (event.key === 'ArrowRight') {
+			event.preventDefault();
+			adjustRailWidth(RAIL_WIDTH_STEP_PX);
+		}
+	}
+
+	function resizeHandle(node: HTMLElement): { destroy: () => void } {
+		node.addEventListener('pointerdown', startResize);
+		node.addEventListener('keydown', handleResizeKeydown);
+		return {
+			destroy: () => {
+				node.removeEventListener('pointerdown', startResize);
+				node.removeEventListener('keydown', handleResizeKeydown);
+			}
+		};
+	}
 </script>
 
-<nav class="rail" class:rail-collapsed={collapsed} aria-label={RAIL_NAV_LABEL}>
+<svelte:window
+	onpointermove={handleWindowPointerMove}
+	onpointerup={stopResize}
+	onpointercancel={stopResize}
+/>
+
+<nav bind:this={rail} class="rail" class:rail-collapsed={collapsed} aria-label={RAIL_NAV_LABEL}>
 	<div class="rail-top">
 		<button
 			type="button"
@@ -74,6 +139,20 @@
 		>
 			{collapsed ? '›' : '‹'}
 		</button>
+	{/if}
+
+	{#if showResizeHandle && !collapsed}
+		<input
+			type="range"
+			class="rail-resize"
+			class:rail-resizing={resizing}
+			aria-label={resizeRailLabel}
+			min={RAIL_MIN_WIDTH_PX}
+			max={RAIL_MAX_WIDTH_PX}
+			step={RAIL_WIDTH_STEP_PX}
+			value={$railWidth}
+			use:resizeHandle
+		/>
 	{/if}
 </nav>
 
@@ -169,6 +248,31 @@
 	.rail-collapse:hover {
 		color: var(--text);
 		background: var(--surface-hover);
+	}
+
+	.rail-resize {
+		position: absolute;
+		top: 0;
+		right: -4px;
+		bottom: 0;
+		z-index: 1;
+		width: 8px;
+		padding: 0;
+		border: 0;
+		background: linear-gradient(90deg, transparent 3px, var(--border) 3px 5px, transparent 5px);
+		appearance: none;
+		cursor: col-resize;
+		touch-action: none;
+	}
+
+	.rail-resize:hover,
+	.rail-resize.rail-resizing,
+	.rail-resize:focus-visible {
+		background: linear-gradient(90deg, transparent 3px, var(--accent) 3px 5px, transparent 5px);
+	}
+
+	.rail-resize:focus-visible {
+		outline: none;
 	}
 
 	.rail-collapsed {

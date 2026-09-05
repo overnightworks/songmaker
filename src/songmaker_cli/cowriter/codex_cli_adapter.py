@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import tempfile
 import threading
 import time
@@ -32,6 +33,8 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.constants import (
     CODEX_CLI_AUTH_FILE,
     CODEX_CLI_BINARY,
+    CODEX_CODE_MODE_HOST_BINARY,
+    CODEX_RESOURCES_DIRECTORY,
     COVER_MAX_PIXELS,
     COVER_PNG_MAGIC,
     COWRITER_CLI_TIMEOUT_SECONDS,
@@ -161,6 +164,18 @@ class CodexImageTimeoutError(CodexImageError):
 
 class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
+
+
+def codex_cover_image_capability_is_available() -> bool:
+    """Whether this process has every mounted dependency for a cover image turn."""
+    code_mode_host = Path(CODEX_CODE_MODE_HOST_BINARY)
+    resources = Path(CODEX_RESOURCES_DIRECTORY)
+    return (
+        shutil.which(CODEX_CLI_BINARY) is not None
+        and code_mode_host.is_file()
+        and os.access(code_mode_host, os.X_OK)
+        and resources.is_dir()
+    )
 
 
 class CodexCliToolTransport:
