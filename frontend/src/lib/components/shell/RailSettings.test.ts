@@ -99,6 +99,25 @@ describe('RailSettings', () => {
 		expect(localStorage.getItem(RAIL_SETTINGS_OPEN_STORAGE_KEY)).toBe('true');
 	});
 
+	it('toggles from its text and caret without navigating away from the current settings page', async () => {
+		pageState.url = new URL('https://songmaker.test/settings/users');
+		const target = await render();
+		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		const title = requireElement<HTMLSpanElement>(toggle, '.group-title');
+		const caret = requireElement<SVGElement>(toggle, '.caret');
+
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		title.click();
+		await tick();
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		expect(pageState.url.pathname).toBe('/settings/users');
+
+		caret.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		await tick();
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(pageState.url.pathname).toBe('/settings/users');
+	});
+
 	// Regression coverage for the reviewer's throwaway probe: the force-open
 	// effect used to read `open` as well as write it, so it re-ran on every
 	// close and immediately reopened itself — a viewer could never collapse

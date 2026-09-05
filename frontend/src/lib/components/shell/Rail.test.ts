@@ -235,7 +235,7 @@ describe('Rail', () => {
 		});
 	});
 
-	it('does not collapse an open playlist when an album row is expanded by its own chevron -- Library and Playlists do not share a slot', async () => {
+	it('keeps PLAYLISTS open when All albums returns to the wall', async () => {
 		albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
 		playlistList.set([playlist({ id: 'p1', title: 'Night Drive', entry_count: 0 })]);
 		setOpenCollection({ kind: 'playlist', id: 'p1' });
@@ -246,11 +246,10 @@ describe('Rail', () => {
 		const playlistPanel = requireElement<HTMLDivElement>(target, '.playlist-songs');
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 
-		const albumToggle = requireElement<HTMLButtonElement>(target, '.album-disclose');
-		albumToggle.click();
+		requireElement<HTMLButtonElement>(target, '.all-albums').click();
+		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
 		await tick();
 
-		expect(albumToggle.getAttribute('aria-expanded')).toBe('true');
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 	});
 
