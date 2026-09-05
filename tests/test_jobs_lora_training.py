@@ -30,11 +30,13 @@ from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSampl
 from songmaker_cli.db.queries import get_job, get_user_lora
 from songmaker_cli.jobs.lora_training import (
     _validate_export_path,
+    _worker_training_started_at,
     cleanup_failed_lora_with_factory,
     reconcile_crashed_loras,
     run_lora_training_job,
 )
 from songmaker_cli.lifecycle import reap_stale_jobs
+from songmaker_cli.scheduler import WorkerProtocolError
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 
@@ -63,6 +65,12 @@ def lora_training_config(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@pytest.mark.parametrize("value", [1, "not-a-timestamp", "2026-09-05T12:00:00"])
+def test_worker_training_started_at_rejects_invalid_worker_values(value: object) -> None:
+    with pytest.raises(WorkerProtocolError, match="invalid training start time"):
+        _worker_training_started_at(value)
 
 
 @pytest.fixture

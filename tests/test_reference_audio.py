@@ -80,6 +80,16 @@ def test_rejects_symlink_outside_owner_root(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize("name", ["missing.wav", "unsupported.txt"])
+def test_rejects_missing_or_unsupported_owned_reference_audio(tmp_path: Path, name: str) -> None:
+    audio_dir = tmp_path / "audio"
+    if name == "unsupported.txt":
+        _write_ref(audio_dir, "user-a", name)
+
+    with pytest.raises(ReferenceAudioRejected, match="reference audio path is not owned"):
+        resolve_owned_reference_audio(audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/{name}")
+
+
 def _seed_users(session) -> None:
     session.add_all([
         User(
