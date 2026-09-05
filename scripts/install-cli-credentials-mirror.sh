@@ -49,7 +49,7 @@
 set -euo pipefail
 
 FORCE=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --force) FORCE=1; shift ;;
         *) echo "ERROR: unknown argument '$1'. Usage: $0 [--force]" >&2; exit 2 ;;
@@ -65,7 +65,7 @@ INSTALL_USER="${SUDO_USER:-$(id -un)}"
 # would then install units that mirror /root's logins — which are not the ones
 # the co-writer uses — and the operator would find an empty mirror with no
 # error to explain it.
-if [ "$INSTALL_USER" = "root" ]; then
+if [[ "$INSTALL_USER" = "root" ]]; then
     echo "ERROR: refusing to install units that would run as root." >&2
     echo "SUDO_USER is unset, so this looks like a root login rather than" >&2
     echo "sudo. The units would mirror /root's agent-CLI logins, not the" >&2
@@ -79,7 +79,7 @@ source "$SCRIPT_DIR/agent-cli-paths.sh"
 require_main_checkout "$PROJECT_ROOT" install-cli-credentials-mirror.sh || exit 1
 
 INSTALL_HOME="$(getent passwd "$INSTALL_USER" | cut -d: -f6)"
-if [ -z "$INSTALL_HOME" ]; then
+if [[ -z "$INSTALL_HOME" ]]; then
     echo "ERROR: could not resolve the home directory of '$INSTALL_USER'." >&2
     exit 1
 fi
@@ -113,14 +113,14 @@ ALERT_SERVICE_TARGET="$UNIT_DIR/songmaker-alert@.service"
 ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
 
 for required in "$SERVICE_SOURCE" "$PATH_SOURCE" "$TIMER_SOURCE" "$ALERT_SERVICE_SOURCE"; do
-    if [ ! -f "$required" ]; then
+    if [[ ! -f "$required" ]]; then
         echo "ERROR: $required not found." >&2
         exit 1
     fi
 done
 
 for required in "$MIRROR_SCRIPT" "$CHECK_SCRIPT" "$ALERT_SCRIPT"; do
-    if [ ! -x "$required" ]; then
+    if [[ ! -x "$required" ]]; then
         echo "ERROR: $required not found or not executable." >&2
         exit 1
     fi
@@ -152,13 +152,13 @@ _watches_are_ours() {
     local target="$1"
     shift
     local installed expected
-    [ -f "$target" ] || return 0
+    [[ -f "$target" ]] || return 0
     installed="$(sed -n 's/^Path\(Changed\|Modified\|Exists\)=//p' "$target" \
         | LC_ALL=C sort -u)"
     expected="$(printf '%s\n' "$@" | LC_ALL=C sort -u)"
-    [ "$installed" != "$expected" ] || return 0
+    [[ "$installed" != "$expected" ]] || return 0
 
-    if [ "$FORCE" = "1" ]; then
+    if [[ "$FORCE" = "1" ]]; then
         echo "Replacing $target (--force): it watches something else"
         return 0
     fi

@@ -42,12 +42,12 @@ require_main_checkout() {
     local project_root="$1" installer="$2" git_common_dir main_checkout
     git_common_dir="$(git -C "$project_root" rev-parse --path-format=absolute \
         --git-common-dir 2>/dev/null || true)"
-    if [ -z "$git_common_dir" ]; then
+    if [[ -z "$git_common_dir" ]]; then
         echo "ERROR: $project_root is not a git checkout." >&2
         return 1
     fi
     main_checkout="$(dirname "$git_common_dir")"
-    if [ "$main_checkout" != "$project_root" ]; then
+    if [[ "$main_checkout" != "$project_root" ]]; then
         echo "ERROR: refusing to install permanent units from a linked worktree." >&2
         echo "  this checkout: $project_root" >&2
         echo "  main checkout: $main_checkout" >&2
@@ -89,25 +89,25 @@ require_main_checkout() {
 refuse_silent_takeover() {
     local target="$1" directive="$2" expected="$3" force="$4" mode="${5:-exact}"
     local installed reason="" line found=0
-    [ -f "$target" ] || return 0
+    [[ -f "$target" ]] || return 0
 
     while IFS= read -r line; do
         found=1
         case "$mode" in
             command) case "$line" in "$expected"|"$expected "*) continue ;; esac ;;
-            *)       [ "$line" != "$expected" ] || continue ;;
+            *)       [[ "$line" != "$expected" ]] || continue ;;
         esac
         installed="$line"
         reason="its $directive is: $line"
         break
     done < <(sed -n "s/^${directive}=//p" "$target")
 
-    if [ "$found" = "0" ]; then
+    if [[ "$found" = "0" ]]; then
         reason="it has no $directive= line, so it cannot be identified"
     fi
-    [ -n "$reason" ] || return 0
+    [[ -n "$reason" ]] || return 0
 
-    if [ "$force" = "1" ]; then
+    if [[ "$force" = "1" ]]; then
         echo "Replacing $target (--force): $reason"
         return 0
     fi

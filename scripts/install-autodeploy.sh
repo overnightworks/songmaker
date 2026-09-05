@@ -86,37 +86,37 @@ ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
 # all, which is exactly what must not be discovered during an outage.
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
 
-if [ ! -f "$SERVICE_SOURCE" ]; then
+if [[ ! -f "$SERVICE_SOURCE" ]]; then
     echo "ERROR: $SERVICE_SOURCE not found." >&2
     exit 1
 fi
 
-if [ ! -f "$TIMER_SOURCE" ]; then
+if [[ ! -f "$TIMER_SOURCE" ]]; then
     echo "ERROR: $TIMER_SOURCE not found." >&2
     exit 1
 fi
 
-if [ ! -x "$DEPLOY_SCRIPT" ]; then
+if [[ ! -x "$DEPLOY_SCRIPT" ]]; then
     echo "ERROR: $DEPLOY_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
-if [ ! -f "$ALERT_SERVICE_SOURCE" ]; then
+if [[ ! -f "$ALERT_SERVICE_SOURCE" ]]; then
     echo "ERROR: $ALERT_SERVICE_SOURCE not found." >&2
     exit 1
 fi
 
-if [ ! -x "$ALERT_SCRIPT" ]; then
+if [[ ! -x "$ALERT_SCRIPT" ]]; then
     echo "ERROR: $ALERT_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
-if [ ! -f "$ALERT_CONFIG_LIB" ]; then
+if [[ ! -f "$ALERT_CONFIG_LIB" ]]; then
     echo "ERROR: $ALERT_CONFIG_LIB not found." >&2
     exit 1
 fi
 
-if [ "$INSTALL_USER" = "root" ]; then
+if [[ "$INSTALL_USER" = "root" ]]; then
     echo "ERROR: refusing to install a unit that runs as root." >&2
     echo "You're running this as root directly (no SUDO_USER set), so the unit" >&2
     echo "would get User=root and HOME=/root — that silently breaks the .env and" >&2
