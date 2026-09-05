@@ -106,6 +106,7 @@ def _leaked_secret_env_values() -> dict[str, str]:
     values["REDIS_URL"] = "redis://leaked-host:6379/0"
     return values
 
+
 # ── call_claude routing ─────────────────────────────────────────────
 
 
@@ -218,7 +219,9 @@ def test_clearing_the_provider_login_cache_delegates_to_the_runner() -> None:
 
 
 def _model_command_result(
-    stdout: str, returncode: int = 0, stderr: str = "",
+    stdout: str,
+    returncode: int = 0,
+    stderr: str = "",
 ) -> MagicMock:
     return MagicMock(stdout=stdout, stderr=stderr, returncode=returncode)
 
@@ -242,8 +245,16 @@ def test_list_cli_model_aliases_parses_available_line() -> None:
         aliases = list_cli_model_aliases()
 
     assert aliases == [
-        "sonnet", "opus", "haiku", "fable", "best",
-        "sonnet[1m]", "opus[1m]", "fable[1m]", "opusplan", "default",
+        "sonnet",
+        "opus",
+        "haiku",
+        "fable",
+        "best",
+        "sonnet[1m]",
+        "opus[1m]",
+        "fable[1m]",
+        "opusplan",
+        "default",
     ]
 
 
@@ -425,7 +436,9 @@ def test_judge_cli_gives_the_provider_request_the_remaining_budget(
         patch("subprocess.run", return_value=completed) as run,
     ):
         result = call_claude(
-            "hello", model="claude-sonnet-4-6", timeout_seconds=10,
+            "hello",
+            model="claude-sonnet-4-6",
+            timeout_seconds=10,
         )
 
     assert result.text == "judge verdict"
@@ -451,10 +464,14 @@ def _no_tool_gate_open(monkeypatch: pytest.MonkeyPatch):
     resolved to ``/usr/bin/claude`` — so tests here can focus on what
     ``_call_cli``/``_acall_cli`` do with that verified binary."""
     monkeypatch.setattr(
-        provider, "verify_no_builtin_cli_tools", lambda *, deadline=None: "/usr/bin/claude",
+        provider,
+        "verify_no_builtin_cli_tools",
+        lambda *, deadline=None: "/usr/bin/claude",
     )
     monkeypatch.setattr(
-        provider, "averify_no_builtin_cli_tools", AsyncMock(return_value="/usr/bin/claude"),
+        provider,
+        "averify_no_builtin_cli_tools",
+        AsyncMock(return_value="/usr/bin/claude"),
     )
 
 
@@ -469,7 +486,8 @@ def test_call_cli_success(_no_tool_gate_open) -> None:
 
 
 def test_call_cli_uses_the_shared_process_pool_and_refuses_at_its_cap(
-    _no_tool_gate_open, monkeypatch,
+    _no_tool_gate_open,
+    monkeypatch,
 ) -> None:
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     run_calls = 0
@@ -489,15 +507,15 @@ def test_call_cli_uses_the_shared_process_pool_and_refuses_at_its_cap(
             _call_cli("one too many")
 
     assert str(exc.value) == (
-        "Claude CLI process pool is at its concurrency limit (1); "
-        "refusing to start another"
+        "Claude CLI process pool is at its concurrency limit (1); refusing to start another"
     )
     assert run_calls == 1
     provider._release_zombie_reservation(live_turn)
 
 
 def test_call_cli_strips_secrets_from_child_env(
-    _no_tool_gate_open, monkeypatch: pytest.MonkeyPatch,
+    _no_tool_gate_open,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for key, value in _leaked_secret_env_values().items():
         monkeypatch.setenv(key, value)
@@ -542,7 +560,8 @@ def test_acall_cli_keeps_prompt_and_system_out_of_argv(_no_tool_gate_open) -> No
 
 
 def test_acall_cli_strips_secrets_from_child_env(
-    _no_tool_gate_open, monkeypatch: pytest.MonkeyPatch,
+    _no_tool_gate_open,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for key, value in _leaked_secret_env_values().items():
         monkeypatch.setenv(key, value)
@@ -644,7 +663,8 @@ def test_call_cli_timeout(_no_tool_gate_open) -> None:
     with patch(
         "subprocess.run",
         side_effect=subprocess.TimeoutExpired(
-            cmd="claude", timeout=CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
+            cmd="claude",
+            timeout=CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
         ),
     ):
         with pytest.raises(UnavailableError, match="timed out"):
@@ -653,7 +673,8 @@ def test_call_cli_timeout(_no_tool_gate_open) -> None:
 
 def test_call_cli_refuses_a_cli_the_gate_rejects(_no_tool_gate_open, monkeypatch) -> None:
     monkeypatch.setattr(
-        provider, "verify_no_builtin_cli_tools",
+        provider,
+        "verify_no_builtin_cli_tools",
         MagicMock(side_effect=CliToolSurfaceError("Bash")),
     )
     with patch("subprocess.run") as mock_run:
@@ -664,7 +685,8 @@ def test_call_cli_refuses_a_cli_the_gate_rejects(_no_tool_gate_open, monkeypatch
 
 def test_acall_cli_refuses_a_cli_the_gate_rejects(_no_tool_gate_open, monkeypatch) -> None:
     monkeypatch.setattr(
-        provider, "averify_no_builtin_cli_tools",
+        provider,
+        "averify_no_builtin_cli_tools",
         AsyncMock(side_effect=CliToolSurfaceError("Bash")),
     )
     create = AsyncMock()
@@ -685,7 +707,9 @@ def test_call_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
         lambda *, deadline=None: "/opt/claude/versions/2.1.257",
     )
     monkeypatch.setattr(
-        provider, "_find_claude_binary", lambda: "/usr/local/bin/claude",
+        provider,
+        "_find_claude_binary",
+        lambda: "/usr/local/bin/claude",
     )
     mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
 
@@ -697,11 +721,14 @@ def test_call_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
 
 def test_acall_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
     monkeypatch.setattr(
-        provider, "averify_no_builtin_cli_tools",
+        provider,
+        "averify_no_builtin_cli_tools",
         AsyncMock(return_value="/opt/claude/versions/2.1.257"),
     )
     monkeypatch.setattr(
-        provider, "_find_claude_binary", lambda: "/usr/local/bin/claude",
+        provider,
+        "_find_claude_binary",
+        lambda: "/usr/local/bin/claude",
     )
     proc = MagicMock(returncode=0)
     proc.communicate = AsyncMock(return_value=(b'{"result":"ok"}', b""))
@@ -730,7 +757,9 @@ def test_healthy_cowriter_turn_holds_its_process_pool_reservation_until_it_exits
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     monkeypatch.setattr(
-        provider.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc),
+        provider.asyncio,
+        "create_subprocess_exec",
+        AsyncMock(return_value=proc),
     )
 
     async def run_turn() -> None:
@@ -763,7 +792,8 @@ def test_cowriter_refuses_a_healthy_turn_when_the_shared_process_pool_is_full(
         proc = MagicMock(pid=pid, returncode=0)
 
         async def communicate(
-            _stdin: bytes, turn_started: asyncio.Event = turn_started,
+            _stdin: bytes,
+            turn_started: asyncio.Event = turn_started,
         ) -> tuple[bytes, bytes]:
             turn_started.set()
             await release.wait()
@@ -912,15 +942,20 @@ def _init_line(
     MCP-attached probe (the no-MCP probe never reads ``mcp_servers`` at
     all) — defaults to a connected songmaker server so every existing
     MCP-attached test keeps proving what it always proved."""
-    return json.dumps({
-        "type": "system",
-        "subtype": "init",
-        "tools": tools,
-        "slash_commands": slash_commands or [],
-        "mcp_servers": [
-            {"name": "songmaker", "status": "connected" if mcp_connected else "failed"},
-        ],
-    }).encode() + b"\n"
+    return (
+        json.dumps(
+            {
+                "type": "system",
+                "subtype": "init",
+                "tools": tools,
+                "slash_commands": slash_commands or [],
+                "mcp_servers": [
+                    {"name": "songmaker", "status": "connected" if mcp_connected else "failed"},
+                ],
+            }
+        ).encode()
+        + b"\n"
+    )
 
 
 @pytest.fixture
@@ -952,7 +987,8 @@ _ALL_SONGMAKER_TOOLS = sorted(provider._EXPECTED_MCP_TOOL_NAMES)
 
 
 def test_tool_surface_accepts_a_cli_offering_exactly_the_eleven_songmaker_tools(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
 
@@ -962,7 +998,8 @@ def test_tool_surface_accepts_a_cli_offering_exactly_the_eleven_songmaker_tools(
 
 
 def test_tool_surface_rejects_a_cli_offering_an_unlisted_tool(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line([*_ALL_SONGMAKER_TOOLS, "Bash"]))
 
@@ -973,7 +1010,8 @@ def test_tool_surface_rejects_a_cli_offering_an_unlisted_tool(
 
 
 def test_tool_surface_rejects_a_cli_offering_fewer_than_the_eleven_tools(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """A drift check that only flags additions would miss the songmaker
     server silently losing a registration too — #351 Finding 2 wants the
@@ -988,7 +1026,8 @@ def test_tool_surface_rejects_a_cli_offering_fewer_than_the_eleven_tools(
 
 
 def test_tool_surface_rejects_a_cli_that_still_advertises_slash_commands(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(
         monkeypatch,
@@ -1002,7 +1041,8 @@ def test_tool_surface_rejects_a_cli_that_still_advertises_slash_commands(
 
 
 def test_tool_surface_is_probed_with_the_cowriter_restrictions(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
 
@@ -1018,7 +1058,8 @@ def test_tool_surface_is_probed_with_the_cowriter_restrictions(
 
 
 def test_tool_surface_probe_stops_the_session_it_started(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     killed: list[int] = []
 
@@ -1045,47 +1086,51 @@ def test_tool_surface_probe_stops_the_session_it_started(
 # waiting tasks/threads (the review's own math: ~225/hour at one per
 # immediately-invalid probe).
 #
-# _bounded_wait is the seam where these tests genuinely need real (tiny)
+# The bounded exit helpers are the seam where these tests genuinely need real (tiny)
 # timing. Everything built on top of it is tested by stubbing that seam.
 
 
-def test_bounded_wait_respects_its_timeout() -> None:
+def test_sigterm_exit_wait_reports_a_timeout() -> None:
     """#351 round 6, Finding 9: no real clock — ``proc.wait()`` reports the
     timeout itself rather than genuinely hanging, so this proves the
     branch (a TimeoutError becomes ``False``), not asyncio's own timer."""
+
     async def _timed_out() -> None:
         raise TimeoutError
 
     proc = MagicMock()
     proc.wait = AsyncMock(side_effect=_timed_out)
 
-    completed = asyncio.run(provider._bounded_wait(proc, 999))
+    completed = asyncio.run(provider._wait_for_sigterm_exit(proc))
 
     assert completed is False
 
 
-def test_bounded_wait_returns_true_when_the_process_exits_in_time() -> None:
+def test_sigterm_exit_wait_reports_a_completed_process() -> None:
     proc = MagicMock()
     proc.wait = AsyncMock(return_value=0)
 
-    completed = asyncio.run(provider._bounded_wait(proc, 999))
+    completed = asyncio.run(provider._wait_for_sigterm_exit(proc))
 
     assert completed is True
 
 
 def test_reap_process_group_tracks_a_zombie_when_the_wait_never_confirms_exit(
-    monkeypatch, caplog,
+    monkeypatch,
+    caplog,
 ) -> None:
-    """No real waiting anywhere: _bounded_wait is stubbed to always report
+    """No real waiting anywhere: the exit helpers are stubbed to always report
     'not yet', so the zombie path is exercised deterministically rather
     than resting on a real (even if tiny) wall-clock budget."""
     caplog.set_level("ERROR")
     signals: list[int] = []
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
-    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_zombie_reap", AsyncMock(return_value=False))
     tracked: list[int] = []
     monkeypatch.setattr(
-        provider, "_track_zombie_reap_async",
+        provider,
+        "_track_zombie_reap_async",
         lambda proc: tracked.append(proc.pid) or True,
     )
 
@@ -1105,7 +1150,7 @@ def test_reap_process_group_confirms_a_normal_exit_without_signaling_a_zombie(
 ) -> None:
     signals: list[int] = []
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, sig: signals.append(sig))
-    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=True))
+    monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=True))
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     tracked: list[int] = []
     monkeypatch.setattr(provider, "_track_zombie_reap_async", lambda proc: tracked.append(proc.pid))
@@ -1209,7 +1254,8 @@ def test_reap_in_background_eventually_reaps_logs_and_releases_its_reservation(c
 
 
 def test_shutdown_tool_surface_background_tasks_cancels_a_probe_runner_task(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     probe_started = asyncio.Event()
     probe_cancelled = asyncio.Event()
@@ -1234,11 +1280,9 @@ def test_shutdown_tool_surface_background_tasks_cancels_a_probe_runner_task(
     asyncio.run(asyncio.wait_for(_run(), timeout=2))
 
 
-
-
-
 def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(
         monkeypatch,
@@ -1256,7 +1300,8 @@ def test_tool_surface_is_probed_again_after_the_cli_updates_itself(
 
 
 def test_tool_surface_is_probed_once_per_cli_build(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """Proves the cache across two *sequential* calls — not concurrency;
     see test_tool_surface_single_flight_serializes_concurrent_probes below
@@ -1271,7 +1316,8 @@ def test_tool_surface_is_probed_once_per_cli_build(
 
 
 def test_tool_surface_single_flight_shares_one_successful_probe(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 3, Finding 2: two callers racing for the same cold key
     must share one probe. Genuine concurrency via two real asyncio tasks —
@@ -1306,7 +1352,8 @@ def test_tool_surface_single_flight_shares_one_successful_probe(
 
 
 def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 rounds 4-5, Finding 2: two mutations a bare ``calls == 1`` check
     on a *successful* probe cannot catch, both deterministically red here:
@@ -1345,7 +1392,9 @@ def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
         return await real_await_follower(build, future, timeout_seconds)
 
     monkeypatch.setattr(
-        provider, "_await_follower_result_async", _instrumented_await_follower,
+        provider,
+        "_await_follower_result_async",
+        _instrumented_await_follower,
     )
 
     async def _race() -> list[BaseException]:
@@ -1368,7 +1417,8 @@ def test_tool_surface_single_flight_waits_for_the_real_result_not_a_placeholder(
 
 
 def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_callers(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """A process that outlives SIGKILL turns into a _ZombieProbeError, not
     a hang: single-flight must still resolve *both* concurrent callers to
@@ -1401,7 +1451,8 @@ def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_ca
 
     async def _race() -> list[BaseException]:
         return await asyncio.gather(
-            averify_no_builtin_cli_tools(), averify_no_builtin_cli_tools(),
+            averify_no_builtin_cli_tools(),
+            averify_no_builtin_cli_tools(),
             return_exceptions=True,
         )
 
@@ -1411,10 +1462,9 @@ def test_tool_surface_single_flight_shares_a_zombie_failure_across_concurrent_ca
     assert all(isinstance(r, UnavailableError) for r in results)
 
 
-
-
 def test_tool_surface_reports_a_cli_that_vanished_mid_update(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     claude_binary.unlink()
 
@@ -1424,7 +1474,8 @@ def test_tool_surface_reports_a_cli_that_vanished_mid_update(
 
 
 def test_tool_surface_rejects_a_cli_that_announces_nothing(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, b'{"type": "assistant"}\n')
 
@@ -1434,11 +1485,20 @@ def test_tool_surface_rejects_a_cli_that_announces_nothing(
 
 
 def test_tool_surface_rejects_an_init_event_with_the_wrong_subtype(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
-    line = json.dumps({
-        "type": "system", "subtype": "not_init", "tools": [], "slash_commands": [],
-    }).encode() + b"\n"
+    line = (
+        json.dumps(
+            {
+                "type": "system",
+                "subtype": "not_init",
+                "tools": [],
+                "slash_commands": [],
+            }
+        ).encode()
+        + b"\n"
+    )
     _answer_with(monkeypatch, line)
 
     probe = verify_cli_tool_surface()
@@ -1447,7 +1507,8 @@ def test_tool_surface_rejects_an_init_event_with_the_wrong_subtype(
 
 
 def test_tool_surface_failure_is_cached_across_sequential_calls(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """Sequential calls only — see
     test_tool_surface_single_flight_serializes_concurrent_probes for the
@@ -1466,7 +1527,8 @@ def test_tool_surface_failure_is_cached_across_sequential_calls(
 
 
 def test_tool_surface_failure_cache_expires_so_a_repair_takes_effect(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, b"not json\n", _init_line(_ALL_SONGMAKER_TOOLS))
     clock = {"now": time.monotonic()}
@@ -1483,7 +1545,8 @@ def test_tool_surface_failure_cache_expires_so_a_repair_takes_effect(
 
 
 def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanent_verdict(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 3, Finding 1: a failed MCP connection reports a valid
     init event with tools=[] — the same shape "all eleven genuinely
@@ -1515,7 +1578,8 @@ def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanen
 
 
 def test_claude_cli_tool_surface_health_transitions_from_unverified_to_ok(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """/health must not be a frozen boot snapshot — a later successful
     co-writer probe (e.g. the CLI was briefly unreachable at boot but is
@@ -1538,7 +1602,8 @@ def test_claude_cli_tool_surface_health_transitions_from_unverified_to_ok(
 
 
 def test_claude_cli_tool_surface_health_transitions_from_ok_to_drift_after_a_build_change(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """A later drifted build (after a self-update) must replace an
     earlier "ok" — /health must not go on claiming clean forever just
@@ -1562,7 +1627,8 @@ def test_claude_cli_tool_surface_health_transitions_from_ok_to_drift_after_a_bui
 
 
 def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_disappears(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
 
@@ -1583,7 +1649,8 @@ def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_
 
 
 def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_is_unreadable(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
 
@@ -1607,7 +1674,8 @@ def test_claude_cli_tool_surface_health_becomes_unverified_when_a_cached_binary_
 
 
 def test_tool_surface_unexpected_tool_is_permanent_even_when_mcp_is_disconnected(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 6, Finding 2: tools=["Bash"] plus a failed MCP connection
     used to fall through the disconnected-MCP short-failure path (the MCP
@@ -1633,10 +1701,12 @@ def test_tool_surface_unexpected_tool_is_permanent_even_when_mcp_is_disconnected
 
 
 def test_tool_surface_slash_command_is_permanent_even_when_mcp_is_disconnected(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(
-        monkeypatch, _init_line([], slash_commands=["/compact"], mcp_connected=False),
+        monkeypatch,
+        _init_line([], slash_commands=["/compact"], mcp_connected=False),
     )
 
     probe = verify_cli_tool_surface()
@@ -1651,7 +1721,8 @@ def test_tool_surface_slash_command_is_permanent_even_when_mcp_is_disconnected(
 
 
 def test_tool_surface_permanent_mismatch_outlives_the_zombie_failure_ttl(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """A genuine verdict is not just "longer than ten seconds" — it never
     expires. Advancing the clock past even the zombie TTL (the longest one
@@ -1673,7 +1744,8 @@ def test_tool_surface_permanent_mismatch_outlives_the_zombie_failure_ttl(
 
 
 def test_tool_surface_is_reprobed_after_a_genuine_symlink_retarget(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     """#351 round 6, Finding 8: the 'CLI updates itself' test elsewhere
     overwrites the same file path — a real self-update repoints a symlink
@@ -1712,7 +1784,8 @@ def test_tool_surface_is_reprobed_after_a_genuine_symlink_retarget(
 
 
 def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """became_zombie used to count only when the answer phase had already
     failed — a clean init line read successfully, followed by the process
@@ -1731,7 +1804,8 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
 
 
 def test_zombie_probe_keeps_its_pool_slot_until_the_runner_confirms_reap(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     background_started = threading.Event()
     allow_background_reap = threading.Event()
@@ -1766,10 +1840,13 @@ def test_zombie_probe_keeps_its_pool_slot_until_the_runner_confirms_reap(
 
 
 def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(
-        monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS), _init_line(_ALL_SONGMAKER_TOOLS),
+        monkeypatch,
+        _init_line(_ALL_SONGMAKER_TOOLS),
+        _init_line(_ALL_SONGMAKER_TOOLS),
     )
     monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
     clock = {"now": time.monotonic()}
@@ -1798,7 +1875,8 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
 
 
 def test_zombie_failure_uses_the_event_loop_clock_when_the_loop_is_offset(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
     monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
@@ -1822,7 +1900,8 @@ def test_zombie_failure_uses_the_event_loop_clock_when_the_loop_is_offset(
 
 
 def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 7, Finding 5: a broken pipe during the write must be
     normalized *at the write itself* — caught inline, reaped, and
@@ -1867,7 +1946,8 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
 
 
 def test_tool_surface_probe_rejects_a_newline_free_stream_at_its_read_limit(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
 
@@ -1892,7 +1972,8 @@ def test_tool_surface_probe_rejects_a_newline_free_stream_at_its_read_limit(
 
 
 def test_probe_runner_task_cancellation_gives_waiters_a_normal_error(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 6, Finding 3, updated for round 7's redesign: the probe
     now runs as its own independent task (``_run_probe_and_resolve_async``)
@@ -1931,7 +2012,8 @@ def test_probe_runner_task_cancellation_gives_waiters_a_normal_error(
 
 
 def test_tool_surface_a_cancelled_leader_does_not_reopen_single_flight(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 7, Finding 2: the probe runs as a task independent of
     whoever triggered it (``_run_probe_and_resolve_async``), not inline in
@@ -1975,7 +2057,8 @@ def test_tool_surface_a_cancelled_leader_does_not_reopen_single_flight(
 
 
 def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_raises(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 6, Finding 7: _evaluate_tool_surface used to run outside
     the try/except that resolves the in-flight future — a bug there would
@@ -1991,7 +2074,8 @@ def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_ra
     """
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
     monkeypatch.setattr(
-        provider, "_evaluate_tool_surface",
+        provider,
+        "_evaluate_tool_surface",
         lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -2007,7 +2091,8 @@ def test_tool_surface_inflight_future_is_resolved_even_when_evaluation_itself_ra
 
 
 def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """asyncio.create_subprocess_exec() still runs subprocess.Popen()
     synchronously on whichever thread calls it, including the event loop's
@@ -2039,7 +2124,8 @@ def test_tool_surface_probe_stays_bounded_even_when_popen_itself_hangs(
 
 
 def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     monkeypatch.setattr(provider, "_cleanup_margin_seconds", lambda: 0)
 
@@ -2060,7 +2146,9 @@ def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
         try:
             binary = str(claude_binary)
             probe = provider._probe_cli_surface_async(
-                binary, mcp_config_path=None, deadline=deadline,
+                binary,
+                mcp_config_path=None,
+                deadline=deadline,
             )
             bounded_probe = asyncio.wait_for(probe, timeout=1)
             with pytest.raises(UnavailableError) as exc:
@@ -2074,13 +2162,16 @@ def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
 
 
 def test_delayed_probe_start_is_a_probe_failure_not_a_judge_timeout(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     spawned: list[object] = []
 
     monkeypatch.setattr(provider.time, "monotonic", lambda: 100.0)
     monkeypatch.setattr(
-        provider.subprocess, "Popen", lambda *_args, **_kwargs: spawned.append(1),
+        provider.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: spawned.append(1),
     )
 
     binary = str(claude_binary)
@@ -2109,7 +2200,9 @@ def test_async_probe_waits_for_cleanup_after_its_answer_budget_is_exhausted(
         loop = asyncio.get_running_loop()
         probe = asyncio.create_task(
             provider._probe_cli_surface_async(
-                "claude", mcp_config_path=None, deadline=loop.time(),
+                "claude",
+                mcp_config_path=None,
+                deadline=loop.time(),
             ),
         )
         await asyncio.wait_for(worker_started.wait(), timeout=1)
@@ -2123,7 +2216,10 @@ def test_async_probe_waits_for_cleanup_after_its_answer_budget_is_exhausted(
 
 @pytest.mark.parametrize("stdin_blocked", [False, True], ids=["read", "write"])
 def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
-    claude_binary, monkeypatch, incrementing_monotonic_clock, stdin_blocked: bool,
+    claude_binary,
+    monkeypatch,
+    incrementing_monotonic_clock,
+    stdin_blocked: bool,
 ) -> None:
     spawned = threading.Event()
     pipe_stalled = threading.Event()
@@ -2215,7 +2311,8 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
 
 
 def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     process_spawned = threading.Event()
     cleanup_started = threading.Event()
@@ -2238,9 +2335,13 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
 
     async def verify_after_cleanup() -> None:
         loop = asyncio.get_running_loop()
-        probe = asyncio.create_task(provider._probe_cli_surface_async(
-            str(claude_binary), mcp_config_path=None, deadline=loop.time() + 0.02,
-        ))
+        probe = asyncio.create_task(
+            provider._probe_cli_surface_async(
+                str(claude_binary),
+                mcp_config_path=None,
+                deadline=loop.time() + 0.02,
+            )
+        )
         assert await asyncio.to_thread(process_spawned.wait, 1)
         assert await asyncio.to_thread(cleanup_started.wait, 1)
         assert not probe.done()
@@ -2262,7 +2363,8 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
 
 
 def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 round 7, Finding 1: reaping used to happen only in the calling
     function, after it successfully read the background thread's result
@@ -2315,7 +2417,9 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
 
 
 def test_tool_surface_preflight_uses_its_configured_bound(
-    claude_binary, monkeypatch, incrementing_monotonic_clock,
+    claude_binary,
+    monkeypatch,
+    incrementing_monotonic_clock,
 ) -> None:
     observed_deadlines: list[float] = []
 
@@ -2332,7 +2436,8 @@ def test_tool_surface_preflight_uses_its_configured_bound(
 
 
 def test_judge_deadline_keeps_and_caches_a_zombie_probe_failure(
-    claude_binary, incrementing_monotonic_clock,
+    claude_binary,
+    incrementing_monotonic_clock,
 ) -> None:
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
 
@@ -2352,16 +2457,19 @@ def test_judge_deadline_keeps_and_caches_a_zombie_probe_failure(
 
 
 def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 2)
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
-    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_zombie_reap", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     spawned: list[object] = []
     monkeypatch.setattr(
-        provider.subprocess, "Popen",
+        provider.subprocess,
+        "Popen",
         lambda *_a, **_kw: spawned.append(1) or MagicMock(),
     )
     _build, key = provider._tool_surface_key(provider._NO_TOOLS_EXPECTED)
@@ -2398,8 +2506,7 @@ def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
         with pytest.raises(UnavailableError) as exc:
             verify_no_builtin_cli_tools()
         assert str(exc.value) == (
-            "Claude CLI process pool is at its concurrency limit (2); "
-            "refusing to start another"
+            "Claude CLI process pool is at its concurrency limit (2); refusing to start another"
         )
         assert spawned == []
         with provider._tool_surface_lock:
@@ -2512,7 +2619,8 @@ def test_cowriter_non_stream_turn_refuses_a_cli_with_an_unverified_tool_surface(
     autouse mock of verify_cli_tool_surface would otherwise hide a
     regression that dropped this call from this specific entry point."""
     monkeypatch.setattr(
-        provider, "verify_cli_tool_surface",
+        provider,
+        "verify_cli_tool_surface",
         AsyncMock(side_effect=CliToolSurfaceError("FutureTool")),
     )
     spawned: list[tuple[str, ...]] = []
@@ -2529,13 +2637,12 @@ def test_cowriter_non_stream_turn_refuses_a_cli_with_an_unverified_tool_surface(
     assert spawned == []
 
 
-
-
 def test_cowriter_turn_refuses_a_cli_with_an_unverified_tool_surface(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        provider, "verify_cli_tool_surface",
+        provider,
+        "verify_cli_tool_surface",
         AsyncMock(side_effect=CliToolSurfaceError("FutureTool")),
     )
     spawned: list[tuple[str, ...]] = []
@@ -2598,11 +2705,13 @@ async def _collect_stream_events(stream) -> list[object]:
 
 
 def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) -> None:
-    process = _streaming_cli_process([
-        b"not-json\n",
-        b'{"type":"assistant","message":{"content":[{"type":"text","text":"draft"}]}}\n',
-        b'{"type":"result","result":"final"}\n',
-    ])
+    process = _streaming_cli_process(
+        [
+            b"not-json\n",
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"draft"}]}}\n',
+            b'{"type":"result","result":"final"}\n',
+        ]
+    )
 
     async def spawn(*_command, **_kwargs):
         return process
@@ -2613,9 +2722,11 @@ def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) ->
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     caplog.set_level("WARNING", logger="songmaker_cli.claude.provider")
 
-    events = asyncio.run(_collect_stream_events(
-        acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
-    ))
+    events = asyncio.run(
+        _collect_stream_events(
+            acall_claude_with_mcp_stream(prompt="hi", user_id="u-1"),
+        )
+    )
 
     assert events == [
         provider.AssistantTextEvent(text="draft"),
@@ -2772,11 +2883,15 @@ def test_stream_reap_does_not_spin_under_anyio_level_cancellation(monkeypatch) -
     ids=["timeout", "error"],
 )
 def test_stream_failure_starts_one_background_reaper(
-    monkeypatch, failure: BaseException, expected_error: type[BaseException], message: str,
+    monkeypatch,
+    failure: BaseException,
+    expected_error: type[BaseException],
+    message: str,
 ) -> None:
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
-    monkeypatch.setattr(provider, "_bounded_wait", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=False))
+    monkeypatch.setattr(provider, "_wait_for_zombie_reap", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
@@ -2801,7 +2916,9 @@ def test_stream_failure_starts_one_background_reaper(
 
         proc.wait = AsyncMock(side_effect=wait)
         monkeypatch.setattr(
-            provider.asyncio, "create_subprocess_exec", AsyncMock(return_value=proc),
+            provider.asyncio,
+            "create_subprocess_exec",
+            AsyncMock(return_value=proc),
         )
         monkeypatch.setattr(provider, "_iter_lines", failing_lines)
 
@@ -2828,7 +2945,8 @@ def test_stream_failure_starts_one_background_reaper(
 
 
 def test_no_builtin_gate_accepts_a_cli_offering_nothing(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line([]))
 
@@ -2840,7 +2958,8 @@ def test_no_builtin_gate_accepts_a_cli_offering_nothing(
 
 
 def test_no_builtin_gate_rejects_a_cli_offering_any_tool(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line(["Bash"]))
 
@@ -2851,7 +2970,8 @@ def test_no_builtin_gate_rejects_a_cli_offering_any_tool(
 
 
 def test_no_builtin_gate_rejects_a_cli_still_advertising_slash_commands(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line([], slash_commands=["/help"]))
 
@@ -2862,13 +2982,16 @@ def test_no_builtin_gate_rejects_a_cli_still_advertising_slash_commands(
 
 
 def test_no_builtin_gate_and_mcp_gate_cache_independently(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """Same binary build, different expectation — a co-writer turn passing
     verify_cli_tool_surface() must not let _call_cli skip its own probe,
     and vice versa; they check different command shapes."""
     commands = _answer_with(
-        monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS), _init_line([]),
+        monkeypatch,
+        _init_line(_ALL_SONGMAKER_TOOLS),
+        _init_line([]),
     )
 
     asyncio.run(verify_cli_tool_surface())
@@ -2878,7 +3001,8 @@ def test_no_builtin_gate_and_mcp_gate_cache_independently(
 
 
 def test_no_builtin_gate_sync_twin_accepts_a_cli_offering_nothing(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line([]))
 
@@ -2888,7 +3012,8 @@ def test_no_builtin_gate_sync_twin_accepts_a_cli_offering_nothing(
 
 
 def test_no_builtin_gate_sync_twin_rejects_a_cli_offering_any_tool(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     _answer_with(monkeypatch, _init_line(["Bash"]))
 
@@ -2898,7 +3023,8 @@ def test_no_builtin_gate_sync_twin_rejects_a_cli_offering_any_tool(
 
 
 def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     killed: list[int] = []
 
@@ -2915,7 +3041,8 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
 
 
 def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_placeholder(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """#351 rounds 4-5, Finding 2, sync side: the same two mutations the
     async test guards against (a placeholder-success follower; a follower
@@ -2984,7 +3111,8 @@ def test_no_builtin_gate_sync_single_flight_waits_for_the_real_result_not_a_plac
 
 
 def test_no_builtin_gate_sync_and_async_share_one_cache(
-    claude_binary, monkeypatch,
+    claude_binary,
+    monkeypatch,
 ) -> None:
     """Async and sync gates key their cache on the same (binary build,
     expectation) pair; since round 6 they even spawn through the same

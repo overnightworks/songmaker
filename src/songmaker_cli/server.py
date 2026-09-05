@@ -171,7 +171,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     for name, task in loop_tasks:
         task.add_done_callback(
             lambda completed, loop_name=name: _record_background_loop_completion(
-                completed, loop_name, registry,
+                completed,
+                loop_name,
+                registry,
             ),
         )
     try:
@@ -186,12 +188,16 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def create_app(
-    audio_dir: Path, data_dir: Path, project_root: Path,
+    audio_dir: Path,
+    data_dir: Path,
+    project_root: Path,
     ctx: AppContext | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title=APP_NAME,
-        docs_url=None, redoc_url=None, openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         lifespan=_lifespan,
     )
 
@@ -200,6 +206,7 @@ def create_app(
 
     app.state.ctx = ctx
     from songmaker_cli.redis_client import RedisHttpMetrics, SessionCache
+
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
     app.state.session_cache = SessionCache(ctx.redis)
 
@@ -240,7 +247,7 @@ def create_app(
     app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
 
-    app.add_middleware(  # NOSONAR: CORS order is security-critical; see block above.
+    app.add_middleware(  # NOSONAR CORS order is security-critical; see block above.
         CORSMiddleware,
         **_cors_middleware_kwargs(get_settings().cors_origin),
     )
@@ -253,11 +260,10 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
-        request: Request, exc: RequestValidationError,
+        request: Request,
+        exc: RequestValidationError,
     ) -> JSONResponse:
-        fields = sorted({
-            ".".join(str(loc) for loc in e["loc"]) for e in exc.errors()
-        })
+        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
         return JSONResponse(
             {"detail": f"Validation error on: {', '.join(fields)}"},
             status_code=422,
@@ -276,7 +282,9 @@ def create_app(
 
     if sveltekit_app_dir.exists():
         app.mount(
-            "/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app",
+            "/_app",
+            StaticFiles(directory=str(sveltekit_app_dir)),
+            name="sveltekit-app",
         )
 
     favicon_path = sveltekit_dir / "favicon.svg"
@@ -289,10 +297,15 @@ def create_app(
     manifest_path = sveltekit_dir / "manifest.webmanifest"
     icon_192_path = sveltekit_dir / "icon-192.png"
     icon_512_path = sveltekit_dir / "icon-512.png"
-    _pwa_exact_paths = frozenset({
-        "/service-worker.js",
-        "/manifest.webmanifest",
-    }) | PWA_ICON_PATHS
+    _pwa_exact_paths = (
+        frozenset(
+            {
+                "/service-worker.js",
+                "/manifest.webmanifest",
+            }
+        )
+        | PWA_ICON_PATHS
+    )
 
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:
@@ -325,7 +338,7 @@ def create_app(
     sk_index = sveltekit_dir / "index.html"
 
     @app.exception_handler(404)
-    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse:
+    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse | JSONResponse:
         if (
             not request.url.path.startswith("/api/")
             and not request.url.path.startswith("/audio/")
@@ -409,6 +422,7 @@ def run_server(
         data_dir = project_root / settings.data_dir
 
     from songmaker_cli.logging_config import configure_logging
+
     configure_logging()
 
     for d in (audio_dir, data_dir):
@@ -421,6 +435,7 @@ def run_server(
 
     if open_browser:
         import webbrowser
+
         webbrowser.open(f"http://localhost:{port}")
 
     # proxy_headers=False: uvicorn's own X-Forwarded-For/-Proto handling would
@@ -429,7 +444,12 @@ def run_server(
     # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (see
     # auth.resolve_client_ip), so uvicorn must hand over the connection as it is.
     uvicorn.run(
-        app, host=settings.host, port=port, log_level="info",
+        app,
+        host=settings.host,
+        port=port,
+        log_level="info",
         timeout_keep_alive=settings.request_timeout_seconds,
-        proxy_headers=False, log_config=None, access_log=False,
+        proxy_headers=False,
+        log_config=None,
+        access_log=False,
     )

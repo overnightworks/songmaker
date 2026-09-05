@@ -26,7 +26,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import Final, TypeVar
+from typing import Final
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -109,9 +109,6 @@ class GenerationTaskResultDTO(BaseModel):
     cot_caption: str = ""
     cot_lyrics: str = ""
     delivered_batch_size: int | None = None
-
-
-_TaskResultT = TypeVar("_TaskResultT", bound=BaseModel)
 
 
 @dataclass(frozen=True)
@@ -290,15 +287,9 @@ async def _iterate_task_events(
     httpx error after exhausting the reconnect budget.
     """
     reconnects = 0
-    timeout = httpx.Timeout(
-        connect=options.sse_connect_timeout_seconds,
-        read=options.sse_read_timeout_seconds,
-        write=options.sse_connect_timeout_seconds,
-        pool=options.sse_connect_timeout_seconds,
-    )
     while True:
         try:
-            async for event_type, data in _worker_task_events(worker, task_id, timeout):
+            async for event_type, data in _worker_task_events(worker, task_id, options):
                 yield event_type, data
                 if event_type in ("done", "error"):
                     return
@@ -314,8 +305,14 @@ async def _iterate_task_events(
 async def _worker_task_events(
     worker: _PickedWorker,
     task_id: str,
-    timeout: httpx.Timeout,
+    options: DispatchOptions,
 ) -> AsyncIterator[tuple[str, dict]]:
+    timeout = httpx.Timeout(
+        connect=options.sse_connect_timeout_seconds,
+        read=options.sse_read_timeout_seconds,
+        write=options.sse_connect_timeout_seconds,
+        pool=options.sse_connect_timeout_seconds,
+    )
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream(
             "GET",
@@ -359,7 +356,7 @@ def _sse_reconnect_delay(
     return backoff
 
 
-async def _consume_task_stream(
+async def _consume_task_stream[_TaskResultT: BaseModel](
     worker: _PickedWorker,
     task_id: str,
     *,
@@ -400,7 +397,7 @@ async def _consume_task_stream(
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
-async def _consume_stream_event(
+async def _consume_stream_event[_TaskResultT: BaseModel](
     event_type: str,
     data: dict,
     *,
@@ -419,7 +416,7 @@ async def _consume_stream_event(
     return None
 
 
-def _validate_task_result(
+def _validate_task_result[_TaskResultT: BaseModel](
     data: dict,
     result_type: type[_TaskResultT],
     invalid_result_label: str,

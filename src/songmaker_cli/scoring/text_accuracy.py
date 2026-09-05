@@ -33,7 +33,9 @@ def clear_cache() -> None:
 
 @register("text_accuracy")
 def score_text_accuracy(
-    mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+    mp3_path: Path,
+    meta: SongMeta | None = None,
+    audio_data: AudioData | None = None,
     config: PipelineConfig | None = None,
 ) -> TextAccuracyScore:
     """Transcribe with Whisper and compare to intended lyrics.
@@ -52,20 +54,28 @@ def score_text_accuracy(
 
     lyrics_text = meta.lyrics if meta else ""
     intended_lines = tuple(
-        line.strip() for line in lyrics_text.splitlines()
+        line.strip()
+        for line in lyrics_text.splitlines()
         if line.strip() and not line.strip().startswith("[")
     )
 
     initial_prompt = " ".join(intended_lines) if intended_lines else None
     _, cues, detected_language = _transcribe(
-        mp3_path, language, model, initial_prompt,
+        mp3_path,
+        language,
+        model,
+        initial_prompt,
     )
 
     trans_lines = tuple(cue.text for cue in cues)
     ratio = _word_level_accuracy(intended_lines, trans_lines) if intended_lines else 0.0
 
-    log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
-             ratio * 100, len(intended_lines), len(trans_lines))
+    log.info(
+        "Text accuracy: %.0f%% (%d intended, %d transcribed)",
+        ratio * 100,
+        len(intended_lines),
+        len(trans_lines),
+    )
 
     if _is_hallucination(trans_lines):
         log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
@@ -81,21 +91,27 @@ def score_text_accuracy(
     )
 
 
+_VOCALIZATION_WORDS = frozenset({
+    "oh", "ah", "la", "na", "da", "hey", "yeah", "eh",
+})
+_REPEATED_VOCALIZATION_PATTERN = re.compile(r"^(?:o{2,}h?|hm+|m{2,}|wo+h?)$")
 
-_VOCALIZATION_PATTERN = re.compile(
-    r"^(oh|ah|la|na|da|hey|yeah|oo+h?|hm+|mm+|wo+h?|eh)[\s,]*$",
-    re.IGNORECASE,
-)
+
+def _is_vocalization_word(word: str) -> bool:
+    return word in _VOCALIZATION_WORDS or bool(
+        _REPEATED_VOCALIZATION_PATTERN.fullmatch(word)
+    )
 
 
 def _is_vocalization(line: str) -> bool:
     """Check if a line is only non-lyric vocalizations (oh, ah, la la, etc.)."""
     words = clean_lyrics(line).split()
-    return all(_VOCALIZATION_PATTERN.match(w) for w in words) if words else True
+    return all(_is_vocalization_word(word) for word in words) if words else True
 
 
 def _word_level_accuracy(
-    intended: tuple[str, ...], transcribed: tuple[str, ...],
+    intended: tuple[str, ...],
+    transcribed: tuple[str, ...],
 ) -> float:
     """Measure what fraction of intended lyrics were correctly sung.
 
@@ -110,9 +126,7 @@ def _word_level_accuracy(
     intended_words = " ".join(
         clean_lyrics(line) for line in intended if not _is_vocalization(line)
     ).split()
-    trans_words = " ".join(
-        clean_lyrics(t) for t in transcribed if not _is_vocalization(t)
-    ).split()
+    trans_words = " ".join(clean_lyrics(t) for t in transcribed if not _is_vocalization(t)).split()
 
     if not intended_words:
         return 0.0
@@ -127,11 +141,20 @@ def _word_level_accuracy(
     return matched_intended / len(intended_words)
 
 
-_HALLUCINATION_PHRASES = frozenset({
-    "thank you", "thanks for watching", "goodbye", "you're welcome",
-    "please subscribe", "like and subscribe", "music playing",
-    "music", "applause", "laughter",
-})
+_HALLUCINATION_PHRASES = frozenset(
+    {
+        "thank you",
+        "thanks for watching",
+        "goodbye",
+        "you're welcome",
+        "please subscribe",
+        "like and subscribe",
+        "music playing",
+        "music",
+        "applause",
+        "laughter",
+    }
+)
 
 
 def _is_hallucination(lines: tuple[str, ...]) -> bool:
@@ -154,7 +177,6 @@ def _is_hallucination(lines: tuple[str, ...]) -> bool:
     return hallucinated > len(cleaned) * HALLUCINATION_PHRASE_RATIO
 
 
-
 def clean_lyrics(text: str) -> str:
     """Strip section tags and normalize for comparison.
 
@@ -162,7 +184,7 @@ def clean_lyrics(text: str) -> str:
     'streetlights' == 'street lights' and "I'll" == "I" don't
     count as errors.
     """
-    text = re.sub(r"\[.*?\]", "", text)
+    text = re.sub(r"\[[^\]]*\]", "", text)
     text = text.lower()
     # Normalize contractions: I'll -> i will, don't -> do not, etc.
     text = re.sub(r"'ll\b", " will", text)
@@ -192,7 +214,9 @@ def _get_whisper_model(
         if _whisper_model_key != cache_key:
             log.info("Loading Whisper model (%s) on %s (%s)...", model_size, device, compute_type)
             _whisper_model = WhisperModel(
-                model_size, device=device, compute_type=compute_type,
+                model_size,
+                device=device,
+                compute_type=compute_type,
             )
             _whisper_model_key = cache_key
     return _whisper_model
@@ -223,8 +247,7 @@ def _word_cues_from_whisper_segment(segment: object) -> list[WhisperWordCue] | N
     if raw_words is None:
         return None
     word_cues = [
-        cue for cue in (_word_cue_from_whisper_word(word) for word in raw_words)
-        if cue is not None
+        cue for cue in (_word_cue_from_whisper_word(word) for word in raw_words) if cue is not None
     ]
     return word_cues or None
 
@@ -241,13 +264,17 @@ def _cue_from_whisper_segment(segment: object) -> WhisperCue | None:
     if start is None or end is None:
         raise ValueError("Whisper segment is missing start or end")
     return WhisperCue(
-        start=start, end=end, text=text,
+        start=start,
+        end=end,
+        text=text,
         words=_word_cues_from_whisper_segment(segment),
     )
 
 
 def _transcribe(
-    mp3_path: Path, language: str | None, model: object,
+    mp3_path: Path,
+    language: str | None,
+    model: object,
     initial_prompt: str | None = None,
 ) -> tuple[str, list[WhisperCue], str | None]:
     from songmaker_cli.constants import WHISPER_BEAM_SIZE, WHISPER_TEMPERATURE
@@ -264,8 +291,7 @@ def _transcribe(
         kwargs["initial_prompt"] = initial_prompt
     segments_gen, info = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
     cues = [
-        cue for cue in (_cue_from_whisper_segment(seg) for seg in segments_gen)
-        if cue is not None
+        cue for cue in (_cue_from_whisper_segment(seg) for seg in segments_gen) if cue is not None
     ]
     full_text = " ".join(cue.text for cue in cues)
     detected_language = getattr(info, "language", None)

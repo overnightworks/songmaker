@@ -71,6 +71,7 @@ QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 class PinnedBytesExceededError(Exception):
     """Pinning this snapshot would exceed the server-wide pinned bytes cap."""
 
+
 SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
 
 
@@ -460,18 +461,32 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
     if not stream_dir.exists():
         return
     now = datetime.now(timezone.utc)
+    live_snapshot_ids = _remove_expired_queue_stream_snapshots(ctx, stream_dir, now)
+    _remove_expired_queue_stream_orphans(stream_dir, live_snapshot_ids, now)
+    _enforce_cache_quota(stream_dir)
+
+
+def _remove_expired_queue_stream_snapshots(
+    ctx: AppContext,
+    stream_dir: Path,
+    now: datetime,
+) -> set[str]:
     live_snapshot_ids: set[str] = set()
     for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         snapshot_id = manifest_path.stem
         manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is not None and manifest.expires_at >= now:
+        if manifest is not None and (manifest.expires_at >= now or _is_active_pin(manifest, now)):
             live_snapshot_ids.add(snapshot_id)
-        elif manifest is not None and _is_active_pin(manifest, now):
-            # Pinned and not abandoned — exempt from TTL sweep
-            live_snapshot_ids.add(snapshot_id)
-        else:
-            delete_snapshot_files(ctx, snapshot_id)
+            continue
+        delete_snapshot_files(ctx, snapshot_id)
+    return live_snapshot_ids
 
+
+def _remove_expired_queue_stream_orphans(
+    stream_dir: Path,
+    live_snapshot_ids: set[str],
+    now: datetime,
+) -> None:
     orphan_cutoff = now - QUEUE_STREAM_ORPHAN_MAX_AGE
     for cache_file in stream_dir.iterdir():
         if not cache_file.is_file():
@@ -485,8 +500,6 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
             modified_at = None
         if modified_at is not None and modified_at < orphan_cutoff:
             cache_file.unlink(missing_ok=True)
-
-    _enforce_cache_quota(stream_dir)
 
 
 def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
@@ -580,11 +593,7 @@ def public_queue_stream_manifest(
     snapshot: QueueStreamManifestResponse,
 ) -> QueueStreamManifestResponse:
     return snapshot.model_copy(
-        update={
-            "tracks": [
-                track.model_copy(update={"lyrics": None}) for track in snapshot.tracks
-            ]
-        }
+        update={"tracks": [track.model_copy(update={"lyrics": None}) for track in snapshot.tracks]}
     )
 
 
