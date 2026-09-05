@@ -625,6 +625,31 @@ def create_app(deps: WorkerDeps) -> FastAPI:
     return app
 
 
+@dataclass(frozen=True)
+class _LoraTrainingPaths:
+    workspace: Path
+    dataset_dir: Path
+    output_dir: Path
+    export_dir: Path
+    requested_output_dir: Path
+
+
+def _lora_training_paths(
+    checkpoint_dir: Path,
+    training_workspace_dirname: str,
+    task_id: str,
+    request: TrainLoraRequest,
+) -> _LoraTrainingPaths:
+    workspace = checkpoint_dir / training_workspace_dirname / task_id
+    return _LoraTrainingPaths(
+        workspace=workspace,
+        dataset_dir=workspace / "dataset",
+        output_dir=workspace / "output",
+        export_dir=workspace / "export",
+        requested_output_dir=Path(request.output_dir),
+    )
+
+
 async def default_train_lora_runner(
     task_store: TaskStore,
     task_id: str,
@@ -634,142 +659,217 @@ async def default_train_lora_runner(
     checkpoint_dir: Path,
     training_workspace_dirname: str,
 ) -> None:
-    from acestep_engine.models import LoraTrainingConfig
     from acestep_engine.training_client import AceStepTrainingClient
-    from acestep_worker.models import TrainLoraTaskResult
 
     await task_store.mark_running(task_id)
     client = AceStepTrainingClient(host="http://127.0.0.1", port=port)
-    workspace = checkpoint_dir / training_workspace_dirname / task_id
-    dataset_dir = workspace / "dataset"
-    output_dir = workspace / "output"
-    export_dir = workspace / "export"
-
+    paths = _lora_training_paths(
+        checkpoint_dir,
+        training_workspace_dirname,
+        task_id,
+        request,
+    )
     try:
-        source_dataset_dir = Path(request.dataset_dir)
-        requested_output_dir = Path(request.output_dir)
-        if workspace.is_relative_to(source_dataset_dir):
-            raise ValueError(
-                f"LoRA workspace must not be nested in dataset: {source_dataset_dir}",
-            )
-        await asyncio.to_thread(shutil.rmtree, workspace, ignore_errors=True)
-        await asyncio.to_thread(workspace.mkdir, parents=True, exist_ok=True)
-        await _copytree_before_cleanup(source_dataset_dir, dataset_dir)
-        await asyncio.to_thread(client.initialize_model, request.mode)
-        scan_result = await asyncio.to_thread(client.scan_dataset, str(dataset_dir))
-        await task_store.update_progress(task_id, 0.02)
-        if scan_result.num_samples == 0:
-            raise RuntimeError(f"Dataset scan found 0 samples in {dataset_dir}")
-
-        preprocess_handle = await asyncio.to_thread(
-            client.start_preprocess,
-            str(output_dir / "tensors"),
-        )
-        await task_store.update_progress(task_id, 0.05)
-
-        while True:
-            await asyncio.sleep(request.poll_interval_seconds)
-            status = await asyncio.to_thread(
-                client.poll_preprocess,
-                preprocess_handle.task_id,
-            )
-            if status.total > 0:
-                fraction = 0.05 + 0.15 * min(status.current / status.total, 1.0)
-                await task_store.update_progress(task_id, fraction)
-            if status.status == "completed":
-                break
-            if status.status == "failed":
-                raise RuntimeError(f"Preprocess failed: {status.error or status.progress}")
-
-        lokr_config = LoraTrainingConfig(
-            tensor_dir=str(output_dir / "tensors"),
-            output_dir=str(output_dir),
-            lokr_linear_dim=request.lokr_linear_dim,
-            lokr_linear_alpha=request.lokr_linear_alpha,
-            lokr_factor=request.lokr_factor,
-            lokr_decompose_both=request.lokr_decompose_both,
-            lokr_use_tucker=request.lokr_use_tucker,
-            lokr_use_scalar=request.lokr_use_scalar,
-            lokr_weight_decompose=request.lokr_weight_decompose,
-            learning_rate=request.learning_rate,
-            train_epochs=request.train_epochs,
-            train_batch_size=request.train_batch_size,
-            gradient_accumulation=request.gradient_accumulation,
-            save_every_n_epochs=request.save_every_n_epochs,
-            training_shift=request.training_shift,
-            training_seed=request.training_seed,
-            gradient_checkpointing=request.gradient_checkpointing,
-        )
-        await task_store.mark_training_started(task_id)
-        await asyncio.to_thread(client.start_lokr, lokr_config)
-        await task_store.update_progress(task_id, 0.20)
-
-        total_epochs = max(request.train_epochs, 1)
-        final_loss: float | None = None
-        while True:
-            await asyncio.sleep(request.poll_interval_seconds)
-            training_status = await asyncio.to_thread(client.poll_training)
-            if training_status.current_loss is not None:
-                final_loss = training_status.current_loss
-            epoch_progress = min(training_status.current_epoch / total_epochs, 1.0)
-            fraction = 0.20 + 0.70 * epoch_progress
-            await task_store.update_progress(
-                task_id,
-                fraction,
-                current_epoch=training_status.current_epoch,
-            )
-            if training_status.error:
-                raise RuntimeError(f"Training failed: {training_status.error}")
-            if not training_status.is_training:
-                break
-
-        export_result = await asyncio.to_thread(
-            client.export_training,
-            str(output_dir),
-            str(export_dir),
-        )
-        if Path(export_result.source).resolve() != (output_dir / "final").resolve():
-            raise RuntimeError(
-                f"ACE-Step exported an unexpected source: {export_result.source}",
-            )
-        if Path(export_result.export_path).resolve() != export_dir.resolve():
-            raise RuntimeError(
-                f"ACE-Step exported to an unexpected path: {export_result.export_path}",
-            )
-        if not export_dir.is_dir():
-            raise RuntimeError(f"ACE-Step export is missing: {export_dir}")
-        await asyncio.to_thread(requested_output_dir.parent.mkdir, parents=True, exist_ok=True)
-        await _copytree_before_cleanup(export_dir, requested_output_dir)
-        await task_store.update_progress(task_id, 0.99)
-
-        payload = TrainLoraTaskResult(
-            mode=request.mode,
-            adapter_dir=str(requested_output_dir),
-            num_samples=scan_result.num_samples,
-            final_loss=final_loss,
-        )
-        await task_store.complete(task_id, payload)
+        await _run_lora_training(task_store, task_id, request, client, paths)
     except asyncio.CancelledError:
-        try:
-            await asyncio.to_thread(client.stop_training)
-        except Exception:
-            log.warning("Failed to stop training during cancel", exc_info=True)
+        await _stop_training_after_cancel(client)
         await task_store.fail(task_id, "cancelled")
         raise
     except Exception as exc:
         log.exception("Training failed for task %s", task_id)
-        try:
-            await asyncio.to_thread(client.stop_training)
-        except Exception:
-            log.debug("Best-effort stop_training failed", exc_info=True)
+        await _stop_training_after_failure(client)
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
     finally:
-        try:
-            await asyncio.to_thread(shutil.rmtree, workspace)
-        except FileNotFoundError:
-            pass
-        except OSError:
-            log.exception("Failed to remove LoRA training workspace %s", workspace)
+        await _remove_lora_workspace(paths.workspace)
+
+
+async def _run_lora_training(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    client: Any,
+    paths: _LoraTrainingPaths,
+) -> None:
+    scan_result = await _stage_lora_dataset(task_store, task_id, request, client, paths)
+    await _await_preprocessing(task_store, task_id, request, client, paths.output_dir)
+    await _start_lora_training(task_store, task_id, request, client, paths.output_dir)
+    final_loss = await _await_lora_training(task_store, task_id, request, client)
+    await _export_lora_adapter(task_store, task_id, client, paths)
+    await _complete_lora_training(task_store, task_id, request, scan_result, final_loss, paths)
+
+
+async def _stage_lora_dataset(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    client: Any,
+    paths: _LoraTrainingPaths,
+) -> Any:
+    source_dataset_dir = Path(request.dataset_dir)
+    if paths.workspace.is_relative_to(source_dataset_dir):
+        raise ValueError(
+            f"LoRA workspace must not be nested in dataset: {source_dataset_dir}",
+        )
+    await asyncio.to_thread(shutil.rmtree, paths.workspace, ignore_errors=True)
+    await asyncio.to_thread(paths.workspace.mkdir, parents=True, exist_ok=True)
+    await _copytree_before_cleanup(source_dataset_dir, paths.dataset_dir)
+    await asyncio.to_thread(client.initialize_model, request.mode)
+    scan_result = await asyncio.to_thread(client.scan_dataset, str(paths.dataset_dir))
+    await task_store.update_progress(task_id, 0.02)
+    if scan_result.num_samples == 0:
+        raise RuntimeError(f"Dataset scan found 0 samples in {paths.dataset_dir}")
+    return scan_result
+
+
+async def _await_preprocessing(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    client: Any,
+    output_dir: Path,
+) -> None:
+    preprocess_handle = await asyncio.to_thread(
+        client.start_preprocess,
+        str(output_dir / "tensors"),
+    )
+    await task_store.update_progress(task_id, 0.05)
+    while True:
+        await asyncio.sleep(request.poll_interval_seconds)
+        status = await asyncio.to_thread(client.poll_preprocess, preprocess_handle.task_id)
+        if status.total > 0:
+            fraction = 0.05 + 0.15 * min(status.current / status.total, 1.0)
+            await task_store.update_progress(task_id, fraction)
+        if status.status == "completed":
+            return
+        if status.status == "failed":
+            raise RuntimeError(f"Preprocess failed: {status.error or status.progress}")
+
+
+async def _start_lora_training(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    client: Any,
+    output_dir: Path,
+) -> None:
+    await task_store.mark_training_started(task_id)
+    await asyncio.to_thread(client.start_lokr, _lokr_training_config(request, output_dir))
+    await task_store.update_progress(task_id, 0.20)
+
+
+def _lokr_training_config(request: TrainLoraRequest, output_dir: Path) -> Any:
+    from acestep_engine.models import LoraTrainingConfig
+
+    return LoraTrainingConfig(
+        tensor_dir=str(output_dir / "tensors"),
+        output_dir=str(output_dir),
+        lokr_linear_dim=request.lokr_linear_dim,
+        lokr_linear_alpha=request.lokr_linear_alpha,
+        lokr_factor=request.lokr_factor,
+        lokr_decompose_both=request.lokr_decompose_both,
+        lokr_use_tucker=request.lokr_use_tucker,
+        lokr_use_scalar=request.lokr_use_scalar,
+        lokr_weight_decompose=request.lokr_weight_decompose,
+        learning_rate=request.learning_rate,
+        train_epochs=request.train_epochs,
+        train_batch_size=request.train_batch_size,
+        gradient_accumulation=request.gradient_accumulation,
+        save_every_n_epochs=request.save_every_n_epochs,
+        training_shift=request.training_shift,
+        training_seed=request.training_seed,
+        gradient_checkpointing=request.gradient_checkpointing,
+    )
+
+
+async def _await_lora_training(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    client: Any,
+) -> float | None:
+    total_epochs = max(request.train_epochs, 1)
+    final_loss: float | None = None
+    while True:
+        await asyncio.sleep(request.poll_interval_seconds)
+        status = await asyncio.to_thread(client.poll_training)
+        if status.current_loss is not None:
+            final_loss = status.current_loss
+        await task_store.update_progress(
+            task_id,
+            0.20 + 0.70 * min(status.current_epoch / total_epochs, 1.0),
+            current_epoch=status.current_epoch,
+        )
+        if status.error:
+            raise RuntimeError(f"Training failed: {status.error}")
+        if not status.is_training:
+            return final_loss
+
+
+async def _export_lora_adapter(
+    task_store: TaskStore,
+    task_id: str,
+    client: Any,
+    paths: _LoraTrainingPaths,
+) -> None:
+    export_result = await asyncio.to_thread(
+        client.export_training,
+        str(paths.output_dir),
+        str(paths.export_dir),
+    )
+    expected_source = (paths.output_dir / "final").resolve()
+    if Path(export_result.source).resolve() != expected_source:
+        raise RuntimeError(f"ACE-Step exported an unexpected source: {export_result.source}")
+    if Path(export_result.export_path).resolve() != paths.export_dir.resolve():
+        raise RuntimeError(f"ACE-Step exported to an unexpected path: {export_result.export_path}")
+    if not paths.export_dir.is_dir():
+        raise RuntimeError(f"ACE-Step export is missing: {paths.export_dir}")
+    await asyncio.to_thread(paths.requested_output_dir.parent.mkdir, parents=True, exist_ok=True)
+    await _copytree_before_cleanup(paths.export_dir, paths.requested_output_dir)
+    await task_store.update_progress(task_id, 0.99)
+
+
+async def _complete_lora_training(
+    task_store: TaskStore,
+    task_id: str,
+    request: TrainLoraRequest,
+    scan_result: Any,
+    final_loss: float | None,
+    paths: _LoraTrainingPaths,
+) -> None:
+    from acestep_worker.models import TrainLoraTaskResult
+
+    await task_store.complete(
+        task_id,
+        TrainLoraTaskResult(
+            mode=request.mode,
+            adapter_dir=str(paths.requested_output_dir),
+            num_samples=scan_result.num_samples,
+            final_loss=final_loss,
+        ),
+    )
+
+
+async def _stop_training_after_cancel(client: Any) -> None:
+    try:
+        await asyncio.to_thread(client.stop_training)
+    except Exception:
+        log.warning("Failed to stop training during cancel", exc_info=True)
+
+
+async def _stop_training_after_failure(client: Any) -> None:
+    try:
+        await asyncio.to_thread(client.stop_training)
+    except Exception:
+        log.debug("Best-effort stop_training failed", exc_info=True)
+
+
+async def _remove_lora_workspace(workspace: Path) -> None:
+    try:
+        await asyncio.to_thread(shutil.rmtree, workspace)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        log.exception("Failed to remove LoRA training workspace %s", workspace)
 
 
 def _validate_train_lora_request(
