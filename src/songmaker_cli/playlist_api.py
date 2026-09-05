@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -30,7 +31,22 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.constants import AuditAction, ResourceType
+from songmaker_cli.constants import (
+    COVER_MAX_BYTES,
+    COVER_NOT_FOUND,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
+    AuditAction,
+    ResourceType,
+)
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    cover_media_type,
+    remove_playlist_cover_files,
+    resolve_playlist_cover_file,
+    write_playlist_cover,
+)
 from songmaker_cli.db.models import Generation, Playlist
 from songmaker_cli.db.queries import (
     add_album_to_playlist,
@@ -47,6 +63,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     remove_from_playlist,
     reorder_playlist_entry,
+    set_playlist_cover_key,
     update_playlist,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -131,6 +148,71 @@ def api_delete_playlist(
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()
+
+
+# ── Cover ──────────────────────────────────────────────────────────────
+
+
+@router.get("/playlists/{playlist_id}/cover")
+def api_get_playlist_cover(
+    playlist_id: str,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    playlist = _check_playlist_access(session, playlist_id, user)
+    if v is not None and v != playlist.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_playlist_cover_file(
+            ctx.audio_dir, playlist.id, playlist.cover_key, variant,
+        )
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, playlist.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.post("/playlists/{playlist_id}/cover")
+async def api_upload_playlist_cover(
+    playlist_id: str,
+    file: UploadFile,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> PlaylistResponse:
+    playlist = _check_playlist_access(session, playlist_id, user)
+    payload = await file.read(COVER_MAX_BYTES + 1)
+    try:
+        cover_key = write_playlist_cover(ctx.audio_dir, playlist.id, payload)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    playlist = set_playlist_cover_key(session, playlist.id, cover_key)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
+    session.commit()
+    return PlaylistResponse.from_orm(playlist)
+
+
+@router.delete("/playlists/{playlist_id}/cover")
+def api_delete_playlist_cover(
+    playlist_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> PlaylistResponse:
+    playlist = _check_playlist_access(session, playlist_id, user)
+    playlist = set_playlist_cover_key(session, playlist.id, None)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
+    session.commit()
+    remove_playlist_cover_files(ctx.audio_dir, playlist.id)
+    return PlaylistResponse.from_orm(playlist)
 
 
 # ── Entries ────────────────────────────────────────────────────────────

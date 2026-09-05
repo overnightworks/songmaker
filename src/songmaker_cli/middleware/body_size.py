@@ -25,6 +25,8 @@ def is_large_upload_path(path: str, method: str = "POST") -> bool:
         return True
     if resource == "albums" and action == "cover" and method.upper() == "POST":
         return True
+    if resource == "playlists" and action == "cover" and method.upper() == "POST":
+        return True
     if resource == "songs" and action == "cover":
         return True
     return False

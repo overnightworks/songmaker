@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
     COVER_FORMAT_JPEG,
     COVER_FORMAT_PNG,
     COVER_INVALID_ALBUM_ID,
+    COVER_INVALID_PLAYLIST_ID,
     COVER_INVALID_SONG_ID,
     COVER_JPEG_EXTENSION,
     COVER_JPEG_MAGIC,
@@ -44,6 +45,7 @@ from songmaker_cli.constants import (
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
     COVER_VARIANTS,
+    PLAYLIST_COVER_DIRNAME,
     SONG_COVER_DIRNAME,
 )
 
@@ -136,6 +138,15 @@ def resolve_song_cover_file(
     )
 
 
+def resolve_playlist_cover_file(
+    audio_dir: Path, playlist_id: str, cover_key: str | None, variant: str,
+) -> Path:
+    return _resolve_cover_file(
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, cover_key, variant,
+        COVER_INVALID_PLAYLIST_ID,
+    )
+
+
 def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
     if len(payload) > COVER_MAX_BYTES:
         raise CoverRejectedError(COVER_TOO_LARGE, status_code=413)
@@ -179,6 +190,13 @@ def write_song_cover(audio_dir: Path, song_id: str, payload: bytes) -> str:
     return write_cover(
         audio_dir, SONG_COVER_DIRNAME, song_id, payload,
         invalid_id_message=COVER_INVALID_SONG_ID,
+    )
+
+
+def write_playlist_cover(audio_dir: Path, playlist_id: str, payload: bytes) -> str:
+    return write_cover(
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, payload,
+        invalid_id_message=COVER_INVALID_PLAYLIST_ID,
     )
 
 
@@ -232,6 +250,13 @@ def remove_album_cover_files(audio_dir: Path, album_id: str) -> None:
 def remove_song_cover_files(audio_dir: Path, song_id: str) -> None:
     remove_cover_files(
         audio_dir, SONG_COVER_DIRNAME, song_id, invalid_id_message=COVER_INVALID_SONG_ID,
+    )
+
+
+def remove_playlist_cover_files(audio_dir: Path, playlist_id: str) -> None:
+    remove_cover_files(
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id,
+        invalid_id_message=COVER_INVALID_PLAYLIST_ID,
     )
 
 
