@@ -154,6 +154,30 @@ function abortOnCallerOrTimeout(
 	return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
 }
 
+function addCsrfToken(init: RequestInit, method: string): RequestInit {
+	if (method === 'GET' || method === 'HEAD') return init;
+	const token = getCsrfToken();
+	if (!token) return init;
+	return {
+		...init,
+		headers: { 'X-CSRF-Token': token, ...(init.headers as Record<string, string>) }
+	};
+}
+
+async function throwForFailedResponse(response: Response, path: string): Promise<void> {
+	if (response.ok) return;
+	const { detail, responseDetail } = await readErrorDetail(response);
+	notifyIfRateLimited(response.status, path);
+	if (isSessionLostResponse(response.status, path)) await handleSessionLost();
+	throw new ApiError(
+		response.status,
+		detail,
+		path,
+		parseRetryAfterSeconds(response),
+		responseDetail
+	);
+}
+
 export async function apiFetch<T>(
 	path: string,
 	init?: RequestInit,
@@ -162,28 +186,17 @@ export async function apiFetch<T>(
 	const method = init?.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
-	let opts: RequestInit = {
-		credentials: 'include',
-		...init,
-		signal: abortOnCallerOrTimeout(init?.signal, controller.signal)
-	};
-	if (method !== 'GET' && method !== 'HEAD') {
-		const token = getCsrfToken();
-		if (token) {
-			opts = {
-				...opts,
-				headers: { 'X-CSRF-Token': token, ...(init?.headers as Record<string, string>) }
-			};
-		}
-	}
+	const opts = addCsrfToken(
+		{
+			credentials: 'include',
+			...init,
+			signal: abortOnCallerOrTimeout(init?.signal, controller.signal)
+		},
+		method
+	);
 	try {
 		const resp = await fetch(path, opts);
-		if (!resp.ok) {
-			const { detail, responseDetail } = await readErrorDetail(resp);
-			notifyIfRateLimited(resp.status, path);
-			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
-			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp), responseDetail);
-		}
+		await throwForFailedResponse(resp, path);
 		return resp.json() as Promise<T>;
 	} finally {
 		clearTimeout(timeout);
@@ -191,6 +204,31 @@ export async function apiFetch<T>(
 }
 
 export type JobStatus = JobItem;
+
+async function* parseSseEvents<T>(body: ReadableStream<Uint8Array>): AsyncGenerator<T> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder('utf-8');
+	let buffer = '';
+	while (true) {
+		const { value, done } = await reader.read();
+		if (done) return;
+		buffer += decoder.decode(value, { stream: true });
+		let boundary = buffer.indexOf('\n\n');
+		while (boundary !== -1) {
+			const frame = buffer.slice(0, boundary);
+			buffer = buffer.slice(boundary + 2);
+			const line = frame.split('\n').find((entry) => entry.startsWith('data: '));
+			if (line) {
+				try {
+					yield JSON.parse(line.slice('data: '.length)) as T;
+				} catch {
+					// drop malformed frame
+				}
+			}
+			boundary = buffer.indexOf('\n\n');
+		}
+	}
+}
 
 export async function* sseFetch<T = unknown>(
 	path: string,
@@ -200,58 +238,22 @@ export async function* sseFetch<T = unknown>(
 	const method = init.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
-	let opts: RequestInit = {
-		credentials: 'include',
-		...init,
-		signal: abortOnCallerOrTimeout(init.signal, controller.signal),
-		headers: {
-			Accept: 'text/event-stream',
-			...((init.headers as Record<string, string>) ?? {})
-		}
-	};
-	if (method !== 'GET' && method !== 'HEAD') {
-		const token = getCsrfToken();
-		if (token) {
-			opts = {
-				...opts,
-				headers: { 'X-CSRF-Token': token, ...(opts.headers as Record<string, string>) }
-			};
-		}
-	}
+	const opts = addCsrfToken(
+		{
+			credentials: 'include',
+			...init,
+			signal: abortOnCallerOrTimeout(init.signal, controller.signal),
+			headers: {
+				Accept: 'text/event-stream',
+				...((init.headers as Record<string, string>) ?? {})
+			}
+		},
+		method
+	);
 	try {
 		const resp = await fetch(path, opts);
-		if (!resp.ok) {
-			const { detail, responseDetail } = await readErrorDetail(resp);
-			notifyIfRateLimited(resp.status, path);
-			if (isSessionLostResponse(resp.status, path)) await handleSessionLost();
-			throw new ApiError(resp.status, detail, path, parseRetryAfterSeconds(resp), responseDetail);
-		}
-		if (!resp.body) {
-			return;
-		}
-		const reader = resp.body.getReader();
-		const decoder = new TextDecoder('utf-8');
-		let buffer = '';
-		while (true) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			let boundary = buffer.indexOf('\n\n');
-			while (boundary !== -1) {
-				const frame = buffer.slice(0, boundary);
-				buffer = buffer.slice(boundary + 2);
-				const line = frame.split('\n').find((l) => l.startsWith('data: '));
-				if (line) {
-					const json = line.slice('data: '.length);
-					try {
-						yield JSON.parse(json) as T;
-					} catch {
-						// drop malformed frame
-					}
-				}
-				boundary = buffer.indexOf('\n\n');
-			}
-		}
+		await throwForFailedResponse(resp, path);
+		if (resp.body) yield* parseSseEvents<T>(resp.body);
 	} finally {
 		clearTimeout(timeout);
 	}
