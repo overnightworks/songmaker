@@ -692,7 +692,7 @@ async def _chat_event_generator(
         user_id=user.id,
         system=build_cowriter_system_prompt(
             tools_available=(
-                provider_route_capability(prepared.provider, prepared.route)
+                provider_route_capability()
                 is ProviderRouteCapability.TOOLS_AVAILABLE
             ),
             text_tool_protocol=(

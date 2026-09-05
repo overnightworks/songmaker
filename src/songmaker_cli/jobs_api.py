@@ -162,38 +162,35 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
     previous_queue_position: int | None = None
     deadline = monotonic() + JOB_STREAM_CONNECTION_SECONDS
     last_emit = monotonic()
-    try:
-        while monotonic() < deadline:
-            response = await _fetch_job_response_before(ctx, job_id, deadline)
-            if response is None:
-                return
+    while monotonic() < deadline:
+        response = await _fetch_job_response_before(ctx, job_id, deadline)
+        if response is None:
+            return
 
-            status_changed = (
-                response.status != previous_status
-                or response.progress != previous_progress
-                or response.queue_reason != previous_queue_reason
-                or response.queue_position != previous_queue_position
-            )
-            if status_changed:
-                previous_status = response.status
-                previous_progress = response.progress
-                previous_queue_reason = response.queue_reason
-                previous_queue_position = response.queue_position
-                yield f"data: {json.dumps(response.model_dump())}\n\n"
-                last_emit = monotonic()
-            elif monotonic() - last_emit >= SSE_HEARTBEAT_SECONDS:
-                yield SSE_HEARTBEAT_COMMENT
-                last_emit = monotonic()
+        status_changed = (
+            response.status != previous_status
+            or response.progress != previous_progress
+            or response.queue_reason != previous_queue_reason
+            or response.queue_position != previous_queue_position
+        )
+        if status_changed:
+            previous_status = response.status
+            previous_progress = response.progress
+            previous_queue_reason = response.queue_reason
+            previous_queue_position = response.queue_position
+            yield f"data: {json.dumps(response.model_dump())}\n\n"
+            last_emit = monotonic()
+        elif monotonic() - last_emit >= SSE_HEARTBEAT_SECONDS:
+            yield SSE_HEARTBEAT_COMMENT
+            last_emit = monotonic()
 
-            if response.status in JOB_TERMINAL_STATUSES:
-                return
+        if response.status in JOB_TERMINAL_STATUSES:
+            return
 
-            remaining = deadline - monotonic()
-            if remaining <= 0:
-                return
-            await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, remaining))
-    except asyncio.CancelledError:
-        raise
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, remaining))
 
 
 def _get_job_stream_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:

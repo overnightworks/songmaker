@@ -145,7 +145,6 @@ def _child_main(conn: Connection) -> None:
                 conn.send(ScoreResponse(scores=scores, error=None))
             except Exception as exc:
                 conn.send(ScoreResponse(scores=None, error=str(exc)))
-            continue
 
 
 class ScorerProcess:
