@@ -1,9 +1,4 @@
-"""Non-model constants for the acestep-worker package.
-
-Lives here (not imported from ``songmaker_cli``) because the
-acestep-worker container is a slim image that does not install
-``songmaker_cli`` — see CLAUDE.md "Engine packages are independent".
-"""
+"""Non-model constants for the acestep-worker package."""
 
 from __future__ import annotations
 
@@ -11,8 +6,8 @@ from typing import Final
 
 # Env var names stripped from the environment of every child process this
 # package spawns (the ACE-Step HTTP subprocess, in subprocess_runner.py).
-# Kept identical in content and name to songmaker_cli.constants.SECRET_ENV_KEYS
-# — the two packages cannot share an import, so
+# Kept identical in content and name to the application package's secret-key constant.
+# The packages cannot share an import, so
 # tests/test_secret_scrub_parity.py pins the two as equal sets.
 #
 # HF_TOKEN: the ACE-Step subprocess *does* call Hugging Face itself — see

@@ -1,15 +1,7 @@
 """Settings for the acestep-worker container.
 
-Lives in ``acestep_worker/`` (not ``songmaker_cli/``) because the
-acestep-worker container is a slim image that does NOT install
-``songmaker_cli`` — it only ships ``acestep_worker`` and
-``acestep_engine``. Importing from ``songmaker_cli.settings`` here
-would (and did, until 2026-04-09) crash the worker container at
-startup with ``ModuleNotFoundError: No module named 'songmaker_cli'``.
-
-Independent from ``songmaker_cli.settings.Settings`` because the GPU
-worker pod has no database, no sessions, and no internal API of its
-own — it only needs Redis, its own identity, and subprocess knobs.
+The GPU worker pod has no database, sessions, or API of its own; it only
+needs Redis, its identity, and subprocess controls.
 """
 
 from __future__ import annotations
@@ -21,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
 DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
+DEFAULT_CONTAINER_BIND_HOST = "0.0.0.0"
 
 
 class WorkerSettings(BaseSettings):
@@ -35,6 +28,7 @@ class WorkerSettings(BaseSettings):
     redis_url: str
     songmaker_internal_token: SecretStr
     worker_host: str | None = None
+    worker_bind_host: str = DEFAULT_CONTAINER_BIND_HOST
     worker_port: int = 8001
     vram_budget_gb: float = 24.0
     acestep_checkpoint_dir: str = "/opt/acestep"
