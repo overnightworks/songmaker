@@ -36,7 +36,13 @@ def _validate_upload(file: UploadFile, label: str) -> None:
         raise HTTPException(422, f"Invalid {label} content type: {content_type}")
 
 
-@router.post("/songs/{song_id}/reimport")
+@router.post(
+    "/songs/{song_id}/reimport",
+    responses={
+        413: {"description": "Uploaded audio file is too large"},
+        422: {"description": "Reimport upload is invalid"},
+    },
+)
 async def api_reimport(
     song_id: str,
     mp3: UploadFile | None = None,

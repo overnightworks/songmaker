@@ -439,7 +439,13 @@ def _sse_format(event: StreamEvent | dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-@router.post("/chat/turn")
+@router.post(
+    "/chat/turn",
+    responses={
+        404: {"description": "Mentioned album or version does not exist"},
+        422: {"description": "Chat context or co-writer configuration is invalid"},
+    },
+)
 async def api_chat_turn(
     req: ChatTurnV2Request,
     request: Request,
@@ -701,7 +707,10 @@ def api_list_conversations(
     )
 
 
-@router.get("/conversations/{conversation_id}")
+@router.get(
+    "/conversations/{conversation_id}",
+    responses={404: {"description": "Conversation does not exist"}},
+)
 def api_conversation_messages(
     conversation_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -730,7 +739,10 @@ def api_new_conversation(
     return ConversationResponse.from_orm(new_conv)
 
 
-@router.delete("/conversations/{conversation_id}")
+@router.delete(
+    "/conversations/{conversation_id}",
+    responses={404: {"description": "Conversation does not exist"}},
+)
 def api_delete_conversation(
     conversation_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
