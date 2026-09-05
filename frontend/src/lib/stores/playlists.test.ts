@@ -78,6 +78,8 @@ function makePlaylist(id: string, overrides: Partial<PlaylistItem> = {}): Playli
 	};
 }
 
+const albumMutationResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
+
 beforeEach(() => {
 	resetPlaylists();
 	toasts.set([]);
@@ -328,23 +330,58 @@ describe('playlist mutations', () => {
 		expect(get(selectedPlaylistDetail)).toBeNull();
 	});
 
-	it('sends entry mutations to their playlist and refreshes its library summary', async () => {
-		const refreshed = makePlaylist('p1', { entry_count: 4 });
-		const albumResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
-		vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
-		vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumResult);
+	it.each([
+		{
+			description: 'adds a generation',
+			mutate: () => addGeneration('p1', 'g1'),
+			assertRequest: () => expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1')
+		},
+		{
+			description: 'adds a song',
+			mutate: () => addSong('p1', 's1'),
+			assertRequest: () => expect(addSongToPlaylist).toHaveBeenCalledWith('p1', 's1')
+		},
+		{
+			description: 'adds an album',
+			mutate: () => addAlbum('p1', 'a1'),
+			assertRequest: () => expect(addAlbumToPlaylist).toHaveBeenCalledWith('p1', 'a1'),
+			expectedResult: albumMutationResult
+		},
+		{
+			description: 'removes an entry',
+			mutate: () => removePlaylistEntry('p1', 'entry-1'),
+			assertRequest: () => expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 'entry-1')
+		},
+		{
+			description: 'moves an entry',
+			mutate: () => movePlaylistEntry('p1', 'entry-2', 3),
+			assertRequest: () => expect(reorderPlaylistEntry).toHaveBeenCalledWith('p1', 'entry-2', 3)
+		}
+	])(
+		'$description refreshes the library summary',
+		async ({ mutate, assertRequest, expectedResult }) => {
+			const refreshed = makePlaylist('p1', { entry_count: 4 });
+			vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
+			vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumMutationResult);
 
+			const result = await mutate();
+
+			assertRequest();
+			if (expectedResult) expect(result).toEqual(expectedResult);
+			expect(get(playlistList)).toEqual([refreshed]);
+		}
+	);
+
+	it('reloads the open playlist detail after an entry mutation', async () => {
+		vi.mocked(fetchPlaylist)
+			.mockResolvedValueOnce(makeDetail('p1', { entry_count: 1 }))
+			.mockResolvedValueOnce(makeDetail('p1', { entry_count: 2 }));
+		vi.mocked(fetchPlaylists).mockResolvedValue([makePlaylist('p1', { entry_count: 2 })]);
+
+		await loadPlaylistDetail('p1');
 		await addGeneration('p1', 'g1');
-		await addSong('p1', 's1');
-		expect(await addAlbum('p1', 'a1')).toEqual(albumResult);
-		await removePlaylistEntry('p1', 'entry-1');
-		await movePlaylistEntry('p1', 'entry-2', 3);
 
-		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
-		expect(addSongToPlaylist).toHaveBeenCalledWith('p1', 's1');
-		expect(addAlbumToPlaylist).toHaveBeenCalledWith('p1', 'a1');
-		expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 'entry-1');
-		expect(reorderPlaylistEntry).toHaveBeenCalledWith('p1', 'entry-2', 3);
-		expect(get(playlistList)).toEqual([refreshed]);
+		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+		expect(get(selectedPlaylistDetail)?.entry_count).toBe(2);
 	});
 });

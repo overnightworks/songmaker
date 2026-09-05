@@ -61,6 +61,15 @@ describe('selection', () => {
 		expect(get(selectedIds)).toEqual(new Set());
 	});
 
+	it('keeps selection mode active while another item remains selected', () => {
+		toggleSelection('g1');
+		toggleSelection('g2');
+		toggleSelection('g1');
+
+		expect(get(selectionMode)).toBe(true);
+		expect(get(selectedIds)).toEqual(new Set(['g2']));
+	});
+
 	it('keeps existing selections when adding all ids and clears them when selection mode exits', () => {
 		toggleSelection('g1');
 		selectAll(['g1', 'g2']);
