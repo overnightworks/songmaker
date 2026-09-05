@@ -369,6 +369,7 @@ export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 // every private route, settings included (issue #263).
 export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_LIBRARY_LABEL = 'Library';
+export const RAIL_ALL_ALBUMS_LABEL = 'All albums';
 export const RAIL_PLAYLISTS_LABEL = 'Playlists';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 // The drawer the compact shell puts the rail in — its accessible name, which
@@ -385,11 +386,6 @@ export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';
 // apart from the rail's outer RAIL_NAV_LABEL and from each other.
 export const RAIL_LIBRARY_NAV_LABEL = 'Library albums';
 export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
-// Deliberately generic, never interpolating the album title: e2e drives the
-// album row by "a button whose name contains the album title", and only the
-// label button may match that -- every album's chevron sharing this exact
-// name is why a flow must scope to the album's own row before finding it.
-export const RAIL_ALBUM_DISCLOSE_LABEL = 'Toggle album tracks';
 export const RAIL_PLAYING_MARKER_LABEL = 'Playing';
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.

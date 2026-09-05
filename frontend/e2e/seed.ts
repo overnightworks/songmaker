@@ -56,6 +56,7 @@ const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
 // Playwright context sent it.
 const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
 const RAIL_FILLER_ALBUM_COUNT = 30;
+const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
 
 function runMarker(): string {
 	return Date.now().toString(36);
@@ -184,6 +185,35 @@ async function seedFillerAlbums(titlePrefix: string): Promise<void> {
 	}
 }
 
+/**
+ * Keep reruns equivalent to the clean stack the request budgets describe.
+ * Evidence from an earlier run remains recoverable under Archived, while its
+ * rows and covers no longer inflate the live rail before this run is seeded.
+ */
+async function archivePreviousE2EAlbums(): Promise<void> {
+	try {
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/archive_e2e_albums.py',
+				'--title-prefix',
+				E2E_ALBUM_TITLE_PREFIX,
+				'--owner-username',
+				requiredEnv('ADMIN_USERNAME')
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Archiving previous E2E albums failed: ${detail}`, { cause: err });
+	}
+}
+
 class SeedApi {
 	constructor(
 		private readonly api: APIRequestContext,
@@ -235,6 +265,7 @@ class SeedApi {
 }
 
 export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
+	await archivePreviousE2EAlbums();
 	const seed = await SeedApi.login(api);
 	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker()}`;
 	const takeAudio = readFileSync(TAKE_FIXTURE);

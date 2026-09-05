@@ -34,6 +34,7 @@ JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
     "to enable image generation."
 )
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
+JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -463,6 +464,8 @@ COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 COVER_CLI_DEADLINE_SECONDS: Final[int] = 88
 COVER_JOB_BUDGET_SECONDS: Final[int] = 300
+COVER_MAX_CONCURRENT_RUNS: Final[int] = 1
+CODEX_CLI_MAX_CONCURRENT_PROCESSES: Final[int] = 8
 COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
 COVER_PROMPT_MAX_CHARS: Final[int] = 6000
 # These are not independently configurable timeouts. They document the

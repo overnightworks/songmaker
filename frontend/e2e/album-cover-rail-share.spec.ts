@@ -3,6 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
+import {
+	RAIL_DRAWER_LABEL,
+	RAIL_DRAWER_OPEN_LABEL,
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_NAV_LABEL
+} from '../src/lib/constants';
 import { BASE_URL } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -39,6 +46,16 @@ async function postCover(page: Page, albumId: string): Promise<void> {
 		}
 	});
 	expect(response.ok(), `Cover upload failed: ${await response.text()}`).toBeTruthy();
+}
+
+async function openRail(page: Page, isMobile: boolean) {
+	if (isMobile) {
+		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
+		if (!(await drawer.isVisible())) {
+			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		}
+	}
+	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
 test('a fresh album cover reaches wall, row, rail, and every share page at desktop and 375 px', async ({
@@ -82,10 +99,14 @@ test('a fresh album cover reaches wall, row, rail, and every share page at deskt
 
 	await page.goto(`/album/${album.id}`);
 	await expect(page.locator('.row-tile.active .tile-cover img')).toBeVisible();
-	if (!isMobile) {
-		const railAlbum = page.locator('.album-row').filter({ hasText: albumTitle });
-		await expect(railAlbum.locator('.album-art img')).toBeVisible();
-	}
+	const rail = await openRail(page, Boolean(isMobile));
+	const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${RAIL_LIBRARY_LABEL}`) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	const railAlbum = rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle });
+	await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
 
 	const publicContext = await browser.newContext({ storageState: undefined });
 	try {
