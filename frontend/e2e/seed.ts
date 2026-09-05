@@ -32,7 +32,7 @@ const CSRF_HEADER = 'x-csrf-token';
 const ALBUM_ARTIST = 'E2E Ensemble';
 // Fixed titles: only one album is ever open at a time, so they stay unique on
 // screen even when a local re-run seeds a second album.
-const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time', 'After Hours'] as const;
+const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 // The album and the playlist are listed side by side with everything a
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
@@ -329,9 +329,10 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		takeBySongTitle.set(title, take.id);
 	}
 
-	const [pickedSongTitle, playlistSongTitle, desktopContinueSongTitle, mobileContinueSongTitle] =
+	const [desktopContinueSongTitle, mobileContinueSongTitle, initialContinueLeaderTitle] =
 		SONG_TITLES;
-	const playlistSongTitles = [playlistSongTitle, desktopContinueSongTitle];
+	const pickedSongTitle = desktopContinueSongTitle;
+	const playlistSongTitles = [mobileContinueSongTitle, initialContinueLeaderTitle];
 	const pickedSongId = songIdByTitle.get(pickedSongTitle);
 	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
 	const continueReorderSongs = {
@@ -339,6 +340,13 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
 	};
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
+	// Give Continue a stable initial pair. Each shell then listens to its own
+	// later row (Opening Move or Second Wind), proving an observable reorder
+	// independently and in either serial order.
+	await seed.postJson(
+		`/api/songs/${seededSong(songIdByTitle, initialContinueLeaderTitle).id}/listen`,
+		{}
+	);
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
