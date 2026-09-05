@@ -681,7 +681,9 @@ def test_concurrent_lease_limiter_enforces_scope_global_release_and_pruning() ->
     )
     alice_one = limiter.acquire("alice")
     alice_two = limiter.acquire("alice")
-    assert alice_one and alice_two and alice_one != alice_two
+    assert alice_one
+    assert alice_two
+    assert alice_one != alice_two
     assert limiter.acquire("alice") is None
     bob_one = limiter.acquire("bob")
     assert bob_one
