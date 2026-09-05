@@ -6,11 +6,9 @@
 // stays silent, and which axis a real container query puts the strip on can
 // only be shown here, against a real render.
 //
-// The strip only ever renders on the desktop shell today (the compact
-// shell's Takes tab uses TakesList instead — see WriteColumn.svelte and
-// SongDetailView.svelte) — the second test below is the honest proof of
-// that at a real phone viewport, not a kinetic-scrolling proof, since there
-// is nothing of this action's to exercise on that surface yet.
+// The strip renders in Write on the compact shell too. Its phone proof below
+// verifies the same action survives at 375px and that a second take list is
+// not reintroduced there.
 
 import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_VIEW_COWRITER_LABEL, TRANSPORT_PAUSE_LABEL } from '../src/lib/constants';
@@ -432,7 +430,7 @@ test.describe('kinetic take strip', () => {
 		await context.close();
 	});
 
-	test('the strip does not render on the compact shell at phone width — the Takes tab carries takes there instead', async ({
+	test('the strip renders in Write on the compact shell at phone width, without a second takes list', async ({
 		browser,
 		isMobile
 	}) => {
@@ -452,8 +450,12 @@ test.describe('kinetic take strip', () => {
 		await page.goto(`/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`);
 		await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 
-		await expect(page.locator('.take-strip')).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: /Takes/ })).toBeVisible();
+		const strip = page.locator('.take-strip');
+		await expect(strip).toBeVisible();
+		await expect(page.locator('.takes-list')).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveCount(0);
+		await strip.getByRole('button', { name: library.takeLabel, exact: true }).click();
+		await expect(page.getByRole('contentinfo').getByText(library.takeLabel)).toBeVisible();
 
 		await context.close();
 	});

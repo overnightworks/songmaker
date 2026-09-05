@@ -2,16 +2,14 @@
 // take, put it on a playlist, reorder the playlist, shuffle, and open the
 // public album link while logged out.
 //
-// Both shells walk the same steps. Where the compact shell differs — the rail
-// becomes a drawer, the editor opens on Write, Now Playing's right panel
-// becomes a sheet, the transport shrinks to one 64px row — the mobile
-// expectation is spelled out instead of skipped.
+// Both shells walk the same playback and sharing steps. The desktop flow also
+// curates a playlist through the detailed take list; on mobile, that list is
+// intentionally absent and the Write tab's take strip is the one playback
+// entry point.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	collectionRowPlayLabel,
-	EDITOR_TAB_TAKES_LABEL,
-	EDITOR_TAB_WRITE_LABEL,
 	HITBOX_FREQUENT_PX,
 	LIBRARY_FILTER_LABELS,
 	NOW_PLAYING_CLOSE,
@@ -105,16 +103,6 @@ async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Pro
 	expect(breadcrumbBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
 
 	await page.setViewportSize(MOBILE_VIEWPORT);
-}
-
-/** The desktop editor already shows the takes; the compact one opens on Write. */
-async function openTakes(page: Page, shell: Shell): Promise<void> {
-	if (shell === 'desktop') return;
-	await expect(page.getByRole('tab', { name: EDITOR_TAB_WRITE_LABEL })).toHaveAttribute(
-		'aria-selected',
-		'true'
-	);
-	await page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) }).click();
 }
 
 /** Compact Now Playing stacks, so the judging panel arrives as its own sheet. */
@@ -275,10 +263,18 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	if (shell === 'mobile') await expectCompactTransport(transport);
 
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
-	await openTakes(page, shell);
-
-	const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
-	await takeRow.locator('.take-summary').click();
+	const takeControl =
+		shell === 'desktop'
+			? surface.locator('.take-row').filter({ hasText: library.takeLabel }).locator('.take-summary')
+			: surface
+					.locator('.take-strip')
+					.getByRole('button', { name: library.takeLabel, exact: true });
+	if (shell === 'mobile') {
+		await expect(surface.locator('.take-strip')).toHaveCount(1);
+		await expect(surface.locator('.takes-list')).toHaveCount(0);
+		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(0);
+	}
+	await takeControl.click();
 	await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
 	// A row body never stops the music: the take that was already playing when
 	// the row was clicked is still playing after it.
@@ -290,63 +286,60 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	).toBeVisible();
 	await closeNowPlaying(page, shell);
 
-	await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
-	await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
-	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
-
-	await openLibraryWall(page, shell);
-	await surface.getByRole('radio', { name: LIBRARY_FILTER_LABELS.playlists }).click();
-	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
-
-	const entryRows = playlistEntryRows(page);
-	await expect(entryRows).toHaveText([
-		containing(firstPlaylistSong),
-		containing(secondPlaylistSong),
-		containing(library.pickedSongTitle)
-	]);
-
-	await surface
-		.getByRole('button', { name: playlistEntryOverflowLabel(firstPlaylistSong) })
-		.click();
-	await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_MOVE_DOWN_LABEL }).click();
-	await expect(entryRows).toHaveText([
-		containing(secondPlaylistSong),
-		containing(firstPlaylistSong),
-		containing(library.pickedSongTitle)
-	]);
-
-	await surface
-		.getByRole('button', { name: playlistEntryOverflowLabel(library.pickedSongTitle) })
-		.click();
-	await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_REMOVE_LABEL }).click();
-	await expect(entryRows).toHaveText([
-		containing(secondPlaylistSong),
-		containing(firstPlaylistSong)
-	]);
-
-	// A playlist row is a take row: it plays and judges, the same click as in
-	// the editor's takes list, and the playlist stays where it is.
-	await entryRows
-		.first()
-		.getByRole('button', { name: nameStartingWith(secondPlaylistSong) })
-		.click();
-	await expectTakeShownInNowPlaying(page, shell, secondPlaylistSong);
-	// The row played, it did not merely open: the transport that is showing
-	// offers to pause the take the row stands for.
-	await expect(
-		shellTransport(page, shell, secondPlaylistSong).getByRole('button', {
-			name: TRANSPORT_PAUSE_LABEL,
-			exact: true
-		})
-	).toBeVisible();
 	if (shell === 'desktop') {
+		const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
+		await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
+		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+
+		await openLibraryWall(page, shell);
+		await surface.getByRole('radio', { name: LIBRARY_FILTER_LABELS.playlists }).click();
+		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+
+		const entryRows = playlistEntryRows(page);
+		await expect(entryRows).toHaveText([
+			containing(firstPlaylistSong),
+			containing(secondPlaylistSong),
+			containing(library.pickedSongTitle)
+		]);
+
+		await surface
+			.getByRole('button', { name: playlistEntryOverflowLabel(firstPlaylistSong) })
+			.click();
+		await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_MOVE_DOWN_LABEL }).click();
+		await expect(entryRows).toHaveText([
+			containing(secondPlaylistSong),
+			containing(firstPlaylistSong),
+			containing(library.pickedSongTitle)
+		]);
+
+		await surface
+			.getByRole('button', { name: playlistEntryOverflowLabel(library.pickedSongTitle) })
+			.click();
+		await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_REMOVE_LABEL }).click();
+		await expect(entryRows).toHaveText([
+			containing(secondPlaylistSong),
+			containing(firstPlaylistSong)
+		]);
+
+		await entryRows
+			.first()
+			.getByRole('button', { name: nameStartingWith(secondPlaylistSong) })
+			.click();
+		await expectTakeShownInNowPlaying(page, shell, secondPlaylistSong);
+		await expect(
+			shellTransport(page, shell, secondPlaylistSong).getByRole('button', {
+				name: TRANSPORT_PAUSE_LABEL,
+				exact: true
+			})
+		).toBeVisible();
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+		await closeNowPlaying(page, shell);
+		await expect(entryRows).toHaveText([
+			containing(secondPlaylistSong),
+			containing(firstPlaylistSong)
+		]);
 	}
-	await closeNowPlaying(page, shell);
-	await expect(entryRows).toHaveText([
-		containing(secondPlaylistSong),
-		containing(firstPlaylistSong)
-	]);
 
 	const shuffle = transport.getByRole('button', {
 		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)

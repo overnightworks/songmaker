@@ -41,7 +41,6 @@ import {
 	clearHitboxStyles,
 	clearPointer,
 	injectHitboxStyles,
-	minHeightPx,
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
@@ -489,7 +488,6 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('.take-strip')).not.toBeNull();
 		expect(target.querySelector('[role="tablist"]')).toBeNull();
 	});
-
 });
 
 describe('SongDetailView adding a take to a playlist', () => {
