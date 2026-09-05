@@ -22,6 +22,16 @@ export const EXPIRY_WARN_DAYS = 3;
 
 export const LORA_POLL_INTERVAL_MS = 5000;
 
+export const VOICE_PICKER_LABEL = 'Your Voice';
+export const VOICE_PICKER_NONE_LABEL = 'None';
+export const VOICE_PICKER_CREATE_LABEL = 'Create a voice';
+export const VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL = 'not available for this model';
+export const VOICE_PICKER_DELETED_LABEL = 'voice deleted';
+
+export function voicePickerMobileLabel(modelMode: string): string {
+	return `${VOICE_PICKER_LABEL} · ${modelMode} model`;
+}
+
 export const LORA_MIN_SAMPLES_FOR_TRAINING = 3;
 
 export const LORA_MAX_SAMPLES = 20;
