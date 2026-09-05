@@ -618,10 +618,20 @@
 	);
 	const judgeCanSave = $derived(judgeDirty && judgeModel !== '' && !savingJudge);
 
+	function savedCowriterModel(provider: string, models: string[]): string | null {
+		if (cowriterSettings?.provider !== provider) return null;
+		return models.includes(cowriterSettings.model) ? cowriterSettings.model : null;
+	}
+
+	function cowriterCardModel(provider: string, models: string[]): string {
+		if (provider === cowriterProvider) return cowriterModel;
+		return savedCowriterModel(provider, models) ?? models[0] ?? '';
+	}
+
 	function selectCowriterProvider(provider: string): void {
 		cowriterProvider = provider;
 		const models = routeModels(provider, selectedCowriterRoute(provider));
-		cowriterModel = models[0] ?? '';
+		cowriterModel = savedCowriterModel(provider, models) ?? models[0] ?? '';
 	}
 
 	function selectCowriterRoute(provider: string, route: ProviderRoute): void {
@@ -1451,7 +1461,7 @@
 												>
 												<select
 													id={`cowriter-model-${provider}`}
-													value={provider === cowriterProvider ? cowriterModel : (models[0] ?? '')}
+													value={cowriterCardModel(provider, models)}
 													disabled={provider !== cowriterProvider ||
 														models.length === 0 ||
 														!selectedRouteReady}
