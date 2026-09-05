@@ -484,7 +484,7 @@ Codex Bubblewrap forms because they answer different questions:
 
 - The **boot check** is Codex's startup capability probe, not a cover-command
   execution. Its literal argv is `bwrap --unshare-user --unshare-net --ro-bind
-  / / -- /bin/true`. Source: the Codex 0.147.0 Linux binary's embedded string,
+  / / /bin/true`. Source: the Codex 0.147.0 Linux binary's embedded string,
   confirmed by the boot check's direct `subprocess.run` assertion. It asks only
   whether Bubblewrap can create the namespace and read-only root at all.
 - The **post-rollout proof** uses the real read-only command form, with its

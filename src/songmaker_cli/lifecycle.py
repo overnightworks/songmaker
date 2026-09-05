@@ -39,7 +39,6 @@ _CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
     "--unshare-user",
     "--unshare-net",
     "--ro-bind", "/", "/",
-    "--",
     "/bin/true",
 )
 

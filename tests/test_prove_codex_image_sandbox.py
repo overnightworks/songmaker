@@ -75,7 +75,9 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
         if command[:4] == ("docker", "compose", "images", "-q"):
             return proof.CommandResult(0, "web-image\n", "")
         if command[:2] == ("docker", "run"):
-            return proof.CommandResult(1, "", "bwrap: permission denied")
+            return proof.CommandResult(
+                1, "", "bwrap: No permissions to create a new namespace"
+            )
         return proof.CommandResult(0, "", "")
 
     proof.prove(run)
@@ -96,6 +98,11 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
     assert f"apparmor={proof.DEFAULT_DOCKER_PROFILE}" in reference
     assert ("--network", "none") == reference[3:5]
     assert "no-new-privileges:true" in reference
+    assert reference[-len(proof._BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS):] == (
+        proof._BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS
+    )
+    assert proof.CODEX_BINARY not in reference
+    assert "CODEX_HOME=" not in " ".join(reference)
 
 
 def test_prove_rejects_a_successful_docker_default_probe() -> None:
@@ -109,4 +116,20 @@ def test_prove_rejects_a_successful_docker_default_probe() -> None:
         return proof.CommandResult(0, "", "")
 
     with pytest.raises(RuntimeError, match="unexpectedly ran under docker-default"):
+        proof.prove(run)
+
+
+def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
+    def run(command: tuple[str, ...]) -> proof.CommandResult:
+        if command[:5] == ("docker", "compose", "ps", "-q", proof.WEB_SERVICE):
+            return proof.CommandResult(0, "container-id\n", "")
+        if command[:3] == ("docker", "inspect", "--format"):
+            return proof.CommandResult(0, f"{proof.WEB_PROFILE}\n", "")
+        if command[:4] == ("docker", "compose", "images", "-q"):
+            return proof.CommandResult(0, "web-image\n", "")
+        if command[:2] == ("docker", "run"):
+            return proof.CommandResult(1, "", "bwrap: executable not found")
+        return proof.CommandResult(0, "", "")
+
+    with pytest.raises(RuntimeError, match="did not fail while creating a namespace"):
         proof.prove(run)

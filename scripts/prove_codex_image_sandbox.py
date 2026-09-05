@@ -16,17 +16,23 @@ SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
 SANDBOX_WORKDIR = "/tmp/songmaker-codex-sandbox-probe/workdir"
 CODEX_BINARY = "/usr/local/bin/codex"
 _PROTECTED_CODEX_HOME_PATHS = (".git", ".agents", ".codex")
+_NAMESPACE_DENIAL_OUTPUTS = (
+    "No permissions to create a new namespace",
+    "Operation not permitted",
+    "EPERM",
+)
+_BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS = (
+    "--unshare-user",
+    "--unshare-net",
+    "--ro-bind", "/", "/",
+    "/bin/true",
+)
 CODEX_READ_ONLY_PERMISSION_PROFILE = (
     '{"type":"managed","file_system":{"type":"restricted","entries":['
     '{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},'
     f'{{"path":{{"type":"path","path":"{SANDBOX_CODEX_HOME}"}},"access":"write"}}'
     ']},"network":"restricted"}'
 )
-_PREPARE_AND_EXECUTE_BWRAP = (
-    'home=$1; shift; mkdir -p "$home/.git" "$home/.agents" "$home/.codex"; '
-    'exec bwrap "$@"'
-)
-
 _SANDBOX_ASSERTIONS = f"""set -eu
 : > "$CODEX_HOME/allowed"
 if : > /app/songmaker-sandbox-write-probe; then
@@ -172,19 +178,18 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         f"apparmor={DEFAULT_DOCKER_PROFILE}",
         "--security-opt",
         "no-new-privileges:true",
-        "--tmpfs",
-        "/tmp",
         "--entrypoint",
-        "/bin/sh",
+        "bwrap",
         image,
-        "-ec",
-        _PREPARE_AND_EXECUTE_BWRAP,
-        "bwrap-probe",
-        SANDBOX_CODEX_HOME,
-        *bubblewrap_probe_command()[1:],
+        *_BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS,
     ))
     if result.returncode == 0:
         raise RuntimeError("Bubblewrap unexpectedly ran under docker-default")
+    if not any(denial in result.stderr for denial in _NAMESPACE_DENIAL_OUTPUTS):
+        raise RuntimeError(
+            "docker-default Bubblewrap probe did not fail while creating a namespace:\n"
+            f"{result.stderr.strip()}"
+        )
 
 
 def prove(run: CommandRunner = _run) -> None:
