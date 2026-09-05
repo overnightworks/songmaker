@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
+    ARQ_MUSIC_QUEUE_NAME,
     USER_LORA_MAX_SAMPLES,
     USER_LORA_SAMPLE_MAX_BYTES,
     JobStatus,
@@ -1186,6 +1187,7 @@ def test_train_happy_path_enqueues_and_audits(
     call_args = mock_pool.enqueue_job.await_args[0]
     assert call_args[0] == "lora_training"
     assert call_args[2] == lora_id
+    assert mock_pool.enqueue_job.await_args.kwargs["_queue_name"] == ARQ_MUSIC_QUEUE_NAME
 
     with ctx.db() as session:
         job = session.query(Job).filter_by(id=data["training_job_id"]).first()

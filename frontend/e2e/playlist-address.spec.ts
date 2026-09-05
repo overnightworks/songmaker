@@ -64,6 +64,9 @@ test('a playlist address opens cold, in a tab that knows nothing else', async ({
 	await page.goto(playlistAddress);
 
 	await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+	await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
+	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 	await expectWorkspaceStanding(page);
 });
 

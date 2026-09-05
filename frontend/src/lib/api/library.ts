@@ -1,5 +1,6 @@
 import type {
 	LibrarySearchResponse,
+	LibraryContinueResponse,
 	LibraryPoolQueue,
 	PaginatedResponse,
 	ShareInventoryItem
@@ -16,6 +17,7 @@ export type LibrarySort = CreatedSort;
 
 export type { LibraryAlbumHit, LibrarySearchResponse, LibrarySongHit } from './types';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
+export type LibraryContinueItem = LibraryContinueResponse['items'][number];
 
 export interface LibraryListOptions {
 	q?: string;
@@ -40,6 +42,10 @@ export async function searchLibrary(options: {
 	});
 	if (options.cursor) params.set('cursor', options.cursor);
 	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
+}
+
+export async function fetchLibraryContinue(): Promise<LibraryContinueResponse> {
+	return apiFetch<LibraryContinueResponse>('/api/library/continue');
 }
 
 export async function fetchLibraryPoolQueue(options?: {

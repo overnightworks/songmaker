@@ -14,7 +14,6 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -37,6 +36,7 @@ from songmaker_cli.constants import (
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
+    CoverExecutor,
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
@@ -82,13 +82,6 @@ class LoraTrainingJobConfig:
             "gradient_checkpointing": self.gradient_checkpointing,
             "poll_interval_seconds": self.poll_interval_seconds,
         }
-
-
-class CoverExecutor(StrEnum):
-    """The one process class allowed to take queued cover jobs."""
-
-    MUSIC = "music"
-    WEB = "web"
 
 
 def _find_env_file() -> Path | None:
