@@ -38,6 +38,7 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
@@ -527,6 +528,45 @@ describe('resource sync owner', () => {
 		const before = fetchCalls.length;
 		await controller.handleVisibility();
 		expect(fetchCalls.slice(before)).toEqual(['s1']);
+	});
+
+	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
+		const ids = Array.from({ length: RESOURCE_SYNC_FETCH_CONCURRENCY + 1 }, (_, index) =>
+			`s${index + 1}`
+		);
+		const inFlight = new Set<string>();
+		const maxInFlight: number[] = [];
+		const responses = new Map<string, ReturnType<typeof deferred<SongItem>>>();
+		const { controller, sources, upserted } = setup({
+			listLoadedSongIds: () => ids,
+			fetchSong: (songId) => {
+				inFlight.add(songId);
+				maxInFlight.push(inFlight.size);
+				const response = deferred<SongItem>();
+				responses.set(songId, response);
+				return response.promise.finally(() => inFlight.delete(songId));
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+
+		const refreshes = ids.map((songId) => controller.requestSongRefresh(songId));
+		await vi.waitFor(() => expect(responses.size).toBe(1));
+		for (const [songId, response] of responses) {
+			response.resolve(song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] }));
+		}
+		await vi.waitFor(() => expect(responses.size).toBe(ids.length));
+		for (const [songId, response] of responses) {
+			if (inFlight.has(songId)) {
+				response.resolve(song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] }));
+			}
+		}
+		await Promise.all(refreshes);
+
+		expect(Math.max(...maxInFlight)).toBe(RESOURCE_SYNC_FETCH_CONCURRENCY);
+		expect(upserted.map((item) => item.id)).toEqual(expect.arrayContaining(ids));
 	});
 
 	it('refresh errors are visible and retryable', async () => {
