@@ -15,6 +15,7 @@
 		RAIL_PLAYLISTS_NAV_LABEL
 	} from '$lib/constants';
 	import type { PlaylistEntryItem } from '$lib/api/types';
+	import PlaylistCover from '../PlaylistCover.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
 
@@ -86,49 +87,52 @@
 	expandTrigger={openPlaylistId !== null || filtering}
 	{icon}
 >
-	<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
-		<ul class="playlist-list">
-			{#each visiblePlaylists as playlist (playlist.id)}
-				{@const expanded = playlist.id === openPlaylistId}
-				{@const entries =
-					expanded && openPlaylistDetail?.id === playlist.id ? openPlaylistDetail.entries : []}
-				<li>
-					<button
-						type="button"
-						class={RAIL_PLAYLIST_ITEM_CLASS}
-						class:row-active={expanded}
-						onclick={() => onPlaylistLabelClick(playlist.id)}
-					>
-						<span class="row-title">{playlist.title}</span>
-						<span class="row-meta">{playlist.entry_count}</span>
-					</button>
-					<div class="playlist-songs" data-open={expanded} inert={!expanded}>
-						<div class="playlist-songs-content">
-							<ul>
-								{#each entries as entry, index (entry.id)}
-									<li>
-										<button
-											type="button"
-											class="row row-sub2"
-											class:row-active={isPlaylistEntryCurrent(entry)}
-											onclick={() => onEntryClick(index)}
-										>
-											{#if isEntryPlaying(entry)}
-												<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
-													<span></span><span></span><span></span>
-												</span>
-											{/if}
-											<span class="row-title">{entry.song_title}</span>
-										</button>
-									</li>
-								{/each}
-							</ul>
+	{#snippet children(open: boolean)}
+		<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
+			<ul class="playlist-list">
+				{#each visiblePlaylists as playlist (playlist.id)}
+					{@const expanded = playlist.id === openPlaylistId}
+					{@const entries =
+						expanded && openPlaylistDetail?.id === playlist.id ? openPlaylistDetail.entries : []}
+					<li>
+						<button
+							type="button"
+							class={RAIL_PLAYLIST_ITEM_CLASS}
+							class:row-active={expanded}
+							onclick={() => onPlaylistLabelClick(playlist.id)}
+						>
+							<PlaylistCover title={playlist.title} covers={playlist.album_covers} visible={open} />
+							<span class="row-title">{playlist.title}</span>
+							<span class="row-meta">{playlist.entry_count}</span>
+						</button>
+						<div class="playlist-songs" data-open={expanded} inert={!expanded}>
+							<div class="playlist-songs-content">
+								<ul>
+									{#each entries as entry, index (entry.id)}
+										<li>
+											<button
+												type="button"
+												class="row row-sub2"
+												class:row-active={isPlaylistEntryCurrent(entry)}
+												onclick={() => onEntryClick(index)}
+											>
+												{#if isEntryPlaying(entry)}
+													<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
+														<span></span><span></span><span></span>
+													</span>
+												{/if}
+												<span class="row-title">{entry.song_title}</span>
+											</button>
+										</li>
+									{/each}
+								</ul>
+							</div>
 						</div>
-					</div>
-				</li>
-			{/each}
-		</ul>
-	</nav>
+					</li>
+				{/each}
+			</ul>
+		</nav>
+	{/snippet}
 </RailGroup>
 
 <style>
