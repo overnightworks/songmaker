@@ -56,7 +56,12 @@ def best_playable_generation(song: Song) -> Generation | None:
 def list_playlists(session: Session, user_id: str) -> list[Playlist]:
     return (
         session.query(Playlist)
-        .options(joinedload(Playlist.entries))
+        .options(
+            joinedload(Playlist.entries)
+            .joinedload(PlaylistEntry.generation)
+            .joinedload(Generation.song)
+            .joinedload(Song.album),
+        )
         .filter_by(created_by=user_id)
         .order_by(Playlist.title)
         .all()

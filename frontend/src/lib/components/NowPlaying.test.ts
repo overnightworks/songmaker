@@ -399,6 +399,7 @@ describe('NowPlaying', () => {
 			slug: 'morning-ride',
 			entry_count: 0,
 			is_shared: false,
+			album_covers: [],
 			created_at: '',
 			entries: []
 		});
