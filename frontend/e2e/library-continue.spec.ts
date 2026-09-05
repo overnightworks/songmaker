@@ -81,6 +81,11 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	await openLibraryWall(page, shell);
 	await expect(entries.first()).toBeVisible();
 	expect(continueRequests).toBe(2);
+	const afterSpaReturn = await entries.evaluateAll((buttons) =>
+		buttons.map((button) => button.getAttribute('aria-label'))
+	);
+	expect(afterSpaReturn).not.toEqual(before);
+	expect(afterSpaReturn.slice(0, 2)).toContain(listenedSongLabel);
 	const continueRequestsBeforeReload = continueRequests;
 	const continueCoverRequestsBeforeReload = continueCoverRequests;
 	const continueAfterReload = page.waitForResponse(
@@ -99,11 +104,10 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		exact: true
 	});
 	await expect(playedSong).toBeVisible();
-	const after = await entries.evaluateAll((buttons) =>
+	const afterReload = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
-	expect(after).not.toEqual(before);
-	expect(after.slice(0, 2)).toContain(listenedSongLabel);
+	expect(afterReload).toEqual(afterSpaReturn);
 
 	await playedSong.click();
 	await expect(page.getByRole('heading', { name: listenedSong.title })).toBeVisible();
