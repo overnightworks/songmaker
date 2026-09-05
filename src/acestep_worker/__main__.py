@@ -148,11 +148,10 @@ def main() -> None:
     app = create_app(deps)
     uvicorn.run(
         app,
-        # The worker must accept connections on the container network.
-        host="0.0.0.0",  # nosec B104
+        host=settings.worker_bind_host,
         port=settings.worker_port,
         log_config=None,
-    )  # noqa: S104
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
