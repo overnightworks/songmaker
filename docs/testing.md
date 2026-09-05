@@ -22,7 +22,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -49,9 +49,9 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 ## Coverage Targets
 
-- **CI backend**: 90% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
-- **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
+- **CI frontend**: `pnpm test:coverage` (91% statement and 94% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
@@ -63,7 +63,7 @@ while issue #31 remains open. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 93% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
