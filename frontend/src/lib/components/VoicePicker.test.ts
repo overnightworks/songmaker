@@ -103,14 +103,21 @@ describe('VoicePicker', () => {
 	it('keeps a referenced deleted voice visible but disabled', async () => {
 		setDraftGenParams({ user_lora_id: 'deleted-lora' });
 		loras.set([
-			lora({ id: 'deleted-lora', name: 'Folk Alto', deleted_at: '2026-09-05T00:00:00Z' })
+			lora({ id: 'deleted-lora', name: 'Folk Alto', deleted_at: '2026-09-05T00:00:00Z' }),
+			lora({
+				id: 'other-deleted-lora',
+				name: 'Retired Baritone',
+				deleted_at: '2026-09-05T00:00:00Z'
+			})
 		]);
 		const target = await render();
-		const [, deleted] = await openOptions(target);
+		const [none, deleted] = await openOptions(target);
 
+		expect(none).toBeDefined();
 		expect(deleted.disabled).toBe(true);
 		expect(deleted.textContent).toContain('voice deleted');
 		expect(target.querySelector('.picker')?.textContent).toContain('voice deleted');
+		expect(target.textContent).not.toContain('Retired Baritone');
 	});
 
 	it('uses the picture labels and mode chips without a target-model chip', async () => {

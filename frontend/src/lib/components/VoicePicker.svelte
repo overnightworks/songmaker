@@ -17,16 +17,15 @@
 	const NONE_VALUE = '__none__';
 
 	const current = $derived(($editGenParams ?? {}).user_lora_id ?? null);
+	const visibleLoras = $derived(
+		($loras ?? []).filter((lora) => lora.deleted_at === null || lora.id === current)
+	);
 	const selectedLora = $derived(($loras ?? []).find((lora) => lora.id === current) ?? null);
 	const targetModelMode = $derived($recipeModel ?? '');
 	let open = $state(false);
 
 	function isSelectable(lora: UserLoraItem): boolean {
-		return (
-			lora.status === 'ready' &&
-			lora.deleted_at === null &&
-			lora.model_mode === targetModelMode
-		);
+		return lora.status === 'ready' && lora.deleted_at === null && lora.model_mode === targetModelMode;
 	}
 
 	function unavailableLabel(lora: UserLoraItem): string | null {
@@ -91,7 +90,7 @@
 				>
 					{VOICE_PICKER_NONE_LABEL}
 				</button>
-				{#each $loras ?? [] as lora (lora.id)}
+				{#each visibleLoras as lora (lora.id)}
 					{@const selectable = isSelectable(lora)}
 					{@const unavailable = unavailableLabel(lora)}
 					<button
