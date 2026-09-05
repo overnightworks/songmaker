@@ -644,11 +644,7 @@ async def default_train_lora_runner(
     training_workspace_dirname: str,
 ) -> None:
     from acestep_engine.models import LoraTrainingConfig
-    from acestep_engine.training_client import (
-        AceStepTrainingClient,
-        TrainingRequestError,
-        TrainingResponseError,
-    )
+    from acestep_engine.training_client import AceStepTrainingClient
     from acestep_worker.models import TrainLoraTaskResult
 
     await task_store.mark_running(task_id)
@@ -765,7 +761,7 @@ async def default_train_lora_runner(
     except asyncio.CancelledError:
         try:
             await asyncio.to_thread(client.stop_training)
-        except (TrainingRequestError, TrainingResponseError, Exception):
+        except Exception:
             log.warning("Failed to stop training during cancel", exc_info=True)
         await task_store.fail(task_id, "cancelled")
         raise

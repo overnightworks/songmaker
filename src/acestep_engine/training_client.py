@@ -19,7 +19,6 @@ import json
 import logging
 import time
 from typing import Final
-from urllib.error import URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -193,7 +192,7 @@ class AceStepTrainingClient:
                 with urlopen(req, timeout=timeout or self.timeout) as resp:
                     raw = json.loads(resp.read())
                 return _unwrap_data(raw)
-            except (URLError, OSError) as exc:
+            except OSError as exc:
                 last_exc = exc
                 if attempt < retries - 1:
                     delay = TRAINING_SUBMIT_RETRY_DELAYS[

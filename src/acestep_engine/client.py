@@ -18,7 +18,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
-from urllib.error import URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -112,7 +111,7 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
         req = Request(f"{host}:{port}/health", method="GET")
         with urlopen(req, timeout=5) as resp:
             return resp.status == 200
-    except (URLError, OSError):
+    except OSError:
         return False
 
 
@@ -292,7 +291,7 @@ class AceStepClient:
                 lm_model=data.get("loaded_lm_model", ""),
                 version=data.get("version", ""),
             )
-        except (URLError, OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             return None
 
     def generate(
@@ -356,7 +355,7 @@ class AceStepClient:
                 resp.read()
             log.info("LoRA loaded: path=%s adapter=%s", lora_path, adapter_name)
             return True
-        except (URLError, OSError) as exc:
+        except OSError as exc:
             log.warning("Failed to load LoRA %s: %s", lora_path, exc)
             return False
 
@@ -371,7 +370,7 @@ class AceStepClient:
             with urlopen(req, timeout=30) as resp:
                 resp.read()
             log.info("LoRA unloaded")
-        except (URLError, OSError) as exc:
+        except OSError as exc:
             log.warning("Failed to unload LoRA: %s", exc)
 
     def _submit_task(self, config: AceStepConfig) -> str:
@@ -388,7 +387,7 @@ class AceStepClient:
         for attempt in range(SUBMIT_RETRIES):
             try:
                 return self._send_submit_request(payload)
-            except (URLError, OSError) as exc:
+            except OSError as exc:
                 last_exc = exc
                 if attempt < SUBMIT_RETRIES - 1:
                     delay = SUBMIT_RETRY_DELAYS[attempt]
@@ -506,7 +505,7 @@ class AceStepClient:
                 log.warning("Generation cancelled by user (task_id=%s)", task_id)
                 raise
 
-            except (URLError, OSError, json.JSONDecodeError, PydanticValidationError) as exc:
+            except (OSError, json.JSONDecodeError, PydanticValidationError) as exc:
                 log.warning("Poll error (retrying): %s", exc)
 
             time.sleep(POLL_INTERVAL)
@@ -551,7 +550,7 @@ class AceStepClient:
 
             return AceStepResult(wav_bytes=wav_bytes, seed=seed)
 
-        except (URLError, OSError) as exc:
+        except OSError as exc:
             raise AudioDownloadError(
                 f"Failed to download ACE-Step audio: {exc}"
             ) from exc

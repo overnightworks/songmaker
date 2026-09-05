@@ -67,7 +67,7 @@ def _missing_signal_liveness(
         if seen_at is None:
             return WorkerLiveness.UNKNOWN
         last_alive_at = datetime.fromisoformat(seen_at)
-    except (RedisError, UnicodeDecodeError, TypeError, ValueError):
+    except (RedisError, TypeError, ValueError):
         log.warning("Could not read worker liveness", exc_info=True)
         return WorkerLiveness.UNKNOWN
     grace = timedelta(seconds=worker_restart_grace_seconds(signal))
@@ -99,7 +99,7 @@ def acestep_worker_liveness(
             if state is None:
                 continue
             parsed_state = json.loads(state)
-        except (UnicodeDecodeError, TypeError, ValueError):
+        except (TypeError, ValueError):
             log.warning("Could not decode ACE-Step worker liveness", exc_info=True)
             malformed_state = True
             continue
