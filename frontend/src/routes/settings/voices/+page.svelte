@@ -207,7 +207,7 @@
 {#if loraPendingDelete}
 	<ConfirmDeleteDialog
 		title="Delete voice?"
-		items={[loraPendingDelete.name]}
+		items={[]}
 		warning={`${loraPendingDelete.name} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`}
 		confirmLabel="Delete"
 		onconfirm={confirmDelete}

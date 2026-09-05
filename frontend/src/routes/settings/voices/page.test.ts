@@ -129,9 +129,11 @@ describe('voices page', () => {
 
 		target.querySelector<HTMLButtonElement>('.danger')?.click();
 		await tick();
+		expect(target.querySelector('.dialog h3')?.textContent).toBe('Delete voice?');
 		expect(target.querySelector('.warning')?.textContent).toBe(
 			'My Tenor will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.'
 		);
+		expect(target.querySelectorAll('.dialog li')).toHaveLength(0);
 
 		target.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 		await vi.waitFor(() => expect(mocks.softDeleteLora).toHaveBeenCalledWith(voice.id));
