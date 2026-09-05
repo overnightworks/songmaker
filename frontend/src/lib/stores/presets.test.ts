@@ -59,7 +59,7 @@ beforeEach(() => {
 });
 
 describe('preset store', () => {
-	it('adopts each successfully loaded settings value while keeping prior state on unavailable responses', async () => {
+	it('adopts each successfully loaded settings value', async () => {
 		api.fetchPresets.mockResolvedValue([preset('mine'), preset('shared', { is_shared: true })]);
 		api.fetchBuiltinDefaults.mockResolvedValue({ acestep: { inference_steps: 8 } });
 		api.fetchActiveModels.mockResolvedValue([{ id: 'acestep', is_active: true }]);
@@ -71,10 +71,58 @@ describe('preset store', () => {
 		expect(get(builtinDefaults)).toEqual({ acestep: { inference_steps: 8 } });
 		expect(get(activeModelIds)).toEqual(new Set(['acestep']));
 		expect(get(defaultConfig)).toBe('acestep');
+	});
 
-		api.fetchPresets.mockRejectedValueOnce(new Error('offline'));
-		await loadPresets();
-		expect(get(presets).map((item) => item.id)).toEqual(['mine', 'shared']);
+	it.each([
+		[
+			'presets',
+			() => {
+				presets.set([preset('saved')]);
+			},
+			() => {
+				api.fetchPresets.mockRejectedValueOnce(new Error('offline'));
+				return loadPresets();
+			},
+			() => get(presets)
+		],
+		[
+			'builtin defaults',
+			() => {
+				builtinDefaults.set({ acestep: { inference_steps: 8 } });
+			},
+			() => {
+				api.fetchBuiltinDefaults.mockRejectedValueOnce(new Error('offline'));
+				return loadBuiltins();
+			},
+			() => get(builtinDefaults)
+		],
+		[
+			'active models',
+			() => {
+				activeModels.set([{ id: 'acestep', is_active: true }]);
+			},
+			() => {
+				api.fetchActiveModels.mockRejectedValueOnce(new Error('offline'));
+				return loadActiveModels();
+			},
+			() => get(activeModels)
+		],
+		[
+			'default config',
+			() => {
+				defaultConfig.set('acestep');
+			},
+			() => {
+				api.fetchDefaultConfig.mockRejectedValueOnce(new Error('offline'));
+				return loadDefaultConfig();
+			},
+			() => get(defaultConfig)
+		]
+	])('keeps prior %s when loading is unavailable', async (_name, arrange, load, read) => {
+		arrange();
+		const previousValue = read();
+		await load();
+		expect(read()).toEqual(previousValue);
 	});
 
 	it('applies returned default config and preset mutations to the observable store', async () => {

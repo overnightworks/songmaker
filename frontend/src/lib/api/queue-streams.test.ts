@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -28,6 +28,10 @@ beforeEach(() => {
 });
 
 describe('queue stream API contract', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it('builds explicit and library snapshots with their declared defaults', async () => {
 		await createQueueStreamSnapshot([{ generation_id: 'g-1' }]);
 		let [url, init] = request();
@@ -45,6 +49,18 @@ describe('queue stream API contract', () => {
 			shuffle: false,
 			pool: 'mix'
 		});
+	});
+
+	it('keeps a cold snapshot build alive for its 120 second timeout budget', () => {
+		vi.useFakeTimers();
+		mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+		void createQueueStreamSnapshot([{ generation_id: 'g-1' }]).catch(() => {});
+		const signal = request()[1].signal as AbortSignal;
+		vi.advanceTimersByTime(119_999);
+		expect(signal.aborted).toBe(false);
+		vi.advanceTimersByTime(1);
+		expect(signal.aborted).toBe(true);
 	});
 
 	it.each([

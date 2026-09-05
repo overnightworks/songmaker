@@ -61,7 +61,7 @@ describe('generation API contract', () => {
 		expect(JSON.parse(String(init.body))).toEqual(payload);
 	});
 
-	it('sends every supplied repaint and cover override without inventing count one', async () => {
+	it('sends every supplied repaint and cover override', async () => {
 		await repaintGeneration('gen-1', 12, 24, {
 			model: 'acestep',
 			lyrics: '',
@@ -113,5 +113,13 @@ describe('generation API contract', () => {
 			count: 2,
 			cover_noise_strength: 0.25
 		});
+	});
+
+	it.each([
+		['repaint', () => repaintGeneration('gen-1', 12, 24, { model: 'acestep', count: 1 })],
+		['cover', () => coverGeneration('gen-1', 0.7, { model: 'acestep', count: 1 })]
+	])('does not send count one for %s requests', async (_name, send) => {
+		await send();
+		expect(JSON.parse(String(request()[1].body))).not.toHaveProperty('count');
 	});
 });
