@@ -240,6 +240,32 @@ describe('load()', () => {
 		expect(fakeAudio.src).toBe('/audio/b.mp3');
 	});
 
+	it('publishes replacement takes while loading', () => {
+		const statuses: Array<[string, string]> = [];
+		audioPlayer.swapCallbacks(
+			callbacks({
+				onCurrentChange: (current) => {
+					if (current) statuses.push([current.generation.id, audioPlayer.status]);
+				}
+			})
+		);
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('play');
+		statuses.length = 0;
+
+		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }), {
+			autoplay: false
+		});
+
+		expect(statuses).toEqual([['g2', 'loading']]);
+
+		fakeAudio.fire('play');
+		statuses.length = 0;
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+
+		expect(statuses).toEqual([['g1', 'loading']]);
+	});
+
 	it('clears prior error state on new load', () => {
 		audioPlayer.load(makeInfo());
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
@@ -276,6 +302,17 @@ describe('event handling', () => {
 	it('play event sets status to playing', () => {
 		fakeAudio.fire('play');
 		expect(audioPlayer.status).toBe('playing');
+	});
+
+	it('notifies playback started only after media starts playing', () => {
+		const onPlaybackStarted = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onPlaybackStarted }));
+
+		fakeAudio.fire('play');
+		fakeAudio.fire('error');
+		fakeAudio.fire('playing');
+
+		expect(onPlaybackStarted).not.toHaveBeenCalled();
 	});
 
 	it('pause event sets status to paused (when not error or ended)', () => {
@@ -390,6 +427,22 @@ describe('stream playback', () => {
 		expect(audioPlayer.duration).toBe(20);
 	});
 
+	it('notifies the owner when a running stream crosses into another track', () => {
+		const onCurrentChange = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange }));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		onCurrentChange.mockClear();
+
+		fakeAudio.currentTime = 12.5;
+		fakeAudio.fire('timeupdate');
+
+		expect(onCurrentChange).toHaveBeenCalledOnce();
+		expect(onCurrentChange).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) })
+		);
+	});
+
 	it('seeks next and previous tracks inside the stream', () => {
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 
@@ -431,6 +484,7 @@ describe('stream playback', () => {
 		expect(onEnded).toHaveBeenCalledWith('window-end');
 
 		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
 		fakeAudio.fire('ended');
 		expect(onPlaybackStarted).toHaveBeenCalledOnce();
 		expect(onEnded).toHaveBeenCalledTimes(2);

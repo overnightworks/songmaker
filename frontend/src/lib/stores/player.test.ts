@@ -52,6 +52,9 @@ vi.mock('$lib/api/client', () => ({
 	}),
 	fetchLastFailedGeneration: vi.fn()
 }));
+vi.mock('$lib/api/songs', () => ({
+	recordSongListen: vi.fn().mockResolvedValue(undefined)
+}));
 import { albumList, songList } from './libraryData';
 import {
 	buildQueueViewModel,
@@ -114,6 +117,8 @@ import {
 } from './player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
+import { recordSongListen } from '$lib/api/songs';
+import { SharePlayback } from '$lib/share/sharePlayback.svelte';
 import { ApiError, handleSessionLost } from '$lib/api/fetch';
 import {
 	DEFAULT_DESKTOP_NOW_PLAYING_SURFACE,
@@ -609,6 +614,111 @@ describe('playback dispatch', () => {
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 
 		expect(get(windowEnded)).toBe(false);
+	});
+
+	it('records the first playing transition for each app take once', () => {
+		const song = makeSong({ id: 's-listen' });
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-1', song_id: song.id }), song);
+
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.status = 'paused';
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-2', song_id: song.id }), song);
+		audioPlayer.status = 'playing';
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledTimes(2);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, song.id);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id);
+	});
+
+	it('records a stream take when playback crosses into it', () => {
+		const firstSong = makeSong({ id: 's-stream-listen-1' });
+		const secondSong = makeSong({ id: 's-stream-listen-2' });
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-stream-listen-1', song_id: firstSong.id }),
+			firstSong
+		);
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-stream-listen-2', song_id: secondSong.id }),
+			secondSong
+		);
+		audioPlayer.currentCallbacks.onCurrentChange?.(audioPlayer.current);
+
+		expect(recordSongListen).toHaveBeenCalledTimes(2);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, firstSong.id);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, secondSong.id);
+	});
+
+	it('does not record a replacement take until it starts playing', () => {
+		const firstSong = makeSong({ id: 's-replacement-listen-1' });
+		const secondSong = makeSong({ id: 's-replacement-listen-2' });
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-replacement-listen-1', song_id: firstSong.id }),
+			firstSong
+		);
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		vi.mocked(recordSongListen).mockClear();
+
+		audioPlayer.current = makePlayback(
+			makeGen({ id: 'g-replacement-listen-2', song_id: secondSong.id }),
+			secondSong
+		);
+		audioPlayer.status = 'loading';
+		audioPlayer.currentCallbacks.onCurrentChange?.(audioPlayer.current);
+		audioPlayer.status = 'error';
+
+		expect(recordSongListen).not.toHaveBeenCalled();
+
+		audioPlayer.status = 'playing';
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledOnce();
+		expect(recordSongListen).toHaveBeenCalledWith(secondSong.id);
+	});
+
+	it('logs a reporting failure without interrupting playback', async () => {
+		const song = makeSong({ id: 's-listen-error' });
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-listen-error', song_id: song.id }), song);
+		const reportingError = new Error('offline');
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(recordSongListen).mockRejectedValueOnce(reportingError);
+		audioPlayer.status = 'playing';
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		await Promise.resolve();
+
+		expect(recordSongListen).toHaveBeenCalledWith(song.id);
+		expect(logged).toHaveBeenCalledWith('Could not record song listen:', reportingError);
+	});
+
+	it('does not record while share playback owns the audio callback', () => {
+		const song = makeSong({ id: 's-share-listen' });
+		const sharePlayback = new SharePlayback();
+		sharePlayback.start(
+			{
+				kind: 'song',
+				title: 'Shared song',
+				artist: 'Artist',
+				albumTitle: null,
+				year: null,
+				cover: null,
+				tracks: []
+			},
+			null
+		);
+		audioPlayer.current = makePlayback(makeGen({ id: 'g-share-listen', song_id: song.id }), song);
+
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).not.toHaveBeenCalled();
+		sharePlayback.stop();
 	});
 
 	it('clears library feedback when playback switches to a playlist', () => {

@@ -176,11 +176,11 @@ class AudioPlayer {
 		this.syncStreamBoundaries();
 		this.streamEndSignaled = false;
 		this.mode = 'classic';
-		this.setCurrent(info);
-		this.currentUrl = url;
-		this.error = null;
 
 		if (sameGen && this.audio && this.status !== 'error' && !restart) {
+			this.setCurrent(info);
+			this.currentUrl = url;
+			this.error = null;
 			if (autoplay && this.status !== 'playing') this.play();
 			return;
 		}
@@ -191,8 +191,11 @@ class AudioPlayer {
 		this.lastObservedTime = 0;
 		this.autoplayPending = autoplay;
 		const el = this.ensureAudio();
-		el.pause();
 		this.status = 'loading';
+		el.pause();
+		this.setCurrent(info);
+		this.currentUrl = url;
+		this.error = null;
 		this.currentTime = 0;
 		this.duration = 0;
 		el.src = url;
@@ -215,14 +218,14 @@ class AudioPlayer {
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
 		this.mode = 'stream';
+		this.autoplayPending = autoplay;
+		this.status = 'loading';
+		el.pause();
 		this.setCurrent(streamState.info);
 		this.currentUrl = manifest.stream_url;
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.error = null;
-		this.autoplayPending = autoplay;
-		el.pause();
-		this.status = 'loading';
 		el.src = manifest.stream_url;
 		el.load();
 		// The start-track seek is applied on loadedmetadata, never eagerly:
@@ -435,7 +438,6 @@ class AudioPlayer {
 		});
 		el.addEventListener('play', () => {
 			this.streamEndSignaled = false;
-			this.callbacks.onPlaybackStarted?.();
 			if (this.status !== 'error') this.status = 'playing';
 		});
 		el.addEventListener('playing', () => {
@@ -445,6 +447,7 @@ class AudioPlayer {
 			// between blips.
 			if (this.streamEngine.active) this.recoveryAttempts = 0;
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
+			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		el.addEventListener('pause', () => {
 			this.clearStallRecoveryTimer();
