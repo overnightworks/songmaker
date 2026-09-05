@@ -1068,6 +1068,7 @@ export interface UserLoraItem {
 	name: string;
 	slug: string;
 	status: string;
+	model_mode: string;
 	storage_path?: string | null;
 	tensor_path?: string | null;
 	training_job_id?: string | null;
