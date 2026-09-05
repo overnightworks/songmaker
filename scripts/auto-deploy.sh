@@ -4,8 +4,9 @@
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin/main every couple of minutes (see songmaker-autodeploy.timer) and
 # fast-forwards + redeploys the local checkout when main has moved. Before it
-# pulls, it verifies through GitHub that every check run for the fetched
-# commit has completed successfully; the script itself does not re-run tests.
+# pulls, it verifies through GitHub that every check run for the newest green
+# commit in the fetched main history has completed successfully; the script
+# itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -210,6 +211,9 @@ if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS:-60}"
+# The deployable history window. A busy or failed HEAD must not keep an older,
+# fully verified main commit from reaching production indefinitely.
+CHECK_RUN_LOOKBACK_COMMITS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS:-10}"
 # Once TERM has had this long to be honoured, kill a wedged gh child so it
 # cannot keep the deploy lock forever.
 CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS:-5}"
@@ -223,6 +227,10 @@ fi
 CHECK_RUN_APPEARANCE_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS:-1800}"
 if ! [[ "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_LOOKBACK_COMMITS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS must be a positive integer, got '$CHECK_RUN_LOOKBACK_COMMITS'"
     exit 1
 fi
 if ! [[ "$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
@@ -961,55 +969,81 @@ elif ! MOUNT_PREFLIGHT_ERROR="$(bash "$MOUNT_PREFLIGHT_SCRIPT" 2>&1)"; then
     fail_tick "agent CLI mount preflight failed"
 fi
 
-# --- 9. Only pull a commit whose checks are green. A check run that is
-# still queued/in progress is an ordinary wait, not a deploy failure: the
-# next timer tick will query the same fetched SHA again. A completed non-green
-# run, an aged SHA with no runs, or inability to query GitHub at all, is a
-# named fail-closed refusal.
-if ! REMOTE_COMMIT_TIMESTAMP="$(safe_git show -s --format=%ct "$REMOTE_HEAD" 2>&1)"; then
-    log_err "cannot determine commit time for verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD: $REMOTE_COMMIT_TIMESTAMP"
-    fail_tick "cannot determine verified commit time"
+# --- 9. Select the newest fully green commit in the recent main history.
+# A newer running or failed commit is skipped rather than becoming a reason to
+# hold an already-verified predecessor back. An unavailable or malformed
+# GitHub answer is still fail-closed: without its result we cannot prove that
+# a predecessor is the newest green candidate.
+if ! DEPLOY_CANDIDATES="$(safe_git rev-list --first-parent --max-count="$CHECK_RUN_LOOKBACK_COMMITS" "origin/$DEPLOY_BRANCH" 2>&1)"; then
+    log_err "cannot list the newest $CHECK_RUN_LOOKBACK_COMMITS commits for origin/$DEPLOY_BRANCH: $DEPLOY_CANDIDATES"
+    fail_tick "cannot list deploy candidates"
 fi
-if ! [[ "$REMOTE_COMMIT_TIMESTAMP" =~ ^[0-9]+$ ]]; then
-    log_err "verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD has an invalid commit time '$REMOTE_COMMIT_TIMESTAMP'"
-    fail_tick "invalid verified commit time"
-fi
-
-if ! CHECK_RUN_AGE_START="$(first_seen_commit_timestamp "$REMOTE_HEAD")"; then
-    log_err "cannot determine when origin/$DEPLOY_BRANCH commit $REMOTE_HEAD was first seen — refusing to deploy: $CHECK_RUN_AGE_START"
-    fail_tick "cannot determine commit first-seen time"
-fi
-if ! REMOTE_CHECK_STATUS="$(remote_check_status "$REMOTE_HEAD" "$CHECK_RUN_AGE_START")"; then
-    log_err "cannot determine GitHub check status for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — refusing to deploy: $REMOTE_CHECK_STATUS"
-    if [[ "$REMOTE_CHECK_STATUS" == "check-run lookup timed out" ]]; then
-        fail_tick "check-run lookup timed out"
-    fi
-    fail_tick "GitHub check status undetermined"
+if [[ -z "$DEPLOY_CANDIDATES" ]]; then
+    log_err "origin/$DEPLOY_BRANCH has no commits to evaluate for deployment"
+    fail_tick "no deploy candidates"
 fi
 
-case "$REMOTE_CHECK_STATUS" in
-    green)
-        ;;
-    waiting\ *)
-        log_info "GitHub checks for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) are not green yet: $REMOTE_CHECK_STATUS"
-        exit 0
-        ;;
-    failed\ *)
-        log_err "GitHub checks for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) are not green — refusing to deploy: $REMOTE_CHECK_STATUS"
-        if [[ "$REMOTE_CHECK_STATUS" == "failed (GitHub has not reported a check run within "* ]]; then
-            fail_tick "no GitHub check runs reported within ${CHECK_RUN_APPEARANCE_GRACE_SECONDS}s of commit"
+DEPLOY_COMMIT=""
+while IFS= read -r CANDIDATE_COMMIT; do
+    if [[ "$CANDIDATE_COMMIT" == "$REMOTE_HEAD" ]]; then
+        if ! CHECK_RUN_AGE_START="$(first_seen_commit_timestamp "$CANDIDATE_COMMIT")"; then
+            log_err "cannot determine when origin/$DEPLOY_BRANCH commit $CANDIDATE_COMMIT was first seen — refusing to deploy: $CHECK_RUN_AGE_START"
+            fail_tick "cannot determine commit first-seen time"
         fi
-        fail_tick "GitHub checks are not green"
-        ;;
-    *)
-        log_err "cannot determine GitHub check status for origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — refusing to deploy: unexpected result '$REMOTE_CHECK_STATUS'"
-        fail_tick "GitHub check status undetermined"
-        ;;
-esac
+    else
+        if ! CHECK_RUN_AGE_START="$(safe_git show -s --format=%ct "$CANDIDATE_COMMIT" 2>&1)"; then
+            log_err "cannot determine commit time for deploy candidate $CANDIDATE_COMMIT: $CHECK_RUN_AGE_START"
+            fail_tick "cannot determine candidate commit time"
+        fi
+        if ! [[ "$CHECK_RUN_AGE_START" =~ ^[0-9]+$ ]]; then
+            log_err "deploy candidate $CANDIDATE_COMMIT has an invalid commit time '$CHECK_RUN_AGE_START'"
+            fail_tick "invalid candidate commit time"
+        fi
+    fi
 
-# --- 10. Fast-forward exactly the fetched-and-verified commit, then build.
+    if ! CANDIDATE_CHECK_STATUS="$(remote_check_status "$CANDIDATE_COMMIT" "$CHECK_RUN_AGE_START")"; then
+        log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: $CANDIDATE_CHECK_STATUS"
+        if [[ "$CANDIDATE_CHECK_STATUS" == "check-run lookup timed out" ]]; then
+            fail_tick "check-run lookup timed out"
+        fi
+        fail_tick "GitHub check status undetermined"
+    fi
+
+    case "$CANDIDATE_CHECK_STATUS" in
+        green)
+            DEPLOY_COMMIT="$CANDIDATE_COMMIT"
+            log_info "selected newest fully green deploy candidate $DEPLOY_COMMIT from origin/$DEPLOY_BRANCH"
+            break
+            ;;
+        waiting\ *|failed\ *)
+            log_info "skipping deploy candidate $CANDIDATE_COMMIT: $CANDIDATE_CHECK_STATUS"
+            ;;
+        *)
+            log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: unexpected result '$CANDIDATE_CHECK_STATUS'"
+            fail_tick "GitHub check status undetermined"
+            ;;
+    esac
+done <<<"$DEPLOY_CANDIDATES"
+
+if [[ -z "$DEPLOY_COMMIT" ]]; then
+    log_info "no fully green deploy candidate among the newest $CHECK_RUN_LOOKBACK_COMMITS commits of origin/$DEPLOY_BRANCH; waiting"
+    exit 0
+fi
+
+if [[ "$LOCAL_HEAD" == "$DEPLOY_COMMIT" && "$DEPLOYED_SHA" == "$DEPLOY_COMMIT" ]]; then
+    reset_counters
+    log_debug "newest fully green deploy candidate $DEPLOY_COMMIT is already running; waiting for a newer green commit"
+    exit 0
+fi
+
+if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$DEPLOY_COMMIT"; then
+    log_err "newest fully green deploy candidate $DEPLOY_COMMIT is behind local HEAD $LOCAL_HEAD — refusing to roll the checkout backwards"
+    fail_tick "deploy candidate is behind local HEAD"
+fi
+
+# --- 10. Fast-forward exactly the selected green commit, then build.
 # Do not use `git pull` here: it would fetch a second time and could move the
-# checkout past $REMOTE_HEAD after its checks were accepted. No timeout around
+# checkout past $DEPLOY_COMMIT after its checks were accepted. No timeout around
 # the build (CLAUDE.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
@@ -1018,8 +1052,8 @@ esac
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
 # only a short log_err line with the exit code goes through `logger`.
-if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$REMOTE_HEAD" 2>&1)"; then
-    log_err "git merge --ff-only to verified origin/$DEPLOY_BRANCH ($REMOTE_HEAD) failed in $REPO_ROOT: $MERGE_OUTPUT"
+if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$DEPLOY_COMMIT" 2>&1)"; then
+    log_err "git merge --ff-only to selected deploy candidate ($DEPLOY_COMMIT) failed in $REPO_ROOT: $MERGE_OUTPUT"
     fail_tick "git fast-forward failed"
 fi
 
@@ -1028,8 +1062,8 @@ if ! CHECKED_OUT_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     fail_tick "cannot determine HEAD after fast-forward"
 fi
 
-if [[ "$CHECKED_OUT_HEAD" != "$REMOTE_HEAD" ]]; then
-    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the verified origin/$DEPLOY_BRANCH commit $REMOTE_HEAD — refusing to build"
+if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
+    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
     fail_tick "checked out commit differs from verified commit"
 fi
 
