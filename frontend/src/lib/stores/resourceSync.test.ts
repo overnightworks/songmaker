@@ -428,7 +428,11 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 
-		expect(get(store)).toMatchObject({ status: 'error', error: 'snapshot unavailable', ready: false });
+		expect(get(store)).toMatchObject({
+			status: 'error',
+			error: 'snapshot unavailable',
+			ready: false
+		});
 	});
 
 	it('bounds deferred events and remembered generation ids', async () => {
@@ -1035,7 +1039,11 @@ describe('resource sync owner', () => {
 
 	it.each([
 		['an API detail', new ApiError(500, 'server detail', '/api/songs/s1'), 'server detail'],
-		['an API fallback message', new ApiError(500, '', '/api/songs/s1'), 'Something went wrong. Try again.'],
+		[
+			'an API fallback message',
+			new ApiError(500, '', '/api/songs/s1'),
+			'Something went wrong. Try again.'
+		],
 		['an unknown failure', null, RESOURCE_SYNC_ERROR]
 	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
 		const { controller, sources, store } = setup({
