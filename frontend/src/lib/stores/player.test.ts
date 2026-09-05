@@ -448,6 +448,14 @@ describe('browsing state', () => {
 		expect(get(selectedGeneration)).toBeNull();
 	});
 
+	it('selectedGeneration returns null when the selected take is no longer in its song', () => {
+		songList.set([makeSong()]);
+		selectedSongId.set('s1');
+		selectedGenerationId.set('g-removed');
+
+		expect(get(selectedGeneration)).toBeNull();
+	});
+
 	it('filteredSongs filters by album', () => {
 		songList.set([makeSong({ album_id: 'a1' }), makeSong({ id: 's2', album_id: 'a2' })]);
 		selectedAlbumId.set('a1');
