@@ -1895,6 +1895,39 @@ def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient
     assert set(playlist["entries"][0]) == _SHARED_PLAYLIST_ENTRY_KEYS
 
 
+@pytest.mark.parametrize(
+    ("share_path", "cover_path"),
+    [
+        pytest.param(
+            "/api/albums/test_album/share", "/shared/{slug}/cover", id="album",
+        ),
+        pytest.param(
+            "/api/songs/s1/share", "/shared/song/{slug}/cover", id="song",
+        ),
+        pytest.param(
+            "/api/generations/g1/share",
+            "/shared/gen/{slug}/album-cover",
+            id="generation-album",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share", "/shared/playlist/{slug}/cover", id="playlist",
+        ),
+    ],
+)
+def test_shared_cover_endpoints_hide_missing_media(
+    two_take_app: TestClient,
+    share_path: str,
+    cover_path: str,
+) -> None:
+    """A live share link never turns a missing cover file into a server error."""
+    slug = _share_slug(two_take_app, share_path)
+    public = TestClient(two_take_app.app, cookies={})
+
+    response = public.get(cover_path.format(slug=slug))
+
+    assert response.status_code == 404
+
+
 # ── Public base URL (#339) ───────────────────────────────────────────
 #
 # Share links no longer trust request.base_url. In the Docker + Cloudflare
