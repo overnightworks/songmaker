@@ -377,6 +377,60 @@ describe('resource sync interleavings', () => {
 });
 
 describe('resource sync owner', () => {
+	it('keeps an unstarted owner idle and creates only one stream on repeated starts', async () => {
+		const { controller, sources, fetchCalls } = setup();
+
+		expect(await controller.waitForReady()).toBe(false);
+		await controller.requestSongRefresh('s1');
+		expect(fetchCalls).toEqual([]);
+		controller.start();
+		controller.start();
+		expect(sources).toHaveLength(1);
+	});
+
+	it('does not revalidate while the document is hidden or before the first snapshot', async () => {
+		const { controller, sources, fetchCalls } = setup();
+		controller.start();
+		await controller.handleVisibility();
+		expect(fetchCalls).toEqual([]);
+
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		await controller.handleVisibility();
+		expect(fetchCalls).toEqual([]);
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+	});
+
+	it.each([
+		['hello', { high_water_mark: 1 }],
+		['resync', { high_water_mark: 1 }],
+		['generation.created', { sequence: 1 }]
+	])('makes malformed %s events visibly retryable', async (type, data) => {
+		const { controller, sources, store } = setup();
+		controller.start();
+
+		latestSource(sources).emit(type, data);
+		await flush();
+
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toEqual(expect.any(String));
+	});
+
+	it('keeps the first bootstrap error when a later cleanup would use a generic fallback', async () => {
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => {
+				throw new Error('snapshot unavailable');
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error: 'snapshot unavailable', ready: false });
+	});
+
 	it('bounds deferred events and remembered generation ids', async () => {
 		let loaded: string[] = [];
 		const newestSongId = `s-${RESOURCE_SYNC_TRACKED_EVENT_LIMIT + 1}`;
@@ -530,6 +584,17 @@ describe('resource sync owner', () => {
 		expect(fetchCalls.slice(before)).toEqual(['s1']);
 	});
 
+	it('does nothing when a live revalidation has no failed or priority song', async () => {
+		const { controller, sources, fetchCalls } = setup({ listPrioritySongIds: () => [] });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+
+		await controller.handleVisibility();
+		expect(fetchCalls).toEqual([]);
+	});
+
 	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
 		const ids = Array.from(
 			{ length: RESOURCE_SYNC_FETCH_CONCURRENCY + 1 },
@@ -623,6 +688,20 @@ describe('resource sync owner', () => {
 		expect(await controller.retry()).toBe(true);
 		expect(get(store).status).toBe('live');
 		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
+	});
+
+	it('returns a failed retry when the active owner stops during its refresh', async () => {
+		const pending = deferred<SongItem>();
+		const { controller, sources } = setup({ fetchSong: () => pending.promise });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const retry = controller.retry();
+		controller.stop();
+		pending.resolve(song());
+
+		expect(await retry).toBe(false);
 	});
 
 	it('unauthorized stream errors stop the owner and clear auth', async () => {
@@ -952,6 +1031,24 @@ describe('resource sync owner', () => {
 		expect(forgotten).toEqual(['s1']);
 		expect(get(store).status).toBe('live');
 		expect(get(store).error).toBeNull();
+	});
+
+	it.each([
+		['an API detail', new ApiError(500, 'server detail', '/api/songs/s1'), 'server detail'],
+		['an API fallback message', new ApiError(500, '', '/api/songs/s1'), 'Something went wrong. Try again.'],
+		['an unknown failure', null, RESOURCE_SYNC_ERROR]
+	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
+		const { controller, sources, store } = setup({
+			fetchSong: async () => Promise.reject(failure)
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+
+		expect(get(store)).toMatchObject({ status: 'error', error });
 	});
 });
 
