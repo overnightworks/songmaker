@@ -403,7 +403,7 @@ function* phrasesContainingRun(
 		if (first < run.from) {
 			opening = opening === '' ? wordTexts[first] : `${wordTexts[first]} ${opening}`;
 		}
-		let phrase = opening === '' ? run.text : `${opening} ${run.text}`;
+		const phrase = opening === '' ? run.text : `${opening} ${run.text}`;
 		if (phrase.length > maxPhraseLength) break;
 
 		yield* phraseExtensionsAfterRun(wordTexts, run, first, phrase, maxPhraseLength);
