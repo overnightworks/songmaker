@@ -27,6 +27,8 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   deny @{PROC}/sysrq-trigger rwklx,
   deny @{PROC}/kcore rwklx,
 
+  # Docker's `deny mount` becomes this exhaustive Bubblewrap allowlist; every
+  # mount shape not listed here remains denied by AppArmor's default policy.
   # Bubblewrap first makes the copied mount tree a recursive slave so its
   # later mounts cannot propagate back to the web container.
   mount options=(rslave) -> /,
@@ -34,6 +36,9 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   mount fstype=tmpfs options=(rw nosuid nodev) none -> /tmp/,
   # Bubblewrap bind-mounts that construction root before the first pivot_root.
   mount options=(rw rbind) /tmp/newroot/ -> /tmp/newroot/,
+  # Its two pivot_root calls enter the construction root and then newroot.
+  pivot_root /tmp/ -> /tmp/oldroot/,
+  pivot_root /newroot/ -> /newroot/,
   # It detaches the old root after each pivot and makes it private first.
   mount options=(rprivate) -> /oldroot/,
 
@@ -52,8 +57,12 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # --dev exposes only Bubblewrap's six standard device nodes from oldroot.
   mount options=(rw rbind) /oldroot/dev/{null,zero,full,random,urandom,tty} -> /newroot/dev/{null,zero,full,random,urandom,tty},
   mount options=(rw remount bind nosuid) -> /newroot/dev/{null,zero,full,random,urandom,tty},
-  # --tmpfs /tmp creates the sandbox's only writable ordinary filesystem.
+  # --tmpfs /tmp supplies the sandbox scratch mount.
   mount fstype=tmpfs options=(rw nosuid nodev) none -> /newroot/tmp/,
+  # The private Codex home is the sole writable bind below that scratch mount.
+  mount options=(rw rbind) /oldroot/tmp/songmaker-cover-codex-*/codex-home/ -> /newroot/tmp/songmaker-cover-codex-*/codex-home/,
+  mount options=(rw rbind) /oldroot/tmp/songmaker-codex-sandbox-probe/codex-home/ -> /newroot/tmp/songmaker-codex-sandbox-probe/codex-home/,
+  mount options=(rw remount bind nosuid nodev) -> /newroot/tmp/{songmaker-cover-codex-*,songmaker-codex-sandbox-probe}/codex-home/{,**},
 
   deny /sys/[^f]*/** wklx,
   deny /sys/f[^s]*/** wklx,
