@@ -15,6 +15,7 @@
 		RAIL_PLAYLISTS_NAV_LABEL
 	} from '$lib/constants';
 	import type { PlaylistEntryItem } from '$lib/api/types';
+	import PlaylistCover from '../PlaylistCover.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
 
@@ -99,6 +100,7 @@
 						class:row-active={expanded}
 						onclick={() => onPlaylistLabelClick(playlist.id)}
 					>
+						<PlaylistCover title={playlist.title} covers={playlist.album_covers} />
 						<span class="row-title">{playlist.title}</span>
 						<span class="row-meta">{playlist.entry_count}</span>
 					</button>

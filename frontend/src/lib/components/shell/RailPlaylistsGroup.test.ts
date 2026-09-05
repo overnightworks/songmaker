@@ -110,6 +110,33 @@ describe('RailPlaylistsGroup', () => {
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '12']);
 	});
 
+	it('shows each playlist mosaic while keeping the whole row as its navigation target', async () => {
+		playlistList.set([
+			playlist({
+				id: 'p1',
+				title: 'Night Drive',
+				album_covers: [
+					{ card: '/covers/night.jpg', detail: '/covers/night-detail.jpg' },
+					{ card: '/covers/drive.jpg', detail: '/covers/drive-detail.jpg' }
+				]
+			})
+		]);
+		fetchPlaylist.mockResolvedValue(detail({ id: 'p1', title: 'Night Drive' }));
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+
+		const row = requireElement<HTMLButtonElement>(target, '.playlist-label');
+		expect(row.querySelectorAll('.playlist-cover-cell')).toHaveLength(4);
+		expect(row.querySelectorAll('.playlist-cover-cell img')).toHaveLength(2);
+		expect(row.querySelectorAll('.playlist-cover-initials')).toHaveLength(2);
+		expect(row.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
+		expect(row.querySelectorAll('button')).toHaveLength(0);
+
+		row.click();
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' }));
+	});
+
 	it('narrows playlists by title without hiding the open playlist', async () => {
 		playlistList.set([
 			playlist({ id: 'p-open', title: 'Night Drive' }),
