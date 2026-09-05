@@ -533,8 +533,9 @@ def test_second_mode_load_is_not_fooled_by_first_modes_leftover_health(
         loaded_turbo = _run(loader("turbo"))
         assert loaded_turbo.port == 8101
 
+        load_operation = loader("sft")
         with pytest.raises(SubprocessStartError, match="did not become healthy"):
-            _run(loader("sft"))
+            _run(load_operation)
 
 
 def test_make_acestep_runner_passes_on_log_line(tmp_path: Path) -> None:

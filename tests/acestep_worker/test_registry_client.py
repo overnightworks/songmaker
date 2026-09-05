@@ -66,7 +66,7 @@ def test_payload_shape() -> None:
     assert payload["vram_total_gb"] == 24.0
 
 
-def test_register_success_first_try() -> None:
+def test_register_success_first_try(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -91,17 +91,14 @@ def test_register_success_first_try() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = factory  # type: ignore[misc]
-    try:
-        _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    _run(client.register(_make_registration()))
 
     assert captured["url"].endswith(REGISTER_PATH)
     assert captured["headers"]["x-internal-token"] == "secret"
 
 
-def test_register_retries_then_succeeds() -> None:
+def test_register_retries_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = {"count": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -126,16 +123,15 @@ def test_register_retries_then_succeeds() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = factory  # type: ignore[misc]
-    try:
-        _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    _run(client.register(_make_registration()))
 
     assert attempts["count"] == 2
 
 
-def test_register_finite_delays_exhausted_raises() -> None:
+def test_register_finite_delays_exhausted_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="permanent")
 
@@ -157,17 +153,15 @@ def test_register_finite_delays_exhausted_raises() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = factory  # type: ignore[misc]
-    try:
-        with pytest.raises(RegistrationFailedError):
-            _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    registration = client.register(_make_registration())
+    with pytest.raises(RegistrationFailedError):
+        _run(registration)
 
     assert sleep_calls == [1.0, 2.0, 3.0]
 
 
-def test_register_handles_transport_error() -> None:
+def test_register_handles_transport_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
 
@@ -187,12 +181,10 @@ def test_register_handles_transport_error() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = factory  # type: ignore[misc]
-    try:
-        with pytest.raises(RegistrationFailedError):
-            _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    registration = client.register(_make_registration())
+    with pytest.raises(RegistrationFailedError):
+        _run(registration)
 
 
 def test_default_retry_delays_yields_initial_then_indefinite() -> None:
@@ -213,7 +205,9 @@ def test_default_factory_is_fresh_iterator_each_call() -> None:
     assert next(a) == next(b)
 
 
-def test_register_uses_delays_factory_for_each_call() -> None:
+def test_register_uses_delays_factory_for_each_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     handler_calls = {"count": 0}
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -246,18 +240,17 @@ def test_register_uses_delays_factory_for_each_call() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = http_factory  # type: ignore[misc]
-    try:
-        _run(client.register(_make_registration()))
-        _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", http_factory)
+    _run(client.register(_make_registration()))
+    _run(client.register(_make_registration()))
 
     assert factory_call_count["count"] == 2
     assert handler_calls["count"] >= 4
 
 
-def test_register_default_factory_eventually_succeeds_after_failures() -> None:
+def test_register_default_factory_eventually_succeeds_after_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     attempts = {"count": 0}
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -281,11 +274,8 @@ def test_register_default_factory_eventually_succeeds_after_failures() -> None:
         kwargs["transport"] = transport
         return original(*args, **kwargs)
 
-    httpx.AsyncClient = http_factory  # type: ignore[misc]
-    try:
-        _run(client.register(_make_registration()))
-    finally:
-        httpx.AsyncClient = original  # type: ignore[misc]
+    monkeypatch.setattr(httpx, "AsyncClient", http_factory)
+    _run(client.register(_make_registration()))
 
     assert attempts["count"] == 7
 

@@ -404,10 +404,11 @@ def test_generate_acquisition_serializes_with_hold_reservation(
         await running_generation
 
         assert (await reserve()).token
+        held_generation = generate(
+            GenerateRequest(mode="sft", config=AceStepConfig(prompt="test", lyrics=""))
+        )
         with pytest.raises(HTTPException, match="GPU is held for LoRA training"):
-            await generate(
-                GenerateRequest(mode="sft", config=AceStepConfig(prompt="test", lyrics=""))
-            )
+            await held_generation
         await deps.redis.delete(gpu_hold_key(deps.worker_id))
 
     _run(scenario())

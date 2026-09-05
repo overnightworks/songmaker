@@ -160,8 +160,9 @@ def test_update_unknown_raises() -> None:
         store = TaskStore()
         await store.mark_running("ghost")
 
+    operation = go()
     with pytest.raises(KeyError):
-        _run(go())
+        _run(operation)
 
 
 def test_subscribe_replays_initial_then_terminal() -> None:
@@ -194,8 +195,9 @@ def test_subscribe_unknown_raises() -> None:
         async for _ in store.subscribe("ghost"):
             pass
 
+    operation = go()
     with pytest.raises(KeyError):
-        _run(go())
+        _run(operation)
 
 
 def test_subscribe_already_terminal_yields_only_initial() -> None:
