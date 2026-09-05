@@ -2107,6 +2107,38 @@ def test_scoring_job_cancelled_after_start_does_not_score_or_persist(
         assert session.query(Score).filter_by(generation_id="g1").count() == 0
 
 
+def test_scoring_job_cancelled_after_loading_input_does_not_score_or_persist(
+    seeded_db,
+    tmp_path: Path,
+) -> None:
+    from songmaker_cli.jobs.scoring import _load_scoring_input as load_scoring_input
+
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+
+    def cancel_after_loading_input(*args):
+        scoring_input = load_scoring_input(*args)
+        _cancel_job(seeded_db, "j2")
+        return scoring_input
+
+    scorer = MagicMock(score=MagicMock(return_value=_scoring_result()))
+    with (
+        patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer),
+        patch(
+            "songmaker_cli.jobs.scoring._load_scoring_input",
+            side_effect=cancel_after_loading_input,
+        ),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    scorer.score.assert_not_called()
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "cancelled"
+        assert job.completed_at is not None
+        assert session.query(Score).filter_by(generation_id="g1").count() == 0
+
+
 def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
