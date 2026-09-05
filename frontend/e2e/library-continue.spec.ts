@@ -22,10 +22,19 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	const shell = shellOf(testInfo);
 	if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 375, height: 844 });
 	const library = readSeededLibrary();
-	const listenedSong = {
-		id: library.continueReorderSongId,
-		title: library.continueReorderSongTitle
-	};
+	const listenedSong = library.continueReorderSongs[shell];
+	let continueRequests = 0;
+	let continueCoverRequests = 0;
+	page.on('request', (request) => {
+		const url = new URL(request.url());
+		if (request.method() === 'GET' && url.pathname === '/api/library/continue')
+			continueRequests += 1;
+		if (
+			request.resourceType() === 'image' &&
+			/^\/api\/(?:albums|songs)\/[^/]+\/cover$/.test(url.pathname)
+		)
+			continueCoverRequests += 1;
+	});
 
 	// AudioPlayer owns a detached Audio object, which headless Chromium does
 	// not advance far enough to emit `playing`. Preserve the real playback
@@ -66,14 +75,20 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	).toBeVisible();
 	expect((await listenReport).status()).toBe(200);
 
-	const continueAfterListen = page.waitForResponse(
+	const continueRequestsBeforeReturn = continueRequests;
+	const continueCoverRequestsBeforeReturn = continueCoverRequests;
+	const continueAfterReturn = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
 			new URL(response.url()).pathname === '/api/library/continue'
 	);
 	await page.goto('/');
-	expect((await continueAfterListen).status()).toBe(200);
-	await page.reload();
+	expect((await continueAfterReturn).status()).toBe(200);
+	// Returning to the Continue owner fetches its data once. This seed has no
+	// covers, so the refreshed row adds no image requests. The complete flows
+	// stay within their measured 45/40-request budgets below.
+	expect(continueRequests).toBe(continueRequestsBeforeReturn + 1);
+	expect(continueCoverRequests).toBe(continueCoverRequestsBeforeReturn);
 	const playedSong = continueRow.getByRole('button', {
 		name: `Open song ${listenedSong.title}`,
 		exact: true

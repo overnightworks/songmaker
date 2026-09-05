@@ -67,6 +67,11 @@ export interface SeededTake {
 	takeId: string;
 }
 
+export interface SeededSong {
+	id: string;
+	title: string;
+}
+
 /** A private, playable take for the Voices flow to select through its real catalogue. */
 export interface SeededVoiceTake {
 	songTitle: string;
@@ -96,9 +101,12 @@ export interface SeededLibrary {
 	pickedSongTitle: string;
 	/** The picked song's API id, used by the Continue reorder proof. */
 	pickedSongId: string;
-	/** A second playable song, so each viewport proves a fresh reorder. */
-	continueReorderSongTitle: string;
-	continueReorderSongId: string;
+	/**
+	 * One non-leading song per shell, so the serial desktop and mobile flows
+	 * each prove their own reorder without relying on another spec to move the
+	 * shared library's leader in between.
+	 */
+	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -137,6 +145,12 @@ function requiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} must be set to the CI stack's admin credentials`);
 	return value;
+}
+
+function seededSong(songIdByTitle: Map<string, string>, title: string): SeededSong {
+	const id = songIdByTitle.get(title);
+	if (!id) throw new Error(`Missing seeded song ${title}`);
+	return { id, title };
 }
 
 /**
@@ -315,12 +329,14 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		takeBySongTitle.set(title, take.id);
 	}
 
-	const [pickedSongTitle, ...playlistSongTitles] = SONG_TITLES;
+	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
+	const playlistSongTitles = [mobileContinueSongTitle, desktopContinueSongTitle];
 	const pickedSongId = songIdByTitle.get(pickedSongTitle);
 	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
-	const continueReorderSongTitle = playlistSongTitles[playlistSongTitles.length - 1];
-	const continueReorderSongId = songIdByTitle.get(continueReorderSongTitle);
-	if (!continueReorderSongId) throw new Error(`Missing seeded song ${continueReorderSongTitle}`);
+	const continueReorderSongs = {
+		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
+		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
+	};
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
@@ -353,8 +369,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
 		pickedSongId,
-		continueReorderSongTitle,
-		continueReorderSongId,
+		continueReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,
