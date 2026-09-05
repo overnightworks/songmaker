@@ -46,6 +46,8 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # remounts every resulting mount nodev,nosuid,read-only.
   mount options=(rw rbind) /oldroot/ -> /newroot/,
   mount options=(ro remount bind nosuid nodev) -> /newroot/{,**},
+  # Existing noexec mounts (such as procfs) retain that flag during remount.
+  mount options=(ro remount bind nosuid nodev noexec) -> /newroot/{,**},
   # --proc mounts a fresh, non-executable procfs for the private PID namespace.
   mount fstype=proc options=(rw nosuid nodev noexec) proc -> /newroot/proc/,
   # Bubblewrap covers writable legacy proc nodes with read-only self-binds.
