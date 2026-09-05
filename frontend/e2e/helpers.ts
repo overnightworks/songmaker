@@ -17,12 +17,11 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 /**
  * What the library flow costs the API per shell, measured on a green full-suite
  * run against `library.spec.ts`'s own first test: 40 requests on desktop and
- * 45 on mobile. The mobile flow's five-request increase is the new Continue
- * row on its first wall: one GET `/api/library/continue` plus four visible
- * cover images. Those requests render the new surface; the row does not issue
- * duplicate data requests. Both projects share one IP rate-limit window, so a
- * later jump is a regression to find rather than a budget to raise. Every other
- * mention of this budget (the `e2e/README.md` table, `docs/testing.md`)
+ * 30 on mobile against a clean stack, budgeted at 40 for both. Both projects
+ * share one IP rate-limit window, so a flow that suddenly needs more round
+ * trips is a regression — find the extra requests instead of raising this
+ * number. Every other mention of this budget (the `e2e/README.md` table,
+ * `docs/testing.md`)
  * points back here rather than restating it, which is exactly how those
  * three numbers drifted apart before: #312 and #325 each added a request per
  * page load (`ensureAllAlbumsLoaded`, `ensurePlaylistsLoaded`) without this
@@ -30,7 +29,7 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  */
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	desktop: 40,
-	mobile: 45
+	mobile: 40
 };
 
 /**

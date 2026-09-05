@@ -58,8 +58,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	const listenedSongLabel = `Open song ${listenedSong.title}`;
 	expect(before.length).toBeGreaterThan(0);
 	expect(before.length).toBeLessThanOrEqual(6);
-	expect(before).toContain(listenedSongLabel);
-	expect(before[0]).not.toBe(listenedSongLabel);
+	expect(before.slice(0, 2)).not.toContain(listenedSongLabel);
 	expect(await continueRow.locator('.continue-tag').allTextContents()).toEqual(
 		expect.arrayContaining(['Album'])
 	);
@@ -102,7 +101,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
 	expect(after).not.toEqual(before);
-	expect(after.indexOf(listenedSongLabel)).toBeLessThan(before.indexOf(listenedSongLabel));
+	expect(after.slice(0, 2)).toContain(listenedSongLabel);
 
 	await playedSong.click();
 	await expect(page.getByRole('heading', { name: listenedSong.title })).toBeVisible();
