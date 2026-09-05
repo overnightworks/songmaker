@@ -31,6 +31,7 @@ from songmaker_cli.mcp_server.tools import (
     tool_list_songs,
     tool_rename_song,
     tool_search_songs,
+    tool_suggest_album_cover,
     tool_update_song_lyrics,
     tool_update_song_prompt,
     tool_update_song_style,
@@ -153,6 +154,13 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
         _object({"song_id": _STRING, "title": _STRING}, ["song_id", "title"]),
         True,
         tool_rename_song,
+    ),
+    CowriterTool(
+        "suggest_album_cover",
+        "Request three album cover suggestions. Returns the queued job ID and status.",
+        _object({"album_id": _STRING}, ["album_id"]),
+        True,
+        tool_suggest_album_cover,
     ),
 )
 

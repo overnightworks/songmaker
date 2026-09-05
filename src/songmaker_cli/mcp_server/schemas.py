@@ -177,3 +177,11 @@ class WriteResult(BaseModel):
     song_id: str
     message: str
     song: SongDetail
+
+
+class CoverSuggestionRequestResult(BaseModel):
+    """The queued cover-suggestion job returned to a co-writer."""
+
+    job_id: str
+    status: str
+    message: str

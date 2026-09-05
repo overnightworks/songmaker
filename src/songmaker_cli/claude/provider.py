@@ -98,7 +98,7 @@ _EXPECTED_MCP_TOOL_NAMES: Final[frozenset[str]] = frozenset(
         "list_albums", "list_songs", "search_songs", "get_song",
         "get_version", "get_generation", "create_song",
         "update_song_lyrics", "update_song_prompt", "update_song_style",
-        "rename_song",
+        "rename_song", "suggest_album_cover",
     )
 )
 _NO_TOOLS_EXPECTED: Final[frozenset[str]] = frozenset()
