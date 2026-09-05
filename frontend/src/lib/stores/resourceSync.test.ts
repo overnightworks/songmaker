@@ -531,8 +531,9 @@ describe('resource sync owner', () => {
 	});
 
 	it('limits simultaneous refresh requests while applying every invalidated song', async () => {
-		const ids = Array.from({ length: RESOURCE_SYNC_FETCH_CONCURRENCY + 1 }, (_, index) =>
-			`s${index + 1}`
+		const ids = Array.from(
+			{ length: RESOURCE_SYNC_FETCH_CONCURRENCY + 1 },
+			(_, index) => `s${index + 1}`
 		);
 		const inFlight = new Set<string>();
 		const maxInFlight: number[] = [];
@@ -555,12 +556,16 @@ describe('resource sync owner', () => {
 		const refreshes = ids.map((songId) => controller.requestSongRefresh(songId));
 		await vi.waitFor(() => expect(responses.size).toBe(1));
 		for (const [songId, response] of responses) {
-			response.resolve(song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] }));
+			response.resolve(
+				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+			);
 		}
 		await vi.waitFor(() => expect(responses.size).toBe(ids.length));
 		for (const [songId, response] of responses) {
 			if (inFlight.has(songId)) {
-				response.resolve(song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] }));
+				response.resolve(
+					song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+				);
 			}
 		}
 		await Promise.all(refreshes);
