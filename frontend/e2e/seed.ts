@@ -107,8 +107,6 @@ export interface SeededLibrary {
 	 * shared library's leader in between.
 	 */
 	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
-	/** The neutral song the Continue spec uses to establish its precondition. */
-	continueAnchorSong: SeededSong;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -331,17 +329,14 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		takeBySongTitle.set(title, take.id);
 	}
 
-	const [desktopContinueSongTitle, mobileContinueSongTitle, initialContinueLeaderTitle] =
-		SONG_TITLES;
-	const pickedSongTitle = desktopContinueSongTitle;
-	const playlistSongTitles = [mobileContinueSongTitle, initialContinueLeaderTitle];
+	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
+	const playlistSongTitles = [mobileContinueSongTitle, desktopContinueSongTitle];
 	const pickedSongId = songIdByTitle.get(pickedSongTitle);
 	if (!pickedSongId) throw new Error(`Missing seeded song ${pickedSongTitle}`);
 	const continueReorderSongs = {
 		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
 		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
 	};
-	const continueAnchorSong = seededSong(songIdByTitle, initialContinueLeaderTitle);
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
@@ -375,7 +370,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		pickedSongTitle,
 		pickedSongId,
 		continueReorderSongs,
-		continueAnchorSong,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,

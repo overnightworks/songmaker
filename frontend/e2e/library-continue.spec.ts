@@ -15,14 +15,14 @@ const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	mobile: 40
 };
 
-test('Continue shows up to six tagged entries and moves a played song to the front after returning to Library', async ({
+test('Continue shows up to six tagged entries and moves a played song to the front after reload', async ({
 	page
 }, testInfo) => {
+	const guard = new FlowGuard(page);
 	const shell = shellOf(testInfo);
 	if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 375, height: 844 });
 	const library = readSeededLibrary();
 	const listenedSong = library.continueReorderSongs[shell];
-	const anchorSong = library.continueAnchorSong;
 	let continueRequests = 0;
 	let continueCoverRequests = 0;
 	page.on('request', (request) => {
@@ -51,39 +51,15 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	await page.goto('/');
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
-	const anchorStatus = await page.evaluate(async (songId) => {
-		const csrfToken = document.cookie
-			.split('; ')
-			.find((cookie) => cookie.startsWith('csrf_token='))
-			?.split('=')[1];
-		const response = await fetch(`/api/songs/${songId}/listen`, {
-			method: 'POST',
-			headers: { 'X-CSRF-Token': csrfToken ? decodeURIComponent(csrfToken) : '' }
-		});
-		return response.status;
-	}, anchorSong.id);
-	expect(anchorStatus).toBe(200);
-
-	const continueRequestsBeforeAnchorReturn = continueRequests;
-	const guard = new FlowGuard(page);
-	const continueAfterAnchorReturn = page.waitForResponse(
-		(response) =>
-			response.request().method() === 'GET' &&
-			new URL(response.url()).pathname === '/api/library/continue'
-	);
-	await page.goto('/');
-	expect((await continueAfterAnchorReturn).status()).toBe(200);
-	// Each return mounts Continue once. This seed has no covers, so neither
-	// return adds images; the complete desktop/mobile flows stay within 45/40.
-	expect(continueRequests).toBe(continueRequestsBeforeAnchorReturn + 1);
-	expect(continueCoverRequests).toBe(0);
-
 	await expect(entries.first()).toBeVisible();
 	const before = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
+	const listenedSongLabel = `Open song ${listenedSong.title}`;
 	expect(before.length).toBeGreaterThan(0);
 	expect(before.length).toBeLessThanOrEqual(6);
+	expect(before).toContain(listenedSongLabel);
+	expect(before[0]).not.toBe(listenedSongLabel);
 	expect(await continueRow.locator('.continue-tag').allTextContents()).toEqual(
 		expect.arrayContaining(['Album'])
 	);
@@ -102,21 +78,23 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 	).toBeVisible();
 	expect((await listenReport).status()).toBe(200);
 
-	const continueRequestsBeforeReturn = continueRequests;
-	const continueCoverRequestsBeforeReturn = continueCoverRequests;
-	const continueAfterReturn = page.waitForResponse(
+	await page.goto('/');
+	await expect(entries.first()).toBeVisible();
+	const continueRequestsBeforeReload = continueRequests;
+	const continueCoverRequestsBeforeReload = continueCoverRequests;
+	const continueAfterReload = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
 			new URL(response.url()).pathname === '/api/library/continue'
 	);
-	await page.goto('/');
-	expect((await continueAfterReturn).status()).toBe(200);
-	// The target return has the same one-GET, no-cover contract as the anchor
-	// return above. The complete flows stay within their measured 45/40 budgets.
-	expect(continueRequests).toBe(continueRequestsBeforeReturn + 1);
-	expect(continueCoverRequests).toBe(continueCoverRequestsBeforeReturn);
+	await page.reload();
+	expect((await continueAfterReload).status()).toBe(200);
+	// Reloading the Continue owner fetches its data exactly once. This seed has
+	// no covers, so the refreshed row must not add image requests.
+	expect(continueRequests).toBe(continueRequestsBeforeReload + 1);
+	expect(continueCoverRequests).toBe(continueCoverRequestsBeforeReload);
 	const playedSong = continueRow.getByRole('button', {
-		name: `Open song ${listenedSong.title}`,
+		name: listenedSongLabel,
 		exact: true
 	});
 	await expect(playedSong).toBeVisible();
@@ -124,6 +102,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
 	expect(after).not.toEqual(before);
+	expect(after.indexOf(listenedSongLabel)).toBeLessThan(before.indexOf(listenedSongLabel));
 
 	await playedSong.click();
 	await expect(page.getByRole('heading', { name: listenedSong.title })).toBeVisible();
