@@ -683,6 +683,7 @@ describe('admin models tab', () => {
 	});
 
 	it('activates Codex with its CLI catalog and names its source', async () => {
+		const codexCatalog = ['gpt-5.6-terra', 'gpt-5.6'];
 		api.fetchCowriterSettings.mockResolvedValue({
 			provider: 'claude',
 			model: 'claude-sonnet',
@@ -691,7 +692,7 @@ describe('admin models tab', () => {
 			allowed_models: ['claude-sonnet'],
 			models_by_provider: {
 				claude: ['claude-sonnet'],
-				codex: ['gpt-5.6', 'gpt-5.6-terra'],
+				codex: codexCatalog,
 				grok: []
 			},
 			models_errors: {},
@@ -705,7 +706,9 @@ describe('admin models tab', () => {
 		await tick();
 
 		expect(cowriter.textContent).toContain('known models for the CLI route');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe('gpt-5.6');
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
+			codexCatalog[0]
+		);
 		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
 	});
 
@@ -840,6 +843,34 @@ describe('admin models tab', () => {
 		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
 			'claude-api'
 		);
+	});
+
+	it('uses the selected provider card default and cannot save a model from another card', async () => {
+		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
+		api.updateCowriterSettings.mockResolvedValue(
+			routeAwareCowriterSettings({ provider: 'grok', model: 'grok-cli' })
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+		const claudeModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude');
+		const grokModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok');
+
+		buttonNamed(cowriter, 'Grok').click();
+		await tick();
+
+		expect(grokModel.value).toBe('grok-cli');
+		expect(claudeModel.disabled).toBe(true);
+		expect(grokModel.disabled).toBe(false);
+
+		buttonNamed(cowriter, 'Save Co-Writer').click();
+		await flush();
+
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith('grok', 'grok-cli', 8000, {
+			claude: 'cli',
+			codex: 'cli',
+			grok: 'cli'
+		});
 	});
 
 	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {

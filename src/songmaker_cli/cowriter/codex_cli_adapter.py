@@ -63,6 +63,9 @@ from songmaker_cli.cowriter.tool_loop import (
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
+_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE: Final = (
+    "Code Mode is unavailable because code-mode host is disabled."
+)
 _BLOCKED_ITEM_TYPES: Final = frozenset({
     "collab_agent_tool_call", "command_execution", "file_change", "image_generation",
     "mcp_tool_call", "web_search",
@@ -287,7 +290,11 @@ class CodexCliToolTransport:
                     if item_type in _BLOCKED_ITEM_TYPES:
                         raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
                     if event_type == "item.completed" and item_type == "error":
-                        error_message = _completed_error_item_message(event)
+                        completed_error = _completed_error_item_message(event)
+                        if _is_code_mode_host_disabled_isolation_notice(completed_error):
+                            log.info("Codex CLI ignored its code-mode-host isolation notice")
+                            continue
+                        error_message = completed_error
                         channel.request_abort()
                         continue
                     if item_type not in _INFORMATIONAL_ITEM_TYPES:
@@ -394,7 +401,6 @@ def generate_codex_cover_image(
         _validate_codex_image_events(
             outcome.stdout,
             codex_home=codex_home,
-            work_dir=work_dir,
         )
         artifact = _find_only_generated_png(codex_home)
         return _normalize_generated_png(artifact)
@@ -410,7 +416,7 @@ def _run_codex_image_cli(
 ) -> CliRunOutcome:
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
-    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    event_gate = _CodexImageEventGate(codex_home=codex_home)
     reservation = get_codex_process_pool().reserve(CodexProcessKind.COVER)
 
     def run() -> None:
@@ -578,11 +584,9 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
         raise CodexImageCliError()
 
 
-def _validate_codex_image_events(
-    output: str, *, codex_home: Path, work_dir: Path,
-) -> None:
+def _validate_codex_image_events(output: str, *, codex_home: Path) -> None:
     """Accept only image generation and its measured read-only bootstrap pair."""
-    event_gate = _CodexImageEventGate(codex_home=codex_home, work_dir=work_dir)
+    event_gate = _CodexImageEventGate(codex_home=codex_home)
     for line in output.splitlines():
         event_gate.accept(line.encode("utf-8"))
     event_gate.finish()
@@ -593,7 +597,6 @@ class _CodexImageEventGate:
     """Validate one image-run transcript, whether streamed or complete."""
 
     codex_home: Path
-    work_dir: Path
     saw_completed_turn: bool = False
     completed_error_item_message: str | None = None
     command_id: str | None = None
@@ -625,7 +628,6 @@ class _CodexImageEventGate:
                     command_id=self.command_id,
                     saw_completed_command=self.saw_completed_command,
                     expected_command=_expected_image_skill_command(self.codex_home),
-                    expected_cwd=str(self.work_dir.resolve()),
                 )
                 return
             if item_type in _BLOCKED_ITEM_TYPES:
@@ -662,13 +664,12 @@ def _validate_image_skill_command(
     command_id: str | None,
     saw_completed_command: bool,
     expected_command: str,
-    expected_cwd: str,
 ) -> tuple[str, bool]:
     item = _item(event)
     item_id = item.get("id")
     if not isinstance(item_id, str) or item.get("command") != expected_command:
         raise ImageToolBlockedError()
-    if item.get("cwd") != expected_cwd:
+    if item.get("cwd") is not None:
         raise ImageToolBlockedError()
     if event_type == "item.started":
         if (
@@ -889,6 +890,11 @@ def _completed_error_item_message(event: dict[str, object]) -> str:
     if not isinstance(message, str):
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return message
+
+
+def _is_code_mode_host_disabled_isolation_notice(message: str) -> bool:
+    """Recognize the one Codex notice caused by this adapter's isolation."""
+    return message == _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE
 
 
 def _item_type(event: dict[str, object]) -> str:
