@@ -619,8 +619,10 @@
 	const judgeCanSave = $derived(judgeDirty && judgeModel !== '' && !savingJudge);
 
 	function savedCowriterModel(provider: string, models: string[]): string | null {
-		if (cowriterSettings?.provider !== provider) return null;
-		return models.includes(cowriterSettings.model) ? cowriterSettings.model : null;
+		const savedModel =
+			cowriterSettings?.selected_models_by_provider?.[provider] ??
+			(cowriterSettings?.provider === provider ? cowriterSettings.model : undefined);
+		return savedModel && models.includes(savedModel) ? savedModel : null;
 	}
 
 	function cowriterCardModel(provider: string, models: string[]): string {

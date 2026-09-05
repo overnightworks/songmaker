@@ -892,6 +892,33 @@ describe('admin models tab', () => {
 		expect(grokModel.value).toBe('grok-4.6');
 	});
 
+	it('shows every provider card model returned after a reload', async () => {
+		const settings = routeAwareCowriterSettings({
+			provider: 'codex',
+			model: 'codex-cli',
+			selected_models_by_provider: {
+				claude: 'claude-cli',
+				codex: 'codex-cli',
+				grok: 'grok-4.6'
+			}
+		});
+		settings.provider_routes_status.grok.cli = routeStatus('ready', ['grok-4.5', 'grok-4.6']);
+		api.fetchCowriterSettings.mockResolvedValue(settings);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const cowriter = sectionByHeading(target, 'Co-Writer');
+
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
+			'claude-cli'
+		);
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-codex').value).toBe(
+			'codex-cli'
+		);
+		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok').value).toBe(
+			'grok-4.6'
+		);
+	});
+
 	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {
 		api.fetchCowriterSettings.mockResolvedValue(
 			routeAwareCowriterSettings({
