@@ -1699,7 +1699,10 @@ def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None
     assert unpin_data["pinned_at"] is None
 
 
-@pytest.mark.parametrize("method", [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")])
+@pytest.mark.parametrize(
+    "method",
+    [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")],
+)
 @pytest.mark.parametrize("scope", [pytest.param("foreign"), pytest.param("shared")])
 def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
     tmp_path: Path,
