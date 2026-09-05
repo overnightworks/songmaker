@@ -1,3 +1,5 @@
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
@@ -23,6 +25,7 @@ import {
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
+import type { RailSearchTarget } from '$lib/stores/railSearch';
 import { SONG_LINK_NOT_FOUND_TOAST, type LibraryFilter } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
@@ -233,6 +236,26 @@ export async function openPlaylist(playlistId: string): Promise<void> {
 	setLibrarySurface('detail');
 	closeSidebar();
 	await pushLibraryHistory();
+}
+
+// The rail search has one selected result and therefore one destination. Its
+// data owner only describes that destination; this navigation owner performs
+// the transition and closes the compact drawer on every successful choice.
+export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
+	if (target.kind === 'album') {
+		await openAlbum(target.id);
+		return;
+	}
+	if (target.kind === 'song') {
+		await selectSong(target.id);
+		return;
+	}
+	if (target.kind === 'playlist') {
+		await openPlaylist(target.id);
+		return;
+	}
+	closeSidebar();
+	await goto(resolve(target.href));
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb

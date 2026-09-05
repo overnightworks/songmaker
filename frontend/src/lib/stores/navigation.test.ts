@@ -87,6 +87,7 @@ import {
 	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
+	openRailSearchTarget,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
 	resetNavigationForTests,
@@ -1145,6 +1146,20 @@ describe('initNavigation', () => {
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(history.state)).toBe(true));
 		cleanup();
+	});
+});
+
+describe('openRailSearchTarget', () => {
+	it('opens one page target and closes the rail drawer', async () => {
+		history.replaceState(null, '', '/');
+		toggleSidebar();
+		expect(get(sidebarOpen)).toBe(true);
+
+		await openRailSearchTarget({ kind: 'page', href: '/settings/playback' });
+
+		expect(get(sidebarOpen)).toBe(false);
+		expect(window.location.pathname).toBe('/settings/playback');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
 	});
 });
 
