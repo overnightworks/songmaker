@@ -239,6 +239,30 @@ describe('song list mutations', () => {
 		).toEqual(['s-hidden', 's-page']);
 	});
 
+	it('follows album-song pages and stops after an empty page even when the server says more exists', async () => {
+		vi.mocked(fetchSongs)
+			.mockResolvedValueOnce({
+				items: [makeSong({ id: 's1', album_id: 'a1' })],
+				total: 2,
+				offset: 0,
+				limit: 200,
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [],
+				total: 2,
+				offset: 1,
+				limit: 200,
+				has_more: true
+			});
+
+		await loadSongsForAlbum('a1');
+
+		expect(fetchSongs).toHaveBeenLastCalledWith('a1', 1, 200);
+		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
+		expect(get(albumSongsLoad).a1).toEqual({ status: 'idle', error: null });
+	});
+
 	it('dedupes concurrent requests for the same album songs', async () => {
 		vi.mocked(fetchSongs).mockResolvedValueOnce({
 			items: [makeSong({ id: 's1', album_id: 'a1' })],

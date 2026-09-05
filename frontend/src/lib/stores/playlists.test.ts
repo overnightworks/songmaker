@@ -1,18 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { createPlaylist, fetchPlaylist, fetchPlaylists } from '$lib/api/client';
+import {
+	addAlbumToPlaylist,
+	addGenerationToPlaylist,
+	addSongToPlaylist,
+	createPlaylist,
+	deletePlaylistApi,
+	fetchPlaylist,
+	fetchPlaylists,
+	removeFromPlaylist,
+	reorderPlaylistEntry,
+	updatePlaylist
+} from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { toasts } from '$lib/stores/toast';
 import { ApiError } from '$lib/api/fetch';
-import type { PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
+import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
 	createNewPlaylist,
+	deletePlaylist,
 	ensurePlaylistsLoaded,
+	movePlaylistEntry,
+	addGenerationToPlaylist as addGeneration,
+	addSongToPlaylist as addSong,
+	addAlbumToPlaylist as addAlbum,
 	loadPlaylistDetail,
 	loadPlaylists,
 	playlistDetailLoad,
 	playlistList,
 	playlistLoad,
+	renamePlaylist,
+	removePlaylistEntry,
 	resetPlaylists,
 	selectedPlaylistDetail,
 	selectedPlaylistId
@@ -42,6 +60,20 @@ function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): Pl
 		album_covers: [],
 		created_at: '',
 		entries: [],
+		...overrides
+	};
+}
+
+function makePlaylist(id: string, overrides: Partial<PlaylistItem> = {}): PlaylistItem {
+	return {
+		id,
+		title: id,
+		slug: id,
+		entry_count: 0,
+		is_shared: false,
+		share_slug: null,
+		album_covers: [],
+		created_at: '',
 		...overrides
 	};
 }
@@ -265,5 +297,54 @@ describe('loadPlaylists', () => {
 		resolveList?.([]);
 		await pending;
 		expect(get(playlistList).map((item) => item.id)).toEqual(['new']);
+	});
+});
+
+describe('playlist mutations', () => {
+	it('mirrors creating, renaming, and deleting a selected playlist in library state', async () => {
+		const original = makePlaylist('p1', { title: 'Original' });
+		const created = makePlaylist('p2', { title: 'New playlist' });
+		const renamed = makePlaylist('p1', { title: 'Renamed' });
+		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('p1', { title: 'Original' }));
+		vi.mocked(createPlaylist).mockResolvedValue(created);
+		vi.mocked(updatePlaylist).mockResolvedValue(renamed);
+		vi.mocked(deletePlaylistApi).mockResolvedValue(undefined);
+		playlistList.set([original]);
+
+		await loadPlaylistDetail('p1');
+		await createNewPlaylist('New playlist');
+		await renamePlaylist('p1', 'Renamed');
+
+		expect(createPlaylist).toHaveBeenCalledWith('New playlist');
+		expect(updatePlaylist).toHaveBeenCalledWith('p1', 'Renamed');
+		expect(get(playlistList)).toEqual([renamed, created]);
+		expect(get(selectedPlaylistDetail)?.title).toBe('Renamed');
+
+		await deletePlaylist('p1');
+
+		expect(deletePlaylistApi).toHaveBeenCalledWith('p1');
+		expect(get(playlistList)).toEqual([created]);
+		expect(get(selectedPlaylistId)).toBeNull();
+		expect(get(selectedPlaylistDetail)).toBeNull();
+	});
+
+	it('sends entry mutations to their playlist and refreshes its library summary', async () => {
+		const refreshed = makePlaylist('p1', { entry_count: 4 });
+		const albumResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
+		vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
+		vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumResult);
+
+		await addGeneration('p1', 'g1');
+		await addSong('p1', 's1');
+		expect(await addAlbum('p1', 'a1')).toEqual(albumResult);
+		await removePlaylistEntry('p1', 'entry-1');
+		await movePlaylistEntry('p1', 'entry-2', 3);
+
+		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(addSongToPlaylist).toHaveBeenCalledWith('p1', 's1');
+		expect(addAlbumToPlaylist).toHaveBeenCalledWith('p1', 'a1');
+		expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 'entry-1');
+		expect(reorderPlaylistEntry).toHaveBeenCalledWith('p1', 'entry-2', 3);
+		expect(get(playlistList)).toEqual([refreshed]);
 	});
 });

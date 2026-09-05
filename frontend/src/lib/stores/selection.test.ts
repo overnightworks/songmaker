@@ -15,9 +15,7 @@ import {
 	toggleSelection
 } from './selection';
 
-function generation(
-	overrides: Partial<GenerationItem> = {}
-): GenerationItem {
+function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
 		id: 'g1',
 		song_id: 's1',

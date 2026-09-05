@@ -358,6 +358,37 @@ describe('restoreLibraryBrowse', () => {
 });
 
 describe('loadLibraryBrowse', () => {
+	it('does not let a superseded browse response replace the later page', async () => {
+		let resolveFirstAlbums:
+			((value: { items: AlbumItem[]; has_more: boolean }) => void) | undefined;
+		let resolveFirstSongs: ((value: { items: SongItem[]; has_more: boolean }) => void) | undefined;
+		fetchAlbums
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirstAlbums = resolve;
+					})
+			)
+			.mockResolvedValueOnce({ items: [album({ id: 'new-album' })], has_more: false });
+		fetchSongs
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirstSongs = resolve;
+					})
+			)
+			.mockResolvedValueOnce({ items: [song({ id: 'new-song' })], has_more: false });
+
+		const first = loadLibraryBrowse({ reset: true });
+		await loadLibraryBrowse({ reset: true });
+		resolveFirstAlbums?.({ items: [album({ id: 'old-album' })], has_more: false });
+		resolveFirstSongs?.({ items: [song({ id: 'old-song' })], has_more: false });
+
+		expect(await first).toBe(false);
+		expect(get(albumList).map((item) => item.id)).toEqual(['new-album']);
+		expect(get(songList).map((item) => item.id)).toEqual(['new-song']);
+	});
+
 	it('keeps browse offsets independent of songs appended from search', async () => {
 		fetchAlbums.mockResolvedValue({
 			items: [album({ id: 'a-page' })],
