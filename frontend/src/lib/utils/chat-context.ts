@@ -13,7 +13,7 @@ export interface ApplyData {
 }
 
 export function cleanDisplayText(text: string): string {
-	return text.replaceAll(/```songmaker\s*\n[\s\S]*?```/g, '').trim();
+	return text.replaceAll(/```songmaker\s*\n.*?```/gs, '').trim();
 }
 
 function parseSongmakerBlock(
@@ -84,7 +84,7 @@ export function extractAllApplyData(
 	allSongs: SongItem[]
 ): ApplyData[] {
 	const results: ApplyData[] = [];
-	const re = /```songmaker\s*\n([\s\S]*?)```/g;
+	const re = /```songmaker\s*\n(.*?)```/gs;
 	let match;
 	while ((match = re.exec(text)) !== null) {
 		try {

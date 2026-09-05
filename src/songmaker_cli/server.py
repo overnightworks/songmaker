@@ -286,7 +286,10 @@ def create_app(
         cors_kwargs["allow_origins"] = [cors_origin]
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
-    app.add_middleware(CORSMiddleware, **cors_kwargs)
+    app.add_middleware(  # NOSONAR: CORS order is security-critical; see block above.
+        CORSMiddleware,
+        **cors_kwargs,
+    )
     app.add_middleware(
         SelectiveGZipMiddleware,
         minimum_size=GZIP_MINIMUM_SIZE_BYTES,
