@@ -14,7 +14,7 @@ import {
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
 } from '$lib/constants';
-import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
@@ -200,16 +200,6 @@ const INVENTORY = [
 		component: 'AlbumDetailView'
 	},
 	{
-		name: 'new-album',
-		selector: '[data-hitbox="frequent"][aria-label="New album"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'wall-tile-play',
-		selector: '.wall-tile-play[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
 		name: 'playlist-picker-add',
 		selector: '.picker-add[data-hitbox="frequent"]',
 		component: 'PlaylistPicker'
@@ -223,16 +213,6 @@ const INVENTORY = [
 		name: 'collection-menu',
 		selector: '.menu-trigger[data-hitbox="frequent"]',
 		component: 'CollectionMenu'
-	},
-	{
-		name: 'library-filter-chip',
-		selector: '.filter-chip[data-hitbox="frequent"]',
-		component: 'LibraryWall'
-	},
-	{
-		name: 'library-sort-select',
-		selector: '.sort-select[data-hitbox="frequent"]',
-		component: 'LibraryWall'
 	},
 	{
 		name: 'rail-search',
@@ -534,7 +514,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	// The album interior is asked for by id rather than by opening it, since the
 	// playlist interior above needs the open collection to stay its own.
 	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
-	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
+	mounted.push(mount(LibraryWall, { target: songTarget }));
 	mounted.push(
 		mount(PlaylistPicker, {
 			target: pickerTarget,
@@ -674,27 +654,6 @@ describe('frequent action hitboxes', () => {
 				}
 			}
 		}
-	});
-
-	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
-		const { root } = await renderInventory();
-		libraryFilter.set('playlists');
-		await tick();
-		const newPlaylistBtn = requireButton(
-			root,
-			'new-playlist',
-			'[data-hitbox="frequent"][aria-label="New playlist"]'
-		);
-
-		setPointer('coarse');
-		const coarse = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
-		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
-
-		setPointer('fine');
-		const fine = minSquarePx(newPlaylistBtn, 'new-playlist');
-		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
-		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
 	it('keeps reorder and remove on the same button hitbox for pointer and keyboard', async () => {
