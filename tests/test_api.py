@@ -3664,6 +3664,56 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
 # ── Default generation config ────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    ("path", "method", "error_statuses"),
+    [
+        pytest.param("/api/settings/presets", "post", {"400", "409"}, id="create-preset"),
+        pytest.param(
+            "/api/settings/presets/{preset_id}", "put", {"404", "409"}, id="update-preset",
+        ),
+        pytest.param(
+            "/api/settings/presets/{preset_id}", "delete", {"404"}, id="delete-preset",
+        ),
+        pytest.param(
+            "/api/settings/presets/{preset_id}/set-default", "post", {"404"},
+            id="set-default-preset",
+        ),
+        pytest.param("/api/settings/models/{model_id}", "put", {"404"}, id="toggle-model"),
+        pytest.param(
+            "/api/settings/default-config", "put", {"400", "404"}, id="set-default-config",
+        ),
+        pytest.param("/api/settings/claude-models", "put", {"400"}, id="set-claude-models"),
+        pytest.param("/api/settings/cowriter", "get", {"422"}, id="get-cowriter"),
+        pytest.param("/api/settings/cowriter", "put", {"422", "503"}, id="set-cowriter"),
+        pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
+        pytest.param("/api/settings/judge", "put", {"422", "503"}, id="set-judge"),
+        pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "get", {"404"},
+            id="get-user-rate-limits",
+        ),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "put", {"400", "404"},
+            id="set-user-rate-limits",
+        ),
+        pytest.param(
+            "/api/settings/rate-limits/user/{user_id}", "delete", {"404"},
+            id="delete-user-rate-limits",
+        ),
+    ],
+)
+def test_settings_api_documents_its_http_error_responses(
+    client: TestClient,
+    path: str,
+    method: str,
+    error_statuses: set[str],
+) -> None:
+    documented_responses = client.app.openapi()["paths"][path][method]["responses"]
+
+    assert error_statuses.issubset(documented_responses)
+    assert all(documented_responses[status]["description"] for status in error_statuses)
+
+
 def test_default_config_get_returns_null(client: TestClient) -> None:
     resp = client.get("/api/settings/default-config")
     assert resp.status_code == 200
