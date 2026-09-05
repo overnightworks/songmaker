@@ -21,9 +21,16 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.cover_suggestions import remove_cover_suggestion_files
+from songmaker_cli.cover_suggestions import (
+    CoverSuggestionAlbumNotFoundError,
+    CoverSuggestionAlreadyRunningError,
+    CoverSuggestionDailyLimitReachedError,
+    remove_cover_suggestion_files,
+    request_cover_suggestions,
+)
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.db.queries import get_album
+from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
 
 
@@ -96,6 +103,70 @@ def _add_suggestion(factory, audio_dir: Path, *, album_id: str = "alice-album") 
         ))
         session.commit()
     return suggestion_id
+
+
+def _actor(user_id: str, *, role: str = "user") -> AuthenticatedUser:
+    return AuthenticatedUser(id=user_id, username=user_id, role=role, is_active=True)
+
+
+def _album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
+    album = session.query(Album).filter_by(id=album_id).one()
+    return _actor(album.created_by or "")
+
+
+def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_path: Path) -> None:
+    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+
+    with factory() as session:
+        with pytest.raises(CoverSuggestionAlbumNotFoundError):
+            request_cover_suggestions(session, "missing", _actor("alice"))
+        with pytest.raises(CoverSuggestionAlbumNotFoundError):
+            request_cover_suggestions(session, "bob-album", _actor("alice"))
+
+
+def test_cover_suggestion_request_owner_creates_one_job_and_replaces_stale_suggestions(
+    tmp_path: Path,
+) -> None:
+    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    suggestion_id = _add_suggestion(factory, tmp_path / "audio")
+    with factory() as session:
+        stale_job = session.query(Job).filter_by(album_id="alice-album").one()
+        stale_job.status = JobStatus.COMPLETED
+        session.commit()
+
+    with factory() as session:
+        result = request_cover_suggestions(session, "alice-album", _album_owner(session))
+
+        assert result.job.type == JobType.COVER
+        assert result.job.album_id == "alice-album"
+        assert result.stale_suggestion_paths == [
+            f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/alice-album/{suggestion_id}.png",
+        ]
+        assert session.query(AlbumCoverSuggestion).count() == 0
+        assert session.query(Job).filter_by(album_id="alice-album").count() == 2
+
+
+def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _add_cover_job(factory)
+
+    with factory() as session:
+        with pytest.raises(CoverSuggestionAlreadyRunningError):
+            request_cover_suggestions(session, "alice-album", _album_owner(session))
+        session.rollback()
+
+    with factory() as session:
+        active_job = session.query(Job).filter_by(album_id="alice-album").one()
+        active_job.status = JobStatus.FAILED
+        session.commit()
+
+    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
+    get_settings.cache_clear()
+    with factory() as session:
+        with pytest.raises(CoverSuggestionDailyLimitReachedError):
+            request_cover_suggestions(session, "alice-album", _album_owner(session))
 
 
 def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(
@@ -410,6 +481,7 @@ def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
             return utc_midnight + timedelta(microseconds=1)
 
     monkeypatch.setattr("songmaker_cli.album_api.datetime", FixedUtcDateTime)
+    monkeypatch.setattr("songmaker_cli.cover_suggestions.datetime", FixedUtcDateTime)
     _add_cover_job(
         factory,
         status=JobStatus.FAILED,
