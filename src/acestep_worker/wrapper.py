@@ -209,7 +209,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.get(
         "/health",
-        response_model=HealthResponse,
         responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
     )
     async def health() -> HealthResponse:
@@ -226,7 +225,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             )
         return HealthResponse(status="ok")
 
-    @router.get("/loaded_models", response_model=LoadedModelsResponse)
+    @router.get("/loaded_models")
     async def loaded_models() -> LoadedModelsResponse:
         snapshot = deps.cache.snapshot()
         return LoadedModelsResponse(
@@ -251,7 +250,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/load_model",
-        response_model=LoadModelResponse,
         responses={
             400: {"description": "Requested model mode is unknown"},
             409: {"description": "Insufficient capacity to load the model"},
@@ -276,7 +274,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/evict_model",
-        response_model=EvictModelResponse,
         responses={409: {"description": "Model cannot be evicted"}},
     )
     async def evict_model(req: EvictModelRequest) -> EvictModelResponse:
@@ -291,7 +288,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/pin_model",
-        response_model=PinModelResponse,
         responses={409: {"description": "Model must be loaded before it can be pinned"}},
     )
     async def pin_model(req: PinModelRequest) -> PinModelResponse:
@@ -302,13 +298,13 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         snapshot = deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    @router.post("/unpin_model", response_model=PinModelResponse)
+    @router.post("/unpin_model")
     async def unpin_model(req: UnpinModelRequest) -> PinModelResponse:
         await deps.cache.unpin(req.mode)
         snapshot = deps.cache.snapshot()
         return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
 
-    @router.post("/restart", response_model=RestartResponse)
+    @router.post("/restart")
     async def restart() -> RestartResponse:
         log.info("Restart requested via /restart endpoint")
         pid = os.getpid()
@@ -318,7 +314,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/generate",
-        response_model=TaskCreatedResponse,
         dependencies=[Depends(verify_internal_token)],
         responses={409: {"description": "GPU is held or the requested model is not loaded"}},
     )
@@ -371,7 +366,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/gpu_hold/reserve",
-        response_model=GpuHoldResponse,
         dependencies=[Depends(verify_internal_token)],
         responses={409: {"description": "GPU is busy or already held"}},
     )
@@ -422,7 +416,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/gpu_hold/handover",
-        response_model=GpuHoldHandoverResponse,
         dependencies=[Depends(verify_internal_token)],
     )
     async def hold_handover(req: GpuHoldTokenRequest) -> GpuHoldHandoverResponse:
@@ -435,7 +428,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post(
         "/tasks/train_lora",
-        response_model=TaskCreatedResponse,
         dependencies=[Depends(verify_internal_token)],
         responses={
             409: {"description": "GPU hold or requested model is unavailable"},
@@ -556,7 +548,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             raise
         return TaskCreatedResponse(task_id=task_id)
 
-    @router.post("/download_model", response_model=TaskCreatedResponse)
+    @router.post("/download_model")
     async def download_model(req: DownloadModelRequest) -> TaskCreatedResponse:
         task_id = await start_download(
             deps.task_store,
@@ -567,7 +559,6 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.get(
         "/tasks/{task_id}",
-        response_model=TaskSnapshot,
         responses={404: {"description": "Task does not exist"}},
     )
     async def get_task(task_id: str) -> TaskSnapshot:
