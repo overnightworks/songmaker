@@ -37,6 +37,11 @@ describe('cleanDisplayText', () => {
 		expect(cleanDisplayText(text)).toBe('A\n\nB\n\nC');
 	});
 
+	it('removes multiline songmaker blocks', () => {
+		const text = 'A\n```songmaker\n{\n  "lyrics": "a"\n}\n```\nB';
+		expect(cleanDisplayText(text)).toBe('A\n\nB');
+	});
+
 	it('returns text unchanged without blocks', () => {
 		expect(cleanDisplayText('hello world')).toBe('hello world');
 	});
@@ -66,6 +71,11 @@ describe('extractAllApplyData', () => {
 		expect(result[0].lyrics).toBe('verse 1');
 		expect(result[1].lyrics).toBe('verse 2');
 		expect(result[1].songId).toBe('s2');
+	});
+
+	it('extracts a multiline block', () => {
+		const text = '```songmaker\n{\n  "lyrics": "verse 1",\n  "bpm": 120\n}\n```';
+		expect(extractAllApplyData(text, 'a1', songs)).toEqual([{ lyrics: 'verse 1', bpm: 120 }]);
 	});
 
 	it('marks unknown song as create', () => {

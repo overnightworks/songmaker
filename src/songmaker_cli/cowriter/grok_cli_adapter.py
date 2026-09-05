@@ -11,6 +11,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 from urllib.parse import quote
@@ -64,6 +65,15 @@ class _GrokCliStreamFailure(Exception):
         self.code = code
 
 
+@dataclass
+class _GrokToolRoundState:
+    """Protocol state accumulated while receiving one Grok CLI round."""
+
+    saw_end: bool = False
+    error_message: str | None = None
+    received_session_id: str | None = None
+
+
 class GrokCliToolTransport:
     """One private, resumable Grok CLI session for the shared tool loop.
 
@@ -93,10 +103,6 @@ class GrokCliToolTransport:
         # Keep it on this tool-using path so tool-free workers can import this
         # adapter without that optional dependency.
         from songmaker_cli.cowriter.text_tool_protocol import (
-            FinalText as ParsedFinalText,
-        )
-        from songmaker_cli.cowriter.text_tool_protocol import (
-            TextToolCall,
             TextToolProtocolError,
             TextToolStreamParser,
         )
@@ -131,9 +137,7 @@ class GrokCliToolTransport:
             unset_env=("GROK_HOME",),
         ))
         parser = TextToolStreamParser()
-        saw_end = False
-        error_message: str | None = None
-        received_session_id: str | None = None
+        state = _GrokToolRoundState()
         started_at = time.monotonic()
         try:
             while True:
@@ -142,44 +146,21 @@ class GrokCliToolTransport:
                     outcome = item
                     break
                 event_type, event_data = _parse_grok_line(item)
-                if saw_end:
-                    raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
-                if event_type in {"tool_call", "tool_call_update"}:
-                    raise _GrokCliStreamFailure("grok_cli_tool_call_blocked")
-                if event_type == "text":
-                    text = parser.feed(_text_event_data(event_data))
-                    if text:
-                        yield TextDelta(text)
-                    continue
-                if event_type == "end":
-                    _end_event_data(event_data)
-                    received_session_id = _stream_session_id(event_data)
-                    saw_end = True
-                    continue
-                if event_type == "error":
-                    error_message = _error_event_data(event_data)
-                    channel.request_abort()
-                    continue
-                if event_type in _IGNORED_EVENT_TYPES:
-                    continue
-                raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
+                text = _consume_grok_tool_event(event_type, event_data, parser, state, channel)
+                if text:
+                    yield TextDelta(text)
             await asyncio.shield(runner)
-            _raise_for_grok_outcome(outcome, saw_end, error_message)
-            if received_session_id is None:
-                raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
-            if is_resume and received_session_id != self._session_id:
-                raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
-            self._session_id = received_session_id
-            parsed = parser.finish()
-            if isinstance(parsed, TextToolCall):
-                call = ToolCall(str(uuid.uuid4()), parsed.name, parsed.arguments)
-                _log_tool_round(self._round_index, self._session_id, started_at, call.name)
-                yield ToolCallBatch((call,))
-            elif isinstance(parsed, ParsedFinalText):
-                _log_tool_round(self._round_index, self._session_id, started_at, None)
-                yield FinalText(parsed.text)
-            else:  # pragma: no cover - TypeAlias keeps this branch unreachable.
-                raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
+            response, session_id = _finish_grok_tool_round(
+                outcome,
+                is_resume=is_resume,
+                expected_session_id=self._session_id,
+                state=state,
+                parser=parser,
+                round_index=self._round_index,
+                started_at=started_at,
+            )
+            self._session_id = session_id
+            yield response
         except TextToolProtocolError:
             channel.request_abort()
             await asyncio.shield(runner)
@@ -210,10 +191,7 @@ class GrokCliToolTransport:
         if self._closed:
             return
         self._closed = True
-        try:
-            _remove_grok_sessions_for_cwd(self._turn_directory.name)
-        finally:
-            self._turn_directory.cleanup()
+        await asyncio.to_thread(_cleanup_grok_turn_directory, self._turn_directory)
 
 
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
@@ -235,6 +213,67 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     except json.JSONDecodeError:
         value = result.content
     return render_tool_result(value).encode()
+
+
+def _consume_grok_tool_event(
+    event_type: str,
+    event: dict[str, object],
+    parser,
+    state: _GrokToolRoundState,
+    channel: CliLineChannel,
+) -> str | None:
+    """Apply one Grok event and return any safe assistant-text delta."""
+    if state.saw_end:
+        raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
+    if event_type in {"tool_call", "tool_call_update"}:
+        raise _GrokCliStreamFailure("grok_cli_tool_call_blocked")
+    if event_type == "text":
+        return parser.feed(_text_event_data(event))
+    if event_type == "end":
+        _end_event_data(event)
+        state.received_session_id = _stream_session_id(event)
+        state.saw_end = True
+        return None
+    if event_type == "error":
+        state.error_message = _error_event_data(event)
+        channel.request_abort()
+        return None
+    if event_type in _IGNORED_EVENT_TYPES:
+        return None
+    raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
+
+
+def _finish_grok_tool_round(
+    outcome: CliRunOutcome,
+    *,
+    is_resume: bool,
+    expected_session_id: str | None,
+    state: _GrokToolRoundState,
+    parser,
+    round_index: int,
+    started_at: float,
+) -> tuple[TransportResponse, str]:
+    """Validate one completed Grok round and produce its terminal response."""
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        FinalText as ParsedFinalText,
+    )
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        TextToolCall,
+    )
+
+    _raise_for_grok_outcome(outcome, state.saw_end, state.error_message)
+    session_id = state.received_session_id
+    if session_id is None or (is_resume and session_id != expected_session_id):
+        raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
+    parsed = parser.finish()
+    if isinstance(parsed, TextToolCall):
+        call = ToolCall(str(uuid.uuid4()), parsed.name, parsed.arguments)
+        _log_tool_round(round_index, session_id, started_at, call.name)
+        return ToolCallBatch((call,)), session_id
+    if isinstance(parsed, ParsedFinalText):
+        _log_tool_round(round_index, session_id, started_at, None)
+        return FinalText(parsed.text), session_id
+    raise _GrokCliStreamFailure("grok_cli_stream_protocol_error")
 
 
 def _build_grok_cli_tool_command(
@@ -277,6 +316,14 @@ def _remove_grok_sessions_for_cwd(cwd: str) -> None:
     session_tree = Path.home() / ".grok" / "sessions" / quote(cwd, safe="")
     if session_tree.exists():
         shutil.rmtree(session_tree)
+
+
+def _cleanup_grok_turn_directory(turn_directory: tempfile.TemporaryDirectory) -> None:
+    """Remove one Grok session subtree before its private working directory."""
+    try:
+        _remove_grok_sessions_for_cwd(turn_directory.name)
+    finally:
+        turn_directory.cleanup()
 
 
 def _grok_cli_env() -> dict[str, str]:

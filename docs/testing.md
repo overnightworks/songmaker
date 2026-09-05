@@ -29,6 +29,8 @@ Before the first CI scan, an operator must disable **Automatic Analysis** in the
 
 The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
+Coverage exclusions are intentionally narrower and identical in `.coveragerc-ci` and `sonar-project.properties`: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
+
 The profile deliberately ignores two repository-wide smells. `python:S9100` is ignored for `tests/**` because these pytest fixtures use `yield` as setup syntax without teardown; changing them to `return` would only optimize a test-style diagnostic and add no product value. `docker:S7031` is ignored for `**/*Dockerfile*` because separate `RUN` instructions mark intentional install, cache, permission, and model-warmup boundaries; the pattern covers both `Dockerfile` and the repository's `*.Dockerfile` names. These exceptions are limited to their named paths and rules; other Sonar findings remain visible.
 
 ### Parallel Execution
@@ -38,11 +40,11 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
-- Scorer tests run on CPU but are excluded from CI coverage because the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights (see `.coveragerc-ci`)
+- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.coveragerc-ci`)
 
 ## Coverage Targets
 
-- **CI backend**: 90% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (scoring modules excluded — require GPU extras not installed in CI, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 90% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.

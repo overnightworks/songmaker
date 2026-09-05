@@ -173,6 +173,15 @@ class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
 
 
+@dataclass
+class _CodexToolRoundState:
+    """Protocol state accumulated while receiving one Codex CLI round."""
+
+    saw_success: bool = False
+    error_message: str | None = None
+    received_thread_id: str | None = None
+
+
 def codex_cover_image_capability_is_available() -> bool:
     """Whether this process has every mounted dependency for a cover image turn."""
     code_mode_host = Path(CODEX_CODE_MODE_HOST_BINARY)
@@ -224,10 +233,6 @@ class CodexCliToolTransport:
         if self._closed:
             raise RuntimeError("Codex CLI tool transport is closed")
         from songmaker_cli.cowriter.text_tool_protocol import (
-            FinalText as ParsedFinalText,
-        )
-        from songmaker_cli.cowriter.text_tool_protocol import (
-            TextToolCall,
             TextToolProtocolError,
             TextToolStreamParser,
         )
@@ -266,9 +271,7 @@ class CodexCliToolTransport:
             codex_home=self._codex_home,
         ))
         parser = TextToolStreamParser()
-        saw_success = False
-        error_message: str | None = None
-        received_thread_id: str | None = None
+        state = _CodexToolRoundState()
         started_at = time.monotonic()
         try:
             while True:
@@ -277,69 +280,29 @@ class CodexCliToolTransport:
                     outcome = item
                     break
                 event_type, event = _parse_codex_line(item)
-                if saw_success:
-                    raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-                if event_type == "thread.started":
-                    thread_id = _thread_started_id(event)
-                    if received_thread_id is not None or (
-                        is_resume and thread_id != self._thread_id
-                    ):
-                        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-                    received_thread_id = thread_id
-                    continue
-                if event_type == "turn.started":
-                    continue
-                if event_type in _ITEM_EVENT_TYPES:
-                    item_type = _item_type(event)
-                    if item_type in _BLOCKED_ITEM_TYPES:
-                        raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
-                    if event_type == _CODEX_ITEM_COMPLETED_EVENT and item_type == "error":
-                        completed_error = _completed_error_item_message(event)
-                        if _is_code_mode_host_disabled_isolation_notice(completed_error):
-                            log.info("Codex CLI ignored its code-mode-host isolation notice")
-                            continue
-                        error_message = completed_error
-                        channel.request_abort()
-                        continue
-                    if item_type not in _INFORMATIONAL_ITEM_TYPES:
-                        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-                    if (
-                        event_type == _CODEX_ITEM_COMPLETED_EVENT
-                        and item_type == "agent_message"
-                    ):
-                        text = parser.feed(_completed_agent_message(event))
-                        if text:
-                            yield TextDelta(text)
-                    continue
-                if event_type == "turn.completed":
-                    _completed_turn(event)
-                    saw_success = True
-                    continue
-                if event_type == "error":
-                    error_message = _top_level_error_message(event)
-                    channel.request_abort()
-                    continue
-                if event_type == "turn.failed":
-                    error_message = _failed_turn_message(event)
-                    channel.request_abort()
-                    continue
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+                text = _consume_codex_tool_event(
+                    event_type,
+                    event,
+                    is_resume=is_resume,
+                    expected_thread_id=self._thread_id,
+                    parser=parser,
+                    state=state,
+                    channel=channel,
+                )
+                if text:
+                    yield TextDelta(text)
             await asyncio.shield(runner)
-            _raise_for_codex_outcome(outcome, saw_success, error_message, None)
-            if not is_resume and received_thread_id is None:
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-            if received_thread_id is not None:
-                self._thread_id = received_thread_id
-            parsed = parser.finish()
-            if isinstance(parsed, TextToolCall):
-                call = ToolCall(str(uuid.uuid4()), parsed.name, parsed.arguments)
-                _log_codex_tool_round(self._round_index, started_at, call.name)
-                yield ToolCallBatch((call,))
-            elif isinstance(parsed, ParsedFinalText):
-                _log_codex_tool_round(self._round_index, started_at, None)
-                yield FinalText(parsed.text)
-            else:  # pragma: no cover - TypeAlias keeps this branch unreachable.
-                raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+            response, thread_id = _finish_codex_tool_round(
+                outcome,
+                is_resume=is_resume,
+                state=state,
+                parser=parser,
+                round_index=self._round_index,
+                started_at=started_at,
+            )
+            if thread_id is not None:
+                self._thread_id = thread_id
+            yield response
         except TextToolProtocolError:
             channel.request_abort()
             await asyncio.shield(runner)
@@ -370,7 +333,7 @@ class CodexCliToolTransport:
         if self._closed:
             return
         self._closed = True
-        self._turn_directory.cleanup()
+        await asyncio.to_thread(self._turn_directory.cleanup)
 
 
 def generate_codex_cover_image(
@@ -836,6 +799,117 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     except json.JSONDecodeError:
         value = result.content
     return render_tool_result(value).encode()
+
+
+def _consume_codex_tool_event(
+    event_type: str,
+    event: dict[str, object],
+    *,
+    is_resume: bool,
+    expected_thread_id: str | None,
+    parser,
+    state: _CodexToolRoundState,
+    channel: CliLineChannel,
+) -> str | None:
+    """Apply one Codex event and return any safe assistant-text delta."""
+    if state.saw_success:
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    if event_type == "thread.started":
+        _record_codex_thread_id(
+            event,
+            is_resume=is_resume,
+            expected_thread_id=expected_thread_id,
+            state=state,
+        )
+        return None
+    if event_type == "turn.started":
+        return None
+    if event_type in _ITEM_EVENT_TYPES:
+        return _consume_codex_item_event(event_type, event, parser, state, channel)
+    if event_type == "turn.completed":
+        _completed_turn(event)
+        state.saw_success = True
+        return None
+    if event_type == "error":
+        state.error_message = _top_level_error_message(event)
+        channel.request_abort()
+        return None
+    if event_type == "turn.failed":
+        state.error_message = _failed_turn_message(event)
+        channel.request_abort()
+        return None
+    raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+
+
+def _record_codex_thread_id(
+    event: dict[str, object],
+    *,
+    is_resume: bool,
+    expected_thread_id: str | None,
+    state: _CodexToolRoundState,
+) -> None:
+    thread_id = _thread_started_id(event)
+    if state.received_thread_id is not None or (
+        is_resume and thread_id != expected_thread_id
+    ):
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    state.received_thread_id = thread_id
+
+
+def _consume_codex_item_event(
+    event_type: str,
+    event: dict[str, object],
+    parser,
+    state: _CodexToolRoundState,
+    channel: CliLineChannel,
+) -> str | None:
+    item_type = _item_type(event)
+    if item_type in _BLOCKED_ITEM_TYPES:
+        raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
+    if event_type == _CODEX_ITEM_COMPLETED_EVENT and item_type == "error":
+        completed_error = _completed_error_item_message(event)
+        if _is_code_mode_host_disabled_isolation_notice(completed_error):
+            log.info("Codex CLI ignored its code-mode-host isolation notice")
+            return None
+        state.error_message = completed_error
+        channel.request_abort()
+        return None
+    if item_type not in _INFORMATIONAL_ITEM_TYPES:
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    if event_type == _CODEX_ITEM_COMPLETED_EVENT and item_type == "agent_message":
+        return parser.feed(_completed_agent_message(event))
+    return None
+
+
+def _finish_codex_tool_round(
+    outcome: CliRunOutcome,
+    *,
+    is_resume: bool,
+    state: _CodexToolRoundState,
+    parser,
+    round_index: int,
+    started_at: float,
+) -> tuple[TransportResponse, str | None]:
+    """Validate one completed Codex round and produce its terminal response."""
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        FinalText as ParsedFinalText,
+    )
+    from songmaker_cli.cowriter.text_tool_protocol import (
+        TextToolCall,
+    )
+
+    _raise_for_codex_outcome(outcome, state.saw_success, state.error_message, None)
+    if not is_resume and state.received_thread_id is None:
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
+    parsed = parser.finish()
+    if isinstance(parsed, TextToolCall):
+        call = ToolCall(str(uuid.uuid4()), parsed.name, parsed.arguments)
+        _log_codex_tool_round(round_index, started_at, call.name)
+        return ToolCallBatch((call,)), state.received_thread_id
+    if isinstance(parsed, ParsedFinalText):
+        _log_codex_tool_round(round_index, started_at, None)
+        return FinalText(parsed.text), state.received_thread_id
+    raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
 
 
 def _codex_cli_env(codex_home: Path) -> dict[str, str]:
