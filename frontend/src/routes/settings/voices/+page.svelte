@@ -300,6 +300,8 @@
 		border-radius: 4px;
 		color: var(--score-bad);
 		font-size: 0.85rem;
+		overflow-wrap: anywhere;
+		white-space: pre-line;
 	}
 
 	.primary {

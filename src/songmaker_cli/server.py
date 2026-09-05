@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
     HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
+from songmaker_cli.cover_runner import CoverJobCancellationRegistry, cover_runner_loop
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
@@ -57,7 +58,7 @@ from songmaker_cli.middleware import (
     SecurityHeadersMiddleware,
     SelectiveGZipMiddleware,
 )
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -104,8 +105,18 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
-    registry = BackgroundLoopRegistry()
+    settings = get_settings()
+    loop_names = tuple(
+        name
+        for name in BackgroundLoopName
+        if (
+            settings.cover_executor is CoverExecutor.WEB
+            or name is not BackgroundLoopName.COVER_RUNNER
+        )
+    )
+    registry = BackgroundLoopRegistry(loop_names)
     app.state.background_loop_registry = registry
+    app.state.cover_job_cancellation_registry = CoverJobCancellationRegistry()
     cleanup_expired_queue_streams(ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
@@ -130,7 +141,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
-    loop_tasks = (
+    loop_tasks = [
         (BackgroundLoopName.SESSION_SYNC, asyncio.create_task(session_sync_loop(app))),
         (
             BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
@@ -142,7 +153,11 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             BackgroundLoopName.PROVIDER_STATUS_REFRESH,
             asyncio.create_task(provider_status_refresh_loop(app)),
         ),
-    )
+    ]
+    if settings.cover_executor is CoverExecutor.WEB:
+        loop_tasks.append(
+            (BackgroundLoopName.COVER_RUNNER, asyncio.create_task(cover_runner_loop(app))),
+        )
     app.state.background_loop_tasks = dict(loop_tasks)
     for name, task in loop_tasks:
         task.add_done_callback(

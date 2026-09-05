@@ -404,6 +404,15 @@ describe('browsing state', () => {
 		expect(get(selectedSong)?.generations.length).toBe(1);
 	});
 
+	it('dedupes concurrent generation loads for the same song', async () => {
+		songList.set([]);
+		vi.mocked(fetchSong).mockResolvedValueOnce(makeSong({ id: 's-direct' }));
+
+		await Promise.all([ensureGenerationsLoaded('s-direct'), ensureGenerationsLoaded('s-direct')]);
+
+		expect(fetchSong).toHaveBeenCalledTimes(1);
+	});
+
 	it('selectedGeneration derives from selectedSong', () => {
 		songList.set([makeSong()]);
 		selectedSongId.set('s1');

@@ -15,6 +15,7 @@ import {
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
+import { railTreeQuery } from '$lib/stores/filter';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {
@@ -63,6 +64,7 @@ beforeEach(() => {
 		song({ id: 's2', title: 'Ebb', track_number: 2 })
 	]);
 	selectedSongId.set(null);
+	railTreeQuery.set('');
 	setShuffle(false);
 	closeNowPlaying();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
@@ -78,6 +80,7 @@ afterEach(async () => {
 	await cleanup();
 	openCollection.set(null);
 	resetLibraryContextForTests();
+	railTreeQuery.set('');
 });
 
 describe('RailLibraryGroup', () => {
@@ -118,6 +121,31 @@ describe('RailLibraryGroup', () => {
 		expect(Array.from(albumRows).map((row) => row.textContent)).toEqual(['Nachtstrom', 'Anfield']);
 		const counts = target.querySelectorAll('.album-label .row-meta');
 		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '5']);
+	});
+
+	it('narrows known albums and songs, while keeping the open album visible', async () => {
+		albumList.set([
+			album({ id: 'a-open', title: 'Anfield' }),
+			album({ id: 'a-match', title: 'Other album' }),
+			album({ id: 'a-hidden', title: 'Quiet room' })
+		]);
+		songList.set([
+			song({ id: 's-open', album_id: 'a-open', title: 'Tide', track_number: 1 }),
+			song({ id: 's-match', album_id: 'a-match', title: 'Stadion', track_number: 1 })
+		]);
+		openCollection.set({ kind: 'album', id: 'a-open' });
+		railTreeQuery.set('stadion');
+
+		const target = await render();
+		await tick();
+
+		expect(target.textContent).toContain('Anfield');
+		expect(target.textContent).toContain('Other album');
+		expect(target.textContent).toContain('Stadion');
+		expect(target.textContent).not.toContain('Quiet room');
+		expect(
+			requireElement<HTMLButtonElement>(target, '.album-label').getAttribute('aria-expanded')
+		).toBe('true');
 	});
 
 	it('puts All albums first and returns to the wall with the group closed', async () => {

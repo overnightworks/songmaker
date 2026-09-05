@@ -213,6 +213,36 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
     )
 
 
+def test_music_cover_executor_does_not_start_a_web_cover_runner(
+    tmp_path, monkeypatch, mock_arq_pool,
+) -> None:
+    monkeypatch.setenv("COVER_EXECUTOR", "music")
+    client, _ = make_test_app(tmp_path)
+
+    with client:
+        assert BackgroundLoopName.COVER_RUNNER not in client.app.state.background_loop_tasks
+
+
+def test_web_cover_runner_is_visible_in_lifecycle_health(
+    tmp_path, monkeypatch, mock_arq_pool,
+) -> None:
+    started = threading.Event()
+
+    async def idle_cover_runner(app) -> None:
+        lifecycle.background_loop_registry(app).record_success(BackgroundLoopName.COVER_RUNNER)
+        started.set()
+        await asyncio.Future()
+
+    monkeypatch.setenv("COVER_EXECUTOR", "web")
+    monkeypatch.setattr(server, "cover_runner_loop", idle_cover_runner)
+    client, _ = make_test_app(tmp_path)
+
+    with client:
+        assert started.wait(timeout=1)
+        health = client.get("/health").json()["background_loops"]
+        assert health[BackgroundLoopName.COVER_RUNNER]["state"] == BackgroundLoopStatus.OK
+
+
 def test_provider_status_loop_fills_snapshots_and_is_healthy(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:

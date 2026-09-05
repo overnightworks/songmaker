@@ -6,7 +6,7 @@ import asyncio
 import logging
 import shutil
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -41,6 +41,7 @@ JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
 
 class BackgroundLoopName(StrEnum):
+    COVER_RUNNER = "cover_runner"
     SESSION_SYNC = "session_sync"
     RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
     SCORE_BACKFILL = "score_backfill"
@@ -71,9 +72,10 @@ class BackgroundLoopHealth:
 
 
 class BackgroundLoopRegistry:
-    def __init__(self) -> None:
+    def __init__(self, loop_names: Collection[BackgroundLoopName] | None = None) -> None:
         self._loops = {
-            name: BackgroundLoopHealth(name=name) for name in BackgroundLoopName
+            name: BackgroundLoopHealth(name=name)
+            for name in (loop_names or BackgroundLoopName)
         }
         self._shutting_down = False
 

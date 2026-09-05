@@ -82,7 +82,7 @@ function fetchPlaylistDetailDeduped(
 		playlistDetailInflight.delete(id);
 	} else {
 		const inflight = playlistDetailInflight.get(id);
-		if (inflight) return inflight;
+		if (inflight !== undefined) return inflight;
 	}
 	const request: Promise<PlaylistDetailItem> = Promise.resolve(fetchPlaylist(id))
 		.then((detail) => {
@@ -101,7 +101,7 @@ function fetchPlaylistDetailDeduped(
 }
 
 export async function loadPlaylists(): Promise<boolean> {
-	if (playlistsInflight) return playlistsInflight;
+	if (playlistsInflight !== null) return playlistsInflight;
 	playlistLoad.set({ status: 'loading', error: null });
 	playlistsInflight = (async () => {
 		try {

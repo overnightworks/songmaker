@@ -17,6 +17,6 @@ import {
 export function nextReconnectDelayMs(attempt: number): number {
 	const exponential = SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_BACKOFF_FACTOR ** (attempt - 1);
 	const capped = Math.min(exponential, SSE_RECONNECT_MAX_DELAY_MS);
-	const jitter = capped * SSE_RECONNECT_JITTER_RATIO * Math.random();
+	const jitter = capped * SSE_RECONNECT_JITTER_RATIO * Math.random(); // NOSONAR S2245: reconnect pacing has no security context.
 	return Math.round(capped + jitter);
 }

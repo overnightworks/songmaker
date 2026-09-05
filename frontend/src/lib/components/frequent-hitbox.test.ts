@@ -132,6 +132,7 @@ import PlaylistPicker from './PlaylistPicker.svelte';
 import LibraryWall from './LibraryWall.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
+import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
@@ -142,6 +143,7 @@ import collectionMenuSource from './CollectionMenu.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
+import railSearchSource from './shell/RailSearch.svelte?raw';
 
 // Every target below is styled by exactly one of these components — never a
 // generic wrapper — so injecting that component's own compiled stylesheet
@@ -157,6 +159,7 @@ const COMPONENT_STYLE_SOURCES = {
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
 	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
+	RailSearch: { source: railSearchSource, filename: 'RailSearch.svelte' },
 	Layout: { source: layoutSource, filename: '+layout.svelte' }
 } as const satisfies Record<string, { source: string; filename: string }>;
 
@@ -232,10 +235,10 @@ const INVENTORY = [
 		component: 'LibraryWall'
 	},
 	{
-		name: 'library-search',
-		selector: '.search[data-hitbox="text"]',
+		name: 'rail-search',
+		selector: '.rail-search input[data-hitbox="text"]',
 		shape: 'text',
-		component: 'LibraryWall'
+		component: 'RailSearch'
 	},
 	{
 		name: 'breadcrumb-link',
@@ -509,6 +512,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const albumTarget = document.createElement('div');
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
+	const railSearchTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
 	const playerTarget = document.createElement('div');
 	root.append(
@@ -517,6 +521,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 		albumTarget,
 		songTarget,
 		pickerTarget,
+		railSearchTarget,
 		layoutTarget,
 		playerTarget
 	);
@@ -535,6 +540,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 			props: { onselect: vi.fn(), onclose: playlistPickerOnClose }
 		})
 	);
+	mounted.push(mount(RailSearch, { target: railSearchTarget }));
 	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
 	mounted.push(mount(PlayerBar, { target: playerTarget }));
 	await tick();

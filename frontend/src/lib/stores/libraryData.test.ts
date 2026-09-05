@@ -201,6 +201,20 @@ describe('song list mutations', () => {
 		).toEqual(['s-hidden', 's-page']);
 	});
 
+	it('dedupes concurrent requests for the same album songs', async () => {
+		vi.mocked(fetchSongs).mockResolvedValueOnce({
+			items: [makeSong({ id: 's1', album_id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+
+		await Promise.all([loadSongsForAlbum('a1'), loadSongsForAlbum('a1')]);
+
+		expect(fetchSongs).toHaveBeenCalledTimes(1);
+	});
+
 	it('retainRicherSong keeps loaded takes when a summary arrives later', () => {
 		const loaded = makeSong({
 			id: 's1',
@@ -311,6 +325,20 @@ describe('ensureAllAlbumsLoaded', () => {
 		await ensureAllAlbumsLoaded();
 		await ensureAllAlbumsLoaded();
 		expect(vi.mocked(fetchAlbums)).toHaveBeenCalledTimes(1);
+	});
+
+	it('dedupes concurrent requests for all albums', async () => {
+		vi.mocked(fetchAlbums).mockResolvedValueOnce({
+			items: [makeAlbum({ id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+
+		await Promise.all([ensureAllAlbumsLoaded(), ensureAllAlbumsLoaded()]);
+
+		expect(fetchAlbums).toHaveBeenCalledTimes(1);
 	});
 
 	it('preserves an album a concurrent load added while merging its own fetch', async () => {

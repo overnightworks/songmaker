@@ -9,7 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.constants import JOB_TERMINAL_STATUSES, LORA_ACTIVE_STATUSES, LoraStatus
-from songmaker_cli.db.models import Job, UserLora, UserLoraSample
+from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,17 @@ def list_user_loras_for_user(
     if not include_deleted:
         query = query.filter(UserLora.deleted_at.is_(None))
     return query.order_by(UserLora.created_at.desc()).all()
+
+
+def list_user_loras_for_admin(session: Session) -> list[tuple[UserLora, str]]:
+    """Return every active voice with its owner's username for operations."""
+    return (
+        session.query(UserLora, User.username)
+        .join(User, User.id == UserLora.user_id)
+        .filter(UserLora.deleted_at.is_(None))
+        .order_by(User.username.asc(), UserLora.created_at.desc())
+        .all()
+    )
 
 
 def count_active_user_loras(session: Session, user_id: str) -> int:
