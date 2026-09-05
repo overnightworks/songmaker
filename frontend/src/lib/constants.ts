@@ -268,13 +268,6 @@ export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
-export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
-export const LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER = 'Search playlists';
-export const LIBRARY_SHARED_SEARCH_PLACEHOLDER = 'Search shared';
-export const LIBRARY_SEARCH_EMPTY = 'No albums or songs match';
-export const LIBRARY_PLAYLISTS_SEARCH_EMPTY = 'No playlists match';
-export const LIBRARY_SHARED_SEARCH_EMPTY = 'No shared items match';
-export const LIBRARY_SEARCH_LOADING = 'Searching…';
 export const LIBRARY_SEARCH_ERROR = 'Search failed';
 export const LIBRARY_RETRY_LABEL = 'Retry';
 export const LIBRARY_LOAD_MORE = 'Load more';
