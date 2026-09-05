@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
 	COLLECTION_MENU_COVER_REMOVE_LABEL,
 	COLLECTION_MENU_LABEL,
+	RAIL_DRAWER_CLOSE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -194,6 +195,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
+		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_CLOSE_LABEL }).click();
 
 		await wallPlaylistTile.click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
