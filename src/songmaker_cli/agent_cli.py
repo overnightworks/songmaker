@@ -396,6 +396,14 @@ class _CliOutput:
     io_error: OSError | None = None
 
 
+@dataclass
+class _CliExchange:
+    stdout: bytearray
+    stderr: bytearray
+    pending_stdin: memoryview
+    stdout_line_remainder: bytearray
+
+
 def _run_cli_bounded(
     state: _BoundedRunState,
     argv: tuple[str, ...],
@@ -414,41 +422,21 @@ def _run_cli_bounded(
     extra_env: Mapping[str, str] | None,
     unset_env: Collection[str],
 ) -> None:
-    process: subprocess.Popen[bytes] | None = None
-    prompt_file_path: str | None = None
-    outcome: CliRunOutcome | None = None
+    process, prompt_file_path, outcome = _start_bounded_cli(
+        argv,
+        stderr,
+        on_spawn_failed,
+        prompt_file_bytes,
+        prompt_file_arg_index,
+        cwd,
+        extra_env,
+        unset_env,
+    )
     output = _CliOutput(
         bytearray(), bytearray(), complete=False, reason=CliRunReason.IO_ERROR,
     )
     try:
-        try:
-            command, prompt_file_path = _with_private_prompt_file(
-                argv,
-                prompt_file_bytes,
-                prompt_file_arg_index,
-            )
-            process = subprocess.Popen(
-                command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
-                env=_child_env(extra_env, unset_env),
-                start_new_session=True,
-                cwd=cwd,
-            )
-        except BaseException as error:
-            _notify_spawn_failed(on_spawn_failed)
-            outcome = CliRunOutcome(
-                started=False,
-                spawn_error=error,
-                returncode=None,
-                stdout="",
-                stderr="",
-                complete=False,
-                became_zombie=False,
-                reason=CliRunReason.SPAWN_FAILED,
-            )
-        else:
+        if process is not None:
             state.started.set()
             _notify_spawned(on_spawned, process.pid)
             output = _exchange_bounded(
@@ -461,48 +449,110 @@ def _run_cli_bounded(
             )
     finally:
         if process is not None:
-            became_zombie = _reap_process_group(process)
-            if became_zombie and on_reaped is not None:
-                threading.Thread(
-                    target=_reap_in_background,
-                    args=(process, on_reaped),
-                    daemon=True,
-                ).start()
-            else:
-                _notify_reaped(on_reaped, process.pid, became_zombie=False)
-            outcome = CliRunOutcome(
-                started=True,
-                spawn_error=None,
-                returncode=process.returncode,
-                stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
-                stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
-                complete=output.complete,
-                became_zombie=became_zombie,
-                reason=output.reason,
-                io_error=output.io_error,
-            )
-        if prompt_file_path is not None:
-            try:
-                _unlink_prompt_file(prompt_file_path)
-            except OSError as error:
-                if outcome is None:
-                    raise RuntimeError("bounded CLI runner exited without an outcome")
-                outcome = CliRunOutcome(
-                    started=outcome.started,
-                    spawn_error=outcome.spawn_error,
-                    returncode=outcome.returncode,
-                    stdout=outcome.stdout,
-                    stderr=outcome.stderr,
-                    complete=False,
-                    became_zombie=outcome.became_zombie,
-                    reason=CliRunReason.IO_ERROR,
-                    io_error=error,
-                )
+            outcome = _finished_bounded_cli_run(process, output, on_reaped)
+        outcome = _cleanup_bounded_cli_prompt_file(prompt_file_path, outcome)
         if outcome is None:
             raise RuntimeError("bounded CLI runner exited without an outcome")
         _publish_bounded_outcome(state, outcome)
         if stdout_line_channel is not None:
             stdout_line_channel._close(outcome)
+
+
+def _start_bounded_cli(
+    argv: tuple[str, ...],
+    stderr: Literal["capture", "devnull"],
+    on_spawn_failed: Callable[[], None] | None,
+    prompt_file_bytes: bytes | None,
+    prompt_file_arg_index: int | None,
+    cwd: str | None,
+    extra_env: Mapping[str, str] | None,
+    unset_env: Collection[str],
+) -> tuple[subprocess.Popen[bytes] | None, str | None, CliRunOutcome | None]:
+    prompt_file_path: str | None = None
+    try:
+        command, prompt_file_path = _with_private_prompt_file(
+            argv,
+            prompt_file_bytes,
+            prompt_file_arg_index,
+        )
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE if stderr == "capture" else subprocess.DEVNULL,
+            env=_child_env(extra_env, unset_env),
+            start_new_session=True,
+            cwd=cwd,
+        )
+    except BaseException as error:
+        _notify_spawn_failed(on_spawn_failed)
+        return None, prompt_file_path, _spawn_failure_outcome(error)
+    return process, prompt_file_path, None
+
+
+def _spawn_failure_outcome(error: BaseException) -> CliRunOutcome:
+    return CliRunOutcome(
+        started=False,
+        spawn_error=error,
+        returncode=None,
+        stdout="",
+        stderr="",
+        complete=False,
+        became_zombie=False,
+        reason=CliRunReason.SPAWN_FAILED,
+    )
+
+
+def _finished_bounded_cli_run(
+    process: subprocess.Popen[bytes],
+    output: _CliOutput,
+    on_reaped: Callable[[int, bool], None] | None,
+) -> CliRunOutcome:
+    became_zombie = _reap_process_group(process)
+    if became_zombie and on_reaped is not None:
+        threading.Thread(
+            target=_reap_in_background,
+            args=(process, on_reaped),
+            daemon=True,
+        ).start()
+    else:
+        _notify_reaped(on_reaped, process.pid, became_zombie=False)
+    return CliRunOutcome(
+        started=True,
+        spawn_error=None,
+        returncode=process.returncode,
+        stdout="" if output.reason in _DEADLINE_REASONS else _decode(output.stdout),
+        stderr="" if output.reason in _DEADLINE_REASONS else _decode(output.stderr),
+        complete=output.complete,
+        became_zombie=became_zombie,
+        reason=output.reason,
+        io_error=output.io_error,
+    )
+
+
+def _cleanup_bounded_cli_prompt_file(
+    prompt_file_path: str | None,
+    outcome: CliRunOutcome | None,
+) -> CliRunOutcome | None:
+    if prompt_file_path is None:
+        return outcome
+    try:
+        _unlink_prompt_file(prompt_file_path)
+    except OSError as error:
+        if outcome is None:
+            raise RuntimeError("bounded CLI runner exited without an outcome")
+        return CliRunOutcome(
+            started=outcome.started,
+            spawn_error=outcome.spawn_error,
+            returncode=outcome.returncode,
+            stdout=outcome.stdout,
+            stderr=outcome.stderr,
+            complete=False,
+            became_zombie=outcome.became_zombie,
+            reason=CliRunReason.IO_ERROR,
+            io_error=error,
+        )
+    return outcome
 
 
 def _child_env(
@@ -590,116 +640,276 @@ def _exchange_bounded(
     output_read_limit_bytes: int,
     stdout_line_channel: CliLineChannel | None,
 ) -> _CliOutput:
-    stdout = bytearray()
-    stderr = bytearray()
-    stdin = process.stdin
-    pending_stdin = memoryview(stdin_payload) if stdin_payload else memoryview(b"")
-    stdout_line_remainder = bytearray()
+    exchange = _CliExchange(
+        stdout=bytearray(),
+        stderr=bytearray(),
+        pending_stdin=memoryview(stdin_payload) if stdin_payload else memoryview(b""),
+        stdout_line_remainder=bytearray(),
+    )
     try:
-        if stdin is not None and not pending_stdin:
-            _close_stdin(process)
         with selectors.DefaultSelector() as selector:
-            for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
-                if stream is not None:
-                    os.set_blocking(stream.fileno(), False)
-                    selector.register(stream, selectors.EVENT_READ, name)
-            if stdin is not None and pending_stdin:
-                os.set_blocking(stdin.fileno(), False)
-                selector.register(stdin, selectors.EVENT_WRITE, "stdin")
-            while selector.get_map():
-                if stdout_line_channel is not None and stdout_line_channel.abort_requested():
-                    return _CliOutput(
-                        stdout, stderr, complete=False, reason=CliRunReason.CANCELLED,
-                    )
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return _deadline_output(stdout, stderr, pending_stdin)
-                events = selector.select(timeout=min(remaining, 0.05))
-                if not events:
-                    if time.monotonic() >= deadline:
-                        return _deadline_output(stdout, stderr, pending_stdin)
-                    continue
-                for key, _ in events:
-                    if key.data == "stdin":
-                        written = os.write(key.fileobj.fileno(), pending_stdin)
-                        if written <= 0:
-                            return _CliOutput(
-                                stdout, stderr, complete=False, reason=CliRunReason.IO_ERROR,
-                            )
-                        pending_stdin = pending_stdin[written:]
-                        if not pending_stdin:
-                            selector.unregister(key.fileobj)
-                            key.fileobj.close()
-                        continue
-                    collected = stdout if key.data == "stdout" else stderr
-                    room = output_read_limit_bytes - len(stdout) - len(stderr)
-                    if room <= 0:
-                        return _CliOutput(
-                            stdout,
-                            stderr,
-                            complete=False,
-                            reason=CliRunReason.OUTPUT_LIMIT_REACHED,
-                        )
-                    chunk = os.read(key.fileobj.fileno(), room)
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        if key.data == "stdout" and stdout_line_channel is not None:
-                            if stdout_line_remainder:
-                                line = bytes(stdout_line_remainder)
-                                stdout_line_remainder.clear()
-                                if not stdout_line_channel._send(line):
-                                    reason = (
-                                        CliRunReason.CANCELLED
-                                        if stdout_line_channel.abort_requested()
-                                        else CliRunReason.OUTPUT_CHANNEL_FULL
-                                    )
-                                    return _CliOutput(
-                                        stdout, stderr, complete=False, reason=reason,
-                                    )
-                        if read == "first_line" and key.data == "stdout":
-                            return _CliOutput(
-                                stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
-                            )
-                        continue
-                    if read == "first_line" and key.data == "stdout":
-                        newline = chunk.find(b"\n")
-                        if newline >= 0:
-                            stdout.extend(chunk[:newline + 1])
-                            return _CliOutput(
-                                stdout, stderr, complete=True, reason=CliRunReason.COMPLETE,
-                            )
-                    collected.extend(chunk)
-                    if key.data == "stdout" and stdout_line_channel is not None:
-                        stdout_line_remainder.extend(chunk)
-                        while b"\n" in stdout_line_remainder:
-                            newline = stdout_line_remainder.index(b"\n") + 1
-                            line = bytes(stdout_line_remainder[:newline])
-                            del stdout_line_remainder[:newline]
-                            if not stdout_line_channel._send(line):
-                                reason = (
-                                    CliRunReason.CANCELLED
-                                    if stdout_line_channel.abort_requested()
-                                    else CliRunReason.OUTPUT_CHANNEL_FULL
-                                )
-                                return _CliOutput(
-                                    stdout, stderr, complete=False, reason=reason,
-                                )
-                    if len(stdout) + len(stderr) >= output_read_limit_bytes:
-                        return _CliOutput(
-                            stdout,
-                            stderr,
-                            complete=False,
-                            reason=CliRunReason.OUTPUT_LIMIT_REACHED,
-                        )
+            _register_exchange_streams(selector, process, exchange)
+            return _exchange_until_complete(
+                selector,
+                exchange,
+                read,
+                deadline,
+                output_read_limit_bytes,
+                stdout_line_channel,
+            )
     except OSError as error:
         return _CliOutput(
-            stdout,
-            stderr,
+            exchange.stdout,
+            exchange.stderr,
             complete=False,
             reason=CliRunReason.IO_ERROR,
             io_error=error,
         )
+
+
+def _register_exchange_streams(
+    selector: selectors.BaseSelector,
+    process: subprocess.Popen[bytes],
+    exchange: _CliExchange,
+) -> None:
+    stdin = process.stdin
+    if stdin is not None and not exchange.pending_stdin:
+        _close_stdin(process)
+    _register_output_streams(selector, process)
+    if stdin is not None and exchange.pending_stdin:
+        os.set_blocking(stdin.fileno(), False)
+        selector.register(stdin, selectors.EVENT_WRITE, "stdin")
+
+
+def _register_output_streams(
+    selector: selectors.BaseSelector,
+    process: subprocess.Popen[bytes],
+) -> None:
+    for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
+        if stream is not None:
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, name)
+
+
+def _exchange_until_complete(
+    selector: selectors.BaseSelector,
+    exchange: _CliExchange,
+    read: Literal["all", "first_line"],
+    deadline: float,
+    output_read_limit_bytes: int,
+    stdout_line_channel: CliLineChannel | None,
+) -> _CliOutput:
+    while selector.get_map():
+        terminal_output = _exchange_terminal_output(exchange, stdout_line_channel, deadline)
+        if terminal_output is not None:
+            return terminal_output
+        events = selector.select(timeout=min(deadline - time.monotonic(), 0.05))
+        if not events:
+            if time.monotonic() >= deadline:
+                return _deadline_output(exchange.stdout, exchange.stderr, exchange.pending_stdin)
+            continue
+        for key, _ in events:
+            event_output = _exchange_event(
+                selector,
+                key,
+                exchange,
+                read,
+                output_read_limit_bytes,
+                stdout_line_channel,
+            )
+            if event_output is not None:
+                return event_output
+    return _CliOutput(
+        exchange.stdout,
+        exchange.stderr,
+        complete=True,
+        reason=CliRunReason.COMPLETE,
+    )
+
+
+def _exchange_terminal_output(
+    exchange: _CliExchange,
+    stdout_line_channel: CliLineChannel | None,
+    deadline: float,
+) -> _CliOutput | None:
+    if stdout_line_channel is not None and stdout_line_channel.abort_requested():
+        return _CliOutput(
+            exchange.stdout,
+            exchange.stderr,
+            complete=False,
+            reason=CliRunReason.CANCELLED,
+        )
+    if deadline - time.monotonic() <= 0:
+        return _deadline_output(exchange.stdout, exchange.stderr, exchange.pending_stdin)
+    return None
+
+
+def _exchange_event(
+    selector: selectors.BaseSelector,
+    key: selectors.SelectorKey,
+    exchange: _CliExchange,
+    read: Literal["all", "first_line"],
+    output_read_limit_bytes: int,
+    stdout_line_channel: CliLineChannel | None,
+) -> _CliOutput | None:
+    if key.data == "stdin":
+        return _write_pending_stdin(selector, key, exchange)
+    return _read_cli_output(
+        selector,
+        key,
+        exchange,
+        read,
+        output_read_limit_bytes,
+        stdout_line_channel,
+    )
+
+
+def _write_pending_stdin(
+    selector: selectors.BaseSelector,
+    key: selectors.SelectorKey,
+    exchange: _CliExchange,
+) -> _CliOutput | None:
+    written = os.write(key.fileobj.fileno(), exchange.pending_stdin)
+    if written <= 0:
+        return _CliOutput(
+            exchange.stdout,
+            exchange.stderr,
+            complete=False,
+            reason=CliRunReason.IO_ERROR,
+        )
+    exchange.pending_stdin = exchange.pending_stdin[written:]
+    if exchange.pending_stdin:
+        return None
+    selector.unregister(key.fileobj)
+    key.fileobj.close()
+    return None
+
+
+def _read_cli_output(
+    selector: selectors.BaseSelector,
+    key: selectors.SelectorKey,
+    exchange: _CliExchange,
+    read: Literal["all", "first_line"],
+    output_read_limit_bytes: int,
+    stdout_line_channel: CliLineChannel | None,
+) -> _CliOutput | None:
+    room = output_read_limit_bytes - len(exchange.stdout) - len(exchange.stderr)
+    if room <= 0:
+        return _output_limit_reached(exchange)
+    chunk = os.read(key.fileobj.fileno(), room)
+    if not chunk:
+        return _finish_output_stream(selector, key, exchange, read, stdout_line_channel)
+    if read == "first_line" and key.data == "stdout":
+        first_line_output = _first_line_output(exchange.stdout, exchange.stderr, chunk)
+        if first_line_output is not None:
+            return first_line_output
+    return _collect_output_chunk(
+        key.data,
+        exchange,
+        chunk,
+        output_read_limit_bytes,
+        stdout_line_channel,
+    )
+
+
+def _finish_output_stream(
+    selector: selectors.BaseSelector,
+    key: selectors.SelectorKey,
+    exchange: _CliExchange,
+    read: Literal["all", "first_line"],
+    stdout_line_channel: CliLineChannel | None,
+) -> _CliOutput | None:
+    selector.unregister(key.fileobj)
+    if key.data == "stdout" and stdout_line_channel is not None:
+        channel_output = _flush_stdout_line_remainder(exchange, stdout_line_channel)
+        if channel_output is not None:
+            return channel_output
+    if read == "first_line" and key.data == "stdout":
+        return _CliOutput(
+            exchange.stdout,
+            exchange.stderr,
+            complete=True,
+            reason=CliRunReason.COMPLETE,
+        )
+    return None
+
+
+def _first_line_output(
+    stdout: bytearray,
+    stderr: bytearray,
+    chunk: bytes,
+) -> _CliOutput | None:
+    newline = chunk.find(b"\n")
+    if newline < 0:
+        return None
+    stdout.extend(chunk[:newline + 1])
     return _CliOutput(stdout, stderr, complete=True, reason=CliRunReason.COMPLETE)
+
+
+def _collect_output_chunk(
+    stream_name: str,
+    exchange: _CliExchange,
+    chunk: bytes,
+    output_read_limit_bytes: int,
+    stdout_line_channel: CliLineChannel | None,
+) -> _CliOutput | None:
+    collected = exchange.stdout if stream_name == "stdout" else exchange.stderr
+    collected.extend(chunk)
+    if stream_name == "stdout" and stdout_line_channel is not None:
+        channel_output = _send_complete_stdout_lines(exchange, stdout_line_channel, chunk)
+        if channel_output is not None:
+            return channel_output
+    if len(exchange.stdout) + len(exchange.stderr) >= output_read_limit_bytes:
+        return _output_limit_reached(exchange)
+    return None
+
+
+def _send_complete_stdout_lines(
+    exchange: _CliExchange,
+    stdout_line_channel: CliLineChannel,
+    chunk: bytes,
+) -> _CliOutput | None:
+    exchange.stdout_line_remainder.extend(chunk)
+    while b"\n" in exchange.stdout_line_remainder:
+        newline = exchange.stdout_line_remainder.index(b"\n") + 1
+        line = bytes(exchange.stdout_line_remainder[:newline])
+        del exchange.stdout_line_remainder[:newline]
+        if not stdout_line_channel._send(line):
+            return _stdout_channel_delivery_failure(exchange, stdout_line_channel)
+    return None
+
+
+def _flush_stdout_line_remainder(
+    exchange: _CliExchange,
+    stdout_line_channel: CliLineChannel,
+) -> _CliOutput | None:
+    if not exchange.stdout_line_remainder:
+        return None
+    line = bytes(exchange.stdout_line_remainder)
+    exchange.stdout_line_remainder.clear()
+    if stdout_line_channel._send(line):
+        return None
+    return _stdout_channel_delivery_failure(exchange, stdout_line_channel)
+
+
+def _stdout_channel_delivery_failure(
+    exchange: _CliExchange,
+    stdout_line_channel: CliLineChannel,
+) -> _CliOutput:
+    if stdout_line_channel.abort_requested():
+        reason = CliRunReason.CANCELLED
+    else:
+        reason = CliRunReason.OUTPUT_CHANNEL_FULL
+    return _CliOutput(exchange.stdout, exchange.stderr, complete=False, reason=reason)
+
+
+def _output_limit_reached(exchange: _CliExchange) -> _CliOutput:
+    return _CliOutput(
+        exchange.stdout,
+        exchange.stderr,
+        complete=False,
+        reason=CliRunReason.OUTPUT_LIMIT_REACHED,
+    )
 
 
 def _close_stdin(process: subprocess.Popen[bytes]) -> None:

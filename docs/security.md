@@ -437,6 +437,37 @@ The host remains the only refresh owner: the mounted Codex document keeps
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
+The web service alone runs under the host profile `songmaker-web`. An operator
+loads it for the current host boot with `sudo scripts/apparmor/install.sh` and
+then recreates the service with `docker compose up -d songmaker-web`; the script
+does not install the profile under `/etc/apparmor.d/`, so the operator must load
+it again after a host reboot. Loading changes the host kernel policy, so the
+script deliberately requires root. The profile derives
+Docker Engine 29.1.3's `docker-default` template (Moby
+`profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
+adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
+Bubblewrap 0.9.0's private-root setup operations: recursive-slave propagation,
+construction and sandbox tmpfs mounts, root and private-home binds and
+remounts, both `pivot_root` calls, fresh `proc`, writable-proc covers, and
+minimal `dev`/`devpts`. It accepts Bubblewrap's optional `silent` flag only
+where its mount syscall uses it, preserves the observed inherited mount flags
+during remounts, and permits private homes only below the cover, Co-Writer,
+and post-rollout-probe directory prefixes. Compose applies the profile only to
+`songmaker-web`, drops every container capability, and sets
+`no-new-privileges:true`.
+
+`scripts/prove_codex_image_sandbox.py` is the post-rollout proof. It verifies
+the container label, starts Bubblewrap with `--unshare-user --unshare-all`,
+`--ro-bind / /`, `--proc`, `--dev`, and a private `CODEX_HOME` bind under the
+sandbox's `/tmp` tmpfs, then
+checks that writes outside that home, network egress, new privileges, and
+effective capabilities are unavailable. The probe remounts the scratch tmpfs
+read-only after binding its private home, so no other scratch path is writable.
+Its negative control starts the same
+image under `docker-default` and must fail. The profile is syntax-checked in
+this repository with `apparmor_parser -Q -K`; loading it and the live proof
+require the operator's root access and belong to the next rollout slice.
+
 Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
 `codex exec resume`. Both command shapes apply `--skip-git-repo-check`,

@@ -67,6 +67,38 @@ _AUDIO_UPLOAD_FIELDS: Final[tuple[tuple[str, str], ...]] = (
 )
 
 
+def _completed_poll_result(entry: TaskQueryEntry, started_at: float) -> _PollResult:
+    items = entry.parse_result_items()
+    if not items or not items[0].file:
+        raise GenerationFailedError(
+            f"ACE-Step completed but no audio returned: {entry.result}"
+        )
+
+    elapsed = time.monotonic() - started_at
+    log.info("ACE-Step generation complete (%.1fs)", elapsed)
+    item = items[0]
+    return _PollResult(
+        audio_path=item.file,
+        seed=item.seed,
+        cot_caption=item.cot_caption,
+        cot_lyrics=item.cot_lyrics,
+        requested_batch_size=item.requested_batch_size,
+        delivered_batch_size=item.delivered_batch_size,
+    )
+
+
+def _report_poll_progress(
+    entry: TaskQueryEntry,
+    started_at: float,
+    on_progress: Callable[[str], None] | None,
+) -> None:
+    elapsed = time.monotonic() - started_at
+    progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
+    log.info("ACE-Step: %s", progress)
+    if on_progress is not None:
+        on_progress(progress)
+
+
 def _failure_cause(entry: TaskQueryEntry) -> str:
     """Return ACE-Step's own text for a failed task, short enough to show.
 
@@ -156,31 +188,24 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         "audio_format": "wav",
         "batch_size": config.batch_size,
     }
-    if config.lm_negative_prompt:
-        payload["lm_negative_prompt"] = config.lm_negative_prompt
-    if config.src_audio_path:
-        payload["src_audio_path"] = config.src_audio_path
+    payload.update(_optional_submit_payload(config))
+    return payload
+
+
+def _optional_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    optional_values = {
+        "lm_negative_prompt": config.lm_negative_prompt,
+        "src_audio_path": config.src_audio_path,
+        "reference_audio_path": config.reference_audio_path,
+        "timesteps": config.timesteps,
+        "model": config.model,
+    }
+    payload.update({key: value for key, value in optional_values.items() if value})
     if config.task_type == "repaint":
-        payload["repainting_start"] = config.repainting_start
-        payload["repainting_end"] = config.repainting_end
-        if config.repaint_mode:
-            payload["repaint_mode"] = config.repaint_mode
-        if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
-            payload["repaint_strength"] = config.repaint_strength
-        if config.repaint_latent_crossfade_frames > 0:
-            payload["repaint_latent_crossfade_frames"] = (
-                config.repaint_latent_crossfade_frames
-            )
-        if config.repaint_wav_crossfade_sec > 0:
-            payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
+        payload.update(_repaint_submit_payload(config))
     if config.task_type == "cover":
-        payload["audio_cover_strength"] = config.audio_cover_strength
-        if config.cover_noise_strength > 0:
-            payload["cover_noise_strength"] = config.cover_noise_strength
-    if config.reference_audio_path:
-        payload["reference_audio_path"] = config.reference_audio_path
-    if config.timesteps:
-        payload["timesteps"] = config.timesteps
+        payload.update(_cover_submit_payload(config))
     if not config.use_cot_caption:
         payload["use_cot_caption"] = False
     if not config.use_cot_language:
@@ -195,8 +220,29 @@ def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["cfg_interval_start"] = config.cfg_interval_start
     if config.cfg_interval_end < 1.0:
         payload["cfg_interval_end"] = config.cfg_interval_end
-    if config.model:
-        payload["model"] = config.model
+    return payload
+
+
+def _repaint_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "repainting_start": config.repainting_start,
+        "repainting_end": config.repainting_end,
+    }
+    if config.repaint_mode:
+        payload["repaint_mode"] = config.repaint_mode
+    if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
+        payload["repaint_strength"] = config.repaint_strength
+    if config.repaint_latent_crossfade_frames > 0:
+        payload["repaint_latent_crossfade_frames"] = config.repaint_latent_crossfade_frames
+    if config.repaint_wav_crossfade_sec > 0:
+        payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
+    return payload
+
+
+def _cover_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    payload: dict[str, object] = {"audio_cover_strength": config.audio_cover_strength}
+    if config.cover_noise_strength > 0:
+        payload["cover_noise_strength"] = config.cover_noise_strength
     return payload
 
 
@@ -458,48 +504,9 @@ class AceStepClient:
 
         while time.monotonic() - start < poll_timeout:
             try:
-                req = Request(
-                    f"{self.base_url}/query_result",
-                    data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                with urlopen(req, timeout=10) as resp:
-                    raw = json.loads(resp.read())
-
-                response = TaskQueryResponse.model_validate(raw)
-                if not response.data:
-                    time.sleep(POLL_INTERVAL)
-                    continue
-
-                entry = response.data[0]
-
-                if entry.status == _TASK_STATUS_FAILED:
-                    raise GenerationFailedError(_failure_cause(entry))
-
-                if entry.status == _TASK_STATUS_COMPLETE:
-                    items = entry.parse_result_items()
-                    if items and items[0].file:
-                        elapsed = time.monotonic() - start
-                        log.info("ACE-Step generation complete (%.1fs)", elapsed)
-                        item = items[0]
-                        return _PollResult(
-                            audio_path=item.file,
-                            seed=item.seed,
-                            cot_caption=item.cot_caption,
-                            cot_lyrics=item.cot_lyrics,
-                            requested_batch_size=item.requested_batch_size,
-                            delivered_batch_size=item.delivered_batch_size,
-                        )
-                    raise GenerationFailedError(
-                        f"ACE-Step completed but no audio returned: {entry.result}"
-                    )
-
-                elapsed = time.monotonic() - start
-                progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
-                log.info("ACE-Step: %s", progress)
-                if on_progress:
-                    on_progress(progress)
+                result = self._read_polled_result(payload, start, on_progress)
+                if result is not None:
+                    return result
 
             except KeyboardInterrupt:
                 log.warning("Generation cancelled by user (task_id=%s)", task_id)
@@ -513,6 +520,36 @@ class AceStepClient:
         raise GenerationTimeoutError(
             f"ACE-Step generation timed out after {poll_timeout:.0f}s"
         )
+
+    def _read_polled_result(
+        self,
+        payload: bytes,
+        started_at: float,
+        on_progress: Callable[[str], None] | None,
+    ) -> _PollResult | None:
+        response = self._query_task_result(payload)
+        if not response.data:
+            return None
+
+        entry = response.data[0]
+        if entry.status == _TASK_STATUS_FAILED:
+            raise GenerationFailedError(_failure_cause(entry))
+        if entry.status == _TASK_STATUS_COMPLETE:
+            return _completed_poll_result(entry, started_at)
+
+        _report_poll_progress(entry, started_at, on_progress)
+        return None
+
+    def _query_task_result(self, payload: bytes) -> TaskQueryResponse:
+        req = Request(
+            f"{self.base_url}/query_result",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=10) as resp:
+            raw = json.loads(resp.read())
+        return TaskQueryResponse.model_validate(raw)
 
     def _download_audio(
         self, audio_path: str, seed: int,
