@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from songmaker_cli.settings import Settings
+from songmaker_cli.settings import CoverExecutor, Settings
 
 
 def _required_settings() -> dict[str, str]:
@@ -61,6 +61,13 @@ def test_codex_process_caps_default_to_the_single_pool_contract() -> None:
 
     assert settings.codex_cli_max_concurrent_processes == 8
     assert settings.cover_max_concurrent_runs == 1
+
+
+def test_cover_executor_defaults_to_music_and_rejects_unknown_values() -> None:
+    assert Settings(**_required_settings()).cover_executor is CoverExecutor.MUSIC
+
+    with pytest.raises(ValidationError):
+        Settings(**_required_settings(), cover_executor="unknown")
 
 
 def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
