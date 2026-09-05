@@ -544,6 +544,7 @@ REIMPORT_BODY_MAX_BYTES = (2 * AUDIO_UPLOAD_FILE_MAX_BYTES) + MULTIPART_ENVELOPE
 COVER_DIRNAME: Final[str] = "covers"
 ALBUM_COVER_SUGGESTIONS_DIRNAME: Final[str] = "cover-suggestions"
 SONG_COVER_DIRNAME: Final[str] = "song-covers"
+PLAYLIST_COVER_DIRNAME: Final[str] = "playlist-covers"
 COVER_MAX_BYTES: Final[int] = 8 * 1024 * 1024
 COVER_MAX_PIXELS: Final[int] = 20_000_000
 COVER_CARD_MAX_EDGE: Final[int] = 512
@@ -580,6 +581,7 @@ COVER_SUGGESTION_NOT_FOUND: Final[str] = "Album not found"
 COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
 COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
 COVER_INVALID_SONG_ID: Final[str] = "Invalid song id for cover storage"
+COVER_INVALID_PLAYLIST_ID: Final[str] = "Invalid playlist id for cover storage"
 COVER_OLD_DIRNAME_SUFFIX: Final[str] = ".old"
 COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
 
