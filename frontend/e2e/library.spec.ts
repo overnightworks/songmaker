@@ -41,6 +41,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	openLibraryWall,
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
@@ -154,19 +155,6 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 		await page.keyboard.press('Escape');
 	}
 	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
-}
-
-/** Back to the wall through LIBRARY's first child, in both rail shells. */
-async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	await rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('button', { name: nameStartingWith('All albums') })
-		.click();
-	if (shell === 'mobile')
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
 /**

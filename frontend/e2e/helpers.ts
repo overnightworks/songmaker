@@ -1,7 +1,14 @@
 // Shared guards, shell facts and name matchers for the browser flows.
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants';
+import {
+	RAIL_DRAWER_LABEL,
+	RAIL_DRAWER_OPEN_LABEL,
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_NAV_LABEL,
+	RESOURCE_EVENT_STREAM_PATH
+} from '../src/lib/constants';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -67,6 +74,29 @@ export function nameStartingWith(...labels: string[]): RegExp {
  */
 export function workspace(page: Page): Locator {
 	return page.getByRole('main');
+}
+
+/** Back to the wall through LIBRARY's first child, in the same SPA document. */
+export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('button', { name: nameStartingWith('All albums') })
+		.click();
+	if (shell === 'mobile')
+		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+}
+
+async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
+	if (shell === 'mobile') {
+		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
+		if (!(await drawer.isVisible())) {
+			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		}
+	}
+	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
 /**

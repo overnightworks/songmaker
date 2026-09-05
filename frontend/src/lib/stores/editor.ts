@@ -5,7 +5,7 @@ import {
 	deleteVersion as apiDeleteVersion,
 	fetchSong
 } from '$lib/api/client';
-import { replaceSongInList } from '$lib/stores/libraryData';
+import { replaceSongInList, resetLibraryContinueItems } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 import type {
 	GenerationItem,
@@ -196,6 +196,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 		key_scale: draft.key_scale,
 		generation_params: draft.genParams
 	});
+	resetLibraryContinueItems();
 	editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
 	replaceSongInList(updated);
 	await loadVersions(songId);
@@ -209,6 +210,7 @@ export async function handleDeleteVersion(
 	deleteGenerations: boolean
 ): Promise<void> {
 	await apiDeleteVersion(versionId, deleteGenerations);
+	resetLibraryContinueItems();
 	const updated = await fetchSong(songId);
 	replaceSongInList(updated);
 	if (get(selectedSongId) !== songId) return;

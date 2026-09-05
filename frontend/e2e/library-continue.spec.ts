@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { collectionRowPlayLabel, TRANSPORT_PAUSE_LABEL } from '../src/lib/constants';
-import { FlowGuard, shellOf, type Shell } from './helpers';
+import { FlowGuard, openLibraryWall, shellOf, type Shell } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -48,7 +48,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		};
 	});
 
-	await page.goto('/');
+	await openLibraryWall(page, shell);
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
 	await expect(entries.first()).toBeVisible();

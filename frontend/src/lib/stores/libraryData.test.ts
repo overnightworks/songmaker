@@ -137,15 +137,21 @@ beforeEach(() => {
 });
 
 describe('Continue items', () => {
-	it('shares one request until the per-user cache is reset', async () => {
-		vi.mocked(fetchLibraryContinue).mockResolvedValue({ items: [] });
+	it('reloads Continue after a mutation clears the cache for a wall remount', async () => {
+		const beforeListen = [{ type: 'song' as const, id: 'before', title: 'Before' }];
+		const afterListen = [{ type: 'song' as const, id: 'after', title: 'After' }];
+		vi.mocked(fetchLibraryContinue)
+			.mockResolvedValueOnce({ items: beforeListen })
+			.mockResolvedValueOnce({ items: afterListen });
 
-		await loadLibraryContinueItems();
-		await loadLibraryContinueItems();
+		await expect(loadLibraryContinueItems()).resolves.toEqual(beforeListen);
+		await expect(loadLibraryContinueItems()).resolves.toEqual(beforeListen);
 
 		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
+		// recordSongListen and the editor mutation owners call this before the
+		// library wall mounts again in the same SPA document.
 		resetLibraryContinueItems();
-		await loadLibraryContinueItems();
+		await expect(loadLibraryContinueItems()).resolves.toEqual(afterListen);
 		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
 	});
 
