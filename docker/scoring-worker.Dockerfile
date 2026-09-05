@@ -20,11 +20,15 @@ COPY --chown=songmaker pyproject.toml uv.lock ./
 # distribution, so this locked sync alone may build it.
 RUN uv sync --frozen --no-dev --no-install-project --extra server --extra scoring --extra whisper --extra claude # NOSONAR nvidia-ml-py3 has no wheel in the lockfile; every dependency remains resolved from uv.lock.
 
-ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
-RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run --no-sync --frozen --no-build python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')"
-RUN --mount=type=secret,id=hf_token,env=HF_TOKEN uv run --no-sync --frozen --no-build python -c "from audiobox_aesthetics.infer import AesPredictor; import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; AesPredictor(checkpoint_pth='default')"
+ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
+ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
+    MODEL_WARMUP_TIMEOUT_SECONDS=${MODEL_WARMUP_TIMEOUT_SECONDS}
+# 2026-09-05: hf-xet 1.2.0 stalled after downloading most of Whisper's 3 GB
+# checkpoint; use Hugging Face's HTTP path for these bounded build-time downloads.
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN HF_HUB_DISABLE_XET=1 timeout --verbose "${MODEL_WARMUP_TIMEOUT_SECONDS}s" uv run --no-sync --frozen --no-build python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')"
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN HF_HUB_DISABLE_XET=1 timeout --verbose "${MODEL_WARMUP_TIMEOUT_SECONDS}s" uv run --no-sync --frozen --no-build python -c "from audiobox_aesthetics.infer import AesPredictor; import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; AesPredictor(checkpoint_pth='default')"
 
-COPY --chown=root:root src/ src/
+COPY --chown=songmaker:songmaker src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
 RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable . # NOSONAR The local project adds no resolved dependencies and cannot change locked versions.
