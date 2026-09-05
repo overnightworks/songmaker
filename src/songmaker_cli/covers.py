@@ -10,7 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Final
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 
 from songmaker_cli.constants import (
     COVER_CACHE_CONTROL,
@@ -182,7 +182,7 @@ def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise CoverRejectedError(COVER_TOO_MANY_PIXELS) from exc
-    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, IndexError) as exc:
+    except (OSError, ValueError, SyntaxError, IndexError) as exc:
         raise CoverRejectedError(COVER_UNREADABLE) from exc
     finally:
         Image.MAX_IMAGE_PIXELS = previous_limit
@@ -305,7 +305,7 @@ def _cover_file_exists(
             audio_dir, dirname, entity_id, cover_key, COVER_VARIANT_ORIGINAL,
             invalid_id_message,
         )
-    except (CoverRejectedError, FileNotFoundError, OSError):
+    except (CoverRejectedError, OSError):
         return False
     return path.is_file()
 

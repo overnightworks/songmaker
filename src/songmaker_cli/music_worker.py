@@ -92,7 +92,7 @@ class MusicWorker(WorkerBase):
             redis=ctx["redis"],
         )
 
-    async def generate_cover_suggestions(self, ctx, job_id: str) -> None:
+    async def generate_cover_suggestions(self, _ctx, job_id: str) -> None:
         if not self.check_job_still_valid(job_id):
             return
 
@@ -143,7 +143,7 @@ class MusicWorker(WorkerBase):
             ctx, job_id, mode, db_factory=self.get_db_factory(),
         )
 
-    async def cleanup_files_cron(self, ctx) -> None:
+    async def cleanup_files_cron(self, _ctx) -> None:
         from songmaker_cli.cleanup import run_cleanup_expired
 
         await asyncio.to_thread(self.audit_orphaned_files)
@@ -151,7 +151,7 @@ class MusicWorker(WorkerBase):
             run_cleanup_expired, self.get_db_factory(), self.audio_dir(),
         )
 
-    async def generation_retention_cron(self, ctx) -> int:
+    async def generation_retention_cron(self, _ctx) -> int:
         from songmaker_cli.cleanup import run_generation_retention
 
         report = await asyncio.to_thread(

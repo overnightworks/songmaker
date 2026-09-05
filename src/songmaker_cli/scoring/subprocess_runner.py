@@ -294,7 +294,7 @@ class ScorerProcess:
             if self._conn:
                 self._conn.send(ShutdownRequest())
                 self._process.join(timeout=5)
-        except (OSError, BrokenPipeError, EOFError):
+        except (OSError, EOFError):
             log.debug("Shutdown send failed — subprocess may have already exited", exc_info=True)
         if self.alive:
             self._kill()
@@ -314,7 +314,7 @@ class ScorerProcess:
         if self._conn:
             try:
                 self._conn.close()
-            except (OSError, BrokenPipeError):
+            except OSError:
                 log.debug("Failed to close scorer connection during cleanup", exc_info=True)
         self._conn = None
         self._process = None

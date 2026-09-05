@@ -17,7 +17,7 @@ DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
 
 
 async def load_model_on_worker(
-    ctx, job_id: str, worker_id: str, mode: str, *, db_factory,
+    _ctx, job_id: str, worker_id: str, mode: str, *, db_factory,
 ) -> None:
     import httpx
 
