@@ -53,7 +53,7 @@ log = logging.getLogger(__name__)
 
 COVER_RESPONSE_HEADERS: dict[str, str] = {"Cache-Control": COVER_CACHE_CONTROL}
 _COVER_REJECTED_IDS: Final[frozenset[str]] = frozenset({".", ".."})
-_COVER_PATH_TRAVERSAL_LOG = "Path traversal blocked in cover delete: %s"
+_COVER_PATH_TRAVERSAL_LOG = "Path traversal blocked in cover delete for category: %s"
 
 
 class CoverRejectedError(Exception):
@@ -275,7 +275,7 @@ def remove_cover_files(
     try:
         final = _cover_entity_dir(audio_dir, dirname, entity_id, invalid_id_message)
     except CoverRejectedError:
-        log.warning(_COVER_PATH_TRAVERSAL_LOG, entity_id)
+        log.warning(_COVER_PATH_TRAVERSAL_LOG, dirname)
         return
     covers_root = _covers_root(audio_dir, dirname)
     parent = final.parent

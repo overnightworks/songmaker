@@ -554,6 +554,20 @@ def test_remove_song_cover_files_rejects_unsafe_song_ids(
     _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
+def test_remove_song_cover_files_logs_its_category_without_the_rejected_id(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    rejected_id = "private-user-content/song"
+
+    with caplog.at_level("WARNING", logger="songmaker_cli.covers"):
+        remove_song_cover_files(audio_dir, rejected_id)
+
+    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert rejected_id not in caplog.text
+    assert "category: song-covers" in caplog.text
+
+
 def test_remove_song_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
     nested = audio_dir / "other"
