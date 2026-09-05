@@ -33,7 +33,7 @@ from songmaker_cli.scoring.pipeline import (
 _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 
-@pytest.fixture()
+@pytest.fixture
 def clean_registry() -> Generator[ScorerRegistry, None, None]:
     """Provide an isolated scorer registry for testing."""
     registry = ScorerRegistry()
@@ -41,7 +41,7 @@ def clean_registry() -> Generator[ScorerRegistry, None, None]:
     yield registry
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_mp3(tmp_path: Path) -> Path:
     mp3 = tmp_path / "test.mp3"
     mp3.write_bytes(b"fake")

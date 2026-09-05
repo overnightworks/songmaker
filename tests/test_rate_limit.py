@@ -40,7 +40,7 @@ def _seed_rate_limit_data(session) -> None:
     ).update({"is_active": True}, synchronize_session=False)
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
     yield client
@@ -249,7 +249,7 @@ def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
 # ── Per-IP exemptions ───────────────────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def ip_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
     from songmaker_cli.settings import get_settings
@@ -420,7 +420,7 @@ def test_classify_path(path: str, expected_class: RateLimitClass) -> None:
 # ── Rate limit classes (issue #257) ─────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def class_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
     monkeypatch.setenv("MEDIA_RATE_LIMIT", "2")
@@ -506,7 +506,7 @@ def _seed_shared_album_data(session) -> None:
     ))
 
 
-@pytest.fixture()
+@pytest.fixture
 def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
     # Setup itself spends 2 API-class calls (login + share), so the budget
     # needs headroom above that before the test's own assertions run.

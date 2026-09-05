@@ -44,7 +44,7 @@ def _seed_server_data(session) -> None:
     session.add(Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 48.9}))
 
 
-@pytest.fixture()
+@pytest.fixture
 def server_app(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_server_data)
     audio_dir = tmp_path / "audio"
@@ -182,7 +182,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     assert resp.json()["detail"] == "Not Found"
 
 
-@pytest.fixture()
+@pytest.fixture
 def auth_server_app(tmp_path: Path):
     from songmaker_cli.db.queries import create_album, create_session, create_user
     from songmaker_cli.middleware import SESSION_COOKIE

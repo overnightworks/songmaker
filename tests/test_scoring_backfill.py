@@ -51,7 +51,7 @@ def _seed_song(factory, *, album_id: str = "a1", song_id: str = "s1") -> None:
         session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded_generations(tmp_path: Path):
     """Three generations on one song: g0 already scored, g1 and g2 are not."""
     factory = init_test_db(tmp_path / "test.db")

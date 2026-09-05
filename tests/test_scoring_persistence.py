@@ -52,7 +52,7 @@ def _run(scorer: str, outcome: ScorerOutcome) -> ScorerRun:
     return ScorerRun(scorer=scorer, outcome=outcome, detail="")
 
 
-@pytest.fixture()
+@pytest.fixture
 def scored_generation(tmp_path: Path):
     """A generation that already carries a full set of stored scores."""
     factory = init_test_db(tmp_path / "test.db")

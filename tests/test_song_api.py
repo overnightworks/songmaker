@@ -78,7 +78,7 @@ def _seed_generation_count_scenarios(session) -> None:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def generation_count_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_generation_count_scenarios)
     login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
@@ -200,7 +200,7 @@ def _seed_worked_through_song(session) -> None:
             ))
 
 
-@pytest.fixture()
+@pytest.fixture
 def worked_through_song_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
     login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
