@@ -374,7 +374,11 @@ def test_cowriter_keeps_each_provider_model_across_provider_saves(
         "grok": "grok-4.6",
     }
     with factory() as session:
-        assert get_cowriter_models_by_provider(session) == saved.json()["selected_models_by_provider"]
+        assert get_cowriter_models_by_provider(session) == {
+            "claude": "",
+            "codex": "gpt-5.4",
+            "grok": "grok-4.6",
+        }
 
 
 def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatch):
