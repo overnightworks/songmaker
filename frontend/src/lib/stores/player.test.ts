@@ -242,6 +242,7 @@ function makePlaylist(
 		entry_count: entries.length,
 		is_shared: false,
 		share_slug: null,
+		album_covers: [],
 		created_at: '',
 		entries,
 		...overrides
@@ -1205,6 +1206,7 @@ describe('native first play ignores stream settings', () => {
 			entry_count: 0,
 			is_shared: false,
 			share_slug: null,
+			album_covers: [],
 			created_at: '',
 			entries: []
 		});
@@ -2328,6 +2330,7 @@ describe('idlePlayTarget', () => {
 		entry_count: 0,
 		is_shared: false,
 		share_slug: null,
+		album_covers: [],
 		created_at: '',
 		entries: []
 	};
@@ -2403,6 +2406,7 @@ describe('playIdleStart', () => {
 			entry_count: 1,
 			is_shared: false,
 			share_slug: null,
+			album_covers: [],
 			created_at: '',
 			entries: [makePlaylistEntry({ song_title: 'Listed' })]
 		});
