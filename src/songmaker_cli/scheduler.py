@@ -297,51 +297,65 @@ async def _iterate_task_events(
     )
     while True:
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                async with client.stream(
-                    "GET",
-                    f"{worker.base_url}/tasks/{task_id}/stream",
-                    headers=_internal_headers(),
-                ) as resp:
-                    resp.raise_for_status()
-                    buffer = ""
-                    async for chunk in resp.aiter_text():
-                        buffer += chunk
-                        while "\n\n" in buffer:
-                            raw, buffer = buffer.split("\n\n", 1)
-                            parsed = _parse_sse_event(raw)
-                            if parsed is None:
-                                continue
-                            event_type, data = parsed
-                            yield event_type, data
-                            if event_type in ("done", "error"):
-                                return
+            async for event_type, data in _worker_task_events(worker, task_id, timeout):
+                yield event_type, data
+                if event_type in ("done", "error"):
+                    return
             return
         except httpx.ReadTimeout:
             raise
         except (httpx.TransportError, httpx.RemoteProtocolError) as exc:
             reconnects += 1
-            if reconnects > options.max_sse_reconnects:
-                log.error(
-                    "SSE reconnect budget exhausted for task %s on %s",
-                    task_id,
-                    worker.id,
-                )
-                raise
-            backoff = min(
-                options.initial_reconnect_backoff_seconds * (2 ** (reconnects - 1)),
-                options.max_reconnect_backoff_seconds,
-            )
-            log.warning(
-                "SSE drop on %s task %s (attempt %d/%d): %s — reconnecting in %.1fs",
-                worker.id,
-                task_id,
-                reconnects,
-                options.max_sse_reconnects,
-                exc,
-                backoff,
-            )
+            backoff = _sse_reconnect_delay(worker, task_id, reconnects, options, exc)
             await asyncio.sleep(backoff)
+
+
+async def _worker_task_events(
+    worker: _PickedWorker,
+    task_id: str,
+    timeout: httpx.Timeout,
+) -> AsyncIterator[tuple[str, dict]]:
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "GET",
+            f"{worker.base_url}/tasks/{task_id}/stream",
+            headers=_internal_headers(),
+        ) as response:
+            response.raise_for_status()
+            buffer = ""
+            async for chunk in response.aiter_text():
+                buffer += chunk
+                while "\n\n" in buffer:
+                    raw, buffer = buffer.split("\n\n", 1)
+                    parsed = _parse_sse_event(raw)
+                    if parsed is not None:
+                        yield parsed
+
+
+def _sse_reconnect_delay(
+    worker: _PickedWorker,
+    task_id: str,
+    reconnects: int,
+    options: DispatchOptions,
+    error: Exception,
+) -> float:
+    if reconnects > options.max_sse_reconnects:
+        log.error("SSE reconnect budget exhausted for task %s on %s", task_id, worker.id)
+        raise error
+    backoff = min(
+        options.initial_reconnect_backoff_seconds * (2 ** (reconnects - 1)),
+        options.max_reconnect_backoff_seconds,
+    )
+    log.warning(
+        "SSE drop on %s task %s (attempt %d/%d): %s — reconnecting in %.1fs",
+        worker.id,
+        task_id,
+        reconnects,
+        options.max_sse_reconnects,
+        error,
+        backoff,
+    )
+    return backoff
 
 
 async def _consume_task_stream(
@@ -370,35 +384,66 @@ async def _consume_task_stream(
     try:
         async for event_type, data in _iterate_task_events(worker, task_id, options=options):
             await _maybe_invoke(on_heartbeat)
-            if event_type == "progress":
-                fraction = float(data.get("progress", 0.0))
-                await _maybe_invoke(on_progress, fraction)
-            elif event_type == "done":
-                if "result" not in data:
-                    raise WorkerProtocolError(
-                        "Worker done event missing 'result' field",
-                    )
-                try:
-                    return result_type.model_validate(data["result"])
-                except ValidationError as exc:
-                    raise WorkerTaskFailed(
-                        f"Worker returned {invalid_result_label}: {exc}",
-                    ) from exc
-            elif event_type == "error":
-                if "error" not in data:
-                    raise WorkerProtocolError(
-                        "Worker error event missing 'error' field",
-                    )
-                message = data["error"]
-                if not message:
-                    log.warning("Worker error event has empty 'error' field")
-                    raise WorkerProtocolError(
-                        "Worker error event has an empty 'error' field",
-                    )
-                raise error_exception_type(message)
+            result = await _consume_stream_event(
+                event_type,
+                data,
+                result_type=result_type,
+                invalid_result_label=invalid_result_label,
+                error_exception_type=error_exception_type,
+                on_progress=on_progress,
+            )
+            if result is not None:
+                return result
     except httpx.ReadTimeout as exc:
         raise error_exception_type(WORKER_STREAM_WENT_SILENT) from exc
     raise WorkerTaskFailed("SSE stream ended without done/error event")
+
+
+async def _consume_stream_event(
+    event_type: str,
+    data: dict,
+    *,
+    result_type: type[_TaskResultT],
+    invalid_result_label: str,
+    error_exception_type: type[WorkerTaskFailed],
+    on_progress: ProgressCallback | None,
+) -> _TaskResultT | None:
+    if event_type == "progress":
+        await _maybe_invoke(on_progress, float(data.get("progress", 0.0)))
+        return None
+    if event_type == "done":
+        return _validate_task_result(data, result_type, invalid_result_label)
+    if event_type == "error":
+        _raise_worker_event_error(data, error_exception_type)
+    return None
+
+
+def _validate_task_result(
+    data: dict,
+    result_type: type[_TaskResultT],
+    invalid_result_label: str,
+) -> _TaskResultT:
+    if "result" not in data:
+        raise WorkerProtocolError("Worker done event missing 'result' field")
+    try:
+        return result_type.model_validate(data["result"])
+    except ValidationError as exc:
+        raise WorkerTaskFailed(
+            f"Worker returned {invalid_result_label}: {exc}",
+        ) from exc
+
+
+def _raise_worker_event_error(
+    data: dict,
+    error_exception_type: type[WorkerTaskFailed],
+) -> None:
+    if "error" not in data:
+        raise WorkerProtocolError("Worker error event missing 'error' field")
+    message = data["error"]
+    if not message:
+        log.warning("Worker error event has empty 'error' field")
+        raise WorkerProtocolError("Worker error event has an empty 'error' field")
+    raise error_exception_type(message)
 
 
 async def consume_task_stream(
