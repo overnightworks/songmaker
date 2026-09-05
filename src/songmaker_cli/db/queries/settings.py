@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COWRITER_MODEL,
+    SETTING_COWRITER_PROVIDER_MODEL_PREFIX,
     SETTING_COWRITER_PROVIDER,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
     SETTING_JUDGE_MODEL,
@@ -424,6 +425,35 @@ def get_cowriter_model(session: Session, provider: str) -> str:
     return ""
 
 
+def get_cowriter_models_by_provider(session: Session) -> dict[str, str]:
+    """Return every provider's saved model, retaining the legacy active pair."""
+    active_provider = get_cowriter_provider(session)
+    stored_models = {
+        str(setting_key).removeprefix(SETTING_COWRITER_PROVIDER_MODEL_PREFIX): value_text
+        for setting_key, value_text in (
+            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
+            .filter(
+                RateLimitSetting.setting_key.in_(
+                    [
+                        f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{provider}"
+                        for provider in COWRITER_PROVIDERS
+                    ],
+                ),
+                RateLimitSetting.user_id.is_(None),
+            )
+            .all()
+        )
+    }
+    return {
+        provider: (
+            get_cowriter_model(session, provider)
+            if provider == active_provider
+            else stored_models.get(provider) or ""
+        )
+        for provider in sorted(COWRITER_PROVIDERS)
+    }
+
+
 def set_cowriter_settings(
     session: Session,
     provider: str,
@@ -432,6 +462,7 @@ def set_cowriter_settings(
 ) -> None:
     set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
     set_claude_model(session, SETTING_COWRITER_MODEL, model)
+    set_claude_model(session, f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{provider}", model)
     if routes is not None:
         set_provider_routes(session, routes)
 
