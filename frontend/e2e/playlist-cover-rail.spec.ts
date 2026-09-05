@@ -63,7 +63,6 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 	page,
 	isMobile
 }) => {
-	test.setTimeout(60_000);
 	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
 	const marker = Date.now().toString(36);
 	const playlistTitle = `E2E Playlist Mosaic ${marker}`;
@@ -196,7 +195,10 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
-		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_CLOSE_LABEL }).click();
+		if (isMobile) {
+			await page.getByRole('button', { name: RAIL_DRAWER_CLOSE_LABEL }).click();
+			await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+		}
 
 		await wallPlaylistTile.click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
