@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { ShareInventoryItem, SongItem } from '$lib/api/types';
-import { LIBRARY_SHARES_ERROR } from '$lib/constants';
+import { ApiError } from '$lib/api/fetch';
+import { API_ERROR_GENERIC_MESSAGE, LIBRARY_SHARES_ERROR } from '$lib/constants';
 
 const fetchShares = vi.fn();
 
@@ -16,12 +17,16 @@ import {
 	loadMoreShares,
 	openSharesInventory,
 	patchSharesFromSong,
+	refreshSharesAfterMutation,
 	refreshShareCount,
 	resetShares,
 	setShareTypeFilter,
 	shareCount,
 	shareInventory,
-	sharesViewOpen
+	sharesViewOpen,
+	toggleSharesInventory,
+	watchShareStatus,
+	watchShareView
 } from './shares';
 
 function page(
@@ -115,6 +120,21 @@ describe('share count', () => {
 		fetchShares.mockRejectedValueOnce(new Error('offline'));
 		expect(await refreshShareCount({ force: true })).toBe(false);
 		expect(get(shareCount)).toMatchObject({ status: 'error', total: 3, error: 'offline' });
+	});
+
+	it.each([
+		['an API detail', new ApiError(400, 'server detail', '/api/shares'), 'server detail'],
+		[
+			'an API message without a detail',
+			new ApiError(400, '', '/api/shares'),
+			API_ERROR_GENERIC_MESSAGE
+		],
+		['an unknown rejection', 'offline', LIBRARY_SHARES_ERROR]
+	])('shows %s when the count request fails', async (_caseName, failure, error) => {
+		fetchShares.mockRejectedValueOnce(failure);
+
+		expect(await refreshShareCount()).toBe(false);
+		expect(get(shareCount)).toMatchObject({ status: 'error', error });
 	});
 
 	it('dedupes concurrent refreshes into a single request', async () => {
@@ -224,6 +244,21 @@ describe('share inventory', () => {
 		});
 	});
 
+	it.each([
+		['an API detail', new ApiError(400, 'server detail', '/api/shares'), 'server detail'],
+		[
+			'an API message without a detail',
+			new ApiError(400, '', '/api/shares'),
+			API_ERROR_GENERIC_MESSAGE
+		],
+		['an unknown rejection', null, LIBRARY_SHARES_ERROR]
+	])('shows %s when an inventory request fails', async (_caseName, failure, error) => {
+		fetchShares.mockRejectedValueOnce(failure);
+
+		expect(await loadShareInventory({ reset: true })).toBe(false);
+		expect(get(shareInventory)).toMatchObject({ status: 'error', error });
+	});
+
 	it('dedupes concurrent loads of the same page into a single request', async () => {
 		fetchShares.mockResolvedValueOnce(page({ items: [item()], total: 1 }));
 
@@ -283,6 +318,20 @@ describe('share inventory', () => {
 		});
 		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['first', 'second']);
 	});
+
+	it.each([
+		['has no next page', page({ has_more: false }), false],
+		['is already loading the next page', page({ has_more: true }), false]
+	])('does not load more when the inventory %s', async (_caseName, firstPage, expected) => {
+		fetchShares.mockResolvedValueOnce(firstPage);
+		await loadShareInventory({ reset: true });
+		if (firstPage.has_more) {
+			fetchShares.mockImplementationOnce(() => new Promise(() => undefined));
+			void loadMoreShares();
+		}
+
+		expect(await loadMoreShares()).toBe(expected);
+	});
 });
 
 describe('shares view and patches', () => {
@@ -292,6 +341,11 @@ describe('shares view and patches', () => {
 		expect(get(sharesViewOpen)).toBe(true);
 		closeSharesInventory();
 		expect(get(sharesViewOpen)).toBe(false);
+	});
+
+	it('toggles the inventory and returns its new visibility', () => {
+		expect(toggleSharesInventory()).toBe(true);
+		expect(toggleSharesInventory()).toBe(false);
 	});
 
 	it('patches titles of rows already in the inventory and does not insert new ones', async () => {
@@ -354,5 +408,65 @@ describe('shares view and patches', () => {
 			generation_number: 2,
 			is_archived: true
 		});
+	});
+
+	it('keeps existing slugs and patches a generation missing from the refreshed song', async () => {
+		fetchShares.mockResolvedValueOnce(
+			page({
+				items: [
+					item({ type: 'song', id: 's1', title: 'Tide', share_slug: 'existing-song' }),
+					item({
+						type: 'generation',
+						id: 'g-missing',
+						title: 'Tide',
+						song_id: 's1',
+						song_title: 'Tide',
+						generation_number: 1,
+						share_slug: 'existing-generation'
+					})
+				]
+			})
+		);
+		await loadShareInventory({ reset: true });
+
+		patchSharesFromSong(song({ title: 'Renamed', share_slug: null, generations: [] }));
+
+		expect(get(shareInventory).items).toMatchObject([
+			{ id: 's1', title: 'Renamed', share_slug: 'existing-song' },
+			{
+				id: 'g-missing',
+				title: 'Renamed',
+				song_title: 'Renamed',
+				share_slug: 'existing-generation'
+			}
+		]);
+	});
+});
+
+describe('share watchers', () => {
+	it('refreshes the count for status watchers and releases the visibility listener after cleanup', async () => {
+		const removeListener = vi.spyOn(document, 'removeEventListener');
+		const stop = watchShareStatus();
+		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
+
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		document.dispatchEvent(new Event('visibilitychange'));
+		await Promise.resolve();
+		expect(fetchShares).toHaveBeenCalledTimes(1);
+
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+		stop();
+		expect(removeListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+	});
+
+	it('reloads the inventory for view watchers and mutation refreshes only an open inventory', async () => {
+		const stop = watchShareView();
+		await vi.waitFor(() => expect(fetchShares).toHaveBeenCalledTimes(1));
+		await refreshSharesAfterMutation();
+		expect(fetchShares).toHaveBeenCalledTimes(3);
+		stop();
+
+		await refreshSharesAfterMutation();
+		expect(fetchShares).toHaveBeenCalledTimes(4);
 	});
 });
