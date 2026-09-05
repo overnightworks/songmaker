@@ -81,7 +81,7 @@ def run_demucs(src: Path, work_dir: Path) -> dict[str, Path]:
         "--filename", "{stem}.{ext}",
         str(src),
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)  # NOSONAR Fixed shell-free argv.
     out_dir = work_dir / DEMUCS_MODEL / src.stem
     return {
         "vocals": out_dir / "vocals.wav",
@@ -107,7 +107,7 @@ def acestep_submit_extract(base_url: str, src_audio_path: str, track_name: str) 
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:  # NOSONAR Endpoint is local-only.
         body = json.loads(resp.read().decode("utf-8"))
     task_id = body.get("task_id") or body.get("id")
     if not task_id:
@@ -122,7 +122,7 @@ def acestep_poll_task(base_url: str, task_id: str) -> dict:
     while time.monotonic() < deadline:
         try:
             url = f"{base_url}/get_task_result/{task_id}"
-            with urllib.request.urlopen(url, timeout=15) as resp:
+            with urllib.request.urlopen(url, timeout=15) as resp:  # NOSONAR Local ID.
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -216,7 +216,7 @@ def main() -> None:
         sys.exit(1)
 
     log.info("LUFS-normalizing all candidates for fair comparison")
-    rng = random.Random(time.time_ns())
+    rng = random.Random(time.time_ns())  # NOSONAR Not a security token.
     blind_map: dict[str, dict] = {}
     for sep, track, src_wav in candidates:
         nonce = rng.randint(1000, 9999)

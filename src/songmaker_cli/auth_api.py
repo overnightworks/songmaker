@@ -108,7 +108,7 @@ def _set_session_cookie(
         CSRF_COOKIE,
         csrf_token,
         max_age=max_age,
-        httponly=False,  # NOSONAR CSRF token must be browser-readable.
+        httponly=False,  # NOSONAR The client must read this CSRF token for double-submit.
         samesite="strict",
         secure=secure,
         path="/",

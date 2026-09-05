@@ -88,7 +88,7 @@ def seed_song_takes(
     for _ in range(take_count):
         generation_id = str(uuid.uuid4())
         dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-        dst.write_bytes(mp3_bytes)  # NOSONAR: owner id plus generated UUID form the path
+        dst.write_bytes(mp3_bytes)  # NOSONAR Uses validated audio path.
         gen = create_generation(
             session,
             song_id=song.id,
