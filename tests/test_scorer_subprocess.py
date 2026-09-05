@@ -235,10 +235,11 @@ def test_scorer_process_timeout_kills_child(tmp_path: Path) -> None:
     sp._conn = parent_conn
     pid = sp._process.pid
 
+    config = PipelineConfig(device="cpu", pipeline_timeout=1)
     with pytest.raises(TimeoutError):
         sp.score(
             mp3, scorers=[],
-            config=PipelineConfig(device="cpu", pipeline_timeout=1),
+            config=config,
         )
 
     assert not sp.alive

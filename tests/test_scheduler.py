@@ -183,8 +183,9 @@ def test_pick_worker_skips_offline(db_session) -> None:
 def test_pick_worker_no_online_raises(db_session) -> None:
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
+    operation = pick_worker(db_session, redis, "sft")
     with pytest.raises(NoCapacityError):
-        _run(pick_worker(db_session, redis, "sft"))
+        _run(operation)
 
 
 def test_pick_worker_defers_when_every_online_worker_is_held(db_session) -> None:
@@ -194,9 +195,10 @@ def test_pick_worker_defers_when_every_online_worker_is_held(db_session) -> None
     redis = _InMemoryRedis()
     _set_state(redis, "w1", {"loaded": ["sft"]})
     redis.store[gpu_hold_key("w1")] = "hold-token"
+    operation = pick_worker(db_session, redis, "sft")
 
     with pytest.raises(AllWorkersHeld):
-        _run(pick_worker(db_session, redis, "sft"))
+        _run(operation)
 
 
 def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_session) -> None:
@@ -271,8 +273,9 @@ def test_pick_worker_no_online_when_only_worker_has_broken_gpu(db_session) -> No
     _seed(db_session, "broken-gpu-w")
     redis = _InMemoryRedis()
     _set_state(redis, "broken-gpu-w", {"loaded": ["sft"], "gpu_healthy": False})
+    operation = pick_worker(db_session, redis, "sft")
     with pytest.raises(NoCapacityError):
-        _run(pick_worker(db_session, redis, "sft"))
+        _run(operation)
 
 
 def test_pick_worker_missing_gpu_healthy_field_is_treated_as_not_online(db_session) -> None:
@@ -282,8 +285,9 @@ def test_pick_worker_missing_gpu_healthy_field_is_treated_as_not_online(db_sessi
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
     _set_state(redis, "w1", {"loaded": ["sft"]}, gpu_healthy=None)
+    operation = pick_worker(db_session, redis, "sft")
     with pytest.raises(NoCapacityError):
-        _run(pick_worker(db_session, redis, "sft"))
+        _run(operation)
 
 
 def test_pick_worker_ignores_unreadable_heartbeat_instead_of_preferring_it(
@@ -368,9 +372,10 @@ def test_consume_task_stream_done_returns_dto() -> None:
 def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": "GPU OOM"})])
+    operation = consume_task_stream(worker, "gen-1")
     with _patch_async_client(client):
         with pytest.raises(WorkerGenerationFailed) as exc_info:
-            _run(consume_task_stream(worker, "gen-1"))
+            _run(operation)
     assert str(exc_info.value) == "GPU OOM"
 
 
@@ -428,25 +433,28 @@ def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
 def test_consume_task_stream_invalid_result_raises() -> None:
     worker = _make_picked()
     client = _make_stream_client([("done", {"task_id": "g", "result": {"mode": "sft"}})])
+    operation = consume_task_stream(worker, "gen-1")
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="invalid result"):
-            _run(consume_task_stream(worker, "gen-1"))
+            _run(operation)
 
 
 def test_consume_task_stream_done_missing_result_raises_protocol_error() -> None:
     worker = _make_picked()
     client = _make_stream_client([("done", {"task_id": "g"})])
+    operation = consume_task_stream(worker, "gen-1")
     with _patch_async_client(client):
         with pytest.raises(WorkerProtocolError, match="missing 'result'"):
-            _run(consume_task_stream(worker, "gen-1"))
+            _run(operation)
 
 
 def test_consume_task_stream_error_missing_field_raises_protocol_error() -> None:
     worker = _make_picked()
     client = _make_stream_client([("error", {"task_id": "g"})])
+    operation = consume_task_stream(worker, "gen-1")
     with _patch_async_client(client):
         with pytest.raises(WorkerProtocolError, match="missing 'error'"):
-            _run(consume_task_stream(worker, "gen-1"))
+            _run(operation)
 
 
 @pytest.mark.parametrize(
@@ -465,10 +473,11 @@ def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds
     consumers on the shared ``_consume_task_stream`` implementation."""
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": ""})])
+    operation = consume(worker, "task-1")
     with _patch_async_client(client):
         with caplog.at_level("WARNING", logger="songmaker_cli.scheduler"):
             with pytest.raises(WorkerProtocolError, match="empty 'error'"):
-                _run(consume(worker, "task-1"))
+                _run(operation)
     assert any("empty 'error'" in r.message for r in caplog.records)
 
 
@@ -519,8 +528,9 @@ def test_consume_task_stream_gives_up_after_max_reconnects() -> None:
         max_reconnect_backoff_seconds=0.0,
     )
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
+        operation = consume_task_stream(worker, "gen-1", options=options)
         with pytest.raises(httpx.ConnectError):
-            _run(consume_task_stream(worker, "gen-1", options=options))
+            _run(operation)
 
 
 def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
@@ -531,8 +541,9 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
         "songmaker_cli.scheduler.httpx.AsyncClient",
         return_value=client,
     ) as async_client:
+        operation = consume_task_stream(worker, "gen-1")
         with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
-            _run(consume_task_stream(worker, "gen-1"))
+            _run(operation)
 
     timeout = async_client.call_args.kwargs["timeout"]
     assert timeout.read == ACESTEP_SSE_READ_TIMEOUT_SECONDS
@@ -588,15 +599,14 @@ def test_dispatch_decrements_on_failure(db_factory, db_session) -> None:
         "songmaker_cli.scheduler._submit_generation",
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
+        operation = dispatch_generation(
+            ace_config=_make_ace_config(),
+            target_mode="sft",
+            redis=redis,
+            db_factory=db_factory,
+        )
         with pytest.raises(RuntimeError, match="boom"):
-            _run(
-                dispatch_generation(
-                    ace_config=_make_ace_config(),
-                    target_mode="sft",
-                    redis=redis,
-                    db_factory=db_factory,
-                )
-            )
+            _run(operation)
 
     assert int(redis.store[queue_depth_key("w1")]) == 0
 
@@ -920,8 +930,9 @@ def test_iterate_task_events_max_reconnects_exhausted() -> None:
             async for _evt in _iterate_task_events(worker, "t", options=options):
                 pass
 
+    operation = collect()
     with pytest.raises(httpx.ConnectError):
-        _run(collect())
+        _run(operation)
 
 
 # ── pick_any_online_worker ───────────────────────────────────────────
@@ -952,8 +963,9 @@ def test_pick_any_online_worker_skips_offline(db_session) -> None:
 
 def test_pick_any_online_worker_no_workers_raises(db_session) -> None:
     redis = _InMemoryRedis()
+    operation = pick_any_online_worker(db_session, redis)
     with pytest.raises(NoCapacityError):
-        _run(pick_any_online_worker(db_session, redis))
+        _run(operation)
 
 
 # ── consume_download_task_stream ─────────────────────────────────────
@@ -975,9 +987,10 @@ def test_consume_download_task_stream_done_returns_dto() -> None:
 def test_consume_download_task_stream_error_raises() -> None:
     worker = _make_picked()
     client = _make_stream_client([("error", {"error": "HF 401 unauthorized"})])
+    operation = consume_download_task_stream(worker, "d")
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="HF 401"):
-            _run(consume_download_task_stream(worker, "d"))
+            _run(operation)
 
 
 def test_consume_download_task_stream_progress_calls_callback() -> None:
@@ -1003,25 +1016,28 @@ def test_consume_download_task_stream_progress_calls_callback() -> None:
 def test_consume_download_task_stream_invalid_payload_raises() -> None:
     worker = _make_picked()
     client = _make_stream_client([("done", {"task_id": "d", "result": {"mode": "sft"}})])
+    operation = consume_download_task_stream(worker, "d")
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="invalid download result"):
-            _run(consume_download_task_stream(worker, "d"))
+            _run(operation)
 
 
 def test_consume_download_task_stream_done_missing_result_raises_protocol_error() -> None:
     worker = _make_picked()
     client = _make_stream_client([("done", {"task_id": "d"})])
+    operation = consume_download_task_stream(worker, "d")
     with _patch_async_client(client):
         with pytest.raises(WorkerProtocolError, match="missing 'result'"):
-            _run(consume_download_task_stream(worker, "d"))
+            _run(operation)
 
 
 def test_consume_download_task_stream_error_missing_field_raises_protocol_error() -> None:
     worker = _make_picked()
     client = _make_stream_client([("error", {"task_id": "d"})])
+    operation = consume_download_task_stream(worker, "d")
     with _patch_async_client(client):
         with pytest.raises(WorkerProtocolError, match="missing 'error'"):
-            _run(consume_download_task_stream(worker, "d"))
+            _run(operation)
 
 
 def test_consume_download_task_stream_heartbeat_on_every_event() -> None:
@@ -1047,6 +1063,7 @@ def test_consume_download_task_stream_heartbeat_on_every_event() -> None:
 def test_consume_download_task_stream_empty_stream_raises() -> None:
     worker = _make_picked()
     client = _make_stream_client([])
+    operation = consume_download_task_stream(worker, "d")
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="ended without"):
-            _run(consume_download_task_stream(worker, "d"))
+            _run(operation)

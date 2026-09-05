@@ -244,8 +244,9 @@ def test_live_identity_or_approval_mismatches_fail_closed(
         if selected == resource:
             mutation(raw)
 
+    client = FakeClient(mutate)
     with pytest.raises(live.LiveWitnessError, match=problem):
-        live.verify_live_witnesses(project_with_witness(tmp_path), FakeClient(mutate))
+        live.verify_live_witnesses(project_with_witness(tmp_path), client)
 
 
 class FakeSocket:
