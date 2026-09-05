@@ -236,6 +236,14 @@ flock /tmp/songmaker-probe.lock env \
   songmaker-voices-e2e-worker
 ```
 
+Run its browser proof with the same stack marker, so the normal Library E2E
+run never tries to exercise the Voices-only worker:
+
+```bash
+cd frontend
+E2E_VOICES_STACK=1 E2E_BASE_URL=http://localhost:18080 pnpm exec playwright test e2e/voices.spec.ts
+```
+
 The fake worker uses the same internal worker registration, Redis heartbeat,
 GPU-hold, task-SSE, and adapter-result contracts as the ACE-Step worker. It
 only replaces model training; ARQ, job, and database handling remain in the

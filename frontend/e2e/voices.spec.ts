@@ -15,6 +15,11 @@ const SCREENSHOT_DIR =
 const FAILED_TRAINING_CAPTION = 'e2e fake training failure';
 const TAKE_FIXTURE = fileURLToPath(new URL('./fixtures/take.mp3', import.meta.url));
 
+test.skip(
+	process.env.E2E_VOICES_STACK !== '1',
+	'Voices proof requires the docker-compose.e2e-voices.yml worker override.'
+);
+
 interface VoiceState {
 	id: string;
 	status: string;
@@ -186,10 +191,10 @@ test('the Voices override proves create, waiting, progress, ready, failed, limit
 		await expect(failedVoice.card.getByText('Training failed', { exact: true })).toBeVisible({
 			timeout: 15_000
 		});
-		await expect(failedVoice.card).toContainText('Worker generation failed');
+		await expect(failedVoice.card).toContainText('Worker training failed');
 		const failedState = await readVoice(request, failedVoice.id);
 		expect(failedState.status).toBe('failed');
-		expect(failedState.error).toBe('Worker generation failed');
+		expect(failedState.error).toBe('Worker training failed');
 		expect((await readJob(request, trainingJobId(failedState))).status).toBe('failed');
 
 		const queuedVoiceOne = await createVoice(page, `E2E Queue One ${marker}`);

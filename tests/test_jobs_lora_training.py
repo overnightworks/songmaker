@@ -403,6 +403,34 @@ def test_missing_sample_audio_raises_and_marks_failed(
         assert lora.error is not None
 
 
+def test_worker_training_failure_keeps_a_training_specific_reason(
+    seeded, db_factory, tmp_path
+) -> None:
+    async def failed_training_events(*args, **kwargs):
+        yield ("error", {"error": "fake worker training failure"})
+
+    with _patch_worker_calls(str(tmp_path / "adapter"), events=failed_training_events):
+        _run(
+            run_lora_training_job(
+                {},
+                "job-1",
+                seeded["lora_id"],
+                seeded["user_id"],
+                db_factory=db_factory,
+                audio_dir=seeded["audio_dir"],
+                redis=MagicMock(),
+            )
+        )
+
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        job = get_job(session, "job-1")
+        assert lora.status == LoraStatus.FAILED
+        assert lora.error == "Worker training failed"
+        assert job.status == JobStatus.FAILED
+        assert job.error == "Worker training failed"
+
+
 def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
     async def raising_events(*args, **kwargs):
         raise asyncio.CancelledError()
