@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Final, TypeVar, cast
+from typing import Any, Final, cast
 
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
@@ -96,13 +96,10 @@ class GenerationContext:
     raw_src_audio: str | None = None
 
 
-GenerationContextT = TypeVar("GenerationContextT", bound=GenerationContext)
-
-
-def _with_generation_context_overrides(
-    ctx: GenerationContextT,
+def _with_generation_context_overrides[T: GenerationContext](
+    ctx: T,
     **overrides: Any,
-) -> GenerationContextT:
+) -> T:
     return type(ctx)(**(vars(ctx) | overrides))
 
 
