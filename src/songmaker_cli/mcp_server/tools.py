@@ -3,9 +3,9 @@
 Each function takes an open SQLAlchemy session + an ``AuthenticatedUser``
 and returns a Pydantic model. Ownership is enforced through the
 existing ``check_*_access()`` helpers; write tools delegate to the
-existing domain queries so new versions, track numbering, and the
-in-place update rule for un-generated versions all behave the same as
-the HTTP endpoints.
+existing domain queries so new versions and track numbering behave the
+same as the HTTP endpoints. Every co-writer content write creates a
+new version.
 
 The ``server.py`` layer wires these into FastMCP tools — opening
 sessions, loading the user, committing writes. Keeping the logic in
