@@ -13,10 +13,9 @@ _KEY = "SONGMAKER_TEST_OVERRIDE"
 
 
 @pytest.fixture(autouse=True)
-def _clean_key() -> Iterator[None]:
-    os.environ.pop(_KEY, None)
+def _clean_key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.delenv(_KEY, raising=False)
     yield
-    os.environ.pop(_KEY, None)
 
 
 def test_override_is_visible_inside_the_block() -> None:
@@ -31,8 +30,8 @@ def test_absent_variable_is_absent_again_afterwards() -> None:
     assert _KEY not in os.environ
 
 
-def test_value_set_at_runtime_is_restored() -> None:
-    os.environ[_KEY] = "0,1"
+def test_value_set_at_runtime_is_restored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_KEY, "0,1")
 
     with temporary_env_override(_KEY, ""):
         assert os.environ[_KEY] == ""
@@ -40,10 +39,13 @@ def test_value_set_at_runtime_is_restored() -> None:
     assert os.environ[_KEY] == "0,1"
 
 
-def test_restore_survives_an_exception() -> None:
-    os.environ[_KEY] = "before"
+def test_restore_survives_an_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_KEY, "before")
+    override = temporary_env_override(_KEY, "during")
+    error = RuntimeError("boom")
 
-    with pytest.raises(RuntimeError), temporary_env_override(_KEY, "during"):
-        raise RuntimeError("boom")
+    with pytest.raises(RuntimeError):
+        with override:
+            raise error
 
     assert os.environ[_KEY] == "before"

@@ -144,6 +144,7 @@ class CowriterSettingsResponse(BaseModel):
     allowed_providers: list[str]
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
+    selected_models_by_provider: dict[str, str]
     models_errors: dict[str, str] = Field(default_factory=dict)
     models_sources: dict[str, str] = Field(default_factory=dict)
     current_models_not_in_catalog: dict[str, str] = Field(default_factory=dict)

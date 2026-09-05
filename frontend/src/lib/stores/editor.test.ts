@@ -9,7 +9,8 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 vi.mock('$lib/stores/libraryData', () => ({
-	replaceSongInList: vi.fn()
+	replaceSongInList: vi.fn(),
+	resetLibraryContinueItems: vi.fn()
 }));
 vi.mock('$lib/stores/player', async () => {
 	const { writable } = await import('svelte/store');
@@ -38,6 +39,7 @@ import {
 	computeDraftVersionNumber
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
+import { resetLibraryContinueItems } from '$lib/stores/libraryData';
 import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
@@ -185,6 +187,7 @@ describe('loadVersion', () => {
 
 describe('handleSave', () => {
 	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
+		vi.clearAllMocks();
 		const { updateSong } = await import('$lib/api/client');
 		const mockUpdate = vi.mocked(updateSong);
 		const saved = makeSong({ version_count: 2 });
@@ -197,6 +200,7 @@ describe('handleSave', () => {
 		const result = await handleSave('s1');
 
 		expect(mockUpdate).toHaveBeenCalled();
+		expect(resetLibraryContinueItems).toHaveBeenCalledOnce();
 		expect(get(isDirty)).toBe(false);
 		expect(result).toBe(saved);
 	});
@@ -265,6 +269,7 @@ describe('computeDraftVersionNumber', () => {
 
 describe('handleDeleteVersion', () => {
 	it('calls deleteVersion and refreshes', async () => {
+		vi.clearAllMocks();
 		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
 		loadSongData(makeSong({ lyrics: 'deleted version' }));
 		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
@@ -276,6 +281,7 @@ describe('handleDeleteVersion', () => {
 		await handleDeleteVersion('s1', 'v1', false);
 
 		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
+		expect(resetLibraryContinueItems).toHaveBeenCalledOnce();
 		expect(get(editLyrics)).toBe('remaining lyrics');
 	});
 

@@ -185,7 +185,9 @@ def test_claude_api_streams_deltas_and_carries_tool_errors_back_to_the_model(mon
         FinalEvent(text="draftdone"),
     ]
     assert constructions == [{"api_key": "test-key", "timeout": 600, "max_retries": 0}]
-    assert client.closed and first.closed and second.closed
+    assert client.closed
+    assert first.closed
+    assert second.closed
     assert client.messages.requests[1]["messages"] == [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": first._message.content},
@@ -205,8 +207,10 @@ def test_claude_api_refuses_a_tool_call_after_the_limit(monkeypatch) -> None:
     _install_anthropic(monkeypatch, client)
     monkeypatch.setattr(tool_loop, "COWRITER_MAX_TOOL_ROUNDS", 0)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as raised:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.TOOL_LIMIT_EXCEEDED
 
@@ -217,8 +221,10 @@ def test_claude_api_names_protocol_and_tool_execution_failures(monkeypatch) -> N
     ]))])
     _install_anthropic(monkeypatch, malformed_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as malformed:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert malformed.value.reason.code is SafeRouteReasonCode.TOOL_PROTOCOL_ERROR
 
@@ -248,16 +254,20 @@ def test_claude_api_names_protocol_and_tool_execution_failures(monkeypatch) -> N
 def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "anthropic", None)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as unavailable:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert unavailable.value.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
 
     transport_client = _FakeClient([_FailingFakeStream([], _AssistantMessage([]))])
     _install_anthropic(monkeypatch, transport_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as transport:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert transport.value.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
 
@@ -266,8 +276,10 @@ def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(mon
     protocol_client = _FakeClient([protocol_stream])
     _install_anthropic(monkeypatch, protocol_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as protocol:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert protocol.value.reason.code is SafeRouteReasonCode.API_PROTOCOL_ERROR
 
@@ -276,8 +288,10 @@ def test_claude_api_names_missing_sdk_transport_and_stream_protocol_failures(mon
     ])
     _install_anthropic(monkeypatch, final_message_client)
 
+    arguments = _turn_arguments()
+    events = _events(**arguments)
     with pytest.raises(ProviderUnavailableError) as final_message:
-        asyncio.run(_events(**_turn_arguments()))
+        asyncio.run(events)
 
     assert final_message.value.reason.code is SafeRouteReasonCode.API_PROTOCOL_ERROR
 
@@ -294,7 +308,8 @@ def test_closing_claude_api_stream_closes_the_http_stream_and_client(monkeypatch
 
     asyncio.run(_close())
 
-    assert stream.closed and client.closed
+    assert stream.closed
+    assert client.closed
 
 
 def test_claude_api_tool_loop_persists_an_owned_write_and_refuses_a_foreign_one(

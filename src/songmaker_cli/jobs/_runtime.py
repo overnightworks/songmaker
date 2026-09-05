@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from typing import Callable
 
 from sqlalchemy.orm import Session
 
@@ -76,30 +77,39 @@ class JudgeFailureError(Exception):
 def _sanitize_error(exc: Exception, job_id: str) -> str:
     """Return the fixed musician-facing message and log the raw failure."""
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
-    if isinstance(exc, GenerationSetupError):
-        if str(exc) in _GENERATION_SETUP_MESSAGES:
-            return str(exc)
-        return JOB_ERROR_UNEXPECTED
-    if isinstance(exc, JudgeFailureError):
-        if str(exc) == JUDGE_FAILURE_TIMEOUT:
-            return str(exc)
-        return JOB_ERROR_JUDGE_FAILED
+    for error_type, sanitizer in _ERROR_SANITIZERS:
+        if isinstance(exc, error_type):
+            return sanitizer(exc)
+    return _default_error_message(exc)
+
+
+def _sanitize_generation_setup_error(exc: Exception) -> str:
+    message = str(exc)
+    return message if message in _GENERATION_SETUP_MESSAGES else JOB_ERROR_UNEXPECTED
+
+
+def _sanitize_judge_failure_error(exc: Exception) -> str:
+    return str(exc) if str(exc) == JUDGE_FAILURE_TIMEOUT else JOB_ERROR_JUDGE_FAILED
+
+
+def _default_error_message(exc: Exception) -> str:
     if isinstance(exc, WorkerTaskFailed) and str(exc) == JOB_ERROR_WORKER_STREAM_SILENT:
         return JOB_ERROR_WORKER_STREAM_SILENT
-    if isinstance(exc, CodexImageLoginError):
-        return JOB_ERROR_COVER_CLI_LOGIN
-    if isinstance(exc, CodexProcessPoolSaturatedError):
-        return JOB_ERROR_COVER_CLI_BUSY
-    if isinstance(exc, ImageToolBlockedError):
-        return JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED
-    if isinstance(exc, CodexImageNotCreatedError):
-        return JOB_ERROR_COVER_IMAGE_NOT_CREATED
-    if isinstance(exc, CodexImageError):
-        return JOB_ERROR_COVER_IMAGE_FAILED
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return message
     return JOB_ERROR_UNEXPECTED
+
+
+_ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = (
+    (GenerationSetupError, _sanitize_generation_setup_error),
+    (JudgeFailureError, _sanitize_judge_failure_error),
+    (CodexImageLoginError, lambda _exc: JOB_ERROR_COVER_CLI_LOGIN),
+    (CodexProcessPoolSaturatedError, lambda _exc: JOB_ERROR_COVER_CLI_BUSY),
+    (ImageToolBlockedError, lambda _exc: JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED),
+    (CodexImageNotCreatedError, lambda _exc: JOB_ERROR_COVER_IMAGE_NOT_CREATED),
+    (CodexImageError, lambda _exc: JOB_ERROR_COVER_IMAGE_FAILED),
+)
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:
@@ -132,10 +142,10 @@ def _touch_heartbeat(factory, job_id: str) -> None:
             update_job_heartbeat(session, job_id)
             session.commit()
     except Exception:
-        log.error(
+        log.exception(
             "Heartbeat update failed for job %s — "
             "worker may be falsely declared stale if DB stays unreachable",
-            job_id, exc_info=True,
+            job_id,
         )
 
 

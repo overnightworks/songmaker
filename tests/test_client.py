@@ -15,6 +15,7 @@ from acestep_engine.client import (
     _AUDIO_UPLOAD_FIELDS,
     _MAX_CAUSE_CHARS,
     AceStepClient,
+    _build_submit_payload,
     is_acestep_available,
     validate_audio_path,
 )
@@ -512,6 +513,28 @@ def test_submit_task_with_lm_negative_prompt() -> None:
 
 
 # ── repaint/cover payload keys ────────────────────────────────────
+
+
+def test_repaint_payload_omits_protocol_defaults_and_forwards_explicit_values() -> None:
+    default_payload = _build_submit_payload(AceStepConfig(
+        prompt="test",
+        lyrics="la la",
+        task_type="repaint",
+    ))
+
+    assert "repaint_mode" not in default_payload
+    assert "repaint_strength" not in default_payload
+
+    explicit_payload = _build_submit_payload(AceStepConfig(
+        prompt="test",
+        lyrics="la la",
+        task_type="repaint",
+        repaint_mode="balanced",
+        repaint_strength=0.0,
+    ))
+
+    assert explicit_payload["repaint_mode"] == "balanced"
+    assert explicit_payload["repaint_strength"] == 0.0
 
 
 def test_submit_task_repaint_uploads_source_audio(tmp_path) -> None:

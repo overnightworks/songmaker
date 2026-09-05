@@ -80,13 +80,13 @@ def _build_app(tmp_path: Path, user_id: str = USER_A) -> tuple[TestClient, AppCo
     return TestClient(app), ctx
 
 
-@pytest.fixture()
+@pytest.fixture
 def client_a(tmp_path: Path) -> TestClient:
     client, _ = _build_app(tmp_path, USER_A)
     yield client
 
 
-@pytest.fixture()
+@pytest.fixture
 def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
     return _build_app(tmp_path, USER_A)
 

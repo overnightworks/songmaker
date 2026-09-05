@@ -70,6 +70,7 @@
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
 	import Icon from './Icon.svelte';
+	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
@@ -408,6 +409,7 @@
 			{/if}
 		</div>
 	</div>
+	<LibraryContinue />
 
 	<div
 		class="wall-body"

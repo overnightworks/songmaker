@@ -131,8 +131,9 @@ def test_read_wav_bytes_missing_data_chunk() -> None:
     fmt_chunk = struct.pack("<HHIIHH", 1, 1, 44100, 88200, 2, 16)
     buf += struct.pack("<I", len(fmt_chunk))
     buf += fmt_chunk
+    audio_bytes = bytes(buf)
     with pytest.raises(AudioDecodeError):
-        read_wav_bytes(bytes(buf))
+        read_wav_bytes(audio_bytes)
 
 
 def test_master_audio_empty() -> None:
@@ -152,9 +153,10 @@ def test_encode_mp3_no_ffmpeg() -> None:
     from unittest.mock import patch
 
     signal = np.zeros(100, dtype=np.float64)
+    other_signal = signal.copy()
     with patch("audio_engine.audio_io.shutil.which", return_value=None):
         with pytest.raises(MasteringError, match="ffmpeg not found"):
-            encode_mp3(signal, signal.copy(), "/tmp/test.mp3")
+            encode_mp3(signal, other_signal, "/tmp/test.mp3")
 
 
 def test_encode_mp3_ffmpeg_failure() -> None:
@@ -169,8 +171,9 @@ def test_encode_mp3_ffmpeg_failure() -> None:
             side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),
         ),
     ):
+        other_signal = signal.copy()
         with pytest.raises(MasteringError, match="MP3 encoding failed"):
-            encode_mp3(signal, signal.copy(), "/tmp/test.mp3")
+            encode_mp3(signal, other_signal, "/tmp/test.mp3")
 
 
 def test_master_to_mp3_empty_audio() -> None:
@@ -191,8 +194,9 @@ def test_master_to_mp3_ffmpeg_failure() -> None:
             side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),
         ),
     ):
+        other_signal = signal.copy()
         with pytest.raises(MasteringError, match="MP3 encoding failed"):
-            master_to_mp3(signal, signal.copy(), "/tmp/test.mp3")
+            master_to_mp3(signal, other_signal, "/tmp/test.mp3")
 
 
 def test_build_ffmpeg_cmd_pipe_input() -> None:
@@ -278,5 +282,3 @@ def test_read_wav_bytes_2d_single_column() -> None:
         assert rate == 44100
         assert len(left) == 3
         assert np.array_equal(left, right)
-
-

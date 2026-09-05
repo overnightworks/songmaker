@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Final
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
@@ -109,7 +108,7 @@ def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
         req = Request(f"http://127.0.0.1:{port}/health", method="GET")
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310
             return resp.status == 200
-    except (URLError, OSError):
+    except OSError:
         return False
 
 

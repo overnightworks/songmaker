@@ -36,6 +36,33 @@ describe('railCollapsed', () => {
 	});
 });
 
+describe('libraryContinueCollapsed', () => {
+	it('starts open when this browser has no Continue preference', async () => {
+		const { libraryContinueCollapsed } = await import('./ui');
+
+		expect(get(libraryContinueCollapsed)).toBe(false);
+	});
+
+	it('restores and persists the browser preference', async () => {
+		localStorage.setItem('songmaker.library-continue-collapsed', 'true');
+		const {
+			initLibraryContinueCollapsed,
+			libraryContinueCollapsed,
+			toggleLibraryContinueCollapsed,
+			LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY
+		} = await import('./ui');
+
+		expect(get(libraryContinueCollapsed)).toBe(true);
+		toggleLibraryContinueCollapsed();
+		expect(get(libraryContinueCollapsed)).toBe(false);
+		expect(localStorage.getItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY)).toBe('false');
+
+		libraryContinueCollapsed.set(true);
+		initLibraryContinueCollapsed();
+		expect(get(libraryContinueCollapsed)).toBe(false);
+	});
+});
+
 describe('railWidth', () => {
 	it('starts at the default width when this browser has no rail preference', async () => {
 		const { railWidth } = await import('./ui');

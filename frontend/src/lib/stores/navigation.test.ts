@@ -1083,6 +1083,8 @@ describe('initNavigation', () => {
 		const cleanup = initNavigation();
 		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
 		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		await vi.waitFor(() => expect(updateSong).toHaveBeenCalledTimes(1));
+		expect(get(selectedSongId)).toBe('s1');
 		resolveSave(song({ id: 's1', lyrics: 'unsaved edit' }));
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 

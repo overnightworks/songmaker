@@ -19,7 +19,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.parser import SongMeta
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 

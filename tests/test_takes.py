@@ -95,7 +95,7 @@ def _seed(session, user_id: str) -> None:
     session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path):
     factory = init_db(tmp_path / "takes.db")
     with factory() as session:
@@ -115,7 +115,7 @@ def client(tmp_path: Path):
     yield TestClient(app), factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def stranger_client(tmp_path: Path):
     factory = init_db(tmp_path / "takes_spy.db")
     with factory() as session:

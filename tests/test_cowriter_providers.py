@@ -43,13 +43,16 @@ from songmaker_cli.db.models import (
     AuditLog,
     AvailableModel,
     ChatMessage,
+    Generation,
     Job,
     RateLimitSetting,
     Song,
     User,
+    Version,
 )
 from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
+    get_cowriter_models_by_provider,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
     get_effective_provider_routes,
@@ -161,7 +164,7 @@ def _seed(session, user_id: str) -> None:
     session.commit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
@@ -348,6 +351,78 @@ def test_model_must_be_in_the_live_catalog(admin_client, every_provider_is_confi
     )
     assert ok.status_code == 200
     assert ok.json()["model"] == "grok-4.6"
+
+
+def test_cowriter_keeps_each_provider_model_across_provider_saves(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+
+    grok = client.put(
+        "/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.5"},
+    )
+    assert grok.status_code == 200
+    codex = client.put(
+        "/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"},
+    )
+    assert codex.status_code == 200
+
+    saved = client.get("/api/settings/cowriter")
+
+    assert saved.status_code == 200
+    assert saved.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "gpt-5.4",
+        "grok": "grok-4.5",
+    }
+    with factory() as session:
+        assert get_cowriter_models_by_provider(session) == {
+            "claude": "claude-opus-4-6",
+            "codex": "gpt-5.4",
+            "grok": "grok-4.5",
+        }
+
+
+def test_cowriter_save_preserves_the_legacy_active_pair(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    with factory() as session:
+        set_claude_model(session, SETTING_COWRITER_PROVIDER, "grok")
+        set_claude_model(session, SETTING_COWRITER_MODEL, "grok-4.6")
+        session.commit()
+
+    saved = client.put(
+        "/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"},
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "gpt-5.4",
+        "grok": "grok-4.6",
+    }
+    with factory() as session:
+        assert get_cowriter_models_by_provider(session) == {
+            "claude": "claude-opus-4-6",
+            "codex": "gpt-5.4",
+            "grok": "grok-4.6",
+        }
+
+
+def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
+    admin_client, every_provider_is_configured,
+):
+    client, _ = admin_client
+
+    response = client.get("/api/settings/cowriter")
+
+    assert response.status_code == 200
+    assert response.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "",
+        "grok": "",
+    }
 
 
 def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatch):
@@ -670,9 +745,11 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
         messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
         job = session.query(Job).filter_by(type="chat").one()
 
-        assert song is not None and song.latest_version is not None
+        assert song is not None
+        assert song.latest_version is not None
         assert song.latest_version.lyrics == "API-written lyrics"
-        assert foreign_song is not None and foreign_song.latest_version is None
+        assert foreign_song is not None
+        assert foreign_song.latest_version is None
         assert [message.role for message in messages] == ["user", "assistant"]
         assert [message.content for message in messages] == [
             "Please revise the lyrics.",
@@ -858,6 +935,41 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
         song = session.query(Song).filter_by(id="s1").one()
         assert song.title == "Renamed Track"
         assert song.slug == "renamed-track"
+
+
+def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_client):
+    """The Grok and Codex executor takes the same version-writing path as MCP."""
+    _, factory = admin_client
+    user = AuthenticatedUser(
+        id="u-test", username="u-u-test", role="admin", is_active=True,
+    )
+    with factory() as session:
+        original = Version(
+            id="v1", song_id="s1", version_number=1, lyrics="old lyrics",
+        )
+        session.add(original)
+        session.flush()
+        session.add(Generation(
+            id="g1", song_id="s1", version_id=original.id, generation_number=1,
+            mp3_path="u-test/g1.mp3",
+        ))
+        session.commit()
+
+    with factory() as session:
+        result, is_error = execute_cowriter_tool(
+            session, user, "update_song_lyrics",
+            {"song_id": "s1", "lyrics": "new lyrics"},
+        )
+
+    assert is_error is False
+    assert "Updated lyrics in v2" in result
+    with factory() as session:
+        song = session.query(Song).filter_by(id="s1").one()
+        assert [(version.version_number, version.lyrics) for version in song.versions] == [
+            (1, "old lyrics"),
+            (2, "new lyrics"),
+        ]
+        assert session.query(Generation).filter_by(id="g1").one().version_id == "v1"
 
 
 def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client):

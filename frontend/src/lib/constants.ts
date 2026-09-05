@@ -215,6 +215,7 @@ export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
 export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
 export const COWRITER_MODEL_CURRENT_NOT_IN_CATALOG = 'current, not in catalog';
 export const COWRITER_SAVE_NOTHING_CHANGED = 'Nothing changed.';
+export const COWRITER_SAVE_SAVED = 'Saved.';
 export const COWRITER_SAVE_CHANGED = 'Changed, not saved yet.';
 export const COWRITER_SAVE_MODEL_REQUIRED = 'Choose a model before saving.';
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';

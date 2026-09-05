@@ -143,47 +143,73 @@ def _build_song_context(
     if song:
         parts.append(f"[Current Song]\n{_format_song_context(song)}")
 
-    extra_songs = []
-    for sid in mentioned_song_ids:
-        if sid == song_id:
-            continue
-        try:
-            s = check_song_access(session, sid, user)
-            extra_songs.append(s)
-        except HTTPException:
-            pass
-
+    extra_songs = _accessible_mentioned_songs(session, mentioned_song_ids, song_id, user)
     if extra_songs:
         formatted = "\n\n".join(_format_song_context(s) for s in extra_songs)
         parts.append(f"--- Other songs ---\n\n{formatted}")
 
-    if mentioned_version_ids and song:
-        version_parts = []
-        for vid in mentioned_version_ids:
-            v = get_version(session, vid, song_id)
-            if v:
-                vp = [f"[Version {v.version_number}]"]
-                if v.prompt:
-                    vp.append(f"Style: {v.prompt}")
-                meta = []
-                if v.key_scale:
-                    meta.append(f"Key: {v.key_scale}")
-                if v.bpm:
-                    meta.append(f"BPM: {v.bpm}")
-                if v.audio_duration:
-                    meta.append(f"Duration: {v.audio_duration}s")
-                if meta:
-                    vp.append(" | ".join(meta))
-                if v.lyrics:
-                    vp.append(f"Lyrics:\n{v.lyrics}")
-                version_parts.append("\n".join(vp))
-        if version_parts:
-            parts.append("--- Referenced versions ---\n\n" + "\n\n".join(version_parts))
+    referenced_versions = _referenced_versions(session, mentioned_version_ids, song_id, song)
+    if referenced_versions:
+        parts.append("--- Referenced versions ---\n\n" + "\n\n".join(referenced_versions))
 
     return "\n\n".join(parts)
 
 
-@router.post("/songs/{song_id}/chat")
+def _accessible_mentioned_songs(
+    session: Session,
+    mentioned_song_ids: list[str],
+    song_id: str,
+    user: AuthenticatedUser,
+) -> list:
+    songs = []
+    for mentioned_song_id in mentioned_song_ids:
+        if mentioned_song_id == song_id:
+            continue
+        try:
+            songs.append(check_song_access(session, mentioned_song_id, user))
+        except HTTPException:
+            continue
+    return songs
+
+
+def _referenced_versions(session: Session, version_ids: list[str], song_id: str, song) -> list[str]:
+    if not version_ids or song is None:
+        return []
+    return [
+        _format_referenced_version(version)
+        for version_id in version_ids
+        if (version := get_version(session, version_id, song_id))
+    ]
+
+
+def _format_referenced_version(version) -> str:
+    parts = [f"[Version {version.version_number}]"]
+    if version.prompt:
+        parts.append(f"Style: {version.prompt}")
+    metadata = _version_metadata(version)
+    if metadata:
+        parts.append(" | ".join(metadata))
+    if version.lyrics:
+        parts.append(f"Lyrics:\n{version.lyrics}")
+    return "\n".join(parts)
+
+
+def _version_metadata(version) -> list[str]:
+    return [
+        label
+        for label in (
+            f"Key: {version.key_scale}" if version.key_scale else None,
+            f"BPM: {version.bpm}" if version.bpm else None,
+            f"Duration: {version.audio_duration}s" if version.audio_duration else None,
+        )
+        if label is not None
+    ]
+
+
+@router.post(
+    "/songs/{song_id}/chat",
+    responses={503: {"description": "Claude is currently unavailable"}},
+)
 async def api_song_chat(
     song_id: str,
     req: SendChatRequest,

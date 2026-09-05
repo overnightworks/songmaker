@@ -70,6 +70,11 @@ export interface SeededTake {
 	takeId: string;
 }
 
+export interface SeededSong {
+	id: string;
+	title: string;
+}
+
 /** A private, playable take for the Voices flow to select through its real catalogue. */
 export interface SeededVoiceTake {
 	songTitle: string;
@@ -112,6 +117,12 @@ export interface SeededLibrary {
 	albumShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
+	/**
+	 * One non-leading song per shell, so the serial desktop and mobile flows
+	 * each prove their own reorder without relying on another spec to move the
+	 * shared library's leader in between.
+	 */
+	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -150,6 +161,12 @@ function requiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} must be set to the CI stack's admin credentials`);
 	return value;
+}
+
+function seededSong(songIdByTitle: Map<string, string>, title: string): SeededSong {
+	const id = songIdByTitle.get(title);
+	if (!id) throw new Error(`Missing seeded song ${title}`);
+	return { id, title };
 }
 
 /**
@@ -320,6 +337,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		artist: ALBUM_ARTIST
 	});
 
+	const songIdByTitle = new Map<string, string>();
 	const takeBySongTitle = new Map<string, string>();
 	for (const title of SONG_TITLES) {
 		const song = await seed.postJson<CreatedResource>('/api/songs', {
@@ -331,10 +349,18 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		const take = await seed.postFile<CreatedResource>(`/api/songs/${song.id}/reimport`, {
 			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
 		});
+		songIdByTitle.set(title, song.id);
 		takeBySongTitle.set(title, take.id);
 	}
 
-	const [pickedSongTitle, ...playlistSongTitles] = SONG_TITLES;
+	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
+	// Desktop moves and plays Closing Time, leaving the mobile Continue target
+	// untouched for the next project in the full serial suite.
+	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
+	const continueReorderSongs = {
+		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
+		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
+	};
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
@@ -352,7 +378,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 			prompt: 'calm test tone'
 		});
 	}
-
 	const kineticStripAlbum = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${KINETIC_STRIP_ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
@@ -366,6 +391,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
+		continueReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,

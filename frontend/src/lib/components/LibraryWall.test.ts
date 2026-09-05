@@ -22,6 +22,7 @@ import { resetShares } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
 const fetchShares = vi.fn();
+const fetchLibraryContinue = vi.fn();
 const fetchAlbum = vi.fn();
 const fetchAlbums = vi.fn();
 const fetchSong = vi.fn();
@@ -32,7 +33,8 @@ const unarchiveAlbum = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
-	fetchShares: (...args: unknown[]) => fetchShares(...args)
+	fetchShares: (...args: unknown[]) => fetchShares(...args),
+	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
@@ -151,6 +153,7 @@ beforeEach(() => {
 	fetchShares
 		.mockReset()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false });
+	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
 	fetchAlbum.mockReset();
 	fetchAlbums
 		.mockReset()

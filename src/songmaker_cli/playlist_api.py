@@ -107,7 +107,10 @@ def api_create_playlist(
     return PlaylistResponse.from_orm(playlist)
 
 
-@router.get("/playlists/{playlist_id}")
+@router.get(
+    "/playlists/{playlist_id}",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_get_playlist(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -117,7 +120,10 @@ def api_get_playlist(
     return PlaylistDetailResponse.from_orm(playlist)
 
 
-@router.put("/playlists/{playlist_id}")
+@router.put(
+    "/playlists/{playlist_id}",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_update_playlist(
     playlist_id: str,
     req: PlaylistUpdateRequest,
@@ -134,7 +140,10 @@ def api_update_playlist(
     return PlaylistResponse.from_orm(playlist)
 
 
-@router.delete("/playlists/{playlist_id}")
+@router.delete(
+    "/playlists/{playlist_id}",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_delete_playlist(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -155,7 +164,10 @@ def api_delete_playlist(
 # ── Cover ──────────────────────────────────────────────────────────────
 
 
-@router.get("/playlists/{playlist_id}/cover")
+@router.get(
+    "/playlists/{playlist_id}/cover",
+    responses={404: {"description": "Playlist or cover not found"}},
+)
 def api_get_playlist_cover(
     playlist_id: str,
     variant: str = Query(COVER_VARIANT_DETAIL),
@@ -182,7 +194,10 @@ def api_get_playlist_cover(
     )
 
 
-@router.post("/playlists/{playlist_id}/cover")
+@router.post(
+    "/playlists/{playlist_id}/cover",
+    responses={404: {"description": "Playlist not found"}},
+)
 async def api_upload_playlist_cover(
     playlist_id: str,
     file: UploadFile,
@@ -202,7 +217,10 @@ async def api_upload_playlist_cover(
     return PlaylistResponse.from_orm(playlist)
 
 
-@router.delete("/playlists/{playlist_id}/cover")
+@router.delete(
+    "/playlists/{playlist_id}/cover",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_delete_playlist_cover(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -220,7 +238,10 @@ def api_delete_playlist_cover(
 # ── Entries ────────────────────────────────────────────────────────────
 
 
-@router.post("/playlists/{playlist_id}/entries/generation")
+@router.post(
+    "/playlists/{playlist_id}/entries/generation",
+    responses={404: {"description": "Playlist or generation not found"}},
+)
 def api_add_generation_to_playlist(
     playlist_id: str,
     req: AddGenerationToPlaylistRequest,
@@ -240,7 +261,13 @@ def api_add_generation_to_playlist(
     return PlaylistEntryResponse.from_orm(entry_obj)
 
 
-@router.post("/playlists/{playlist_id}/entries/song")
+@router.post(
+    "/playlists/{playlist_id}/entries/song",
+    responses={
+        400: {"description": "Song has no playable take"},
+        404: {"description": "Playlist or song not found"},
+    },
+)
 def api_add_song_to_playlist(
     playlist_id: str,
     req: AddSongToPlaylistRequest,
@@ -265,7 +292,10 @@ def api_add_song_to_playlist(
     return StatusResponse()
 
 
-@router.post("/playlists/{playlist_id}/entries/album")
+@router.post(
+    "/playlists/{playlist_id}/entries/album",
+    responses={404: {"description": "Playlist or album not found"}},
+)
 def api_add_album_to_playlist(
     playlist_id: str,
     req: AddAlbumToPlaylistRequest,
@@ -305,7 +335,10 @@ def api_add_album_to_playlist(
     )
 
 
-@router.delete("/playlists/{playlist_id}/entries/{entry_id}")
+@router.delete(
+    "/playlists/{playlist_id}/entries/{entry_id}",
+    responses={404: {"description": "Playlist or entry not found"}},
+)
 def api_remove_from_playlist(
     playlist_id: str,
     entry_id: str,
@@ -321,7 +354,10 @@ def api_remove_from_playlist(
     return StatusResponse()
 
 
-@router.patch("/playlists/{playlist_id}/entries/{entry_id}/position")
+@router.patch(
+    "/playlists/{playlist_id}/entries/{entry_id}/position",
+    responses={404: {"description": "Playlist or entry not found"}},
+)
 def api_reorder_playlist_entry(
     playlist_id: str,
     entry_id: str,
@@ -341,7 +377,10 @@ def api_reorder_playlist_entry(
 # ── Sharing ────────────────────────────────────────────────────────────
 
 
-@router.post("/playlists/{playlist_id}/share")
+@router.post(
+    "/playlists/{playlist_id}/share",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_share_playlist(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -361,7 +400,10 @@ def api_share_playlist(
     )
 
 
-@router.delete("/playlists/{playlist_id}/share")
+@router.delete(
+    "/playlists/{playlist_id}/share",
+    responses={404: {"description": "Playlist not found"}},
+)
 def api_unshare_playlist(
     playlist_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

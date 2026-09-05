@@ -79,7 +79,7 @@ def _create_playlist(session: Session, title: str, user_id: str = _DEFAULT_USER_
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_factory(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
@@ -112,7 +112,7 @@ def _seed_test_data(session: Session) -> None:
     ))
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded_session(db_factory) -> Session:
     session = db_factory()
     _seed_test_data(session)
@@ -128,7 +128,7 @@ def _fake_user():
     return lambda: user
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:

@@ -15,6 +15,7 @@ export type Theme = 'dark' | 'light';
 const STORAGE_KEY = 'theme';
 export const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 export const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
+export const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
 export const RAIL_MIN_WIDTH_PX = 220;
 export const RAIL_MAX_WIDTH_PX = 360;
 export const RAIL_WIDTH_STEP_PX = 8;
@@ -36,6 +37,25 @@ function getInitialRailCollapsed(): boolean {
 }
 
 export const railCollapsed = writable(getInitialRailCollapsed());
+
+function getInitialLibraryContinueCollapsed(): boolean {
+	if (typeof window === 'undefined') return false;
+	return localStorage.getItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
+export const libraryContinueCollapsed = writable(getInitialLibraryContinueCollapsed());
+
+export function toggleLibraryContinueCollapsed(): void {
+	libraryContinueCollapsed.update((collapsed) => {
+		const next = !collapsed;
+		localStorage.setItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY, String(next));
+		return next;
+	});
+}
+
+export function initLibraryContinueCollapsed(): void {
+	libraryContinueCollapsed.set(getInitialLibraryContinueCollapsed());
+}
 
 export function clampRailWidth(width: number): number {
 	return Math.min(RAIL_MAX_WIDTH_PX, Math.max(RAIL_MIN_WIDTH_PX, Math.round(width)));
