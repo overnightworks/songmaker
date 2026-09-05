@@ -50,6 +50,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
+    get_cowriter_models_by_provider,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
     get_effective_provider_routes,
@@ -348,6 +349,78 @@ def test_model_must_be_in_the_live_catalog(admin_client, every_provider_is_confi
     )
     assert ok.status_code == 200
     assert ok.json()["model"] == "grok-4.6"
+
+
+def test_cowriter_keeps_each_provider_model_across_provider_saves(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+
+    grok = client.put(
+        "/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.5"},
+    )
+    assert grok.status_code == 200
+    codex = client.put(
+        "/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"},
+    )
+    assert codex.status_code == 200
+
+    saved = client.get("/api/settings/cowriter")
+
+    assert saved.status_code == 200
+    assert saved.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "gpt-5.4",
+        "grok": "grok-4.5",
+    }
+    with factory() as session:
+        assert get_cowriter_models_by_provider(session) == {
+            "claude": "claude-opus-4-6",
+            "codex": "gpt-5.4",
+            "grok": "grok-4.5",
+        }
+
+
+def test_cowriter_save_preserves_the_legacy_active_pair(
+    admin_client, every_provider_is_configured,
+):
+    client, factory = admin_client
+    with factory() as session:
+        set_claude_model(session, SETTING_COWRITER_PROVIDER, "grok")
+        set_claude_model(session, SETTING_COWRITER_MODEL, "grok-4.6")
+        session.commit()
+
+    saved = client.put(
+        "/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"},
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "gpt-5.4",
+        "grok": "grok-4.6",
+    }
+    with factory() as session:
+        assert get_cowriter_models_by_provider(session) == {
+            "claude": "claude-opus-4-6",
+            "codex": "gpt-5.4",
+            "grok": "grok-4.6",
+        }
+
+
+def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
+    admin_client, every_provider_is_configured,
+):
+    client, _ = admin_client
+
+    response = client.get("/api/settings/cowriter")
+
+    assert response.status_code == 200
+    assert response.json()["selected_models_by_provider"] == {
+        "claude": "claude-opus-4-6",
+        "codex": "",
+        "grok": "",
+    }
 
 
 def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatch):

@@ -256,6 +256,7 @@ export interface CowriterSettings {
 	allowed_providers: string[];
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
+	selected_models_by_provider: Record<string, string>;
 	models_errors: Record<string, string>;
 	models_sources: Record<string, string>;
 	current_models_not_in_catalog: Record<string, string>;

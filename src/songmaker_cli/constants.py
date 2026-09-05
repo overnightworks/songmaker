@@ -144,6 +144,7 @@ SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
 CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
+SETTING_COWRITER_PROVIDER_MODEL_PREFIX = "cowriter_model_"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
 SETTING_PROVIDER_ROUTES = "provider_routes"
 SETTING_JUDGE_PROVIDER = "judge_provider"

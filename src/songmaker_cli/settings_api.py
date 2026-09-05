@@ -66,6 +66,7 @@ from songmaker_cli.db.queries.settings import (
     get_claude_chat_model,
     get_claude_scoring_model,
     get_cowriter_model,
+    get_cowriter_models_by_provider,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
     get_effective_provider_routes,
@@ -523,20 +524,24 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
 
     provider = get_cowriter_provider(session)
     model = get_cowriter_model(session, provider)
+    saved_models = get_cowriter_models_by_provider(session)
     routes = get_effective_provider_routes(session)
     snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
     sources: dict[str, str] = {}
     current_models_not_in_catalog: dict[str, str] = {}
+    selected_models_by_provider: dict[str, str] = {}
+    route_statuses_by_provider: dict[str, dict[str, ProviderRouteStatusResponse]] = {}
     for name in sorted(COWRITER_PROVIDERS):
         snapshot = snapshots.get(name)
         route_statuses = _route_statuses(
             name,
             snapshot,
-            model if name == provider else None,
+            saved_models[name] or None,
             ProviderSurface.CO_WRITER,
         )
+        route_statuses_by_provider[name] = route_statuses
         selected = route_statuses[routes[name]]
         catalog_models = selected.models
         models = catalog_models
@@ -546,29 +551,23 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
             errors[name] = error
         if selected.catalog_source is not None:
             sources[name] = selected.catalog_source
-        if name == provider and selected.retained_model_id is not None:
-            current_models_not_in_catalog[name] = model
+        selected_models_by_provider[name] = saved_models[name]
+        if selected.retained_model_id is not None:
+            current_models_not_in_catalog[name] = saved_models[name]
     return CowriterSettingsResponse(
         provider=provider,
         model=model,
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
+        selected_models_by_provider=selected_models_by_provider,
         models_errors=errors,
         models_sources=sources,
         current_models_not_in_catalog=current_models_not_in_catalog,
         probed_at=_provider_probe_times(snapshots),
         tail_token_budget=get_cowriter_tail_token_budget(session),
         provider_routes=routes,
-        provider_routes_status={
-            name: _route_statuses(
-                name,
-                snapshots.get(name),
-                model if name == provider else None,
-                ProviderSurface.CO_WRITER,
-            )
-            for name in sorted(COWRITER_PROVIDERS)
-        },
+        provider_routes_status=route_statuses_by_provider,
     )
 
 
