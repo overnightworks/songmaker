@@ -105,7 +105,13 @@ def _reject_if_active_or_deleted(lora) -> None:
 @router.post(
     "/loras",
     response_model=UserLoraResponse,
-    responses={409: {"model": LoraCapacityErrorResponse}},
+    responses={
+        409: {
+            "description": "LoRA capacity is unavailable",
+            "model": LoraCapacityErrorResponse,
+        },
+        422: {"description": "LoRA request is invalid"},
+    },
 )
 def api_create_lora(
     data: UserLoraCreateRequest,
@@ -173,7 +179,10 @@ def api_get_lora(
     return UserLoraResponse.from_orm(lora)
 
 
-@router.delete("/loras/{lora_id}")
+@router.delete(
+    "/loras/{lora_id}",
+    responses={409: {"description": "LoRA cannot be deleted"}},
+)
 def api_delete_lora(
     lora_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -191,7 +200,14 @@ def api_delete_lora(
     return StatusResponse()
 
 
-@router.post("/loras/{lora_id}/samples/from-generation")
+@router.post(
+    "/loras/{lora_id}/samples/from-generation",
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": "LoRA cannot accept another sample"},
+        422: {"description": "Generation cannot be used as a sample"},
+    },
+)
 def api_add_sample_from_generation(
     lora_id: str,
     data: UserLoraSampleFromGenerationRequest,
@@ -249,7 +265,14 @@ def api_add_sample_from_generation(
     return UserLoraSampleResponse.from_orm(sample)
 
 
-@router.post("/loras/{lora_id}/samples")
+@router.post(
+    "/loras/{lora_id}/samples",
+    responses={
+        409: {"description": "LoRA cannot accept another sample"},
+        413: {"description": "Sample file is too large"},
+        422: {"description": "Sample upload is invalid"},
+    },
+)
 async def api_add_sample(
     lora_id: str,
     caption: str = Form(...),
@@ -317,7 +340,13 @@ async def api_add_sample(
     return UserLoraSampleResponse.from_orm(sample)
 
 
-@router.patch("/loras/{lora_id}/samples/{sample_id}")
+@router.patch(
+    "/loras/{lora_id}/samples/{sample_id}",
+    responses={
+        404: {"description": "Sample does not exist"},
+        422: {"description": "Sample update is invalid"},
+    },
+)
 def api_patch_sample(
     lora_id: str,
     sample_id: str,
@@ -346,7 +375,10 @@ def api_patch_sample(
     return UserLoraSampleResponse.from_orm(updated)
 
 
-@router.delete("/loras/{lora_id}/samples/{sample_id}")
+@router.delete(
+    "/loras/{lora_id}/samples/{sample_id}",
+    responses={404: {"description": "Sample does not exist"}},
+)
 def api_delete_sample(
     lora_id: str,
     sample_id: str,
@@ -375,7 +407,14 @@ def api_delete_sample(
 @router.post(
     "/loras/{lora_id}/train",
     response_model=UserLoraResponse,
-    responses={409: {"model": LoraCapacityErrorResponse}},
+    responses={
+        409: {
+            "description": "LoRA capacity is unavailable",
+            "model": LoraCapacityErrorResponse,
+        },
+        422: {"description": "LoRA training request is invalid"},
+        503: {"description": "Training worker or job queue is unavailable"},
+    },
 )
 async def api_train_lora(
     lora_id: str,
