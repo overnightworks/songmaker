@@ -40,6 +40,33 @@ _REDACTED_CODEX_LOGIN = {
 }
 
 
+@pytest.mark.parametrize("missing", ("cli", "code_mode_host", "resources"))
+def test_cover_image_capability_requires_every_codex_mount(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str,
+) -> None:
+    cli = tmp_path / "codex"
+    code_mode_host = tmp_path / "codex-code-mode-host"
+    resources = tmp_path / "codex-resources"
+    for binary in (cli, code_mode_host):
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+    resources.mkdir()
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_BINARY", str(cli))
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_CODE_MODE_HOST_BINARY", str(code_mode_host))
+    monkeypatch.setattr(codex_cli_adapter, "CODEX_RESOURCES_DIRECTORY", str(resources))
+
+    assert codex_cli_adapter.codex_cover_image_capability_is_available()
+
+    if missing == "cli":
+        cli.unlink()
+    elif missing == "code_mode_host":
+        code_mode_host.unlink()
+    else:
+        resources.rmdir()
+
+    assert not codex_cli_adapter.codex_cover_image_capability_is_available()
+
+
 @pytest.fixture(autouse=True)
 def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror = tmp_path / "auth.json"

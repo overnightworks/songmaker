@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     GPU_HOLD_POLL_INTERVAL_SECONDS,
+    JOB_ERROR_WORKER_TRAINING_FAILED,
     LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
     MODEL_DEFAULT_MODE,
     STALE_JOB_THRESHOLDS,
@@ -54,6 +55,15 @@ from songmaker_cli.settings import LoraTrainingJobConfig
 from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
+
+
+def _sanitize_training_error(exc: Exception, job_id: str) -> str:
+    """Keep a worker failure truthful to the training task the musician started."""
+    message = _sanitize_error(exc, job_id)
+    if isinstance(exc, WorkerTaskFailed):
+        return JOB_ERROR_WORKER_TRAINING_FAILED
+    return message
+
 
 _LORA_PROGRESS_THROTTLE_SECONDS = 2.0
 _LORA_SUBMIT_TIMEOUT_SECONDS = 30.0
@@ -902,7 +912,7 @@ async def run_lora_training_job(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error=_sanitize_error(exc, job_id),
+                error=_sanitize_training_error(exc, job_id),
                 error_type="no_workers",
             )
             return
@@ -1024,18 +1034,18 @@ async def run_lora_training_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_sanitize_training_error(exc, job_id),
             error_type="lora_training_error",
         )
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
-        sanitized_error = _sanitize_error(exc, job_id)
+        sanitized_error = _sanitize_training_error(exc, job_id)
         cleanup_failed_lora_with_factory(
             lora_id=lora_id,
             user_id=user_id,
             audio_dir=audio_dir,
             db_factory=db_factory,
-            error_message=_sanitize_error(exc, job_id),
+            error_message=sanitized_error,
         )
         _update_job(
             db_factory,

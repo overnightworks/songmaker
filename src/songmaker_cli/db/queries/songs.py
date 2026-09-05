@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy import func
+from sqlalchemy import case, func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from songmaker_cli.db.models import (
@@ -46,12 +46,17 @@ def list_continue_candidates(
 ) -> list[ContinueCandidate]:
     """Return the user's newest song and album candidates for Continue.
 
-    Albums do not persist an ``updated_at`` column. Their activity is the
-    newest update among their live songs, falling back to ``created_at`` for
-    an empty album. Fetching the leading ``limit`` entries of each kind is
-    sufficient before merging: an entry behind that cutoff already has at
-    least ``limit`` entries of its own kind ahead of it.
+    A song's activity is its newer edit or listen. Albums do not persist an
+    activity column, so theirs is the newest activity among their live songs,
+    falling back to ``created_at`` for an empty album. Fetching the leading
+    ``limit`` entries of each kind is sufficient before merging: an entry
+    behind that cutoff already has at least ``limit`` entries of its own kind
+    ahead of it.
     """
+    song_activity = case(
+        (Song.last_played_at > Song.updated_at, Song.last_played_at),
+        else_=Song.updated_at,
+    )
     songs = (
         session.query(Song)
         .options(joinedload(Song.album))
@@ -60,16 +65,19 @@ def list_continue_candidates(
             Album.created_by == user_id,
             Album.is_archived.is_(False),
         )
-        .order_by(Song.updated_at.desc(), Song.id.asc())
+        .order_by(song_activity.desc(), Song.id.asc())
         .limit(limit)
         .all()
     )
     song_candidates = [
-        ContinueCandidate(item=song, activity_at=song.updated_at)
+        ContinueCandidate(
+            item=song,
+            activity_at=max(song.updated_at, song.last_played_at or song.updated_at),
+        )
         for song in songs
     ]
 
-    album_activity = func.coalesce(func.max(Song.updated_at), Album.created_at)
+    album_activity = func.coalesce(func.max(song_activity), Album.created_at)
     album_rows = (
         session.query(Album, album_activity.label("activity_at"))
         .outerjoin(Song)
@@ -91,6 +99,18 @@ def list_continue_candidates(
         [*song_candidates, *album_candidates],
         key=_continue_sort_key,
     )[:limit]
+
+
+def record_song_listen(session: Session, song: Song) -> None:
+    """Persist the server time at which an owner started listening to a song."""
+    session.execute(
+        update(Song)
+        .where(Song.id == song.id)
+        .values(
+            last_played_at=datetime.now(timezone.utc),
+            updated_at=Song.updated_at,
+        ),
+    )
 
 
 def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:

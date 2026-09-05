@@ -22,7 +22,13 @@ from songmaker_cli.api_models import (
     VersionResponse,
     WhisperCue,
 )
-from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobStatus, JobType
+from songmaker_cli.constants import (
+    STALE_JOB_THRESHOLDS,
+    CoverExecutor,
+    JobStatus,
+    JobType,
+    stale_job_thresholds,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -1910,15 +1916,33 @@ def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
     assert get_job(db_session, job.id).error_type == "queued_full_queue_bound"
 
 
-@pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))
+@pytest.mark.parametrize(
+    ("job_type", "cover_executor"),
+    [
+        (job_type, executor)
+        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
+        for executor in (
+            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
+        )
+    ],
+    ids=lambda value: "default" if value is None else value.value,
+)
 def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     db_session: Session,
     job_type: JobType,
+    cover_executor: CoverExecutor | None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from datetime import datetime, timedelta, timezone
 
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    thresholds = STALE_JOB_THRESHOLDS[job_type]
+    if cover_executor is None:
+        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
+    else:
+        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
+    thresholds = stale_job_thresholds(
+        CoverExecutor.WEB if cover_executor is None else cover_executor,
+    )[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     healthy = create_job(db_session, job_type)
@@ -1937,14 +1961,32 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
 
-@pytest.mark.parametrize("job_type", tuple(STALE_JOB_THRESHOLDS))
+@pytest.mark.parametrize(
+    ("job_type", "cover_executor"),
+    [
+        (job_type, executor)
+        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
+        for executor in (
+            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
+        )
+    ],
+    ids=lambda value: "default" if value is None else value.value,
+)
 def test_reaper_keeps_jobs_at_each_strict_threshold_cutoff(
     db_session: Session,
     job_type: JobType,
+    cover_executor: CoverExecutor | None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The reaper uses strict `<`: equality with either cutoff stays active."""
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    thresholds = STALE_JOB_THRESHOLDS[job_type]
+    if cover_executor is None:
+        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
+    else:
+        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
+    thresholds = stale_job_thresholds(
+        CoverExecutor.WEB if cover_executor is None else cover_executor,
+    )[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     update_job_status(db_session, running.id, JobStatus.RUNNING)
@@ -2573,6 +2615,33 @@ def test_whisper_cues_migration_adds_nullable_column(tmp_path: Path) -> None:
     assert cols["whisper_cues"]["nullable"] is True
 
 
+def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.05a349e664e2_add_last_played_at_to_songs",
+    )
+    db_path = tmp_path / "last-played-at.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"]: column for column in inspect(engine).get_columns("songs")}
+    engine.dispose()
+    assert columns["last_played_at"]["nullable"] is True
+
+    command.downgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    columns = {column["name"] for column in inspect(engine).get_columns("songs")}
+    engine.dispose()
+    assert "last_played_at" not in columns
+
+
 # ── Claude model settings ───────────────────────────────────────────
 
 
@@ -2746,15 +2815,58 @@ def _alembic_config(url: str):
     return cfg
 
 
+def _seed_song_slug_migration_rows(engine, rows: list[tuple[str, str, str, int, str]]) -> None:
+    """Seed the schema at b8e3f1c07a25 without importing the current ORM model."""
+    from sqlalchemy import MetaData, Table
+
+    metadata = MetaData()
+    albums = Table("albums", metadata, autoload_with=engine)
+    songs = Table("songs", metadata, autoload_with=engine)
+    album_ids = sorted({album_id for _, _, album_id, _, _ in rows})
+    now = datetime.now(timezone.utc)
+
+    with engine.begin() as conn:
+        conn.execute(
+            albums.insert(),
+            [
+                {
+                    "id": album_id,
+                    "title": album_id.upper(),
+                    "artist": "X",
+                    "subtitle": "",
+                    "year": "",
+                    "colors": [],
+                    "created_at": now,
+                }
+                for album_id in album_ids
+            ],
+        )
+        conn.execute(
+            songs.insert(),
+            [
+                {
+                    "id": song_id,
+                    "title": title,
+                    "album_id": album_id,
+                    "vocal_language": "",
+                    "track_number": track_number,
+                    "created_at": now,
+                    "updated_at": now,
+                    "slug": slug,
+                }
+                for song_id, title, album_id, track_number, slug in rows
+            ],
+        )
+
+
 def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) -> None:
     from alembic import command
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import create_engine, text
 
     from songmaker_cli.db.migrations.versions import (
         b8e3f1c07a25_add_slug_to_songs as mig,
     )
-    from songmaker_cli.db.models import SONG_SLUG_MAX_LENGTH, Album, Song
+    from songmaker_cli.db.models import SONG_SLUG_MAX_LENGTH
 
     # Pinned to b8e3f1c07a25, the revision that introduced this backfill —
     # c9d4a2f18e37 promotes the index to UNIQUE afterwards, which the seeded
@@ -2763,19 +2875,17 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
     command.upgrade(_alembic_config(url), "b8e3f1c07a25")
 
     engine = create_engine(url)
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add_all([
-            Album(id="a1", title="A", artist="X"),
-            Album(id="a2", title="B", artist="X"),
-            Song(id="s1", title="Intro", album_id="a1", track_number=1),
-            Song(id="s2", title="Intro", album_id="a1", track_number=2),
-            Song(id="s3", title="Intro", album_id="a2", track_number=1),
-            Song(id="s4", title="!!!", album_id="a2", track_number=2),
-            Song(id="s5", title="音" * 200, album_id="a2", track_number=3),
-            Song(id="s6", title="???", album_id="a2", track_number=4),
-        ])
-        session.commit()
+    _seed_song_slug_migration_rows(
+        engine,
+        [
+            ("s1", "Intro", "a1", 1, ""),
+            ("s2", "Intro", "a1", 2, ""),
+            ("s3", "Intro", "a2", 1, ""),
+            ("s4", "!!!", "a2", 2, ""),
+            ("s5", "音" * 200, "a2", 3, ""),
+            ("s6", "???", "a2", 4, ""),
+        ],
+    )
 
     with engine.begin() as conn:
         original_get_bind = mig.op.get_bind
@@ -2785,8 +2895,8 @@ def test_song_slug_backfill_fills_every_song_uniquely_per_album(tmp_path: Path) 
         finally:
             mig.op.get_bind = original_get_bind
 
-    with factory() as session:
-        slugs = {song.id: song.slug for song in session.query(Song).all()}
+    with engine.connect() as conn:
+        slugs = dict(conn.execute(text("SELECT id, slug FROM songs")).fetchall())
 
     assert slugs["s1"] == "intro"
     assert slugs["s2"] == "intro-2"
@@ -2811,24 +2921,20 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -
     from alembic import command
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import IntegrityError
-    from sqlalchemy.orm import sessionmaker
-
-    from songmaker_cli.db.models import Album, Song
 
     url = f"sqlite:///{tmp_path / 'unique_slug.db'}"
     cfg = _alembic_config(url)
     command.upgrade(cfg, "b8e3f1c07a25")
 
     engine = create_engine(url)
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add_all([
-            Album(id="a1", title="A", artist="X"),
-            Song(id="s1", title="Intro", album_id="a1", track_number=1, slug="intro"),
+    _seed_song_slug_migration_rows(
+        engine,
+        [
+            ("s1", "Intro", "a1", 1, "intro"),
             # Straggler: created via the co-writer MCP path before #270.
-            Song(id="s2", title="Reprise", album_id="a1", track_number=2, slug=""),
-        ])
-        session.commit()
+            ("s2", "Reprise", "a1", 2, ""),
+        ],
+    )
     engine.dispose()
 
     command.upgrade(cfg, "c9d4a2f18e37")
@@ -2840,20 +2946,32 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(tmp_path: Path) -
         )
     assert rows == {"s1": "intro", "s2": "reprise"}
 
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add(Song(id="s3", title="Dup", album_id="a1", track_number=3, slug="intro"))
+    with engine.begin() as conn:
         with pytest.raises(IntegrityError):
-            session.commit()
+            conn.execute(
+                text(
+                    "INSERT INTO songs "
+                    "(id, title, album_id, vocal_language, track_number, created_at, "
+                    "updated_at, slug) "
+                    "VALUES ('s3', 'Dup', 'a1', '', 3, CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP, 'intro')",
+                ),
+            )
     engine.dispose()
 
     command.downgrade(cfg, "b8e3f1c07a25")
 
     engine = create_engine(url)
-    factory = sessionmaker(bind=engine)
-    with factory() as session:
-        session.add(Song(id="s3", title="Dup", album_id="a1", track_number=3, slug="intro"))
-        session.commit()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO songs "
+                "(id, title, album_id, vocal_language, track_number, created_at, "
+                "updated_at, slug) "
+                "VALUES ('s3', 'Dup', 'a1', '', 3, CURRENT_TIMESTAMP, "
+                "CURRENT_TIMESTAMP, 'intro')",
+            ),
+        )
     engine.dispose()
 
 

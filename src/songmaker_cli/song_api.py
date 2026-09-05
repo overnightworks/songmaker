@@ -66,12 +66,14 @@ from songmaker_cli.db.queries import (
     list_songs,
     move_song,
     record_audit,
+    record_song_listen,
     rename_song,
     restore_song,
     set_song_cover_key,
     soft_delete_song,
     update_song,
 )
+from songmaker_cli.db.queries.playlists import best_playable_generation
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
@@ -268,6 +270,20 @@ def api_restore_song(
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(restored)
+
+
+@router.post("/songs/{song_id}/listen")
+def api_record_song_listen(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    song = check_song_access(session, song_id, user)
+    if best_playable_generation(song) is None:
+        raise HTTPException(422, "Song is not playable")
+    record_song_listen(session, song)
+    session.commit()
+    return StatusResponse()
 
 
 @router.post("/songs/{song_id}/cleanup")
