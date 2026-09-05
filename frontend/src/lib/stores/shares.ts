@@ -282,7 +282,7 @@ function requestShares(options: {
 	type?: ShareInventoryType | null;
 }): Promise<PaginatedResponse<ShareInventoryItem>> {
 	if (typeof libraryApi.fetchShares !== 'function') {
-		throw new Error(LIBRARY_SHARES_ERROR);
+		throw new TypeError(LIBRARY_SHARES_ERROR);
 	}
 	return libraryApi.fetchShares(options);
 }

@@ -59,11 +59,11 @@ function parseRetryAfterSeconds(resp: {
 }
 
 function getCsrfToken(): string {
-	const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+	const match = /(?:^|;\s*)csrf_token=([^;]*)/.exec(document.cookie);
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
-const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/setup'];
+const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup']);
 
 // A path whose own 429 is already visible some other way, so the generic
 // toast below would only repeat it. Kept as its own literal list, not
@@ -99,7 +99,7 @@ function notifyIfRateLimited(status: number, path: string): void {
 }
 
 function isSessionLostResponse(status: number, path: string): boolean {
-	return status === 401 && !AUTH_ENDPOINTS.includes(path);
+	return status === 401 && !AUTH_ENDPOINTS.has(path);
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
@@ -245,7 +245,7 @@ export async function* sseFetch<T = unknown>(
 			signal: abortOnCallerOrTimeout(init.signal, controller.signal),
 			headers: {
 				Accept: 'text/event-stream',
-				...((init.headers as Record<string, string>) ?? {})
+				...(init.headers as Record<string, string>)
 			}
 		},
 		method

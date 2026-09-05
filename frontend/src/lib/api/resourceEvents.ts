@@ -4,7 +4,7 @@ import type {
 	ResourceResyncEvent
 } from './types';
 
-const DECIMAL_ID = /^(0|[1-9][0-9]*)$/;
+const DECIMAL_ID = /^(0|[1-9]\d*)$/;
 
 export function compareDecimalId(left: string, right: string): number {
 	if (left === right) return 0;

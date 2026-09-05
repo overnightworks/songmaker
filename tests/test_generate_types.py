@@ -73,8 +73,7 @@ def test_check_detects_seeded_route_models_and_accepts_generated_types(
     assert generate_types.check_generated_types(result, output_path)
     checked_output = capsys.readouterr().out
     assert (
-        "Checked 3 API models (3 from FastAPI routes, 0 from api_models exports"
-        in checked_output
+        "Checked 3 API models (3 from FastAPI routes, 0 from api_models exports" in checked_output
     )
 
 
@@ -83,6 +82,20 @@ def test_generates_parenthesized_discriminated_union_list() -> None:
         generate_types._py_type_to_ts(list[DiscriminatedHit])
         == "(DiscriminatedAlbumHit | DiscriminatedSongHit)[]"
     )
+
+
+def test_generates_shared_repaint_mode_alias() -> None:
+    from songmaker_cli.api_models.generation_params import (
+        BaseGenerationParams,
+        RepaintTaskParams,
+        StoredGenerationParams,
+    )
+
+    result = generate_types.generate(())
+
+    assert "export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';" in result.content
+    for model in (BaseGenerationParams, RepaintTaskParams, StoredGenerationParams):
+        assert "repaint_mode?: RepaintMode | null;" in generate_types._model_to_interface(model)
 
 
 def test_exempts_internal_routes_and_reports_their_count() -> None:

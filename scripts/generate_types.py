@@ -114,10 +114,16 @@ TS_MODEL_NAMES: dict[str, str] = {
 FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
     ("GenerationItem", "scores"): "TrackScores | null",
     ("GenerationItem", "generation_params"): "GenerationParams | null",
+    ("GenerationParams", "repaint_mode"): "RepaintMode | null",
+    ("RepaintTaskParams", "repaint_mode"): "RepaintMode | null",
     ("VersionItem", "generation_params"): "VersionGenerationParams | null",
+    ("VersionGenerationParams", "repaint_mode"): "RepaintMode | null",
     ("SongItem", "generation_params"): "VersionGenerationParams | null",
     ("SongItem", "best_scores"): "TrackScores | null",
     ("PresetItem", "params"): "VersionGenerationParams",
+}
+TYPE_ALIASES: dict[str, str] = {
+    "RepaintMode": "'conservative' | 'balanced' | 'aggressive'",
 }
 STRING_OUTPUT_KEYS = frozenset({"lyrical_summary", "detected_language"})
 
@@ -437,7 +443,8 @@ def _model_to_interface(model: type[BaseModel]) -> str:
     lines = [f"export interface {ts_name} {{"]
     for field_name, field_info in model.model_fields.items():
         ts_type = FIELD_TYPE_OVERRIDES.get(
-            (ts_name, field_name), _py_type_to_ts(field_info.annotation),
+            (ts_name, field_name),
+            _py_type_to_ts(field_info.annotation),
         )
         optional = "?" if not field_info.is_required() and field_info.default is None else ""
         lines.append(f"\t{field_name}{optional}: {ts_type};")
@@ -476,7 +483,11 @@ def generate(
         (*route_models, *exported_models),
         key=lambda model: (_ts_name(model), model.__module__, model.__name__),
     )
-    blocks = [HEADER, _build_track_scores_interface()]
+    blocks = [
+        HEADER,
+        *(f"export type {name} = {definition};" for name, definition in TYPE_ALIASES.items()),
+        _build_track_scores_interface(),
+    ]
     blocks.extend(_model_to_interface(model) for model in emitted_models)
     return GenerationResult(
         content="\n\n".join(blocks) + "\n",
