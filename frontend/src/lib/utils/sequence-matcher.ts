@@ -29,87 +29,26 @@ export class SequenceMatcher {
 
 	findLongestMatch(alo = 0, ahi = this.a.length, blo = 0, bhi = this.b.length): Match {
 		const { a, b, b2j } = this;
-		let besti = alo;
-		let bestj = blo;
-		let bestsize = 0;
+		const best = { a: alo, b: blo, size: 0 };
 		let j2len = new Map<number, number>();
 
 		for (let i = alo; i < ahi; i++) {
-			const newj2len = new Map<number, number>();
-			const indices = b2j.get(a[i]);
-			if (indices) {
-				for (const j of indices) {
-					if (j < blo) continue;
-					if (j >= bhi) break;
-					const k = (j2len.get(j - 1) ?? 0) + 1;
-					newj2len.set(j, k);
-					if (k > bestsize) {
-						besti = i - k + 1;
-						bestj = j - k + 1;
-						bestsize = k;
-					}
-				}
-			}
-			j2len = newj2len;
+			j2len = findMatchesEndingAt(a[i], i, b2j, blo, bhi, j2len, best);
 		}
 
-		while (besti > alo && bestj > blo && a[besti - 1] === b[bestj - 1]) {
-			besti -= 1;
-			bestj -= 1;
-			bestsize += 1;
-		}
-		while (
-			besti + bestsize < ahi &&
-			bestj + bestsize < bhi &&
-			a[besti + bestsize] === b[bestj + bestsize]
-		) {
-			bestsize += 1;
-		}
-
-		return { a: besti, b: bestj, size: bestsize };
+		extendMatchBackwards(a, b, alo, blo, best);
+		extendMatchForwards(a, b, ahi, bhi, best);
+		return best;
 	}
 
 	getMatchingBlocks(): Match[] {
 		if (this.matchingBlocks) return this.matchingBlocks;
 
-		const la = this.a.length;
-		const lb = this.b.length;
-		const queue: [number, number, number, number][] = [[0, la, 0, lb]];
-		const found: Match[] = [];
-
-		while (queue.length > 0) {
-			const next = queue.pop();
-			if (!next) break;
-			const [alo, ahi, blo, bhi] = next;
-			const match = this.findLongestMatch(alo, ahi, blo, bhi);
-			const { a: i, b: j, size: k } = match;
-			if (k) {
-				found.push(match);
-				if (alo < i && blo < j) queue.push([alo, i, blo, j]);
-				if (i + k < ahi && j + k < bhi) queue.push([i + k, ahi, j + k, bhi]);
-			}
-		}
-		found.sort((x, y) => x.a - y.a || x.b - y.b || x.size - y.size);
-
-		const merged: Match[] = [];
-		let i1 = 0;
-		let j1 = 0;
-		let k1 = 0;
-		for (const { a: i2, b: j2, size: k2 } of found) {
-			if (i1 + k1 === i2 && j1 + k1 === j2) {
-				k1 += k2;
-			} else {
-				if (k1) merged.push({ a: i1, b: j1, size: k1 });
-				i1 = i2;
-				j1 = j2;
-				k1 = k2;
-			}
-		}
-		if (k1) merged.push({ a: i1, b: j1, size: k1 });
-		merged.push({ a: la, b: lb, size: 0 });
-
-		this.matchingBlocks = merged;
-		return merged;
+		const matches = findMatchingBlocks(this.a.length, this.b.length, (alo, ahi, blo, bhi) =>
+			this.findLongestMatch(alo, ahi, blo, bhi)
+		);
+		this.matchingBlocks = mergeMatchingBlocks(matches, this.a.length, this.b.length);
+		return this.matchingBlocks;
 	}
 
 	ratio(): number {
@@ -117,6 +56,117 @@ export class SequenceMatcher {
 		const length = this.a.length + this.b.length;
 		return length ? (2.0 * matches) / length : 1.0;
 	}
+}
+
+function findMatchesEndingAt(
+	character: string,
+	index: number,
+	b2j: Map<string, number[]>,
+	blo: number,
+	bhi: number,
+	previousLengths: Map<number, number>,
+	best: Match
+): Map<number, number> {
+	const lengths = new Map<number, number>();
+	const indices = b2j.get(character);
+	if (!indices) return lengths;
+
+	for (const otherIndex of indices) {
+		if (otherIndex < blo) continue;
+		if (otherIndex >= bhi) break;
+		const length = (previousLengths.get(otherIndex - 1) ?? 0) + 1;
+		lengths.set(otherIndex, length);
+		if (length > best.size) {
+			best.a = index - length + 1;
+			best.b = otherIndex - length + 1;
+			best.size = length;
+		}
+	}
+	return lengths;
+}
+
+function extendMatchBackwards(
+	a: string,
+	b: string,
+	alo: number,
+	blo: number,
+	match: Match
+): void {
+	while (match.a > alo && match.b > blo && a[match.a - 1] === b[match.b - 1]) {
+		match.a -= 1;
+		match.b -= 1;
+		match.size += 1;
+	}
+}
+
+function extendMatchForwards(
+	a: string,
+	b: string,
+	ahi: number,
+	bhi: number,
+	match: Match
+): void {
+	while (
+		match.a + match.size < ahi &&
+		match.b + match.size < bhi &&
+		a[match.a + match.size] === b[match.b + match.size]
+	) {
+		match.size += 1;
+	}
+}
+
+function findMatchingBlocks(
+	aLength: number,
+	bLength: number,
+	findLongestMatch: (alo: number, ahi: number, blo: number, bhi: number) => Match
+): Match[] {
+	const queue: [number, number, number, number][] = [[0, aLength, 0, bLength]];
+	const found: Match[] = [];
+
+	while (queue.length > 0) {
+		const next = queue.pop();
+		if (!next) break;
+		const [alo, ahi, blo, bhi] = next;
+		const match = findLongestMatch(alo, ahi, blo, bhi);
+		if (!match.size) continue;
+		found.push(match);
+		enqueueMatchGaps(queue, match, alo, ahi, blo, bhi);
+	}
+	return found.sort((left, right) => left.a - right.a || left.b - right.b || left.size - right.size);
+}
+
+function enqueueMatchGaps(
+	queue: [number, number, number, number][],
+	match: Match,
+	alo: number,
+	ahi: number,
+	blo: number,
+	bhi: number
+): void {
+	if (alo < match.a && blo < match.b) queue.push([alo, match.a, blo, match.b]);
+	if (match.a + match.size < ahi && match.b + match.size < bhi) {
+		queue.push([match.a + match.size, ahi, match.b + match.size, bhi]);
+	}
+}
+
+function mergeMatchingBlocks(matches: Match[], aLength: number, bLength: number): Match[] {
+	const merged: Match[] = [];
+	let current = { a: 0, b: 0, size: 0 };
+	for (const match of matches) {
+		if (isAdjacentMatch(current, match)) {
+			current.size += match.size;
+			continue;
+		}
+		if (current.size) merged.push(current);
+		current = match;
+	}
+	if (current.size) merged.push(current);
+	merged.push({ a: aLength, b: bLength, size: 0 });
+	return merged;
+}
+
+function isAdjacentMatch(first: Match, second: Match): boolean {
+	return first.a + first.size === second.a && first.b + first.size === second.b;
 }
 
 function buildB2J(b: string): Map<string, number[]> {

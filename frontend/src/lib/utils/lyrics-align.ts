@@ -222,29 +222,37 @@ function repeatsOfWinner(
 	tolerateSlips: boolean
 ): Candidate[] {
 	const length = winner.to - winner.from + 1;
-	let earliestStart = winner.from;
-	let latestEnd = winner.to;
-	for (const candidate of candidates) {
-		if (candidate.from < earliestStart) earliestStart = candidate.from;
-		if (candidate.to > latestEnd) latestEnd = candidate.to;
-	}
+	const { earliestStart, latestEnd } = candidateBounds(candidates, winner);
 
 	const repeats: Candidate[] = [];
 	const first = Math.max(0, earliestStart - length + 1);
 	const last = Math.min(unitTexts.length - length, latestEnd);
 	for (let from = first; from <= last; from++) {
 		const text = unitTexts.slice(from, from + length).join(' ');
-		if (!tolerateSlips) {
-			if (text !== winner.text) continue;
-		} else {
-			const reach =
-				(2 * Math.min(text.length, winner.text.length)) / (text.length + winner.text.length);
-			if (reach < REPEAT_MIN_RATIO) continue;
-			if (ratio(text, winner.text) < REPEAT_MIN_RATIO) continue;
-		}
+		if (!isRepeatOfWinner(text, winner.text, tolerateSlips)) continue;
 		repeats.push({ ...winner, from, to: from + length - 1, text });
 	}
 	return repeats;
+}
+
+function candidateBounds(candidates: Candidate[], winner: Candidate): {
+	earliestStart: number;
+	latestEnd: number;
+} {
+	let earliestStart = winner.from;
+	let latestEnd = winner.to;
+	for (const candidate of candidates) {
+		if (candidate.from < earliestStart) earliestStart = candidate.from;
+		if (candidate.to > latestEnd) latestEnd = candidate.to;
+	}
+	return { earliestStart, latestEnd };
+}
+
+function isRepeatOfWinner(text: string, winnerText: string, tolerateSlips: boolean): boolean {
+	if (!tolerateSlips) return text === winnerText;
+
+	const reach = (2 * Math.min(text.length, winnerText.length)) / (text.length + winnerText.length);
+	return reach >= REPEAT_MIN_RATIO && ratio(text, winnerText) >= REPEAT_MIN_RATIO;
 }
 
 function chooseCandidate(
@@ -252,22 +260,40 @@ function chooseCandidate(
 	candidates: Candidate[],
 	tolerateSlips: boolean
 ): Candidate | null {
+	const best = highestScoringCandidate(candidates);
+	if (best === null || best.score < MIN_RATIO) return null;
+
+	const repeats = repeatsOfWinner(unitTexts, candidates, best, tolerateSlips);
+	const rivalScore = highestIndependentRivalScore(candidates, repeats);
+	if (rivalScore !== -Infinity && best.score - rivalScore < AMBIGUITY_MARGIN) return null;
+
+	// Of several renditions of the same words, this line takes the earliest
+	// still in reach; the later ones are left for the lines that come after.
+	return earliestRepeatCandidate(candidates, repeats, best);
+}
+
+function highestScoringCandidate(candidates: Candidate[]): Candidate | null {
 	let best: Candidate | null = null;
 	for (const candidate of candidates) {
 		if (best === null || candidate.score > best.score) best = candidate;
 	}
-	if (best === null || best.score < MIN_RATIO) return null;
+	return best;
+}
 
-	const repeats = repeatsOfWinner(unitTexts, candidates, best, tolerateSlips);
+function highestIndependentRivalScore(candidates: Candidate[], repeats: Candidate[]): number {
 	let rivalScore = -Infinity;
 	for (const candidate of candidates) {
 		if (repeats.some((repeat) => overlaps(candidate, repeat))) continue;
 		if (candidate.score > rivalScore) rivalScore = candidate.score;
 	}
-	if (rivalScore !== -Infinity && best.score - rivalScore < AMBIGUITY_MARGIN) return null;
+	return rivalScore;
+}
 
-	// Of several renditions of the same words, this line takes the earliest
-	// still in reach; the later ones are left for the lines that come after.
+function earliestRepeatCandidate(
+	candidates: Candidate[],
+	repeats: Candidate[],
+	best: Candidate
+): Candidate {
 	let earliest = best;
 	for (const candidate of candidates) {
 		if (candidate.score < MIN_RATIO || candidate.from >= earliest.from) continue;
@@ -346,15 +372,32 @@ function contestingLines(
 	run: Candidate,
 	floor: number
 ): number[] {
-	const waiting: number[] = [];
-	for (let other = linePosition + 1; other < lineTexts.length; other++) {
-		if (lineTexts[other] !== lineTexts[linePosition]) waiting.push(other);
-	}
+	const waiting = waitingLinePositions(lineTexts, linePosition);
 	if (waiting.length === 0) return [];
 	const maxPhraseLength =
 		Math.max(...waiting.map((other) => lineTexts[other].length)) * LENGTH_FACTOR_MAX;
 
 	const contesting: number[] = [];
+	for (const phrase of phrasesContainingRun(wordTexts, run, floor, maxPhraseLength)) {
+		addContestingLinesForPhrase(phrase, lineTexts, linePosition, waiting, contesting);
+	}
+	return contesting;
+}
+
+function waitingLinePositions(lineTexts: string[], linePosition: number): number[] {
+	const waiting: number[] = [];
+	for (let other = linePosition + 1; other < lineTexts.length; other++) {
+		if (lineTexts[other] !== lineTexts[linePosition]) waiting.push(other);
+	}
+	return waiting;
+}
+
+function* phrasesContainingRun(
+	wordTexts: string[],
+	run: Candidate,
+	floor: number,
+	maxPhraseLength: number
+): Iterable<string> {
 	let opening = '';
 	for (let first = run.from; first >= floor; first--) {
 		if (first < run.from) {
@@ -367,21 +410,34 @@ function contestingLines(
 			if (last > run.to) phrase = `${phrase} ${wordTexts[last]}`;
 			if (phrase.length > maxPhraseLength) break;
 			if (first === run.from && last === run.to) continue;
-			const ownReading = scoreAgainstLyrics(phrase, lineTexts[linePosition]);
-			for (const other of waiting) {
-				if (contesting.includes(other)) continue;
-				const lyricLength = lineTexts[other].length;
-				// ratio() cannot exceed this, so a line whose length alone rules
-				// out both MIN_RATIO and beating this line's own reading is
-				// skipped unscored. Exact, not a heuristic.
-				const reach = (2 * Math.min(phrase.length, lyricLength)) / (phrase.length + lyricLength);
-				if (reach < MIN_RATIO || reach <= ownReading) continue;
-				const reading = scoreAgainstLyrics(phrase, lineTexts[other]);
-				if (reading >= MIN_RATIO && reading > ownReading) contesting.push(other);
-			}
+			yield phrase;
 		}
 	}
-	return contesting;
+}
+
+function addContestingLinesForPhrase(
+	phrase: string,
+	lineTexts: string[],
+	linePosition: number,
+	waiting: number[],
+	contesting: number[]
+): void {
+	const ownReading = scoreAgainstLyrics(phrase, lineTexts[linePosition]);
+	for (const other of waiting) {
+		if (contesting.includes(other)) continue;
+		if (!canReadPhraseBetter(phrase, lineTexts[other], ownReading)) continue;
+		const reading = scoreAgainstLyrics(phrase, lineTexts[other]);
+		if (reading >= MIN_RATIO && reading > ownReading) contesting.push(other);
+	}
+}
+
+function canReadPhraseBetter(phrase: string, lyricText: string, ownReading: number): boolean {
+	// ratio() cannot exceed this, so a line whose length alone rules out both
+	// MIN_RATIO and beating this line's own reading is skipped unscored. Exact,
+	// not a heuristic.
+	const reach =
+		(2 * Math.min(phrase.length, lyricText.length)) / (phrase.length + lyricText.length);
+	return reach >= MIN_RATIO && reach > ownReading;
 }
 
 // Lines take their runs in playback order, and a run is only handed over when
