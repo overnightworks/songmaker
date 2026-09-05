@@ -275,16 +275,27 @@ def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     assert stored.slug == "twin-2"
 
 
-def test_update_lyrics_in_place_when_no_generations(db_session: Session):
+def test_update_lyrics_always_creates_a_new_version_and_preserves_existing_take(
+    db_session: Session,
+):
     owner_id, _, _, song_id, version_id = _seed(db_session)
+    db_session.add(Generation(
+        id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
+        mp3_path="p/g1.mp3",
+    ))
+    db_session.commit()
     owner = _owner(db_session, owner_id)
     result = tools.tool_update_song_lyrics(
         db_session, owner, song_id=song_id, lyrics="brand new lyric",
     )
     assert result.song.current_lyrics == "brand new lyric"
-    # No new version — updated in place (no generations existed).
-    assert len(result.song.versions) == 1
-    assert result.song.latest_version_id == version_id
+    assert len(result.song.versions) == 2
+    assert result.song.latest_version_id != version_id
+    assert result.message == "Updated lyrics in v2"
+    existing_take = db_session.query(Generation).filter_by(id="gen1").one()
+    assert existing_take.version_id == version_id
+    original_version = db_session.query(Version).filter_by(id=version_id).one()
+    assert original_version.lyrics == "verse one"
 
 
 def test_update_lyrics_creates_new_version_when_generated(db_session: Session):
@@ -343,7 +354,7 @@ def test_update_style_with_duration(db_session: Session):
 
 
 def test_rename_song(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_rename_song(
         db_session, owner, song_id=song_id, title="Renamed Track",
@@ -351,6 +362,9 @@ def test_rename_song(db_session: Session):
     assert result.song.title == "Renamed Track"
     stored = db_session.query(Song).filter_by(id=song_id).one()
     assert stored.slug == "renamed-track"
+    assert len(stored.versions) == 2
+    assert stored.latest_version.id != version_id
+    assert result.message == "Renamed song to 'Renamed Track' in v2"
 
 
 def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
