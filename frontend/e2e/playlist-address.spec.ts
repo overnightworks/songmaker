@@ -74,7 +74,7 @@ test('an unknown playlist slug states the address names nothing, without a redir
 	page,
 	isMobile
 }) => {
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent');
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
 
 	await page.goto('/playlist/no-such-playlist-here');
 
