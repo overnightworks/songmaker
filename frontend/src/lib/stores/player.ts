@@ -627,7 +627,7 @@ export function canPlayNextSong(
 	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
-	return pool.filter((s) => s.id !== current.songId && s.generation_count > 0).length > 0;
+	return pool.some((s) => s.id !== current.songId && s.generation_count > 0);
 }
 
 // Archived takes are not playable (their rows offer no play affordance), so

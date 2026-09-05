@@ -27,7 +27,7 @@ export function px(value: string, label = 'length'): number {
 		: value;
 	const parsed = Number.parseFloat(resolved);
 	if (!Number.isFinite(parsed)) {
-		throw new Error(`${label} is not a pixel length: ${value === '' ? '(empty)' : value}`);
+		throw new TypeError(`${label} is not a pixel length: ${value === '' ? '(empty)' : value}`);
 	}
 	return parsed;
 }

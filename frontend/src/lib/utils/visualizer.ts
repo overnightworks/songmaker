@@ -115,17 +115,29 @@ function drawBars(
 	}
 }
 
-function drawWaveform(
-	ctx: CanvasRenderingContext2D,
-	waveformData: Uint8Array<ArrayBuffer>,
-	w: number,
-	h: number,
-	cy: number,
-	colors: VizColors,
-	avgE: number,
-	midE: number,
-	phase: number
-): void {
+interface WaveformDrawArgs {
+	ctx: CanvasRenderingContext2D;
+	waveformData: Uint8Array<ArrayBuffer>;
+	w: number;
+	h: number;
+	cy: number;
+	colors: VizColors;
+	avgE: number;
+	midE: number;
+	phase: number;
+}
+
+function drawWaveform({
+	ctx,
+	waveformData,
+	w,
+	h,
+	cy,
+	colors,
+	avgE,
+	midE,
+	phase
+}: WaveformDrawArgs): void {
 	const waveLen = waveformData.length;
 
 	ctx.beginPath();
@@ -162,22 +174,40 @@ function drawWaveform(
 	ctx.stroke();
 }
 
-function drawRings(
-	ctx: CanvasRenderingContext2D,
-	smoothedFreq: Float32Array,
-	binCount: number,
-	w: number,
-	h: number,
-	cy: number,
-	colors: VizColors,
-	energy: EnergyBands,
-	phase: number
-): void {
+interface RingDrawArgs {
+	ctx: CanvasRenderingContext2D;
+	smoothedFreq: Float32Array;
+	binCount: number;
+	w: number;
+	h: number;
+	cy: number;
+	colors: VizColors;
+	energy: EnergyBands;
+	phase: number;
+}
+
+function ringEnergy(ringIndex: number, energy: EnergyBands): number {
+	if (ringIndex < 2) return energy.bass;
+	if (ringIndex < 4) return energy.mid;
+	return energy.high;
+}
+
+function drawRings({
+	ctx,
+	smoothedFreq,
+	binCount,
+	w,
+	h,
+	cy,
+	colors,
+	energy,
+	phase
+}: RingDrawArgs): void {
 	const ringCount = 6;
 	for (let r2 = 0; r2 < ringCount; r2++) {
 		const ringT = r2 / ringCount;
 		const baseRadius = 10 + r2 * (Math.min(w, h) * 0.1);
-		const e = r2 < 2 ? energy.bass : r2 < 4 ? energy.mid : energy.high;
+		const e = ringEnergy(r2, energy);
 		const points = 80;
 
 		ctx.beginPath();
@@ -315,8 +345,28 @@ export class AudioVisualizer {
 
 		ctx.globalAlpha = this._opacity;
 		drawBars(ctx, this.smoothedFreq, binCount, w, h, cy, colors);
-		drawWaveform(ctx, waveformData, w, h, cy, colors, energy.avg, energy.mid, this.phase);
-		drawRings(ctx, this.smoothedFreq, binCount, w, h, cy, colors, energy, this.phase);
+		drawWaveform({
+			ctx,
+			waveformData,
+			w,
+			h,
+			cy,
+			colors,
+			avgE: energy.avg,
+			midE: energy.mid,
+			phase: this.phase
+		});
+		drawRings({
+			ctx,
+			smoothedFreq: this.smoothedFreq,
+			binCount,
+			w,
+			h,
+			cy,
+			colors,
+			energy,
+			phase: this.phase
+		});
 
 		const bassHit = energy.bass > BASS_THRESHOLD;
 		if (bassHit && !this.prevBassHit) {

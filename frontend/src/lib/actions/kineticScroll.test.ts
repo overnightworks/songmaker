@@ -286,6 +286,37 @@ describe('kineticScroll', () => {
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[0]);
 	});
 
+	it('suppresses the drag click and the momentum-catching click separately', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		const onOpen = vi.fn();
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+
+		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
+		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1040 });
+		firePointer(container, 'pointerup', { pos: 150, axis: 'x', t: 1040 });
+		fireClick(items[0]);
+
+		firePointer(container, 'pointerdown', { pos: 150, axis: 'x', t: 1100 });
+		firePointer(container, 'pointermove', {
+			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			axis: 'x',
+			t: 1110
+		});
+		firePointer(container, 'pointerup', {
+			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			axis: 'x',
+			t: 1110
+		});
+
+		fireClick(items[0]);
+		fireClick(items[0]);
+		expect(onOpen).not.toHaveBeenCalled();
+
+		fireClick(items[0]);
+		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[0]);
+	});
+
 	it('accelerates on repeated wheel ticks instead of restarting the swing', () => {
 		stubBrowserTiming();
 		const { container: single } = buildStrip('x');

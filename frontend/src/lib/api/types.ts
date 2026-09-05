@@ -13,6 +13,8 @@ export interface PaginatedResponse<T> {
 	has_more: boolean;
 }
 
+export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
+
 export interface TrackScores {
 	text_accuracy?: number;
 	detected_language?: string;
@@ -354,7 +356,7 @@ export interface GenerationParams {
 	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
 	reference_audio_path?: string | null;
-	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
+	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
 	use_cot_caption?: boolean | null;
@@ -806,7 +808,7 @@ export interface RepaintTaskParams {
 	repainting_end: number;
 	lyrics: string;
 	prompt: string;
-	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
+	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	repaint_latent_crossfade_frames?: number | null;
 	repaint_wav_crossfade_sec?: number | null;
@@ -1132,7 +1134,7 @@ export interface VersionGenerationParams {
 	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
 	reference_audio_path?: string | null;
-	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
+	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
 	use_cot_caption?: boolean | null;
