@@ -87,14 +87,18 @@ _CODEX_TOOL_ISOLATION_CONFIGS: Final = (
     'approval_policy="never"',
     "mcp_servers={}",
     "features.shell_tool=false",
+    "features.unified_exec=false",
+    "features.browser_use=false",
+    "features.computer_use=false",
+    "features.multi_agent=false",
+    "features.image_generation=false",
+    "features.plugins=false",
+    "features.hooks=false",
     'web_search="disabled"',
     "features.code_mode_host=false",
     "features.code_mode=false",
     "features.code_mode_only=false",
 )
-_TOOL_TRANSPORT_BLOCKED_ITEM_TYPES: Final = frozenset({
-    "command_execution", "file_change", "mcp_tool_call", "web_search",
-})
 _CODEX_IMAGE_ISOLATION_ARGS: Final = (
     "--skip-git-repo-check",
     "--ignore-user-config",
@@ -277,17 +281,19 @@ async def stream_codex_cli_turn(
 class CodexCliToolTransport:
     """One private, resumable Codex CLI session for the shared tool loop.
 
-    Codex receives each round through a private prompt file whose contents are
-    forwarded on stdin because ``codex exec`` has no prompt-file option.  The
-    file, private home, and the persisted session are all scoped to this one
-    co-writer turn and removed by :meth:`aclose`.
+    Codex receives each round on stdin. Its private home and persisted session
+    are siblings of an empty private working directory and removed by
+    :meth:`aclose`.
     """
 
     def __init__(self, *, model: str) -> None:
         self._model = model
         self._turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-codex-tool-")
         os.chmod(self._turn_directory.name, 0o700)
-        self._codex_home = Path(self._turn_directory.name) / "codex-home"
+        turn_root = Path(self._turn_directory.name)
+        self._work_directory = turn_root / "work"
+        self._codex_home = turn_root / "codex-home"
+        self._work_directory.mkdir(mode=0o700)
         self._codex_home.mkdir(mode=0o700)
         try:
             _copy_codex_login_mirror(self._codex_home)
@@ -349,7 +355,7 @@ class CodexCliToolTransport:
             prompt=prompt,
             deadline=self._deadline,
             channel=channel,
-            cwd=self._turn_directory.name,
+            cwd=str(self._work_directory),
             codex_home=self._codex_home,
         ))
         parser = TextToolStreamParser()
@@ -378,7 +384,7 @@ class CodexCliToolTransport:
                     continue
                 if event_type in _ITEM_EVENT_TYPES:
                     item_type = _item_type(event)
-                    if item_type in _TOOL_TRANSPORT_BLOCKED_ITEM_TYPES:
+                    if item_type in _BLOCKED_ITEM_TYPES:
                         raise _CodexCliStreamFailure("codex_cli_tool_call_blocked")
                     if event_type == "item.completed" and item_type == "error":
                         error_message = _completed_error_item_message(event)
@@ -861,17 +867,12 @@ def _run_codex_tool_round(
     cwd: str,
     codex_home: Path,
 ) -> CliRunOutcome:
-    """Run one round from a private prompt file and reap its reservation."""
-    prompt_path: str | None = None
+    """Run one round from stdin and reap its reservation."""
     try:
-        descriptor, prompt_path = tempfile.mkstemp(prefix="prompt-", dir=cwd)
-        with os.fdopen(descriptor, "wb") as prompt_file:
-            prompt_file.write(prompt)
-        os.chmod(prompt_path, 0o600)
         return _run_reserved_codex_cli(
             reservation,
             command,
-            stdin_payload=Path(prompt_path).read_bytes(),
+            stdin_payload=prompt,
             read="all",
             deadline=deadline,
             output_read_limit_bytes=CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES,
@@ -894,12 +895,6 @@ def _run_codex_tool_round(
         )
         channel._close(outcome)
         return outcome
-    finally:
-        if prompt_path is not None:
-            try:
-                os.unlink(prompt_path)
-            except FileNotFoundError:
-                pass
 
 
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
@@ -935,7 +930,10 @@ def _thread_started_id(event: dict[str, object]) -> str:
     thread_id = event.get("thread_id")
     if not isinstance(thread_id, str) or not thread_id:
         raise _CodexCliStreamFailure("codex_cli_stream_protocol_error")
-    return thread_id
+    try:
+        return str(uuid.UUID(thread_id))
+    except ValueError as exc:
+        raise _CodexCliStreamFailure("codex_cli_stream_protocol_error") from exc
 
 
 def _log_codex_tool_round(

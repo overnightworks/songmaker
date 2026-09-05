@@ -179,11 +179,11 @@ def test_codex_cli_accepts_the_recorded_real_stream_and_returns_one_final(monkey
     ]
 
 
-def test_codex_tool_transport_starts_then_resumes_with_private_prompt_files(monkeypatch) -> None:
+def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(monkeypatch) -> None:
     calls: list = []
     prompts: list[bytes] = []
     scrubbed_calls = 0
-    thread_id = "fixture-codex-thread-527"
+    thread_id = "52700000-0000-4000-8000-000000000000"
     rounds = iter([
         [
             json.dumps({"type": "thread.started", "thread_id": thread_id}).encode() + b"\n",
@@ -199,8 +199,14 @@ def test_codex_tool_transport_starts_then_resumes_with_private_prompt_files(monk
 
     def run_cli_bounded(command, **kwargs):
         calls.append((command, kwargs))
-        prompt_file = next(Path(kwargs["cwd"]).glob("prompt-*"))
-        prompts.append(prompt_file.read_bytes())
+        work_directory = Path(kwargs["cwd"])
+        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
+        assert work_directory.name == "work"
+        assert work_directory.parent == codex_home.parent
+        assert work_directory != codex_home
+        assert work_directory.stat().st_mode & 0o777 == 0o700
+        assert list(work_directory.iterdir()) == []
+        prompts.append(kwargs["stdin_payload"])
         for line in next(rounds):
             assert kwargs["stdout_line_channel"]._send(line)
         outcome = _outcome()
@@ -238,13 +244,8 @@ def test_codex_tool_transport_starts_then_resumes_with_private_prompt_files(monk
         assert kwargs["deadline"] == first_kwargs["deadline"]
         assert kwargs["extra_env"]["CODEX_HOME"].endswith("/codex-home")
         assert kwargs["extra_env"]["PATH"] == "/test/bin"
-        for config in (
-            'approval_policy="never"',
-            "mcp_servers={}",
-            "features.shell_tool=false",
-            'web_search="disabled"',
-            'sandbox_mode="read-only"',
-        ):
+        for config in (*codex_cli_adapter._CODEX_TOOL_ISOLATION_CONFIGS,
+                       'sandbox_mode="read-only"'):
             assert config in command
     assert prompts == [
         b"system\n\nUser: hello",
@@ -255,10 +256,19 @@ def test_codex_tool_transport_starts_then_resumes_with_private_prompt_files(monk
     assert scrubbed_calls == 2
 
 
+@pytest.mark.parametrize(
+    "thread_id",
+    ("fixture-codex-thread-527", "--dangerously-bypass-approvals-and-sandbox"),
+)
+def test_codex_tool_transport_rejects_non_uuid_thread_ids(thread_id: str) -> None:
+    with pytest.raises(codex_cli_adapter._CodexCliStreamFailure):
+        codex_cli_adapter._thread_started_id({"thread_id": thread_id})
+
+
 def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monkeypatch) -> None:
     calls: list = []
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
-        b'{"type":"thread.started","thread_id":"fixture-codex-thread-527"}\n',
+        b'{"type":"thread.started","thread_id":"52700000-0000-4000-8000-000000000000"}\n',
         b'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n',
         b'{"type":"turn.completed","usage":{}}\n',
     ], _outcome(), calls))
@@ -279,9 +289,7 @@ def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monk
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("item_type", (
-    "file_change", "command_execution", "mcp_tool_call", "web_search",
-))
+@pytest.mark.parametrize("item_type", sorted(codex_cli_adapter._BLOCKED_ITEM_TYPES))
 def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
     monkeypatch,
     item_type,
@@ -341,7 +349,7 @@ def test_codex_tool_transport_cleans_its_home_and_does_not_log_protocol_text(
         (home / "sessions").mkdir()
         (home / "sessions" / "private.jsonl").write_text(protocol)
         for line in (
-            b'{"type":"thread.started","thread_id":"fixture-codex-thread-527"}\n',
+            b'{"type":"thread.started","thread_id":"52700000-0000-4000-8000-000000000000"}\n',
             json.dumps({"type": "item.completed", "item": {
                 "type": "agent_message", "text": protocol,
             }}).encode() + b"\n",
