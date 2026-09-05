@@ -396,40 +396,11 @@ def update_song(
     else:
         new_gen_params = generation_params or None
 
-    if lyrics is not None:
-        new_lyrics = lyrics
-    elif prev:
-        new_lyrics = prev.lyrics
-    else:
-        new_lyrics = ""
-
-    if prompt is not None:
-        new_prompt = prompt
-    elif prev:
-        new_prompt = prev.prompt
-    else:
-        new_prompt = ""
-
-    if bpm is not None:
-        new_bpm = bpm
-    elif prev:
-        new_bpm = prev.bpm
-    else:
-        new_bpm = 0
-
-    if audio_duration is not None:
-        new_audio_duration = audio_duration
-    elif prev:
-        new_audio_duration = prev.audio_duration
-    else:
-        new_audio_duration = 180
-
-    if key_scale is not None:
-        new_key_scale = key_scale
-    elif prev:
-        new_key_scale = prev.key_scale
-    else:
-        new_key_scale = ""
+    new_lyrics = _version_value(lyrics, prev, "lyrics", "")
+    new_prompt = _version_value(prompt, prev, "prompt", "")
+    new_bpm = _version_value(bpm, prev, "bpm", 0)
+    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", 180)
+    new_key_scale = _version_value(key_scale, prev, "key_scale", "")
 
     creative_changed = prev is None or (
         new_lyrics != prev.lyrics
@@ -465,6 +436,14 @@ def update_song(
     session.flush()
     log.info("Updated song %s → v%d", song_id, next_num)
     return version
+
+
+def _version_value(value, previous: Version | None, field: str, default):
+    if value is not None:
+        return value
+    if previous is not None:
+        return getattr(previous, field)
+    return default
 
 
 def delete_song(session: Session, song_id: str) -> list[str]:

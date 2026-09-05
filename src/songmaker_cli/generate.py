@@ -112,21 +112,11 @@ def _splice_repaint_raw(
     left = source.left[:n].copy()
     right = source.right[:n].copy()
 
-    region_len = end - start
     has_fade_in = start > 0
     has_fade_out = end < n
-    if has_fade_in and has_fade_out:
-        fade_in_len = min(fade_len, region_len // 2)
-        fade_out_len = min(fade_len, region_len - fade_in_len)
-    elif has_fade_in:
-        fade_in_len = min(fade_len, region_len)
-        fade_out_len = 0
-    elif has_fade_out:
-        fade_in_len = 0
-        fade_out_len = min(fade_len, region_len)
-    else:
-        fade_in_len = 0
-        fade_out_len = 0
+    fade_in_len, fade_out_len = _repaint_fade_lengths(
+        end - start, fade_len, has_fade_in, has_fade_out,
+    )
 
     if has_fade_in and fade_in_len > 0:
         ramp = np.linspace(0.0, 1.0, fade_in_len)
@@ -160,4 +150,19 @@ def _splice_repaint_raw(
     )
     return DecodedAudio(left=left, right=right, sample_rate=sr, duration=n / sr)
 
+
+def _repaint_fade_lengths(
+    region_length: int,
+    fade_length: int,
+    has_fade_in: bool,
+    has_fade_out: bool,
+) -> tuple[int, int]:
+    if has_fade_in and has_fade_out:
+        fade_in = min(fade_length, region_length // 2)
+        return fade_in, min(fade_length, region_length - fade_in)
+    if has_fade_in:
+        return min(fade_length, region_length), 0
+    if has_fade_out:
+        return 0, min(fade_length, region_length)
+    return 0, 0
 
