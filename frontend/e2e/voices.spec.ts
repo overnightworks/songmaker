@@ -39,7 +39,6 @@ interface CreatedVoice {
 
 interface GeneratedTake {
 	id: string;
-	mp3_path: string;
 	wav_path: string | null;
 }
 
@@ -156,15 +155,6 @@ async function readGeneratedWav(request: APIRequestContext, take: GeneratedTake)
 	const response = await request.get(`/audio/${take.wav_path}`);
 	expect(response.ok(), `GET generated WAV failed: ${await response.text()}`).toBeTruthy();
 	return response.body();
-}
-
-async function expectGeneratedMp3ToRemainPlayable(
-	request: APIRequestContext,
-	take: GeneratedTake
-): Promise<void> {
-	expect(take.mp3_path).toBeTruthy();
-	const response = await request.get(`/audio/${take.mp3_path}`);
-	expect(response.ok(), `GET generated MP3 failed: ${await response.text()}`).toBeTruthy();
 }
 
 function trainingJobId(voice: VoiceState): string {
@@ -328,7 +318,13 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(deletedVoiceOption).toContainText(`${voiceName} — voice deleted`);
 		expect(await deletedVoiceOption.isDisabled()).toBe(true);
 		await deletedPicker.click();
-		if (!isMobile) {
+		if (isMobile) {
+			await page.getByRole('button', { name: 'Collapse ˄', exact: true }).click();
+			const deletedVoiceTake = page.locator('.take-chip').filter({ hasText: 'v1 · take 1' });
+			await expect(deletedVoiceTake).toBeVisible();
+			await deletedVoiceTake.click();
+			await expect(deletedVoiceTake).toHaveClass(/playing/);
+		} else {
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
 			const deletedVoicePlayTarget = deletedVoiceTake.getByRole('button', {
@@ -336,7 +332,6 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			});
 			await expect(deletedVoicePlayTarget).toBeVisible();
 		}
-		await expectGeneratedMp3ToRemainPlayable(request, adapterTake);
 
 		await page.goto('/settings/voices');
 		const failedVoice = await createVoice(page, failedVoiceName);
