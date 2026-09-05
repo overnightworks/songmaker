@@ -93,6 +93,10 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 
+PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
+PRESET_NOT_FOUND_DETAIL = "Preset not found"
+USER_NOT_FOUND_DETAIL = "User not found"
+
 
 @router.get("/settings/generation-builtins")
 def api_get_builtins(
@@ -134,7 +138,7 @@ def api_list_presets(
     "/settings/presets",
     responses={
         400: {"description": "Requested model is not available"},
-        409: {"description": "A preset with that name already exists"},
+        409: {"description": PRESET_NAME_EXISTS_DETAIL},
     },
 )
 def api_create_preset(
@@ -146,7 +150,7 @@ def api_create_preset(
     if req.model_mode not in active_ids:
         raise HTTPException(400, f"Model '{req.model_mode}' is not available")
     if name_exists(session, user.id, req.model_mode, req.name):
-        raise HTTPException(409, "A preset with that name already exists")
+        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
     preset = create_preset(
         session,
         name=req.name,
@@ -159,7 +163,7 @@ def api_create_preset(
     try:
         session.commit()
     except IntegrityError:
-        raise HTTPException(409, "A preset with that name already exists")
+        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
     return PresetResponse.from_orm(preset)
 
 
@@ -167,7 +171,7 @@ def api_create_preset(
     "/settings/presets/{preset_id}",
     responses={
         404: {"description": "Preset does not exist"},
-        409: {"description": "A preset with that name already exists"},
+        409: {"description": PRESET_NAME_EXISTS_DETAIL},
     },
 )
 def api_update_preset(
@@ -178,16 +182,16 @@ def api_update_preset(
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:
-        raise HTTPException(404, "Preset not found")
+        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
     if req.name is not None and req.name != preset.name:
         if name_exists(session, user.id, preset.model_mode, req.name):
-            raise HTTPException(409, "A preset with that name already exists")
+            raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
     params_dict = gen_params_to_json(req.params) if req.params is not None else None
     update_preset(session, preset, name=req.name, params=params_dict, is_default=req.is_default)
     try:
         session.commit()
     except IntegrityError:
-        raise HTTPException(409, "A preset with that name already exists")
+        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
     return PresetResponse.from_orm(preset)
 
 
@@ -201,7 +205,7 @@ def api_delete_preset(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     if not delete_preset(session, preset_id, user.id):
-        raise HTTPException(404, "Preset not found")
+        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PRESET, preset_id)
     session.commit()
     return StatusResponse()
@@ -218,7 +222,7 @@ def api_set_default_preset(
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:
-        raise HTTPException(404, "Preset not found")
+        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
     set_default_preset(session, preset)
     session.commit()
     return PresetResponse.from_orm(preset)
@@ -331,7 +335,7 @@ def api_set_default_config(
                 )
     db_user = session.query(User).filter_by(id=user.id).first()
     if not db_user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
     db_user.default_generation_config = req.config
     record_audit(
         session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
@@ -932,7 +936,7 @@ def api_get_user_rate_limits(
     session: Session = Depends(get_db_session),
 ) -> UserRateLimitsResponse:
     if not get_user(session, user_id):
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
     env_defaults = _get_env_defaults()
     overrides = get_user_rate_limits(session, user_id)
     override_items = [RateLimitItem.from_orm(o, is_override=True) for o in overrides]
@@ -964,7 +968,7 @@ def api_update_user_rate_limits(
     from songmaker_cli.constants import RATE_LIMIT_SETTING_KEYS
 
     if not get_user(session, user_id):
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
     invalid = set(req.settings.keys()) - RATE_LIMIT_SETTING_KEYS
     if invalid:
         raise HTTPException(400, f"Unknown setting keys: {sorted(invalid)}")
@@ -987,7 +991,7 @@ def api_delete_user_rate_limits(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     if not get_user(session, user_id):
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
     delete_all_user_rate_limits(session, user_id)
     record_audit(session, admin.id, AuditAction.DELETE, ResourceType.RATE_LIMITS, user_id)
     session.commit()
