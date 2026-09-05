@@ -2734,7 +2734,10 @@ describe('stream transport direction', () => {
 			return true;
 		});
 		vi.spyOn(audioPlayer, 'prevStreamTrack').mockImplementation(() => {
-			audioPlayer.current = makePlayback(makeGen({ id: 'g-previous' }), makeSong({ id: 'previous' }));
+			audioPlayer.current = makePlayback(
+				makeGen({ id: 'g-previous' }),
+				makeSong({ id: 'previous' })
+			);
 			return true;
 		});
 
@@ -2833,7 +2836,9 @@ describe('playTake', () => {
 
 		await playTake(makeGen(), makeSong());
 
-		expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message: 'Playback failed' })]);
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ type: 'error', message: 'Playback failed' })
+		]);
 	});
 });
 
