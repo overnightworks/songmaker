@@ -1,15 +1,10 @@
 <script lang="ts">
 	import { titleInitials } from '$lib/utils/format';
 
-	// The cover/fill/initials fallback chain, and the title/subtitle text
-	// block, are identical between the full wall grid (LibraryWall.svelte)
-	// and the compressed row (LibraryRow.svelte) -- only the outer button,
-	// its size, selection marking, and any play affordance stay owned by
-	// each caller. Sizing that genuinely differs between the two (initials
-	// glyph size, meta padding, title/subtitle type scale) is exposed as CSS
-	// custom properties so a caller's own stylesheet can override it on the
-	// element it mounts this into, without either caller re-declaring the
-	// fallback markup itself.
+	// The wall owns its outer tile button, selection marking and play
+	// affordance. This component owns only the shared cover/fill/initials
+	// fallback and title/subtitle block; callers supply sizing through CSS
+	// custom properties rather than a component mode.
 	interface Props {
 		title: string;
 		subtitle: string;
