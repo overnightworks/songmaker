@@ -199,60 +199,12 @@ export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
 	grok_cli: 'Grok CLI login',
 	codex_cli: 'Codex CLI login'
 };
-export const PROVIDER_CONFIGURED_LABEL = 'configured';
-export const PROVIDER_NOT_CONFIGURED_LABEL = 'not configured';
-export const PROVIDER_LOGIN_ONLY_LABEL = 'login only';
-export const PROVIDER_KEY_ONLY_LABEL = 'key only';
-export const PROVIDER_MISSING_DEPENDENCY_LABEL = 'missing dependency';
-export const PROVIDER_UNVERIFIED_LABEL = 'Unchecked';
 export const PROVIDER_UNVERIFIED_DETAIL = 'Provider check is still running in the background';
-export const PROVIDER_STATUS_DESCRIPTION =
-	"Each provider's real reachability — whether it can answer you, by what means, and what is still missing when it cannot.";
-export const PROVIDER_STATUS_REFRESHING_MESSAGE = 'Refreshing provider status...';
-export const PROVIDER_STATUS_EMPTY_MESSAGE = 'No provider status is available.';
 export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
 export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
 export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
-export const COWRITER_MODEL_CURRENT_NOT_IN_CATALOG = 'current, not in catalog';
-export const COWRITER_SAVE_NOTHING_CHANGED = 'Nothing changed.';
-export const COWRITER_SAVE_SAVED = 'Saved.';
-export const COWRITER_SAVE_CHANGED = 'Changed, not saved yet.';
-export const COWRITER_SAVE_MODEL_REQUIRED = 'Choose a model before saving.';
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
 export const PROVIDER_ROUTE_API_LABEL = 'API';
-export const PROVIDER_ROUTE_READY_LABEL = 'ready';
-export const PROVIDER_ROUTE_NOT_SET_UP_LABEL = 'not set up';
-export const PROVIDER_ROUTE_BROKEN_LABEL = 'broken';
-export const PROVIDER_ROUTE_KEY_SET_LABEL = 'key: set';
-export const PROVIDER_ROUTE_KEY_NOT_SET_LABEL = 'key: not set';
-export const PROVIDER_ROUTE_MODELS_LABEL = 'Provider routes';
-export const PROVIDER_ROUTE_MODEL_LABEL = 'model';
-export const PROVIDER_ROUTE_NO_MODELS_LABEL = 'No models available';
-export const PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL = 'status unavailable';
-export const PROVIDER_ROUTE_ACTIVE_LABEL = 'Active route';
-export const PROVIDER_ROUTE_STILL_ACTIVE_LABEL = 'Still active route';
-export const PROVIDER_ROUTE_UNAVAILABLE_LABEL = 'Provider unavailable';
-export const PROVIDER_ROUTE_UNAVAILABLE_DETAIL =
-	'No ready route is configured. A new turn cannot start.';
-export const PROVIDER_ROUTE_CONFIGURATION_REQUIRED =
-	'Select CLI or API for every provider before saving.';
-export const PROVIDER_ROUTE_TURN_BLOCKED_LABEL = 'Turn blocked';
-export const PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP = 'Choose a ready route to continue.';
-
-export function providerRouteModelLabel(route: 'cli' | 'api' | undefined): string {
-	if (!route) return 'Model';
-	const routeLabel = route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL;
-	return `${routeLabel} ${PROVIDER_ROUTE_MODEL_LABEL}`;
-}
-
-export function providerRouteBlockedDetail(
-	provider: string,
-	route: 'cli' | 'api',
-	state: string,
-	reason: string
-): string {
-	return `${provider} ${route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL} · ${state} — ${reason} ${PROVIDER_ROUTE_TURN_BLOCKED_NEXT_STEP}`;
-}
 
 export function providerMissingDependencyDetail(dependency: string | null | undefined): string {
 	return `Missing ${dependency ?? 'required dependency'}`;
