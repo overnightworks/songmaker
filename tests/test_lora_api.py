@@ -307,7 +307,7 @@ def test_cross_user_access_is_404(tmp_path: Path) -> None:
         lora_id = lora_a.id
 
     app_b = FastAPI()
-    app_b.state.ctx = ctx
+    install_app_context(app_b, ctx)
     from songmaker_cli.api import router
     app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
     app_b.include_router(router)
@@ -820,7 +820,7 @@ def test_add_sample_cross_user_404(tmp_path: Path) -> None:
 
     from songmaker_cli.api import router
     app_b = FastAPI()
-    app_b.state.ctx = ctx
+    install_app_context(app_b, ctx)
     app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
     app_b.include_router(router)
     client_b = TestClient(app_b)
@@ -981,7 +981,7 @@ def test_patch_sample_cross_user_404(tmp_path: Path) -> None:
 
     from songmaker_cli.api import router
     app_b = FastAPI()
-    app_b.state.ctx = ctx
+    install_app_context(app_b, ctx)
     app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
     app_b.include_router(router)
     client_b = TestClient(app_b)
@@ -1089,7 +1089,7 @@ def test_delete_sample_cross_user_404(tmp_path: Path) -> None:
 
     from songmaker_cli.api import router
     app_b = FastAPI()
-    app_b.state.ctx = ctx
+    install_app_context(app_b, ctx)
     app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
     app_b.include_router(router)
     client_b = TestClient(app_b)
