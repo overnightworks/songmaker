@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from webauth.proxies import resolve_client_ip
+
 log = logging.getLogger(__name__)
 
 
@@ -17,7 +19,6 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
 
         structlog.contextvars.clear_contextvars()
 
-        from songmaker_cli.auth import resolve_client_ip
         ip = resolve_client_ip(request)
 
         structlog.contextvars.bind_contextvars(

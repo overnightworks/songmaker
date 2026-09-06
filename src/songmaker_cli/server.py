@@ -24,7 +24,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.agent_runtime import configure_agent_providers
-from songmaker_cli.app_context import AppContext
+from songmaker_cli.app_context import (
+    AppContext,
+    build_web_auth_config,
+    parse_trusted_proxies,
+)
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -208,10 +212,14 @@ def create_app(
         ctx = _create_default_context(audio_dir, data_dir)
 
     app.state.ctx = ctx
-    from songmaker_cli.redis_client import RedisHttpMetrics, SessionCache
+    from songmaker_cli.redis_client import RedisHttpMetrics
+    from webauth.config import install_web_auth_config
+    from webauth.session_store import SessionCache
 
+    web_auth = build_web_auth_config(ctx, get_settings())
+    install_web_auth_config(app, web_auth)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
-    app.state.session_cache = SessionCache(ctx.redis)
+    app.state.session_cache = SessionCache(ctx.redis, web_auth.session_key_prefixes)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
@@ -358,7 +366,6 @@ def create_app(
 
 
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
-    from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
     from songmaker_cli.constants import REDIS_STARTUP_ERROR
     from songmaker_cli.db.engine import init_db
     from songmaker_cli.redis_client import create_redis, redis_health
@@ -374,9 +381,9 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         db=init_db(settings.database_url),
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=ensure_session_secret(data_dir).encode(),
+        session_secret=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
-        trusted_proxies=parse_trusted_proxies(),
+        trusted_proxies=parse_trusted_proxies(settings),
         allowed_hosts_exact=hosts_exact,
         allowed_hosts_patterns=hosts_patterns,
     )

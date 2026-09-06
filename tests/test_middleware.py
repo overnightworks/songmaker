@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_fake_redis
+from conftest import install_app_context, make_fake_redis
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -31,7 +31,8 @@ def _db(tmp_path: Path):
 
 def _build_auth_app(_db, redis=None):
     from songmaker_cli.app_context import AppContext, get_db_session
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.config import installed_web_auth_config
+    from webauth.session_store import SessionCache
 
     if redis is None:
         redis = make_fake_redis()
@@ -40,8 +41,10 @@ def _build_auth_app(_db, redis=None):
         session_secret=_TEST_SECRET, redis=redis,
     )
     app = FastAPI()
-    app.state.ctx = ctx
-    app.state.session_cache = SessionCache(redis)
+    install_app_context(app, ctx)
+    app.state.session_cache = SessionCache(
+        redis, installed_web_auth_config(app).session_key_prefixes,
+    )
 
     @app.get("/protected")
     def protected(
@@ -260,7 +263,7 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
 def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id) -> None:
     from unittest.mock import patch
 
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     sid = create_session_id()
     session_cache: SessionCache = auth_app.app.state.session_cache
@@ -277,7 +280,7 @@ def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id)
 def test_redis_miss_falls_back_to_db_and_populates_cache(
     auth_app: TestClient, create_session_id,
 ) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     sid = create_session_id()
     session_cache: SessionCache = auth_app.app.state.session_cache

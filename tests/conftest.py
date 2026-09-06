@@ -288,6 +288,23 @@ def make_fake_redis():
     return fakeredis.FakeRedis(decode_responses=True)
 
 
+def install_app_context(app, ctx) -> None:
+    """Give a bare test app what ``create_app`` installs on the real one.
+
+    An app that serves any auth-protected or rate-limited route needs both the
+    context and the ``WebAuthConfig`` built from it, or it fails loudly on the
+    first request. The settings are read uncached, so a test that shapes its
+    environment after building its app still gets its own values back from
+    ``get_settings()``.
+    """
+    from songmaker_cli.app_context import build_web_auth_config
+    from songmaker_cli.settings import Settings
+    from webauth.config import install_web_auth_config
+
+    app.state.ctx = ctx
+    install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
+
+
 def apply_csrf_header(client) -> None:
     """Extract the csrf_token cookie and set it as a default X-CSRF-Token header.
 

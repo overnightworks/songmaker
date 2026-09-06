@@ -21,12 +21,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PWA_ICON_PATHS, RESOURCE_EVENT_STREAM_PATH
 from songmaker_cli.settings import get_settings
+from webauth.config import web_auth_config
+from webauth.proxies import resolve_client_ip
 
 if TYPE_CHECKING:
     from songmaker_cli.redis_client import RedisRateLimiter
+    from webauth.config import WebAuthConfig
 
 log = logging.getLogger(__name__)
 
@@ -123,23 +125,19 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         self._limiters: dict[RateLimitClass, RedisRateLimiter] = {}
 
     def _get_limiter(
-        self, ctx: AppContext, rate_limit_class: RateLimitClass,
+        self, config: WebAuthConfig, rate_limit_class: RateLimitClass,
     ) -> RedisRateLimiter:
         limiter = self._limiters.get(rate_limit_class)
         if limiter is None:
-            from songmaker_cli.constants import (
-                REDIS_RL_IP_MEDIA_PREFIX,
-                REDIS_RL_IP_PREFIX,
-                REDIS_RL_IP_STREAM_PREFIX,
-            )
             from songmaker_cli.redis_client import RedisRateLimiter
             settings = get_settings()
+            prefixes = config.rate_limit_key_prefixes
             prefix, budget = {
-                RateLimitClass.API: (REDIS_RL_IP_PREFIX, settings.ip_rate_limit),
-                RateLimitClass.MEDIA: (REDIS_RL_IP_MEDIA_PREFIX, settings.media_rate_limit),
-                RateLimitClass.STREAM: (REDIS_RL_IP_STREAM_PREFIX, settings.stream_rate_limit),
+                RateLimitClass.API: (prefixes.api, settings.ip_rate_limit),
+                RateLimitClass.MEDIA: (prefixes.media, settings.media_rate_limit),
+                RateLimitClass.STREAM: (prefixes.stream, settings.stream_rate_limit),
             }[rate_limit_class]
-            limiter = RedisRateLimiter(ctx.redis, prefix, budget, IP_RATE_WINDOW)
+            limiter = RedisRateLimiter(config.redis, prefix, budget, IP_RATE_WINDOW)
             self._limiters[rate_limit_class] = limiter
         return limiter
 
@@ -147,12 +145,12 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path.startswith(STATIC_ASSET_PREFIX) or path in RATE_LIMIT_EXEMPT_PATHS:
             return await call_next(request)
-        from songmaker_cli.auth import resolve_client_ip
-        ctx: AppContext = request.app.state.ctx
         ip = resolve_client_ip(request)
         rate_limit_class = _classify_path(path)
         try:
-            allowed = self._get_limiter(ctx, rate_limit_class).is_allowed(ip)
+            allowed = self._get_limiter(
+                web_auth_config(request), rate_limit_class,
+            ).is_allowed(ip)
         except Exception:
             log.warning("IP rate limiter unavailable -- rejecting request")
             return JSONResponse(

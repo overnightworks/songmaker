@@ -11,19 +11,18 @@ import structlog
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from songmaker_cli.app_context import AppContext, get_db_session
-from songmaker_cli.auth import (
-    ROLE_ADMIN,
-    resolve_client_ip,
-    verify_session_cookie,
-)
+from songmaker_cli.app_context import get_db_session
+from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import HTTP_MAX_USER_AGENT_LENGTH, AuditAction, ResourceType
 from songmaker_cli.db.queries import get_session_with_user, record_audit
-from songmaker_cli.settings import get_settings
+from webauth.config import WebAuthConfig, web_auth_config
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, verify_session_cookie
+from webauth.proxies import resolve_client_ip
+from webauth.session_store import SessionCache
 
 log = logging.getLogger(__name__)
 
-SESSION_COOKIE = "session_id"
+SESSION_COOKIE = DEFAULT_SESSION_COOKIE_NAME
 
 SESSION_EXPIRED_DETAIL: Final = "Session expired"
 
@@ -63,10 +62,8 @@ def _check_ip_ua_changes(
 
 
 def _try_redis_auth(
-    request: Request, db: Session, session_id: str,
+    request: Request, db: Session, session_id: str, config: WebAuthConfig,
 ) -> AuthenticatedUser | None:
-    from songmaker_cli.redis_client import SessionCache
-
     session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if session_cache is None:
         return None
@@ -85,8 +82,7 @@ def _try_redis_auth(
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
 
-    settings = get_settings()
-    if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
+    if (now - created_at).total_seconds() > config.session_absolute_max_age_seconds:
         raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     if not cached.is_active:
@@ -102,7 +98,7 @@ def _try_redis_auth(
     )
 
     try:
-        session_cache.refresh_ttl(session_id, settings.session_max_age_seconds)
+        session_cache.refresh_ttl(session_id, config.session_max_age_seconds)
         if ip_changed or ua_changed:
             session_cache.update_ip_ua(session_id, current_ip, current_ua)
     except Exception:
@@ -121,19 +117,19 @@ def _try_redis_auth(
 def get_current_user(
     request: Request, db: Session = Depends(get_db_session),
 ) -> AuthenticatedUser:
-    ctx: AppContext = request.app.state.ctx
+    config = web_auth_config(request)
 
-    raw_cookie = request.cookies.get(SESSION_COOKIE)
+    raw_cookie = request.cookies.get(config.session_cookie_name)
     if not raw_cookie or len(raw_cookie) > 200:
         raise HTTPException(401, "Authentication required")
 
-    session_id = verify_session_cookie(raw_cookie, ctx.session_secret)
+    session_id = verify_session_cookie(raw_cookie, config.signing_key)
     if session_id is None:
         raise HTTPException(401, "Invalid session")
 
     request.state.session_id = session_id
 
-    redis_result = _try_redis_auth(request, db, session_id)
+    redis_result = _try_redis_auth(request, db, session_id, config)
     if redis_result is not None:
         return redis_result
 
@@ -144,9 +140,8 @@ def get_current_user(
     if not user_session or expires_at < now:
         raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
-    settings = get_settings()
     created_at = user_session.created_at.replace(tzinfo=timezone.utc)
-    if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
+    if (now - created_at).total_seconds() > config.session_absolute_max_age_seconds:
         raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     if not user_session.user.is_active:
@@ -163,10 +158,9 @@ def get_current_user(
     user_session.ip_address = current_ip
     user_session.user_agent = current_ua
 
-    user_session.expires_at = now + timedelta(seconds=settings.session_max_age_seconds)
+    user_session.expires_at = now + timedelta(seconds=config.session_max_age_seconds)
 
     try:
-        from songmaker_cli.redis_client import SessionCache
         session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
         if session_cache:
             session_cache.store(
@@ -174,7 +168,7 @@ def get_current_user(
                 user_session.user.role, user_session.user.is_active,
                 current_ip, current_ua,
                 user_session.expires_at, user_session.created_at,
-                settings.session_max_age_seconds,
+                config.session_max_age_seconds,
             )
     except Exception:
         log.warning("Redis session cache populate failed")
