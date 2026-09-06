@@ -63,7 +63,7 @@ while issue #31 remains open. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
