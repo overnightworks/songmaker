@@ -587,14 +587,22 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 `db/queries/settings.py` owns the complete instance-wide Co-Writer route map
 and the independent Cover and Judge selections. Each task captures its provider,
 model, and explicit `cli` or `api` route before work begins. `cowriter/dispatch.py`
-owns the resulting adapter decision: Co-Writer executes that route, Judge uses
-its selected API adapter, and Cover asks the same owner whether that route has
-an image tool. A selected route never falls back to its sibling. `cowriter/catalog.py`
-refreshes both routes per provider independently; the Codex CLI route reads its
-model catalogue from the mounted CLI's `codex debug models` JSON output. The
-settings responses project the selected route for legacy callers while also
-returning route-keyed readiness and catalogue snapshots. The Judge
-remains API-only. Claude's API route plus Grok's and Codex's CLI routes own the
+owns the resulting adapter decision for all three: Co-Writer executes its
+selected route, the Judge calls its selected API adapter through
+`call_provider_once`, and Cover asks `cover_image_capability(provider, route)`,
+the one answer to whether a route carries an image tool and what blocks it
+today. Nothing else answers that: the cover job resolves its saved row through
+it, `/api/settings/providers` projects it per route as `cover_routes`, and no
+endpoint preflights the mounted CLI on its own. A selected route never falls
+back to its sibling, so a Cover selection without an image tool ends its job
+named (`<Provider> · no image tool`) instead of quietly running Codex.
+`cowriter/catalog.py` refreshes both routes per provider independently; the
+Codex CLI route reads its model catalogue from the mounted CLI's
+`codex debug models` JSON output. The settings responses project the selected
+route for legacy callers while also returning route-keyed readiness and
+catalogue snapshots. The Judge remains API-only.
+
+Claude's API route plus Grok's and Codex's CLI routes own the
 same shared co-writer tool loop; the CLI routes carry calls and results in the
 strict text protocol while their built-in tools remain unavailable. Codex starts
 one private thread and resumes it for each result round, with the read-only
