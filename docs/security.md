@@ -458,16 +458,18 @@ adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
 Bubblewrap 0.12.0's private-root setup operations: recursive-slave propagation,
 construction and sandbox tmpfs mounts, root binds and remounts, both
 `pivot_root` calls, the retained-proc bind from `/oldroot/proc/` to `/proc/`,
-fresh `proc`, writable-proc covers, and minimal `dev`/`devpts`. The retained
-proc bind is the first mount denied in the kernel audit for the observed Codex
-form. The allowlist also names only the three traced protected-home overlays
-(`.git`, `.agents`, and `.codex`) below the cover, Co-Writer, and post-rollout
-probe home prefixes: Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`,
-after preparing each target with `--perms 555`, and then read-only remounts it.
-It accepts Bubblewrap's optional `silent` flag only where its mount syscall
-uses it and preserves the observed inherited mount flags during remounts. Compose applies
-the profile only to `songmaker-web`, drops every container capability, and
-sets `no-new-privileges:true`.
+fresh `proc`, writable-proc covers, and minimal `dev`/`devpts`. Codex's
+per-run startup probe gets its own `tmpfs` at `/newroot/`, then read-only binds
+only `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, and `/usr`; its `dev` and `proc`
+mounts use the same minimal rules as the cover command. The allowlist also
+names only the three traced protected-home overlays (`.git`, `.agents`, and
+`.codex`) below the cover, Co-Writer, and post-rollout probe home prefixes:
+Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`, after preparing each
+target with `--perms 555`, and then read-only remounts it. It accepts
+Bubblewrap's optional `silent` flag only where its mount syscall uses it and
+preserves the observed inherited mount flags during remounts. Compose applies
+the profile only to `songmaker-web`, drops every container capability, and sets
+`no-new-privileges:true`.
 
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
@@ -482,7 +484,7 @@ namespace with the capabilities it needs inside that namespace.
 Unprivileged user namespaces enlarge the kernel attack surface; this is the
 deliberate #666 trade-off because the alternative is Option 2.
 
-`lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin two different
+`lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin three different
 Codex Bubblewrap forms because they answer different questions:
 
 - The **boot check** is Codex's startup capability probe, not a cover-command
@@ -490,6 +492,18 @@ Codex Bubblewrap forms because they answer different questions:
   / / /bin/true`. Source: the Codex 0.147.0 Linux binary's embedded string,
   confirmed by the boot check's direct `subprocess.run` assertion. It asks only
   whether Bubblewrap can create the namespace and read-only root at all.
+- Codex then runs this **per-run startup probe** before its sandbox command.
+  `strace -f -e trace=execve -s 400 codex sandbox -- /bin/true` on 06.09.2026
+  (Codex 0.147.0) recorded its literal argv:
+
+  ```text
+  bwrap --new-session --die-with-parent --tmpfs / --dev /dev --ro-bind /bin /bin --ro-bind /etc /etc --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /sbin /sbin --ro-bind /usr /usr --unshare-user --unshare-pid --unshare-net --proc /proc -- /usr/bin/true
+  ```
+
+  The startup probe is an empty private root, not the read-only-root form from
+  the boot check. The post-rollout proof runs this exact form before its G4
+  command and its test pins every argument, so an AppArmor rule cannot be kept
+  without the observed command that needs it.
 - The **post-rollout proof** uses the real read-only command form, with its
   terminal command replaced by G4 assertions. Source: `strace -f -e
   trace=execve -s 400` of `codex sandbox --sandbox-state-json … -- /bin/true`
@@ -512,12 +526,13 @@ Codex Bubblewrap forms because they answer different questions:
   gains no environment-setting argument. Its `docker-default` control runs the
   same prepared form and must fail.
 
-The AppArmor audit of that traced form currently reaches the known first
-denial, `bwrap: mounting proc: Permission denied`, under `songmaker-web`;
-there is no evidence for later mount shapes until an operator loads the next
-policy candidate and reruns the throwaway-container proof. Before that load,
-the checked-in rule and `apparmor_parser -Q -K` prove only the source and
-syntax.
+The 06.09.2026 live audit of the per-run startup probe recorded exactly one
+denial: `bwrap` mounting `tmpfs` at `/newroot/` with `rw,nosuid,nodev`
+(`info="failed flags match"`). The matching profile rule permits that mount;
+the traced `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, and `/usr` binds are the
+only additional startup-probe rules. Before the operator reloads the profile,
+the checked-in rules and `apparmor_parser -Q -K` prove only source and syntax;
+the live proof remains the next rollout step.
 
 An operator runs the rollout and proof in this exact order:
 

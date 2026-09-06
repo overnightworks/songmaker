@@ -43,6 +43,16 @@ profile "songmaker-web" flags=(attach_disconnected,mediate_deleted) {
   # It detaches the old root after each pivot and makes it private first.
   mount options=(rprivate) options in (silent) -> /oldroot/,
 
+  # Codex first runs Bubblewrap's startup probe with a fresh tmpfs root.
+  mount fstype=tmpfs options=(rw nosuid nodev) options in (silent) tmpfs -> /newroot/,
+  # That probe exposes only the runtime paths it needs from the old root.
+  mount options=(rw rbind) options in (silent) /oldroot/usr/bin/ -> /newroot/bin/,
+  mount options=(rw rbind) options in (silent) /oldroot/etc/ -> /newroot/etc/,
+  mount options=(rw rbind) options in (silent) /oldroot/usr/lib/ -> /newroot/lib/,
+  mount options=(rw rbind) options in (silent) /oldroot/usr/lib64/ -> /newroot/lib64/,
+  mount options=(rw rbind) options in (silent) /oldroot/usr/sbin/ -> /newroot/sbin/,
+  mount options=(rw rbind) options in (silent) /oldroot/usr/ -> /newroot/usr/,
+
   # Codex's observed Bubblewrap form retains proc across the first pivot. This
   # is the first denied mount under this profile: /oldroot/proc -> /proc.
   mount options=(rw rbind) options in (silent) /oldroot/proc/ -> /proc/,
