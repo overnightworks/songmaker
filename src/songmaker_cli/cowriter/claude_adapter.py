@@ -8,10 +8,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from agent_providers.events import StreamEvent
 from songmaker_cli.claude.provider import (
     CliBinaryUnavailableError,
     CliToolSurfaceError,
-    StreamEvent,
     UnavailableError,
     acall_claude_with_mcp_stream,
     call_claude,

@@ -12,14 +12,14 @@ from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import (
+from agent_providers.events import (
     AssistantTextEvent,
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
+from songmaker_cli.app_context import AppContext
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,

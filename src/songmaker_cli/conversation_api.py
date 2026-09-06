@@ -28,6 +28,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from agent_providers.events import (
+    FinalEvent,
+    StreamEvent,
+)
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_generation_access,
@@ -48,10 +52,6 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.claude.provider import (
-    FinalEvent,
-    StreamEvent,
-)
 from songmaker_cli.constants import (
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,

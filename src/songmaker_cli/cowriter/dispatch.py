@@ -9,12 +9,10 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.events import StreamEvent
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
-)
-from songmaker_cli.claude.provider import (
-    StreamEvent,
 )
 from songmaker_cli.claude.provider import (
     UnavailableError as ClaudeUnavailableError,
