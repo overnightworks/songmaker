@@ -485,7 +485,7 @@ constraints rather than substitutes for the AppArmor rule. The runtime proof
 checks that the web-service parent and the private Bubblewrap child both receive
 `Permission denied` when reading `/proc/interrupts`, `/proc/keys`,
 `/proc/latency_stats`, `/sys/devices/virtual/powercap`, and
-`/sys/firmware/acpi/tables/DSDT`, or when writing `/proc/sys/kernel/shmmax`.
+`/sys/firmware/memmap/1/type`, or when writing `/proc/sys/kernel/shmmax`.
 
 An operator loads the AppArmor policy for the current host boot with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
