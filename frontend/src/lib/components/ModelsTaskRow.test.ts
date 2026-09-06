@@ -27,8 +27,7 @@ const READY_CLI: ModelsTaskRoute = { ready: true, reason: null, models: ['opus',
 const NO_KEY: ModelsTaskRoute = {
 	ready: false,
 	reason: { code: 'api_key_not_set', message: 'API key is not set.' },
-	models: [],
-	modelsReason: 'List needs the key'
+	models: []
 };
 const NO_LOGIN: ModelsTaskRoute = {
 	ready: false,
@@ -41,6 +40,11 @@ const NO_IMAGE_TOOL: ModelsTaskRoute = {
 	models: []
 };
 const UNPROBED: ModelsTaskRoute = { ready: false, reason: null, models: [] };
+const CATALOGUE_DOWN: ModelsTaskRoute = {
+	ready: false,
+	reason: { code: 'catalogue_http_error', message: 'Model catalogue request failed.' },
+	models: []
+};
 
 function provider(
 	name: string,
@@ -205,7 +209,7 @@ describe('models task row', () => {
 		});
 	});
 
-	it('shows "No models" with its reason instead of inventing one', async () => {
+	it('shows "No models" instead of inventing one', async () => {
 		const target = await renderRow({
 			providers: [GROK_WITHOUT_KEY],
 			selection: { provider: 'grok', route: 'api', model: '' }
@@ -214,7 +218,47 @@ describe('models task row', () => {
 		const models = selectNamed(target, 'model');
 		expect(optionLabels(models)).toEqual([MODELS_NO_MODELS_LABEL]);
 		expect(models.disabled).toBe(true);
-		expect(requireElement(target, '.hint').textContent?.trim()).toBe('List needs the key');
+	});
+
+	it.each([
+		['a missing API key', 'api' as ModelsRouteKey, GROK_WITHOUT_KEY, 'List needs the key'],
+		['a CLI nobody signed in to', 'cli' as ModelsRouteKey, GROK_WITHOUT_KEY, 'List needs the CLI'],
+		[
+			'a provider that cannot draw',
+			'cli' as ModelsRouteKey,
+			CODEX_WITHOUT_IMAGE_TOOL,
+			'Codex cannot draw'
+		],
+		[
+			'a catalogue that failed',
+			'cli' as ModelsRouteKey,
+			provider('claude', 'Claude', CATALOGUE_DOWN, CATALOGUE_DOWN),
+			'Model catalogue request failed.'
+		]
+	])('names %s as the reason the model list is empty', async (_name, route, entry, hint) => {
+		const target = await renderRow({
+			providers: [entry],
+			selection: { provider: entry.provider, route, model: '' }
+		});
+
+		expect(requireElement(target, '.hint').textContent?.trim()).toBe(hint);
+	});
+
+	it('keeps a catalogue failure on a route that is otherwise set up', async () => {
+		const brokenCatalogue = provider(
+			'claude',
+			'Claude',
+			{ ready: true, reason: null, models: [], modelsReason: 'Model catalogue request failed.' },
+			NO_KEY
+		);
+		const target = await renderRow({
+			providers: [brokenCatalogue],
+			selection: { provider: 'claude', route: 'cli', model: '' }
+		});
+
+		expect(requireElement(target, '.hint').textContent?.trim()).toBe(
+			'Model catalogue request failed.'
+		);
 	});
 
 	it('keeps a stored model that the live catalogue no longer lists', async () => {
@@ -266,6 +310,13 @@ describe('models task row', () => {
 			[GROK_WITHOUT_KEY],
 			'off',
 			'○Grok CLI not logged in'
+		],
+		[
+			'a route whose catalogue is down',
+			{ provider: 'claude', route: 'cli' as ModelsRouteKey, model: '' },
+			[provider('claude', 'Claude', CATALOGUE_DOWN, CATALOGUE_DOWN)],
+			'off',
+			'○Claude · Model catalogue request failed.'
 		],
 		[
 			'a readiness that has not been probed yet',

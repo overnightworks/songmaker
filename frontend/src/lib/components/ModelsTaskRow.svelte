@@ -35,6 +35,8 @@
 		MODELS_COLUMN_PROVIDER_LABEL,
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
+		MODELS_LIST_NEEDS_CLI_HINT,
+		MODELS_LIST_NEEDS_KEY_HINT,
 		MODELS_NO_MODELS_LABEL,
 		MODELS_OPTION_NEEDS_API_KEY_PHRASE,
 		MODELS_OPTION_READY_LABEL,
@@ -51,7 +53,8 @@
 		MODELS_STATUS_READY_CLI_LABEL,
 		MODELS_STATUS_READY_KEY_LABEL,
 		PROVIDER_ROUTE_API_LABEL,
-		PROVIDER_ROUTE_CLI_LABEL
+		PROVIDER_ROUTE_CLI_LABEL,
+		modelsCannotDrawHint
 	} from '$lib/constants';
 
 	interface Props {
@@ -76,6 +79,7 @@
 	const modelOptions = $derived(modelOptionsOf(routeView?.models ?? [], current.model));
 	const status = $derived(statusOf());
 	const routeReasons = $derived(reasonsOf());
+	const modelsHint = $derived(modelsHintOf());
 
 	function routeLabel(route: ModelsRouteKey): string {
 		return route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL;
@@ -110,6 +114,18 @@
 			if (text === null) return [];
 			return [{ route, text, warn: route === current.route }];
 		});
+	}
+
+	function modelsHintOf(): string | null {
+		if (modelOptions.length > 0) return null;
+		const reason = routeView?.reason;
+		if (!reason) return routeView?.modelsReason ?? null;
+		if (reason.code === 'api_key_not_set') return MODELS_LIST_NEEDS_KEY_HINT;
+		if (reason.code === 'cli_login_not_configured') return MODELS_LIST_NEEDS_CLI_HINT;
+		if (reason.code === 'no_image_tool') {
+			return modelsCannotDrawHint(providerView?.label ?? current.provider);
+		}
+		return reason.message;
 	}
 
 	function statusOf(): { shape: 'ok' | 'warn' | 'off' | 'bad'; mark: string; text: string } {
@@ -275,8 +291,8 @@
 				{/each}
 			{/if}
 		</select>
-		{#if modelOptions.length === 0 && routeView?.modelsReason}
-			<small class="hint">{routeView.modelsReason}</small>
+		{#if modelsHint !== null}
+			<small class="hint">{modelsHint}</small>
 		{/if}
 	</div>
 

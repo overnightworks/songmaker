@@ -475,7 +475,7 @@
 			ready,
 			reason,
 			models: models ?? catalogue?.models ?? [],
-			modelsReason: catalogue?.catalogue_failure?.message ?? reason?.message ?? null
+			modelsReason: catalogue?.catalogue_failure?.message ?? null
 		};
 	}
 
