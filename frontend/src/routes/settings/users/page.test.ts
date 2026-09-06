@@ -688,6 +688,31 @@ describe('admin models tab', () => {
 		expect(sectionByHeading(target, 'Models').querySelector('.tt-sub.bad')).toBeNull();
 	});
 
+	it('names a rejected history-tail save next to the field with a retry', async () => {
+		api.updateCowriterSettings.mockRejectedValue(new Error('Tail budget out of range'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		const disclosure = requireElement<HTMLDetailsElement>(
+			sectionByHeading(target, 'Models'),
+			'details'
+		);
+		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
+		budget.value = '999999';
+		budget.dispatchEvent(new Event('change', { bubbles: true }));
+		await flush();
+
+		expect(disclosure.textContent).toContain('Tail budget out of range');
+		expect(disclosure.textContent).not.toContain('Saved.');
+
+		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ tail_token_budget: 999999 }));
+		requireElement<HTMLButtonElement>(disclosure, '.retry').click();
+		await flush();
+
+		expect(disclosure.textContent).toContain('Saved.');
+		expect(disclosure.textContent).not.toContain('Tail budget out of range');
+	});
+
 	it('keeps the history tail under a collapsed Advanced disclosure and saves it there', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
