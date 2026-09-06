@@ -491,20 +491,6 @@
 		font-family: "IBM Plex Sans", system-ui, sans-serif;
 	}
 
-	.info {
-		display: inline-grid;
-		place-items: center;
-		width: .95rem;
-		height: .95rem;
-		border: 1px solid var(--rule-strong);
-		border-radius: 50%;
-		color: var(--muted);
-		font-size: .62rem;
-		font-weight: 600;
-		line-height: 1;
-		vertical-align: middle;
-	}
-
 	/* ── 375 px ──────────────────────────────────────────────── */
 	.phone {
 		width: 375px;
@@ -923,6 +909,9 @@
 					Option ihren Zustand: „Codex ✓ ready", „Grok · needs its API key", „Claude · no image
 					tool". Grau heißt nicht gesperrt — was heute nicht geht, kann morgen gehen, und der
 					Weg dahin bleibt sichtbar statt weggeblendet.</li>
+				<li><strong>Modelle kommen bei allen Anbietern live vom Provider</strong>; Codex-CLI
+					über <code>codex debug models</code> (#817). Es gibt keine gepflegte Liste mehr, also
+					auch keinen Hinweis darauf — alle Modell-Selects sehen gleich aus.</li>
 				<li><strong>Kein Providers-Block.</strong> Erreichbarkeit steht als Punkt plus einer
 					kurzen Zeile in der Status-Spalte der Aufgabe, die sie betrifft — dort, wo sie eine
 					Entscheidung auslöst.</li>
@@ -994,10 +983,7 @@
 									<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
 									<small class="why">API · no image tool</small>
 								</span>
-								<span>
-									<span class="sel">gpt-5-codex<span class="caret">⌄</span></span>
-									<small class="hint">Known models <span class="info">i</span></small>
-								</span>
+								<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
 								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 							</div>
 
@@ -1058,10 +1044,7 @@
 							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
 							<small class="why">API · no image tool</small>
 						</span>
-						<span>
-							<span class="sel">gpt-5-codex<span class="caret">⌄</span></span>
-							<small class="hint">Known models <span class="info">i</span></small>
-						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 
@@ -1174,10 +1157,7 @@
 							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
 							<small class="why">API · no image tool</small>
 						</span>
-						<span>
-							<span class="sel">gpt-5-codex<span class="caret">⌄</span></span>
-							<small class="hint">Known models <span class="info">i</span></small>
-						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 
@@ -1249,10 +1229,7 @@
 							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
 							<small class="why">API · no image tool</small>
 						</span>
-						<span>
-							<span class="sel">gpt-5-codex<span class="caret">⌄</span></span>
-							<small class="hint">Known models <span class="info">i</span></small>
-						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 
