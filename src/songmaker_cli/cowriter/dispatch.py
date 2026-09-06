@@ -23,6 +23,12 @@ from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
 )
+from agent_providers.tool_loop import (
+    ToolLoopLimitError,
+    ToolLoopProtocolError,
+    ToolTransport,
+    stream_tool_loop,
+)
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.claude_adapter import (
@@ -44,12 +50,6 @@ from songmaker_cli.cowriter.grok_cli_adapter import GrokCliToolTransport
 from songmaker_cli.cowriter.openai_adapter import (
     call_openai_compatible_once,
     stream_openai_compatible_turn,
-)
-from songmaker_cli.cowriter.tool_loop import (
-    ToolLoopLimitError,
-    ToolLoopProtocolError,
-    ToolTransport,
-    stream_tool_loop,
 )
 from songmaker_cli.db.queries.settings import get_cover_settings
 from webauth.dependencies import AuthenticatedUser
@@ -95,6 +95,7 @@ async def stream_cowriter_turn(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     if provider not in COWRITER_PROVIDERS:
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
@@ -110,6 +111,7 @@ async def stream_cowriter_turn(
             messages=messages,
             session=session,
             user=user,
+            correlation_id=correlation_id,
         )
         try:
             async for event in stream:
@@ -140,11 +142,16 @@ def _stream_for_route(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     if route is ProviderRoute.CLI:
         if provider == "claude":
             return stream_claude_turn(
-                user_id=user_id, system=system, model=model, messages=messages,
+                user_id=user_id,
+                system=system,
+                model=model,
+                messages=messages,
+                correlation_id=correlation_id,
             )
         if provider == "grok":
             return _stream_grok_cli_tool_turn(
@@ -153,6 +160,7 @@ def _stream_for_route(
                 messages=messages,
                 session=session,
                 user=user,
+                correlation_id=correlation_id,
             )
         if provider == "codex":
             return _stream_codex_cli_tool_turn(
@@ -161,6 +169,7 @@ def _stream_for_route(
                 messages=messages,
                 session=session,
                 user=user,
+                correlation_id=correlation_id,
             )
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
     connection = _api_connection(provider)
@@ -172,6 +181,7 @@ def _stream_for_route(
             messages=messages,
             session=session,
             user=user,
+            correlation_id=correlation_id,
         )
     return stream_openai_compatible_turn(
         provider=provider,
@@ -182,6 +192,7 @@ def _stream_for_route(
         messages=messages,
         session=session,
         user=user,
+        correlation_id=correlation_id,
     )
 
 
@@ -192,6 +203,7 @@ async def _stream_grok_cli_tool_turn(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run Grok's text protocol through the shared co-writer tool loop."""
     async for event in _stream_cli_tool_turn(
@@ -201,6 +213,7 @@ async def _stream_grok_cli_tool_turn(
         session=session,
         user=user,
         transport=GrokCliToolTransport(model=model),
+        correlation_id=correlation_id,
     ):
         yield event
 
@@ -212,6 +225,7 @@ async def _stream_codex_cli_tool_turn(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run Codex's text protocol through the shared co-writer tool loop."""
     async for event in _stream_cli_tool_turn(
@@ -221,6 +235,7 @@ async def _stream_codex_cli_tool_turn(
         session=session,
         user=user,
         transport=CodexCliToolTransport(model=model),
+        correlation_id=correlation_id,
     ):
         yield event
 
@@ -233,6 +248,7 @@ async def _stream_cli_tool_turn(
     session: Session,
     user: AuthenticatedUser,
     transport: ToolTransport,
+    correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run one CLI text-protocol transport through the authorized tool loop."""
     from songmaker_cli.cowriter.tools import execute_cowriter_tool
@@ -247,6 +263,10 @@ async def _stream_cli_tool_turn(
             executor=lambda name, arguments: execute_cowriter_tool(
                 session, user, name, arguments,
             ),
+            tool_failure_message=normalize_route_failure(
+                SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
+            ).message,
+            correlation_id=correlation_id,
         ):
             yield event
     except ToolLoopLimitError as exc:

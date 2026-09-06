@@ -21,6 +21,8 @@ from typing import Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from agent_providers.tool_loop import TurnOutcome
+from agent_providers.tools import ToolCatalog, ToolDeclaration
 from songmaker_cli.mcp_server.tools import (
     MCPToolError,
     tool_create_song,
@@ -166,6 +168,18 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
 
 _TOOLS_BY_NAME = {tool.name: tool for tool in COWRITER_TOOLS}
 
+COWRITER_TOOL_CATALOG: ToolCatalog = ToolCatalog(
+    tools=tuple(
+        ToolDeclaration(
+            name=tool.name,
+            description=tool.description,
+            parameters=tool.parameters,
+        )
+        for tool in COWRITER_TOOLS
+    ),
+)
+"""The same catalog the provider layer renders, parses and validates against."""
+
 
 def openai_tool_schemas() -> list[dict[str, Any]]:
     return [
@@ -211,23 +225,23 @@ def execute_cowriter_tool(
     user: AuthenticatedUser,
     name: str,
     arguments: dict[str, Any],
-) -> tuple[str, bool]:
+) -> TurnOutcome:
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
-        return f"Unknown tool: {name}", True
+        return TurnOutcome(f"Unknown tool: {name}", True)
     allowed = set(tool.parameters.get("properties", {}))
     filtered = {key: value for key, value in arguments.items() if key in allowed}
     try:
         result = tool.handler(session, user, **filtered)
         if tool.write:
             session.commit()
-        return _serialize(result), False
+        return TurnOutcome(_serialize(result), False)
     except MCPToolError as exc:
         session.rollback()
-        return str(exc), True
+        return TurnOutcome(str(exc), True)
     except TypeError as exc:
         session.rollback()
-        return str(exc), True
+        return TurnOutcome(str(exc), True)
     except Exception:
         session.rollback()
         raise

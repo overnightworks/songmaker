@@ -1028,7 +1028,7 @@ def test_a_deployment_without_an_mcp_server_streams_the_tool_free_command_line(
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
     monkeypatch.setattr(provider, "_reap_stream_process_after_cancellation", AsyncMock())
 
-    async def one_final_event(_proc, _timeout):
+    async def one_final_event(_proc, _timeout, _correlation_id):
         yield FinalEvent(text="done")
 
     monkeypatch.setattr(provider, "_consume_stream", one_final_event)

@@ -14,15 +14,18 @@ from conftest import override_provider_runtime
 
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from agent_providers.process import CliRunOutcome, CliRunReason
-from songmaker_cli.cowriter import grok_cli_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
-from songmaker_cli.cowriter.tool_loop import (
+from agent_providers.tool_loop import (
     InitialTurn,
     ToolCallBatch,
     ToolResult,
     ToolResultBatch,
+    TurnOutcome,
     stream_tool_loop,
 )
+from songmaker_cli.cowriter import grok_cli_adapter
+from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+
+A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
 
 _SESSION_ID = "3e04bf5b-4e1c-4f26-8e1e-2f17c5f6d9cf"
 
@@ -81,6 +84,7 @@ def _tool_transport_events(transport, executor):
         messages=[{"role": "user", "content": "hello"}],
         transport=transport,
         executor=executor,
+        tool_failure_message=A_TOOL_FAILURE_MESSAGE,
     )
 
 
@@ -131,7 +135,7 @@ def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypa
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
     events = asyncio.run(_collect_tool_events(
-        _tool_transport_events(transport, lambda _name, _arguments: ('{"songs":[]}', False)),
+        _tool_transport_events(transport, lambda _name, _arguments: TurnOutcome('{"songs":[]}', False)),
     ))
 
     assert isinstance(events[0], ToolCallEvent)
@@ -180,9 +184,9 @@ def test_recorded_grok_tool_stream_executes_then_resumes_without_streaming_proto
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
     executed: list[tuple[str, dict[str, object]]] = []
 
-    def executor(name: str, arguments: dict[str, object]) -> tuple[str, bool]:
+    def executor(name: str, arguments: dict[str, object]) -> TurnOutcome:
         executed.append((name, arguments))
-        return '{"song_id":"fixture-song-527","bpm":68}', False
+        return TurnOutcome('{"song_id":"fixture-song-527","bpm":68}', False)
 
     events = asyncio.run(_collect_tool_events(_tool_transport_events(transport, executor)))
 
@@ -220,10 +224,10 @@ def test_grok_tool_stream_executes_a_write_after_prose_and_exposes_its_result_ne
         kwargs["stdout_line_channel"]._close(outcome)
         return outcome
 
-    def executor(name: str, arguments: dict[str, object]) -> tuple[str, bool]:
+    def executor(name: str, arguments: dict[str, object]) -> TurnOutcome:
         assert name == "update_song_style"
         state["bpm"] = arguments["bpm"]
-        return '{"song_id":"fixture-song-527","bpm":69}', False
+        return TurnOutcome('{"song_id":"fixture-song-527","bpm":69}', False)
 
     monkeypatch.setattr(grok_cli_adapter, "run_cli_bounded", run_cli_bounded)
     events = asyncio.run(_collect_tool_events(_tool_transport_events(
@@ -497,7 +501,7 @@ def test_grok_tool_transport_aborts_native_calls_before_the_loop_executes(
     def executor(_name, _arguments):
         nonlocal executed
         executed = True
-        return "unreachable", False
+        return TurnOutcome("unreachable", False)
 
     async def collect() -> None:
         transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
@@ -529,7 +533,7 @@ def test_closing_the_tool_loop_aborts_and_reaps_the_grok_runner(monkeypatch) -> 
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
     async def close_turn() -> None:
-        turn = _tool_transport_events(transport, lambda _name, _arguments: ("unused", False))
+        turn = _tool_transport_events(transport, lambda _name, _arguments: TurnOutcome("unused", False))
         assert await anext(turn) == AssistantTextEvent(text="partial")
         started.set()
         await turn.aclose()

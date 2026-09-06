@@ -22,15 +22,15 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from agent_providers.events import (
     FinalEvent,
-    StreamEvent,
 )
 from songmaker_cli.api_helpers import (
     check_album_access,
@@ -72,6 +72,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
+    SafeRouteReason,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
@@ -185,9 +186,10 @@ def build_cowriter_system_prompt(
     )
     tool_protocol = ""
     if text_tool_protocol:
-        from songmaker_cli.cowriter.text_tool_protocol import render_tool_catalog
+        from agent_providers.text_tool_protocol import render_tool_catalog
+        from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
-        tool_protocol = f"\n\n{render_tool_catalog()}"
+        tool_protocol = f"\n\n{render_tool_catalog(COWRITER_TOOL_CATALOG)}"
     return (
         f"{COWRITER_ROLE}\n\n{route_instructions}\n\n"
         f"{COWRITER_UNTRUSTED_NOTICE}\n\n{COWRITER_MEMORY_INSTRUCTIONS}{tool_protocol}"
@@ -507,8 +509,32 @@ class ChatTurnLifecycle:
         await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
 
 
-def _sse_format(event: StreamEvent | dict) -> str:
-    if isinstance(event, StreamEvent):
+_PROVIDER_UNAVAILABLE_STATUS: Final = 503
+_TURN_FAILED_STATUS: Final = 500
+_CHAT_REQUEST_FAILED: Final = "Chat request failed"
+_CHAT_COMPLETION_FAILED: Final = "Chat completion failed"
+
+
+class ChatTurnRouteErrorFrame(BaseModel):
+    """The frame a turn ends with when its provider route is unavailable."""
+
+    type: Literal["error"] = "error"
+    status: int
+    provider: str
+    route: str | None
+    reason: SafeRouteReason
+
+
+class ChatTurnFailureFrame(BaseModel):
+    """The frame a turn ends with when the endpoint itself could not finish."""
+
+    type: Literal["error"] = "error"
+    status: int
+    message: str
+
+
+def _sse_format(event: BaseModel | dict) -> str:
+    if isinstance(event, BaseModel):
         payload = event.model_dump()
     else:
         payload = event
@@ -703,6 +729,7 @@ async def _chat_event_generator(
         messages=prepared.api_messages,
         session=session,
         user=user,
+        correlation_id=prepared.job_id,
     )
     terminal = False
     try:
@@ -762,18 +789,15 @@ def _provider_unavailable_event(
     )
     _fail_chat_job(session, job_id, f"{exc.provider} unavailable", "unavailable")
     return _sse_format(
-        {
-            "type": "error",
-            "status": 503,
-            "provider": exc.provider,
-            "route": exc.route,
-            "reason": (
+        ChatTurnRouteErrorFrame(
+            status=_PROVIDER_UNAVAILABLE_STATUS,
+            provider=exc.provider,
+            route=exc.route,
+            reason=(
                 exc.reason
-                or normalize_route_failure(
-                    SafeRouteReasonCode.ROUTE_FAILED,
-                )
-            ).model_dump(mode="json"),
-        }
+                or normalize_route_failure(SafeRouteReasonCode.ROUTE_FAILED)
+            ),
+        )
     )
 
 
@@ -781,8 +805,10 @@ def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
     from songmaker_cli.jobs._runtime import _fail_chat_job
 
     log.error("Co-writer chat failed (%s)", type(exc).__name__)
-    _fail_chat_job(session, job_id, "Chat request failed", "chat_error")
-    return _sse_format({"type": "error", "status": 500, "message": "Chat request failed"})
+    _fail_chat_job(session, job_id, _CHAT_REQUEST_FAILED, "chat_error")
+    return _sse_format(
+        ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=_CHAT_REQUEST_FAILED),
+    )
 
 
 def _complete_chat_turn(
@@ -822,8 +848,10 @@ def _chat_completion_failure_event(session: Session, job_id: str) -> str:
     from songmaker_cli.jobs._runtime import _fail_chat_job
 
     log.exception("Co-writer chat completion failed")
-    _fail_chat_job(session, job_id, "Chat completion failed", "completion_error")
-    return _sse_format({"type": "error", "status": 500, "message": "Chat completion failed"})
+    _fail_chat_job(session, job_id, _CHAT_COMPLETION_FAILED, "completion_error")
+    return _sse_format(
+        ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=_CHAT_COMPLETION_FAILED),
+    )
 
 
 # ── Conversation CRUD ────────────────────────────────────────────────

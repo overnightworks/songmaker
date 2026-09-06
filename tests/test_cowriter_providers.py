@@ -23,10 +23,10 @@ from fastapi.testclient import TestClient
 
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
+from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, TurnOutcome
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    COWRITER_MAX_TOOL_ROUNDS,
     SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COVER_MODEL,
     SETTING_COVER_PROVIDER,
@@ -921,11 +921,12 @@ def test_create_song_tool_hits_canonical_function(admin_client):
         id="u-test", username="u-u-test", role="admin", is_active=True,
     )
     with factory() as session:
-        via_catalog, err = execute_cowriter_tool(
+        outcome = execute_cowriter_tool(
             session, user, "create_song",
             {"album_id": "alb1", "title": "FromCatalog", "lyrics": "a"},
         )
-        assert err is False
+        via_catalog = outcome.content
+        assert outcome.is_error is False
         canonical = tool_create_song(
             session, user, album_id="alb1", title="FromDirect", lyrics="b",
         )
@@ -948,11 +949,11 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
         id="u-test", username="u-u-test", role="admin", is_active=True,
     )
     with factory() as session:
-        _, err = execute_cowriter_tool(
+        outcome = execute_cowriter_tool(
             session, user, "rename_song",
             {"song_id": "s1", "title": "Renamed Track"},
         )
-        assert err is False
+        assert outcome.is_error is False
     with factory() as session:
         song = session.query(Song).filter_by(id="s1").one()
         assert song.title == "Renamed Track"
@@ -978,13 +979,13 @@ def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_c
         session.commit()
 
     with factory() as session:
-        result, is_error = execute_cowriter_tool(
+        outcome = execute_cowriter_tool(
             session, user, "update_song_lyrics",
             {"song_id": "s1", "lyrics": "new lyrics"},
         )
 
-    assert is_error is False
-    assert "Updated lyrics in v2" in result
+    assert outcome.is_error is False
+    assert "Updated lyrics in v2" in outcome.content
     with factory() as session:
         song = session.query(Song).filter_by(id="s1").one()
         assert [(version.version_number, version.lyrics) for version in song.versions] == [
@@ -1000,11 +1001,11 @@ def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_clien
         id="u-test", username="u-u-test", role="admin", is_active=True,
     )
     with factory() as session:
-        via_catalog, err = execute_cowriter_tool(
+        outcome = execute_cowriter_tool(
             session, user, "suggest_album_cover", {"album_id": "alb1"},
         )
-        assert err is False
-        assert '"status": "queued"' in via_catalog
+        assert outcome.is_error is False
+        assert '"status": "queued"' in outcome.content
 
     with factory() as session:
         job = session.query(Job).filter_by(album_id="alb1").one()
@@ -1102,7 +1103,7 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
             return _Response(responses.pop(0))
 
     monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
-    execute = MagicMock(return_value=("[]", False))
+    execute = MagicMock(return_value=TurnOutcome("[]", False))
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,
     )

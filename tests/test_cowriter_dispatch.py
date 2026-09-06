@@ -11,6 +11,7 @@ import httpx
 import pytest
 from conftest import override_provider_runtime
 
+from agent_providers import tool_loop
 from agent_providers.claude.provider import (
     CliBinaryUnavailableError,
     CliToolSurfaceError,
@@ -24,15 +25,21 @@ from agent_providers.events import (
     ToolResultEvent,
 )
 from agent_providers.process import AgentCliUnavailableError
+from agent_providers.tool_loop import (
+    FinalText,
+    TextDelta,
+    ToolCall,
+    ToolCallBatch,
+    TurnOutcome,
+)
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter, tool_loop
+from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from songmaker_cli.cowriter.tool_loop import FinalText, TextDelta, ToolCall, ToolCallBatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
@@ -135,7 +142,7 @@ def test_cli_turn_uses_its_transport_through_the_shared_tool_loop(
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
-        lambda _session, _user, name, arguments: (
+        lambda _session, _user, name, arguments: TurnOutcome(
             "updated" if arguments["song_id"] == "own-song" else "Song not found", False,
         ),
     )
