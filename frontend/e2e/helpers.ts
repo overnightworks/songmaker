@@ -2,6 +2,7 @@
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
+	COWRITER_TURN_PATH,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -147,13 +148,18 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Leaving the library route (Settings, sign-out) intentionally closes
-			// the live resource-event stream (`ResourceSyncController.stop()`);
-			// Chromium reports the cancelled in-flight GET as a failed request
+			// Both of these are streams the client closes on purpose: leaving the
+			// library route (Settings, sign-out) stops the live resource-event
+			// stream (`ResourceSyncController.stop()`), and a co-writer turn's
+			// reader stops on the last event it needs, including a named failure.
+			// Chromium reports either cancelled in-flight request as a failed one
 			// with exactly this error, indistinguishable from any other
 			// intentional client-side abort. Every other reason still fails the
 			// flow, including a 429 or 5xx on the same path (handled below).
-			if (errorText === 'net::ERR_ABORTED' && request.url().endsWith(RESOURCE_EVENT_STREAM_PATH)) {
+			const closedOnPurpose = [RESOURCE_EVENT_STREAM_PATH, COWRITER_TURN_PATH].some((path) =>
+				request.url().endsWith(path)
+			);
+			if (errorText === 'net::ERR_ABORTED' && closedOnPurpose) {
 				return;
 			}
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);

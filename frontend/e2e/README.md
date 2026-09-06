@@ -12,6 +12,7 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | `album-address.spec.ts`    | An album address pasted into a tab that knows nothing else → open a track under its own song address → Back → Forward, with the shell standing throughout (issue #269); a song address pasted into a tab that knows nothing else, on its own (issue #275); a take address pasted into a tab that knows nothing else, on its own (issue #281); a legacy `/?song=<uuid>` bookmark redirects onto the song address in place, and Back skips the old form (issue #284)                                                                                                                                                                                                                                        |
 | `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `kinetic-strip.spec.ts`    | The take strip's kinetic scrolling (issue #358) against a real render, in both layouts its own container query switches it between: dragged, released with momentum that coasts past where the drag stopped, and a click that catches it mid-roll without opening the take it lands on — then a plain click still opens one, the wheel is proven directly against the dispatched event (native on the column layout, converted on the row layout), and Home/End/arrow keys follow the real axis. A third test proves the strip's absence on the compact shell at phone width, not kinetic behaviour — there is nothing of this action's to exercise there yet (WriteColumn.svelte's own `!compact` guard) |
+| `admin-models.spec.ts`     | The admin Models tab (issues #820, #846): one row per task with both routes offered and the unusable one greyed with its reason, `No models` where no route is set up, a collapsed Advanced, and every column — Status included — still on screen at 1920, 1440, 1280 and 1024px, where the card the table sits in is hundreds of pixels narrower than the viewport. Then a save the server keeps even though no route can run it, a co-writer turn that ends with its named reason instead of switching provider quietly, and, at 375px, one card per task with labelled lines and no sideways scroll. Replaces `admin-routes.spec.ts`, whose per-provider route cards Fassung 2 removed                 |
 
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
@@ -124,8 +125,19 @@ mobile-absence test costs 15 and never comes close. Seeding the strip's own
 takes never touches this budget at all — it runs directly against the
 database (`seedTakeStripSong`), the same way the rail's filler albums do.
 
-Summed together, the per-flow `FlowGuard` totals above (158 `/api` requests
-on **desktop**, 59 on **mobile**) are **not** what the server's own IP rate
+`admin-models.spec.ts` carries its own file-wide ceiling,
+`MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 11 for the table at four
+desktop widths, 24 for the Cover row's save, reload and restore, 46 for the
+co-writer turn and 9 for the phone cards, against a shared 60. Its three desktop tests
+run on **desktop only** and its card test on **mobile only** — the table and
+the cards are two different surfaces, so each is driven where it exists rather
+than skipped in the other shell.
+
+Summed together, the per-flow `FlowGuard` totals above (351 `/api` requests on
+**desktop** and 98 on **mobile**, read off one green run -- CI run
+34039372545, 2026-09-06 -- rather than carried forward, which is how the
+library flow's own number drifted into three values before issue #326) are
+**not** what the server's own IP rate
 limit sees, and issue #344 is the reason that distinction is written down
 explicitly rather than assumed: a `FlowGuard` only counts `/api/*` requests
 the page itself made, so it misses HTML document navigations (`_classify_path`
@@ -140,10 +152,12 @@ way `docker/docker-compose.ci.yml`'s own `IP_RATE_LIMIT` comment measures it: fr
 one IP and to the API class. One full local run of the whole suite (the CI
 workflow's smoke-test curls plus both Playwright projects) measured 288 such
 requests, finishing in about 35 seconds — so the 60-second window's peak is
-that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "600"`
-override (`docker/docker-compose.ci.yml`), which carries roughly 2x headroom over
-that measurement, including room for one CI retry landing inside the same
-window. Re-running the suite repeatedly against the same stack inside that
+that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "2000"`
+override (`docker/docker-compose.ci.yml`), which carries several times the headroom
+that measurement needs, including room for one CI retry landing inside the
+same window. That 288 has not been re-measured since `admin-models.spec.ts`
+was added, and the sum above is not a substitute for it: when it matters,
+measure it from the access log the same way rather than trusting the total. Re-running the suite repeatedly against the same stack inside that
 window is cumulative, not reset per run — see "Running it locally" below. If
 this suite gains more specs, re-measure the same way rather than trusting
 the `FlowGuard` sum — that gap between the two is exactly what let #344
@@ -229,7 +243,7 @@ cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml do
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit
-— `IP_RATE_LIMIT: "600"` per 60-second window under this CI recipe (see the
+— `IP_RATE_LIMIT: "2000"` per 60-second window under this CI recipe (see the
 budget note above; the production default is 120) — and the flow will report
 429s — that is the guard working, not a flaky test. Wait out the window or
 reset the stack; a fresh run right after a previous one still counts against
