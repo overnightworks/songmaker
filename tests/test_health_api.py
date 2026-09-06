@@ -12,6 +12,7 @@ never a lucky real GPU.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -136,6 +137,82 @@ def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "unverified"
+
+
+@pytest.fixture(autouse=True)
+def _reset_codex_image_sandbox_runtime_health():
+    """codex_image_sandbox_runtime_health() (#789) is a module-level live
+    value like claude_cli_tool_surface_health() above — reset it around
+    every test in this file so one test's recorded verdict can't leak
+    into the next."""
+    from songmaker_cli import lifecycle
+
+    lifecycle.record_codex_image_sandbox_runtime_health("unverified")
+    yield
+    lifecycle.record_codex_image_sandbox_runtime_health("unverified")
+
+
+def test_health_reports_codex_image_sandbox_runtime_ready_after_a_real_clean_probe(
+    tmp_path: Path, monkeypatch, mock_arq_pool,
+) -> None:
+    """Undoes conftest's blanket stub (_no_codex_cover_sandbox_runtime_probe)
+    for this one test, so the *real* boot report — including the /health
+    state it records — runs against a faked-successful bwrap instead of
+    not running at all."""
+    from songmaker_cli import lifecycle, server
+
+    completed = subprocess.CompletedProcess(args=(), returncode=0)
+    monkeypatch.setattr(
+        server, "report_codex_image_sandbox_runtime",
+        lifecycle.report_codex_image_sandbox_runtime,
+    )
+    monkeypatch.setattr(lifecycle.shutil, "which", lambda _name: "/usr/bin/bwrap")
+    monkeypatch.setattr(lifecycle.subprocess, "run", lambda *a, **kw: completed)
+
+    client, _ = make_test_app(tmp_path)
+    with client:
+        resp = client.get("/health")
+
+    assert resp.status_code == 200
+    assert resp.json()["codex_image_sandbox_runtime"] == "ready"
+
+
+def test_health_reports_codex_image_sandbox_runtime_not_set_up_without_failing_the_server(
+    tmp_path: Path, monkeypatch, mock_arq_pool,
+) -> None:
+    from songmaker_cli import lifecycle, server
+
+    monkeypatch.setattr(
+        server, "report_codex_image_sandbox_runtime",
+        lifecycle.report_codex_image_sandbox_runtime,
+    )
+    monkeypatch.setattr(lifecycle.shutil, "which", lambda _name: None)
+
+    client, _ = make_test_app(tmp_path)
+    with client:
+        resp = client.get("/health")
+
+    assert resp.status_code == 200
+    assert resp.json()["codex_image_sandbox_runtime"] == "not_set_up"
+
+
+def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot_report(
+    tmp_path: Path, mock_arq_pool,
+) -> None:
+    """The live state defaults to "unverified" (never a silent "ready")
+    until the boot report actually records a real answer. This test never
+    triggers a real boot report at all — including at boot, where the
+    suite's own safety stub (conftest._no_codex_cover_sandbox_runtime_probe)
+    deliberately keeps report_codex_image_sandbox_runtime() from running
+    for real, the same way a host without bubblewrap would. Reporting
+    "ready" here would be exactly the silent default
+    check_no_silent_fallbacks.py exists to catch."""
+    client, _ = make_test_app(tmp_path)
+    with client:
+        resp = client.get("/health")
+
+    assert resp.status_code == 200
+    assert resp.json()["codex_image_sandbox_runtime"] == "unverified"
 
 
 def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool) -> None:

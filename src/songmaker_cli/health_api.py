@@ -29,7 +29,12 @@ from songmaker_cli.constants import (
     PROM_NEVER_FAILED_TIMESTAMP,
     PROM_QUEUE_DEPTH,
 )
-from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopStatus
+from songmaker_cli.lifecycle import (
+    BackgroundLoopName,
+    BackgroundLoopStatus,
+    CodexImageSandboxRuntimeHealth,
+    codex_image_sandbox_runtime_health,
+)
 
 router = APIRouter()
 
@@ -383,6 +388,9 @@ async def health_check(request: Request) -> JSONResponse:
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )
+    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth = (
+        codex_image_sandbox_runtime_health()
+    )
 
     degraded = (
         not db_ok
@@ -417,6 +425,14 @@ async def health_check(request: Request) -> JSONResponse:
         # "ok". Defaults to "unverified" (never a silent "ok") for the
         # narrow window before the boot-time check has run at all.
         "claude_cli_tool_surface": claude_cli_tool_surface_health(),
+        # "ready" / "not_set_up" / "unverified" (#789): whether the Codex
+        # cover-image sandbox's user-namespace boot check last succeeded.
+        # Same live-value shape as claude_cli_tool_surface above — reads
+        # lifecycle.codex_image_sandbox_runtime_health(), which every
+        # report_codex_image_sandbox_runtime() call updates, so a later
+        # boot report overrides an earlier one. Defaults to "unverified"
+        # for the window before the boot report has run at all.
+        "codex_image_sandbox_runtime": codex_image_sandbox_runtime,
         "background_loops": _background_loop_response_adapter.dump_python(
             background_loops, mode="json",
         ),
