@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -48,8 +49,8 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.db.queries.albums import list_expired_albums
 from songmaker_cli.db.queries.songs import list_expired_songs
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 RESTORE_WINDOW = timedelta(days=get_settings().soft_delete_retention_days)
 
@@ -349,7 +350,7 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -415,7 +416,7 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

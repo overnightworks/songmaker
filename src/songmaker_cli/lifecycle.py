@@ -29,7 +29,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
-from webauth.session_store import SessionCache
+from webauth.session_store import SessionCache, installed_session_cache
 
 log = logging.getLogger(__name__)
 
@@ -577,8 +577,9 @@ def auto_setup_admin(ctx: AppContext) -> None:
 
     from sqlalchemy.exc import IntegrityError
 
-    from songmaker_cli.auth import ROLE_ADMIN, check_password_strength, hash_password
+    from songmaker_cli.constants import ROLE_ADMIN
     from songmaker_cli.db.queries import create_user, user_count
+    from webauth.passwords import check_password_strength, hash_password
 
     with ctx.db() as session:
         if user_count(session) > 0:
@@ -716,7 +717,11 @@ async def session_sync_loop(app: FastAPI) -> None:
     )
 
     ctx: AppContext = app.state.ctx
-    session_cache: SessionCache = app.state.session_cache
+    session_cache = installed_session_cache(app)
+    if session_cache is None:
+        raise RuntimeError(
+            "Session sync needs the session cache the application installs at startup.",
+        )
     registry = background_loop_registry(app)
 
     while True:

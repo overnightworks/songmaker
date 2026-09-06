@@ -28,6 +28,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.settings import SendChatRequest
 from songmaker_cli.app_context import get_db_session
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     JobStatus,
     JobType,
@@ -44,7 +45,7 @@ from songmaker_cli.db.queries import (
     songs_with_chat,
     update_job_status,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

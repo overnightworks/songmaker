@@ -11,7 +11,6 @@ from conftest import login_and_csrf, make_test_app
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from songmaker_cli.auth import hash_password
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
@@ -50,6 +49,7 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
+from webauth.passwords import hash_password
 
 ALICE_PASSWORD = "alicepass1"
 BOB_PASSWORD = "bobpass12"

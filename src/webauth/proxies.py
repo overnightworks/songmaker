@@ -225,3 +225,9 @@ def request_is_https(request: Request) -> bool:
         return False
     newest = next(_forwarded_entries(request.headers.getlist(FORWARDED_PROTO_HEADER)), "")
     return newest.lower() == HTTPS_SCHEME
+
+
+def client_user_agent(request: Request) -> str:
+    """The agent the client declares, cut to the length the deployment records."""
+    limit = web_auth_config(request).max_user_agent_chars
+    return (request.headers.get("user-agent") or "")[:limit]

@@ -36,7 +36,7 @@ from songmaker_cli.mcp_server.tools import (
     tool_update_song_prompt,
     tool_update_song_style,
 )
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 _STRING = {"type": "string"}
 _INT = {"type": "integer"}

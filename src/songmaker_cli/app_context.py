@@ -11,13 +11,14 @@ from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import (
+    HTTP_MAX_USER_AGENT_LENGTH,
     REDIS_RL_IP_MEDIA_PREFIX,
     REDIS_RL_IP_PREFIX,
     REDIS_RL_IP_STREAM_PREFIX,
     REDIS_SESSION_PREFIX,
     REDIS_USER_SESSIONS_PREFIX,
+    ROLE_ADMIN,
 )
 from webauth.config import (
     RateLimitKeyPrefixes,
@@ -37,7 +38,7 @@ class AppContext:
     db: sessionmaker[Session]
     audio_dir: Path
     data_dir: Path
-    session_secret: bytes
+    signing_key: bytes
     redis: Redis
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
@@ -55,7 +56,7 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
     return WebAuthConfig(
-        session_secret=SecretStr(ctx.session_secret.decode()),
+        session_secret=SecretStr(ctx.signing_key.decode()),
         redis=ctx.redis,
         trusted_proxies=ctx.trusted_proxies,
         session_key_prefixes=SessionKeyPrefixes(
@@ -71,6 +72,7 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
         allowed_hosts_patterns=tuple(ctx.allowed_hosts_patterns),
         session_max_age_seconds=settings.session_max_age_seconds,
         session_absolute_max_age_seconds=settings.session_absolute_max_age_seconds,
+        max_user_agent_chars=HTTP_MAX_USER_AGENT_LENGTH,
         login_rate_limit=settings.login_rate_limit,
         login_lockout_threshold=settings.login_lockout_threshold,
         login_lockout_window_seconds=settings.login_lockout_window_seconds,

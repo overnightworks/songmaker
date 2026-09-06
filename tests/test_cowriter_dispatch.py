@@ -36,7 +36,7 @@ from songmaker_cli.cowriter.tool_loop import FinalText, TextDelta, ToolCall, Too
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 
 class _Stream(AsyncIterator[StreamEvent]):

@@ -52,7 +52,7 @@ from songmaker_cli.cowriter.tool_loop import (
     stream_tool_loop,
 )
 from songmaker_cli.db.queries.settings import get_cover_settings
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

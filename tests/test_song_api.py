@@ -20,9 +20,9 @@ import pytest
 from conftest import login_and_csrf, make_test_app
 from sqlalchemy import event
 
-from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.db.queries.songs import list_songs
+from webauth.passwords import hash_password
 
 _ADMIN_USER = "admin"
 _ADMIN_PASSWORD = "admin12345"

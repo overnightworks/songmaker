@@ -18,6 +18,7 @@ from songmaker_cli.api_models import (
     ShareInventoryType,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_MISMATCH,
@@ -40,11 +41,11 @@ from songmaker_cli.library_cursor import (
     decode_library_cursor,
     encode_library_cursor,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_stream_api import (
     check_queue_stream_rate_limit,
     resolve_library_pool_membership,
 )
+from webauth.dependencies import AuthenticatedUser
 
 router = APIRouter()
 
@@ -77,7 +78,7 @@ def api_library_search(
     if cursor is not None:
         try:
             after = decode_library_cursor(
-                cursor, ctx.session_secret, q=query, sort=sort,
+                cursor, ctx.signing_key, q=query, sort=sort,
             )
         except LibraryCursorInvalidError:
             raise HTTPException(422, LIBRARY_CURSOR_INVALID)
@@ -97,7 +98,7 @@ def api_library_search(
             raise HTTPException(422, LIBRARY_CURSOR_INVALID)
         next_cursor = encode_library_cursor(
             cursor_from_hit(page.items[-1], q=query, sort=sort),
-            ctx.session_secret,
+            ctx.signing_key,
         )
     album_ids = [item.id for item in page.items if isinstance(item, Album)]
     picked_counts = count_picked_songs_by_album(session, album_ids)

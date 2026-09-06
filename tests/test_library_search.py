@@ -28,11 +28,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG
+from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User, Version
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 OWNER_ID = "owner"
 ADMIN_ID = "admin"
@@ -71,7 +71,7 @@ def _client_with_title(
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

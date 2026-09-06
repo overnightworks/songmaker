@@ -22,7 +22,7 @@ from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteRea
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, anthropic_tool_schemas
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 
 @dataclass

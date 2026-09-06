@@ -21,7 +21,7 @@ from songmaker_cli.jobs.generation import (
     _apply_user_lora_path,
     _extract_user_lora_id,
 )
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 USER_A = "u-alice"
 USER_B = "u-bob"
@@ -251,7 +251,7 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
 
     from songmaker_cli.api import router
     from songmaker_cli.app_context import AppContext
-    from songmaker_cli.middleware import get_current_user
+    from songmaker_cli.auth_dependencies import get_current_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -281,7 +281,7 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
 
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     (tmp_path / "data").mkdir()
     app = FastAPI()
