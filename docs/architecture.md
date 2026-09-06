@@ -616,9 +616,19 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
+
+The provider layer never reads songmaker's settings. Its binaries, credential
+mirrors, mounted Codex resources, chat model, API keys, process caps, and
+secret-scrub list arrive as one frozen `ProviderRuntimeConfig`, installed by
+`songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
+two places call it: `server.create_app` for the web container, and
+`worker_base.WorkerBase.on_startup` for the music and scoring workers, which run
+no lifespan. A process that never configures gets a loud
+`ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
+path.
 
 These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` and `webauth` also never import each other. The `.importlinter` contract states these boundaries and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
 
