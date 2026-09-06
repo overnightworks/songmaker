@@ -5,8 +5,12 @@ from __future__ import annotations
 import logging
 
 import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from webauth_arrangement import a_web_auth_config
 
 from webauth import proxies
+from webauth.config import install_web_auth_config
 from webauth.proxies import (
     MAX_ADDRESS_CHARS,
     MAX_FORWARDED_FOR_HOPS,
@@ -247,3 +251,36 @@ def test_client_ip_canonicalizes_an_ipv4_mapped_peer() -> None:
 def test_client_ip_of_a_peer_that_is_not_an_address() -> None:
     trusted = TrustedProxies.parse(_PROXY_NETWORK)
     assert get_client_ip("testclient", ["203.0.113.7"], trusted) == "testclient"
+
+
+def _client_ip_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/client-ip")
+    def client_ip(request: Request) -> dict:
+        return {"ip": proxies.resolve_client_ip(request)}
+
+    return app
+
+
+def test_the_client_identity_of_a_configured_application() -> None:
+    app = _client_ip_app()
+    install_web_auth_config(app, a_web_auth_config())
+
+    with TestClient(app, client=(_TRUSTED_PEER, 55000)) as client:
+        response = client.get("/client-ip", headers={"x-forwarded-for": _CLIENT})
+
+    assert response.json() == {"ip": _CLIENT}
+
+
+def test_an_application_without_a_configuration_names_nobody() -> None:
+    """Guessing here would hand a forged header the identity that binds a
+    session and buys a rate-limit budget, so a missing configuration has to
+    stop the request instead of falling back to the peer."""
+    app = _client_ip_app()
+
+    with (
+        TestClient(app, client=(_TRUSTED_PEER, 55000)) as client,
+        pytest.raises(RuntimeError, match="install_web_auth_config"),
+    ):
+        client.get("/client-ip", headers={"x-forwarded-for": _CLIENT})
