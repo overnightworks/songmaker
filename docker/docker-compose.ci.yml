@@ -27,9 +27,10 @@ services:
   songmaker-web:
     build:
       <<: *gha_cache
-    # The full desktop + mobile suite measured 300 API requests in one run;
-    # keep the isolated stack well above that burst. Production remains at
-    # its 120/600 limits.
+    # The full desktop + mobile suite measured 449 API requests in one run
+    # (CI run 34039372545, 2026-09-06, with admin-models.spec.ts); keep the
+    # isolated stack well above that burst. Production remains at its 120/600
+    # limits.
     environment:
       IP_RATE_LIMIT: "2000"
       # The 2026-09-05 CI run opened 30 streams successfully; the 31st returned 429.

@@ -606,6 +606,28 @@ the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
+Those three tasks — Co-Writer, Cover, and the scoring Judge — are the whole of
+what asks that one dispatch, and Settings › Admin › **Models** is where all
+three are configured: one table, one row per task, with Task, Provider, Route,
+Model and Status. Every task offers every provider, because what a provider
+cannot do, or has not been set up for, is a reason next to the choice and never
+a missing control: an unusable route stays visible and greyed with its reason
+(`API · key not set`, `CLI · not logged in`, `API · no image tool`), a provider
+option carries its own state, and a model list that could not be fetched says
+`No models` rather than inventing a value. A row saves on change and confirms
+with `Saved.`; a rejected save is a red sub-row with the reason and a retry.
+Because the dispatch never falls back to a sibling route, a saved but unusable
+combination is kept, and it is the next turn or job that ends with the named
+error — the table shows that state, it does not prevent it. Keys and logins
+appear as state only, never as values. How much room the five columns have is
+answered by the card the table sits in rather than by the viewport — the same
+reasoning as the editor's own container query (#185), since the rail and a
+docked panel take hundreds of pixels the viewport still counts — so the column
+geometry is published once as tokens on that card (`--models-columns`) and read
+by both the header row and `ModelsTaskRow.svelte`. Below 768px each row becomes
+one card per task with the same labelled lines;
+`frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
+
 Claude's API route plus Grok's and Codex's CLI routes own the
 same shared co-writer tool loop; the CLI routes carry calls and results in the
 strict text protocol while their built-in tools remain unavailable. Codex starts
