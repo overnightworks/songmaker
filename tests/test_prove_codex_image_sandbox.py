@@ -61,6 +61,16 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     assert f'"{proof.EMPTY_CAPABILITY_MASK}"' in assertions
     assert "EMPTY_CAPABILITY_MASK" not in assertions
     assert "1.1.1.1" in assertions
+    for path in (
+        "/proc/interrupts",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware/memmap/1/type",
+        "/proc/sys/kernel/shmmax",
+    ):
+        assert path in assertions
+    assert "Permission denied" in assertions
 
 
 def test_bubblewrap_startup_probe_matches_the_traced_codex_preflight_form() -> None:
@@ -117,6 +127,16 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
         "-T",
         proof.WEB_SERVICE,
         *proof.bubblewrap_startup_probe_command(),
+    ) in commands
+    assert (
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        proof.WEB_SERVICE,
+        "/bin/sh",
+        "-ec",
+        proof._MASKED_PATH_ASSERTIONS,
     ) in commands
     sandbox = next(
         command

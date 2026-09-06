@@ -6,6 +6,8 @@ import asyncio
 import subprocess
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from songmaker_cli.claude.provider import CliToolSurfaceError, UnavailableError
 from songmaker_cli.lifecycle import (
     report_claude_cli_tool_surface,
@@ -79,7 +81,7 @@ def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
     caplog.set_level("INFO")
     completed = subprocess.CompletedProcess(args=(), returncode=0)
     with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
-        "songmaker_cli.lifecycle.subprocess.run", return_value=completed,
+        "songmaker_cli.lifecycle.subprocess.run", side_effect=(completed, completed),
     ):
         status = report_codex_image_sandbox_runtime()
 
@@ -90,14 +92,63 @@ def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
 def test_codex_cover_startup_probe_uses_codex_embedded_bubblewrap_argv() -> None:
     completed = subprocess.CompletedProcess(args=(), returncode=0)
     with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
-        "songmaker_cli.lifecycle.subprocess.run", return_value=completed,
+        "songmaker_cli.lifecycle.subprocess.run", side_effect=(completed, completed),
     ) as run:
         report_codex_image_sandbox_runtime()
 
-    assert run.call_args.args[0] == (
+    assert run.call_args_list[0].args[0] == (
         "/usr/bin/bwrap",
         "--unshare-user",
         "--unshare-net",
         "--ro-bind", "/", "/",
         "/bin/true",
     )
+    assert run.call_args_list[1].args[0] == (
+        "/usr/bin/bwrap",
+        "--new-session",
+        "--die-with-parent",
+        "--tmpfs", "/",
+        "--dev", "/dev",
+        "--ro-bind", "/bin", "/bin",
+        "--ro-bind", "/etc", "/etc",
+        "--ro-bind", "/lib", "/lib",
+        "--ro-bind", "/lib64", "/lib64",
+        "--ro-bind", "/sbin", "/sbin",
+        "--ro-bind", "/usr", "/usr",
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-net",
+        "--proc", "/proc",
+        "--",
+        "/usr/bin/true",
+    )
+
+
+def test_boot_requires_the_per_run_codex_startup_probe(caplog) -> None:
+    caplog.set_level("INFO")
+    completed = subprocess.CompletedProcess(args=(), returncode=0)
+    failed = subprocess.CompletedProcess(args=(), returncode=1)
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", side_effect=(completed, failed),
+    ):
+        status = report_codex_image_sandbox_runtime()
+
+    assert status == "not_set_up"
+
+
+@pytest.mark.parametrize(
+    "probe_error",
+    [OSError("bwrap not executable"), subprocess.TimeoutExpired(cmd="bwrap", timeout=5)],
+    ids=["oserror", "timeout"],
+)
+def test_boot_marks_the_codex_cover_path_not_set_up_when_the_probe_raises(
+    caplog, probe_error: Exception,
+) -> None:
+    caplog.set_level("INFO")
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", side_effect=probe_error,
+    ):
+        status = report_codex_image_sandbox_runtime()
+
+    assert status == "not_set_up"
+    assert "bubblewrap user namespaces are unavailable" in caplog.text

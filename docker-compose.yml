@@ -168,6 +168,10 @@ services:
       - apparmor=songmaker-web
       - seccomp=scripts/seccomp/songmaker-web.json
       - no-new-privileges:true
+      # Bubblewrap mounts a fresh procfs only when Docker does not overmount
+      # its system paths. songmaker-web's AppArmor profile denies the same
+      # paths by name instead.
+      - systempaths=unconfined
 
   songmaker-music-worker:
     build:
