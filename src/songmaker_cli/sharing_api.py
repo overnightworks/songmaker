@@ -87,7 +87,7 @@ from songmaker_cli.queue_streams import (
     queue_stream_audio_path,
     track_source_from_generation,
 )
-from songmaker_cli.redis_client import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)

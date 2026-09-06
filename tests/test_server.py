@@ -778,7 +778,9 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
 def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "10")
 
-    from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
+    from songmaker_cli.request_policies import build_body_size_policy
+    from songmaker_cli.settings import get_settings
+    from webauth.middleware import BodySizeLimitMiddleware
 
     async def dummy_app(scope, receive, send):
         await receive()
@@ -790,7 +792,9 @@ def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
         await send({"type": "http.response.body", "body": b"ok"})
 
     if True:
-        middleware = BodySizeLimitMiddleware(dummy_app)
+        middleware = BodySizeLimitMiddleware(
+            dummy_app, policy=build_body_size_policy(get_settings()),
+        )
 
         async def run():
             response_started = False
