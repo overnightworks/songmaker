@@ -17,7 +17,7 @@ RUN mkdir -p /home/songmaker/.codex
 COPY --chown=songmaker pyproject.toml uv.lock ./
 # All resolved versions come from the committed uv.lock.
 RUN uv sync --frozen --no-build --no-dev --no-install-project \
-    --extra server # NOSONAR
+    --extra server --extra image # NOSONAR
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
