@@ -11,6 +11,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from conftest import override_provider_runtime
 from PIL import Image
 
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
@@ -46,7 +47,7 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.mark.parametrize("missing", ("cli", "code_mode_host", "resources"))
 def test_cover_image_capability_requires_every_codex_mount(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str,
+    tmp_path: Path, missing: str,
 ) -> None:
     cli = tmp_path / "codex"
     code_mode_host = tmp_path / "codex-code-mode-host"
@@ -55,9 +56,11 @@ def test_cover_image_capability_requires_every_codex_mount(
         binary.write_text("#!/bin/sh\n")
         binary.chmod(0o755)
     resources.mkdir()
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_BINARY", str(cli))
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CODE_MODE_HOST_BINARY", str(code_mode_host))
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_RESOURCES_DIRECTORY", str(resources))
+    override_provider_runtime(
+        codex_cli_binary=str(cli),
+        codex_code_mode_host_binary=code_mode_host,
+        codex_resources_directory=resources,
+    )
 
     assert codex_cli_adapter.codex_cover_image_capability_is_available()
 
@@ -75,7 +78,7 @@ def test_cover_image_capability_requires_every_codex_mount(
 def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror = tmp_path / "auth.json"
     mirror.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(mirror))
+    override_provider_runtime(codex_cli_auth_file=mirror)
     process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
     monkeypatch.setattr(
         codex_cli_adapter,
@@ -596,13 +599,12 @@ def test_codex_cover_image_rejects_the_recorded_no_image_turn(monkeypatch) -> No
 )
 def test_codex_public_adapters_reject_unusable_login_mirrors(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     document: dict | None,
 ) -> None:
     auth_file = tmp_path / "invalid-auth.json"
     if document is not None:
         auth_file.write_text(json.dumps(document))
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
 
     with pytest.raises(codex_cli_adapter.CodexImageLoginError):
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)

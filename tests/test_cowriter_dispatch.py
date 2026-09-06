@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from conftest import override_provider_runtime
 
 from agent_providers.events import (
     AssistantTextEvent,
@@ -324,7 +325,7 @@ def test_closing_a_cli_turn_aborts_its_transport(monkeypatch, provider, transpor
 
 def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
     stream = _Stream()
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    override_provider_runtime(xai_api_key="test-key")
     monkeypatch.setattr(dispatch, "stream_openai_compatible_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
@@ -629,7 +630,7 @@ async def _next_response(responses):
 
 def test_claude_api_dispatches_only_to_the_native_tool_adapter(monkeypatch):
     stream = _Stream()
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    override_provider_runtime(anthropic_api_key="test-key")
     monkeypatch.setattr(dispatch, "stream_claude_api_turn", lambda **_kwargs: stream)
     monkeypatch.setattr(
         dispatch,
@@ -642,7 +643,7 @@ def test_claude_api_dispatches_only_to_the_native_tool_adapter(monkeypatch):
 
 
 def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_attempt(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    override_provider_runtime(anthropic_api_key=None)
     monkeypatch.setattr(
         dispatch,
         "stream_claude_api_turn",

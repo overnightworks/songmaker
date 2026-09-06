@@ -122,6 +122,51 @@ def _reset_settings_cache():
 
 
 @pytest.fixture(autouse=True)
+def _configure_agent_provider_runtime():
+    """Give every test the provider runtime songmaker installs at startup.
+
+    ``agent_providers`` refuses to run unconfigured, and production installs
+    its configuration exactly once — in ``server.create_app`` and in
+    ``WorkerBase.on_startup``. Tests reach provider code directly, so each one
+    starts from a configuration built the same way and drops it afterwards.
+    """
+    from agent_providers.config import reset_config
+    from songmaker_cli.agent_runtime import configure_agent_providers
+    from songmaker_cli.settings import Settings
+
+    configure_agent_providers(Settings())
+    yield
+    reset_config()
+
+
+def override_provider_runtime(**deployment_facts) -> None:
+    """Replace named provider deployment facts for the current test only.
+
+    Test doubles for a mounted binary, credential mirror, or resource
+    directory belong here rather than in a patched module constant: the
+    provider layer reads them from the injected configuration, which the
+    autouse fixture above rebuilds for every test.
+
+    Deliberately replaces the installation rather than adding to it, because
+    ``configure()`` refuses a differing second value. A test that overrides
+    before building its app therefore fails loudly when ``create_app``
+    installs songmaker's own facts over it, instead of silently losing them.
+    """
+    from agent_providers.config import (
+        ProviderRuntimeConfig,
+        configure,
+        current_config,
+        reset_config,
+    )
+
+    replacement = ProviderRuntimeConfig(
+        **{**current_config().model_dump(), **deployment_facts},
+    )
+    reset_config()
+    configure(replacement)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_codex_process_pool():
     """Keep each test independent of Codex CLI process reservations."""
     import songmaker_cli.cowriter.codex_process_pool as pool_mod
@@ -462,9 +507,11 @@ def every_provider_is_configured(monkeypatch):
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    override_provider_runtime(
+        anthropic_api_key="test-key",
+        xai_api_key="test-key",
+        openai_api_key="test-key",
+    )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog._cli_is_logged_in",
         lambda _provider: True,

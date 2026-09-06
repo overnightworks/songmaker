@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from conftest import make_test_app
+from conftest import make_test_app, override_provider_runtime
 
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
@@ -276,9 +276,6 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         for route in ProviderRoute
     }
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog._cli_is_logged_in",
         lambda _provider: True,
@@ -302,6 +299,11 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         server, "provider_status_refresh_loop", lifecycle.provider_status_refresh_loop,
     )
     client, _ = make_test_app(tmp_path)
+    override_provider_runtime(
+        anthropic_api_key="test-key",
+        xai_api_key="test-key",
+        openai_api_key="test-key",
+    )
 
     with client:
         assert client.portal.call(asyncio.to_thread, refreshed.wait, 1)

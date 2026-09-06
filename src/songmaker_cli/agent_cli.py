@@ -17,9 +17,9 @@ from collections import deque
 from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Final, Literal, NotRequired, Required, Sequence, TypedDict, Unpack
 
+from agent_providers.config import current_config
 from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
     CLAUDE_CLI_LOGGED_IN_FIELD,
@@ -27,21 +27,16 @@ from songmaker_cli.constants import (
     CLI_LOGIN_STATUS_CACHE_SECONDS,
     CLI_OUTPUT_READ_LIMIT_BYTES,
     CLI_TERMINATION_GRACE_SECONDS,
-    CODEX_CLI_AUTH_FILE,
-    CODEX_CLI_BINARY,
     CODEX_CLI_LOGGED_IN_MARKER,
     CODEX_CLI_LOGGED_OUT_MARKER,
     CODEX_CLI_MODELS_ARGS,
     CODEX_CLI_STATUS_ARGS,
     COWRITER_MODELS_TIMEOUT_SECONDS,
-    GROK_CLI_AUTH_FILE,
-    GROK_CLI_BINARY,
     GROK_CLI_LOGGED_IN_MARKER,
     GROK_CLI_LOGGED_OUT_MARKER,
     GROK_CLI_MODEL_BULLETS,
     GROK_CLI_MODEL_LIST_MARKER,
     GROK_CLI_STATUS_ARGS,
-    SECRET_ENV_KEYS,
 )
 
 CODEX_CLI_MODEL_CATALOG_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
@@ -190,7 +185,7 @@ CODEX_CLI_CREDENTIALS_INVALID_DETAIL: Final = "could not parse Codex CLI credent
 def scrubbed_env() -> dict[str, str]:
     """Return the inherited environment without application secrets."""
     env = os.environ.copy()
-    for key in SECRET_ENV_KEYS:
+    for key in current_config().secret_env_keys:
         env.pop(key, None)
     return env
 
@@ -1080,7 +1075,7 @@ def _probe_claude_login(binary: str) -> CliLogin:
 
 
 def _probe_grok_status() -> GrokCliStatus:
-    output = _cli_output(GROK_CLI_BINARY, GROK_CLI_STATUS_ARGS)
+    output = _cli_output(current_config().grok_cli_binary, GROK_CLI_STATUS_ARGS)
     if output is None:
         return GrokCliStatus(login=LOGGED_OUT, model_names=())
     login = _parse_grok_login(output)
@@ -1092,7 +1087,7 @@ def _probe_grok_status() -> GrokCliStatus:
 def grok_cli_token_is_present() -> bool:
     """Whether the Grok CLI credential mirror contains a non-empty access token."""
     try:
-        raw_auth = Path(GROK_CLI_AUTH_FILE).read_text()
+        raw_auth = current_config().grok_cli_auth_file.read_text()
     except FileNotFoundError:
         return False
     except OSError as exc:
@@ -1119,7 +1114,7 @@ def grok_cli_token_is_present() -> bool:
 def codex_cli_access_token_is_present() -> bool:
     """Whether the Codex CLI credential mirror contains a non-empty access token."""
     try:
-        raw_auth = Path(CODEX_CLI_AUTH_FILE).read_text()
+        raw_auth = current_config().codex_cli_auth_file.read_text()
     except FileNotFoundError:
         return False
     except OSError as exc:
@@ -1180,7 +1175,7 @@ def _grok_model_names_under(lines: list[str]) -> list[str]:
 
 
 def _probe_codex_login() -> CliLogin:
-    output = _cli_output(CODEX_CLI_BINARY, CODEX_CLI_STATUS_ARGS)
+    output = _cli_output(current_config().codex_cli_binary, CODEX_CLI_STATUS_ARGS)
     if output is None:
         return LOGGED_OUT
     return _parse_codex_login(output)
@@ -1188,7 +1183,7 @@ def _probe_codex_login() -> CliLogin:
 
 def codex_cli_model_catalog() -> str:
     """Return the current JSON catalog emitted by ``codex debug models``."""
-    binary = shutil.which(CODEX_CLI_BINARY)
+    binary = shutil.which(current_config().codex_cli_binary)
     if binary is None:
         raise AgentCliUnavailableError("codex debug models did not return a catalog")
     outcome = run_cli_bounded(
