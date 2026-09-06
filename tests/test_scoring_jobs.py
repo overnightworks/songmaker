@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from conftest import (
     TEST_SECRET,
+    install_app_context,
     make_fake_redis,
     override_provider_runtime,
     refresh_provider_snapshots,
@@ -171,7 +172,7 @@ def admin_client(tmp_path: Path, monkeypatch):
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test")
     app.include_router(router)
     yield TestClient(app), factory

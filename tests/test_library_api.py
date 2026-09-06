@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slugify import slugify
@@ -112,7 +112,7 @@ def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(
         user_id, f"test-{user_id}", role,
     )

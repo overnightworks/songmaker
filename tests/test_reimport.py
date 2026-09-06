@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from conftest import install_app_context
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -229,7 +230,7 @@ def reimport_client(tmp_path: Path):
     from songmaker_cli.middleware import get_current_user
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user()
     app.include_router(router)
     return TestClient(app)

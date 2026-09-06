@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -74,7 +74,7 @@ def _build_app(tmp_path: Path, user_id: str = USER_A) -> tuple[TestClient, AppCo
 
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _user_dep(user_id)
     app.include_router(router)
     return TestClient(app), ctx
@@ -445,7 +445,7 @@ def _make_take(
 
 def _client_for_user(ctx: AppContext, user_id: str, role: str = "user") -> TestClient:
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     from songmaker_cli.api import router
     app.dependency_overrides[get_current_user] = _user_dep(user_id, role)
     app.include_router(router)

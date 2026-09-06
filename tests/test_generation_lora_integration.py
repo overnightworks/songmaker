@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import install_app_context
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.api_models.generation_params import (
@@ -284,7 +285,7 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
     )
     (tmp_path / "data").mkdir()
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = lambda: _auth(USER_B, role="admin")
     app.include_router(router)
     client = TestClient(app)
