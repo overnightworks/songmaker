@@ -84,9 +84,13 @@ for path in \\
   /sys/firmware/memmap/1/type; do
   expect_permission_denied "$path" /bin/cat "$path"
 done
-expect_permission_denied /proc/sys/kernel/shmmax \\
+"""
+# DAC already denies this write to the unprivileged user, so it proves only that
+# the mask section still exists, never the `deny /proc/sys w` rule itself.
+_DAC_COVERED_MASK_WRITE_ASSERTION = """expect_permission_denied /proc/sys/kernel/shmmax \\
   /bin/sh -c 'printf x > "$1"' sh /proc/sys/kernel/shmmax
 """
+_MASKED_PATH_ASSERTIONS += _DAC_COVERED_MASK_WRITE_ASSERTION
 _SANDBOX_ASSERTIONS += _MASKED_PATH_ASSERTIONS
 
 

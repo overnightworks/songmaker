@@ -147,7 +147,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
     try:
         for command in (
             (bubblewrap, *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS),
-            (bubblewrap, *bubblewrap_startup_probe_command()[1:]),
+            (bubblewrap, *_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS),
         ):
             result = subprocess.run(
                 command,
