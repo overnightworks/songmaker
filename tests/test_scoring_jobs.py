@@ -15,7 +15,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, refresh_provider_snapshots
+from conftest import (
+    TEST_SECRET,
+    make_fake_redis,
+    override_provider_runtime,
+    refresh_provider_snapshots,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -299,9 +304,7 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
         set_judge_settings(session, "grok", "grok-4.6")
         session.commit()
 
-    monkeypatch.setenv("XAI_API_KEY", "grok-key")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(xai_api_key="grok-key")
 
     with (
         patch(
@@ -339,9 +342,7 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
         set_judge_settings(session, "grok", "grok-4.6")
         session.commit()
 
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(xai_api_key=None)
 
     with (
         patch(
@@ -409,9 +410,7 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory, audio_dir = _seeded_generation(tmp_path)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(anthropic_api_key=None)
     preflight_completed = threading.Event()
     cli_stopped = threading.Event()
     judged: SongScores | None = None

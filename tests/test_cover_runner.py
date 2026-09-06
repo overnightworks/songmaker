@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from conftest import override_provider_runtime
 from PIL import Image
 
 import songmaker_cli.cover_runner as cover_runner
@@ -268,7 +269,7 @@ def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
 
     from songmaker_cli.cowriter import codex_cli_adapter
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
     monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
     return spawned, abort_requested, allow_reap, reaped, process_pool
