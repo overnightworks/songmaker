@@ -145,8 +145,8 @@ def _final_event(events: list[dict]) -> dict:
 
 
 def test_mcp_cli_cmd_includes_required_flags():
+    from agent_providers.claude.provider import _build_mcp_cli_cmd
     from agent_providers.config import current_config
-    from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
     cmd = _build_mcp_cli_cmd(
         "claude", "claude-opus-4-6", "/tmp/mcp.json", current_config().mcp_server,
@@ -164,8 +164,8 @@ def test_mcp_cli_cmd_includes_required_flags():
 
 
 def test_mcp_config_passes_user_id_to_subprocess_env():
+    from agent_providers.claude.provider import _build_mcp_config
     from agent_providers.config import current_config
-    from songmaker_cli.claude.provider import _build_mcp_config
 
     cfg = json.loads(_build_mcp_config(current_config().mcp_server, "user-xyz"))
     srv = cfg["mcpServers"]["songmaker"]
@@ -177,7 +177,7 @@ def test_mcp_config_passes_user_id_to_subprocess_env():
 def test_acall_claude_with_mcp_dispatches_to_cli(monkeypatch):
     import asyncio
 
-    from songmaker_cli.claude import provider
+    from agent_providers.claude import provider
 
     monkeypatch.setattr(provider, "_require_claude_binary", lambda: "/bin/claude")
 
@@ -214,7 +214,7 @@ def test_acall_claude_with_mcp_dispatches_to_cli(monkeypatch):
 def test_acall_claude_with_mcp_returns_unavailable_on_failure(monkeypatch):
     import asyncio
 
-    from songmaker_cli.claude import provider
+    from agent_providers.claude import provider
 
     monkeypatch.setattr(provider, "_require_claude_binary", lambda: "/bin/claude")
 
@@ -234,7 +234,7 @@ def test_acall_claude_with_mcp_returns_unavailable_on_failure(monkeypatch):
 def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
     import asyncio
 
-    from songmaker_cli.claude import provider
+    from agent_providers.claude import provider
 
     monkeypatch.setattr(provider, "_require_claude_binary", lambda: "/bin/claude")
 
@@ -251,7 +251,7 @@ def test_acall_claude_with_mcp_raises_when_binary_missing(monkeypatch):
 def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
     import asyncio
 
-    from songmaker_cli.claude import provider
+    from agent_providers.claude import provider
 
     monkeypatch.setattr(provider, "_require_claude_binary", lambda: "/bin/claude")
 
@@ -439,13 +439,13 @@ def test_chat_turn_disconnect_reaps_provider_before_asgi_23_response_returns(cli
                 "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
                 _keep_heartbeat,
             ), patch(
-                "songmaker_cli.claude.provider._spawn_reserved_async_cli_process",
+                "agent_providers.claude.provider._spawn_reserved_async_cli_process",
                 _spawn,
             ), patch(
-                "songmaker_cli.claude.provider._consume_stream",
+                "agent_providers.claude.provider._consume_stream",
                 _consume,
             ), patch(
-                "songmaker_cli.claude.provider._reap_process_group",
+                "agent_providers.claude.provider._reap_process_group",
                 _reap,
             ):
                 response = await api_chat_turn(

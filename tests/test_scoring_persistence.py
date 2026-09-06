@@ -92,7 +92,7 @@ def claude_call():
 
 
 def _verdict(text: str):
-    from songmaker_cli.claude.provider import ClaudeResponse
+    from agent_providers.claude.provider import ClaudeResponse
 
     return ClaudeResponse(text=text)
 

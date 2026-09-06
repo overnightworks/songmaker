@@ -10,7 +10,7 @@ import httpx
 import pytest
 from conftest import override_provider_runtime
 
-from songmaker_cli.agent_cli import AgentCliUnavailableError
+from agent_providers.process import AgentCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
     DependencyUnavailableProvider,
     ProviderRoute,
@@ -201,7 +201,7 @@ def test_snapshot_refreshes_both_routes(monkeypatch):
 
 
 def test_cli_probe_failure_is_isolated_to_its_provider_route(monkeypatch):
-    from songmaker_cli.agent_cli import AgentCliUnavailableError
+    from agent_providers.process import AgentCliUnavailableError
 
     def failing_login(provider: str) -> bool:
         if provider == "grok":

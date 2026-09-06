@@ -2282,7 +2282,7 @@ def test_song_chat_failure_leaves_no_empty_conversation(
     """
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.claude.provider import UnavailableError
+    from agent_providers.claude.provider import UnavailableError
     from songmaker_cli.db.models import Conversation
 
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
@@ -2298,7 +2298,7 @@ def test_song_chat_failure_leaves_no_empty_conversation(
 def test_song_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.claude.provider import UnavailableError
+    from agent_providers.claude.provider import UnavailableError
 
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
@@ -3862,7 +3862,7 @@ def test_chat_success_finalizes_job(client: TestClient) -> None:
 def test_chat_failure_finalizes_job(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.claude.provider import UnavailableError
+    from agent_providers.claude.provider import UnavailableError
 
     mock_acall = AsyncMock(side_effect=UnavailableError("down"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
@@ -3881,7 +3881,7 @@ def test_chat_failure_finalizes_job(client: TestClient) -> None:
 def test_chat_unavailable_hides_details(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.claude.provider import UnavailableError
+    from agent_providers.claude.provider import UnavailableError
 
     err = UnavailableError("Claude CLI error: /home/user/.local/bin...")
     mock_acall = AsyncMock(side_effect=err)

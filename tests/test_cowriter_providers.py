@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent_providers.events import FinalEvent, ToolCallEvent
-from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
+from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     COWRITER_MAX_TOOL_ROUNDS,
@@ -83,10 +83,10 @@ LIVE_CATALOG = {
 def test_legacy_provider_routes_preserve_the_old_per_provider_defaults(monkeypatch, tmp_path):
     factory = init_db(tmp_path / "routes.db")
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli.grok_cli_token_is_present", lambda: True,
+        "agent_providers.process.grok_cli_token_is_present", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli.codex_cli_access_token_is_present", lambda: False,
+        "agent_providers.process.codex_cli_access_token_is_present", lambda: False,
     )
 
     with factory() as session:
@@ -96,15 +96,15 @@ def test_legacy_provider_routes_preserve_the_old_per_provider_defaults(monkeypat
 
 
 def test_unavailable_legacy_probe_defaults_only_its_provider_to_cli(monkeypatch, tmp_path):
-    from songmaker_cli.agent_cli import AgentCliUnavailableError
+    from agent_providers.process import AgentCliUnavailableError
 
     factory = init_db(tmp_path / "routes.db")
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli.grok_cli_token_is_present",
+        "agent_providers.process.grok_cli_token_is_present",
         lambda: (_ for _ in ()).throw(AgentCliUnavailableError("broken")),
     )
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli.codex_cli_access_token_is_present", lambda: False,
+        "agent_providers.process.codex_cli_access_token_is_present", lambda: False,
     )
 
     with factory() as session:
@@ -131,7 +131,7 @@ def test_provider_routes_are_compact_complete_and_reject_malformed_values(tmp_pa
 
 @pytest.fixture(autouse=True)
 def _clear_agent_cli_caches():
-    from songmaker_cli.agent_cli import clear_agent_cli_caches
+    from agent_providers.process import clear_agent_cli_caches
     from songmaker_cli.cowriter.catalog import clear_provider_snapshots
 
     clear_agent_cli_caches()
@@ -1170,7 +1170,7 @@ def _stub_cli_runners(
     codex: CliLogin = LOGGED_OUT,
 ) -> dict[str, int]:
     calls = {"claude": 0, "grok": 0, "codex": 0}
-    monkeypatch.setattr("songmaker_cli.claude.provider._find_claude_binary", lambda: "claude")
+    monkeypatch.setattr("agent_providers.claude.provider._find_claude_binary", lambda: "claude")
 
     def fake_claude_output(_binary: str) -> str:
         calls["claude"] += 1
@@ -1190,8 +1190,8 @@ def _stub_cli_runners(
         calls["codex"] += 1
         return "Logged in using ChatGPT" if codex.logged_in else "Not logged in"
 
-    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", fake_claude_output)
-    monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", fake_cli_output)
+    monkeypatch.setattr("agent_providers.process._claude_output", fake_claude_output)
+    monkeypatch.setattr("agent_providers.process._cli_output", fake_cli_output)
     return calls
 
 
@@ -1397,9 +1397,9 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
     _stub_cli_runners(monkeypatch)
 
     if provider == "claude":
-        monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", lambda _binary: "not JSON")
+        monkeypatch.setattr("agent_providers.process._claude_output", lambda _binary: "not JSON")
     else:
-        monkeypatch.setattr("songmaker_cli.agent_cli._cli_output", lambda *_args: "not status")
+        monkeypatch.setattr("agent_providers.process._cli_output", lambda *_args: "not status")
     refresh_provider_snapshots()
     from songmaker_cli.cowriter.catalog import UnconfiguredProvider, provider_snapshot
 
@@ -1424,7 +1424,7 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
 def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
     monkeypatch, provider,
 ):
-    from songmaker_cli.agent_cli import AgentCliUnavailableError
+    from agent_providers.process import AgentCliUnavailableError
     from songmaker_cli.cowriter.catalog import (
         ProviderRoute,
         ProviderRouteReadinessState,
@@ -1476,13 +1476,13 @@ def test_settings_responses_project_one_snapshot_generation_per_provider(
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
 def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkeypatch, provider):
-    from songmaker_cli import agent_cli
+    from agent_providers import process
 
     _configure_only_these_api_keys()
     _stub_cli_runners(monkeypatch)
 
     def timed_out():
-        raise agent_cli.CliProbeBudgetExceeded("probe timed out")
+        raise process.CliProbeBudgetExceeded("probe timed out")
 
     if provider == "claude":
         started = threading.Event()
@@ -1493,17 +1493,17 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
             release.wait(timeout=1)
             return None
 
-        monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
-        monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
+        monkeypatch.setattr("agent_providers.process._claude_output", _hanging_output)
+        monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
     elif provider == "grok":
         monkeypatch.setattr(
-            agent_cli._grok_status_probe,
+            process._grok_status_probe,
             "get",
             timed_out,
         )
     else:
         monkeypatch.setattr(
-            agent_cli._codex_login_probe,
+            process._codex_login_probe,
             "get",
             timed_out,
         )
@@ -1574,11 +1574,11 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
     monkeypatch.setattr(catalog, "list_provider_models", _list_provider_models)
     monkeypatch.setattr(catalog, "_cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
-        "songmaker_cli.claude.provider._find_claude_binary",
+        "agent_providers.claude.provider._find_claude_binary",
         lambda: "/usr/bin/claude",
     )
     monkeypatch.setattr(
-        "songmaker_cli.claude.provider.subprocess.run",
+        "agent_providers.claude.provider.subprocess.run",
         lambda *args, **kwargs: MagicMock(
             stdout="", stderr=secret_stderr, returncode=1,
         ),
@@ -1757,7 +1757,7 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
         calls += 1
         raise AssertionError("settings request started a process")
 
-    monkeypatch.setattr("songmaker_cli.agent_cli.subprocess.Popen", _counting_popen)
+    monkeypatch.setattr("agent_providers.process.subprocess.Popen", _counting_popen)
     client, _ = admin_client
 
     cowriter = client.get("/api/settings/cowriter")

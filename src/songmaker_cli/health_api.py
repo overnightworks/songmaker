@@ -335,6 +335,7 @@ async def health_check(request: Request) -> JSONResponse:
 
     db_ok = _check_db(ctx)
 
+    from agent_providers.claude.provider import claude_cli_tool_surface_health
     from songmaker_cli.acestep_state import read_worker_state, worker_is_online
     from songmaker_cli.arq_pool import (
         get_arq_pool,
@@ -343,7 +344,6 @@ async def health_check(request: Request) -> JSONResponse:
         is_music_worker_healthy,
         is_scoring_worker_healthy,
     )
-    from songmaker_cli.claude.provider import claude_cli_tool_surface_health
     from songmaker_cli.db.queries import count_total_queued_jobs, list_worker_identities
     from songmaker_cli.settings import get_settings
 

@@ -13,7 +13,7 @@ from conftest import override_provider_runtime
 from PIL import Image
 
 import songmaker_cli.cover_runner as cover_runner
-from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
+from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError, CodexImageQuotaError

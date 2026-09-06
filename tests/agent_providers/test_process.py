@@ -14,8 +14,13 @@ from unittest.mock import patch
 import pytest
 from conftest import override_provider_runtime
 
-from songmaker_cli import agent_cli
-from songmaker_cli.agent_cli import (
+from agent_providers import process
+from agent_providers.constants import (
+    CLAUDE_CLI_AUTH_METHOD_FIELD,
+    CLAUDE_CLI_LOGGED_IN_FIELD,
+    CLI_OUTPUT_READ_LIMIT_BYTES,
+)
+from agent_providers.process import (
     CODEX_CLI_CREDENTIALS_INVALID_DETAIL,
     GROK_CLI_CREDENTIALS_INVALID_DETAIL,
     AgentCliUnavailableError,
@@ -35,12 +40,7 @@ from songmaker_cli.agent_cli import (
     run_cli_bounded,
     scrubbed_env,
 )
-from songmaker_cli.constants import (
-    CLAUDE_CLI_AUTH_METHOD_FIELD,
-    CLAUDE_CLI_LOGGED_IN_FIELD,
-    CLI_OUTPUT_READ_LIMIT_BYTES,
-    SECRET_ENV_KEYS,
-)
+from songmaker_cli.constants import SECRET_ENV_KEYS
 
 GROK_LOGGED_IN = """You are logged in with grok.com.
 
@@ -66,15 +66,15 @@ def _clear_probe_caches():
 
 
 def _a_cli_that_says(output: str | None):
-    return patch("songmaker_cli.agent_cli._cli_output", return_value=output)
+    return patch("agent_providers.process._cli_output", return_value=output)
 
 
 def _a_claude_cli_that_says(output: str | None):
-    return patch("songmaker_cli.agent_cli._claude_output", return_value=output)
+    return patch("agent_providers.process._claude_output", return_value=output)
 
 
 def _a_shell_pretending_to_be_a_cli():
-    return patch("songmaker_cli.agent_cli.shutil.which", return_value="/bin/sh")
+    return patch("agent_providers.process.shutil.which", return_value="/bin/sh")
 
 
 def test_claude_reports_the_account_its_json_status_names() -> None:
@@ -107,8 +107,8 @@ def test_a_claude_probe_that_exceeds_its_caller_budget_is_logged_out(monkeypatch
         release.wait(timeout=1)
         return None
 
-    monkeypatch.setattr("songmaker_cli.agent_cli._claude_output", _hanging_output)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr("agent_providers.process._claude_output", _hanging_output)
+    monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
     try:
         login = claude_cli_login("/mounted/claude")
     finally:
@@ -185,9 +185,9 @@ def test_codex_that_cannot_be_asked_counts_as_logged_out() -> None:
 
 def test_codex_model_catalog_reads_past_the_login_probe_limit(monkeypatch) -> None:
     catalog_length = CLI_OUTPUT_READ_LIMIT_BYTES + 1
-    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: sys.executable)
+    monkeypatch.setattr(process.shutil, "which", lambda _binary: sys.executable)
     monkeypatch.setattr(
-        agent_cli,
+        process,
         "CODEX_CLI_MODELS_ARGS",
         (
             "-c",
@@ -203,7 +203,7 @@ def test_codex_model_catalog_reads_past_the_login_probe_limit(monkeypatch) -> No
 
 
 def test_codex_model_catalog_without_a_binary_raises(monkeypatch) -> None:
-    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: None)
+    monkeypatch.setattr(process.shutil, "which", lambda _binary: None)
 
     with pytest.raises(
         AgentCliUnavailableError,
@@ -245,7 +245,7 @@ def test_a_second_claude_ask_reuses_the_recent_answer() -> None:
 def test_expired_cache_asks_the_cli_again() -> None:
     with (
         _a_cli_that_says(CODEX_LOGGED_IN) as spawn,
-        patch("songmaker_cli.agent_cli.CLI_LOGIN_STATUS_CACHE_SECONDS", 0),
+        patch("agent_providers.process.CLI_LOGIN_STATUS_CACHE_SECONDS", 0),
     ):
         codex_cli_login()
         codex_cli_login()
@@ -369,7 +369,7 @@ def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None
         return "answer"
 
     cached = CachedProbe(probe)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.05)
 
     def first_ask() -> None:
         try:
@@ -395,8 +395,8 @@ def test_a_follower_waits_only_its_own_single_flight_budget(monkeypatch) -> None
 def test_run_cli_returns_after_its_answer_budget_and_cleanup_grace(monkeypatch) -> None:
     answer_budget = 0.05
     cleanup_grace = 0.05
-    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", answer_budget)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", cleanup_grace)
+    monkeypatch.setattr("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", answer_budget)
+    monkeypatch.setattr("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", cleanup_grace)
 
     started_at = time.monotonic()
     run = run_cli("/bin/sh", ("-c", "trap '' TERM; while :; do :; done"))
@@ -444,7 +444,7 @@ def test_a_cli_that_floods_us_is_read_only_up_to_the_limit() -> None:
 def test_a_cli_that_never_answers_is_given_up_on() -> None:
     with (
         _a_shell_pretending_to_be_a_cli(),
-        patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2),
+        patch("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2),
     ):
         assert _cli_output("grok", ("-c", "while :; do :; done")) is None
 
@@ -455,14 +455,14 @@ def test_a_cli_that_leaves_a_child_behind_is_terminated_with_its_group() -> None
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
     with (
         _a_shell_pretending_to_be_a_cli(),
-        patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2),
-        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process),
+        patch("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2),
+        patch("agent_providers.process.subprocess.Popen", side_effect=capture_process),
     ):
         assert _cli_output("grok", ("-c", command)) is None
 
@@ -477,15 +477,15 @@ def test_a_sigterm_ignoring_cli_and_child_are_reaped_after_sigkill() -> None:
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
     with (
         _a_shell_pretending_to_be_a_cli(),
-        patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.05),
-        patch("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.1),
-        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process),
+        patch("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.05),
+        patch("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", 0.1),
+        patch("agent_providers.process.subprocess.Popen", side_effect=capture_process),
     ):
         assert _cli_output("grok", ("-c", command)) is None
 
@@ -500,25 +500,25 @@ def test_a_spawn_that_returns_after_its_deadline_is_reaped() -> None:
     reaped = threading.Event()
     started: list[subprocess.Popen[bytes]] = []
     real_popen = subprocess.Popen
-    real_reap = agent_cli._reap_process_group
+    real_reap = process._reap_process_group
 
     def late_process(*args, **kwargs):
         release_spawn.wait()
-        process = real_popen(*args, **kwargs)
-        started.append(process)
+        child = real_popen(*args, **kwargs)
+        started.append(child)
         spawned.set()
-        return process
+        return child
 
-    def capture_reap(process: subprocess.Popen[bytes]) -> bool:
+    def capture_reap(child: subprocess.Popen[bytes]) -> bool:
         try:
-            return real_reap(process)
+            return real_reap(child)
         finally:
             reaped.set()
 
     with (
-        patch("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.1),
-        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=late_process),
-        patch("songmaker_cli.agent_cli._reap_process_group", side_effect=capture_reap),
+        patch("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.1),
+        patch("agent_providers.process.subprocess.Popen", side_effect=late_process),
+        patch("agent_providers.process._reap_process_group", side_effect=capture_reap),
     ):
         assert run_cli("/bin/sh", ("-c", "while :; do :; done")) is None
         release_spawn.set()
@@ -538,18 +538,18 @@ def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() 
     spawned_process_ids: list[int] = []
     reaped_processes: list[tuple[int, bool]] = []
     real_popen = subprocess.Popen
-    real_reap = agent_cli._reap_process_group
+    real_reap = process._reap_process_group
 
     def late_process(*args, **kwargs):
         release_spawn.wait()
-        process = real_popen(*args, **kwargs)
-        started.append(process)
+        child = real_popen(*args, **kwargs)
+        started.append(child)
         spawned.set()
-        return process
+        return child
 
-    def capture_reap(process: subprocess.Popen[bytes]) -> bool:
+    def capture_reap(child: subprocess.Popen[bytes]) -> bool:
         try:
-            return real_reap(process)
+            return real_reap(child)
         finally:
             reaped.set()
 
@@ -558,8 +558,8 @@ def test_bounded_runner_returns_on_a_stalled_spawn_and_reaps_its_late_process() 
         callbacks_reaped.set()
 
     with (
-        patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=late_process),
-        patch("songmaker_cli.agent_cli._reap_process_group", side_effect=capture_reap),
+        patch("agent_providers.process.subprocess.Popen", side_effect=late_process),
+        patch("agent_providers.process._reap_process_group", side_effect=capture_reap),
     ):
         deadline = time.monotonic() + 0.05
         assert run_cli_bounded(
@@ -585,7 +585,7 @@ def test_bounded_runner_reports_a_spawn_error() -> None:
     error = OSError("cannot start")
     spawned_process_ids: list[int] = []
     reaped_processes: list[tuple[int, bool]] = []
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=error):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=error):
         outcome = run_cli_bounded(
             ("missing-cli",),
             stdin_payload=None,
@@ -611,7 +611,7 @@ def test_bounded_runner_reports_a_non_os_spawn_error_immediately() -> None:
     reaped_processes: list[tuple[int, bool]] = []
     deadline = time.monotonic() + 1
 
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=error):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=error):
         outcome = run_cli_bounded(
             (),
             stdin_payload=None,
@@ -636,7 +636,7 @@ def test_bounded_runner_carries_an_output_io_error(monkeypatch) -> None:
     def fail_to_set_blocking(_fd: int, _value: bool) -> None:
         raise error
 
-    monkeypatch.setattr("songmaker_cli.agent_cli.os.set_blocking", fail_to_set_blocking)
+    monkeypatch.setattr("agent_providers.process.os.set_blocking", fail_to_set_blocking)
 
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "printf output"),
@@ -660,7 +660,7 @@ def test_bounded_runner_reports_a_stdin_close_error_after_spawning(monkeypatch) 
     def record_reaped(process_id: int, became_zombie: bool) -> None:
         reaped_processes.append((process_id, became_zombie))
 
-    monkeypatch.setattr("songmaker_cli.agent_cli._close_stdin", fail_to_close_stdin)
+    monkeypatch.setattr("agent_providers.process._close_stdin", fail_to_close_stdin)
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "exec sleep 10"),
         stdin_payload=None,
@@ -679,16 +679,16 @@ def test_bounded_runner_reports_a_stdin_close_error_after_spawning(monkeypatch) 
 def test_bounded_runner_returns_when_its_cleanup_margin_expires(monkeypatch) -> None:
     release_cleanup = threading.Event()
     reaped = threading.Event()
-    real_reap = agent_cli._reap_process_group
+    real_reap = process._reap_process_group
 
-    def delayed_reap(process: subprocess.Popen[bytes]) -> bool:
+    def delayed_reap(child: subprocess.Popen[bytes]) -> bool:
         release_cleanup.wait(timeout=1)
         try:
-            return real_reap(process)
+            return real_reap(child)
         finally:
             reaped.set()
 
-    monkeypatch.setattr("songmaker_cli.agent_cli._reap_process_group", delayed_reap)
+    monkeypatch.setattr("agent_providers.process._reap_process_group", delayed_reap)
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "exec sleep 10"),
         stdin_payload=None,
@@ -711,21 +711,21 @@ def test_bounded_runner_notifies_a_zombie_reap_only_after_background_confirmatio
     spawned_process_ids: list[int] = []
     callbacks: list[tuple[int, bool]] = []
 
-    def await_background_reap(process, callback) -> None:
+    def await_background_reap(child, callback) -> None:
         background_started.set()
         assert allow_background_reap.wait(timeout=1)
-        for stream in (process.stdin, process.stdout, process.stderr):
+        for stream in (child.stdin, child.stdout, child.stderr):
             if stream is not None:
                 stream.close()
-        process.wait()
-        agent_cli._notify_reaped(callback, process.pid, became_zombie=True)
+        child.wait()
+        process._notify_reaped(callback, child.pid, became_zombie=True)
 
     def record_reaped(process_id: int, became_zombie: bool) -> None:
         callbacks.append((process_id, became_zombie))
         callback_finished.set()
 
-    monkeypatch.setattr("songmaker_cli.agent_cli._reap_process_group", lambda _process: True)
-    monkeypatch.setattr("songmaker_cli.agent_cli._reap_in_background", await_background_reap)
+    monkeypatch.setattr("agent_providers.process._reap_process_group", lambda _process: True)
+    monkeypatch.setattr("agent_providers.process._reap_in_background", await_background_reap)
 
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "printf ready"),
@@ -749,11 +749,11 @@ def test_bounded_runner_stops_a_cli_that_never_reads_its_full_stdin_pipe() -> No
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
             ("/bin/sh", "-c", "exec sleep 10"),
             stdin_payload=b"x" * (1024 * 1024),
@@ -771,11 +771,11 @@ def test_bounded_runner_stops_a_cli_that_never_writes_output() -> None:
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
             ("/bin/sh", "-c", "exec sleep 10"),
             stdin_payload=None,
@@ -793,16 +793,16 @@ def test_bounded_runner_marks_an_unconfirmed_sigkill_as_a_zombie(monkeypatch) ->
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        "agent_providers.process._wait_for_process_group_exit",
         lambda _process, _timeout: False,
     )
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+    monkeypatch.setattr("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
             ("/bin/sh", "-c", "trap '' TERM; while :; do :; done"),
             stdin_payload=None,
@@ -821,14 +821,14 @@ def test_run_cli_logs_a_sigkill_survivor_without_starting_a_background_reaper(
     reaper_may_finish = threading.Event()
     threads_before = {thread.ident for thread in threading.enumerate()}
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        "agent_providers.process._wait_for_process_group_exit",
         lambda _process, _timeout: False,
     )
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli._process_group_exists",
+        "agent_providers.process._process_group_exists",
         lambda _process_id: not reaper_may_finish.is_set(),
     )
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", 0.01)
     caplog.set_level("WARNING")
 
     try:
@@ -845,7 +845,7 @@ def test_run_cli_logs_a_sigkill_survivor_without_starting_a_background_reaper(
 def test_background_reap_notifies_when_process_group_check_fails(
     monkeypatch, caplog,
 ) -> None:
-    process = subprocess.Popen(
+    child = subprocess.Popen(
         ("/bin/sh", "-c", "printf ready"),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -854,18 +854,18 @@ def test_background_reap_notifies_when_process_group_check_fails(
     callbacks: list[tuple[int, bool]] = []
     error = OSError("cannot check process group")
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli._process_group_exists",
+        "agent_providers.process._process_group_exists",
         lambda _process_id: (_ for _ in ()).throw(error),
     )
     caplog.set_level("ERROR")
 
-    agent_cli._reap_in_background(
-        process,
+    process._reap_in_background(
+        child,
         lambda process_id, became_zombie: callbacks.append((process_id, became_zombie)),
     )
-    process.communicate()
+    child.communicate()
 
-    assert callbacks == [(process.pid, True)]
+    assert callbacks == [(child.pid, True)]
     assert any(
         "background reap of agent CLI process group" in record.message
         for record in caplog.records
@@ -873,7 +873,7 @@ def test_background_reap_notifies_when_process_group_check_fails(
 
 
 def test_bounded_runner_stops_collecting_at_the_byte_limit(monkeypatch) -> None:
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 32)
+    monkeypatch.setattr("agent_providers.process.CLI_OUTPUT_READ_LIMIT_BYTES", 32)
 
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "while :; do printf x; done"),
@@ -888,8 +888,8 @@ def test_bounded_runner_stops_collecting_at_the_byte_limit(monkeypatch) -> None:
 
 
 def test_run_cli_discards_partial_output_when_its_read_deadline_expires(monkeypatch) -> None:
-    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", 0.01)
 
     run = run_cli("/bin/sh", ("-c", "printf partial; exec sleep 10"))
 
@@ -901,17 +901,17 @@ def test_run_cli_keeps_a_started_cli_result_when_cleanup_reports_a_zombie(monkey
     real_popen = subprocess.Popen
 
     def capture_process(*args, **kwargs):
-        process = real_popen(*args, **kwargs)
-        started.append(process)
-        return process
+        child = real_popen(*args, **kwargs)
+        started.append(child)
+        return child
 
-    monkeypatch.setattr("songmaker_cli.agent_cli.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_TERMINATION_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr("agent_providers.process.COWRITER_MODELS_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr("agent_providers.process.CLI_TERMINATION_GRACE_SECONDS", 0.01)
     monkeypatch.setattr(
-        "songmaker_cli.agent_cli._wait_for_process_group_exit",
+        "agent_providers.process._wait_for_process_group_exit",
         lambda _process, _timeout: False,
     )
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
         run = run_cli("/bin/sh", ("-c", "trap '' TERM; while :; do :; done"))
 
     assert run is not None
@@ -982,7 +982,7 @@ def test_bounded_runner_drains_both_output_streams_in_all_mode() -> None:
 
 
 def test_bounded_runner_applies_its_byte_limit_to_both_streams(monkeypatch) -> None:
-    monkeypatch.setattr("songmaker_cli.agent_cli.CLI_OUTPUT_READ_LIMIT_BYTES", 4)
+    monkeypatch.setattr("agent_providers.process.CLI_OUTPUT_READ_LIMIT_BYTES", 4)
 
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", "printf 123; printf abc >&2"),
@@ -1018,7 +1018,7 @@ def test_bounded_runner_can_discard_stderr() -> None:
     ],
 )
 def test_an_incomplete_or_failed_run_is_not_accepted_as_authenticated(run: CliRun) -> None:
-    with patch("songmaker_cli.agent_cli.run_cli", return_value=run):
+    with patch("agent_providers.process.run_cli", return_value=run):
         login = codex_cli_login()
 
     assert login.logged_in is False
@@ -1028,7 +1028,7 @@ def test_claude_parses_only_stdout() -> None:
     stdout = json.dumps({CLAUDE_CLI_LOGGED_IN_FIELD: True})
     stderr = json.dumps({CLAUDE_CLI_LOGGED_IN_FIELD: False})
     run = CliRun(returncode=0, stdout=stdout, stderr=stderr, complete=True)
-    with patch("songmaker_cli.agent_cli.run_cli", return_value=run):
+    with patch("agent_providers.process.run_cli", return_value=run):
         login = claude_cli_login("/mounted/claude")
 
     assert login.logged_in is True
@@ -1042,14 +1042,14 @@ def test_claude_parses_only_stdout() -> None:
     ],
 )
 def test_claude_does_not_accept_a_failed_or_incomplete_run(run: CliRun) -> None:
-    with patch("songmaker_cli.agent_cli.run_cli", return_value=run):
+    with patch("agent_providers.process.run_cli", return_value=run):
         login = claude_cli_login("/mounted/claude")
 
     assert login.logged_in is False
 
 
 def test_a_cli_that_is_not_installed_cannot_be_asked() -> None:
-    with patch("songmaker_cli.agent_cli.shutil.which", return_value=None):
+    with patch("agent_providers.process.shutil.which", return_value=None):
         assert _cli_output("grok", ("models",)) is None
 
 
@@ -1065,7 +1065,7 @@ def test_a_spawned_cli_never_sees_our_secrets(monkeypatch) -> None:
 def test_child_environment_additions_are_local_to_the_spawned_cli(monkeypatch) -> None:
     monkeypatch.delenv("CODEX_HOME", raising=False)
 
-    child_env = agent_cli._child_env({"CODEX_HOME": "/private/codex-home"})
+    child_env = process._child_env({"CODEX_HOME": "/private/codex-home"})
 
     assert child_env["CODEX_HOME"] == "/private/codex-home"
     assert "CODEX_HOME" not in os.environ
@@ -1183,7 +1183,7 @@ def test_bounded_runner_uses_and_removes_a_private_prompt_file() -> None:
         observed.append((prompt_path, os.stat(prompt_path).st_mode & 0o777))
         return real_popen(command, **kwargs)
 
-    with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
+    with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
         outcome = run_cli_bounded(
             ("/bin/sh", "-c", "cat \"$1\"", "unused", "placeholder"),
             stdin_payload=None,
@@ -1211,8 +1211,8 @@ def test_bounded_runner_treats_a_missing_prompt_file_as_already_removed(monkeypa
         raise FileNotFoundError
 
     try:
-        with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
-            monkeypatch.setattr(agent_cli.os, "unlink", report_missing_file)
+        with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
+            monkeypatch.setattr(process.os, "unlink", report_missing_file)
             outcome = run_cli_bounded(
                 ("/bin/sh", "-c", ":", "unused", "placeholder"),
                 stdin_payload=None,
@@ -1252,8 +1252,8 @@ def test_bounded_runner_publishes_prompt_unlink_errors_to_waiting_consumers(monk
     consumer.start()
     assert ready_to_receive.wait(timeout=1)
     try:
-        with patch("songmaker_cli.agent_cli.subprocess.Popen", side_effect=capture_process):
-            monkeypatch.setattr(agent_cli.os, "unlink", fail_to_unlink)
+        with patch("agent_providers.process.subprocess.Popen", side_effect=capture_process):
+            monkeypatch.setattr(process.os, "unlink", fail_to_unlink)
             outcome = run_cli_bounded(
                 ("/bin/sh", "-c", ":", "unused", "placeholder"),
                 stdin_payload=None,
@@ -1276,7 +1276,7 @@ def test_bounded_runner_publishes_prompt_unlink_errors_to_waiting_consumers(monk
 
 
 def test_bounded_runner_creates_no_prompt_file_without_prompt_bytes() -> None:
-    with patch("songmaker_cli.agent_cli.tempfile.mkstemp") as create_prompt_file:
+    with patch("agent_providers.process.tempfile.mkstemp") as create_prompt_file:
         outcome = run_cli_bounded(
             ("/bin/sh", "-c", "printf ready"),
             stdin_payload=None,
@@ -1333,8 +1333,8 @@ def test_bounded_runner_removes_a_private_prompt_file_when_writing_it_fails(
         os.close(descriptor)
         raise OSError("cannot write private prompt")
 
-    monkeypatch.setattr(agent_cli.tempfile, "mkstemp", create_prompt_file)
-    monkeypatch.setattr(agent_cli.os, "fdopen", fail_to_open)
+    monkeypatch.setattr(process.tempfile, "mkstemp", create_prompt_file)
+    monkeypatch.setattr(process.os, "fdopen", fail_to_open)
 
     outcome = run_cli_bounded(
         ("/bin/sh", "-c", ":", "placeholder"),
@@ -1391,9 +1391,9 @@ def test_credential_probe_names_malformed_mounted_credentials(
     credential_file = tmp_path / f"{checker}.json"
     credential_file.write_text(payload)
     function = (
-        agent_cli.grok_cli_token_is_present
+        process.grok_cli_token_is_present
         if checker == "grok"
-        else agent_cli.codex_cli_access_token_is_present
+        else process.codex_cli_access_token_is_present
     )
     field = "grok_cli_auth_file" if checker == "grok" else "codex_cli_auth_file"
     override_provider_runtime(**{field: credential_file})

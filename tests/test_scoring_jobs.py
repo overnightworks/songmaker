@@ -25,12 +25,12 @@ from conftest import (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     JUDGE_DEFAULT_PROVIDER,
-    JUDGE_FAILURE_TIMEOUT,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
 )
@@ -439,11 +439,11 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
             )),
         ),
         patch(
-            "songmaker_cli.claude.provider.verify_no_builtin_cli_tools",
+            "agent_providers.claude.provider.verify_no_builtin_cli_tools",
             side_effect=verified_binary,
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
+            "agent_providers.claude.provider.subprocess.run",
             side_effect=timed_out_cli,
         ),
         patch(
