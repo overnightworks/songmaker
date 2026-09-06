@@ -48,7 +48,7 @@ def refused_write_probe(path: str) -> str:
     observes the subshell's exit status, so a refused write reads as false on
     both shells and a successful write still reports the failure.
     """
-    return f"""if ( : > {path} ) 2>/dev/null; then
+    return f"""if ( : > "{path}" ) 2>/dev/null; then
   echo 'sandbox wrote outside CODEX_HOME' >&2
   exit 1
 fi
