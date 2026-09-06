@@ -9,6 +9,85 @@ from typing import Final
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 from acestep_engine.settings import get_engine_settings
 
+# Transitional re-export of the provider mechanics that moved to
+# agent_providers.constants (#856): the modules outside the provider layer keep
+# importing them from here until A6 rewrites their import sites. Nothing below
+# is defined twice — docs/architecture.md carries the ruled Go/Stay table.
+from agent_providers.constants import ANTHROPIC_API_VERSION as ANTHROPIC_API_VERSION
+from agent_providers.constants import CLAUDE_CLI_AUTH_METHOD_FIELD as CLAUDE_CLI_AUTH_METHOD_FIELD
+from agent_providers.constants import (
+    CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS as CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
+)
+from agent_providers.constants import CLAUDE_CLI_LOGGED_IN_FIELD as CLAUDE_CLI_LOGGED_IN_FIELD
+from agent_providers.constants import (
+    CLAUDE_CLI_MAX_CONCURRENT_PROCESSES as CLAUDE_CLI_MAX_CONCURRENT_PROCESSES,
+)
+from agent_providers.constants import (
+    CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS as CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+)
+from agent_providers.constants import (
+    CLAUDE_CLI_SIGTERM_GRACE_SECONDS as CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
+)
+from agent_providers.constants import CLAUDE_CLI_STATUS_ARGS as CLAUDE_CLI_STATUS_ARGS
+from agent_providers.constants import (
+    CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS as CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
+)
+from agent_providers.constants import (
+    CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS as CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+)
+from agent_providers.constants import (
+    CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS as CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
+)
+from agent_providers.constants import (
+    CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS as CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+)
+from agent_providers.constants import (
+    CLI_LOGIN_STATUS_CACHE_SECONDS as CLI_LOGIN_STATUS_CACHE_SECONDS,
+)
+from agent_providers.constants import CLI_OUTPUT_READ_LIMIT_BYTES as CLI_OUTPUT_READ_LIMIT_BYTES
+from agent_providers.constants import CLI_TERMINATION_GRACE_SECONDS as CLI_TERMINATION_GRACE_SECONDS
+from agent_providers.constants import CODEX_CLI_LOGGED_IN_MARKER as CODEX_CLI_LOGGED_IN_MARKER
+from agent_providers.constants import CODEX_CLI_LOGGED_OUT_MARKER as CODEX_CLI_LOGGED_OUT_MARKER
+from agent_providers.constants import CODEX_CLI_MODELS_ARGS as CODEX_CLI_MODELS_ARGS
+from agent_providers.constants import CODEX_CLI_STATUS_ARGS as CODEX_CLI_STATUS_ARGS
+from agent_providers.constants import COWRITER_ANTHROPIC_MODELS_URL as COWRITER_ANTHROPIC_MODELS_URL
+from agent_providers.constants import (
+    COWRITER_CLAUDE_API_MAX_TOKENS as COWRITER_CLAUDE_API_MAX_TOKENS,
+)
+from agent_providers.constants import (
+    COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER as COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
+)
+from agent_providers.constants import COWRITER_CLAUDE_MODEL_PREFIX as COWRITER_CLAUDE_MODEL_PREFIX
+from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS as COWRITER_CLI_TIMEOUT_SECONDS
+from agent_providers.constants import COWRITER_GROK_CHAT_URL as COWRITER_GROK_CHAT_URL
+from agent_providers.constants import (
+    COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY as COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY,
+)
+from agent_providers.constants import COWRITER_GROK_MODEL_PREFIX as COWRITER_GROK_MODEL_PREFIX
+from agent_providers.constants import COWRITER_GROK_MODELS_URL as COWRITER_GROK_MODELS_URL
+from agent_providers.constants import (
+    COWRITER_GROK_NON_CHAT_MARKERS as COWRITER_GROK_NON_CHAT_MARKERS,
+)
+from agent_providers.constants import (
+    COWRITER_MODELS_TIMEOUT_SECONDS as COWRITER_MODELS_TIMEOUT_SECONDS,
+)
+from agent_providers.constants import COWRITER_OPENAI_CHAT_PREFIXES as COWRITER_OPENAI_CHAT_PREFIXES
+from agent_providers.constants import COWRITER_OPENAI_CHAT_URL as COWRITER_OPENAI_CHAT_URL
+from agent_providers.constants import COWRITER_OPENAI_MODELS_URL as COWRITER_OPENAI_MODELS_URL
+from agent_providers.constants import (
+    COWRITER_OPENAI_NON_CHAT_MARKERS as COWRITER_OPENAI_NON_CHAT_MARKERS,
+)
+from agent_providers.constants import COWRITER_PROVIDERS as COWRITER_PROVIDERS
+from agent_providers.constants import GROK_CLI_LOGGED_IN_MARKER as GROK_CLI_LOGGED_IN_MARKER
+from agent_providers.constants import GROK_CLI_LOGGED_OUT_MARKER as GROK_CLI_LOGGED_OUT_MARKER
+from agent_providers.constants import GROK_CLI_MODEL_BULLETS as GROK_CLI_MODEL_BULLETS
+from agent_providers.constants import GROK_CLI_MODEL_LIST_MARKER as GROK_CLI_MODEL_LIST_MARKER
+from agent_providers.constants import GROK_CLI_STATUS_ARGS as GROK_CLI_STATUS_ARGS
+from agent_providers.constants import (
+    GROK_CLI_STREAMING_OUTPUT_FORMAT as GROK_CLI_STREAMING_OUTPUT_FORMAT,
+)
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT as JUDGE_FAILURE_TIMEOUT
+
 APP_NAME = "Hallucinai"
 
 JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audio"
@@ -190,95 +269,21 @@ TURN_BLOCK_MENTIONED_ALBUM = "mentioned_album"
 TURN_BLOCK_CURRENT_TAKE = "current_take"
 TURN_BLOCK_NO_TAKE = "no_take"
 
-COWRITER_PROVIDERS: Final[frozenset[str]] = frozenset({"claude", "grok", "codex"})
 COWRITER_DEFAULT_PROVIDER = "claude"
 COWRITER_DEFAULT_TAIL_TOKEN_BUDGET = 24_000
 COWRITER_MIN_TAIL_TOKEN_BUDGET = 2_000
 COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000
-COWRITER_CLI_TIMEOUT_SECONDS = 600
-COWRITER_CLAUDE_API_MAX_TOKENS = 4_096
-COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY = 64
 COWRITER_MAX_TOOL_ROUNDS = 8
-COWRITER_MODELS_TIMEOUT_SECONDS = 15
-CLI_LOGIN_STATUS_CACHE_SECONDS = 30
-# Agent CLI login probes return only a few hundred bytes. These bounds keep a
-# broken mounted binary from holding a request or its memory indefinitely.
-CLI_OUTPUT_READ_LIMIT_BYTES = 64 * 1024
-CLI_TERMINATION_GRACE_SECONDS = 1
-# The real init event measured 0.34s (see docs/security.md); these budgets
-# keep a wide margin over that without letting a stuck probe block a request
-# for anywhere near as long as the old 30s did.
-CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS = 10
-CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS = 5
-CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS = 120
-# A judge timeout has one stable reason across its provider's own bound and
-# the outer watchdog, so callers need not infer it from incidental prose.
-JUDGE_FAILURE_TIMEOUT: Final[str] = "judge_timeout"
-# Short on purpose: long enough to shield a struggling probe from being
-# re-run by every concurrent caller, short enough that a real repair (binary
-# reinstalled, DB reachable again) is picked up on the next request rather
-# than staying failed for the lifetime of the success cache.
-CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS = 10
-# How long a probe waits for SIGTERM to take effect before escalating to
-# SIGKILL. Named rather than a literal so the reap budget below is legible
-# as spelled-out arithmetic, not a mystery "+1".
-CLAUDE_CLI_SIGTERM_GRACE_SECONDS = 1
-# After SIGKILL a process cannot ignore the signal, so this bounds only the
-# pathological case (an uninterruptible kernel sleep, a stuck watcher) —
-# not a normal exit, which is immediate. Chosen well above that normal case
-# so it never fires in practice, and well below any caller's own timeout so
-# a stuck reap cannot block whoever is waiting on its outcome past it.
-CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS = 5
-# A process that outlives SIGKILL is not a transient hiccup — ten more
-# seconds will not make it healthy, and probing again on that schedule only
-# spawns another zombie. Cached failures of that specific kind get this much
-# longer TTL instead of CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS.
-CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS = 300
-# A hard ceiling on all Claude CLI processes: live turns, probes, and processes
-# that are still waiting for a background reaper. A zombie storm deliberately
-# degrades to refusing new work (fail-closed), rather than growing without bound.
-CLAUDE_CLI_MAX_CONCURRENT_PROCESSES = 8
-COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
-COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
-COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-COWRITER_OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
-COWRITER_ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
-ANTHROPIC_API_VERSION = "2023-06-01"
-COWRITER_GROK_MODEL_PREFIX = "grok-"
-COWRITER_GROK_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
-    "imagine", "image", "video", "voice", "tts", "whisper",
-)
-COWRITER_OPENAI_CHAT_PREFIXES: Final[tuple[str, ...]] = (
-    "gpt-", "o1", "o3", "o4", "codex",
-)
-COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
-    "whisper", "tts", "embedding", "dall-e", "dalle", "transcribe", "realtime",
-    "audio", "image", "search", "moderation",
-)
-COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
-COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER = "Available: "
 
 CLAUDE_CLI_BINARY: Final[str] = "claude"
-CLAUDE_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("auth", "status")
-CLAUDE_CLI_LOGGED_IN_FIELD: Final[str] = "loggedIn"
-CLAUDE_CLI_AUTH_METHOD_FIELD: Final[str] = "authMethod"
 GROK_CLI_BINARY: Final[str] = "grok"
 GROK_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.grok/auth.json"
 GROK_CLI_PROMPT_FILE_PLACEHOLDER: Final[str] = "<songmaker-private-prompt>"
-GROK_CLI_STREAMING_OUTPUT_FORMAT: Final[str] = "streaming-json"
-GROK_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("models",)
-GROK_CLI_LOGGED_IN_MARKER: Final[str] = "You are logged in with "
-GROK_CLI_LOGGED_OUT_MARKER: Final[str] = "You are not authenticated."
-GROK_CLI_MODEL_LIST_MARKER: Final[str] = "Available models:"
-GROK_CLI_MODEL_BULLETS: Final[tuple[str, ...]] = ("* ", "- ")
 CODEX_CLI_BINARY: Final[str] = "codex"
 CODEX_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.codex/auth.json"
 CODEX_CODE_MODE_HOST_BINARY: Final[str] = "/usr/local/bin/codex-code-mode-host"
 CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
-CODEX_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("login", "status")
-CODEX_CLI_MODELS_ARGS: Final[tuple[str, ...]] = ("debug", "models")
-CODEX_CLI_LOGGED_IN_MARKER: Final[str] = "Logged in using "
-CODEX_CLI_LOGGED_OUT_MARKER: Final[str] = "Not logged in"
+
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 
