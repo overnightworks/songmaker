@@ -16,7 +16,7 @@ import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError
+from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError, CodexImageQuotaError
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessPool
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
@@ -223,6 +223,60 @@ def test_web_runner_records_the_shared_cover_error_terminal_state(
         assert job.error == JOB_ERROR_COVER_IMAGE_FAILED
         assert job.error_type == "cover_suggestion_error"
         assert list(job.album.cover_suggestions) == []
+
+
+def test_web_runner_names_the_codex_usage_limit_in_job_error_and_log(
+    tmp_path: Path, monkeypatch, caplog,
+) -> None:
+    factory, audio_dir, job_id = _cover_job(tmp_path)
+    monkeypatch.setattr(
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
+    )
+    codex_message = (
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at Sep 7th, 2026 8:45 PM."
+    )
+
+    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
+        raise CodexImageQuotaError(codex_message, retry_at="Sep 7th, 2026 8:45 PM")
+
+    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
+    caplog.set_level("ERROR", logger="songmaker_cli.jobs._runtime")
+
+    assert asyncio.run(cover_runner.run_next_cover_job(
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+    ))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == "Codex usage limit reached, try again after Sep 7th, 2026 8:45 PM."
+        assert job.error_type == "cover_suggestion_error"
+    assert codex_message in caplog.text
+
+
+def test_web_runner_names_the_codex_turn_failure_in_job_error(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    factory, audio_dir, job_id = _cover_job(tmp_path)
+    monkeypatch.setattr(
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
+    )
+
+    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
+        raise CodexImageCliError("The requested model is unavailable.")
+
+    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
+
+    assert asyncio.run(cover_runner.run_next_cover_job(
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+    ))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == "Codex could not draw: The requested model is unavailable."
+        assert job.error_type == "cover_suggestion_error"
 
 
 def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[

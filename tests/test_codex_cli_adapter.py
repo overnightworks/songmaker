@@ -548,6 +548,36 @@ def test_codex_cover_image_names_terminal_cli_failures(
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
 
 
+def test_codex_cover_image_names_the_usage_limit_and_its_retry_time(monkeypatch) -> None:
+    outcome = _outcome(
+        returncode=1,
+        stdout=(_FIXTURES / "codex-cover-quota-exceeded.jsonl").read_text(),
+    )
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+
+    with pytest.raises(codex_cli_adapter.CodexImageQuotaError) as raised:
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert raised.value.retry_at == "Sep 7th, 2026 8:45 PM"
+    assert "usage limit" in str(raised.value)
+
+
+def test_codex_cover_image_names_a_generic_turn_failure_message(monkeypatch) -> None:
+    outcome = _outcome(
+        returncode=1,
+        stdout=(
+            '{"type":"turn.started"}\n'
+            '{"type":"turn.failed","error":{"message":"The requested model is unavailable."}}\n'
+        ),
+    )
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+
+    with pytest.raises(codex_cli_adapter.CodexImageCliError) as raised:
+        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+
+    assert str(raised.value) == "The requested model is unavailable."
+
+
 @pytest.mark.parametrize(
     ("artifact_count", "expected_error"),
     (
