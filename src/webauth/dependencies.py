@@ -81,6 +81,11 @@ def current_user_dependency(
     session renewal and the audit record are written into.
     ``on_authenticated`` is handed the account once the request's identity is
     established, so the application can bind it into its own log context.
+
+    The verified session id is published on ``request.state.session_id``. That
+    is part of this contract, not a leftover: a logout route reads it there to
+    delete the very session it just authenticated, and dropping the write would
+    leave the stored session alive behind a cleared cookie.
     """
 
     def current_user(
