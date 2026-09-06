@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.auth import request_is_https
 from songmaker_cli.constants import RESOURCE_EVENT_STREAM_PATH
+from webauth.proxies import request_is_https
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

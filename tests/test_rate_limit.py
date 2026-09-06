@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,13 +16,20 @@ from songmaker_cli.auth import TrustedProxies, hash_password
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware.rate_limit import RateLimitClass, _classify_path
+from webauth.config import install_web_auth_config, installed_web_auth_config
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
 
 
 def _trust_proxy_network(client: TestClient) -> None:
-    client.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
+    install_web_auth_config(
+        client.app,
+        dataclasses.replace(
+            installed_web_auth_config(client.app),
+            trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
+        ),
+    )
 
 
 def _seed_rate_limit_data(session) -> None:

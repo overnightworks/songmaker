@@ -91,8 +91,8 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
-from songmaker_cli.redis_client import SessionCache
 from songmaker_cli.settings import get_settings
+from webauth.session_store import SessionCache
 
 log = logging.getLogger(__name__)
 

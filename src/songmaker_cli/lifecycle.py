@@ -29,6 +29,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
+from webauth.session_store import SessionCache
 
 log = logging.getLogger(__name__)
 
@@ -639,7 +640,7 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified
     return "ok"
 
 
-def _sync_sessions(ctx: AppContext, session_cache) -> int:
+def _sync_sessions(ctx: AppContext, session_cache: SessionCache) -> int:
     """Sync Redis session TTLs to the database. Returns count of synced sessions.
 
     Removes cached sessions for inactive users or sessions missing from the DB.
@@ -712,7 +713,7 @@ async def session_sync_loop(app: FastAPI) -> None:
     )
 
     ctx: AppContext = app.state.ctx
-    session_cache = app.state.session_cache
+    session_cache: SessionCache = app.state.session_cache
     registry = background_loop_registry(app)
 
     while True:

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.app_context import AppContext
+from webauth.config import web_auth_config
+from webauth.cookies import verify_csrf_token, verify_session_cookie
 
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -32,17 +34,14 @@ class CsrfTokenMiddleware(BaseHTTPMiddleware):
             and request.url.path not in _CSRF_EXEMPT_PATHS
             and not any(request.url.path.startswith(p) for p in _CSRF_EXEMPT_PREFIXES)
         ):
-            from songmaker_cli.auth import CSRF_HEADER, verify_csrf_token, verify_session_cookie
-            from songmaker_cli.middleware.auth import SESSION_COOKIE
-
-            ctx: AppContext = request.app.state.ctx
-            header_token = request.headers.get(CSRF_HEADER)
+            config = web_auth_config(request)
+            header_token = request.headers.get(config.csrf_header_name)
             if not header_token:
                 return JSONResponse(
                     {"detail": "CSRF token missing or invalid"}, status_code=403,
                 )
-            raw_cookie = request.cookies.get(SESSION_COOKIE)
-            secret = ctx.session_secret
+            raw_cookie = request.cookies.get(config.session_cookie_name)
+            secret = config.signing_key
             session_id = verify_session_cookie(raw_cookie, secret) if raw_cookie else None
             if not session_id or not verify_csrf_token(header_token, session_id, secret):
                 return JSONResponse(
@@ -54,7 +53,7 @@ class CsrfTokenMiddleware(BaseHTTPMiddleware):
 def _is_allowed_host(
     netloc: str,
     exact: frozenset[str],
-    patterns: list[re.Pattern[str]],
+    patterns: tuple[re.Pattern[str], ...],
 ) -> bool:
     host_without_port = netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
     if exact or patterns:
@@ -72,12 +71,13 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
         ):
             origin = request.headers.get("origin") or request.headers.get("referer")
             if origin:
-                from urllib.parse import urlparse
-                ctx: AppContext = request.app.state.ctx
+                config = web_auth_config(request)
                 parsed = urlparse(origin)
                 origin_host = parsed.netloc
                 if origin_host and not _is_allowed_host(
-                    origin_host, ctx.allowed_hosts_exact, ctx.allowed_hosts_patterns,
+                    origin_host,
+                    config.allowed_hosts_exact,
+                    config.allowed_hosts_patterns,
                 ):
                     return JSONResponse(
                         {"detail": "Cross-origin request rejected"},
