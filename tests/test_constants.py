@@ -219,3 +219,11 @@ def test_the_job_rate_limit_window_is_an_hour() -> None:
     from songmaker_cli.auth import RATE_LIMIT_WINDOW_SECONDS
 
     assert RATE_LIMIT_WINDOW_SECONDS == 3600
+
+
+def test_the_admin_role_is_spelled_admin() -> None:
+    """It is stored on every user row and compared as a literal in
+    `require_admin`, so renaming it silently demotes every administrator."""
+    from songmaker_cli.auth import ROLE_ADMIN
+
+    assert ROLE_ADMIN == "admin"
