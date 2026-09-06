@@ -84,6 +84,7 @@ from songmaker_cli.db.queries.settings import (
     set_cowriter_tail_token_budget,
     set_default_preset,
     set_judge_settings,
+    stored_provider_is_retired,
     toggle_model,
     update_preset,
 )
@@ -705,8 +706,7 @@ def _model_the_provider_row_shows(session: Session, provider: str) -> str:
 
     A saved provider that no longer exists leaves the rows nothing to keep.
     """
-    saved_provider = get_raw_stored_cowriter_settings(session).provider
-    if saved_provider not in (None, "") and saved_provider not in COWRITER_PROVIDERS:
+    if stored_provider_is_retired(get_raw_stored_cowriter_settings(session).provider):
         return ""
     return get_cowriter_models_by_provider(session)[provider]
 

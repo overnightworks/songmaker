@@ -44,7 +44,6 @@
 		CoverSettingsResponse,
 		CowriterSettings,
 		JudgeSettings,
-		ProviderNotConfiguredDetail,
 		ProviderRouteStatusResponse,
 		ProviderStatus,
 		ProviderSurfaceStatus,
@@ -94,8 +93,6 @@
 		modelsRouteNotAvailablePhrase,
 		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
-		PROVIDER_COWRITER_SURFACE_PREFIX,
-		PROVIDER_JUDGE_SURFACE_PREFIX,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		PROVIDER_UNVERIFIED_DETAIL,
 		providerCliLoginNeedsApiKeyDetail,
@@ -370,40 +367,6 @@
 		return typeof value === 'string' && value.length > 0;
 	}
 
-	function isProviderSurfaceStatus(detail: unknown): detail is ProviderSurfaceStatus {
-		if (typeof detail !== 'object' || detail === null) return false;
-		const status = detail as Partial<ProviderSurfaceStatus>;
-		return (
-			status.state === 'unverified' ||
-			status.state === 'configured' ||
-			status.state === 'cli_login_needs_api_key' ||
-			status.state === 'api_key_needs_cli_login' ||
-			status.state === 'missing_dependency' ||
-			status.state === 'unconfigured'
-		);
-	}
-
-	function isProviderNotConfiguredDetail(detail: unknown): detail is ProviderNotConfiguredDetail {
-		if (typeof detail !== 'object' || detail === null) return false;
-		const candidate = detail as Partial<ProviderNotConfiguredDetail>;
-		return (
-			isNonEmptyString(candidate.provider) &&
-			(candidate.surface === 'cowriter' || candidate.surface === 'judge') &&
-			isProviderSurfaceStatus(candidate.status)
-		);
-	}
-
-	function providerNotConfiguredMessage(error: unknown): string | null {
-		if (!(error instanceof ApiError) || !isProviderNotConfiguredDetail(error.responseDetail)) {
-			return null;
-		}
-		const surfacePrefix =
-			error.responseDetail.surface === 'cowriter'
-				? PROVIDER_COWRITER_SURFACE_PREFIX
-				: PROVIDER_JUDGE_SURFACE_PREFIX;
-		return `${providerLabel(error.responseDetail.provider)} ${surfacePrefix} ${surfaceDetail(error.responseDetail.status)}`;
-	}
-
 	const JUDGE_ROUTE: ModelsRouteKey = 'api';
 	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
 
@@ -581,13 +544,11 @@
 	}
 
 	/**
-	 * Every rejected save reaches the row as a sentence: the unconfigured-provider
-	 * detail as before, a route reason through the row's own phrasing, a plain
-	 * string verbatim. The generic API message never stands in for a reason.
+	 * Every rejected save reaches the row as a sentence: a route reason through
+	 * the row's own phrasing, a plain string verbatim. The generic API message
+	 * never stands in for a reason.
 	 */
 	function saveFailureReason(e: unknown, task: string, route: ModelsRouteKey): string {
-		const notConfigured = providerNotConfiguredMessage(e);
-		if (notConfigured !== null) return notConfigured;
 		if (e instanceof ApiError) {
 			if (isRouteReason(e.responseDetail)) {
 				return routeReasonSentence(e.responseDetail, route, task);

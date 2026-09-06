@@ -653,12 +653,6 @@ export interface PresetUpdateRequest {
 	is_default?: boolean | null;
 }
 
-export interface ProviderNotConfiguredDetail {
-	provider: string;
-	surface: 'cowriter' | 'judge';
-	status: ProviderSurfaceStatus;
-}
-
 export interface ProviderRouteReadiness {
 	state: 'ready' | 'not_configured' | 'disturbed' | 'unverified';
 	capability: 'tools_available' | 'text_only';

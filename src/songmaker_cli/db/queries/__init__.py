@@ -396,6 +396,9 @@ from songmaker_cli.db.queries.settings import (
     set_judge_settings as set_judge_settings,
 )
 from songmaker_cli.db.queries.settings import set_provider_routes as set_provider_routes
+from songmaker_cli.db.queries.settings import (
+    stored_provider_is_retired as stored_provider_is_retired,
+)
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset
 from songmaker_cli.db.queries.sharing import (
