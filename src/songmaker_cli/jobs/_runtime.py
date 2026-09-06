@@ -15,8 +15,12 @@ from songmaker_cli.constants import (
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
     JOB_ERROR_COVER_CLI_BUSY,
     JOB_ERROR_COVER_CLI_LOGIN,
+    JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS,
+    JOB_ERROR_COVER_IMAGE_CLI_FAILED,
     JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_ERROR_COVER_IMAGE_NOT_CREATED,
+    JOB_ERROR_COVER_IMAGE_QUOTA,
+    JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY,
     JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
     JOB_ERROR_GENERATION_TIMED_OUT,
     JOB_ERROR_INTERNAL,
@@ -37,9 +41,11 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.codex_cli_adapter import (
+    CodexImageCliError,
     CodexImageError,
     CodexImageLoginError,
     CodexImageNotCreatedError,
+    CodexImageQuotaError,
     ImageToolBlockedError,
 )
 from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
@@ -77,7 +83,7 @@ class JudgeFailureError(Exception):
 
 
 def _sanitize_error(exc: Exception, job_id: str) -> str:
-    """Return the fixed musician-facing message and log the raw failure."""
+    """Return the musician-facing message and log the raw failure in full."""
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
     for error_type, sanitizer in _ERROR_SANITIZERS:
         if isinstance(exc, error_type):
@@ -92,6 +98,20 @@ def _sanitize_generation_setup_error(exc: Exception) -> str:
 
 def _sanitize_judge_failure_error(exc: Exception) -> str:
     return str(exc) if str(exc) == JUDGE_FAILURE_TIMEOUT else JOB_ERROR_JUDGE_FAILED
+
+
+def _sanitize_codex_image_quota_error(exc: CodexImageQuotaError) -> str:
+    if exc.retry_at is None:
+        return JOB_ERROR_COVER_IMAGE_QUOTA
+    return JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY.format(retry_at=exc.retry_at)
+
+
+def _sanitize_codex_image_cli_error(exc: CodexImageCliError) -> str:
+    message = str(exc)
+    if not message:
+        return JOB_ERROR_COVER_IMAGE_FAILED
+    first_line = message.splitlines()[0][:JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS]
+    return JOB_ERROR_COVER_IMAGE_CLI_FAILED.format(message=first_line)
 
 
 def _default_error_message(exc: Exception) -> str:
@@ -114,6 +134,8 @@ _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...
     (CodexProcessPoolSaturatedError, lambda _exc: JOB_ERROR_COVER_CLI_BUSY),
     (ImageToolBlockedError, lambda _exc: JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED),
     (CodexImageNotCreatedError, lambda _exc: JOB_ERROR_COVER_IMAGE_NOT_CREATED),
+    (CodexImageQuotaError, _sanitize_codex_image_quota_error),
+    (CodexImageCliError, _sanitize_codex_image_cli_error),
     (CodexImageError, lambda _exc: JOB_ERROR_COVER_IMAGE_FAILED),
 )
 

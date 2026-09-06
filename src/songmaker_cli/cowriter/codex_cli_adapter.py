@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -60,6 +61,9 @@ from songmaker_cli.cowriter.tool_loop import (
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
 CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 _AUTH_FAILURE_MARKERS: Final = ("401", "unauthorized", "unauthenticated")
+_USAGE_LIMIT_MARKER: Final = "usage limit"
+# Codex's own wording for the retry hint, e.g. "... try again at Sep 7th, 2026 8:45 PM."
+_USAGE_LIMIT_RETRY_AT_PATTERN: Final = re.compile(r"try again at (?P<retry_at>.+?)\.?\s*$")
 # Codex appends version-specific remediation after this stable isolation notice.
 _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX: Final = (
     "Code Mode is unavailable because code-mode host is disabled"
@@ -182,6 +186,14 @@ class CodexImageTimeoutError(CodexImageError):
 
 class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
+
+
+class CodexImageQuotaError(CodexImageError):
+    """The Codex account hit its usage limit for this turn."""
+
+    def __init__(self, message: str, *, retry_at: str | None) -> None:
+        super().__init__(message)
+        self.retry_at = retry_at
 
 
 @dataclass
@@ -578,8 +590,36 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
         CliRunReason.CLEANUP_OVERRAN,
     }:
         raise CodexImageTimeoutError()
-    if not outcome.complete or outcome.returncode != 0:
+    if outcome.complete and outcome.returncode == 0:
+        return
+    message = _codex_image_turn_failure_message(outcome.stdout)
+    if message is None:
         raise CodexImageCliError()
+    if _codex_cli_failure_reason(message) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
+        raise CodexImageLoginError()
+    if _USAGE_LIMIT_MARKER in message.lower():
+        match = _USAGE_LIMIT_RETRY_AT_PATTERN.search(message)
+        raise CodexImageQuotaError(
+            message, retry_at=match.group("retry_at") if match else None,
+        )
+    raise CodexImageCliError(message)
+
+
+def _codex_image_turn_failure_message(stdout: str) -> str | None:
+    """Read the last turn-failure message the CLI reported on stdout, if any."""
+    message: str | None = None
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event_type, event = _parse_codex_line(line.encode("utf-8"))
+            if event_type == "error":
+                message = _top_level_error_message(event)
+            elif event_type == "turn.failed":
+                message = _failed_turn_message(event)
+        except _CodexCliStreamFailure:
+            continue
+    return message
 
 
 def _validate_codex_image_events(output: str, *, codex_home: Path) -> None:
