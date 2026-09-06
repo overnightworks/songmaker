@@ -84,9 +84,9 @@ def enforce_login_attempt_limits(
 ) -> None:
     """Refuse an attempt that has spent either failure budget.
 
-    The lockout counts this account's failures from this address over a long
-    window; the rate limit counts the address on its own and the account over
-    a short one, and each refusal names how long it stands.
+    The lockout counts this account's failures over a long window wherever
+    they came from; the rate limit counts the address on its own and the
+    account over a short one, and each refusal names how long it stands.
     """
     lockout_failures = attempts.count_recent_failures(
         ip_address=ip_address,
