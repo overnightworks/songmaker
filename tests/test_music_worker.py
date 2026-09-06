@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import songmaker_cli.music_worker as mw_mod
+from agent_providers.config import reset_config
 from songmaker_cli.constants import (
     AuditAction,
     CoverExecutor,
@@ -269,6 +270,10 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
     worker.audio_dir = MagicMock(return_value=audio_dir)
     redis = AsyncMock()
     redis.set = AsyncMock(return_value=True)
+    # This worker starts from settings of its own, and startup installs them as
+    # the provider runtime; the suite's default installation has to go first,
+    # because configure() refuses a differing second value.
+    reset_config()
 
     with patch("songmaker_cli.logging_config.configure_logging"):
         _run(worker.on_startup({"redis": redis}))
