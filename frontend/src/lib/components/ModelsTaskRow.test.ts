@@ -12,7 +12,7 @@ import {
 	MODELS_STATUS_READY_CLI_LABEL,
 	MODELS_STATUS_READY_KEY_LABEL
 } from '$lib/constants';
-import ModelsTaskRow from './ModelsTaskRow.svelte';
+import ModelsTaskRow, { MODELS_ROUTE_NOT_AVAILABLE_CODE } from './ModelsTaskRow.svelte';
 import type {
 	ModelsRouteKey,
 	ModelsSaveOutcome,
@@ -40,6 +40,11 @@ const NO_IMAGE_TOOL: ModelsTaskRoute = {
 	models: []
 };
 const UNPROBED: ModelsTaskRoute = { ready: false, reason: null, models: [] };
+const NOT_AVAILABLE_FOR_TASK: ModelsTaskRoute = {
+	ready: false,
+	reason: { code: MODELS_ROUTE_NOT_AVAILABLE_CODE, message: 'not available for co-writer' },
+	models: []
+};
 const CATALOGUE_DOWN: ModelsTaskRoute = {
 	ready: false,
 	reason: { code: 'catalogue_http_error', message: 'Model catalogue request failed.' },
@@ -65,8 +70,6 @@ interface RenderOptions {
 	providers?: ModelsTaskProvider[];
 	selection?: ModelsTaskSelection;
 	save?: (selection: ModelsTaskSelection) => Promise<ModelsSaveOutcome>;
-	routeSelectable?: boolean;
-	advanced?: boolean;
 }
 
 async function flush(): Promise<void> {
@@ -86,8 +89,7 @@ async function renderRow(options: RenderOptions = {}): Promise<HTMLElement> {
 			task: TASK,
 			providers: options.providers ?? [CLAUDE_ON_CLI, GROK_WITHOUT_KEY, CODEX_WITHOUT_IMAGE_TOOL],
 			selection: options.selection ?? { provider: 'claude', route: 'cli', model: 'opus' },
-			save: options.save ?? vi.fn().mockResolvedValue({ ok: true }),
-			routeSelectable: options.routeSelectable ?? true
+			save: options.save ?? vi.fn().mockResolvedValue({ ok: true })
 		}
 	});
 	await flush();
@@ -402,16 +404,49 @@ describe('models task row', () => {
 		expect(target.textContent).toContain(MODELS_SAVED_LABEL);
 	});
 
-	it('cannot switch a route the task does not store', async () => {
+	it('greys a route the task cannot use and ignores clicks on it', async () => {
 		const save = vi.fn().mockResolvedValue({ ok: true });
-		const target = await renderRow({ routeSelectable: false, save });
+		const onlyApi = provider('claude', 'Claude', NOT_AVAILABLE_FOR_TASK, {
+			ready: true,
+			reason: null,
+			models: ['claude-api']
+		});
+		const target = await renderRow({
+			providers: [onlyApi],
+			selection: { provider: 'claude', route: 'api', model: 'claude-api' },
+			save
+		});
 
-		const api = routeButton(target, 'api');
-		expect(api.disabled).toBe(true);
-		api.click();
+		const cli = routeButton(target, 'cli');
+		expect(cli.classList.contains('dead')).toBe(true);
+		expect(cli.disabled).toBe(true);
+		expect(reasons(target)).toEqual(['CLI · not available for co-writer']);
+		expect(routeButton(target, 'api').classList.contains('on')).toBe(true);
+		expect(routeButton(target, 'api').disabled).toBe(false);
+
+		cli.click();
 		await flush();
 
 		expect(save).not.toHaveBeenCalled();
+	});
+
+	it('never moves to a route the task cannot use when the provider changes', async () => {
+		const save = vi.fn().mockResolvedValue({ ok: true });
+		const claudeOnApi = provider('claude', 'Claude', NOT_AVAILABLE_FOR_TASK, {
+			ready: true,
+			reason: null,
+			models: ['claude-api']
+		});
+		const grokWithoutKey = provider('grok', 'Grok', NOT_AVAILABLE_FOR_TASK, NO_KEY);
+		const target = await renderRow({
+			providers: [claudeOnApi, grokWithoutKey],
+			selection: { provider: 'claude', route: 'api', model: 'claude-api' },
+			save
+		});
+
+		await choose(selectNamed(target, 'provider'), 'grok');
+
+		expect(save).toHaveBeenCalledWith({ provider: 'grok', route: 'api', model: '' });
 	});
 
 	it('reads its reasons out with the control they belong to', async () => {
