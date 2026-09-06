@@ -518,12 +518,14 @@
 		return taskRoute(provider, route, surface.state === 'configured', judgeReason(surface));
 	}
 
+	function storedCoverProvider(): string[] {
+		return coverSettings ? [coverSettings.provider] : [];
+	}
+
 	function taskProviders(
 		routeOf: (provider: string, route: ModelsRouteKey) => ModelsTaskRoute,
-		selected: string
+		names: string[]
 	): ModelsTaskProvider[] {
-		const names =
-			providerStatuses.length > 0 ? providerStatuses.map((status) => status.provider) : [selected];
 		return names.map((provider) => ({
 			provider,
 			label: providerLabel(provider),
@@ -540,21 +542,25 @@
 		);
 	}
 
-	const cowriterProviders = $derived(
-		taskProviders(transportRoute, cowriterSettings?.provider ?? '')
-	);
+	const cowriterProviderNames = $derived(cowriterSettings?.allowed_providers ?? []);
+	const cowriterProviders = $derived(taskProviders(transportRoute, cowriterProviderNames));
 	const cowriterSelection = $derived<ModelsTaskSelection>({
 		provider: cowriterSettings?.provider ?? '',
 		route: storedRoute(cowriterSettings?.provider ?? ''),
 		model: cowriterSettings?.model ?? ''
 	});
-	const coverProviders = $derived(taskProviders(coverRoute, coverSettings?.provider ?? ''));
+	const coverProviderNames = $derived(
+		cowriterProviderNames.length > 0 ? cowriterProviderNames : storedCoverProvider()
+	);
+	const coverProviders = $derived(taskProviders(coverRoute, coverProviderNames));
 	const coverSelection = $derived<ModelsTaskSelection>({
 		provider: coverSettings?.provider ?? '',
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
 		model: coverSettings?.model ?? ''
 	});
-	const scoringProviders = $derived(taskProviders(scoringRoute, judgeSettings?.provider ?? ''));
+	const scoringProviders = $derived(
+		taskProviders(scoringRoute, judgeSettings?.allowed_providers ?? [])
+	);
 	const scoringSelection = $derived<ModelsTaskSelection>({
 		provider: judgeSettings?.provider ?? '',
 		route: JUDGE_ROUTE,

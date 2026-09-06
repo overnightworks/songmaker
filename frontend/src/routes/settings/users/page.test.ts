@@ -566,6 +566,30 @@ describe('admin models tab', () => {
 		]);
 	});
 
+	it('keeps every provider offered while the reachability probe is pending', async () => {
+		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual([
+			'Claude · Checking…',
+			'Codex · Checking…',
+			'Grok · Checking…'
+		]);
+	});
+
+	it('keeps every provider offered after the reachability probe fails', async () => {
+		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
+			'Claude · Provider probe failed',
+			'Codex · Provider probe failed',
+			'Grok · Provider probe failed'
+		]);
+	});
+
 	it('shows each row its live models for the selected route', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
