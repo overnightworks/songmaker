@@ -10,6 +10,7 @@ import pytest
 from conftest import make_test_app
 
 from agent_providers.config import (
+    ProviderRuntimeAlreadyConfiguredError,
     ProviderRuntimeNotConfiguredError,
     current_config,
     reset_config,
@@ -54,6 +55,22 @@ def test_songmaker_installs_its_container_mounts_and_credentials() -> None:
     assert config.codex_resources_directory == Path(CODEX_RESOURCES_DIRECTORY)
     assert config.codex_max_concurrent_processes == settings.codex_cli_max_concurrent_processes
     assert config.codex_max_concurrent_cover_runs == settings.cover_max_concurrent_runs
+
+
+def test_installing_the_same_deployment_facts_again_changes_nothing() -> None:
+    """Every startup path a host owns may configure, in any order."""
+    settings = Settings()
+    configure_agent_providers(settings)
+    configure_agent_providers(settings)
+
+    assert current_config().claude_chat_model == settings.claude_chat_model
+
+
+def test_installing_differing_deployment_facts_over_a_live_one_is_refused() -> None:
+    configure_agent_providers(Settings())
+
+    with pytest.raises(ProviderRuntimeAlreadyConfiguredError):
+        configure_agent_providers(Settings(claude_chat_model="a-different-model"))
 
 
 def test_a_configuration_is_immutable_once_installed() -> None:
