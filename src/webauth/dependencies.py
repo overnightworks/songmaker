@@ -58,14 +58,16 @@ class AuthenticatedUser:
 
 @dataclass(frozen=True)
 class AuthDependencies:
-    """The two route dependencies built from one set of stores.
+    """The route dependencies built from one set of stores.
 
-    ``admin_user`` resolves ``current_user`` itself, so an application that
-    replaces one in a test replaces the identity behind both.
+    ``admin_user`` and ``verified_session_id`` resolve ``current_user``
+    themselves, so an application that replaces one in a test replaces the
+    identity behind all three.
     """
 
     current_user: Callable[..., AuthenticatedUser]
     admin_user: Callable[..., AuthenticatedUser]
+    verified_session_id: Callable[..., str]
 
 
 def current_user_dependency(
@@ -81,11 +83,6 @@ def current_user_dependency(
     session renewal and the audit record are written into.
     ``on_authenticated`` is handed the account once the request's identity is
     established, so the application can bind it into its own log context.
-
-    The verified session id is published on ``request.state.session_id``. That
-    is part of this contract, not a leftover: a logout route reads it there to
-    delete the very session it just authenticated, and dropping the write would
-    leave the stored session alive behind a cleared cookie.
     """
 
     def current_user(
@@ -95,7 +92,6 @@ def current_user_dependency(
     ) -> AuthenticatedUser:
         config = web_auth_config(request)
         session_id = _session_id_from_cookie(request, config)
-        request.state.session_id = session_id
 
         user = _authenticate_from_cache(request, audit, session_id, config)
         if user is None:
@@ -111,7 +107,26 @@ def current_user_dependency(
             raise HTTPException(403, ADMIN_REQUIRED_DETAIL)
         return user
 
-    return AuthDependencies(current_user=current_user, admin_user=admin_user)
+    def verified_session_id(
+        request: Request,
+        _account: AuthenticatedUser = Depends(current_user),
+    ) -> str:
+        """The session this request proved it holds.
+
+        A logout needs the identifier of the very session it just
+        authenticated, and ``AuthenticatedUser`` deliberately does not carry
+        one. Resolving ``current_user`` first is what makes the answer
+        trustworthy: an expired, unknown, or deactivated session never reaches
+        this line, so a route can delete what it names here without checking
+        anything again.
+        """
+        return _session_id_from_cookie(request, web_auth_config(request))
+
+    return AuthDependencies(
+        current_user=current_user,
+        admin_user=admin_user,
+        verified_session_id=verified_session_id,
+    )
 
 
 def _session_id_from_cookie(request: Request, config: WebAuthConfig) -> str:
