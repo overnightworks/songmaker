@@ -1,5 +1,13 @@
 <script module lang="ts">
 	import type { SafeRouteReason } from '$lib/api/types';
+	import {
+		MODELS_ROUTE_KEY_NOT_SET_PHRASE,
+		MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
+		MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE,
+		PROVIDER_ROUTE_API_LABEL,
+		PROVIDER_ROUTE_CLI_LABEL,
+		modelsRouteNotAvailablePhrase
+	} from '$lib/constants';
 
 	export type ModelsRouteKey = 'cli' | 'api';
 
@@ -36,6 +44,35 @@
 	function offersRoute(entry: ModelsTaskProvider, route: ModelsRouteKey): boolean {
 		return entry.routes[route].reason?.code !== MODELS_ROUTE_NOT_AVAILABLE_CODE;
 	}
+
+	export function routeLabel(route: ModelsRouteKey): string {
+		return route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL;
+	}
+
+	export function failurePhrase(
+		reason: ModelsRouteReason,
+		route: ModelsRouteKey,
+		task: string
+	): string {
+		if (reason.code === MODELS_ROUTE_NOT_AVAILABLE_CODE) {
+			return modelsRouteNotAvailablePhrase(task);
+		}
+		if (reason.code === 'api_key_not_set') return MODELS_ROUTE_KEY_NOT_SET_PHRASE;
+		if (reason.code === 'no_image_tool') return MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE;
+		if (reason.code === 'cli_login_not_configured' && route === 'cli') {
+			return MODELS_ROUTE_NOT_LOGGED_IN_PHRASE;
+		}
+		return reason.message;
+	}
+
+	/** The one sentence a task row says about a route it cannot use. */
+	export function routeReasonSentence(
+		reason: ModelsRouteReason,
+		route: ModelsRouteKey,
+		task: string
+	): string {
+		return `${routeLabel(route)} · ${failurePhrase(reason, route, task)}`;
+	}
 </script>
 
 <script lang="ts">
@@ -52,21 +89,15 @@
 		MODELS_OPTION_NEEDS_API_KEY_PHRASE,
 		MODELS_OPTION_READY_LABEL,
 		MODELS_RETRY_LABEL,
-		MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 		MODELS_ROUTE_KEY_SET_PHRASE,
 		MODELS_ROUTE_LOGGED_IN_PHRASE,
-		MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
-		MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE,
 		MODELS_SAVED_LABEL,
 		MODELS_STATUS_CHECKING_LABEL,
 		MODELS_STATUS_NEEDS_API_KEY_LABEL,
 		MODELS_STATUS_NOT_SAVED_LABEL,
 		MODELS_STATUS_READY_CLI_LABEL,
 		MODELS_STATUS_READY_KEY_LABEL,
-		PROVIDER_ROUTE_API_LABEL,
-		PROVIDER_ROUTE_CLI_LABEL,
-		modelsCannotDrawHint,
-		modelsRouteNotAvailablePhrase
+		modelsCannotDrawHint
 	} from '$lib/constants';
 
 	interface Props {
@@ -96,24 +127,8 @@
 	const routeReasons = $derived(reasonsOf());
 	const modelsHint = $derived(modelsHintOf());
 
-	function routeLabel(route: ModelsRouteKey): string {
-		return route === 'cli' ? PROVIDER_ROUTE_CLI_LABEL : PROVIDER_ROUTE_API_LABEL;
-	}
-
 	function readyPhrase(route: ModelsRouteKey): string {
 		return route === 'cli' ? MODELS_ROUTE_LOGGED_IN_PHRASE : MODELS_ROUTE_KEY_SET_PHRASE;
-	}
-
-	function failurePhrase(reason: ModelsRouteReason, route: ModelsRouteKey): string {
-		if (reason.code === MODELS_ROUTE_NOT_AVAILABLE_CODE) {
-			return modelsRouteNotAvailablePhrase(task);
-		}
-		if (reason.code === 'api_key_not_set') return MODELS_ROUTE_KEY_NOT_SET_PHRASE;
-		if (reason.code === 'no_image_tool') return MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE;
-		if (reason.code === 'cli_login_not_configured' && route === 'cli') {
-			return MODELS_ROUTE_NOT_LOGGED_IN_PHRASE;
-		}
-		return reason.message;
 	}
 
 	function routeReason(route: ModelsRouteKey): string | null {
@@ -121,7 +136,7 @@
 		if (!view) return null;
 		if (view.ready) return `${routeLabel(route)} · ${readyPhrase(route)}`;
 		if (!view.reason) return null;
-		return `${routeLabel(route)} · ${failurePhrase(view.reason, route)}`;
+		return routeReasonSentence(view.reason, route, task);
 	}
 
 	function reasonsOf(): { route: ModelsRouteKey; text: string; selected: boolean }[] {
@@ -188,7 +203,7 @@
 		if (keyMissing) return `${entry.label} · ${MODELS_OPTION_NEEDS_API_KEY_PHRASE}`;
 		for (const route of offered) {
 			const reason = entry.routes[route].reason;
-			if (reason) return `${entry.label} · ${failurePhrase(reason, route)}`;
+			if (reason) return `${entry.label} · ${failurePhrase(reason, route, task)}`;
 		}
 		return `${entry.label} · ${MODELS_STATUS_CHECKING_LABEL}`;
 	}

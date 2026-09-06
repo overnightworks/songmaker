@@ -201,12 +201,6 @@ class ProviderSurfaceStatus(BaseModel):
     probed_at: ComputedTimestamp = None
 
 
-class ProviderNotConfiguredDetail(BaseModel):
-    provider: str
-    surface: Literal["cowriter", "judge"]
-    status: ProviderSurfaceStatus
-
-
 class ProviderStatusResponse(BaseModel):
     provider: str
     cowriter: ProviderSurfaceStatus
