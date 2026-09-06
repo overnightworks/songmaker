@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
-from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, TurnOutcome
+from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -1103,7 +1103,7 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
             return _Response(responses.pop(0))
 
     monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
-    execute = MagicMock(return_value=TurnOutcome("[]", False))
+    execute = MagicMock(return_value=ToolOutcome("[]", False))
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,
     )

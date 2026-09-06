@@ -30,7 +30,7 @@ from agent_providers.tool_loop import (
     TextDelta,
     ToolCall,
     ToolCallBatch,
-    TurnOutcome,
+    ToolOutcome,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
@@ -142,7 +142,7 @@ def test_cli_turn_uses_its_transport_through_the_shared_tool_loop(
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool",
-        lambda _session, _user, name, arguments: TurnOutcome(
+        lambda _session, _user, name, arguments: ToolOutcome(
             "updated" if arguments["song_id"] == "own-song" else "Song not found", False,
         ),
     )

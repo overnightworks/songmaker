@@ -21,7 +21,7 @@ from typing import Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from agent_providers.tool_loop import TurnOutcome
+from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import ToolCatalog, ToolDeclaration
 from songmaker_cli.mcp_server.tools import (
     MCPToolError,
@@ -225,23 +225,23 @@ def execute_cowriter_tool(
     user: AuthenticatedUser,
     name: str,
     arguments: dict[str, Any],
-) -> TurnOutcome:
+) -> ToolOutcome:
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
-        return TurnOutcome(f"Unknown tool: {name}", True)
+        return ToolOutcome(f"Unknown tool: {name}", True)
     allowed = set(tool.parameters.get("properties", {}))
     filtered = {key: value for key, value in arguments.items() if key in allowed}
     try:
         result = tool.handler(session, user, **filtered)
         if tool.write:
             session.commit()
-        return TurnOutcome(_serialize(result), False)
+        return ToolOutcome(_serialize(result), False)
     except MCPToolError as exc:
         session.rollback()
-        return TurnOutcome(str(exc), True)
+        return ToolOutcome(str(exc), True)
     except TypeError as exc:
         session.rollback()
-        return TurnOutcome(str(exc), True)
+        return ToolOutcome(str(exc), True)
     except Exception:
         session.rollback()
         raise
