@@ -319,7 +319,32 @@
 		padding-top: .1rem;
 	}
 
-	.fixed-provider { font-size: .84rem; color: var(--ink); padding-top: .35rem; display: block; }
+	.menu {
+		margin-top: .3rem;
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		background: var(--panel);
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: .5rem;
+		padding: .34rem .45rem;
+		font-size: .8rem;
+		color: var(--ink);
+	}
+	.menu-item + .menu-item { border-top: 1px solid var(--rule); }
+	.menu-item .state { font-size: .68rem; color: var(--muted); white-space: nowrap; }
+	.menu-item.gap { color: var(--muted); }
+	.menu-item.picked { background: color-mix(in srgb, var(--violet) 8%, var(--panel)); color: var(--violet); font-weight: 600; }
+	.menu-item.picked .state { color: var(--good); font-weight: 600; }
+
+	.menu-demo { max-width: 15rem; }
+	.menu-demo .field-label { margin-bottom: .3rem; }
 
 	.hint {
 		display: block;
@@ -856,7 +881,8 @@
 <body>
 <p class="freeze-note">
 	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, gezeichnet am 06.09.2026</strong> nach
-	dem Operator-Ruling desselben Tages; wartet auf die Freigabe. Gebaut wird gegen Issue #317;
+	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
+	Anbietern, Gründe im Select); wartet auf die Freigabe. Gebaut wird gegen Issue #317;
 	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
 	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
@@ -889,9 +915,14 @@
 				<li><strong>Der CLI/API-Schalter bleibt sichtbar, wird aber ausgegraut.</strong> Eine
 					nicht eingerichtete Route verschwindet nie automatisch; sie steht grau da, mit ihrem
 					Grund darunter. Ist nur eine Route eingerichtet, ist sie gewählt und die andere grau.</li>
-				<li><strong>Cover ist sichtbar und fest auf Codex.</strong> Nur die Codex-CLI hat das
-					Bild-Werkzeug, also kein Select, sondern der Klartext „Codex" mit dem Hinweis
-					„only Codex can draw".</li>
+				<li><strong>Alle Aufgaben mit allen Anbietern.</strong> Jede Zeile hat dasselbe
+					Provider-Select — Claude, Grok, Codex. Eine Fähigkeitslücke (kein Bildwerkzeug) ist
+					ein Status, kein fehlendes Select: Der Eintrag bleibt wählbar, die Zeile fällt in den
+					grauen Zustand, und der Grund steht im Klartext da — „Claude · no image tool".</li>
+				<li><strong>Der Grund steht bei der Auswahl.</strong> Im aufgeklappten Select trägt jede
+					Option ihren Zustand: „Codex ✓ ready", „Grok · needs its API key", „Claude · no image
+					tool". Grau heißt nicht gesperrt — was heute nicht geht, kann morgen gehen, und der
+					Weg dahin bleibt sichtbar statt weggeblendet.</li>
 				<li><strong>Kein Providers-Block.</strong> Erreichbarkeit steht als Punkt plus einer
 					kurzen Zeile in der Status-Spalte der Aufgabe, die sie betrifft — dort, wo sie eine
 					Entscheidung auslöst.</li>
@@ -902,9 +933,10 @@
 					nicht in einem Banner am Seitenkopf.</li>
 			</ul>
 			<p>
-				Drei Status-Zustände, mehr gibt es nicht: <strong>ready</strong> (grüner Haken),
-				<strong>needs its API key</strong> (gelbes Ausrufezeichen), <strong>not logged in</strong>
-				(grauer, leerer Ring). Jede Farbe hat eine eigene Form, damit die Zeile auch
+				Drei Formen, mehr gibt es nicht: <strong>ready</strong> (grüner Haken),
+				<strong>needs its API key</strong> (gelbes Ausrufezeichen) und der graue, leere Ring für
+				alles, was heute nicht geht — <strong>not logged in</strong> ebenso wie
+				<strong>no image tool</strong>. Jede Farbe hat ihre eigene Form, damit die Zeile auch
 				schwarzweiß lesbar bleibt. Rot bleibt reserviert für den einzigen Fall, den nur ein
 				Mensch beenden kann: ein fehlgeschlagenes Speichern.
 			</p>
@@ -956,8 +988,7 @@
 							<div class="tt-row">
 								<span class="cell-task">Cover</span>
 								<span>
-									<span class="fixed-provider">Codex</span>
-									<small class="hint">only Codex can draw</small>
+									<span class="sel">Codex<span class="caret">⌄</span></span>
 								</span>
 								<span>
 									<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
@@ -1021,8 +1052,7 @@
 					<div class="tt-row">
 						<span class="cell-task">Cover</span>
 						<span>
-							<span class="fixed-provider">Codex</span>
-							<small class="hint">only Codex can draw</small>
+							<span class="sel">Codex<span class="caret">⌄</span></span>
 						</span>
 						<span>
 							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
@@ -1053,12 +1083,13 @@
 			</article>
 
 			<article class="state wide">
-				<div class="state-head"><h3>(c) Cover · Codex CLI not logged in</h3><span class="tag tag-state">Not set up</span></div>
+				<div class="state-head"><h3>(c) Cover · a provider that cannot draw</h3><span class="tag tag-state">No image tool</span></div>
 				<p class="state-note">
-					Kein Weg führt zum Bild: Die CLI ist nicht angemeldet, die API hat kein
-					Bild-Werkzeug. Die Zeile wird grau statt gelb, weil hier nichts kaputt ist — es ist
-					nur nicht eingerichtet. Der Schalter bleibt trotzdem stehen, damit sichtbar bleibt,
-					welche zwei Wege es überhaupt gibt.
+					Cover hat dasselbe Select wie die anderen Zeilen; hier steht Claude darin. Claude ist
+					angemeldet und erreichbar — es hat nur kein Bild-Werkzeug. Genau das sagt der Status:
+					Die Zeile wird grau, das Modell-Feld erfindet nichts, und das Select bleibt
+					unangetastet. Eine Fähigkeitslücke sperrt kein Bedienelement, sie erklärt sich.
+					Derselbe graue Zustand trägt auch „not logged in" — der Fall steht als Karte in (f).
 				</p>
 
 				<div class="tt">
@@ -1088,19 +1119,17 @@
 					<div class="tt-row off">
 						<span class="cell-task">Cover</span>
 						<span>
-							<span class="fixed-provider">Codex</span>
-							<small class="hint">only Codex can draw</small>
+							<span class="sel">Claude<span class="caret">⌄</span></span>
 						</span>
 						<span>
-							<span class="rsw"><b class="picked-dead">CLI</b><b class="dead">API</b></span>
-							<small class="why">CLI · not logged in</small>
-							<small class="why">API · no image tool</small>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">CLI · logged in</small>
 						</span>
 						<span>
 							<span class="sel off">No models<span class="caret">⌄</span></span>
-							<small class="hint">List needs the CLI</small>
+							<small class="hint">Claude cannot draw</small>
 						</span>
-						<span class="st off"><span class="mark">○</span>Codex CLI not logged in</span>
+						<span class="st off"><span class="mark">○</span>Claude · no image tool</span>
 					</div>
 
 					<div class="tt-row">
@@ -1117,7 +1146,65 @@
 			</article>
 
 			<article class="state wide">
-				<div class="state-head"><h3>(d) Saving happens in the row</h3><span class="tag tag-state">Saved · failed</span></div>
+				<div class="state-head"><h3>(d) The open provider list</h3><span class="tag tag-state">Choosing</span></div>
+				<p class="state-note">
+					Der Grund steht dort, wo entschieden wird: Jede Option trägt ihren eigenen Zustand.
+					Grau heißt nicht gesperrt — der Eintrag bleibt wählbar, weil aus „kann heute nicht"
+					morgen „kann" werden kann; wer ihn wählt, sieht denselben Grund danach im Status der
+					Zeile. Dieselbe Liste steht in jeder Zeile, nur mit den Gründen der jeweiligen
+					Aufgabe.
+				</p>
+
+				<div class="tt">
+					<div class="tt-head">
+						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Codex<span class="caret">⌃</span></span>
+							<div class="menu">
+								<div class="menu-item gap"><span>Claude</span><span class="state">no image tool</span></div>
+								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
+								<div class="menu-item picked"><span>Codex</span><span class="state">✓ ready</span></div>
+							</div>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+							<small class="why">API · no image tool</small>
+						</span>
+						<span>
+							<span class="sel">gpt-5-codex<span class="caret">⌄</span></span>
+							<small class="hint">Known models <span class="info">i</span></small>
+						</span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Scoring</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · logged in</small>
+						</span>
+						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+					</div>
+				</div>
+
+				<div class="menu-demo">
+					<span class="field-label">Co-Writer · same list, its own reasons</span>
+					<div class="menu">
+						<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
+						<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
+						<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(e) Saving happens in the row</h3><span class="tag tag-state">Saved · failed</span></div>
 				<p class="state-note">
 					Jede Änderung speichert sofort ihre eigene Zeile. Der Co-Writer wurde gerade auf
 					Grok umgestellt und bestätigt das mit „Saved."; die Scoring-Zeile hat es versucht
@@ -1156,8 +1243,7 @@
 					<div class="tt-row">
 						<span class="cell-task">Cover</span>
 						<span>
-							<span class="fixed-provider">Codex</span>
-							<small class="hint">only Codex can draw</small>
+							<span class="sel">Codex<span class="caret">⌄</span></span>
 						</span>
 						<span>
 							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
@@ -1198,7 +1284,7 @@
 
 		<div class="states">
 			<article class="state">
-				<div class="state-head"><h3>(e) Stacked cards</h3><span class="tag tag-state">375 px</span></div>
+				<div class="state-head"><h3>(f) Stacked cards</h3><span class="tag tag-state">375 px</span></div>
 				<p class="state-note">
 					Aus jeder Tabellenzeile wird eine Karte, aus jeder Spalte eine beschriftete Zeile.
 					Nichts wird weggekürzt: Route, Grund und Status stehen vollständig da. Die
@@ -1230,8 +1316,7 @@
 						<div class="tcard off">
 							<h4>Cover</h4>
 							<div class="line"><span class="k">Provider</span><span>
-								<span class="fixed-provider">Codex</span>
-								<small class="hint">only Codex can draw</small>
+								<span class="sel">Codex<span class="caret">⌄</span></span>
 							</span></div>
 							<div class="line"><span class="k">Route</span><span>
 								<span class="rsw"><b class="picked-dead">CLI</b><b class="dead">API</b></span>
@@ -1258,7 +1343,7 @@
 			</article>
 
 			<article class="state">
-				<div class="state-head"><h3>(f) Loading and empty</h3><span class="tag tag-state">375 px</span></div>
+				<div class="state-head"><h3>(g) Loading and empty</h3><span class="tag tag-state">375 px</span></div>
 				<p class="state-note">
 					Solange die Erreichbarkeit noch geholt wird, behauptet keine Zeile etwas: der Status
 					sagt „Checking…", die Auswahl bleibt bedienbar. Einen eigenen Leerzustand für die
@@ -1280,8 +1365,7 @@
 						<div class="tcard off">
 							<h4>Cover</h4>
 							<div class="line"><span class="k">Provider</span><span>
-								<span class="fixed-provider">Codex</span>
-								<small class="hint">only Codex can draw</small>
+								<span class="sel">Codex<span class="caret">⌄</span></span>
 							</span></div>
 							<div class="line"><span class="k">Route</span><span>
 								<span class="rsw"><b class="picked-dead">CLI</b><b class="dead">API</b></span>
@@ -1314,9 +1398,17 @@
 				sondern die tatsächliche Erreichbarkeit.
 			</p>
 			<p>
-				Ob es für Cover neben der Codex-CLI je einen zweiten Weg gibt, ist offen. Solange nicht,
-				bleibt die API-Route sichtbar und grau mit dem ehrlichen Grund „no image tool" — sie
-				verschwindet nicht, damit niemand sie später sucht.
+				Das Provider-Select in der Cover-Zeile ist ebenfalls Zielzustand: Der Cover-Weg ist im
+				Code heute fest die Codex-CLI — <code>cover_image_provider_method()</code> in
+				<code>src/songmaker_cli/cowriter/dispatch.py</code>, aufgerufen von
+				<code>cover_runner.py</code> und <code>jobs/cover_suggestions.py</code>, mit
+				<code>generate_codex_cover_image</code> als einzigem Generator. Ein echtes
+				Provider-Setting für Cover ist Backend-Arbeit und hat heute kein Issue.
+			</p>
+			<p>
+				Ob Claude oder Grok je ein Bildwerkzeug bekommen, entscheidet nicht diese Seite. Bis
+				dahin bleiben sie im Select wählbar und grau, mit dem ehrlichen Grund — sie
+				verschwinden nicht, damit niemand sie später sucht.
 			</p>
 		</div>
 	</section>
