@@ -165,6 +165,8 @@ def _codex_image_sandbox_runtime_error() -> str | None:
     return None
 
 
+type CodexImageSandboxRuntimeHealth = Literal["ready", "not_set_up", "unverified"]
+
 # The boot report's most recent verdict, for /health's
 # codex_image_sandbox_runtime field -- mirrors claude.provider's
 # _tool_surface_health_state: a live value every call to
@@ -173,21 +175,17 @@ def _codex_image_sandbox_runtime_error() -> str | None:
 # "unverified" (never a silent "ready") for the window before the boot
 # report has run at all.
 _codex_image_sandbox_runtime_health_lock = threading.Lock()
-_codex_image_sandbox_runtime_health: Literal["ready", "not_set_up", "unverified"] = (
-    "unverified"
-)
+_codex_image_sandbox_runtime_health: CodexImageSandboxRuntimeHealth = "unverified"
 
 
-def codex_image_sandbox_runtime_health() -> Literal["ready", "not_set_up", "unverified"]:
+def codex_image_sandbox_runtime_health() -> CodexImageSandboxRuntimeHealth:
     """The sandbox boot report's most recent verdict -- what /health's
     codex_image_sandbox_runtime field reports."""
     with _codex_image_sandbox_runtime_health_lock:
         return _codex_image_sandbox_runtime_health
 
 
-def record_codex_image_sandbox_runtime_health(
-    state: Literal["ready", "not_set_up", "unverified"],
-) -> None:
+def record_codex_image_sandbox_runtime_health(state: CodexImageSandboxRuntimeHealth) -> None:
     global _codex_image_sandbox_runtime_health
     with _codex_image_sandbox_runtime_health_lock:
         _codex_image_sandbox_runtime_health = state

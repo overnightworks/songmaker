@@ -165,17 +165,11 @@ def _no_codex_cover_sandbox_runtime_probe():
     The cover path itself verifies its fail-closed sandbox requirement. Tests
     that enter the web lifespan only need the boot contract, so they must not
     depend on bubblewrap or user namespaces being available in their runner.
-    Records the stubbed verdict the same way the real boot report would, so
-    /health's codex_image_sandbox_runtime field reflects it instead of
-    staying at the unverified default a bypassed real probe would leave.
     """
-    from songmaker_cli.lifecycle import record_codex_image_sandbox_runtime_health
-
     with patch(
         "songmaker_cli.server.report_codex_image_sandbox_runtime",
         return_value="ready",
     ):
-        record_codex_image_sandbox_runtime_health("ready")
         yield
 
 

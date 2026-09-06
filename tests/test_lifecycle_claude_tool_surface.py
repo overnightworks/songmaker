@@ -80,6 +80,9 @@ def test_boot_log_confirms_a_clean_tool_surface(caplog) -> None:
 
 
 def test_boot_marks_the_future_codex_cover_path_not_set_up_without_stopping(caplog) -> None:
+    """Also proves the boot report publishes its verdict as the live
+    /health state (codex_image_sandbox_runtime_health(), #789) — not a
+    value frozen at whatever the process saw first."""
     caplog.set_level("INFO")
     completed = subprocess.CompletedProcess(args=(), returncode=1)
     with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
@@ -89,9 +92,12 @@ def test_boot_marks_the_future_codex_cover_path_not_set_up_without_stopping(capl
 
     assert status == "not_set_up"
     assert "Codex cover image path not set up" in caplog.text
+    assert codex_image_sandbox_runtime_health() == "not_set_up"
 
 
 def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
+    """Also proves the boot report publishes its verdict as the live
+    /health state (codex_image_sandbox_runtime_health(), #789)."""
     caplog.set_level("INFO")
     completed = subprocess.CompletedProcess(args=(), returncode=0)
     with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
@@ -101,27 +107,7 @@ def test_boot_confirms_the_codex_cover_sandbox_runtime(caplog) -> None:
 
     assert status == "ready"
     assert "Codex cover image sandbox runtime verified" in caplog.text
-
-
-def test_boot_report_publishes_ready_as_the_live_health_state() -> None:
-    """codex_image_sandbox_runtime_health() (#789) is what /health's
-    codex_image_sandbox_runtime field reports — a live value the boot
-    report updates, not a value frozen at whatever the process saw
-    first."""
-    completed = subprocess.CompletedProcess(args=(), returncode=0)
-    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
-        "songmaker_cli.lifecycle.subprocess.run", side_effect=(completed, completed),
-    ):
-        report_codex_image_sandbox_runtime()
-
     assert codex_image_sandbox_runtime_health() == "ready"
-
-
-def test_boot_report_publishes_not_set_up_as_the_live_health_state() -> None:
-    with patch("songmaker_cli.lifecycle.shutil.which", return_value=None):
-        report_codex_image_sandbox_runtime()
-
-    assert codex_image_sandbox_runtime_health() == "not_set_up"
 
 
 def test_boot_report_overrides_an_earlier_recorded_state() -> None:

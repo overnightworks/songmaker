@@ -200,17 +200,15 @@ def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot
     tmp_path: Path, mock_arq_pool,
 ) -> None:
     """The live state defaults to "unverified" (never a silent "ready")
-    until the boot report actually records a real answer. Simulates that
-    window by resetting the state (the autouse reset fixture above) after
-    conftest's blanket stub already recorded "ready" for this app's own
-    boot, then reading /health without a fresh boot report in between —
-    the same "unverified" contract claude_cli_tool_surface pins for the
-    same reason above."""
-    from songmaker_cli import lifecycle
-
+    until the boot report actually records a real answer. This test never
+    triggers a real boot report at all — including at boot, where the
+    suite's own safety stub (conftest._no_codex_cover_sandbox_runtime_probe)
+    deliberately keeps report_codex_image_sandbox_runtime() from running
+    for real, the same way a host without bubblewrap would. Reporting
+    "ready" here would be exactly the silent default
+    check_no_silent_fallbacks.py exists to catch."""
     client, _ = make_test_app(tmp_path)
     with client:
-        lifecycle.record_codex_image_sandbox_runtime_health("unverified")
         resp = client.get("/health")
 
     assert resp.status_code == 200
