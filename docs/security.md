@@ -551,7 +551,10 @@ Codex Bubblewrap forms because they answer different questions:
   0.147.0 Linux binary's embedded string, confirmed by the boot check's direct
   `subprocess.run` assertion. It asks whether Bubblewrap can create the
   namespace and read-only root at all; the second form below proves the fresh
-  procfs setup as well. `ready` means that both commands succeeded.
+  procfs setup as well. `ready` means that both commands succeeded. This
+  boot check's verdict (`ready`, `not_set_up`, or `unverified` before the
+  boot check has run) is also `GET /health`'s live `codex_image_sandbox_runtime`
+  field, so the operator sees sandbox readiness without reading the boot log.
 - Codex then runs this **per-run startup probe** before its sandbox command.
   `strace -f -e trace=execve -s 400 codex sandbox -- /bin/true` on 06.09.2026
   (Codex 0.147.0) recorded its literal argv:
