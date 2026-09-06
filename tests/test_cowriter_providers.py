@@ -1611,10 +1611,10 @@ def test_cover_settings_are_admin_only(admin_client):
 
 
 def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
-    admin_client, monkeypatch,
+    admin_client,
 ):
     client, factory = admin_client
-    monkeypatch.setenv("ANTHROPIC_API_KEY", TEST_SECRET.decode())
+    override_provider_runtime(anthropic_api_key=TEST_SECRET.decode())
 
     assert client.get("/api/settings/cover").json() == {
         "provider": "codex", "route": "cli", "model": "",
