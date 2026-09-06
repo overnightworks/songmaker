@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
-from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.errors import (

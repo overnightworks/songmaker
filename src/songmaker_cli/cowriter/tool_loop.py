@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from songmaker_cli.claude.provider import (
+from agent_providers.events import (
     AssistantTextEvent,
     FinalEvent,
     StreamEvent,

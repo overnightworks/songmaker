@@ -10,15 +10,17 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from songmaker_cli.agent_cli import AgentCliUnavailableError
-from songmaker_cli.claude.provider import (
+from agent_providers.events import (
     AssistantTextEvent,
-    CliBinaryUnavailableError,
-    CliToolSurfaceError,
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
+)
+from songmaker_cli.agent_cli import AgentCliUnavailableError
+from songmaker_cli.claude.provider import (
+    CliBinaryUnavailableError,
+    CliToolSurfaceError,
     UnavailableError,
 )
 from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter, tool_loop
