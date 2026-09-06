@@ -270,7 +270,7 @@ def create_app(
 
     app.add_middleware(  # NOSONAR CORS order is security-critical; see block above.
         CORSMiddleware,
-        **_cors_middleware_kwargs(get_settings().cors_origin),
+        **_cors_middleware_kwargs(settings.cors_origin),
     )
     app.add_middleware(
         SelectiveGZipMiddleware,
