@@ -278,6 +278,29 @@ def test_cover_job_names_a_saved_claude_selection_without_calling_codex(
         assert job.error == COVER_IMAGE_TOOL_UNAVAILABLE_ERROR.format(provider="Claude")
 
 
+def test_cover_job_asks_the_selected_codex_route_to_sign_in(
+    cover_job, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: False,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == JOB_ERROR_COVER_CLI_LOGIN
+
+
 @pytest.mark.parametrize(
     "mutate",
     (

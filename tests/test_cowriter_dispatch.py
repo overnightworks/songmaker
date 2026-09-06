@@ -362,8 +362,10 @@ def test_only_the_codex_cli_route_owns_an_image_tool(
 ) -> None:
     _mount_a_signed_in_codex_cli(monkeypatch)
 
-    failure = dispatch.cover_image_route_failure(provider, route)
+    capability = dispatch.cover_image_capability(provider, route)
 
+    assert capability.carries_image_tool is (expected_code is None)
+    failure = capability.failure
     assert (failure.code if failure is not None else None) is expected_code
 
 
@@ -371,17 +373,19 @@ def test_the_codex_cover_route_names_a_missing_cli_login(monkeypatch) -> None:
     monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: True)
     monkeypatch.setattr(dispatch, "codex_cli_access_token_is_present", lambda: False)
 
-    failure = dispatch.cover_image_route_failure("codex", ProviderRoute.CLI)
+    capability = dispatch.cover_image_capability("codex", ProviderRoute.CLI)
 
-    assert failure.code is SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED
+    assert capability.carries_image_tool is True
+    assert capability.failure.code is SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED
 
 
 def test_the_codex_cover_route_names_an_unmounted_cli(monkeypatch) -> None:
     monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: False)
 
-    failure = dispatch.cover_image_route_failure("codex", ProviderRoute.CLI)
+    capability = dispatch.cover_image_capability("codex", ProviderRoute.CLI)
 
-    assert failure.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
+    assert capability.carries_image_tool is True
+    assert capability.failure.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
 
 
 def test_the_saved_cover_selection_resolves_to_its_route_and_model(

@@ -26,11 +26,13 @@ from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
 from songmaker_cli.cowriter.codex_cli_adapter import (
     CodexImageCliError,
+    CodexImageError,
+    CodexImageLoginError,
     CodexImageTimeoutError,
     generate_codex_cover_image,
 )
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch, cover_image_provider_method
-from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,
@@ -216,7 +218,7 @@ async def run_claimed_cover_suggestion_job(
         try:
             dispatch = await asyncio.to_thread(_load_cover_image_dispatch, db_factory)
         except ProviderUnavailableError as exc:
-            raise CodexImageCliError() from exc
+            raise _unstartable_route_error(exc) from exc
         log.info(
             "Cover job %s runs on %s %s with model %r",
             job_id, dispatch.provider, dispatch.route.value, dispatch.model,
@@ -335,6 +337,13 @@ def _load_cover_prompt(db_factory, job_id: str) -> tuple[str, str]:
 def _load_cover_image_dispatch(db_factory) -> CoverImageDispatch:
     with db_factory() as session:
         return cover_image_provider_method(session)
+
+
+def _unstartable_route_error(exc: ProviderUnavailableError) -> CodexImageError:
+    """Keep the sign-in hint for a selected route that only lacks its login."""
+    if exc.reason.code is SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED:
+        return CodexImageLoginError()
+    return CodexImageCliError()
 
 
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:

@@ -436,27 +436,23 @@ def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
         ProviderRouteReadinessState,
         route_setup_label,
     )
-    from songmaker_cli.cowriter.dispatch import cover_image_route_failure
-    from songmaker_cli.cowriter.errors import SafeRouteReasonCode
+    from songmaker_cli.cowriter.dispatch import cover_image_capability
 
     readiness: dict[str, ProviderRouteReadiness] = {}
     for route in ProviderRoute:
-        failure = cover_image_route_failure(provider, route)
-        carries_image_tool = (
-            failure is None or failure.code is not SafeRouteReasonCode.NO_IMAGE_TOOL
-        )
+        capability = cover_image_capability(provider, route)
         readiness[route.value] = ProviderRouteReadiness(
             state=(
                 ProviderRouteReadinessState.READY
-                if failure is None
+                if capability.failure is None
                 else ProviderRouteReadinessState.NOT_CONFIGURED
             ).value,
             capability=(
                 ProviderRouteCapability.TOOLS_AVAILABLE
-                if carries_image_tool
+                if capability.carries_image_tool
                 else ProviderRouteCapability.TEXT_ONLY
             ).value,
-            reason=failure,
+            reason=capability.failure,
             setup_label=route_setup_label(route),
         )
     return readiness

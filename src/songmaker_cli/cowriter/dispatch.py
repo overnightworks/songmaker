@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Final
 
 from sqlalchemy.orm import Session
 
@@ -57,6 +58,11 @@ from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
+# Cover images come from Codex's CLI image turn; no other provider or route
+# ships an image tool today (#822).
+_IMAGE_TOOL_PROVIDER: Final[str] = "codex"
+_IMAGE_TOOL_ROUTE: Final[ProviderRoute] = ProviderRoute.CLI
+
 
 @dataclass(frozen=True)
 class _ApiConnection:
@@ -71,6 +77,14 @@ class CoverImageDispatch:
     provider: str
     route: ProviderRoute
     model: str
+
+
+@dataclass(frozen=True)
+class CoverImageCapability:
+    """One route's image answer: does it own the tool, and what blocks it today."""
+
+    carries_image_tool: bool
+    failure: SafeRouteReason | None
 
 
 async def stream_cowriter_turn(
@@ -306,14 +320,24 @@ def _require_secret(provider: str, route: ProviderRoute, secret) -> str:
     return value
 
 
-def cover_image_route_failure(provider: str, route: ProviderRoute) -> SafeRouteReason | None:
-    """Answer whether a provider route can create cover images, or name why not.
+def cover_image_capability(provider: str, route: ProviderRoute) -> CoverImageCapability:
+    """Answer whether one provider route can create cover images, or name why not.
 
     Every caller that needs the answer — the cover job, the provider status,
     and the admin surface — asks here instead of deciding for itself.
     """
-    if provider != "codex" or route is not ProviderRoute.CLI:
-        return normalize_route_failure(SafeRouteReasonCode.NO_IMAGE_TOOL)
+    if provider != _IMAGE_TOOL_PROVIDER or route is not _IMAGE_TOOL_ROUTE:
+        return CoverImageCapability(
+            carries_image_tool=False,
+            failure=normalize_route_failure(SafeRouteReasonCode.NO_IMAGE_TOOL),
+        )
+    return CoverImageCapability(
+        carries_image_tool=True, failure=_codex_cli_image_route_failure(),
+    )
+
+
+def _codex_cli_image_route_failure() -> SafeRouteReason | None:
+    """Name what keeps the mounted Codex CLI from running an image turn."""
     if not codex_cover_image_capability_is_available():
         return normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
     try:
@@ -334,14 +358,12 @@ def cover_image_provider_method(session: Session) -> CoverImageDispatch:
         raise _unavailable(
             selection.provider, ProviderRoute.CLI, SafeRouteReasonCode.ROUTE_FAILED,
         ) from exc
-    failure = cover_image_route_failure(selection.provider, route)
-    if failure is None:
-        return CoverImageDispatch(
-            provider=selection.provider, route=route, model=selection.model,
-        )
-    if failure.code is SafeRouteReasonCode.NO_IMAGE_TOOL:
+    capability = cover_image_capability(selection.provider, route)
+    if not capability.carries_image_tool:
         raise CoverImageToolUnavailableError(selection.provider)
-    raise ProviderUnavailableError(selection.provider, route.value, failure)
+    if capability.failure is not None:
+        raise ProviderUnavailableError(selection.provider, route.value, capability.failure)
+    return CoverImageDispatch(provider=selection.provider, route=route, model=selection.model)
 
 
 def _unavailable(
