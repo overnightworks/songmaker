@@ -8,6 +8,8 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from songmaker_cli.lifecycle import bubblewrap_startup_probe_command
+
 WEB_SERVICE = "songmaker-web"
 WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
@@ -26,24 +28,6 @@ _BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS = (
     "--unshare-net",
     "--ro-bind", "/", "/",
     "/bin/true",
-)
-_CODEX_BUBBLEWRAP_STARTUP_PROBE_ARGUMENTS = (
-    "--new-session",
-    "--die-with-parent",
-    "--tmpfs", "/",
-    "--dev", "/dev",
-    "--ro-bind", "/bin", "/bin",
-    "--ro-bind", "/etc", "/etc",
-    "--ro-bind", "/lib", "/lib",
-    "--ro-bind", "/lib64", "/lib64",
-    "--ro-bind", "/sbin", "/sbin",
-    "--ro-bind", "/usr", "/usr",
-    "--unshare-user",
-    "--unshare-pid",
-    "--unshare-net",
-    "--proc", "/proc",
-    "--",
-    "/usr/bin/true",
 )
 CODEX_READ_ONLY_PERMISSION_PROFILE = (
     '{"type":"managed","file_system":{"type":"restricted","entries":['
@@ -74,6 +58,40 @@ else:
     raise SystemExit("sandbox network unexpectedly reachable")
 PY
 """
+_MASKED_PATH_ASSERTIONS = """set -eu
+expect_permission_denied() {
+  description="$1"
+  shift
+
+  if output="$("$@" 2>&1)"; then
+    echo "system-path mask unexpectedly allowed: $description" >&2
+    exit 1
+  fi
+  case "$output" in
+    *"Permission denied"*) ;;
+    *)
+      echo "system-path mask did not report Permission denied: $description: $output" >&2
+      exit 1
+      ;;
+  esac
+}
+
+for path in \\
+  /proc/interrupts \\
+  /proc/keys \\
+  /proc/latency_stats \\
+  /sys/devices/virtual/powercap \\
+  /sys/firmware/memmap/1/type; do
+  expect_permission_denied "$path" /bin/cat "$path"
+done
+"""
+# DAC already denies this write to the unprivileged user, so it proves only that
+# the mask section still exists, never the `deny /proc/sys w` rule itself.
+_DAC_COVERED_MASK_WRITE_ASSERTION = """expect_permission_denied /proc/sys/kernel/shmmax \\
+  /bin/sh -c 'printf x > "$1"' sh /proc/sys/kernel/shmmax
+"""
+_MASKED_PATH_ASSERTIONS += _DAC_COVERED_MASK_WRITE_ASSERTION
+_SANDBOX_ASSERTIONS += _MASKED_PATH_ASSERTIONS
 
 
 @dataclass(frozen=True)
@@ -125,11 +143,6 @@ def bubblewrap_probe_command() -> tuple[str, ...]:
     return tuple(command)
 
 
-def bubblewrap_startup_probe_command() -> tuple[str, ...]:
-    """Build Codex's traced Bubblewrap probe that precedes every sandbox run."""
-    return ("bwrap", *_CODEX_BUBBLEWRAP_STARTUP_PROBE_ARGUMENTS)
-
-
 def _run(command: Sequence[str]) -> CommandResult:
     completed = subprocess.run(command, capture_output=True, check=False, text=True)
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
@@ -167,6 +180,11 @@ def _verify_sandbox(run: CommandRunner) -> None:
     ))
     _required_output(prepare, "preparing the private CODEX_HOME probe directory")
     try:
+        masked_paths = run((
+            "docker", "compose", "exec", "-T", WEB_SERVICE,
+            "/bin/sh", "-ec", _MASKED_PATH_ASSERTIONS,
+        ))
+        _required_output(masked_paths, "AppArmor system-path mask proof")
         startup_probe = run((
             "docker", "compose", "exec", "-T", WEB_SERVICE,
             *bubblewrap_startup_probe_command(),
