@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-from conftest import fake_cli_process
+from conftest import fake_cli_process, override_provider_runtime
 
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import (
@@ -844,27 +844,32 @@ def test_find_binary_on_path() -> None:
         assert _find_claude_binary() == "/usr/bin/claude"
 
 
-def test_find_binary_in_vscode(tmp_path: Path) -> None:
-    ext_dir = tmp_path / ".vscode" / "extensions" / "anthropic.claude-code-1.0.0"
-    binary = ext_dir / "resources" / "native-binary" / "claude"
+def _install_vscode_style_binary(root: Path, version: str) -> Path:
+    binary = root / f"anthropic.claude-code-{version}" / "resources" / "native-binary" / "claude"
     binary.parent.mkdir(parents=True)
     binary.write_text("#!/bin/sh")
+    return binary
 
-    with (
-        patch("shutil.which", return_value=None),
-        patch("pathlib.Path.home", return_value=tmp_path),
-    ):
-        result = _find_claude_binary()
 
-    assert result is not None
-    assert "claude" in result
+def test_find_binary_takes_the_newest_match_from_a_configured_search_location(
+    tmp_path: Path,
+) -> None:
+    _install_vscode_style_binary(tmp_path, "1.0.0")
+    newest = _install_vscode_style_binary(tmp_path, "2.0.0")
+    override_provider_runtime(
+        claude_cli_binary_search_globs=(
+            str(tmp_path / "anthropic.claude-code-*" / "resources" / "native-binary" / "claude"),
+        ),
+    )
+
+    with patch("shutil.which", return_value=None):
+        assert _find_claude_binary() == str(newest)
 
 
 def test_find_binary_not_found() -> None:
-    with (
-        patch("shutil.which", return_value=None),
-        patch("pathlib.Path.home", return_value=Path("/nonexistent")),
-    ):
+    override_provider_runtime(claude_cli_binary_search_globs=())
+
+    with patch("shutil.which", return_value=None):
         assert _find_claude_binary() is None
 
 
