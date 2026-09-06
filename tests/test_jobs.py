@@ -15,10 +15,10 @@ import fakeredis.aioredis
 import pytest
 
 from acestep_engine.models import AceStepConfig
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
-    JUDGE_FAILURE_TIMEOUT,
     JobFunction,
     JobType,
 )
@@ -1492,7 +1492,7 @@ def stubbed_claude_judge():
     cowriter's claude_adapter — stub it there, one level below
     ``call_provider_once``, so the provider-dispatch logic itself still runs.
     """
-    from songmaker_cli.claude.provider import ClaudeResponse
+    from agent_providers.claude.provider import ClaudeResponse
 
     with patch(
         "songmaker_cli.cowriter.claude_adapter.call_claude",
@@ -1690,7 +1690,7 @@ def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
     abandoned thread is this process's problem — killing the child would
     reclaim nothing, so it keeps running.
     """
-    from songmaker_cli.claude.provider import UnavailableError
+    from agent_providers.claude.provider import UnavailableError
 
     judge_timeout = threading.Event()
 

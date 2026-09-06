@@ -15,8 +15,8 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from songmaker_cli.claude.provider import parse_json_response
-from songmaker_cli.constants import (
+from agent_providers.claude.provider import parse_json_response
+from agent_providers.constants import (
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
 )

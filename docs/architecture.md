@@ -642,7 +642,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate; the transports, tool loop and sandbox blocks move in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares. `songmaker_cli.auth` and `songmaker_cli.middleware` re-export the moved symbols until the auth dependencies and the auth router follow |
 
@@ -698,9 +698,16 @@ every deployment and lives in `agent_providers/constants.py` (**Go**). A value
 that is songmaker's own — a default someone may change, a container path, a
 history or cover rule, a text a musician reads — stays in
 `songmaker_cli/constants.py` (**Stay**) and reaches the provider layer through
-`ProviderRuntimeConfig` when the layer needs it at all. Until the provider code
-itself moves, `songmaker_cli/constants.py` re-exports the Go names so the
-modules around it keep their import sites.
+`ProviderRuntimeConfig` when the layer needs it at all. The transitional
+re-export that carried the Go names through `songmaker_cli/constants.py` is
+gone: every module reads a Go constant from the library directly.
+
+The table's universe is those two `constants.py` modules, and moving the
+provider code into the library does not widen it: a module-level invariant
+that only its own module reads — the probe's caller budget in `process.py`,
+the Codex catalog's larger read limit, the Claude provider's error texts —
+stays a named constant beside its owner, exactly as it was before the move,
+and is not a value the host and the library could disagree about.
 
 `tests/test_agent_providers_constants.py` reads this table and holds both
 modules to it in both directions, so a constant cannot quietly change sides.
@@ -971,7 +978,7 @@ much for its tool-free CLI preflight; only that Claude path performs the
 tool-surface probe. Grok and Codex use the compatible API path directly.
 The five-second timeout is the provider floor; the bounded cleanup margin
 (SIGTERM grace plus post-SIGKILL wait) belongs only to the
-`agent_cli.run_cli_bounded` probe, while Grok/Codex use HTTP timeouts, the
+`agent_providers.process.run_cli_bounded` probe, while Grok/Codex use HTTP timeouts, the
 Claude API uses its SDK timeout, the Claude-CLI judge uses
 `subprocess.run(timeout)`, and the outer judge boundary is the Thread-Watchdog
 `timeout+1s` (`pipeline.py:223-229`). The scorer watchdog has only a small

@@ -8,19 +8,19 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from agent_providers.config import current_config
-from agent_providers.constants import (
-    COWRITER_CLAUDE_API_MAX_TOKENS,
-    COWRITER_CLI_TIMEOUT_SECONDS,
-)
-from agent_providers.events import StreamEvent
-from songmaker_cli.claude.provider import (
+from agent_providers.claude.provider import (
     CliBinaryUnavailableError,
     CliToolSurfaceError,
     UnavailableError,
     acall_claude_with_mcp_stream,
     call_claude,
 )
+from agent_providers.config import current_config
+from agent_providers.constants import (
+    COWRITER_CLAUDE_API_MAX_TOKENS,
+    COWRITER_CLI_TIMEOUT_SECONDS,
+)
+from agent_providers.events import StreamEvent
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
