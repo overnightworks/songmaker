@@ -64,9 +64,9 @@ from songmaker_cli.db.queries import (
     resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
-from songmaker_cli.redis_client import RedisRateLimiter
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
+from webauth.rate_limit import RedisRateLimiter
 
 if TYPE_CHECKING:
     from redis import Redis

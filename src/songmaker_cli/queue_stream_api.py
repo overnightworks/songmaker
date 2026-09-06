@@ -49,7 +49,7 @@ from songmaker_cli.queue_streams import (
     track_source_from_generation,
     unpin_snapshot,
 )
-from songmaker_cli.redis_client import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 

@@ -27,8 +27,8 @@ from webauth.config import web_auth_config
 from webauth.proxies import resolve_client_ip
 
 if TYPE_CHECKING:
-    from songmaker_cli.redis_client import RedisRateLimiter
     from webauth.config import WebAuthConfig
+    from webauth.rate_limit import RedisRateLimiter
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
     ) -> RedisRateLimiter:
         limiter = self._limiters.get(rate_limit_class)
         if limiter is None:
-            from songmaker_cli.redis_client import RedisRateLimiter
+            from webauth.rate_limit import RedisRateLimiter
             settings = get_settings()
             prefixes = config.rate_limit_key_prefixes
             prefix, budget = {

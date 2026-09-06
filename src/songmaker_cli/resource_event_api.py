@@ -48,8 +48,9 @@ from songmaker_cli.db.queries import (
     list_resource_events_after,
 )
 from songmaker_cli.middleware import get_current_user
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, RedisRateLimiter
+from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
+from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)
