@@ -56,10 +56,12 @@
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import ModelsTaskRow, {
 		MODELS_ROUTES,
-		MODELS_ROUTE_NOT_AVAILABLE_CODE
+		MODELS_ROUTE_NOT_AVAILABLE_CODE,
+		routeReasonSentence
 	} from '$lib/components/ModelsTaskRow.svelte';
 	import type {
 		ModelsRouteKey,
+		ModelsRouteReason,
 		ModelsSaveOutcome,
 		ModelsTaskProvider,
 		ModelsTaskRoute,
@@ -572,11 +574,27 @@
 		model: judgeSettings?.model ?? ''
 	});
 
-	function saveFailureReason(e: unknown): string {
-		return (
-			providerNotConfiguredMessage(e) ??
-			(e instanceof Error ? e.message : MODELS_SAVE_FAILED_FALLBACK)
-		);
+	function isRouteReason(detail: unknown): detail is ModelsRouteReason {
+		if (typeof detail !== 'object' || detail === null) return false;
+		const candidate = detail as Partial<ModelsRouteReason>;
+		return isNonEmptyString(candidate.code) && isNonEmptyString(candidate.message);
+	}
+
+	/**
+	 * Every rejected save reaches the row as a sentence: the unconfigured-provider
+	 * detail as before, a route reason through the row's own phrasing, a plain
+	 * string verbatim. The generic API message never stands in for a reason.
+	 */
+	function saveFailureReason(e: unknown, task: string, route: ModelsRouteKey): string {
+		const notConfigured = providerNotConfiguredMessage(e);
+		if (notConfigured !== null) return notConfigured;
+		if (e instanceof ApiError) {
+			if (isRouteReason(e.responseDetail)) {
+				return routeReasonSentence(e.responseDetail, route, task);
+			}
+			return isNonEmptyString(e.responseDetail) ? e.responseDetail : MODELS_SAVE_FAILED_FALLBACK;
+		}
+		return e instanceof Error ? e.message : MODELS_SAVE_FAILED_FALLBACK;
 	}
 
 	function routeMapWith(selection: ModelsTaskSelection): Record<string, ModelsRouteKey> {
@@ -597,7 +615,10 @@
 			cowriterBudget = cowriterSettings.tail_token_budget;
 			return { ok: true };
 		} catch (e) {
-			return { ok: false, reason: saveFailureReason(e) };
+			return {
+				ok: false,
+				reason: saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, selection.route)
+			};
 		}
 	}
 
@@ -610,7 +631,7 @@
 			);
 			return { ok: true };
 		} catch (e) {
-			return { ok: false, reason: saveFailureReason(e) };
+			return { ok: false, reason: saveFailureReason(e, MODELS_TASK_COVER_LABEL, selection.route) };
 		}
 	}
 
@@ -619,7 +640,10 @@
 			judgeSettings = await updateJudgeSettings(selection.provider, selection.model);
 			return { ok: true };
 		} catch (e) {
-			return { ok: false, reason: saveFailureReason(e) };
+			return {
+				ok: false,
+				reason: saveFailureReason(e, MODELS_TASK_SCORING_LABEL, selection.route)
+			};
 		}
 	}
 

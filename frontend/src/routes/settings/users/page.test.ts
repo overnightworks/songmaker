@@ -735,6 +735,42 @@ describe('admin models tab', () => {
 		expect(sectionByHeading(target, 'Models').querySelector('.tt-sub.bad')).toBeNull();
 	});
 
+	it.each([
+		{
+			shape: 'a route reason the row can phrase',
+			detail: { code: 'cli_login_not_configured', message: 'grok CLI is not signed in.' },
+			sentence: 'CLI · not logged in'
+		},
+		{
+			shape: 'a plain sentence from the server',
+			detail: "Unknown grok model 'grok-4'",
+			sentence: "Unknown grok model 'grok-4'"
+		},
+		{
+			shape: 'a detail the page cannot read',
+			detail: [{ loc: ['body', 'model'], msg: 'field required' }],
+			sentence: 'The server rejected the change.'
+		}
+	])('names a rejected save that carries $shape', async ({ detail, sentence }) => {
+		api.updateCowriterSettings.mockRejectedValue(
+			new ApiError(
+				422,
+				typeof detail === 'string' ? detail : '',
+				'/api/settings/cowriter',
+				null,
+				detail
+			)
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		await choose(providerSelect(target, 'Co-Writer'), 'grok');
+
+		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
+		expect(failure.textContent).toContain(sentence);
+		expect(failure.textContent).not.toContain('Something went wrong');
+	});
+
 	it('names a rejected history-tail save next to the field with a retry', async () => {
 		api.updateCowriterSettings.mockRejectedValue(new Error('Tail budget out of range'));
 		const target = await renderPage(true);
