@@ -23,18 +23,20 @@ from songmaker_cli.constants import (
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
 )
-from songmaker_cli.cowriter.catalog import (
-    ProviderRoute,
-    ProviderSetupMethod,
-)
+from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
+from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.claude_adapter import (
     call_claude_once,
     stream_claude_api_turn,
     stream_claude_turn,
 )
-from songmaker_cli.cowriter.codex_cli_adapter import CodexCliToolTransport
+from songmaker_cli.cowriter.codex_cli_adapter import (
+    CodexCliToolTransport,
+    codex_cover_image_capability_is_available,
+)
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
+    SafeRouteReason,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
@@ -49,6 +51,7 @@ from songmaker_cli.cowriter.tool_loop import (
     ToolTransport,
     stream_tool_loop,
 )
+from songmaker_cli.db.queries.settings import get_cover_settings
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
 
@@ -59,6 +62,15 @@ log = logging.getLogger(__name__)
 class _ApiConnection:
     api_key: str
     api_url: str | None = None
+
+
+@dataclass(frozen=True)
+class CoverImageDispatch:
+    """The saved cover route, verified to own an image tool, and its model."""
+
+    provider: str
+    route: ProviderRoute
+    model: str
 
 
 async def stream_cowriter_turn(
@@ -294,26 +306,42 @@ def _require_secret(provider: str, route: ProviderRoute, secret) -> str:
     return value
 
 
-def _codex_cli_access_token_is_present() -> bool:
-    try:
-        return codex_cli_access_token_is_present()
-    except AgentCliUnavailableError as exc:
-        raise _unavailable(
-            "codex",
-            ProviderRoute.CLI,
-            SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE,
-        ) from exc
+def cover_image_route_failure(provider: str, route: ProviderRoute) -> SafeRouteReason | None:
+    """Answer whether a provider route can create cover images, or name why not.
 
-
-def cover_image_provider_method() -> ProviderSetupMethod | None:
-    """Choose the one configured route for a generated cover image.
-
-    Cover generation intentionally has no HTTP/API fallback.  The image
-    adapter receives only this selected method and never reads credentials.
+    Every caller that needs the answer — the cover job, the provider status,
+    and the admin surface — asks here instead of deciding for itself.
     """
-    if _codex_cli_access_token_is_present():
-        return ProviderSetupMethod.CODEX_CLI
+    if provider != "codex" or route is not ProviderRoute.CLI:
+        return normalize_route_failure(SafeRouteReasonCode.NO_IMAGE_TOOL)
+    if not codex_cover_image_capability_is_available():
+        return normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
+    try:
+        signed_in = codex_cli_access_token_is_present()
+    except AgentCliUnavailableError:
+        return normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE)
+    if not signed_in:
+        return normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
     return None
+
+
+def cover_image_provider_method(session: Session) -> CoverImageDispatch:
+    """Resolve the saved cover selection through the one image-capability owner."""
+    selection = get_cover_settings(session)
+    try:
+        route = ProviderRoute(selection.route)
+    except ValueError as exc:
+        raise _unavailable(
+            selection.provider, ProviderRoute.CLI, SafeRouteReasonCode.ROUTE_FAILED,
+        ) from exc
+    failure = cover_image_route_failure(selection.provider, route)
+    if failure is None:
+        return CoverImageDispatch(
+            provider=selection.provider, route=route, model=selection.model,
+        )
+    if failure.code is SafeRouteReasonCode.NO_IMAGE_TOOL:
+        raise CoverImageToolUnavailableError(selection.provider)
+    raise ProviderUnavailableError(selection.provider, route.value, failure)
 
 
 def _unavailable(

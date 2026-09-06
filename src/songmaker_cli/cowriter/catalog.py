@@ -323,6 +323,11 @@ def _route_preflight_snapshot(
     )
 
 
+def route_setup_label(route: ProviderRoute) -> str:
+    """Name the credential a transport route needs to become usable."""
+    return _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL
+
+
 def provider_route_capability() -> ProviderRouteCapability:
     """Return the fixed feature capability of a provider transport route."""
     return ProviderRouteCapability.TOOLS_AVAILABLE

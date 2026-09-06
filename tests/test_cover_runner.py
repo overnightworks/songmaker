@@ -14,9 +14,10 @@ from PIL import Image
 import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
-from songmaker_cli.cowriter.catalog import ProviderSetupMethod
+from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessPool
+from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries import update_job_status
@@ -37,6 +38,10 @@ def _png_bytes() -> bytes:
     output = BytesIO()
     Image.new("RGB", (16, 16), (20, 80, 160)).save(output, format="PNG")
     return output.getvalue()
+
+
+def _codex_cover_dispatch() -> CoverImageDispatch:
+    return CoverImageDispatch(provider="codex", route=ProviderRoute.CLI, model="")
 
 
 def _cover_job(tmp_path: Path):
@@ -95,7 +100,7 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
     image_started = threading.Event()
     allow_image_return = threading.Event()
 
-    def fake_image_generator(_prompt: str, *, deadline: float) -> bytes:
+    def fake_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
         assert deadline > 0
         image_started.set()
         assert allow_image_return.wait(timeout=2)
@@ -103,7 +108,7 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
     monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
 
     async def run_race() -> tuple[bool, bool]:
@@ -172,7 +177,7 @@ def test_web_recovery_fails_interrupted_work_cleans_its_group_and_leaves_queue_f
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
     monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
     assert asyncio.run(cover_runner.run_next_cover_job(
         db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
@@ -199,10 +204,10 @@ def test_web_runner_records_the_shared_cover_error_terminal_state(
 ) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
 
-    def fail_image_generator(_prompt: str, *, deadline: float) -> bytes:
+    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
         raise CodexImageCliError()
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
@@ -278,7 +283,7 @@ def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
     )
     registry = cover_runner.CoverJobCancellationRegistry()
     monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
 
     async def cancel_running_job() -> bool:
@@ -316,7 +321,7 @@ def test_web_runner_task_cancellation_reaps_the_codex_process(tmp_path: Path, mo
         monkeypatch, tmp_path,
     )
     monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda: ProviderSetupMethod.CODEX_CLI,
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
 
     async def cancel_runner_task() -> None:

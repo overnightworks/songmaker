@@ -171,6 +171,18 @@ class JudgeSettingsResponse(BaseModel):
     probed_at: dict[str, ComputedTimestamp]
 
 
+class CoverSettingsRequest(BaseModel):
+    provider: str
+    route: str
+    model: str
+
+
+class CoverSettingsResponse(BaseModel):
+    provider: str
+    route: Literal["cli", "api"]
+    model: str
+
+
 class ProviderSurfaceState(StrEnum):
     UNVERIFIED = "unverified"
     CONFIGURED = "configured"
@@ -202,6 +214,7 @@ class ProviderStatusResponse(BaseModel):
     cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse] = Field(
         default=None,
     )
+    cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 
 class ChatRequest(BaseModel):
