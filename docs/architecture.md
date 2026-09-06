@@ -620,7 +620,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 
@@ -644,6 +644,96 @@ declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outsid
 `mcp_server/`, whose package import pulls in the `mcp` extra the scoring worker
 does not install. `None` is a valid value: a deployment without an MCP server
 runs its co-writer turns on the tool-free command line and gate.
+
+#### Provider constants: Go and Stay
+
+The constants of the provider layer are split the same way as its
+configuration. A value that is a fact about Claude, Codex or Grok — a probe
+budget, a read limit, an endpoint, the wording a CLI prints — is the same in
+every deployment and lives in `agent_providers/constants.py` (**Go**). A value
+that is songmaker's own — a default someone may change, a container path, a
+history or cover rule, a text a musician reads — stays in
+`songmaker_cli/constants.py` (**Stay**) and reaches the provider layer through
+`ProviderRuntimeConfig` when the layer needs it at all. Until the provider code
+itself moves, `songmaker_cli/constants.py` re-exports the Go names so the
+modules around it keep their import sites.
+
+`tests/test_agent_providers_constants.py` reads this table and holds both
+modules to it in both directions, so a constant cannot quietly change sides.
+
+| Constant | Side | Reason |
+|---|---|---|
+| `ANTHROPIC_API_VERSION` | Go | The version header Anthropic's HTTP API requires. |
+| `CLAUDE_CLI_AUTH_METHOD_FIELD` | Go | Field name in the Claude CLI's login-status JSON. |
+| `CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS` | Go | Budget for one Claude CLI completion. |
+| `CLAUDE_CLI_LOGGED_IN_FIELD` | Go | Field name in the Claude CLI's login-status JSON. |
+| `CLAUDE_CLI_MAX_CONCURRENT_PROCESSES` | Go | Fail-closed ceiling on live Claude CLI processes. |
+| `CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS` | Go | Budget for the tool-free surface probe. |
+| `CLAUDE_CLI_SIGTERM_GRACE_SECONDS` | Go | Grace a probe gives SIGTERM before SIGKILL. |
+| `CLAUDE_CLI_STATUS_ARGS` | Go | The Claude CLI's login-status subcommand. |
+| `CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS` | Go | TTL of an unusable probe answer. |
+| `CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS` | Go | Budget for the MCP-attached surface probe. |
+| `CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS` | Go | TTL of a verdict about a process that outlived SIGKILL. |
+| `CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS` | Go | Bound on reaping a killed CLI process. |
+| `CLI_LOGIN_STATUS_CACHE_SECONDS` | Go | How long a login verdict is reused before re-probing. |
+| `CLI_OUTPUT_READ_LIMIT_BYTES` | Go | Cap on how much output a bounded CLI run reads. |
+| `CLI_TERMINATION_GRACE_SECONDS` | Go | Grace before a bounded run kills its process group. |
+| `CODEX_CLI_LOGGED_IN_MARKER` | Go | Wording the Codex CLI prints when signed in. |
+| `CODEX_CLI_LOGGED_OUT_MARKER` | Go | Wording the Codex CLI prints when signed out. |
+| `CODEX_CLI_MODELS_ARGS` | Go | The Codex CLI's model-list subcommand. |
+| `CODEX_CLI_STATUS_ARGS` | Go | The Codex CLI's login-status subcommand. |
+| `COWRITER_ANTHROPIC_MODELS_URL` | Go | Anthropic's model-catalog endpoint. |
+| `COWRITER_CLAUDE_API_MAX_TOKENS` | Go | Response cap the Claude API transport sends. |
+| `COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER` | Go | Wording the Claude CLI prints before its model list. |
+| `COWRITER_CLAUDE_MODEL_PREFIX` | Go | How Anthropic names its models. |
+| `COWRITER_CLI_TIMEOUT_SECONDS` | Go | Budget for one CLI turn. |
+| `COWRITER_GROK_CHAT_URL` | Go | xAI's chat endpoint. |
+| `COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY` | Go | Backpressure bound of the Grok CLI line reader. |
+| `COWRITER_GROK_MODELS_URL` | Go | xAI's model-catalog endpoint. |
+| `COWRITER_GROK_MODEL_PREFIX` | Go | How xAI names its models. |
+| `COWRITER_GROK_NON_CHAT_MARKERS` | Go | Which xAI models are not chat models. |
+| `COWRITER_MODELS_TIMEOUT_SECONDS` | Go | Budget for a model-catalog probe. |
+| `COWRITER_OPENAI_CHAT_PREFIXES` | Go | How OpenAI names its chat models. |
+| `COWRITER_OPENAI_CHAT_URL` | Go | OpenAI's chat endpoint. |
+| `COWRITER_OPENAI_MODELS_URL` | Go | OpenAI's model-catalog endpoint. |
+| `COWRITER_OPENAI_NON_CHAT_MARKERS` | Go | Which OpenAI models are not chat models. |
+| `COWRITER_PROVIDERS` | Go | The three providers this layer drives. |
+| `GROK_CLI_LOGGED_IN_MARKER` | Go | Wording the Grok CLI prints when signed in. |
+| `GROK_CLI_LOGGED_OUT_MARKER` | Go | Wording the Grok CLI prints when signed out. |
+| `GROK_CLI_MODEL_BULLETS` | Go | Bullets the Grok CLI lists its models with. |
+| `GROK_CLI_MODEL_LIST_MARKER` | Go | Wording the Grok CLI prints before its model list. |
+| `GROK_CLI_STATUS_ARGS` | Go | The Grok CLI's login-status subcommand. |
+| `GROK_CLI_STREAMING_OUTPUT_FORMAT` | Go | The Grok CLI's streaming output format. |
+| `JUDGE_FAILURE_TIMEOUT` | Go | The one reason a judge turn reports when it runs out of time. |
+| `CLAUDE_CLI_BINARY` | Stay | Songmaker's default binary name; the live value arrives as `ProviderRuntimeConfig.claude_cli_binary`. |
+| `CLAUDE_SCORING_MODEL_DEFAULT` | Stay | The judge's fallback model — a product choice. |
+| `CODEX_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
+| `CODEX_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.codex_cli_binary`. |
+| `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
+| `CODEX_CODE_MODE_HOST_BINARY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
+| `CODEX_RESOURCES_DIRECTORY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
+| `COVER_CLI_DEADLINE_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
+| `COVER_DEFAULT_MODEL` | Stay | Cover art is songmaker's own task, with its own model choice. |
+| `COVER_DEFAULT_PROVIDER` | Stay | Cover art is songmaker's own task, with its own provider choice. |
+| `COVER_DEFAULT_ROUTE` | Stay | Cover art is songmaker's own task, with its own route choice. |
+| `COVER_IMAGE_TOOL_UNAVAILABLE_ERROR` | Stay | A text a musician reads. |
+| `COVER_JOB_BUDGET_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
+| `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
+| `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
+| `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |
+| `COWRITER_DEFAULT_PROVIDER` | Stay | Which provider a musician gets by default — a product choice. |
+| `COWRITER_DEFAULT_TAIL_TOKEN_BUDGET` | Stay | How much conversation history songmaker sends verbatim. |
+| `COWRITER_MAX_SUMMARY_CHARS` | Stay | How long that rolling summary may grow. |
+| `COWRITER_MAX_TAIL_TOKEN_BUDGET` | Stay | Upper bound a musician may set for that history budget. |
+| `COWRITER_MAX_TOOL_ROUNDS` | Stay | Bound of songmaker's tool loop; it travels with that loop, not with the constants split. |
+| `COWRITER_MIN_TAIL_TOKEN_BUDGET` | Stay | Lower bound a musician may set for that history budget. |
+| `COWRITER_SUMMARY_TAG` | Stay | The tag songmaker's rolling summary is wrapped in. |
+| `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
+| `GROK_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.grok_cli_binary`. |
+| `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; it is parametrised together with the branded text-protocol tags when the Grok transport moves. |
+| `JUDGE_DEFAULT_PROVIDER` | Stay | Which provider judges lyrical coherence by default — a product choice. |
+| `MODEL_ALLOWED_CLAUDE` | Stay | Allow-list of the legacy `/settings/claude-models` endpoint. |
+| `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
 These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` and `webauth` also never import each other. The `.importlinter` contract states these boundaries and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
 
