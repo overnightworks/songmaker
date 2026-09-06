@@ -642,7 +642,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak; the transports and sandbox blocks move in slice by slice |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak, `errors.py` owns the named route failures every transport raises, `images.py` owns the `ImagePolicy` port the host lends the image route, `grok/transport.py` owns the Grok CLI turn, and `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover image turn (`image.py`); the sandbox blocks move in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares, `dependencies.py` the `current_user_dependency` factory that yields the session and admin dependencies; the login route with its advisory lock stays in the application |
 
@@ -781,7 +781,13 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `COWRITER_SUMMARY_TAG` | Stay | The tag songmaker's rolling summary is wrapped in. |
 | `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
 | `GROK_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.grok_cli_binary`. |
-| `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; it is parametrised together with the branded text-protocol tags when the Grok transport moves. |
+| `CLI_PROMPT_FILE_PREFIX` | Stay | The temporary prompt file carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_prefix`. |
+| `COVER_GENERATED_EDGE_PIXELS` | Stay | How large a generated cover is — a product choice, injected as `ImagePolicy.output_edge_pixels`. |
+| `COVER_GENERATED_IMAGE_FORMAT` | Stay | Which format a generated cover is written in; injected as `ImagePolicy.output_format`. |
+| `COVER_MAX_BYTES` | Stay | The byte ceiling for any cover songmaker accepts; injected as `ImagePolicy.maximum_source_bytes`. |
+| `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts; injected as `ImagePolicy.maximum_pixels`. |
+| `COVER_PNG_MAGIC` | Stay | The signature a generated cover must carry; injected as `ImagePolicy.output_signature`. |
+| `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_placeholder`. |
 | `JUDGE_DEFAULT_PROVIDER` | Stay | Which provider judges lyrical coherence by default — a product choice. |
 | `MODEL_ALLOWED_CLAUDE` | Stay | Allow-list of the legacy `/settings/claude-models` endpoint. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |

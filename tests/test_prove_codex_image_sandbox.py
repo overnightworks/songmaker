@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from agent_providers.codex import image as codex_image
+from agent_providers.codex import transport as codex_transport
 
 _SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "prove_codex_image_sandbox.py"
 _SPEC = importlib.util.spec_from_file_location("prove_codex_image_sandbox", _SCRIPT_PATH)
@@ -247,3 +251,24 @@ def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
 
     with pytest.raises(RuntimeError, match="did not fail while creating a namespace"):
         proof.prove(run)
+
+
+def test_the_apparmor_profile_allows_exactly_the_codex_home_prefixes_in_use() -> None:
+    """A prefix renamed without the profile is a silently blocked mount.
+
+    Bubblewrap binds each private Codex home from a directory named by one of
+    these prefixes, and only the mounts the profile lists are permitted, so
+    the two sets have to agree. Moving the prefixes into the library is #825's
+    slice A24; this pins them so that move starts from a proof (issue #871).
+    """
+    profile = (Path(__file__).parents[1] / "scripts" / "apparmor" / "songmaker-web").read_text()
+    allowed = {
+        name.rstrip("*")
+        for name in re.findall(r"/tmp/(songmaker-[A-Za-z0-9-]+\*?)/codex-home", profile)
+    }
+
+    assert allowed == {
+        codex_image.CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
+        codex_transport.CODEX_TOOL_TURN_DIRECTORY_PREFIX,
+        Path(proof.SANDBOX_CODEX_HOME).parent.name,
+    }
