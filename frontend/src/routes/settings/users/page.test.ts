@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
 	LoginAttemptItem,
 	PaginatedResponse,
+	ProviderRouteReadiness,
 	ProviderStatus,
 	ProviderSurfaceStatus,
 	SessionItem,
@@ -84,12 +85,24 @@ const ATTEMPT: LoginAttemptItem = {
 	success: false,
 	attempted_at: '2026-01-03T01:00:00Z'
 };
+const NO_IMAGE_TOOL: ProviderRouteReadiness = {
+	state: 'not_configured',
+	capability: 'text_only',
+	reason: { code: 'no_image_tool', message: 'no image tool' },
+	setup_label: 'CLI login'
+};
+
 function providerStatus(
 	provider: string,
 	cowriter: ProviderSurfaceStatus,
 	judge: ProviderSurfaceStatus = cowriter
 ): ProviderStatus {
-	return { provider, cowriter, judge };
+	return {
+		provider,
+		cowriter,
+		judge,
+		cover_routes: { cli: NO_IMAGE_TOOL, api: { ...NO_IMAGE_TOOL, setup_label: 'API key' } }
+	};
 }
 
 const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
