@@ -6,6 +6,7 @@ import asyncio
 import logging
 import shutil
 import subprocess
+import threading
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -164,13 +165,47 @@ def _codex_image_sandbox_runtime_error() -> str | None:
     return None
 
 
+type CodexImageSandboxRuntimeHealth = Literal["ready", "not_set_up", "unverified"]
+
+# The boot report's most recent verdict, for /health's
+# codex_image_sandbox_runtime field -- mirrors claude.provider's
+# _tool_surface_health_state: a live value every call to
+# report_codex_image_sandbox_runtime() updates, not a value frozen at
+# whatever the process happened to see at startup. Defaults to
+# "unverified" (never a silent "ready") for the window before the boot
+# report has run at all.
+_codex_image_sandbox_runtime_health_lock = threading.Lock()
+_codex_image_sandbox_runtime_health: CodexImageSandboxRuntimeHealth = "unverified"
+
+
+def codex_image_sandbox_runtime_health() -> CodexImageSandboxRuntimeHealth:
+    """The sandbox boot report's most recent verdict -- what /health's
+    codex_image_sandbox_runtime field reports."""
+    with _codex_image_sandbox_runtime_health_lock:
+        return _codex_image_sandbox_runtime_health
+
+
+def record_codex_image_sandbox_runtime_health(state: CodexImageSandboxRuntimeHealth) -> None:
+    global _codex_image_sandbox_runtime_health
+    with _codex_image_sandbox_runtime_health_lock:
+        _codex_image_sandbox_runtime_health = state
+
+
 def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
-    """Report whether the future web cover route can enter its user namespace."""
+    """Report whether the future web cover route can enter its user namespace.
+
+    Also records the outcome as the live /health state (see
+    codex_image_sandbox_runtime_health above) on every call, so a later
+    boot report always overrides an earlier one instead of /health being
+    stuck at whatever the process saw first.
+    """
     error = _codex_image_sandbox_runtime_error()
     if error is not None:
         log.info("Codex cover image path not set up: %s", error)
+        record_codex_image_sandbox_runtime_health("not_set_up")
         return "not_set_up"
     log.info("Codex cover image sandbox runtime verified")
+    record_codex_image_sandbox_runtime_health("ready")
     return "ready"
 
 
