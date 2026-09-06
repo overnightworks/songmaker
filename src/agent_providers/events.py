@@ -17,9 +17,17 @@ from pydantic import BaseModel, Field
 
 
 class StreamEvent(BaseModel):
-    """Base class for every event a provider turn streams."""
+    """Base class for every event a provider turn streams.
+
+    ``correlation_id`` is the host's own handle for the turn that produced
+    the event — a job id, a request id — carried so the host can log and
+    group events without threading a second value beside them. It is
+    excluded from serialization: the wire payload is the same with it as
+    without it.
+    """
 
     type: str
+    correlation_id: str | None = Field(default=None, exclude=True)
 
 
 class AssistantTextEvent(StreamEvent):
@@ -44,8 +52,3 @@ class ToolResultEvent(StreamEvent):
 class FinalEvent(StreamEvent):
     type: Literal["final"] = "final"
     text: str
-
-
-class ErrorEvent(StreamEvent):
-    type: Literal["error"] = "error"
-    message: str

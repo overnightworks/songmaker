@@ -11,12 +11,7 @@ from sqlalchemy.orm import Session
 
 from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from agent_providers.events import StreamEvent
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
-from songmaker_cli.cowriter.tool_loop import (
+from agent_providers.tool_loop import (
     FinalText,
     InitialTurn,
     TextDelta,
@@ -27,6 +22,11 @@ from songmaker_cli.cowriter.tool_loop import (
     ToolResultBatch,
     TransportResponse,
     stream_tool_loop,
+)
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
 )
 from webauth.dependencies import AuthenticatedUser
 
@@ -41,6 +41,7 @@ async def stream_openai_compatible_turn(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     # Imported lazily: the songmaker tool catalog pulls in the MCP server
     # package, which only the tool-using co-writer chat needs. The judge's
@@ -67,6 +68,10 @@ async def stream_openai_compatible_turn(
                 executor=lambda name, arguments: execute_cowriter_tool(
                     session, user, name, arguments,
                 ),
+                tool_failure_message=normalize_route_failure(
+                    SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
+                ).message,
+                correlation_id=correlation_id,
             ):
                 yield event
     except ToolLoopLimitError as exc:

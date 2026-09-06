@@ -273,14 +273,19 @@ async def acall_claude_with_mcp_stream(
     model: str | None = None,
     messages: list[dict[str, str]] | None = None,
     timeout_seconds: int = 600,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream Claude CLI output as parsed events.
 
     Spawns the Claude CLI with ``--output-format stream-json`` and yields
     typed ``StreamEvent`` instances as the subprocess emits newline-delimited
-    JSON lines. The final yielded event is always a ``FinalEvent`` (on
-    success) or an ``ErrorEvent`` (on CLI failure). Malformed JSON lines
-    are logged and skipped rather than raising.
+    JSON lines. A turn that reaches its end yields a ``FinalEvent`` last; a
+    failing CLI raises ``UnavailableError`` instead. Malformed JSON lines are
+    logged and skipped rather than raising.
+
+    ``correlation_id`` stamps every yielded event with the caller's own handle
+    for this turn; it is excluded from serialization and never reaches a wire
+    payload.
     """
     if model is None:
         model = current_config().claude_chat_model
@@ -308,7 +313,7 @@ async def acall_claude_with_mcp_stream(
                 proc.stdin.write(stdin_body.encode())
                 await proc.stdin.drain()
                 proc.stdin.close()
-            async for event in _consume_stream(proc, timeout_seconds):
+            async for event in _consume_stream(proc, timeout_seconds, correlation_id):
                 yield event
         finally:
             await _reap_stream_process_after_cancellation(proc)
@@ -317,6 +322,7 @@ async def acall_claude_with_mcp_stream(
 async def _consume_stream(
     proc: asyncio.subprocess.Process,
     timeout_seconds: int,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     text_chunks: list[str] = []
     final_text: str | None = None
@@ -327,7 +333,7 @@ async def _consume_stream(
                 parsed = _safe_json_loads(raw_line)
                 if parsed is None:
                     continue
-                event = _parse_stream_event(parsed, text_chunks)
+                event = _parse_stream_event(parsed, text_chunks, correlation_id)
                 if event is None:
                     continue
                 if isinstance(event, FinalEvent):
@@ -351,7 +357,7 @@ async def _consume_stream(
             )
 
         assembled = final_text if final_text is not None else "".join(text_chunks)
-        yield FinalEvent(text=assembled.strip())
+        yield FinalEvent(text=assembled.strip(), correlation_id=correlation_id)
     finally:
         if not stderr_task.done():
             stderr_task.cancel()
@@ -405,16 +411,17 @@ def _safe_json_loads(raw_line: bytes) -> dict | None:
 def _parse_stream_event(
     payload: dict,
     text_chunks: list[str],
+    correlation_id: str | None,
 ) -> StreamEvent | None:
     kind = payload.get("type")
     if kind == "assistant":
-        return _parse_assistant_event(payload, text_chunks)
+        return _parse_assistant_event(payload, text_chunks, correlation_id)
     if kind == "user":
-        return _parse_user_event(payload)
+        return _parse_user_event(payload, correlation_id)
     if kind == "result":
         text = payload.get("result")
         if isinstance(text, str):
-            return FinalEvent(text=text)
+            return FinalEvent(text=text, correlation_id=correlation_id)
         return None
     return None
 
@@ -422,6 +429,7 @@ def _parse_stream_event(
 def _parse_assistant_event(
     payload: dict,
     text_chunks: list[str],
+    correlation_id: str | None,
 ) -> StreamEvent | None:
     message = payload.get("message") or {}
     blocks = message.get("content") or []
@@ -430,17 +438,18 @@ def _parse_assistant_event(
         if btype == "text":
             text = block.get("text") or ""
             text_chunks.append(text)
-            return AssistantTextEvent(text=text)
+            return AssistantTextEvent(text=text, correlation_id=correlation_id)
         if btype == "tool_use":
             return ToolCallEvent(
                 tool_use_id=block.get("id") or "",
                 name=block.get("name") or "",
                 input=block.get("input") or {},
+                correlation_id=correlation_id,
             )
     return None
 
 
-def _parse_user_event(payload: dict) -> StreamEvent | None:
+def _parse_user_event(payload: dict, correlation_id: str | None) -> StreamEvent | None:
     message = payload.get("message") or {}
     blocks = message.get("content") or []
     for block in blocks:
@@ -457,6 +466,7 @@ def _parse_user_event(payload: dict) -> StreamEvent | None:
                 tool_use_id=block.get("tool_use_id") or "",
                 content=content_str,
                 is_error=bool(block.get("is_error", False)),
+                correlation_id=correlation_id,
             )
     return None
 

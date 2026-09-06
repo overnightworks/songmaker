@@ -33,6 +33,15 @@ from agent_providers.process import (
     run_cli_bounded,
     scrubbed_env,
 )
+from agent_providers.tool_loop import (
+    FinalText,
+    InitialTurn,
+    TextDelta,
+    ToolCall,
+    ToolCallBatch,
+    ToolResultBatch,
+    TransportResponse,
+)
 from songmaker_cli.constants import (
     COVER_MAX_PIXELS,
     COVER_PNG_MAGIC,
@@ -47,15 +56,6 @@ from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
-)
-from songmaker_cli.cowriter.tool_loop import (
-    FinalText,
-    InitialTurn,
-    TextDelta,
-    ToolCall,
-    ToolCallBatch,
-    ToolResultBatch,
-    TransportResponse,
 )
 
 CODEX_CLI_LINE_CHANNEL_CAPACITY: Final = 64
@@ -256,10 +256,11 @@ class CodexCliToolTransport:
         """Stream one response, retaining only the server-issued thread ID."""
         if self._closed:
             raise RuntimeError("Codex CLI tool transport is closed")
-        from songmaker_cli.cowriter.text_tool_protocol import (
+        from agent_providers.text_tool_protocol import (
             TextToolProtocolError,
             TextToolStreamParser,
         )
+        from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
         try:
             prompt = _tool_transport_prompt(message)
@@ -296,7 +297,7 @@ class CodexCliToolTransport:
                 codex_home=self._codex_home,
             )
         )
-        parser = TextToolStreamParser()
+        parser = TextToolStreamParser(COWRITER_TOOL_CATALOG)
         state = _CodexToolRoundState()
         started_at = time.monotonic()
         try:
@@ -852,10 +853,11 @@ def _run_codex_tool_round(
 
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     """Render one initial prompt or exactly one completed tool result."""
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         TextToolProtocolError,
         render_tool_result,
     )
+    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
     if isinstance(message, InitialTurn):
         return stdin_prompt(
@@ -869,7 +871,7 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
         value = json.loads(result.content)
     except json.JSONDecodeError:
         value = result.content
-    return render_tool_result(value).encode()
+    return render_tool_result(COWRITER_TOOL_CATALOG, value).encode()
 
 
 def _consume_codex_tool_event(
@@ -960,10 +962,10 @@ def _finish_codex_tool_round(
     started_at: float,
 ) -> tuple[TransportResponse, str | None]:
     """Validate one completed Codex round and produce its terminal response."""
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         FinalText as ParsedFinalText,
     )
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         TextToolCall,
     )
 

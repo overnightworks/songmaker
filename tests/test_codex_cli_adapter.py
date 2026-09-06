@@ -16,6 +16,14 @@ from PIL import Image
 
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from agent_providers.process import CliRunOutcome, CliRunReason
+from agent_providers.tool_loop import (
+    InitialTurn,
+    ToolCallBatch,
+    ToolOutcome,
+    ToolResult,
+    ToolResultBatch,
+    stream_tool_loop,
+)
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.errors import (
@@ -23,13 +31,8 @@ from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
 )
-from songmaker_cli.cowriter.tool_loop import (
-    InitialTurn,
-    ToolCallBatch,
-    ToolResult,
-    ToolResultBatch,
-    stream_tool_loop,
-)
+
+A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
 
 _REDACTED_CODEX_LOGIN = {
     "auth_mode": "chatgpt",
@@ -157,6 +160,7 @@ def _codex_tool_events(transport, executor):
         messages=[{"role": "user", "content": "hello"}],
         transport=transport,
         executor=executor,
+        tool_failure_message=A_TOOL_FAILURE_MESSAGE,
     )
 
 
@@ -246,7 +250,7 @@ def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(mon
     transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
     events = asyncio.run(_collect_tool_events(_codex_tool_events(
         transport,
-        lambda _name, _arguments: ('{"songs":[]}', False),
+        lambda _name, _arguments: ToolOutcome('{"songs":[]}', False),
     )))
 
     assert isinstance(events[0], ToolCallEvent)
@@ -334,7 +338,7 @@ def test_codex_tool_transport_ignores_its_code_mode_host_isolation_notice(
 
     events = asyncio.run(_collect_tool_events(_codex_tool_events(
         transport,
-        lambda _name, _arguments: ("unreachable", False),
+        lambda _name, _arguments: ToolOutcome("unreachable", False),
     )))
 
     assert events == [
@@ -402,7 +406,7 @@ def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
     def executor(_name, _arguments):
         nonlocal executed
         executed = True
-        return "unreachable", False
+        return ToolOutcome("unreachable", False)
 
     async def collect() -> None:
         transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
