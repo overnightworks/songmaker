@@ -25,6 +25,10 @@ Session-based auth with bcrypt password hashing (12 rounds).
 Two-layer defense:
 
 1. **Dependency-based auth** (`webauth/dependencies.py`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
+   The logout route names the session it deletes through the factory's
+   `verified_session_id` dependency, which resolves `get_current_user` first —
+   so a session is only ever deleted after the request proved it holds it, and
+   a logout can never clear the cookie while leaving the stored session alive.
 2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth/setup endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
