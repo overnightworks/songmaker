@@ -696,7 +696,7 @@ describe('admin models tab', () => {
 				grok: []
 			},
 			models_errors: {},
-			models_sources: { codex: 'known models for the CLI route' }
+			models_sources: { codex: 'provider CLI' }
 		});
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
@@ -705,7 +705,7 @@ describe('admin models tab', () => {
 		pillNamed(cowriter, 'Codex').click();
 		await tick();
 
-		expect(cowriter.textContent).toContain('known models for the CLI route');
+		expect(cowriter.textContent).toContain('provider CLI');
 		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
 			codexCatalog[0]
 		);

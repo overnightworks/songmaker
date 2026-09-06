@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from dataclasses import dataclass
@@ -11,12 +12,13 @@ from importlib.util import find_spec
 from typing import Final
 
 import httpx
-from pydantic import SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
     codex_cli_login,
+    codex_cli_model_catalog,
     grok_cli_status,
     grok_cli_token_is_present,
 )
@@ -59,18 +61,7 @@ XAI_API_KEY_ENVIRONMENT: Final = "XAI_API_KEY"
 OPENAI_API_KEY_ENVIRONMENT: Final = "OPENAI_API_KEY"
 _API_KEY_SETUP_LABEL: Final = "API key"
 _CLI_LOGIN_SETUP_LABEL: Final = "CLI login"
-
-# Owner: Codex CLI route. Checked 2026-09-04: ``codex --help`` and
-# ``codex exec --help`` accept ``--model <MODEL>`` but do not enumerate models.
-# Source: https://developers.openai.com/api/docs/guides/latest-model
-_CODEX_CLI_KNOWN_MODELS: Final = (
-    "gpt-5.6-terra",
-    "gpt-5.6",
-    "gpt-5.6-sol",
-    "gpt-5.6-luna",
-    "gpt-6-astra",
-)
-_CODEX_CLI_KNOWN_MODELS_SOURCE: Final = "known models for the CLI route"
+_CODEX_CLI_HIDDEN_VISIBILITY: Final = "hide"
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +74,14 @@ class ProviderSetupMethod(StrEnum):
     CLAUDE_CLI = "claude_cli"
     GROK_CLI = "grok_cli"
     CODEX_CLI = "codex_cli"
+
+
+class _CodexCliCatalogLine(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    slug: str = Field(min_length=1)
+    visibility: str = Field(min_length=1)
+    priority: int
 
 
 class ProviderSurface(StrEnum):
@@ -250,9 +249,7 @@ def _refresh_provider_route(
             capability, reason, now,
             _CLI_LOGIN_SETUP_LABEL if route is ProviderRoute.CLI else _API_KEY_SETUP_LABEL,
         )
-    if provider == _CODEX_PROVIDER and route is ProviderRoute.CLI:
-        source = _CODEX_CLI_KNOWN_MODELS_SOURCE
-    elif route is ProviderRoute.API:
+    if route is ProviderRoute.API:
         source = "provider API"
     else:
         source = "provider CLI"
@@ -387,7 +384,7 @@ def _models_for_setup_method(
     if method is ProviderSetupMethod.GROK_CLI:
         return _list_grok_cli_models()
     if method is ProviderSetupMethod.CODEX_CLI:
-        return list(_CODEX_CLI_KNOWN_MODELS)
+        return _list_codex_cli_models()
 
     key = _secret(_provider_api_credential(provider, settings).secret)
     if provider == _GROK_PROVIDER:
@@ -574,6 +571,42 @@ def _list_grok_cli_models() -> list[str]:
             normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
         )
     return sorted(chat)
+
+
+def _list_codex_cli_models() -> list[str]:
+    try:
+        output = codex_cli_model_catalog()
+    except AgentCliUnavailableError as exc:
+        raise ProviderModelCatalogUnavailableError(
+            _CODEX_PROVIDER,
+            "could not list codex CLI models",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
+        ) from exc
+    try:
+        payload = json.loads(output)
+        rows = payload.get("models") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError("codex debug models did not return a models list")
+        models = [_CodexCliCatalogLine.model_validate(row) for row in rows]
+        visible_models = [
+            model for model in models
+            if model.visibility != _CODEX_CLI_HIDDEN_VISIBILITY
+        ]
+        if not visible_models:
+            raise ValueError("codex debug models did not return a visible model")
+        if len({model.slug for model in visible_models}) != len(visible_models):
+            raise ValueError("codex debug models returned duplicate model slugs")
+    except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+        raise ProviderModelCatalogUnavailableError(
+            _CODEX_PROVIDER,
+            "could not parse codex CLI model catalog",
+            normalize_route_failure(SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR),
+        ) from exc
+    ordered_models = sorted(
+        visible_models,
+        key=lambda model: (model.priority, model.slug),
+    )
+    return [model.slug for model in ordered_models]
 
 
 def _list_openai_models(key: str) -> list[str]:

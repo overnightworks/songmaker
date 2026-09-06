@@ -26,8 +26,8 @@ from songmaker_cli.agent_cli import (
     _cli_output,
     claude_cli_login,
     clear_agent_cli_caches,
-    codex_cli_model_catalog,
     codex_cli_login,
+    codex_cli_model_catalog,
     grok_cli_status,
     run_cli,
     run_cli_bounded,
@@ -37,6 +37,8 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
     CLAUDE_CLI_LOGGED_IN_FIELD,
     CLI_OUTPUT_READ_LIMIT_BYTES,
+    CODEX_CLI_BINARY,
+    CODEX_CLI_MODELS_ARGS,
     SECRET_ENV_KEYS,
 )
 
@@ -187,7 +189,7 @@ def test_codex_model_catalog_uses_the_bounded_cli_output() -> None:
     with _a_cli_that_says(catalog) as output:
         assert codex_cli_model_catalog() == catalog
 
-    output.assert_called_once()
+    output.assert_called_once_with(CODEX_CLI_BINARY, CODEX_CLI_MODELS_ARGS)
 
 
 def test_codex_model_catalog_that_cannot_be_read_raises() -> None:
