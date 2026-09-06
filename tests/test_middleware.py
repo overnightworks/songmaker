@@ -7,11 +7,15 @@ from pathlib import Path
 
 import pytest
 from conftest import install_app_context, make_fake_redis
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from songmaker_cli.auth_dependencies import get_current_user, require_admin
+from songmaker_cli.auth_dependencies import (
+    get_current_user,
+    get_verified_session_id,
+    require_admin,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_session, create_user
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
@@ -45,15 +49,15 @@ def _build_auth_app(_db, redis=None):
 
     @app.get("/protected")
     def protected(
-        request: Request,
         user: AuthenticatedUser = Depends(get_current_user),
+        session_id: str = Depends(get_verified_session_id),
         db: Session = Depends(get_db_session),
     ):
         db.commit()
         return {
             "username": user.username,
             "role": user.role,
-            "session_id_set": hasattr(request.state, "session_id"),
+            "session_id": session_id,
         }
 
     @app.get("/admin-only")
@@ -161,12 +165,14 @@ def test_valid_session_returns_200(auth_app: TestClient, create_session_id) -> N
     assert resp.json()["username"].startswith("test_user")
 
 
-def test_session_id_set_on_request_state(auth_app: TestClient, create_session_id) -> None:
+def test_a_protected_route_can_name_the_session_it_authenticated(
+    auth_app: TestClient, create_session_id,
+) -> None:
     sid = create_session_id()
     auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
-    assert resp.json()["session_id_set"] is True
+    assert resp.json()["session_id"] == sid
 
 
 def test_sliding_window_renewal(auth_app: TestClient, create_session_id) -> None:

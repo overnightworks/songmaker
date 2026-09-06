@@ -11,6 +11,7 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
+from songmaker_cli.db.models import UserSession
 from songmaker_cli.db.queries import create_user
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
@@ -615,23 +616,25 @@ def test_login_commit_failure_does_not_leave_redis_session(client: TestClient) -
         assert remaining == []
 
 
-def test_logout_clears_redis(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
-
+def test_logout_removes_the_session_from_the_database_and_from_redis(
+    client: TestClient,
+) -> None:
     _seed_admin(client)
     _login(client, "admin", "admin12345")
 
-    session_cache: SessionCache = client.app.state.session_cache
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    redis = client.app.state.ctx.redis
+    session_cache = client.app.state.session_cache
     user_id = _get_user_id(client, "admin")
-    sids_before = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(sids_before) >= 1
-    sid = list(sids_before)[0]
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session_id = session.query(UserSession).filter_by(user_id=user_id).one().id
+    assert session_cache.get(session_id) is not None
 
-    client.delete("/api/auth/session")
+    resp = client.delete("/api/auth/session")
 
-    assert session_cache.get(sid) is None
+    assert resp.status_code == 200
+    with factory() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).all() == []
+    assert session_cache.get(session_id) is None
 
 
 def test_password_change_clears_old_populates_new(client: TestClient) -> None:

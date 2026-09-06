@@ -40,6 +40,7 @@ _auth_dependencies = current_user_dependency(
 
 get_current_user = _auth_dependencies.current_user
 require_admin = _auth_dependencies.admin_user
+get_verified_session_id = _auth_dependencies.verified_session_id
 
 
 def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:

@@ -21,7 +21,7 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.auth_dependencies import get_current_user, get_verified_session_id
 from songmaker_cli.auth_stores import DatabaseLoginAttemptStore
 from songmaker_cli.constants import ROLE_ADMIN
 from songmaker_cli.db.queries import (
@@ -216,20 +216,20 @@ def logout(
     response: Response,
     db: Session = Depends(get_db_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
+    session_id: str = Depends(get_verified_session_id),
+    config: WebAuthConfig = Depends(web_auth_config),
 ) -> StatusResponse:
-    session_id = getattr(request.state, "session_id", None)
-    if session_id:
-        delete_session(db, session_id)
-        db.commit()
+    delete_session(db, session_id)
+    db.commit()
 
-        session_cache = installed_session_cache(request.app)
-        if session_cache:
-            try:
-                session_cache.delete(session_id, current_user.id)
-            except Exception:
-                log.warning("Redis session cache delete failed on logout")
+    session_cache = installed_session_cache(request.app)
+    if session_cache:
+        try:
+            session_cache.delete(session_id, current_user.id)
+        except Exception:
+            log.warning("Redis session cache delete failed on logout")
 
-    clear_session_cookies(response, web_auth_config(request))
+    clear_session_cookies(response, config)
     return StatusResponse(status="ok")
 
 
