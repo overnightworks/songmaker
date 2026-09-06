@@ -608,8 +608,9 @@ events.
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
 | `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
+| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 
-These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. The `.importlinter` contract states that boundary and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
+These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` and `webauth` also never import each other. The `.importlinter` contract states these boundaries and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
 
 ## Data Model
 
