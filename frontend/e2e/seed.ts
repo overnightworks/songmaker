@@ -57,6 +57,24 @@ const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
 const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
 const RAIL_FILLER_ALBUM_COUNT = 30;
 const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
+// The role every account but the stack's admin holds (`CreateUserRequest` in
+// `api_models/auth.py`), and what the absolute-age flow needs to reach past:
+// `session_absolute_max_age_seconds`' own default in `settings.py`, and the
+// Redis key `REDIS_SESSION_PREFIX` in `songmaker_cli/constants.py` builds.
+const NON_ADMIN_ROLE = 'user';
+const SESSION_ABSOLUTE_MAX_AGE_DAYS = 90;
+const REDIS_SESSION_KEY_PREFIX = 'songmaker:session';
+const SESSION_ID_SHAPE = /^[A-Za-z0-9_-]+$/;
+
+// The compose defaults for the throwaway CI database (`docker-compose.yml`),
+// which neither the workflow nor the README's local recipe overrides.
+function postgresUser(): string {
+	return process.env.POSTGRES_USER ?? 'songmaker';
+}
+
+function postgresDatabase(): string {
+	return process.env.POSTGRES_DB ?? 'songmaker';
+}
 export const VOICES_OCCUPANCY_PROMPT = 'E2E voices occupancy prompt';
 const VOICE_ADAPTER_COMPARISON_PROMPT = 'E2E adapter comparison prompt';
 const VOICE_ADAPTER_COMPARISON_LYRICS = 'E2E adapter comparison lyrics';
@@ -685,4 +703,92 @@ export function writeSeededLibrary(library: SeededLibrary): void {
 
 export function readSeededLibrary(): SeededLibrary {
 	return JSON.parse(readFileSync(SEEDED_LIBRARY_FILE, 'utf-8')) as SeededLibrary;
+}
+
+/**
+ * A second account, created through the same admin API the admin page uses:
+ * what a *non-admin* musician may reach is not provable from the run's one
+ * admin session. `auth-flows.spec.ts` removes it again when its flows are
+ * done, so a run leaves the users table as it found it.
+ */
+export async function createAccount(
+	api: APIRequestContext,
+	username: string,
+	password: string
+): Promise<string> {
+	const seed = await SeedApi.fromSession(api);
+	const account = await seed.postJson<CreatedResource>('/api/admin/users', {
+		username,
+		password,
+		role: NON_ADMIN_ROLE
+	});
+	return account.id;
+}
+
+/** Removes an account created for a flow, rows and all. */
+export async function deleteAccount(api: APIRequestContext, userId: string): Promise<void> {
+	const seed = await SeedApi.fromSession(api);
+	await seed.delete(`/api/admin/users/${userId}/permanent`);
+}
+
+/**
+ * Makes one session older than the absolute maximum age, from the stack's own
+ * side.
+ *
+ * `user_sessions.created_at` is the whole of what that check reads
+ * (`_reject_session_older_than_absolute_limit` in `webauth/dependencies.py`),
+ * and the Redis copy carries a `created_at` of its own, written at login. So a
+ * session that has genuinely outlived `SESSION_ABSOLUTE_MAX_AGE` is one whose
+ * row is that old and whose cache entry is gone — which is exactly how a
+ * 90-day-old session looks on a live stack, since the cache key's own TTL
+ * (`SESSION_MAX_AGE`, 30 days) ran out two months before the absolute limit
+ * did. Nothing here fakes the refusal: the server still decides, from the row.
+ *
+ * A run cannot wait the age out and cannot shorten it either — the value is
+ * stack-wide, and the whole suite runs on one storage-state session that would
+ * die with it (`global-setup.ts`).
+ */
+export async function ageSessionPastAbsoluteLimit(sessionId: string): Promise<void> {
+	if (!SESSION_ID_SHAPE.test(sessionId)) throw new Error(`Not a session id: ${sessionId}`);
+	const age = `${SESSION_ABSOLUTE_MAX_AGE_DAYS + 1} days`;
+	try {
+		const { stdout } = await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'postgres',
+				'psql',
+				'-U',
+				postgresUser(),
+				'-d',
+				postgresDatabase(),
+				'-v',
+				'ON_ERROR_STOP=1',
+				'-c',
+				`UPDATE user_sessions SET created_at = created_at - INTERVAL '${age}' WHERE id = '${sessionId}'`
+			],
+			{ cwd: REPO_ROOT }
+		);
+		if (!stdout.includes('UPDATE 1')) {
+			throw new Error(`Expected to age exactly one session, got: ${stdout.trim()}`);
+		}
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'redis',
+				'redis-cli',
+				'DEL',
+				`${REDIS_SESSION_KEY_PREFIX}:${sessionId}`
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Ageing session ${sessionId} failed: ${detail}`, { cause: err });
+	}
 }
