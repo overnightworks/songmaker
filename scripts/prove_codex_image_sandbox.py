@@ -81,7 +81,7 @@ for path in \\
   /proc/keys \\
   /proc/latency_stats \\
   /sys/devices/virtual/powercap \\
-  /sys/firmware/acpi/tables/DSDT; do
+  /sys/firmware/memmap/1/type; do
   expect_permission_denied "$path" /bin/cat "$path"
 done
 expect_permission_denied /proc/sys/kernel/shmmax \\

@@ -66,7 +66,7 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
         "/proc/keys",
         "/proc/latency_stats",
         "/sys/devices/virtual/powercap",
-        "/sys/firmware/acpi/tables/DSDT",
+        "/sys/firmware/memmap/1/type",
         "/proc/sys/kernel/shmmax",
     ):
         assert path in assertions
