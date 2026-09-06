@@ -10,7 +10,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer's address falls inside a `TRUSTED_PROXIES` network — see "Proxy trust")
 - **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
 - **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change and admin password reset still delete all sessions from both DB and Redis
-- **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
+- **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session it deletes is named by the `verified_session_id` dependency, which resolves `get_current_user` first — see "Authorization" below.
 - **Session anomaly detection**: IP and user-agent changes are logged to the audit trail (even on Redis cache hits)
 - **User deactivation**: All sessions immediately deleted from both DB and Redis. A `user_sessions:{user_id}` Redis set tracks all active session IDs per user for efficient bulk deletion.
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
