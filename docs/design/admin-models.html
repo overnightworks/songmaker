@@ -387,7 +387,9 @@
 	.rsw b { padding: .16rem .55rem; border-radius: 999px; font-weight: 600; color: var(--ink-soft); }
 	.rsw b.on { background: var(--violet); color: #fff; }
 	.rsw b.dead { color: var(--rule-strong); }
-	.rsw b.picked-dead { border: 1px dashed var(--warn-ink); color: var(--warn-ink); padding: .1rem .45rem; }
+	.rsw b.picked-dead { border: 1px dashed var(--rule-strong); color: var(--muted); padding: .1rem .45rem; }
+	.tt-row.warn .rsw b.picked-dead,
+	.tcard.warn .rsw b.picked-dead { border-color: var(--warn-ink); color: var(--warn-ink); }
 
 	.why { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.35; color: var(--muted); }
 	.why.warn { color: var(--warn-ink); }
@@ -991,8 +993,8 @@
 								<span class="cell-task">Scoring</span>
 								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 								<span>
-									<span class="rsw"><b>CLI</b><b class="on">API</b></span>
-									<small class="why">CLI · logged in</small>
+									<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
+									<small class="why">CLI · not available for scoring</small>
 								</span>
 								<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
 								<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
@@ -1054,7 +1056,7 @@
 						<span>
 							<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
 							<small class="why warn">API · key not set</small>
-							<small class="why">CLI · not logged in</small>
+							<small class="why">CLI · not available for scoring</small>
 						</span>
 						<span>
 							<span class="sel off">No models<span class="caret">⌄</span></span>
@@ -1105,8 +1107,8 @@
 							<span class="sel">Claude<span class="caret">⌄</span></span>
 						</span>
 						<span>
-							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-							<small class="why">CLI · logged in</small>
+							<span class="rsw"><b class="picked-dead">CLI</b><b>API</b></span>
+							<small class="why">CLI · no image tool</small>
 						</span>
 						<span>
 							<span class="sel off">No models<span class="caret">⌄</span></span>
@@ -1119,8 +1121,8 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · logged in</small>
+							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · not available for scoring</small>
 						</span>
 						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
@@ -1165,8 +1167,8 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · logged in</small>
+							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · not available for scoring</small>
 						</span>
 						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
@@ -1237,8 +1239,8 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · logged in</small>
+							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · not available for scoring</small>
 						</span>
 						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
 						<span class="st bad"><span class="mark">✕</span>Not saved</span>
@@ -1310,7 +1312,7 @@
 							<div class="line"><span class="k">Route</span><span>
 								<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
 								<small class="why warn">API · key not set</small>
-								<small class="why">CLI · not logged in</small>
+								<small class="why">CLI · not available for scoring</small>
 							</span></div>
 							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
 							<div class="line"><span class="k">Status</span><span class="st warn"><span class="mark">!</span>Needs its API key</span></div>

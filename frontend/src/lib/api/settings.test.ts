@@ -8,6 +8,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import {
 	deleteUserRateLimits,
 	toggleModel,
+	updateCoverSettings,
 	updateCowriterSettings,
 	updateGenerationDefaults,
 	updateJudgeSettings,
@@ -43,6 +44,13 @@ describe('settings API contract', () => {
 			'/api/settings/judge',
 			'PUT',
 			{ provider: 'openai', model: 'gpt-5' }
+		],
+		[
+			'cover settings',
+			() => updateCoverSettings('codex', 'cli', 'gpt-5-codex'),
+			'/api/settings/cover',
+			'PUT',
+			{ provider: 'codex', route: 'cli', model: 'gpt-5-codex' }
 		],
 		[
 			'rate limits',

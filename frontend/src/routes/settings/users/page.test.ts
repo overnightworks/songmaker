@@ -2,11 +2,15 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
+	CowriterSettings,
+	JudgeSettings,
 	LoginAttemptItem,
 	PaginatedResponse,
 	ProviderRouteReadiness,
+	ProviderRouteStatusResponse,
 	ProviderStatus,
 	ProviderSurfaceStatus,
+	SafeRouteReason,
 	SessionItem,
 	UserItem
 } from '$lib/api/types';
@@ -37,6 +41,8 @@ const api = vi.hoisted(() => ({
 	updateCowriterSettings: vi.fn(),
 	fetchJudgeSettings: vi.fn(),
 	updateJudgeSettings: vi.fn(),
+	fetchCoverSettings: vi.fn(),
+	updateCoverSettings: vi.fn(),
 	fetchProviderStatus: vi.fn(),
 	fetchBuiltinDefaults: vi.fn(),
 	listWorkers: vi.fn(),
@@ -91,17 +97,58 @@ const NO_IMAGE_TOOL: ProviderRouteReadiness = {
 	reason: { code: 'no_image_tool', message: 'no image tool' },
 	setup_label: 'CLI login'
 };
+const IMAGE_TOOL_READY: ProviderRouteReadiness = {
+	state: 'ready',
+	capability: 'tools_available',
+	setup_label: 'CLI login'
+};
+const NO_COVER_ROUTES: Record<'cli' | 'api', ProviderRouteReadiness> = {
+	cli: NO_IMAGE_TOOL,
+	api: NO_IMAGE_TOOL
+};
+
+function readyRoute(models: string[]): ProviderRouteStatusResponse {
+	return {
+		models,
+		readiness: { state: 'ready', capability: 'tools_available', setup_label: 'CLI login' }
+	};
+}
+
+function blockedRoute(reason: SafeRouteReason, setupLabel: string): ProviderRouteStatusResponse {
+	return {
+		models: [],
+		catalogue_failure: { code: reason.code, message: 'Model catalogue request failed.' },
+		readiness: {
+			state: 'not_configured',
+			capability: 'tools_available',
+			reason,
+			setup_label: setupLabel
+		}
+	};
+}
+
+const KEY_NOT_SET: SafeRouteReason = { code: 'api_key_not_set', message: 'API key is not set.' };
+const NOT_SIGNED_IN: SafeRouteReason = {
+	code: 'cli_login_not_configured',
+	message: 'CLI is not signed in.'
+};
 
 function providerStatus(
 	provider: string,
 	cowriter: ProviderSurfaceStatus,
-	judge: ProviderSurfaceStatus = cowriter
+	judge: ProviderSurfaceStatus = cowriter,
+	routes: Partial<Record<'cli' | 'api', ProviderRouteStatusResponse>> = {},
+	coverRoutes: Record<'cli' | 'api', ProviderRouteReadiness> = NO_COVER_ROUTES
 ): ProviderStatus {
 	return {
 		provider,
 		cowriter,
 		judge,
-		cover_routes: { cli: NO_IMAGE_TOOL, api: { ...NO_IMAGE_TOOL, setup_label: 'API key' } }
+		cowriter_routes: {
+			cli: routes.cli ?? blockedRoute(NOT_SIGNED_IN, 'CLI login'),
+			api: routes.api ?? blockedRoute(KEY_NOT_SET, 'API key')
+		},
+		cover_routes: coverRoutes
 	};
 }
 
@@ -111,94 +158,64 @@ const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
 	setup_method: 'claude_cli',
 	environment_key: null
 };
-const GROK_VIA_CLI: ProviderSurfaceStatus = {
+const CODEX_VIA_KEY: ProviderSurfaceStatus = {
 	state: 'configured',
 	needs: null,
-	setup_method: 'grok_cli',
-	environment_key: null
+	setup_method: 'api_key',
+	environment_key: 'OPENAI_API_KEY'
 };
-const GROK_CLI_NEEDS_API_KEY: ProviderSurfaceStatus = {
-	state: 'cli_login_needs_api_key',
-	needs: 'api_key',
-	setup_method: 'grok_cli',
-	environment_key: 'XAI_API_KEY'
-};
-const NO_CODEX_KEY: ProviderSurfaceStatus = {
+const GROK_WITHOUT_KEY: ProviderSurfaceStatus = {
 	state: 'unconfigured',
 	needs: 'api_key',
 	setup_method: null,
-	environment_key: 'OPENAI_API_KEY'
+	environment_key: 'XAI_API_KEY'
 };
-const GROK_CONFIGURED_VIA_CLI: ProviderStatus[] = [
-	providerStatus('claude', CLAUDE_VIA_CLI),
-	providerStatus('codex', NO_CODEX_KEY),
-	providerStatus('grok', GROK_VIA_CLI, GROK_CLI_NEEDS_API_KEY)
-];
-const CLAUDE_KEY_WITHOUT_CLI: ProviderStatus[] = [
+
+const PROVIDER_STATUSES: ProviderStatus[] = [
+	providerStatus('claude', CLAUDE_VIA_CLI, CLAUDE_VIA_CLI, {
+		cli: readyRoute(['claude-sonnet', 'claude-opus-cli']),
+		api: readyRoute(['claude-opus', 'claude-api'])
+	}),
 	providerStatus(
-		'claude',
-		{
-			state: 'api_key_needs_cli_login',
-			needs: 'cli_login',
-			setup_method: 'api_key',
-			environment_key: null
-		},
-		{
-			state: 'configured',
-			needs: null,
-			setup_method: 'api_key',
-			environment_key: 'ANTHROPIC_API_KEY'
-		}
+		'codex',
+		CODEX_VIA_KEY,
+		CODEX_VIA_KEY,
+		{ cli: readyRoute(['gpt-5-codex']), api: readyRoute(['gpt-5.4']) },
+		{ cli: IMAGE_TOOL_READY, api: NO_IMAGE_TOOL }
 	),
-	providerStatus('codex', NO_CODEX_KEY),
-	providerStatus('grok', GROK_VIA_CLI)
+	providerStatus('grok', GROK_WITHOUT_KEY)
 ];
 
-function routeStatus(
-	state: 'ready' | 'not_configured' | 'disturbed',
-	models: string[],
-	reason?: { code: 'api_key_not_set' | 'catalogue_http_error'; message: string },
-	catalogVersion?: string
-) {
-	return {
-		models,
-		catalog_version: catalogVersion,
-		readiness: {
-			state,
-			reason: reason ?? null,
-			setup_label: 'CLI login'
-		}
-	};
-}
-
-function routeAwareCowriterSettings(overrides: Record<string, unknown> = {}) {
+function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSettings {
 	return {
 		provider: 'claude',
-		model: 'claude-cli',
+		model: 'claude-sonnet',
 		tail_token_budget: 8000,
 		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: ['claude-cli'],
-		models_by_provider: { claude: ['claude-cli'], codex: ['codex-cli'], grok: ['grok-cli'] },
+		allowed_models: ['claude-sonnet'],
+		models_by_provider: {},
+		selected_models_by_provider: {},
 		models_errors: {},
 		models_sources: {},
-		provider_routes: { claude: 'cli' as const, codex: 'cli' as const, grok: 'cli' as const },
-		provider_routes_status: {
-			claude: {
-				cli: routeStatus('ready', ['claude-cli'], undefined, '1.4.0'),
-				api: routeStatus('ready', ['claude-api'], undefined, '2026-09')
-			},
-			codex: {
-				cli: routeStatus('ready', ['codex-cli']),
-				api: routeStatus('ready', ['codex-api'])
-			},
-			grok: {
-				cli: routeStatus('ready', ['grok-cli']),
-				api: routeStatus('ready', ['grok-api'])
-			}
-		},
+		current_models_not_in_catalog: {},
+		probed_at: {},
+		provider_routes: { claude: 'cli', codex: 'cli', grok: 'cli' },
 		...overrides
 	};
 }
+
+function judgeSettings(provider: string, model: string): JudgeSettings {
+	return {
+		provider,
+		model,
+		allowed_providers: ['claude', 'codex', 'grok'],
+		allowed_models: [model],
+		models_by_provider: {},
+		models_errors: {},
+		probed_at: {}
+	};
+}
+
 const TAB_LABELS = [
 	'Users',
 	'Voices',
@@ -280,20 +297,68 @@ function sectionByHeading(target: HTMLElement, heading: string): HTMLElement {
 	return section;
 }
 
-function pillNamed(section: HTMLElement, name: string): HTMLButtonElement {
-	const pill = Array.from(section.querySelectorAll<HTMLButtonElement>('.provider-pill')).find(
-		(el) => el.textContent?.includes(name)
-	);
-	if (!pill) throw new Error(`Expected a "${name}" provider pill`);
-	return pill;
+function headings(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('h2')).map((el) => el.textContent?.trim() ?? '');
 }
 
-function buttonNamed(section: HTMLElement, label: string): HTMLButtonElement {
-	const button = Array.from(section.querySelectorAll<HTMLButtonElement>('button')).find((el) =>
-		el.textContent?.trim().startsWith(label)
+function taskNames(section: HTMLElement): string[] {
+	return Array.from(section.querySelectorAll('.cell-task')).map(
+		(el) => el.textContent?.trim() ?? ''
 	);
-	if (!button) throw new Error(`Expected a button starting with "${label}"`);
+}
+
+function columnNames(section: HTMLElement): string[] {
+	return Array.from(section.querySelectorAll('.tt-head span')).map(
+		(el) => el.textContent?.trim() ?? ''
+	);
+}
+
+function saveButtons(section: HTMLElement): string[] {
+	return Array.from(section.querySelectorAll('button'))
+		.map((el) => el.textContent?.trim() ?? '')
+		.filter((label) => label.startsWith('Save'));
+}
+
+function rowNamed(target: HTMLElement, task: string): HTMLElement {
+	const row = Array.from(target.querySelectorAll<HTMLElement>('.tt-row')).find(
+		(el) => el.querySelector('.cell-task')?.textContent?.trim() === task
+	);
+	if (!row) throw new Error(`Expected a "${task}" row`);
+	return row;
+}
+
+function taskSelect(target: HTMLElement, task: string, column: string): HTMLSelectElement {
+	return requireElement<HTMLSelectElement>(target, `select[aria-label="${task} ${column}"]`);
+}
+
+function providerSelect(target: HTMLElement, task: string): HTMLSelectElement {
+	return taskSelect(target, task, 'provider');
+}
+
+function modelSelect(target: HTMLElement, task: string): HTMLSelectElement {
+	return taskSelect(target, task, 'model');
+}
+
+function routeButton(row: HTMLElement, label: string): HTMLButtonElement {
+	const button = Array.from(row.querySelectorAll<HTMLButtonElement>('.rsw button')).find(
+		(el) => el.textContent?.trim() === label
+	);
+	if (!button) throw new Error(`Expected a ${label} route button`);
 	return button;
+}
+
+function reasons(row: HTMLElement): string[] {
+	return Array.from(row.querySelectorAll('.why')).map((el) => el.textContent?.trim() ?? '');
+}
+
+function statusText(row: HTMLElement): string {
+	return requireElement(row, '.st').textContent?.trim() ?? '';
+}
+
+async function choose(select: HTMLSelectElement, value: string): Promise<void> {
+	select.value = value;
+	select.dispatchEvent(new Event('change', { bubbles: true }));
+	await flush();
 }
 
 beforeEach(() => {
@@ -306,49 +371,24 @@ beforeEach(() => {
 	api.fetchGenerationDefaults.mockResolvedValue({});
 	api.fetchAllModels.mockResolvedValue([]);
 	api.fetchBuiltinDefaults.mockResolvedValue({});
-	api.fetchProviderStatus.mockResolvedValue([
-		providerStatus('claude', CLAUDE_VIA_CLI),
-		providerStatus('codex', {
-			state: 'configured',
-			needs: null,
-			setup_method: 'api_key',
-			environment_key: 'OPENAI_API_KEY'
-		}),
-		providerStatus('grok', {
-			state: 'unconfigured',
-			needs: 'api_key',
-			setup_method: null,
-			environment_key: 'XAI_API_KEY'
-		})
-	]);
-	api.fetchCowriterSettings.mockResolvedValue({
-		provider: 'claude',
-		model: 'claude-sonnet',
-		tail_token_budget: 8000,
-		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: ['claude-sonnet'],
-		models_by_provider: { claude: ['claude-sonnet'], codex: [], grok: [] },
-		models_errors: {
-			codex: 'could not list codex models',
-			grok: 'grok is not configured: missing XAI_API_KEY'
-		}
+	api.fetchProviderStatus.mockResolvedValue(PROVIDER_STATUSES);
+	api.fetchCowriterSettings.mockResolvedValue(cowriterSettings());
+	api.updateCowriterSettings.mockImplementation(
+		async (provider: string, model: string, tailTokenBudget: number) =>
+			cowriterSettings({ provider, model, tail_token_budget: tailTokenBudget })
+	);
+	api.fetchCoverSettings.mockResolvedValue({
+		provider: 'codex',
+		route: 'cli',
+		model: 'gpt-5-codex'
 	});
-	api.fetchJudgeSettings.mockResolvedValue({
-		provider: 'claude',
-		model: 'claude-opus',
-		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: ['claude-opus'],
-		models_by_provider: { claude: ['claude-opus'], codex: ['gpt-5.4'], grok: [] },
-		models_errors: { grok: 'grok is not configured: missing XAI_API_KEY' }
-	});
-	api.updateJudgeSettings.mockImplementation(async (provider: string, model: string) => ({
-		provider,
-		model,
-		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: [model],
-		models_by_provider: { claude: ['claude-opus'], codex: ['gpt-5.4'], grok: [] },
-		models_errors: { grok: 'grok is not configured: missing XAI_API_KEY' }
-	}));
+	api.updateCoverSettings.mockImplementation(
+		async (provider: string, route: 'cli' | 'api', model: string) => ({ provider, route, model })
+	);
+	api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-opus'));
+	api.updateJudgeSettings.mockImplementation(async (provider: string, model: string) =>
+		judgeSettings(provider, model)
+	);
 	api.listWorkers.mockResolvedValue({ workers: [] });
 	api.getRegistry.mockResolvedValue({ models: [] });
 	Object.defineProperty(window, 'innerWidth', { configurable: true, value: VIEWPORT_PX });
@@ -498,678 +538,249 @@ describe('admin settings compact layout', () => {
 });
 
 describe('admin models tab', () => {
-	it('shows each provider real reachability with its setup method or missing key', async () => {
+	it('answers who does what in one row per task', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const providers = sectionByHeading(target, 'Providers');
 
-		expect(providers.textContent).toContain('Claude Code CLI login');
-		expect(providers.textContent).toContain('Configured via OPENAI_API_KEY');
-		expect(providers.textContent).toContain('Missing XAI_API_KEY');
+		const models = sectionByHeading(target, 'Models');
+		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover', 'Scoring']);
+		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		expect(headings(target)).not.toContain('Providers');
+		expect(models.querySelector('.route-card')).toBeNull();
+		expect(saveButtons(models)).toEqual([]);
 	});
 
-	it('names the CLI each provider is signed in with', async () => {
-		api.fetchProviderStatus.mockResolvedValue([
-			providerStatus('claude', CLAUDE_VIA_CLI),
-			providerStatus('codex', {
-				state: 'configured',
-				setup_method: 'codex_cli',
-				environment_key: null
-			}),
-			providerStatus('grok', {
-				state: 'configured',
-				setup_method: 'grok_cli',
-				environment_key: null
-			})
+	it('offers every provider in every task with the state that task gives it', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual([
+			'Claude ✓ ready',
+			'Codex ✓ ready',
+			'Grok · needs its API key'
 		]);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const providers = sectionByHeading(target, 'Providers');
-
-		expect(providers.textContent).toContain('Grok CLI login');
-		expect(providers.textContent).toContain('Codex CLI login');
-	});
-
-	it('names an unverified provider while its background check is running', async () => {
-		api.fetchProviderStatus.mockResolvedValue([
-			providerStatus('claude', {
-				state: 'unverified',
-				probed_at: '2026-09-03T09:00:00Z'
-			})
+		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
+			'Claude · no image tool',
+			'Codex ✓ ready',
+			'Grok · no image tool'
 		]);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('Provider check is still running in the background');
-		expect(requireElement(providers, '.provider-status-row')).toHaveClass('unverified');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		expect(pillNamed(cowriter, 'Claude')).toMatchObject({
-			disabled: true,
-			textContent: expect.stringContaining('Unchecked')
-		});
-		expect(cowriter.textContent).toContain('Provider check is still running in the background');
-	});
-
-	it('offers Grok through its CLI login to the co-writer but not scoring', async () => {
-		api.fetchProviderStatus.mockResolvedValue(GROK_CONFIGURED_VIA_CLI);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		expect(pillNamed(sectionByHeading(target, 'Co-Writer'), 'Grok').disabled).toBe(false);
-		const scoring = sectionByHeading(target, 'Scoring');
-		expect(pillNamed(scoring, 'Grok').disabled).toBe(true);
-		expect(scoring.textContent).toContain('answering needs its API key');
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('Configured via Grok CLI login');
-		expect(providers.textContent).toContain(
-			'Grok CLI login found — but answering needs its API key'
-		);
-	});
-
-	it('names a missing dependency and a missing status without inventing an API key', async () => {
-		api.fetchProviderStatus.mockResolvedValue([
-			providerStatus('claude', {
-				state: 'missing_dependency',
-				needs: null,
-				setup_method: null,
-				environment_key: null,
-				missing_dependency: 'anthropic'
-			})
+		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
+			'Claude ✓ ready',
+			'Codex ✓ ready',
+			'Grok · needs its API key'
 		]);
+	});
+
+	it('keeps every provider offered while the reachability probe is pending', async () => {
+		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(sectionByHeading(target, 'Providers').textContent).toContain('Missing anthropic');
-		expect(sectionByHeading(target, 'Co-Writer').textContent).toContain(
-			'Provider status is unavailable'
-		);
-		expect(target.textContent).not.toContain('Missing undefined');
+		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual([
+			'Claude · Checking…',
+			'Codex · Checking…',
+			'Grok · Checking…'
+		]);
 	});
 
-	it('shows a provider-status fetch failure instead of loading forever', async () => {
+	it('keeps every provider offered after the reachability probe fails', async () => {
 		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('Provider probe failed');
-		expect(providers.textContent).not.toContain('Loading...');
+		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
+			'Claude · Provider probe failed',
+			'Codex · Provider probe failed',
+			'Grok · Provider probe failed'
+		]);
 	});
 
-	it('does not show stale reachability after a provider-status refresh fails', async () => {
-		api.fetchProviderStatus
-			.mockResolvedValueOnce([providerStatus('claude', CLAUDE_VIA_CLI)])
-			.mockRejectedValueOnce(new Error('Provider refresh failed'));
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		expect(sectionByHeading(target, 'Providers').textContent).toContain('Claude Code CLI login');
-
-		await selectTab(target, 'models');
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('Provider refresh failed');
-		expect(providers.textContent).not.toContain('Claude Code CLI login');
-	});
-
-	it('keeps known reachability enabled while refreshing it', async () => {
-		let resolveRefresh: ((statuses: ProviderStatus[]) => void) | undefined;
-		const refresh = new Promise<ProviderStatus[]>((resolve) => {
-			resolveRefresh = resolve;
-		});
-		api.fetchProviderStatus
-			.mockResolvedValueOnce([providerStatus('claude', CLAUDE_VIA_CLI)])
-			.mockReturnValueOnce(refresh);
+	it('shows each row its live models for the selected route', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		await selectTab(target, 'models');
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('Refreshing provider status...');
-		expect(providers.textContent).toContain('Claude Code CLI login');
-		expect(pillNamed(sectionByHeading(target, 'Co-Writer'), 'Claude').disabled).toBe(false);
-
-		resolveRefresh?.([providerStatus('claude', CLAUDE_VIA_CLI)]);
-		await flush();
-		expect(providers.textContent).not.toContain('Refreshing provider status...');
+		expect(optionLabels(modelSelect(target, 'Co-Writer'))).toEqual([
+			'claude-sonnet',
+			'claude-opus-cli'
+		]);
+		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
 	});
 
-	it('names an empty provider-status response as empty', async () => {
-		api.fetchProviderStatus.mockResolvedValue([]);
+	it('greys a route that is not set up and names its reason in the row', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		const providers = sectionByHeading(target, 'Providers');
-		expect(providers.textContent).toContain('No provider status is available.');
-		expect(providers.textContent).not.toContain('Loading...');
+		const cover = rowNamed(target, 'Cover');
+		expect(routeButton(cover, 'API')).toHaveClass('dead');
+		expect(reasons(cover)).toContain('API · no image tool');
 	});
 
-	it('offers a Claude API key to the judge but not the co-writer', async () => {
-		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
+	it('stands with the table while the reachability probe is still running', async () => {
+		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(pillNamed(sectionByHeading(target, 'Scoring'), 'Claude').disabled).toBe(false);
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		expect(pillNamed(cowriter, 'Claude').disabled).toBe(true);
-		expect(cowriter.textContent).toContain('answering needs the Claude Code CLI login');
+		expect(taskNames(sectionByHeading(target, 'Models'))).toEqual([
+			'Co-Writer',
+			'Cover',
+			'Scoring'
+		]);
+		expect(statusText(rowNamed(target, 'Co-Writer'))).toBe('○Checking…');
+		expect(providerSelect(target, 'Co-Writer').disabled).toBe(false);
 	});
 
-	it('spells out both surfaces when their reachability differs', async () => {
-		api.fetchProviderStatus.mockResolvedValue(CLAUDE_KEY_WITHOUT_CLI);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const providers = sectionByHeading(target, 'Providers');
-
-		expect(providers.textContent).toContain('co-writer:');
-		expect(providers.textContent).toContain('judge:');
-	});
-
-	it('disables picking an unconfigured provider in the co-writer picker', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(pillNamed(cowriter, 'Grok').disabled).toBe(true);
-	});
-
-	it('shows the catalog failure reason for a provider that is viewed but not saved', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		pillNamed(cowriter, 'Codex').click();
-		await tick();
-
-		expect(cowriter.textContent).toContain('could not list codex models');
-	});
-
-	it('disables Save Co-Writer once switched to a provider with no valid model', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		pillNamed(cowriter, 'Codex').click();
-		await tick();
-
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
-		expect(cowriter.textContent).toContain('Choose a model before saving.');
-	});
-
-	it('activates Codex with its CLI catalog and names its source', async () => {
-		const codexCatalog = ['gpt-5.6-terra', 'gpt-5.6'];
-		api.fetchCowriterSettings.mockResolvedValue({
-			provider: 'claude',
-			model: 'claude-sonnet',
-			tail_token_budget: 8000,
-			allowed_providers: ['claude', 'codex', 'grok'],
-			allowed_models: ['claude-sonnet'],
-			models_by_provider: {
-				claude: ['claude-sonnet'],
-				codex: codexCatalog,
-				grok: []
-			},
-			models_errors: {},
-			models_sources: { codex: 'provider CLI' }
-		});
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		pillNamed(cowriter, 'Codex').click();
-		await tick();
-
-		expect(cowriter.textContent).toContain('provider CLI');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
-			codexCatalog[0]
-		);
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
-	});
-
-	it('disables picking an unconfigured provider in the scoring picker', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const scoring = sectionByHeading(target, 'Scoring');
-
-		expect(pillNamed(scoring, 'Grok').disabled).toBe(true);
-	});
-
-	it('disables Save and shows "Nothing changed" right after a clean load', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const scoring = sectionByHeading(target, 'Scoring');
-
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
-		expect(cowriter.textContent).toContain('Nothing changed.');
-		expect(buttonNamed(scoring, 'Save Scoring').disabled).toBe(true);
-		expect(scoring.textContent).toContain('Nothing changed.');
-	});
-
-	it('selects the active full model ID supplied by the catalog', async () => {
-		api.fetchCowriterSettings.mockResolvedValue({
-			provider: 'claude',
-			model: 'claude-opus-4-6',
-			tail_token_budget: 8000,
-			allowed_providers: ['claude', 'codex', 'grok'],
-			allowed_models: ['claude-opus-4-6', 'haiku', 'opus', 'sonnet'],
-			models_by_provider: {
-				claude: ['claude-opus-4-6', 'haiku', 'opus', 'sonnet'],
-				codex: [],
-				grok: []
-			},
-			models_errors: {}
-		});
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
-			'claude-opus-4-6'
-		);
-	});
-
-	it('has no Chat Model field anymore', async () => {
+	it('names a failed reachability probe in the row instead of claiming Checking', async () => {
+		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(target.textContent).not.toContain('Chat Model');
+		expect(statusText(rowNamed(target, 'Co-Writer'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('opens without claiming unsaved changes when the saved provider has no live catalog', async () => {
-		api.fetchCowriterSettings.mockResolvedValue({
-			provider: 'claude',
-			model: 'claude-sonnet',
-			tail_token_budget: 8000,
-			allowed_providers: ['claude', 'codex', 'grok'],
-			allowed_models: [],
-			models_by_provider: { claude: [], codex: [], grok: [] },
-			models_errors: { claude: 'could not list claude models' }
-		});
+	it('saves the co-writer row with its route map as soon as the model changes', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const modelSelect = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model');
 
-		expect(cowriter.textContent).toContain('Nothing changed.');
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
-		expect(modelSelect.value).toBe('claude-sonnet');
-		expect(modelSelect.disabled).toBe(true);
-	});
+		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
 
-	it('keeps a saved model missing from the catalog selectable and honestly labelled', async () => {
-		api.fetchCowriterSettings.mockResolvedValue({
-			provider: 'claude',
-			model: 'claude-opus-4-6',
-			tail_token_budget: 8000,
-			allowed_providers: ['claude', 'codex', 'grok'],
-			allowed_models: ['opus', 'claude-opus-4-6'],
-			models_by_provider: { claude: ['opus', 'claude-opus-4-6'], codex: [], grok: [] },
-			models_errors: {},
-			current_models_not_in_catalog: { claude: 'claude-opus-4-6' }
-		});
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model').value).toBe(
-			'claude-opus-4-6'
-		);
-		expect(cowriter.textContent).toContain('claude-opus-4-6 (current, not in catalog)');
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(true);
-		expect(cowriter.textContent).toContain('Nothing changed.');
-	});
-
-	it('shows each route state, redacts API keys, and changes the model catalog with the selected route', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(cowriter.textContent).toContain('CLI · ready');
-		expect(cowriter.textContent).toContain('API · ready');
-		expect(cowriter.textContent).toContain('key: set');
-		expect(cowriter.textContent).toContain('Version 1.4.0');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
-			'claude-cli'
-		);
-
-		buttonNamed(cowriter, 'API').click();
-		await tick();
-
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
-			'claude-api'
-		);
-		expect(cowriter.textContent).toContain('Version 2026-09');
-	});
-
-	it('keeps the selected route catalog when the saved provider is selected again', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		buttonNamed(cowriter, 'API').click();
-		await tick();
-		buttonNamed(cowriter, 'Claude').click();
-		await tick();
-
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
-			'claude-api'
-		);
-	});
-
-	it('uses the selected provider card default and cannot save a model from another card', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
-		api.updateCowriterSettings.mockResolvedValue(
-			routeAwareCowriterSettings({ provider: 'grok', model: 'grok-cli' })
-		);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const claudeModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude');
-		const grokModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok');
-
-		buttonNamed(cowriter, 'Grok').click();
-		await tick();
-
-		expect(grokModel.value).toBe('grok-cli');
-		expect(claudeModel.disabled).toBe(true);
-		expect(grokModel.disabled).toBe(false);
-
-		buttonNamed(cowriter, 'Save Co-Writer').click();
-		await flush();
-
-		expect(api.updateCowriterSettings).toHaveBeenCalledWith('grok', 'grok-cli', 8000, {
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-opus-cli', 8000, {
 			claude: 'cli',
 			codex: 'cli',
 			grok: 'cli'
 		});
-		expect(cowriter.textContent).toContain('Saved.');
-		expect(cowriter.textContent).not.toContain('Nothing changed.');
+		expect(rowNamed(target, 'Co-Writer').textContent).toContain('Saved.');
 	});
 
-	it('keeps the saved card model when switching away and back', async () => {
-		const settings = routeAwareCowriterSettings({ provider: 'grok', model: 'grok-4.6' });
-		settings.provider_routes_status.grok.cli = routeStatus('ready', ['grok-4.5', 'grok-4.6']);
-		api.fetchCowriterSettings.mockResolvedValue(settings);
+	it('saves the cover row with its own provider, route and model', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const grokModel = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok');
 
-		expect(grokModel.value).toBe('grok-4.6');
-		buttonNamed(cowriter, 'Claude').click();
-		await tick();
-		expect(grokModel.value).toBe('grok-4.6');
+		await choose(providerSelect(target, 'Cover'), 'claude');
 
-		buttonNamed(cowriter, 'Grok').click();
-		await tick();
-		expect(grokModel.value).toBe('grok-4.6');
+		expect(api.updateCoverSettings).toHaveBeenCalledWith('claude', 'cli', '');
+		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['No models']);
+		expect(rowNamed(target, 'Cover').textContent).toContain('Claude cannot draw');
 	});
 
-	it('shows every provider card model returned after a reload', async () => {
-		const settings = routeAwareCowriterSettings({
-			provider: 'codex',
-			model: 'codex-cli',
-			selected_models_by_provider: {
-				claude: 'claude-cli',
-				codex: 'codex-cli',
-				grok: 'grok-4.6'
-			}
-		});
-		settings.provider_routes_status.grok.cli = routeStatus('ready', ['grok-4.5', 'grok-4.6']);
-		api.fetchCowriterSettings.mockResolvedValue(settings);
+	it('keeps saving the scoring row against the judge settings', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
 
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
-			'claude-cli'
-		);
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-codex').value).toBe(
-			'codex-cli'
-		);
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-grok').value).toBe(
-			'grok-4.6'
-		);
+		await choose(providerSelect(target, 'Scoring'), 'codex');
+
+		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'gpt-5.4');
+		expect(statusText(rowNamed(target, 'Scoring'))).toBe('✓Ready · key set');
 	});
 
-	it('keeps the stored model selectable when the selected route no longer catalogs it', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(
-			routeAwareCowriterSettings({
-				model: 'claude-legacy',
-				allowed_models: ['claude-legacy', 'claude-cli'],
-				provider_routes_status: {
-					claude: {
-						cli: {
-							...routeStatus('ready', ['claude-cli', 'claude-legacy']),
-							retained_model_id: 'claude-legacy'
-						},
-						api: routeStatus('ready', ['claude-api'])
-					}
-				}
-			})
-		);
+	it('shows scoring its API route and greys the CLI it has no way to use', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
 
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').value).toBe(
-			'claude-legacy'
-		);
-		expect(cowriter.textContent).toContain('claude-legacy (current, not in catalog)');
-	});
+		const scoring = rowNamed(target, 'Scoring');
+		const cli = routeButton(scoring, 'CLI');
+		expect(cli).toHaveClass('dead');
+		expect(cli.disabled).toBe(true);
+		expect(reasons(scoring)).toContain('CLI · not available for scoring');
+		expect(routeButton(scoring, 'API')).toHaveClass('on');
 
-	it('shows a selected broken route as a blocked turn without silently falling back', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(
-			routeAwareCowriterSettings({
-				provider_routes: { claude: 'api', codex: 'cli', grok: 'cli' },
-				provider_routes_status: {
-					claude: {
-						cli: routeStatus('ready', ['claude-cli']),
-						api: routeStatus('disturbed', [], {
-							code: 'catalogue_http_error',
-							message: 'Rate limit exceeded'
-						})
-					}
-				}
-			})
-		);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(cowriter.textContent).toContain('API · broken');
-		expect(cowriter.textContent).toContain('Turn blocked');
-		expect(cowriter.textContent).toContain('Rate limit exceeded');
-		expect(cowriter.textContent).toContain('Choose a ready route to continue.');
-		expect(requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude').disabled).toBe(
-			true
-		);
-	});
-
-	it('names routes that are not set up and saves the complete route choice with the model', async () => {
-		const saved = routeAwareCowriterSettings({
-			provider_routes: { claude: 'api', codex: 'cli', grok: 'cli' },
-			model: 'claude-api',
-			allowed_models: ['claude-api']
-		});
-		api.fetchCowriterSettings.mockResolvedValue(
-			routeAwareCowriterSettings({
-				provider_routes_status: {
-					claude: {
-						cli: routeStatus('not_configured', [], {
-							code: 'catalogue_http_error',
-							message: 'CLI login required'
-						}),
-						api: routeStatus('not_configured', [], {
-							code: 'api_key_not_set',
-							message: 'API key is missing'
-						})
-					}
-				}
-			})
-		);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-
-		expect(cowriter.textContent).toContain('CLI · not set up');
-		expect(cowriter.textContent).toContain('API · not set up');
-		expect(cowriter.textContent).toContain('key: not set');
-
-		api.fetchCowriterSettings.mockResolvedValue(routeAwareCowriterSettings());
-		api.updateCowriterSettings.mockResolvedValue(saved);
-		await selectTab(target, 'models');
-		buttonNamed(cowriter, 'API').click();
-		await tick();
-		buttonNamed(cowriter, 'Save Co-Writer').click();
+		cli.click();
 		await flush();
 
-		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-api', 8000, {
-			claude: 'api',
-			codex: 'cli',
-			grok: 'cli'
-		});
+		expect(api.updateJudgeSettings).not.toHaveBeenCalled();
 	});
 
-	it('shows no invented model when no route is ready', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(
-			routeAwareCowriterSettings({
-				provider_routes_status: {
-					claude: {
-						cli: routeStatus('not_configured', []),
-						api: routeStatus('not_configured', [])
-					},
-					codex: {
-						cli: routeStatus('not_configured', []),
-						api: routeStatus('not_configured', [])
-					},
-					grok: {
-						cli: routeStatus('not_configured', []),
-						api: routeStatus('not_configured', [])
-					}
-				}
-			})
-		);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const modelSelect = requireElement<HTMLSelectElement>(cowriter, '#cowriter-model-claude');
-
-		expect(cowriter.textContent).toContain('Provider unavailable');
-		expect(modelSelect.disabled).toBe(true);
-		expect(optionLabels(modelSelect)).toEqual(['No models available']);
-	});
-
-	it('lets a history-tail-only change stay saveable when the saved provider has no live catalog', async () => {
-		api.fetchCowriterSettings.mockResolvedValue({
-			provider: 'claude',
-			model: 'claude-sonnet',
-			tail_token_budget: 8000,
+	it('shows a scoring provider that cannot answer as its own grey row', async () => {
+		api.fetchJudgeSettings.mockResolvedValue({
+			provider: 'grok',
+			model: '',
 			allowed_providers: ['claude', 'codex', 'grok'],
 			allowed_models: [],
-			models_by_provider: { claude: [], codex: [], grok: [] },
-			models_errors: { claude: 'could not list claude models' }
+			models_by_provider: {},
+			models_errors: {},
+			probed_at: {}
 		});
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
-		budgetInput.value = '30000';
-		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
 
-		expect(buttonNamed(cowriter, 'Save Co-Writer').disabled).toBe(false);
+		expect(statusText(rowNamed(target, 'Scoring'))).toBe('!Needs its API key');
 	});
 
-	it('renders a provider configuration error from its structured detail', async () => {
-		api.updateCowriterSettings.mockRejectedValueOnce(
-			new ApiError(422, '', '/api/settings/cowriter', null, {
+	it('names a rejected save in a red sub-row with a retry', async () => {
+		api.updateCowriterSettings.mockRejectedValue(
+			new ApiError(422, 'Provider not configured', '/api/settings/cowriter', null, {
 				provider: 'grok',
 				surface: 'cowriter',
 				status: {
 					state: 'unconfigured',
 					needs: 'api_key',
+					setup_method: null,
 					environment_key: 'XAI_API_KEY'
 				}
 			})
 		);
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
-		budgetInput.value = '30000';
-		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		buttonNamed(cowriter, 'Save Co-Writer').click();
+
+		await choose(providerSelect(target, 'Co-Writer'), 'grok');
+
+		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
+		expect(failure.textContent).toContain('Grok co-writer: Missing XAI_API_KEY');
+		expect(requireElement<HTMLButtonElement>(failure, '.retry').textContent?.trim()).toBe('Retry');
+
+		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ provider: 'grok', model: '' }));
+		requireElement<HTMLButtonElement>(failure, '.retry').click();
 		await flush();
 
-		expect(target.querySelector('.error')?.textContent).toBe('Grok co-writer: Missing XAI_API_KEY');
+		expect(api.updateCowriterSettings).toHaveBeenCalledTimes(2);
+		expect(sectionByHeading(target, 'Models').querySelector('.tt-sub.bad')).toBeNull();
 	});
 
-	it('falls back to the generic error message for a malformed provider detail', async () => {
-		api.updateCowriterSettings.mockRejectedValueOnce(
-			new ApiError(422, 'Could not save co-writer settings', '/api/settings/cowriter', null, {
-				provider: 'grok',
-				surface: 'cowriter',
-				status: { state: 'unknown' }
-			})
-		);
+	it('names a rejected history-tail save next to the field with a retry', async () => {
+		api.updateCowriterSettings.mockRejectedValue(new Error('Tail budget out of range'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
-		budgetInput.value = '30000';
-		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		buttonNamed(cowriter, 'Save Co-Writer').click();
+
+		const disclosure = requireElement<HTMLDetailsElement>(
+			sectionByHeading(target, 'Models'),
+			'details'
+		);
+		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
+		budget.value = '999999';
+		budget.dispatchEvent(new Event('change', { bubbles: true }));
 		await flush();
 
-		expect(target.querySelector('.error')?.textContent).toBe('Could not save co-writer settings');
+		expect(disclosure.textContent).toContain('Tail budget out of range');
+		expect(disclosure.textContent).not.toContain('Saved.');
+
+		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ tail_token_budget: 999999 }));
+		requireElement<HTMLButtonElement>(disclosure, '.retry').click();
+		await flush();
+
+		expect(disclosure.textContent).toContain('Saved.');
+		expect(disclosure.textContent).not.toContain('Tail budget out of range');
 	});
 
-	it('names a missing CLI setup method in a structured provider detail', async () => {
-		api.updateCowriterSettings.mockRejectedValueOnce(
-			new ApiError(422, '', '/api/settings/cowriter', null, {
-				provider: 'grok',
-				surface: 'cowriter',
-				status: { state: 'cli_login_needs_api_key', needs: 'api_key' }
-			})
-		);
+	it('keeps the history tail under a collapsed Advanced disclosure and saves it there', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-		const cowriter = sectionByHeading(target, 'Co-Writer');
-		const budgetInput = requireElement<HTMLInputElement>(cowriter, '#cowriter-budget');
-		budgetInput.value = '30000';
-		budgetInput.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		buttonNamed(cowriter, 'Save Co-Writer').click();
-		await flush();
 
-		expect(target.querySelector('.error')?.textContent).toBe(
-			'Grok co-writer: required CLI login found — but answering needs its API key'
+		const disclosure = requireElement<HTMLDetailsElement>(
+			sectionByHeading(target, 'Models'),
+			'details'
 		);
-	});
+		expect(disclosure.open).toBe(false);
+		expect(disclosure.textContent).toContain('History tail (tokens)');
 
-	it('loads and saves the scoring block against /api/settings/judge', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		const scoring = sectionByHeading(target, 'Scoring');
-		expect(scoring.textContent).toContain('claude-opus');
-
-		pillNamed(scoring, 'Codex').click();
-		await tick();
-		const modelSelect = requireElement<HTMLSelectElement>(scoring, '#judge-model');
-		modelSelect.value = 'gpt-5.4';
-		modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
-		await tick();
-
-		const saveButton = buttonNamed(scoring, 'Save Scoring');
-		expect(saveButton.disabled).toBe(false);
-		saveButton.click();
+		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
+		budget.value = '24000';
+		budget.dispatchEvent(new Event('change', { bubbles: true }));
 		await flush();
 
-		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'gpt-5.4');
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-sonnet', 24000, {
+			claude: 'cli',
+			codex: 'cli',
+			grok: 'cli'
+		});
+		expect(disclosure.textContent).toContain('Saved.');
 	});
 });
