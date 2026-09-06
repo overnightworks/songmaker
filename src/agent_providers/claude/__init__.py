@@ -1,1 +1,1 @@
-"""Claude integration — CLI and API providers for lyrics co-writing."""
+"""Claude backends: the mounted CLI, the Anthropic API, and the tool-surface gate."""

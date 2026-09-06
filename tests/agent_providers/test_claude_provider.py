@@ -1179,6 +1179,46 @@ def test_tool_surface_is_probed_with_the_cowriter_restrictions(
     assert "--mcp-config" in probe
 
 
+def test_the_cowriter_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """One value flows from the gate into the turn: the resolved build path.
+
+    The mounted ``claude`` is a symlink into a versioned build, so the two
+    command lines only agree if the turn really carries what the gate
+    returned. Both must also carry the same tool-isolation flags — a probe
+    that verified a different command line than the turn executes would
+    prove nothing about the turn.
+    """
+    build = tmp_path / "claude-2.1.257"
+    build.write_bytes(b"cli-build-one")
+    mounted = tmp_path / "claude"
+    mounted.symlink_to(build)
+    monkeypatch.setattr(provider, "_find_claude_binary", lambda: str(mounted))
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", verify_cli_tool_surface)
+    probe_commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
+    turn_commands: list[tuple[str, ...]] = []
+
+    async def fake_exec(*cmd, **_kw):
+        turn_commands.append(cmd)
+        spawned = MagicMock(pid=4242, returncode=0)
+        spawned.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
+        return spawned
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    asyncio.run(provider.acall_claude_with_mcp(prompt="hi", user_id="u-1"))
+
+    probed, executed = list(probe_commands[0]), list(turn_commands[0])
+    assert probed[0] == executed[0] == str(build)
+    for flag in ("--tools", "--setting-sources", "--allowedTools"):
+        assert _flag_value(probed, flag) == _flag_value(executed, flag)
+    assert "--strict-mcp-config" in probed and "--strict-mcp-config" in executed
+    assert "--disable-slash-commands" in probed
+    assert "--disable-slash-commands" in executed
+
+
 def test_tool_surface_gate_expects_no_tool_when_no_mcp_server_is_configured(
     claude_binary,
     monkeypatch,
