@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import check_root_layout  # noqa: E402
@@ -26,6 +28,12 @@ DIRECTORY_ENTRIES = frozenset(
         "vendor",
     }
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_git_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps the temp-repo tests independent of the developer's global git config."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
 
 
 def _seed_allowlisted_root(repository_root: Path) -> None:
