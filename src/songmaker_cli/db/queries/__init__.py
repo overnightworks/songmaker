@@ -323,6 +323,9 @@ from songmaker_cli.db.queries.settings import (
     ActiveJudgeSettings as ActiveJudgeSettings,
 )
 from songmaker_cli.db.queries.settings import (
+    CoverSettings as CoverSettings,
+)
+from songmaker_cli.db.queries.settings import (
     RawStoredCowriterSettings as RawStoredCowriterSettings,
 )
 from songmaker_cli.db.queries.settings import (
@@ -341,6 +344,9 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.settings import (
     get_claude_scoring_model as get_claude_scoring_model,
+)
+from songmaker_cli.db.queries.settings import (
+    get_cover_settings as get_cover_settings,
 )
 from songmaker_cli.db.queries.settings import (
     get_cowriter_model as get_cowriter_model,
@@ -376,6 +382,9 @@ from songmaker_cli.db.queries.settings import list_shared_presets as list_shared
 from songmaker_cli.db.queries.settings import name_exists as name_exists
 from songmaker_cli.db.queries.settings import save_global_defaults as save_global_defaults
 from songmaker_cli.db.queries.settings import set_claude_model as set_claude_model
+from songmaker_cli.db.queries.settings import (
+    set_cover_settings as set_cover_settings,
+)
 from songmaker_cli.db.queries.settings import (
     set_cowriter_settings as set_cowriter_settings,
 )

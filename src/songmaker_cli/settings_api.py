@@ -24,6 +24,8 @@ from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
     ClaudeModelsRequest,
     ClaudeModelsResponse,
+    CoverSettingsRequest,
+    CoverSettingsResponse,
     CowriterSettingsRequest,
     CowriterSettingsResponse,
     DefaultConfigRequest,
@@ -65,6 +67,7 @@ from songmaker_cli.db.queries.settings import (
     delete_preset,
     get_claude_chat_model,
     get_claude_scoring_model,
+    get_cover_settings,
     get_cowriter_model,
     get_cowriter_models_by_provider,
     get_cowriter_provider,
@@ -79,6 +82,7 @@ from songmaker_cli.db.queries.settings import (
     list_shared_presets,
     name_exists,
     set_claude_model,
+    set_cover_settings,
     set_cowriter_settings,
     set_cowriter_tail_token_budget,
     set_default_preset,
@@ -418,9 +422,44 @@ def api_get_provider_status(
                 name, ProviderSurface.JUDGE, snapshots.get(name), None,
             ),
             cowriter_routes=_route_statuses(snapshots.get(name), None),
+            cover_routes=_cover_route_readiness(name),
         )
         for name in sorted(COWRITER_PROVIDERS)
     ]
+
+
+def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
+    """Project the one image-capability answer for every route of one provider."""
+    from songmaker_cli.cowriter.catalog import (
+        ProviderRoute,
+        ProviderRouteCapability,
+        ProviderRouteReadinessState,
+        route_setup_label,
+    )
+    from songmaker_cli.cowriter.dispatch import cover_image_route_failure
+    from songmaker_cli.cowriter.errors import SafeRouteReasonCode
+
+    readiness: dict[str, ProviderRouteReadiness] = {}
+    for route in ProviderRoute:
+        failure = cover_image_route_failure(provider, route)
+        carries_image_tool = (
+            failure is None or failure.code is not SafeRouteReasonCode.NO_IMAGE_TOOL
+        )
+        readiness[route.value] = ProviderRouteReadiness(
+            state=(
+                ProviderRouteReadinessState.READY
+                if failure is None
+                else ProviderRouteReadinessState.NOT_CONFIGURED
+            ).value,
+            capability=(
+                ProviderRouteCapability.TOOLS_AVAILABLE
+                if carries_image_tool
+                else ProviderRouteCapability.TEXT_ONLY
+            ).value,
+            reason=failure,
+            setup_label=route_setup_label(route),
+        )
+    return readiness
 
 
 def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfaceStatus:
@@ -598,6 +637,7 @@ def _route_statuses(
         ProviderRouteReadinessState,
         models_with_active_model,
         provider_route_capability,
+        route_setup_label,
     )
 
     if snapshot is None:
@@ -607,7 +647,7 @@ def _route_statuses(
                 readiness=ProviderRouteReadiness(
                     state=ProviderRouteReadinessState.UNVERIFIED.value,
                     capability=provider_route_capability().value,
-                    setup_label="CLI login" if route is ProviderRoute.CLI else "API key",
+                    setup_label=route_setup_label(route),
                 ),
             )
             for route in ProviderRoute
@@ -862,6 +902,51 @@ def api_set_judge_settings(
     )
     session.commit()
     return _judge_response(session)
+
+
+# ── Cover provider settings ─────────────────────────────────────────
+
+
+def _cover_response(session: Session) -> CoverSettingsResponse:
+    selection = get_cover_settings(session)
+    return CoverSettingsResponse(
+        provider=selection.provider,
+        route=selection.route,
+        model=selection.model,
+    )
+
+
+@router.get("/settings/cover")
+def api_get_cover_settings(
+    _admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> CoverSettingsResponse:
+    return _cover_response(session)
+
+
+@router.put(
+    "/settings/cover",
+    responses={422: {"description": "Unknown cover provider or route"}},
+)
+def api_set_cover_settings(
+    req: CoverSettingsRequest,
+    admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> CoverSettingsResponse:
+    """Persist the cover selection, including one no route can currently run."""
+    from songmaker_cli.cowriter.catalog import ProviderRoute
+
+    if req.provider not in COWRITER_PROVIDERS:
+        raise HTTPException(422, f"Unknown cover provider '{req.provider}'")
+    if req.route not in {route.value for route in ProviderRoute}:
+        raise HTTPException(422, f"Unknown cover route '{req.route}'")
+    set_cover_settings(session, req.provider, req.route, req.model)
+    record_audit(
+        session, admin.id, AuditAction.UPDATE, ResourceType.COVER,
+        detail=f"provider={req.provider} route={req.route} model={req.model}",
+    )
+    session.commit()
+    return _cover_response(session)
 
 
 # ── Rate limits ────────────────────────────────────────────────────

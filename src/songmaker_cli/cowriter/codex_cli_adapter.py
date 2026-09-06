@@ -357,6 +357,7 @@ def generate_codex_cover_image(
     *,
     deadline: float,
     abort_signal: threading.Event | None = None,
+    model: str = "",
 ) -> bytes:
     """Run one isolated Codex image turn and return its normalized PNG.
 
@@ -382,6 +383,7 @@ def generate_codex_cover_image(
             codex_home=codex_home,
             work_dir=work_dir,
             abort_signal=abort_signal,
+            model=model,
         )
         _raise_for_codex_image_outcome(outcome)
         _validate_codex_image_events(
@@ -399,6 +401,7 @@ def _run_codex_image_cli(
     codex_home: Path,
     work_dir: Path,
     abort_signal: threading.Event | None = None,
+    model: str = "",
 ) -> CliRunOutcome:
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
@@ -408,7 +411,7 @@ def _run_codex_image_cli(
     def run() -> None:
         result = _run_reserved_codex_cli(
             reservation,
-            _build_codex_image_command(),
+            _build_codex_image_command(model),
             stdin_payload=prompt.encode("utf-8"),
             read="all",
             deadline=deadline,
@@ -539,7 +542,7 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
         raise _CodexLoginMirrorError() from exc
 
 
-def _build_codex_image_command() -> tuple[str, ...]:
+def _build_codex_image_command(model: str) -> tuple[str, ...]:
     """Return the fixed command for the image-only Codex route."""
     return (
         CODEX_CLI_BINARY,
@@ -548,6 +551,7 @@ def _build_codex_image_command() -> tuple[str, ...]:
         "--sandbox",
         "read-only",
         *_CODEX_IMAGE_ISOLATION_ARGS,
+        *(("--model", model) if model else ()),
         "-",
     )
 
@@ -561,7 +565,7 @@ def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str
         "--sandbox",
         sandbox,
         *_CODEX_CLI_ISOLATION_ARGS,
-        *(("--model", model) if model is not None else ()),
+        *(("--model", model) if model else ()),
         "-",
     )
 

@@ -14,6 +14,7 @@ from PIL import Image
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
+    COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
     JOB_ERROR_COVER_CLI_BUSY,
@@ -25,8 +26,9 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cowriter import codex_cli_adapter
-from songmaker_cli.cowriter.catalog import ProviderSetupMethod
+from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
+from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -34,6 +36,7 @@ from songmaker_cli.cowriter.errors import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
+from songmaker_cli.db.queries.settings import set_cover_settings
 from songmaker_cli.jobs.cover_suggestions import build_cover_prompt, run_cover_suggestion_job
 
 _REDACTED_CODEX_LOGIN = {
@@ -48,6 +51,10 @@ _REDACTED_CODEX_LOGIN = {
     },
 }
 _FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _codex_cover_dispatch(model: str = "") -> CoverImageDispatch:
+    return CoverImageDispatch(provider="codex", route=ProviderRoute.CLI, model=model)
 
 
 def _reap_fake_codex_process(kwargs: dict) -> None:
@@ -173,8 +180,8 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
     factory, audio_dir, job_id = cover_job
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: ProviderSetupMethod.CODEX_CLI,
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: _codex_cover_dispatch(),
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -187,7 +194,9 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
         assert len(suggestions) == 3
         paths = [item.png_path for item in suggestions]
     assert len(calls) == 3
-    assert all(call["command"] == codex_cli_adapter._build_codex_image_command() for call in calls)
+    assert all(
+        call["command"] == codex_cli_adapter._build_codex_image_command("") for call in calls
+    )
     assert all(call["stdin_payload"] is not None for call in calls)
     assert all(len(call["stdin_payload"].decode()) <= COVER_PROMPT_MAX_CHARS for call in calls)
     assert all("--sandbox" in call["command"] for call in calls)
@@ -222,6 +231,51 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
         not Path(call["cwd"]).is_relative_to(Path(call["extra_env"]["CODEX_HOME"]))
         for call in calls
     )
+
+
+def test_a_saved_codex_model_reaches_the_image_cli_as_its_model_flag(
+    cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    with factory() as session:
+        set_cover_settings(session, "codex", "cli", "gpt-5.4")
+        session.commit()
+    calls = _install_fake_codex_cli(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: True,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        assert session.get(Job, job_id).status == JobStatus.COMPLETED
+    assert len(calls) == 3
+    assert all(
+        call["command"][call["command"].index("--model") + 1] == "gpt-5.4" for call in calls
+    )
+
+
+def test_cover_job_names_a_saved_claude_selection_without_calling_codex(
+    cover_job, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory, audio_dir, job_id = cover_job
+    with factory() as session:
+        set_cover_settings(session, "claude", "cli", "")
+        session.commit()
+    monkeypatch.setattr(
+        "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
+    )
+
+    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        assert job.status == JobStatus.FAILED
+        assert job.error == COVER_IMAGE_TOOL_UNAVAILABLE_ERROR.format(provider="Claude")
 
 
 @pytest.mark.parametrize(
@@ -405,8 +459,8 @@ def test_cover_job_leaves_no_group_for_named_image_failures(
     factory, audio_dir, job_id = cover_job
     _install_fake_codex_cli(monkeypatch, tmp_path, outcome=outcome)
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: ProviderSetupMethod.CODEX_CLI,
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: _codex_cover_dispatch(),
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -424,8 +478,8 @@ def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
 ) -> None:
     factory, audio_dir, job_id = cover_job
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: (_ for _ in ()).throw(ProviderUnavailableError(
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: (_ for _ in ()).throw(ProviderUnavailableError(
             "codex",
             "cli",
             normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE),
@@ -449,8 +503,8 @@ def test_cover_job_names_a_busy_codex_process_pool(
     _install_fake_codex_cli(monkeypatch, tmp_path)
     monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: ProviderSetupMethod.CODEX_CLI,
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: _codex_cover_dispatch(),
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -471,8 +525,8 @@ def test_cover_job_names_a_completed_turn_that_creates_no_image(
         creates_artifact=False,
     )
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: ProviderSetupMethod.CODEX_CLI,
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: _codex_cover_dispatch(),
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -617,14 +671,14 @@ def test_cancelled_cover_job_removes_its_staging_group(
     started = threading.Event()
     release = threading.Event()
 
-    def delayed_image(_prompt: str, *, deadline: float) -> bytes:
+    def delayed_image(_prompt: str, *, deadline: float, model: str) -> bytes:
         started.set()
         assert release.wait(timeout=1)
         return _png_bytes()
 
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.cover_image_provider_method",
-        lambda: ProviderSetupMethod.CODEX_CLI,
+        "songmaker_cli.cover_runner.cover_image_provider_method",
+        lambda _session: _codex_cover_dispatch(),
     )
     monkeypatch.setattr(
         "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",

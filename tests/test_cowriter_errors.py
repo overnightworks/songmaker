@@ -10,6 +10,7 @@ from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_f
 @pytest.mark.parametrize(
     ("code", "message"),
     [
+        (SafeRouteReasonCode.NO_IMAGE_TOOL, "no image tool"),
         (SafeRouteReasonCode.API_KEY_NOT_SET, "API key is not set."),
         (SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED, "CLI is not signed in."),
         (SafeRouteReasonCode.CLI_AUTH_REJECTED, "CLI login was rejected or has expired."),

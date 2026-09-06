@@ -24,14 +24,12 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
-from songmaker_cli.cowriter.catalog import ProviderSetupMethod
 from songmaker_cli.cowriter.codex_cli_adapter import (
     CodexImageCliError,
-    CodexImageLoginError,
     CodexImageTimeoutError,
     generate_codex_cover_image,
 )
-from songmaker_cli.cowriter.dispatch import cover_image_provider_method
+from songmaker_cli.cowriter.dispatch import CoverImageDispatch, cover_image_provider_method
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
@@ -199,7 +197,6 @@ async def run_claimed_cover_suggestion_job(
     audio_dir: Path,
     settings: Settings | None = None,
     image_generator: Callable[..., bytes] | None = None,
-    provider_method: Callable[[], ProviderSetupMethod] | None = None,
     abort_signal: Event | None = None,
 ) -> None:
     """Produce and publish one already-running group of three suggestions.
@@ -210,7 +207,6 @@ async def run_claimed_cover_suggestion_job(
     """
     settings = settings or get_settings()
     image_generator = image_generator or generate_codex_cover_image
-    provider_method = provider_method or cover_image_provider_method
     await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
     heartbeat_task = asyncio.create_task(_keep_heartbeats(db_factory, job_id))
     created_paths: list[str] = []
@@ -218,11 +214,13 @@ async def run_claimed_cover_suggestion_job(
     try:
         prompt, album_id = await asyncio.to_thread(_load_cover_prompt, db_factory, job_id)
         try:
-            selected_provider = provider_method()
+            dispatch = await asyncio.to_thread(_load_cover_image_dispatch, db_factory)
         except ProviderUnavailableError as exc:
             raise CodexImageCliError() from exc
-        if selected_provider is not ProviderSetupMethod.CODEX_CLI:
-            raise CodexImageLoginError()
+        log.info(
+            "Cover job %s runs on %s %s with model %r",
+            job_id, dispatch.provider, dispatch.route.value, dispatch.model,
+        )
         suggestion_ids = [str(uuid.uuid4()) for _ in range(3)]
         staging_dir = await asyncio.to_thread(_staging_directory, audio_dir, album_id, job_id)
         started = time.monotonic()
@@ -235,6 +233,7 @@ async def run_claimed_cover_suggestion_job(
                 prompt,
                 deadline=time.monotonic() + min(settings.cover_cli_deadline_seconds, remaining),
                 abort_signal=abort_signal,
+                model=dispatch.model,
             )
             await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, payload)
             await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
@@ -333,6 +332,11 @@ def _load_cover_prompt(db_factory, job_id: str) -> tuple[str, str]:
         return build_cover_prompt(album, list_songs(session, album_id=album.id)), album.id
 
 
+def _load_cover_image_dispatch(db_factory) -> CoverImageDispatch:
+    with db_factory() as session:
+        return cover_image_provider_method(session)
+
+
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
     staging_dir = _staging_path(audio_dir, album_id, job_id)
     staging_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -407,15 +411,17 @@ async def _generate_cover_image(
     *,
     deadline: float,
     abort_signal: Event | None,
+    model: str,
 ) -> bytes:
     """Await one image generation and reap its CLI before task cancellation escapes."""
     if abort_signal is None or image_generator is not _CODEX_COVER_IMAGE_GENERATOR:
-        return await asyncio.to_thread(image_generator, prompt, deadline=deadline)
+        return await asyncio.to_thread(image_generator, prompt, deadline=deadline, model=model)
     generation = asyncio.create_task(asyncio.to_thread(
         image_generator,
         prompt,
         deadline=deadline,
         abort_signal=abort_signal,
+        model=model,
     ))
     try:
         return await asyncio.shield(generation)
