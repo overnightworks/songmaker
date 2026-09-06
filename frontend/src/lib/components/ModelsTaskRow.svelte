@@ -370,8 +370,8 @@
 <style>
 	.tt-row {
 		display: grid;
-		grid-template-columns: 9rem 11rem 12.5rem 14rem minmax(0, 1fr);
-		gap: 0.85rem;
+		grid-template-columns: var(--models-columns);
+		gap: var(--models-gap);
 		align-items: start;
 		padding: 0.65rem 0.85rem;
 		border-top: 1px solid var(--border);
@@ -529,7 +529,7 @@
 	}
 
 	.tt-sub {
-		padding: 0 0.85rem 0.6rem 10.7rem;
+		padding: 0 0.85rem 0.6rem var(--models-sub-indent);
 		border-left: 3px solid transparent;
 	}
 	.tt-sub.bad {
@@ -589,17 +589,6 @@
 		flex-wrap: wrap;
 	}
 
-	@media (max-width: 1180px) {
-		.tt-row {
-			grid-template-columns: 7.5rem 9rem 10.5rem 11rem minmax(0, 1fr);
-			gap: 0.6rem;
-			font-size: 0.95em;
-		}
-		.tt-sub {
-			padding-left: 8.6rem;
-		}
-	}
-
 	@media (max-width: 768px) {
 		.tt-row {
 			grid-template-columns: minmax(0, 1fr);
@@ -624,6 +613,7 @@
 			grid-column: 2;
 		}
 		.cell-task {
+			grid-template-columns: minmax(0, 1fr);
 			font-size: 0.95rem;
 			text-transform: uppercase;
 		}
