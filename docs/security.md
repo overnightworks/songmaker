@@ -45,8 +45,9 @@ most 60 seconds so deactivation or session expiry is enforced on reconnect.
 `TRUSTED_PROXIES` is a comma-separated list of IP addresses and CIDR networks
 (default: empty — no peer is trusted; the Docker deployment sets
 `172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
-in). `parse_trusted_proxies()` turns each entry into an `ip_network` at
-startup, and a peer is trusted when its address falls inside one of them — so
+in). `app_context.parse_trusted_proxies()` turns each entry into an
+`ip_network` at startup and puts the result into the `WebAuthConfig` the
+application installs, and a peer is trusted when its address falls inside one of them — so
 `172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
 `10.0.0.1` covers only itself. An entry that is not a valid address or
 network (including one with host bits set, like `10.0.0.1/24`) raises at
@@ -66,8 +67,9 @@ is not trusted:
   `Secure` on the session and CSRF cookies.
 - The same signal emits `Strict-Transport-Security`.
 
-`auth.resolve_client_ip()` and `auth.request_is_https()` own both decisions;
-no endpoint or middleware reads those headers itself. The chain is read from
+`webauth.proxies.resolve_client_ip()` and `webauth.proxies.request_is_https()`
+own both decisions and read the trusted networks from the installed
+`WebAuthConfig`; no endpoint or middleware reads those headers itself. The chain is read from
 the right, where our own proxies appended, and only what it says there can
 become an identity:
 

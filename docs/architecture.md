@@ -568,7 +568,7 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
-| Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth.py` |
+| Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth_stores.py`, `auth.py` (transitional re-export of `webauth`) |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search/shares, LoRAs, live co-writer chat, legacy chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `chat_api.py` (legacy), `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
@@ -644,7 +644,20 @@ events.
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
 | `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
-| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
+| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `session_store.py` owns the Redis session cache. `songmaker_cli.auth` re-exports the moved symbols until the middleware and the auth router follow |
+
+The auth layer never reads songmaker's settings or its `AppContext`. The
+session secret, trusted proxies, Redis client and key prefixes, cookie and
+header names, allowed hosts, session ages, and login rate/lockout values arrive
+as one frozen `WebAuthConfig`, built by
+`songmaker_cli/app_context.py::build_web_auth_config(ctx, settings)` and
+installed on the application in `server.create_app`. Middleware and endpoints
+read it through `webauth.config.web_auth_config(request)`; an application that
+never installed one fails loudly at its first auth-protected request.
+songmaker's own data — users, sessions, login attempts, audit entries — reaches
+the library through the `webauth.ports` protocols, implemented in
+`songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
+endpoint owns the request's transaction.
 
 The provider layer never reads songmaker's settings. Its binaries, credential
 mirrors, mounted Codex resources, chat model, API keys, process caps, the

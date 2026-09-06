@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -90,7 +90,7 @@ def client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test")
     app.include_router(router)
     yield TestClient(app), factory
@@ -112,7 +112,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-spy")
     app.include_router(router)
     yield TestClient(app), factory

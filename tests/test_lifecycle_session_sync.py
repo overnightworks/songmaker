@@ -8,10 +8,16 @@ import pytest
 from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import REDIS_SESSION_PREFIX, REDIS_USER_SESSIONS_PREFIX
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.lifecycle import _sync_sessions
-from songmaker_cli.redis_client import SessionCache
+from webauth.config import SessionKeyPrefixes
+from webauth.session_store import SessionCache
+
+_PREFIXES = SessionKeyPrefixes(
+    session=REDIS_SESSION_PREFIX, user_sessions=REDIS_USER_SESSIONS_PREFIX,
+)
 
 
 class _FixedClock:
@@ -85,7 +91,7 @@ def test_session_sync_updates_live_sessions_and_evicts_stale_cache_entries(
         ))
         session.commit()
 
-    session_cache = SessionCache(ctx.redis)
+    session_cache = SessionCache(ctx.redis, _PREFIXES)
     _store_cached_session(session_cache, "live", "active", now + timedelta(days=1), 300)
     _store_cached_session(
         session_cache,
@@ -126,7 +132,7 @@ def test_session_sync_purges_database_expiry_when_redis_has_no_sessions(
         )
         session.commit()
 
-    session_cache = SessionCache(ctx.redis)
+    session_cache = SessionCache(ctx.redis, _PREFIXES)
 
     assert _sync_sessions(ctx, session_cache) == 0
     with ctx.db() as session:

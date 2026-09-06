@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -68,7 +68,7 @@ def client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(
         _DEFAULT_USER_ID, "test_user", "user",
     )
@@ -91,7 +91,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.include_router(router)
     yield TestClient(app)
 
@@ -151,7 +151,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(
         _DEFAULT_USER_ID, "test_user", "user",
     )
@@ -204,7 +204,7 @@ def _make_authed_client(
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(
         user_id, f"test_{role}", role,
     )
@@ -486,7 +486,7 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
     app.include_router(router)
     tc = TestClient(app)
@@ -589,7 +589,7 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
     app.include_router(router)
     tc = TestClient(app)
@@ -738,7 +738,7 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(
         "u-test", "test_user", "user",
     )
@@ -3021,7 +3021,7 @@ def _make_pool_capacity_limited_client(
         session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.include_router(router)
     # No app.dependency_overrides[get_current_user] here on purpose (#331
     # Findings 1/2, review round 2): api_stream_job calls get_current_user
@@ -3793,7 +3793,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     )
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test", "user")
     app.add_middleware(BodySizeLimitMiddleware)
     app.include_router(router)
@@ -4300,7 +4300,7 @@ def test_bulk_delete_other_user(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
     app.include_router(router)
     tc = TestClient(app)
@@ -4343,7 +4343,7 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
     app.include_router(router)
     tc = TestClient(app)

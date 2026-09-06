@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -355,7 +355,7 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user(_DEFAULT_USER_ID, role)
     app.include_router(router)
     return TestClient(app)
@@ -421,7 +421,7 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u1", "user")
     app.include_router(router)
     c1 = TestClient(app)

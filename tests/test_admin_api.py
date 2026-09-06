@@ -413,7 +413,7 @@ def _get_user_id(client: TestClient, username: str) -> str:
 def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
     from conftest import login_and_csrf
 
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _login_as_admin(client)
 
@@ -441,7 +441,7 @@ def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
 
 
 def test_force_logout_clears_redis(client: TestClient) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _login_as_admin(client)
 
