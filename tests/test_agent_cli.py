@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -27,6 +28,7 @@ from songmaker_cli.agent_cli import (
     claude_cli_login,
     clear_agent_cli_caches,
     codex_cli_login,
+    codex_cli_model_catalog,
     grok_cli_status,
     run_cli,
     run_cli_bounded,
@@ -178,6 +180,35 @@ def test_codex_without_a_login_is_logged_out() -> None:
 def test_codex_that_cannot_be_asked_counts_as_logged_out() -> None:
     with _a_cli_that_says(None):
         assert codex_cli_login().logged_in is False
+
+
+def test_codex_model_catalog_reads_past_the_login_probe_limit(monkeypatch) -> None:
+    catalog_length = CLI_OUTPUT_READ_LIMIT_BYTES + 1
+    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: sys.executable)
+    monkeypatch.setattr(
+        agent_cli,
+        "CODEX_CLI_MODELS_ARGS",
+        (
+            "-c",
+            (
+                "import sys; "
+                f"sys.stdout.write('x' * {catalog_length}); "
+                "sys.stderr.write('not catalog output')"
+            ),
+        ),
+    )
+
+    assert codex_cli_model_catalog() == "x" * catalog_length
+
+
+def test_codex_model_catalog_without_a_binary_raises(monkeypatch) -> None:
+    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: None)
+
+    with pytest.raises(
+        AgentCliUnavailableError,
+        match="did not return a catalog",
+    ):
+        codex_cli_model_catalog()
 
 
 def test_codex_answering_in_words_we_do_not_know_raises() -> None:

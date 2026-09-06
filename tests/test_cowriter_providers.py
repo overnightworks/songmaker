@@ -437,6 +437,10 @@ def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatc
         "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present", lambda: True,
     )
     monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        lambda: '{"models": [{"slug": "gpt-5.6-terra", "visibility": "list", "priority": 1}]}',
+    )
+    monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True,
     )
     refresh_provider_snapshots()
@@ -451,7 +455,7 @@ def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatc
     assert settings.status_code == 200
     codex_models = settings.json()["models_by_provider"]["codex"]
     assert codex_models == list_provider_models("codex", ProviderRoute.CLI)
-    assert settings.json()["models_sources"]["codex"] == "known models for the CLI route"
+    assert settings.json()["models_sources"]["codex"] == "provider CLI"
     readiness = settings.json()["provider_routes_status"]["codex"]["cli"]["readiness"]
     assert readiness["state"] == "ready"
     assert readiness["capability"] == "tools_available"
