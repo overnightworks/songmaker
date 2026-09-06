@@ -27,6 +27,24 @@ _BUBBLEWRAP_NAMESPACE_PROBE_ARGUMENTS = (
     "--ro-bind", "/", "/",
     "/bin/true",
 )
+_CODEX_BUBBLEWRAP_STARTUP_PROBE_ARGUMENTS = (
+    "--new-session",
+    "--die-with-parent",
+    "--tmpfs", "/",
+    "--dev", "/dev",
+    "--ro-bind", "/bin", "/bin",
+    "--ro-bind", "/etc", "/etc",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/lib64", "/lib64",
+    "--ro-bind", "/sbin", "/sbin",
+    "--ro-bind", "/usr", "/usr",
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-net",
+    "--proc", "/proc",
+    "--",
+    "/usr/bin/true",
+)
 CODEX_READ_ONLY_PERMISSION_PROFILE = (
     '{"type":"managed","file_system":{"type":"restricted","entries":['
     '{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},'
@@ -107,6 +125,11 @@ def bubblewrap_probe_command() -> tuple[str, ...]:
     return tuple(command)
 
 
+def bubblewrap_startup_probe_command() -> tuple[str, ...]:
+    """Build Codex's traced Bubblewrap probe that precedes every sandbox run."""
+    return ("bwrap", *_CODEX_BUBBLEWRAP_STARTUP_PROBE_ARGUMENTS)
+
+
 def _run(command: Sequence[str]) -> CommandResult:
     completed = subprocess.run(command, capture_output=True, check=False, text=True)
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
@@ -144,6 +167,11 @@ def _verify_sandbox(run: CommandRunner) -> None:
     ))
     _required_output(prepare, "preparing the private CODEX_HOME probe directory")
     try:
+        startup_probe = run((
+            "docker", "compose", "exec", "-T", WEB_SERVICE,
+            *bubblewrap_startup_probe_command(),
+        ))
+        _required_output(startup_probe, "Codex Bubblewrap startup probe")
         result = run((
             "docker", "compose", "exec", "-T",
             "-e", f"CODEX_HOME={SANDBOX_CODEX_HOME}",

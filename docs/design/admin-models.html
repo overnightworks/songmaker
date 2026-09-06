@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Providers, Co-Writer &amp; Scoring — Fassung 1</title>
+<title>Admin · Models — Fassung 2: eine Aufgaben-Tabelle</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 	:root {
@@ -142,6 +142,9 @@
 
 	.decision p { margin: 0; color: var(--ink-soft); font-size: .94rem; }
 	.decision p + p { margin-top: .6rem; }
+	.decision ul { margin: .6rem 0 0; padding-left: 1.1rem; color: var(--ink-soft); font-size: .94rem; }
+	.decision li + li { margin-top: .3rem; }
+	.decision strong { color: var(--ink); }
 	.quote {
 		font-style: italic;
 		border-left: 2px solid var(--rule-strong);
@@ -192,7 +195,7 @@
 		margin-top: .35rem;
 	}
 
-	/* ── settings card mock (App-UI: Englisch) ───────────────── */
+	/* ── state frames (App-UI: Englisch) ─────────────────────── */
 	.states {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -200,7 +203,8 @@
 		align-items: start;
 	}
 
-	.state { display: flex; flex-direction: column; gap: .9rem; }
+	.state { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+	.state.wide { grid-column: 1 / -1; }
 
 	.state-head {
 		display: flex;
@@ -237,6 +241,337 @@
 		min-height: 3.6em;
 		margin: 0;
 	}
+	.state.wide .state-note { min-height: auto; max-width: 84ch; }
+
+	/* ── Fassung 2 · the one task table ──────────────────────── */
+	.screen {
+		border: 1px solid var(--rule);
+		border-radius: 5px;
+		background: var(--panel);
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+
+	.screen-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: .6rem;
+		padding: .5rem .9rem;
+		border-bottom: 1px solid var(--rule);
+		background: var(--panel-sunk);
+		color: var(--muted);
+		font-size: .72rem;
+	}
+	.screen-top strong { color: var(--ink); font-weight: 600; }
+
+	.screen-body { padding: 1rem 1.1rem 1.2rem; }
+
+	.screen-title {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: 1.05rem;
+		font-weight: 600;
+		margin: 0 0 .8rem;
+		color: var(--ink);
+	}
+
+	.tt {
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		background: var(--panel);
+		overflow: hidden;
+	}
+
+	.tt-head, .tt-row {
+		display: grid;
+		grid-template-columns: 9rem 11rem 12.5rem 14rem minmax(0, 1fr);
+		gap: .85rem;
+		align-items: start;
+		padding: .65rem .85rem;
+	}
+
+	.tt-head {
+		background: var(--panel-sunk);
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .09em;
+		font-size: .72rem;
+		font-weight: 600;
+		color: var(--muted);
+		padding-top: .45rem;
+		padding-bottom: .45rem;
+		border-left: 3px solid transparent;
+	}
+
+	.tt-row { border-top: 1px solid var(--rule); border-left: 3px solid transparent; }
+	.tt-row.warn { border-left-color: var(--warn-ink); background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
+	.tt-row.off { border-left-color: var(--rule-strong); background: var(--panel-sunk); }
+	.tt-row.bad { border-left-color: var(--bad-ink); background: color-mix(in srgb, var(--bad-bg) 60%, transparent); }
+
+	.cell-task {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-weight: 600;
+		letter-spacing: .04em;
+		font-size: .98rem;
+		color: var(--ink);
+		padding-top: .1rem;
+	}
+
+	.menu {
+		margin-top: .3rem;
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		background: var(--panel);
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: .5rem;
+		padding: .34rem .45rem;
+		font-size: .8rem;
+		color: var(--ink);
+	}
+	.menu-item + .menu-item { border-top: 1px solid var(--rule); }
+	.menu-item .state { font-size: .68rem; color: var(--muted); white-space: nowrap; }
+	.menu-item.gap { color: var(--muted); }
+	.menu-item.picked { background: color-mix(in srgb, var(--violet) 8%, var(--panel)); color: var(--violet); font-weight: 600; }
+	.menu-item.picked .state { color: var(--good); font-weight: 600; }
+
+	.menu-demo { max-width: 15rem; }
+	.menu-demo .field-label { margin-bottom: .3rem; }
+
+	.hint {
+		display: block;
+		font-size: .68rem;
+		line-height: 1.35;
+		color: var(--muted);
+		margin-top: .2rem;
+	}
+	.hint.warn { color: var(--warn-ink); }
+
+	.sel {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: .4rem;
+		padding: .34rem .45rem;
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		background: var(--panel);
+		color: var(--ink);
+		font-size: .8rem;
+	}
+	.sel .caret { color: var(--muted); font-size: .72rem; }
+	.sel.off {
+		border-style: dashed;
+		background: var(--panel-sunk);
+		color: var(--muted);
+	}
+
+	.rsw {
+		display: inline-flex;
+		border: 1px solid var(--rule-strong);
+		border-radius: 999px;
+		padding: .13rem;
+		background: var(--panel);
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		font-size: .72rem;
+		letter-spacing: .06em;
+	}
+	.rsw b { padding: .16rem .55rem; border-radius: 999px; font-weight: 600; color: var(--ink-soft); }
+	.rsw b.on { background: var(--violet); color: #fff; }
+	.rsw b.dead { color: var(--rule-strong); }
+	.rsw b.picked-dead { border: 1px dashed var(--warn-ink); color: var(--warn-ink); padding: .1rem .45rem; }
+
+	.why { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.35; color: var(--muted); }
+	.why.warn { color: var(--warn-ink); }
+
+	.st { display: flex; align-items: flex-start; gap: .42rem; font-size: .8rem; color: var(--ink); padding-top: .25rem; }
+	.st .mark {
+		flex: 0 0 auto;
+		width: 1.05rem;
+		height: 1.05rem;
+		border-radius: 50%;
+		display: inline-grid;
+		place-items: center;
+		font-size: .66rem;
+		font-weight: 700;
+		line-height: 1;
+		margin-top: .12rem;
+	}
+	.st.ok .mark { background: var(--good); color: #fff; }
+	.st.warn .mark { background: var(--warn-ink); color: #fff; }
+	.st.off .mark { border: 1px solid var(--rule-strong); background: transparent; color: transparent; }
+	.st.bad .mark { background: var(--bad-ink); color: #fff; }
+	.st.warn { color: var(--warn-ink); }
+	.st.off { color: var(--muted); }
+	.st.bad { color: var(--bad-ink); }
+
+	.saved {
+		display: inline-flex;
+		align-items: center;
+		gap: .3rem;
+		margin-top: .35rem;
+		font-size: .72rem;
+		color: var(--good);
+		font-weight: 600;
+	}
+
+	.tt-sub { padding: 0 .85rem .6rem 10.7rem; border-left: 3px solid transparent; }
+	.tt-row + .tt-sub { border-top: 0; }
+	.tt-sub.warn { border-left-color: var(--warn-ink); background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
+	.tt-sub.bad { border-left-color: var(--bad-ink); background: color-mix(in srgb, var(--bad-bg) 60%, transparent); }
+
+	.row-error {
+		display: flex;
+		align-items: center;
+		gap: .6rem;
+		flex-wrap: wrap;
+		font-size: .76rem;
+		color: var(--bad-ink);
+	}
+
+	.retry {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .72rem;
+		font-weight: 600;
+		padding: .18rem .7rem;
+		border: 1px solid var(--bad-ink);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--bad-ink);
+		cursor: default;
+	}
+
+	details.adv summary {
+		display: inline-flex;
+		align-items: center;
+		gap: .3rem;
+		cursor: default;
+		list-style: none;
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .09em;
+		font-size: .72rem;
+		font-weight: 600;
+		color: var(--violet);
+	}
+	details.adv summary::-webkit-details-marker { display: none; }
+	details.adv summary::before { content: "›"; font-size: .85rem; }
+	details.adv[open] summary::before { content: "⌄"; }
+
+	.adv-body { display: flex; align-items: center; gap: .55rem; margin-top: .45rem; flex-wrap: wrap; }
+	.adv-body .field-label { margin: 0; }
+
+	.field-label {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .06em;
+		font-size: .72rem;
+		color: var(--muted);
+		display: block;
+	}
+
+	input.mock {
+		width: 7rem;
+		padding: .32rem .45rem;
+		background: var(--panel);
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		color: var(--ink);
+		font-size: .8rem;
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+	}
+
+	/* ── 375 px ──────────────────────────────────────────────── */
+	.phone {
+		width: 375px;
+		max-width: 100%;
+		border: 1px solid var(--rule);
+		border-radius: 6px;
+		background: var(--paper);
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+
+	.ph-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: .55rem .7rem;
+		background: var(--panel);
+		border-bottom: 1px solid var(--rule);
+		font-size: .72rem;
+		color: var(--muted);
+	}
+	.ph-top strong { color: var(--ink); font-weight: 600; }
+
+	.ph-body { padding: .7rem; display: flex; flex-direction: column; gap: .6rem; }
+
+	.tcard {
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		border-left: 3px solid transparent;
+		border-radius: 4px;
+		padding: .6rem .7rem .65rem;
+	}
+	.tcard.warn { border-left-color: var(--warn-ink); background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
+	.tcard.off { border-left-color: var(--rule-strong); background: var(--panel-sunk); }
+
+	.tcard h4 {
+		margin: 0 0 .45rem;
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		font-size: .95rem;
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	.line {
+		display: grid;
+		grid-template-columns: 4.4rem minmax(0, 1fr);
+		gap: .55rem;
+		align-items: start;
+		padding: .2rem 0;
+	}
+	.line .k {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .68rem;
+		color: var(--muted);
+		padding-top: .35rem;
+	}
+	.line .st { padding-top: .2rem; }
+
+	/* ── Fassung 1 (history) ─────────────────────────────────── */
+	details.legacy {
+		border: 1px solid var(--rule);
+		border-radius: 4px;
+		background: var(--panel);
+		padding: .9rem 1.1rem;
+	}
+	details.legacy > summary {
+		cursor: default;
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: .5rem;
+	}
+	details.legacy > summary::-webkit-details-marker { display: none; }
+	details.legacy > summary::before { content: "›"; color: var(--violet); font-size: 1rem; }
+	details.legacy[open] > summary::before { content: "⌄"; }
+	details.legacy > summary h2 { font-size: .98rem; }
+	.legacy-body { display: flex; flex-direction: column; gap: 2rem; margin-top: 1.4rem; opacity: .92; }
 
 	.mini-page {
 		background: var(--panel);
@@ -263,24 +598,15 @@
 		font-family: "Barlow Condensed", system-ui, sans-serif;
 		text-transform: uppercase;
 		letter-spacing: .07em;
-		font-size: 1.0rem;
+		font-size: 1rem;
 		font-weight: 600;
 		margin: 0;
 		color: var(--ink);
 	}
 
-	.card-sub {
-		font-size: .8rem;
-		color: var(--muted);
-		margin: -.4rem 0 0;
-	}
+	.card-sub { font-size: .8rem; color: var(--muted); margin: -.4rem 0 0; }
 
-	/* provider status list */
-	.provider-status-list {
-		display: flex;
-		flex-direction: column;
-		gap: .45rem;
-	}
+	.provider-status-list { display: flex; flex-direction: column; gap: .45rem; }
 
 	.provider-status-row {
 		display: flex;
@@ -311,18 +637,9 @@
 		min-width: 64px;
 	}
 
-	.provider-status-row .detail {
-		font-size: .76rem;
-		color: var(--ink-soft);
-		display: block;
-	}
+	.provider-status-row .detail { font-size: .76rem; color: var(--ink-soft); display: block; }
 	.provider-status-row.bad .detail { color: var(--bad-ink); }
-	.provider-status-row .subnote {
-		font-size: .72rem;
-		color: var(--warn-ink);
-		display: block;
-		margin-top: .1rem;
-	}
+	.provider-status-row .subnote { font-size: .72rem; color: var(--warn-ink); display: block; margin-top: .1rem; }
 
 	.active-banner {
 		display: flex;
@@ -353,33 +670,12 @@
 		display: block;
 		margin-bottom: .15rem;
 	}
-	.active-banner .model {
-		font-family: ui-monospace, monospace;
-		font-size: .82rem;
-	}
-	.active-banner .caption {
-		display: block;
-		margin-top: .25rem;
-		font-size: .76rem;
-		opacity: .85;
-		font-style: italic;
-	}
+	.active-banner .model { font-family: ui-monospace, monospace; font-size: .82rem; }
+	.active-banner .caption { display: block; margin-top: .25rem; font-size: .76rem; opacity: .85; font-style: italic; }
 
-	.field-label {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		text-transform: uppercase;
-		letter-spacing: .06em;
-		font-size: .74rem;
-		color: var(--muted);
-		margin-bottom: .35rem;
-		display: block;
-	}
+	.legacy-body .field-label { margin-bottom: .35rem; }
 
-	.provider-picker {
-		display: flex;
-		gap: .5rem;
-		flex-wrap: wrap;
-	}
+	.provider-picker { display: flex; gap: .5rem; flex-wrap: wrap; }
 
 	.provider-pill {
 		flex: 1 1 90px;
@@ -389,7 +685,6 @@
 		font-size: .82rem;
 		background: var(--panel);
 		color: var(--ink-soft);
-		cursor: default;
 		display: flex;
 		flex-direction: column;
 		gap: .15rem;
@@ -408,30 +703,15 @@
 		box-shadow: 0 0 0 1px var(--violet) inset;
 		background: color-mix(in srgb, var(--violet) 6%, var(--panel));
 	}
-
 	.provider-pill.selected .name { color: var(--violet); }
+	.provider-pill.disabled { opacity: .55; background: var(--panel-sunk); }
 
-	.provider-pill.disabled {
-		opacity: .55;
-		background: var(--panel-sunk);
-	}
-
-	.pill-status {
-		font-size: .66rem;
-		text-transform: none;
-		letter-spacing: 0;
-		font-weight: 500;
-	}
+	.pill-status { font-size: .66rem; font-weight: 500; }
 	.status-ok { color: var(--good); }
 	.status-bad { color: var(--bad-ink); }
+	.pill-reason { font-size: .66rem; color: var(--muted); line-height: 1.3; }
 
-	.pill-reason {
-		font-size: .66rem;
-		color: var(--muted);
-		line-height: 1.3;
-	}
-
-	select.mock, input.mock {
+	select.mock {
 		width: 100%;
 		padding: .45rem .55rem;
 		background: var(--panel);
@@ -441,19 +721,11 @@
 		font-size: .84rem;
 		font-family: "IBM Plex Sans", system-ui, sans-serif;
 	}
-
-	select.mock:disabled, input.mock:disabled {
-		opacity: .55;
-		background: var(--panel-sunk);
-	}
+	select.mock:disabled, input.mock:disabled { opacity: .55; background: var(--panel-sunk); }
 
 	.dirty-mark { color: var(--violet); font-weight: 600; }
 
-	.inline-note {
-		font-size: .76rem;
-		color: var(--muted);
-		margin: 0;
-	}
+	.inline-note { font-size: .76rem; color: var(--muted); margin: 0; }
 	.inline-note.warn { color: var(--warn-ink); }
 
 	.change-banner {
@@ -483,15 +755,9 @@
 		color: #fff;
 		cursor: default;
 	}
-
-	button.mock-save.disabled {
-		background: var(--rule-strong);
-		color: var(--muted);
-		cursor: not-allowed;
-	}
+	button.mock-save.disabled { background: var(--rule-strong); color: var(--muted); }
 
 	.save-reason { font-size: .74rem; color: var(--muted); }
-
 	.field-row { display: flex; flex-direction: column; gap: .3rem; }
 
 	.gone-block {
@@ -503,36 +769,13 @@
 		background: var(--panel-sunk);
 	}
 
-	/* ── route-aware provider controls (Issue #541) ───────────── */
-	.route-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: .7rem;
-	}
-
-	.route-card {
-		border: 1px solid var(--rule);
-		border-radius: 3px;
-		padding: .65rem;
-		background: var(--panel-sunk);
-	}
-
+	.route-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+	.route-card { border: 1px solid var(--rule); border-radius: 3px; padding: .65rem; background: var(--panel-sunk); }
 	.route-card.unavailable { opacity: .72; }
 	.legacy-route-section { display: none; }
 
-	.route-card-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: .4rem;
-		margin-bottom: .5rem;
-	}
-
-	.route-card-head .name {
-		font-family: "Barlow Condensed", system-ui, sans-serif;
-		font-weight: 600;
-		letter-spacing: .03em;
-	}
+	.route-card-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .5rem; }
+	.route-card-head .name { font-family: "Barlow Condensed", system-ui, sans-serif; font-weight: 600; letter-spacing: .03em; }
 
 	.route-switch {
 		display: inline-flex;
@@ -544,7 +787,6 @@
 		font-size: .68rem;
 		letter-spacing: .04em;
 	}
-
 	.route-switch span { padding: .13rem .35rem; color: var(--muted); }
 	.route-switch .selected { border-radius: 999px; background: var(--violet); color: #fff; }
 
@@ -558,15 +800,7 @@
 		font-size: .72rem;
 		line-height: 1.35;
 	}
-
-	.route-status .dot {
-		width: .48rem;
-		height: .48rem;
-		margin-top: .28rem;
-		border-radius: 50%;
-		background: var(--muted);
-	}
-
+	.route-status .dot { width: .48rem; height: .48rem; margin-top: .28rem; border-radius: 50%; background: var(--muted); }
 	.route-status.ready .dot { background: var(--good); }
 	.route-status.broken .dot { background: var(--bad-ink); }
 	.route-status.not-set-up .dot { border: 1px solid var(--muted); background: transparent; }
@@ -590,10 +824,6 @@
 		color: var(--bad-ink);
 	}
 
-	@media (max-width: 760px) {
-		.route-grid { grid-template-columns: 1fr; }
-	}
-
 	.proposed-tag {
 		display: inline-block;
 		font-family: "Barlow Condensed", sans-serif;
@@ -609,237 +839,747 @@
 		vertical-align: middle;
 	}
 
-	.foot-note {
-		font-size: .86rem;
-		color: var(--muted);
-		max-width: 68ch;
-	}
+	.foot-note { font-size: .86rem; color: var(--muted); max-width: 68ch; }
 
 	.freeze-note {
-		font-family: "IBM Plex Sans", system-ui, sans-serif;
 		font-size: .86rem;
 		color: var(--muted);
 		max-width: 68ch;
 		margin: 0 auto;
 		padding: .75rem 1.5rem 0;
 	}
+	.legacy-body .freeze-note { margin: 0; padding: 0; }
+
+	@media (max-width: 1180px) {
+		.tt-head, .tt-row { grid-template-columns: 7.5rem 9rem 10.5rem 11rem minmax(0, 1fr); gap: .6rem; font-size: .95em; }
+		.tt-sub { padding-left: 8.6rem; }
+	}
+
+	@media (max-width: 760px) {
+		.route-grid { grid-template-columns: 1fr; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		* { transition: none !important; animation: none !important; }
+	}
 </style>
 </head>
 <body>
 <p class="freeze-note">
-	Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung. Gebaut wird
-	gegen Issue #317; #315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 übernommen von
-	<code>docs/design/navigation.html</code> (Fassung 4, eingefroren 01.09.2026). Warum-Notiz auf
-	Deutsch (richtet sich an den Operator); alle Beschriftungen innerhalb der Karten-Mockups auf
-	Englisch, weil die App englisch ist.
+	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, gezeichnet am 06.09.2026</strong> nach
+	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
+	Anbietern, Gründe im Select); wartet auf die Freigabe. Gebaut wird gegen Issue #317;
+	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
+	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
+	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
+	Historie.
 </p>
 <div class="wrap">
 	<header>
-		<div class="eyebrow">Songmaker · Admin · Models · Eingefroren</div>
-		<h1>Providers first, then Co-Writer and Scoring — as two matching blocks</h1>
+		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2</div>
+		<h1>One table: who does what, and does it work?</h1>
 		<p class="lede">
-			Der heutige Tab „Claude" vermischt drei Dinge unter einem Anbieter-Namen. Dieser Entwurf trennt
-			sie: oben ein ehrlicher Anbieter-Status, darunter zwei baugleiche Blöcke (Provider → Modell) für
-			die zwei echten Aufgaben — mitschreiben und bewerten.
+			Drei Aufgaben, eine Tabelle, eine Zeile pro Aufgabe. Die Seite erklärt nicht mehr die
+			Maschinerie dahinter, sondern beantwortet in einem Blick: Wer macht Co-Writer, Cover und
+			Scoring — und läuft es? Der Providers-Block von oben entfällt; sein Inhalt steht als
+			Status in der jeweiligen Zeile.
 		</p>
 	</header>
 
 	<section class="decisions">
 		<div class="decision">
-			<h3>Warum — Operator-Befund vom 01.09.2026, mit Screenshot</h3>
+			<h3>Warum — Operator-Ruling vom 06.09.2026</h3>
 			<p class="quote">
-				„oben steht CLAUDE => falsch. 2 Co-writer? Ich kann Provider wählen und dann kein Model =>
-				Wechsel nicht möglich? Grok default funktioniert gerade nicht. Und wenn ich Save drücke:
-				'grok is not configured'. Und unten dann nochmal Chat-Modell und Scoring-Modell?"
+				Die Seite ist zu komplex und erklärt die Maschinerie, statt die eine Frage zu
+				beantworten: Wer macht was, und funktioniert es?
 			</p>
-			<p class="quote">
-				Nachtrag: Der Co-Writer lief tatsächlich mit Claude und funktionierte — die Seite zeigte
-				trotzdem „grok" im Provider-Feld.
-			</p>
-			<p class="ruling">Zwei Operator-Rulings für diesen Entwurf: Sprache der Karten = Englisch (App ist
-				englisch, nur diese Notiz bleibt deutsch). Scoring wird providerneutral entworfen — je Aufgabe
-				ein eigener Provider, keine erzwungene Kopplung an den Co-Writer.</p>
-			<p>Sieben Befunde, im Code belegt:</p>
-			<ol class="findings">
-				<li>
-					<span class="num">1</span>
-					<span class="claim">
-						Der Tab heißt „Claude" — stehengeblieben aus der Zeit, als der Co-Writer Claude-only
-						war, vor Issue #34 (Multi-Provider). Er ist falsch, sobald ein anderer Provider aktiv
-						ist. Umbenannt zu „Models".
-					</span>
-					<code class="loc">frontend/src/routes/settings/users/+page.svelte:56-64 (ADMIN_TABS)</code>
-				</li>
-				<li>
-					<span class="num">2</span>
-					<span class="claim">
-						„Chat Model" im Abschnitt Scoring Models ist ein totes Feld: Es steuert
-						<code>SETTING_CLAUDE_CHAT_MODEL</code>, gelesen ausschließlich von
-						<code>POST /songs/{'{'}song_id{'}'}/chat</code> — diesen Endpunkt ruft weder Frontend
-						noch CLI je auf. Es ist nicht der Co-Writer und verschwindet in diesem Entwurf
-						ersatzlos.
-					</span>
-					<code class="loc">src/songmaker_cli/chat_api.py:185-220 (unbenutzter Endpunkt) · src/songmaker_cli/settings_api.py:295-336 (totes Feld)</code>
-				</li>
-				<li>
-					<span class="num">3</span>
-					<span class="claim">
-						„Scoring Model" ist echt: Es steuert das Claude-Richter-Modell des
-						<code>lyrical_coherence</code>-Scorers.
-					</span>
-					<code class="loc">src/songmaker_cli/jobs/scoring.py:95 (get_claude_scoring_model)</code>
-				</li>
-				<li>
-					<span class="num">4</span>
-					<span class="claim">
-						Grok und Codex sind in dieser Umgebung wirklich nicht eingerichtet — beide API-Keys
-						sind leer.
-					</span>
-					<code class="loc">src/songmaker_cli/settings.py:185-187 (xai_api_key, openai_api_key)</code>
-				</li>
-				<li>
-					<span class="num">5</span>
-					<span class="claim">
-						Kerndefekt: Der Modell-Katalog verlangt für jeden Provider einen API-Key, auch für
-						Claude — aber der echte Co-Writer-Chat läuft über die gemountete Claude-Code-CLI-Anmeldung
-						ganz ohne Key (kein <code>api_key</code>-Argument im Aufruf). Deshalb zeigte die Seite
-						das tatsächlich laufende, funktionierende Claude als „nicht konfiguriert" mit leerer
-						Modell-Liste — der wahre Auslöser des Nachtrags.
-					</span>
-					<code class="loc">src/songmaker_cli/cowriter/catalog.py:115-118 (Key-Pflicht für Claude) · src/songmaker_cli/cowriter/claude_adapter.py:23-31 (CLI-Aufruf ohne api_key)</code>
-				</li>
-				<li>
-					<span class="num">6</span>
-					<span class="claim">
-						Frontend-Bug: Wechselt man auf einen Provider mit leerem Katalog, wird das alte
-						Modell nicht geleert — der <code>$effect</code> greift nur, wenn die neue Liste nicht
-						leer ist. Der Save-Knopf bleibt dadurch fälschlich aktiv (<code>disabled={'{'}!cowriterModel{'}'}</code>
-						schützt nicht mehr, weil der alte Wert überlebt); nur eine serverseitige Prüfung
-						verhindert den kaputten Schreibvorgang.
-					</span>
-					<code class="loc">frontend/src/routes/settings/users/+page.svelte:282-287 ($effect) · :918 (disabled-Bedingung)</code>
-				</li>
-				<li>
-					<span class="num">7</span>
-					<span class="claim">
-						Zwei Quellen der Wahrheit für „welche Claude-Modelle gibt es": Der Co-Writer holt live
-						von der Anthropic-API, Scoring nutzt eine hartkodierte, veraltete Liste mit
-						Modell-Namen, die es so nicht gibt.
-					</span>
-					<code class="loc">src/songmaker_cli/constants.py:155-159 (MODEL_ALLOWED_CLAUDE)</code>
-				</li>
-			</ol>
+			<p class="ruling">Was das Ruling festlegt:</p>
+			<ul>
+				<li><strong>Aufgabe zuerst.</strong> Eine Tabelle mit drei Zeilen — Co-Writer, Cover,
+					Scoring — und den Spalten Task, Provider, Route, Model, Status. Keine baugleichen
+					Blöcke mehr, keine Karten pro Provider.</li>
+				<li><strong>Der CLI/API-Schalter bleibt sichtbar, wird aber ausgegraut.</strong> Eine
+					nicht eingerichtete Route verschwindet nie automatisch; sie steht grau da, mit ihrem
+					Grund darunter. Ist nur eine Route eingerichtet, ist sie gewählt und die andere grau.</li>
+				<li><strong>Alle Aufgaben mit allen Anbietern.</strong> Jede Zeile hat dasselbe
+					Provider-Select — Claude, Grok, Codex. Eine Fähigkeitslücke (kein Bildwerkzeug) ist
+					ein Status, kein fehlendes Select: Der Eintrag bleibt wählbar, die Zeile fällt in den
+					grauen Zustand, und der Grund steht im Klartext da — „Claude · no image tool".</li>
+				<li><strong>Der Grund steht bei der Auswahl.</strong> Im aufgeklappten Select trägt jede
+					Option ihren Zustand: „Codex ✓ ready", „Grok · needs its API key", „Claude · no image
+					tool". Grau heißt nicht gesperrt — was heute nicht geht, kann morgen gehen, und der
+					Weg dahin bleibt sichtbar statt weggeblendet.</li>
+				<li><strong>Modelle kommen bei allen Anbietern live vom Provider</strong>; Codex-CLI
+					über <code>codex debug models</code> (#817). Es gibt keine gepflegte Liste mehr, also
+					auch keinen Hinweis darauf — alle Modell-Selects sehen gleich aus.</li>
+				<li><strong>Kein Providers-Block.</strong> Erreichbarkeit steht als Punkt plus einer
+					kurzen Zeile in der Status-Spalte der Aufgabe, die sie betrifft — dort, wo sie eine
+					Entscheidung auslöst.</li>
+				<li><strong>History tail liegt unter „Advanced".</strong> Eine kleine, standardmäßig
+					zugeklappte Aufklappzeile unter der Co-Writer-Zeile.</li>
+				<li><strong>Gespeichert wird pro Zeile bei Änderung</strong>, bestätigt mit einem
+					knappen „Saved."; kein großer Save-Knopf mehr. Ein Fehlschlag steht in der Zeile,
+					nicht in einem Banner am Seitenkopf.</li>
+			</ul>
 			<p>
-				Die Providerneutralität des Scoring-Judges gibt es im Code heute nicht — der
-				<code>lyrical_coherence</code>-Judge ruft Claude direkt auf
-				(<code>src/songmaker_cli/jobs/scoring.py:95</code>). Der Scoring-Block unten zeigt einen
-				Zielzustand, der voraussetzt, dass der Judge über dieselbe Provider-Abstraktion läuft wie der
-				Co-Writer; das ist Backend-Arbeit, die dieser Entwurf nicht vorwegnimmt.
+				Drei Formen, mehr gibt es nicht: <strong>ready</strong> (grüner Haken),
+				<strong>needs its API key</strong> (gelbes Ausrufezeichen) und der graue, leere Ring für
+				alles, was heute nicht geht — <strong>not logged in</strong> ebenso wie
+				<strong>no image tool</strong>. Jede Farbe hat ihre eigene Form, damit die Zeile auch
+				schwarzweiß lesbar bleibt. Rot bleibt reserviert für den einzigen Fall, den nur ein
+				Mensch beenden kann: ein fehlgeschlagenes Speichern.
 			</p>
 		</div>
 	</section>
 
 	<hr class="rule">
 
-	<section class="decisions legacy-route-section">
-		<h2>Co-Writer routes, three states side by side</h2>
-		<p class="state-note" style="min-height:auto">
-			Each provider has its own CLI/API route switch. The selected route supplies the model list;
-			an unavailable route never silently falls back to the other one.
-		</p>
+	<section class="decisions">
+		<h2>Das Bild — Desktop</h2>
 
-		<div class="states legacy-states">
-			<div class="state">
-				<div class="state-head">
-					<h3>Both routes ready</h3>
-					<span class="tag tag-next">Ready</span>
-				</div>
+		<div class="states">
+			<article class="state wide">
+				<div class="state-head"><h3>(a) All three ready</h3><span class="tag tag-next">Desktop ≥ 1280</span></div>
 				<p class="state-note">
-					The admin can choose the route for every provider. Each selected route exposes its own
-					models and version identifiers.
+					Der Normalfall. Jede Zeile trägt ihre eigene Antwort: Aufgabe, wer sie macht, über
+					welche Route, mit welchem Modell, und ob es läuft. Die Advanced-Zeile unter dem
+					Co-Writer ist zu.
 				</p>
 
-				<div class="mini-page">
-					<div>
-						<p class="card-title">Co-Writer</p>
-						<p class="card-sub">Provider and model that answer your next message.</p>
+				<div class="screen">
+					<div class="screen-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="screen-body">
+						<h4 class="screen-title">Models</h4>
+						<div class="tt">
+							<div class="tt-head">
+								<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+							</div>
 
-						<div class="active-banner ok">
-							<span class="dot"></span>
-							<span>
-								<b>Active route</b>
-								<span class="model">Claude · CLI · opus</span>
-								<span class="caption">New turns use the selected route immediately.</span>
+							<div class="tt-row">
+								<span class="cell-task">Co-Writer</span>
+								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+								<span>
+									<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+									<small class="why">API · key set</small>
+								</span>
+								<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+							</div>
+							<div class="tt-sub">
+								<details class="adv"><summary>Advanced</summary>
+									<div class="adv-body">
+										<span class="field-label">History tail (tokens)</span>
+										<input class="mock" value="24000">
+									</div>
+								</details>
+							</div>
+
+							<div class="tt-row">
+								<span class="cell-task">Cover</span>
+								<span>
+									<span class="sel">Codex<span class="caret">⌄</span></span>
+								</span>
+								<span>
+									<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+									<small class="why">API · no image tool</small>
+								</span>
+								<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+							</div>
+
+							<div class="tt-row">
+								<span class="cell-task">Scoring</span>
+								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+								<span>
+									<span class="rsw"><b>CLI</b><b class="on">API</b></span>
+									<small class="why">CLI · logged in</small>
+								</span>
+								<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(b) Scoring · Grok chosen, key missing</h3><span class="tag tag-now">Needs its API key</span></div>
+				<p class="state-note">
+					Der Admin hat für Scoring Grok gewählt, der Schlüssel fehlt. Die Zeile wird gelb, das
+					API-Pill bleibt gewählt, aber inaktiv (gestrichelt), die CLI-Route steht grau daneben
+					mit ihrem Grund. Das Modell-Feld erfindet keinen Wert. Co-Writer und Cover bleiben
+					unberührt — der Ausfall gehört einer Zeile, nicht der Seite.
+				</p>
+
+				<div class="tt">
+					<div class="tt-head">
+						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
+						</span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+					<div class="tt-sub">
+						<details class="adv"><summary>Advanced</summary>
+							<div class="adv-body">
+								<span class="field-label">History tail (tokens)</span>
+								<input class="mock" value="24000">
+							</div>
+						</details>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Codex<span class="caret">⌄</span></span>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+							<small class="why">API · no image tool</small>
+						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+
+					<div class="tt-row warn">
+						<span class="cell-task">Scoring</span>
+						<span><span class="sel">Grok<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
+							<small class="why warn">API · key not set</small>
+							<small class="why">CLI · not logged in</small>
+						</span>
+						<span>
+							<span class="sel off">No models<span class="caret">⌄</span></span>
+							<small class="hint warn">List needs the key</small>
+						</span>
+						<span class="st warn"><span class="mark">!</span>Needs its API key</span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(c) Cover · a provider that cannot draw</h3><span class="tag tag-state">No image tool</span></div>
+				<p class="state-note">
+					Cover hat dasselbe Select wie die anderen Zeilen; hier steht Claude darin. Claude ist
+					angemeldet und erreichbar — es hat nur kein Bild-Werkzeug. Genau das sagt der Status:
+					Die Zeile wird grau, das Modell-Feld erfindet nichts, und das Select bleibt
+					unangetastet. Eine Fähigkeitslücke sperrt kein Bedienelement, sie erklärt sich.
+					Derselbe graue Zustand trägt auch „not logged in" — der Fall steht als Karte in (f).
+				</p>
+
+				<div class="tt">
+					<div class="tt-head">
+						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
+						</span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+					<div class="tt-sub">
+						<details class="adv"><summary>Advanced</summary>
+							<div class="adv-body">
+								<span class="field-label">History tail (tokens)</span>
+								<input class="mock" value="24000">
+							</div>
+						</details>
+					</div>
+
+					<div class="tt-row off">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Claude<span class="caret">⌄</span></span>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">CLI · logged in</small>
+						</span>
+						<span>
+							<span class="sel off">No models<span class="caret">⌄</span></span>
+							<small class="hint">Claude cannot draw</small>
+						</span>
+						<span class="st off"><span class="mark">○</span>Claude · no image tool</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Scoring</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · logged in</small>
+						</span>
+						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(d) The open provider list</h3><span class="tag tag-state">Choosing</span></div>
+				<p class="state-note">
+					Der Grund steht dort, wo entschieden wird: Jede Option trägt ihren eigenen Zustand.
+					Grau heißt nicht gesperrt — der Eintrag bleibt wählbar, weil aus „kann heute nicht"
+					morgen „kann" werden kann; wer ihn wählt, sieht denselben Grund danach im Status der
+					Zeile. Dieselbe Liste steht in jeder Zeile, nur mit den Gründen der jeweiligen
+					Aufgabe.
+				</p>
+
+				<div class="tt">
+					<div class="tt-head">
+						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Codex<span class="caret">⌃</span></span>
+							<div class="menu">
+								<div class="menu-item gap"><span>Claude</span><span class="state">no image tool</span></div>
+								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
+								<div class="menu-item picked"><span>Codex</span><span class="state">✓ ready</span></div>
+							</div>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+							<small class="why">API · no image tool</small>
+						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Scoring</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · logged in</small>
+						</span>
+						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+					</div>
+				</div>
+
+				<div class="menu-demo">
+					<span class="field-label">Co-Writer · same list, its own reasons</span>
+					<div class="menu">
+						<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
+						<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
+						<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(e) Saving happens in the row</h3><span class="tag tag-state">Saved · failed</span></div>
+				<p class="state-note">
+					Jede Änderung speichert sofort ihre eigene Zeile. Der Co-Writer wurde gerade auf
+					Grok umgestellt und bestätigt das mit „Saved."; die Scoring-Zeile hat es versucht
+					und ist abgewiesen worden — der Grund steht in der Zeile, mit einem Retry direkt
+					daneben. Die Advanced-Zeile ist hier aufgeklappt gezeichnet.
+				</p>
+
+				<div class="tt">
+					<div class="tt-head">
+						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel">Grok<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · not logged in</small>
+						</span>
+						<span><span class="sel">grok-4-1-fast<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+							<span class="saved">✓ Saved.</span>
+						</span>
+					</div>
+					<div class="tt-sub">
+						<details class="adv" open><summary>Advanced</summary>
+							<div class="adv-body">
+								<span class="field-label">History tail (tokens)</span>
+								<input class="mock" value="24000">
+								<span class="saved">✓ Saved.</span>
+							</div>
+						</details>
+					</div>
+
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Codex<span class="caret">⌄</span></span>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+							<small class="why">API · no image tool</small>
+						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+
+					<div class="tt-row bad">
+						<span class="cell-task">Scoring</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="rsw"><b>CLI</b><b class="on">API</b></span>
+							<small class="why">CLI · logged in</small>
+						</span>
+						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+						<span class="st bad"><span class="mark">✕</span>Not saved</span>
+					</div>
+					<div class="tt-sub bad">
+						<p class="row-error">
+							<span>The server rejected claude-opus-4-6: unknown model.</span>
+							<button class="retry">Retry</button>
+						</p>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Das Bild — 375 px</h2>
+
+		<div class="states">
+			<article class="state">
+				<div class="state-head"><h3>(f) Stacked cards</h3><span class="tag tag-state">375 px</span></div>
+				<p class="state-note">
+					Aus jeder Tabellenzeile wird eine Karte, aus jeder Spalte eine beschriftete Zeile.
+					Nichts wird weggekürzt: Route, Grund und Status stehen vollständig da. Die
+					Farbkante links trägt denselben Zustand wie die Zeile am Desktop.
+				</p>
+
+				<div class="phone">
+					<div class="ph-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span>
+								<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+								<small class="why">API · key set</small>
+							</span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel">opus<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready · CLI login</span></div>
+							<div class="line"><span class="k"></span><span>
+								<details class="adv"><summary>Advanced</summary>
+									<div class="adv-body">
+										<span class="field-label">History tail (tokens)</span>
+										<input class="mock" value="24000">
+									</div>
+								</details>
+							</span></div>
+						</div>
+
+						<div class="tcard off">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Provider</span><span>
+								<span class="sel">Codex<span class="caret">⌄</span></span>
+							</span></div>
+							<div class="line"><span class="k">Route</span><span>
+								<span class="rsw"><b class="picked-dead">CLI</b><b class="dead">API</b></span>
+								<small class="why">CLI · not logged in</small>
+								<small class="why">API · no image tool</small>
+							</span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Codex CLI not logged in</span></div>
+						</div>
+
+						<div class="tcard warn">
+							<h4>Scoring</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Grok<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span>
+								<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
+								<small class="why warn">API · key not set</small>
+								<small class="why">CLI · not logged in</small>
+							</span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st warn"><span class="mark">!</span>Needs its API key</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(g) Loading and empty</h3><span class="tag tag-state">375 px</span></div>
+				<p class="state-note">
+					Solange die Erreichbarkeit noch geholt wird, behauptet keine Zeile etwas: der Status
+					sagt „Checking…", die Auswahl bleibt bedienbar. Einen eigenen Leerzustand für die
+					ganze Seite gibt es nicht — „nichts eingerichtet" ist genau der graue Zeilenzustand
+					darunter, pro Aufgabe, dort wo er eine Entscheidung auslöst.
+				</p>
+
+				<div class="phone">
+					<div class="ph-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="on">CLI</b><b>API</b></span></span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel">opus<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Checking…</span></div>
+						</div>
+
+						<div class="tcard off">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Provider</span><span>
+								<span class="sel">Codex<span class="caret">⌄</span></span>
+							</span></div>
+							<div class="line"><span class="k">Route</span><span>
+								<span class="rsw"><b class="picked-dead">CLI</b><b class="dead">API</b></span>
+								<small class="why">CLI · not logged in</small>
+							</span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Codex CLI not logged in</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Was offen bleibt</h3>
+			<p>
+				Der Scoring-Provider ist weiterhin Zielzustand: Der
+				<code>lyrical_coherence</code>-Judge ruft heute fest Claude auf, eine echte
+				Provider-Abstraktion ist Issue #315. Bis dahin ist das Provider-Select in der
+				Scoring-Zeile ein Bild, kein Verhalten.
+			</p>
+			<p>
+				Woher „ready" seine Wahrheit nimmt, entscheidet das Backend (#316): eine Live-Probe bei
+				jedem Laden oder ein persistierter „zuletzt erfolgreich benutzt"-Zustand. Das Bild
+				verlangt nur, dass die Status-Spalte nicht die gespeicherte Einstellung zurückspiegelt,
+				sondern die tatsächliche Erreichbarkeit.
+			</p>
+			<p>
+				Das Provider-Select in der Cover-Zeile ist ebenfalls Zielzustand: Der Cover-Weg ist im
+				Code heute fest die Codex-CLI — <code>cover_image_provider_method()</code> in
+				<code>src/songmaker_cli/cowriter/dispatch.py</code>, aufgerufen von
+				<code>cover_runner.py</code> und <code>jobs/cover_suggestions.py</code>, mit
+				<code>generate_codex_cover_image</code> als einzigem Generator. Ein echtes
+				Provider-Setting für Cover ist Backend-Arbeit und hat heute kein Issue.
+			</p>
+			<p>
+				Ob Claude oder Grok je ein Bildwerkzeug bekommen, entscheidet nicht diese Seite. Bis
+				dahin bleiben sie im Select wählbar und grau, mit dem ehrlichen Grund — sie
+				verschwinden nicht, damit niemand sie später sucht.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<details class="legacy">
+		<summary><h2>Fassung 1 (superseded 06.09.2026)</h2></summary>
+		<div class="legacy-body">
+			<p class="freeze-note">
+				Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung.
+				Am 06.09.2026 durch Fassung 2 abgelöst: zu komplex, erklärte die Maschinerie statt der
+				Aufgabe. Steht hier als Historie, nicht als Bauvorlage.
+			</p>
+
+			<header>
+				<div class="eyebrow">Songmaker · Admin · Models · Fassung 1</div>
+				<h1>Providers first, then Co-Writer and Scoring — as two matching blocks</h1>
+				<p class="lede">
+					Der heutige Tab „Claude" vermischt drei Dinge unter einem Anbieter-Namen. Dieser Entwurf trennt
+					sie: oben ein ehrlicher Anbieter-Status, darunter zwei baugleiche Blöcke (Provider → Modell) für
+					die zwei echten Aufgaben — mitschreiben und bewerten.
+				</p>
+			</header>
+
+			<section class="decisions">
+				<div class="decision">
+					<h3>Warum — Operator-Befund vom 01.09.2026, mit Screenshot</h3>
+					<p class="quote">
+						„oben steht CLAUDE => falsch. 2 Co-writer? Ich kann Provider wählen und dann kein Model =>
+						Wechsel nicht möglich? Grok default funktioniert gerade nicht. Und wenn ich Save drücke:
+						'grok is not configured'. Und unten dann nochmal Chat-Modell und Scoring-Modell?"
+					</p>
+					<p class="quote">
+						Nachtrag: Der Co-Writer lief tatsächlich mit Claude und funktionierte — die Seite zeigte
+						trotzdem „grok" im Provider-Feld.
+					</p>
+					<p class="ruling">Zwei Operator-Rulings für diesen Entwurf: Sprache der Karten = Englisch (App ist
+						englisch, nur diese Notiz bleibt deutsch). Scoring wird providerneutral entworfen — je Aufgabe
+						ein eigener Provider, keine erzwungene Kopplung an den Co-Writer.</p>
+					<p>Sieben Befunde, im Code belegt:</p>
+					<ol class="findings">
+						<li>
+							<span class="num">1</span>
+							<span class="claim">
+								Der Tab heißt „Claude" — stehengeblieben aus der Zeit, als der Co-Writer Claude-only
+								war, vor Issue #34 (Multi-Provider). Er ist falsch, sobald ein anderer Provider aktiv
+								ist. Umbenannt zu „Models".
 							</span>
-						</div>
+							<code class="loc">frontend/src/routes/settings/users/+page.svelte:56-64 (ADMIN_TABS)</code>
+						</li>
+						<li>
+							<span class="num">2</span>
+							<span class="claim">
+								„Chat Model" im Abschnitt Scoring Models ist ein totes Feld: Es steuert
+								<code>SETTING_CLAUDE_CHAT_MODEL</code>, gelesen ausschließlich von
+								<code>POST /songs/{'{'}song_id{'}'}/chat</code> — diesen Endpunkt ruft weder Frontend
+								noch CLI je auf. Es ist nicht der Co-Writer und verschwindet in diesem Entwurf
+								ersatzlos.
+							</span>
+							<code class="loc">src/songmaker_cli/chat_api.py:185-220 (unbenutzter Endpunkt) · src/songmaker_cli/settings_api.py:295-336 (totes Feld)</code>
+						</li>
+						<li>
+							<span class="num">3</span>
+							<span class="claim">
+								„Scoring Model" ist echt: Es steuert das Claude-Richter-Modell des
+								<code>lyrical_coherence</code>-Scorers.
+							</span>
+							<code class="loc">src/songmaker_cli/jobs/scoring.py:95 (get_claude_scoring_model)</code>
+						</li>
+						<li>
+							<span class="num">4</span>
+							<span class="claim">
+								Grok und Codex sind in dieser Umgebung wirklich nicht eingerichtet — beide API-Keys
+								sind leer.
+							</span>
+							<code class="loc">src/songmaker_cli/settings.py:185-187 (xai_api_key, openai_api_key)</code>
+						</li>
+						<li>
+							<span class="num">5</span>
+							<span class="claim">
+								Kerndefekt: Der Modell-Katalog verlangt für jeden Provider einen API-Key, auch für
+								Claude — aber der echte Co-Writer-Chat läuft über die gemountete Claude-Code-CLI-Anmeldung
+								ganz ohne Key (kein <code>api_key</code>-Argument im Aufruf). Deshalb zeigte die Seite
+								das tatsächlich laufende, funktionierende Claude als „nicht konfiguriert" mit leerer
+								Modell-Liste — der wahre Auslöser des Nachtrags.
+							</span>
+							<code class="loc">src/songmaker_cli/cowriter/catalog.py:115-118 (Key-Pflicht für Claude) · src/songmaker_cli/cowriter/claude_adapter.py:23-31 (CLI-Aufruf ohne api_key)</code>
+						</li>
+						<li>
+							<span class="num">6</span>
+							<span class="claim">
+								Frontend-Bug: Wechselt man auf einen Provider mit leerem Katalog, wird das alte
+								Modell nicht geleert — der <code>$effect</code> greift nur, wenn die neue Liste nicht
+								leer ist. Der Save-Knopf bleibt dadurch fälschlich aktiv (<code>disabled={'{'}!cowriterModel{'}'}</code>
+								schützt nicht mehr, weil der alte Wert überlebt); nur eine serverseitige Prüfung
+								verhindert den kaputten Schreibvorgang.
+							</span>
+							<code class="loc">frontend/src/routes/settings/users/+page.svelte:282-287 ($effect) · :918 (disabled-Bedingung)</code>
+						</li>
+						<li>
+							<span class="num">7</span>
+							<span class="claim">
+								Zwei Quellen der Wahrheit für „welche Claude-Modelle gibt es": Der Co-Writer holt live
+								von der Anthropic-API, Scoring nutzt eine hartkodierte, veraltete Liste mit
+								Modell-Namen, die es so nicht gibt.
+							</span>
+							<code class="loc">src/songmaker_cli/constants.py:155-159 (MODEL_ALLOWED_CLAUDE)</code>
+						</li>
+					</ol>
+					<p>
+						Die Providerneutralität des Scoring-Judges gibt es im Code heute nicht — der
+						<code>lyrical_coherence</code>-Judge ruft Claude direkt auf
+						(<code>src/songmaker_cli/jobs/scoring.py:95</code>). Der Scoring-Block unten zeigt einen
+						Zielzustand, der voraussetzt, dass der Judge über dieselbe Provider-Abstraktion läuft wie der
+						Co-Writer; das ist Backend-Arbeit, die dieser Entwurf nicht vorwegnimmt.
+					</p>
+				</div>
+			</section>
 
-						<p class="block-title">Provider routes</p>
-						<div class="route-grid">
-							<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>opus</option><option>sonnet</option></select><p class="route-source">CLI reports aliases; no version.</p></div></div>
-							<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>grok-4-1-fast</option></select><p class="route-source">Live API catalog.</p></div></div>
-							<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · model reported by CLI.</p></div></div>
+			<section class="decisions">
+				<h2>Route states — admin Co-Writer settings</h2>
+				<p class="state-note" style="min-height:auto">
+					The selected route is explicit for every provider. API keys are shown only as set or not set;
+					CLI source text may identify its installed version.
+				</p>
+				<div class="states">
+					<div class="state">
+						<div class="state-head"><h3>(a) Both routes ready</h3><span class="tag tag-next">Ready</span></div>
+						<p class="state-note">Every provider can use either route. The chosen route supplies its own model dropdown.</p>
+						<div class="mini-page">
+							<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+							<div class="active-banner ok"><span class="dot"></span><span><b>Active route</b><span class="model">Claude · CLI · opus</span><span class="caption">New turns follow this route immediately.</span></span></div>
+							<p class="block-title">Provider routes</p>
+							<div class="route-grid">
+								<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>opus</option><option>sonnet</option></select><p class="route-source">CLI alias; no version.</p></div></div>
+								<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>grok-4-1-fast</option></select><p class="route-source">Live API catalog.</p></div></div>
+								<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
+							</div>
 						</div>
+					</div>
 
-						<div class="field-row">
-							<span class="field-label">History tail (tokens)</span>
-							<input class="mock" value="24000">
+					<div class="state">
+						<div class="state-head"><h3>(b) Selected route broken</h3><span class="tag tag-now">Turn blocked</span></div>
+						<p class="state-note">The selected Grok API route is broken. The reason is visible and the turn stays blocked; there is no silent CLI fallback.</p>
+						<div class="mini-page">
+							<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+							<div class="blocked-banner"><span>●</span><span><strong>Turn blocked</strong><br>Grok API · broken — rate limit exceeded. Choose a ready route to continue.</span></div>
+							<p class="block-title">Provider routes</p>
+							<div class="route-grid">
+								<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>claude-opus-4-6</option></select></div></div>
+								<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status broken"><span class="dot"></span><span><strong>API · broken</strong><small>Rate limit exceeded</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock" disabled><option>grok-4-1-fast</option></select></div></div>
+								<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
+							</div>
 						</div>
+					</div>
 
-						<div class="btn-row"><button class="mock-save disabled">Save</button><span class="save-reason">Nothing changed.</span></div>
+					<div class="state">
+						<div class="state-head"><h3>(c) No routes set up</h3><span class="tag tag-state">Unavailable</span></div>
+						<p class="state-note">Neither route is configured for any provider. Providers remain visible but unavailable, with no model value invented.</p>
+						<div class="mini-page">
+							<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
+							<div class="blocked-banner"><span>●</span><span><strong>Provider unavailable</strong><br>No ready route is configured. A new turn cannot start.</span></div>
+							<p class="block-title">Provider routes</p>
+							<div class="route-grid">
+								<div class="route-card unavailable"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
+								<div class="route-card unavailable"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
+								<div class="route-card unavailable"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>Codex CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
+							</div>
+						</div>
 					</div>
 				</div>
-			</div>
+			</section>
 
-			<div class="state">
-				<div class="state-head">
-					<h3>What the operator actually hit</h3>
-					<span class="tag tag-now">Root cause, now shown correctly</span>
-				</div>
-				<p class="state-note">
-					Grok and Codex are genuinely unconfigured. Claude is configured (it runs via the CLI
-					login) — the model catalog just can't be fetched without a separate API key. The page no
-					longer confuses "chat works" with "catalog reachable".
+			<section class="decisions">
+				<h2>Scoring — same shape, its own provider<span class="proposed-tag">Proposed — not implemented yet, see #315</span></h2>
+				<p class="state-note" style="min-height:auto">
+					Structurally identical to Co-Writer (Provider → Model), because the judge is a separate task
+					from the co-writer and deserves its own choice — but today the <code>lyrical_coherence</code>
+					judge only ever calls Claude. This block is the target this design points to, not what runs now;
+					landing it is Issue #315.
 				</p>
 
-				<div class="mini-page">
+				<div class="mini-page" style="max-width:460px;">
 					<div>
-						<p class="block-title">Providers</p>
-						<div class="provider-status-list">
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Claude</span>
-									<span class="detail">configured — Claude Code CLI login</span>
-									<span class="subnote">Model catalog unavailable: missing ANTHROPIC_API_KEY (not needed for chat itself)</span>
-								</span>
-							</div>
-							<div class="provider-status-row bad">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Grok</span>
-									<span class="detail">not configured — missing XAI_API_KEY in .env</span>
-								</span>
-							</div>
-							<div class="provider-status-row bad">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Codex</span>
-									<span class="detail">not configured — missing OPENAI_API_KEY in .env</span>
-								</span>
-							</div>
-						</div>
-					</div>
-
-					<div>
-						<p class="card-title">Co-Writer</p>
-						<p class="card-sub">Provider and model that answer your next message.</p>
+						<p class="card-title">Scoring — Text Accuracy Judge</p>
+						<p class="card-sub">Provider and model that judge how closely the sung lyrics match what you wrote.</p>
 
 						<div class="active-banner ok">
 							<span class="dot"></span>
 							<span>
 								<b>Active</b>
-								<span class="model">Claude · claude-sonnet-4-6</span>
-								<span class="caption">Runs via the Claude Code CLI login — independent of the catalog note above.</span>
+								<span class="model">Claude · claude-opus-4-6</span>
+								<span class="caption">Judges every new generation with this model.</span>
 							</span>
 						</div>
 
@@ -865,13 +1605,7 @@
 
 						<div class="field-row">
 							<span class="field-label">Model</span>
-							<select class="mock" disabled><option>claude-sonnet-4-6 (current — live list unavailable)</option></select>
-							<p class="inline-note warn">Live catalog needs ANTHROPIC_API_KEY. The model that's actually running stays selected and usable.</p>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">History tail (tokens)</span>
-							<input class="mock" value="24000">
+							<select class="mock"><option>claude-opus-4-6</option></select>
 						</div>
 
 						<div class="btn-row">
@@ -880,259 +1614,45 @@
 						</div>
 					</div>
 				</div>
-			</div>
 
-			<div class="state">
-				<div class="state-head">
-					<h3>Just changed</h3>
-					<span class="tag tag-state">Unsaved</span>
+				<div class="gone-block" style="max-width:460px;">
+					The old "Chat Model" field is gone, not hidden. It controlled an endpoint nothing calls
+					(finding 2) — there is no honest name for it inside either task block, so it does not
+					reappear here.
 				</div>
-				<p class="state-note">
-					Same fully-configured baseline as "Normal case". Switching provider resets the model
-					field to a real option for the new provider — no stale value survives the switch — and
-					names the effect before Save is pressed.
-				</p>
+			</section>
 
-				<div class="mini-page">
-					<div>
-						<p class="block-title">Providers</p>
-						<div class="provider-status-list">
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Claude</span>
-									<span class="detail">configured — Claude Code CLI login, plus ANTHROPIC_API_KEY</span>
-								</span>
-							</div>
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Grok</span>
-									<span class="detail">configured — XAI_API_KEY set</span>
-								</span>
-							</div>
-							<div class="provider-status-row ok">
-								<span class="dot"></span>
-								<span>
-									<span class="name">Codex</span>
-									<span class="detail">configured — OPENAI_API_KEY set</span>
-								</span>
-							</div>
-						</div>
-					</div>
-
-					<div>
-						<p class="card-title">Co-Writer</p>
-						<p class="card-sub">Provider and model that answer your next message.</p>
-
-						<div class="active-banner ok">
-							<span class="dot"></span>
-							<span>
-								<b>Still active</b>
-								<span class="model">Claude · claude-sonnet-4-6</span>
-								<span class="caption">Until you save, Claude keeps answering.</span>
-							</span>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">Provider</span>
-							<div class="provider-picker">
-								<div class="provider-pill">
-									<span class="name">Claude</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-								<div class="provider-pill selected">
-									<span class="name">Grok <span class="dirty-mark">●</span></span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-								<div class="provider-pill">
-									<span class="name">Codex</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-							</div>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">Model</span>
-							<select class="mock"><option>grok-4-latest</option></select>
-							<p class="inline-note">Reset to a real Grok model on switch — the old Claude value is never kept.</p>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">History tail (tokens)</span>
-							<input class="mock" value="24000">
-						</div>
-
-						<div class="change-banner">
-							<span>↷</span>
-							<span>
-								Saving switches the co-writer from <strong>Claude</strong> to
-								<strong>Grok · grok-4-latest</strong> right away. Earlier messages stay as
-								they are; only the next reply comes from Grok.
-							</span>
-						</div>
-
-						<div class="btn-row">
-							<button class="mock-save">Save</button>
-							<span class="save-reason dirty-mark">Changed, not saved yet.</span>
-						</div>
-					</div>
+			<section class="decisions">
+				<div class="decision">
+					<h3>Was ich nicht klären konnte</h3>
+					<p>
+						Wie „aktiv" in Zukunft wirklich verifiziert werden soll (Live-Probe gegen den Provider bei
+						jedem Laden, oder ein persistierter „zuletzt erfolgreich benutzt"-Zustand): Backend liest
+						heute für Anzeige und tatsächliche Nutzung dieselbe gespeicherte Einstellung
+						(<code>src/songmaker_cli/db/queries/settings.py:229-245</code>) und hat keinen separaten
+						Erfolgs-Zustand. Der Banner oben braucht eine neue, echte Quelle — welche, ist eine
+						Backend-Entscheidung.
+					</p>
+					<p>
+						Ob <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code>
+						exakt so in <code>.env</code> heißen, ist aus den Feldnamen in <code>settings.py</code> und
+						dem pydantic-settings-Standard abgeleitet, nicht aus einer dokumentierten Liste bestätigt —
+						<code>.env.docker.example</code> nennt namentlich nur <code>ANTHROPIC_API_KEY</code>.
+					</p>
+					<p>
+						Der Umbau des <code>lyrical_coherence</code>-Judges auf eine echte Provider-Abstraktion
+						(damit der Scoring-Block unten nicht nur ein Mockup bleibt) ist nicht untersucht — nur
+						belegt, dass er heute Claude-fest ist.
+					</p>
 				</div>
-			</div>
+			</section>
 		</div>
-	</section>
-
-	<hr class="rule">
-
-	<section class="decisions">
-		<h2>Route states — admin Co-Writer settings</h2>
-		<p class="state-note" style="min-height:auto">
-			The selected route is explicit for every provider. API keys are shown only as set or not set;
-			CLI source text may identify its installed version.
-		</p>
-		<div class="states">
-			<div class="state">
-				<div class="state-head"><h3>(a) Both routes ready</h3><span class="tag tag-next">Ready</span></div>
-				<p class="state-note">Every provider can use either route. The chosen route supplies its own model dropdown.</p>
-				<div class="mini-page">
-					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
-					<div class="active-banner ok"><span class="dot"></span><span><b>Active route</b><span class="model">Claude · CLI · opus</span><span class="caption">New turns follow this route immediately.</span></span></div>
-					<p class="block-title">Provider routes</p>
-					<div class="route-grid">
-						<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>opus</option><option>sonnet</option></select><p class="route-source">CLI alias; no version.</p></div></div>
-						<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>grok-4-1-fast</option></select><p class="route-source">Live API catalog.</p></div></div>
-						<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span class="selected">CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
-					</div>
-				</div>
-			</div>
-
-			<div class="state">
-				<div class="state-head"><h3>(b) Selected route broken</h3><span class="tag tag-now">Turn blocked</span></div>
-				<p class="state-note">The selected Grok API route is broken. The reason is visible and the turn stays blocked; there is no silent CLI fallback.</p>
-				<div class="mini-page">
-					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
-					<div class="blocked-banner"><span>●</span><span><strong>Turn blocked</strong><br>Grok API · broken — rate limit exceeded. Choose a ready route to continue.</span></div>
-					<p class="block-title">Provider routes</p>
-					<div class="route-grid">
-						<div class="route-card"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Claude Code login</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock"><option>claude-opus-4-6</option></select></div></div>
-						<div class="route-card"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span class="selected">API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Grok CLI login</small></span></div><div class="route-status broken"><span class="dot"></span><span><strong>API · broken</strong><small>Rate limit exceeded</small></span></div></div><div class="route-model"><span class="field-label">API model</span><select class="mock" disabled><option>grok-4-1-fast</option></select></div></div>
-						<div class="route-card"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status ready"><span class="dot"></span><span><strong>CLI · ready</strong><small>Codex CLI v0.42.0</small></span></div><div class="route-status ready"><span class="dot"></span><span><strong>API · ready</strong><small>key: set</small></span></div></div><div class="route-model"><span class="field-label">CLI model</span><select class="mock"><option>gpt-5-codex</option></select><p class="route-source">CLI v0.42.0 · reported by CLI.</p></div></div>
-					</div>
-				</div>
-			</div>
-
-			<div class="state">
-				<div class="state-head"><h3>(c) No routes set up</h3><span class="tag tag-state">Unavailable</span></div>
-				<p class="state-note">Neither route is configured for any provider. Providers remain visible but unavailable, with no model value invented.</p>
-				<div class="mini-page">
-					<p class="card-title">Co-Writer</p><p class="card-sub">Provider and model for the next message.</p>
-					<div class="blocked-banner"><span>●</span><span><strong>Provider unavailable</strong><br>No ready route is configured. A new turn cannot start.</span></div>
-					<p class="block-title">Provider routes</p>
-					<div class="route-grid">
-						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Claude</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
-						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Grok</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
-						<div class="route-card unavailable"><div class="route-card-head"><span class="name">Codex</span><span class="route-switch"><span>CLI</span><span>API</span></span></div><div class="route-status-list"><div class="route-status not-set-up"><span class="dot"></span><span><strong>CLI · not set up</strong><small>Codex CLI login required</small></span></div><div class="route-status not-set-up"><span class="dot"></span><span><strong>API · not set up</strong><small>key: not set</small></span></div></div><div class="route-model"><span class="field-label">Model</span><select class="mock" disabled><option>No models available</option></select></div></div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<hr class="rule">
-
-	<section class="decisions">
-		<h2>Scoring — same shape, its own provider<span class="proposed-tag">Proposed — not implemented yet, see #315</span></h2>
-		<p class="state-note" style="min-height:auto">
-			Structurally identical to Co-Writer (Provider → Model), because the judge is a separate task
-			from the co-writer and deserves its own choice — but today the <code>lyrical_coherence</code>
-			judge only ever calls Claude. This block is the target this design points to, not what runs now;
-			landing it is Issue #315.
-		</p>
-
-		<div class="mini-page" style="max-width:460px;">
-			<div>
-				<p class="card-title">Scoring — Text Accuracy Judge</p>
-				<p class="card-sub">Provider and model that judge how closely the sung lyrics match what you wrote.</p>
-
-				<div class="active-banner ok">
-					<span class="dot"></span>
-					<span>
-						<b>Active</b>
-						<span class="model">Claude · claude-opus-4-6</span>
-						<span class="caption">Judges every new generation with this model.</span>
-					</span>
-				</div>
-
-				<div class="field-row">
-					<span class="field-label">Provider</span>
-					<div class="provider-picker">
-						<div class="provider-pill selected">
-							<span class="name">Claude</span>
-							<span class="pill-status status-ok">configured</span>
-						</div>
-						<div class="provider-pill disabled">
-							<span class="name">Grok</span>
-							<span class="pill-status status-bad">not configured</span>
-							<span class="pill-reason">Missing XAI_API_KEY</span>
-						</div>
-						<div class="provider-pill disabled">
-							<span class="name">Codex</span>
-							<span class="pill-status status-bad">not configured</span>
-							<span class="pill-reason">Missing OPENAI_API_KEY</span>
-						</div>
-					</div>
-				</div>
-
-				<div class="field-row">
-					<span class="field-label">Model</span>
-					<select class="mock"><option>claude-opus-4-6</option></select>
-				</div>
-
-				<div class="btn-row">
-					<button class="mock-save disabled">Save</button>
-					<span class="save-reason">Nothing changed.</span>
-				</div>
-			</div>
-		</div>
-
-		<div class="gone-block" style="max-width:460px;">
-			The old "Chat Model" field is gone, not hidden. It controlled an endpoint nothing calls
-			(finding 2) — there is no honest name for it inside either task block, so it does not
-			reappear here.
-		</div>
-	</section>
-
-	<hr class="rule">
-
-	<section class="decisions">
-		<div class="decision">
-			<h3>Was ich nicht klären konnte</h3>
-			<p>
-				Wie „aktiv" in Zukunft wirklich verifiziert werden soll (Live-Probe gegen den Provider bei
-				jedem Laden, oder ein persistierter „zuletzt erfolgreich benutzt"-Zustand): Backend liest
-				heute für Anzeige und tatsächliche Nutzung dieselbe gespeicherte Einstellung
-				(<code>src/songmaker_cli/db/queries/settings.py:229-245</code>) und hat keinen separaten
-				Erfolgs-Zustand. Der Banner oben braucht eine neue, echte Quelle — welche, ist eine
-				Backend-Entscheidung.
-			</p>
-			<p>
-				Ob <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code>
-				exakt so in <code>.env</code> heißen, ist aus den Feldnamen in <code>settings.py</code> und
-				dem pydantic-settings-Standard abgeleitet, nicht aus einer dokumentierten Liste bestätigt —
-				<code>.env.docker.example</code> nennt namentlich nur <code>ANTHROPIC_API_KEY</code>.
-			</p>
-			<p>
-				Der Umbau des <code>lyrical_coherence</code>-Judges auf eine echte Provider-Abstraktion
-				(damit der Scoring-Block unten nicht nur ein Mockup bleibt) ist nicht untersucht — nur
-				belegt, dass er heute Claude-fest ist.
-			</p>
-		</div>
-	</section>
+	</details>
 
 	<p class="foot-note">
 		Reines HTML-Mockup, kein Produktcode. Tokens, Schrift und Kartenbau von
-		<code>docs/design/navigation.html</code> (Fassung 4) übernommen. Codeverweise mit Datei:Zeile
-		wurden am 01.09.2026 gegen den damaligen Stand von <code>main</code> geprüft.
+		<code>docs/design/navigation.html</code> übernommen. Die Codeverweise in Fassung 1 wurden am
+		01.09.2026 geprüft und seitdem nicht nachgezogen — sie sind Historie.
 	</p>
 </div>
 </body>
