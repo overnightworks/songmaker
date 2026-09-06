@@ -32,6 +32,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
     BackgroundLoopStatus,
+    CodexImageSandboxRuntimeHealth,
     codex_image_sandbox_runtime_health,
 )
 
@@ -387,6 +388,9 @@ async def health_check(request: Request) -> JSONResponse:
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )
+    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth = (
+        codex_image_sandbox_runtime_health()
+    )
 
     degraded = (
         not db_ok
@@ -428,7 +432,7 @@ async def health_check(request: Request) -> JSONResponse:
         # report_codex_image_sandbox_runtime() call updates, so a later
         # boot report overrides an earlier one. Defaults to "unverified"
         # for the window before the boot report has run at all.
-        "codex_image_sandbox_runtime": codex_image_sandbox_runtime_health(),
+        "codex_image_sandbox_runtime": codex_image_sandbox_runtime,
         "background_loops": _background_loop_response_adapter.dump_python(
             background_loops, mode="json",
         ),
