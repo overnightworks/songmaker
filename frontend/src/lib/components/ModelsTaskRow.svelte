@@ -213,7 +213,12 @@
 	}
 </script>
 
-<div class="tt-row" class:warn={status.shape === 'warn'} class:off={status.shape === 'off'} class:bad={status.shape === 'bad'}>
+<div
+	class="tt-row"
+	class:warn={status.shape === 'warn'}
+	class:off={status.shape === 'off'}
+	class:bad={status.shape === 'bad'}
+>
 	<div class="cell cell-task">{task}</div>
 
 	<div class="cell">

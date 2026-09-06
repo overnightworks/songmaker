@@ -222,11 +222,7 @@ describe('models task row', () => {
 			selection: { provider: 'claude', route: 'cli', model: 'retired-opus' }
 		});
 
-		expect(optionLabels(selectNamed(target, 'model'))).toEqual([
-			'opus',
-			'sonnet',
-			'retired-opus'
-		]);
+		expect(optionLabels(selectNamed(target, 'model'))).toEqual(['opus', 'sonnet', 'retired-opus']);
 	});
 
 	it.each([
@@ -240,7 +236,13 @@ describe('models task row', () => {
 		[
 			'a ready API route',
 			{ provider: 'claude', route: 'api' as ModelsRouteKey, model: 'claude-api' },
-			[provider('claude', 'Claude', NO_LOGIN, { ready: true, reason: null, models: ['claude-api'] })],
+			[
+				provider('claude', 'Claude', NO_LOGIN, {
+					ready: true,
+					reason: null,
+					models: ['claude-api']
+				})
+			],
 			'ok',
 			`✓${MODELS_STATUS_READY_KEY_LABEL}`
 		],
@@ -272,15 +274,12 @@ describe('models task row', () => {
 			'off',
 			`○${MODELS_STATUS_CHECKING_LABEL}`
 		]
-	])(
-		'shows %s as its own status shape',
-		async (_name, selection, providers, shape, text) => {
-			const target = await renderRow({ providers, selection });
+	])('shows %s as its own status shape', async (_name, selection, providers, shape, text) => {
+		const target = await renderRow({ providers, selection });
 
-			expect(statusShape(target)).toBe(shape);
-			expect(statusText(target)).toBe(text);
-		}
-	);
+		expect(statusShape(target)).toBe(shape);
+		expect(statusText(target)).toBe(text);
+	});
 
 	it('saves the row on a model change and confirms it in the row', async () => {
 		const save = vi.fn().mockResolvedValue({ ok: true });
