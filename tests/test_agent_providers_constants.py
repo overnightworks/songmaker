@@ -21,6 +21,9 @@ PROVIDER_SOURCES: Final = (
 
 GO: Final = "Go"
 STAY: Final = "Stay"
+APPLICATION_PACKAGE: Final = "songmaker_cli"
+CONSTANTS_MODULE: Final = "constants"
+APPLICATION_CONSTANTS: Final = f"{APPLICATION_PACKAGE}.{CONSTANTS_MODULE}"
 
 
 def _documented_names(side: str) -> set[str]:
@@ -42,13 +45,26 @@ def _defined_names(module: Path) -> set[str]:
     return names
 
 
-def _names_imported_from_application_constants(source: Path) -> set[str]:
-    return {
-        alias.name
-        for node in ast.walk(ast.parse(source.read_text()))
-        if isinstance(node, ast.ImportFrom) and node.module == "songmaker_cli.constants"
-        for alias in node.names
-    }
+def _application_constants_a_module_can_read(source: Path, forbidden: set[str]) -> set[str]:
+    """What the module could read out of the application's constants.
+
+    A ``from ... import NAME`` is judged name by name, because a provider module
+    may still take a Stay constant. A handle on the module itself hides which
+    constant is read behind an attribute access, so it counts whole.
+    """
+    reads = set()
+    for node in ast.walk(ast.parse(source.read_text())):
+        if isinstance(node, ast.Import):
+            reads |= {alias.name for alias in node.names if alias.name == APPLICATION_CONSTANTS}
+        elif isinstance(node, ast.ImportFrom) and node.module == APPLICATION_CONSTANTS:
+            reads |= {alias.name for alias in node.names} & forbidden
+        elif isinstance(node, ast.ImportFrom) and node.module == APPLICATION_PACKAGE:
+            reads |= {
+                APPLICATION_CONSTANTS
+                for alias in node.names
+                if alias.name == CONSTANTS_MODULE
+            }
+    return reads
 
 
 def _provider_modules() -> list[Path]:
@@ -73,7 +89,8 @@ def test_the_application_owns_every_stay_constant_alone() -> None:
     assert {name for name in stay if hasattr(library_constants, name)} == set()
 
 
-def test_a_go_constant_reads_the_same_from_either_module() -> None:
+def test_every_go_constant_is_still_reachable_through_the_transitional_re_export() -> None:
+    """A6 deletes this test together with the shim it guards."""
     go = _documented_names(GO)
 
     assert {name: getattr(application_constants, name) for name in go} == {
@@ -81,11 +98,11 @@ def test_a_go_constant_reads_the_same_from_either_module() -> None:
     }
 
 
-def test_no_provider_module_takes_a_go_constant_from_the_application() -> None:
+def test_no_provider_module_reaches_the_application_for_a_go_constant() -> None:
     go = _documented_names(GO)
 
     assert {
-        module.name: sorted(_names_imported_from_application_constants(module) & go)
+        module.name: sorted(reads)
         for module in _provider_modules()
-        if _names_imported_from_application_constants(module) & go
+        if (reads := _application_constants_a_module_can_read(module, go))
     } == {}
