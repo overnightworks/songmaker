@@ -50,19 +50,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
 
 
-
-
 def _cache_session(
     request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
 ) -> None:
     session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if not session_cache:
         return
+    max_age = web_auth_config(request).session_max_age_seconds
     try:
         session_cache.store(
             session_id, user.id, user.username, user.role, user.is_active,
-            ip, ua, expires, created_at,
-            web_auth_config(request).session_max_age_seconds,
+            ip, ua, expires, created_at, max_age,
         )
     except Exception:
         log.warning("Redis session cache write failed on login")
