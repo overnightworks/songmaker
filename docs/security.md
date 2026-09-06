@@ -185,17 +185,20 @@ path.
 
 Every request is subject to a global per-IP rate limit, split into three budget
 classes (issue #257) so that one traffic pattern cannot exhaust the budget
-another pattern from the same IP needs. `_classify_path` in
-`middleware/rate_limit.py` is the single place that maps a path to a class;
-every request gets exactly one class, and an unrecognized path falls back to
-the API class — fail closed, not fail open. Each class is a Redis
-sliding-window counter (`RedisRateLimiter`) over its own 60-second window and
-its own key prefix, so exhausting one class's counter never touches another's.
+another pattern from the same IP needs. `RateLimitPolicy.classify`
+(`webauth/policies.py`) is the single place that maps a path to a class, and
+the paths it reads are songmaker's own, built by
+`request_policies.build_rate_limit_policy` and installed on the middleware in
+`server.create_app`; every request gets exactly one class, and an unrecognized
+path falls back to the API class — fail closed, not fail open. Each class is a
+Redis sliding-window counter (`webauth.rate_limit.RedisRateLimiter`) over its
+own 60-second window and its own key prefix, so exhausting one class's counter
+never touches another's.
 
 | Class  | Paths | Default | Why |
 |--------|-------|---------|-----|
 | API    | Everything not matched below (including `/health` and unrecognized paths) | 120/min | Unchanged from the original single budget. `/health` is deliberately **not** exempt: it is the most expensive anonymous endpoint (a DB query plus roughly six Redis round trips for worker/queue state) and the only caller is the browser's 15s poll (~4/min) — exempting it would let an anonymous caller hammer the priciest endpoint for free. |
-| Media  | `/audio/*`; `/api/queue-streams/{id}/audio`; every `/shared/**/audio/*` and `/shared/queue-streams/{id}/audio` route | 600/min | Range-request media playback is normal use, not abuse: a single MP3 played with normal seeking is **estimated** at roughly 40 range requests (order-of-magnitude from typical browser Range-chunking, not measured), and comparing takes can move through several songs a minute (40 × 5 = 200/min in ordinary use). 600 leaves headroom for aggressive seeking while still bounding an IP's disk I/O — not unlimited. All of these paths serve a `FileResponse` (Range-capable) — the public share audio routes carry the same seek/scrub pattern as the owner's own player, just from a stranger listening to a public share, so they get the same class. `_classify_path` matches each share-audio route with a regex anchored on the literal `audio` segment at the position that route defines, so a slug that literally reads `audio` cannot pass as one by shape alone. The metadata routes on the same slug — `/shared/{slug}`, `/shared/song/{slug}`, `/shared/gen/{slug}`, `/shared/playlist/{slug}`, every one of their `/cover` routes (song and album cover are both API, deliberately, not just the album one), and the `/stream` manifest POSTs — are deliberately excluded and stay API: only the byte-serving audio routes are Range-served. |
+| Media  | `/audio/*`; `/api/queue-streams/{id}/audio`; every `/shared/**/audio/*` and `/shared/queue-streams/{id}/audio` route | 600/min | Range-request media playback is normal use, not abuse: a single MP3 played with normal seeking is **estimated** at roughly 40 range requests (order-of-magnitude from typical browser Range-chunking, not measured), and comparing takes can move through several songs a minute (40 × 5 = 200/min in ordinary use). 600 leaves headroom for aggressive seeking while still bounding an IP's disk I/O — not unlimited. All of these paths serve a `FileResponse` (Range-capable) — the public share audio routes carry the same seek/scrub pattern as the owner's own player, just from a stranger listening to a public share, so they get the same class. The policy matches each share-audio route with a regex anchored on the literal `audio` segment at the position that route defines, so a slug that literally reads `audio` cannot pass as one by shape alone. The metadata routes on the same slug — `/shared/{slug}`, `/shared/song/{slug}`, `/shared/gen/{slug}`, `/shared/playlist/{slug}`, every one of their `/cover` routes (song and album cover are both API, deliberately, not just the album one), and the `/stream` manifest POSTs — are deliberately excluded and stay API: only the byte-serving audio routes are Range-served. |
 | Stream | `/api/resource-events/stream`, `/api/jobs/*/stream` | 45/min | SSE connection *opens*, not per-message traffic, sized between the legitimate worst case and the observed storm rate. Legitimate worst case: a normal page load opens one resource-events stream plus one job stream per active job; at the `max_user_active_jobs` default (10) that's 11 opens/load, and 3 page loads within a minute (full queue, operator reloads) is 33. Storm rate: the operator incident's reconnect storm ran at roughly 80 opens/min. It self-terminates, but not via a backoff -- there isn't one yet (that is the still-open #257 frontend slice); `MAX_POLL_ERRORS` (`frontend/src/lib/stores/jobs.ts`) is a plain error counter with no delay that closes the `EventSource` after 10 failures, and a 429 response to an `EventSource` is fatal per spec (no browser auto-reconnect), so the burst is short-lived either way. 45 sits clearly above 33 and clearly below 80 — there is no live dependency on `max_user_active_jobs`; raising that setting should prompt re-checking this math, not a settings cross-reference. The resource-events endpoint additionally enforces its own tighter per-user open limit (`RESOURCE_EVENT_STREAM_OPEN_LIMIT`, see below). |
 
 Before this split, all three traffic patterns shared one 120/min bucket:
@@ -287,6 +290,11 @@ matching the resource-event lease.
 
 ## Security Headers
 
+`SecurityHeadersMiddleware` (`webauth/middleware/security_headers.py`) writes
+them; the CSP line, its inline-script hashes, and which paths may be cached
+come from songmaker's `SecurityHeadersPolicy`
+(`request_policies.build_security_headers_policy`).
+
 All responses include:
 
 - `X-Content-Type-Options: nosniff`
@@ -315,7 +323,7 @@ All responses include:
 
 ## Request Size Limits
 
-Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body.
+Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (`webauth/middleware/body_size.py`, raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
 
 JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
 

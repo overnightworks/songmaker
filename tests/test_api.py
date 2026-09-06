@@ -3781,7 +3781,9 @@ def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
 
 def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from songmaker_cli.api import router
-    from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
+    from songmaker_cli.request_policies import build_body_size_policy
+    from songmaker_cli.settings import get_settings
+    from webauth.middleware import BodySizeLimitMiddleware
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
@@ -3795,7 +3797,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     app = FastAPI()
     install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test", "user")
-    app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
     app.include_router(router)
 
     tc = TestClient(app)

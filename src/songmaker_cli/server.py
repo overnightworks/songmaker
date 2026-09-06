@@ -68,6 +68,12 @@ from songmaker_cli.middleware import (
     SecurityHeadersMiddleware,
     SelectiveGZipMiddleware,
 )
+from songmaker_cli.request_policies import (
+    build_body_size_policy,
+    build_csrf_policy,
+    build_rate_limit_policy,
+    build_security_headers_policy,
+)
 from songmaker_cli.settings import CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
@@ -251,12 +257,16 @@ def create_app(
     #     buffering, exactly as if it were absent (see `middleware/gzip.py`
     #     and `test_server_middleware.py`'s SSE test).
     script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    app.add_middleware(SecurityHeadersMiddleware, script_hashes=script_hashes)
+    settings = get_settings()
+    csrf_policy = build_csrf_policy()
+    app.add_middleware(
+        SecurityHeadersMiddleware, policy=build_security_headers_policy(script_hashes),
+    )
     app.add_middleware(AccessLogMiddleware)
-    app.add_middleware(CsrfTokenMiddleware)
-    app.add_middleware(CsrfOriginMiddleware)
-    app.add_middleware(IpRateLimitMiddleware)
-    app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(CsrfTokenMiddleware, policy=csrf_policy)
+    app.add_middleware(CsrfOriginMiddleware, policy=csrf_policy)
+    app.add_middleware(IpRateLimitMiddleware, policy=build_rate_limit_policy(settings))
+    app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(settings))
 
     app.add_middleware(  # NOSONAR CORS order is security-critical; see block above.
         CORSMiddleware,
