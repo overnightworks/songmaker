@@ -8,6 +8,7 @@ import pytest
 from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import REDIS_SESSION_PREFIX, REDIS_USER_SESSIONS_PREFIX
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.lifecycle import _sync_sessions
@@ -15,7 +16,7 @@ from webauth.config import SessionKeyPrefixes
 from webauth.session_store import SessionCache
 
 _PREFIXES = SessionKeyPrefixes(
-    session="songmaker:session", user_sessions="songmaker:user_sessions",
+    session=REDIS_SESSION_PREFIX, user_sessions=REDIS_USER_SESSIONS_PREFIX,
 )
 
 
