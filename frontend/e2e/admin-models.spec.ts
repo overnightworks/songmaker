@@ -121,6 +121,10 @@ function taskStatus(page: Page, task: string): Locator {
 	return taskRow(page, task).locator('.st');
 }
 
+async function expectSaved(page: Page, task: string): Promise<void> {
+	await expect(taskRow(page, task).getByText(MODELS_SAVED_LABEL)).toBeVisible();
+}
+
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
 	await expect
 		.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
@@ -238,11 +242,19 @@ test('a task keeps the provider it was given, even one no route can run', async 
 	const next = options.find((option) => option !== before);
 	expect(next, 'the Cover row offers more than one provider').toBeTruthy();
 
-	await cover.selectOption(next as string);
-	await expect(taskRow(page, MODELS_TASK_COVER_LABEL).getByText(MODELS_SAVED_LABEL)).toBeVisible();
+	try {
+		await cover.selectOption(next as string);
+		await expectSaved(page, MODELS_TASK_COVER_LABEL);
 
-	await openModelsTab(page);
-	await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(next as string);
+		await openModelsTab(page);
+		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(next as string);
+	} finally {
+		// The selection is instance-wide and outlives the test, so it is put back
+		// through the same control: `album-cover.spec.ts` runs against this stack
+		// afterwards and asks the provider left here to draw.
+		await providerSelect(page, MODELS_TASK_COVER_LABEL).selectOption(before);
+		await expectSaved(page, MODELS_TASK_COVER_LABEL);
+	}
 });
 
 test('a route that is not set up ends the next co-writer turn with its reason', async ({
