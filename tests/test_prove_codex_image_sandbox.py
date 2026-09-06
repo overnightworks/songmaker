@@ -61,11 +61,16 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     assert f'"{proof.EMPTY_CAPABILITY_MASK}"' in assertions
     assert "EMPTY_CAPABILITY_MASK" not in assertions
     assert "1.1.1.1" in assertions
-    assert "/proc/kcore" in assertions
-    assert "/proc/keys" in assertions
-    assert "/proc/sched_debug" in assertions
-    assert "/proc/sysrq-trigger" in assertions
-    assert "/proc/sys/kernel/hostname" in assertions
+    for path in (
+        "/proc/interrupts",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware/acpi/tables/DSDT",
+        "/proc/sys/kernel/shmmax",
+    ):
+        assert path in assertions
+    assert "Permission denied" in assertions
 
 
 def test_bubblewrap_startup_probe_matches_the_traced_codex_preflight_form() -> None:

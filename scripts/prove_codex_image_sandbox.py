@@ -59,18 +59,33 @@ else:
 PY
 """
 _MASKED_PATH_ASSERTIONS = """set -eu
-for path in /proc/kcore /proc/keys /proc/sched_debug; do
-  if cat "$path" >/dev/null 2>&1; then
-    echo "masked path remained readable: $path" >&2
+expect_permission_denied() {
+  description="$1"
+  shift
+
+  if output="$("$@" 2>&1)"; then
+    echo "system-path mask unexpectedly allowed: $description" >&2
     exit 1
   fi
+  case "$output" in
+    *"Permission denied"*) ;;
+    *)
+      echo "system-path mask did not report Permission denied: $description: $output" >&2
+      exit 1
+      ;;
+  esac
+}
+
+for path in \\
+  /proc/interrupts \\
+  /proc/keys \\
+  /proc/latency_stats \\
+  /sys/devices/virtual/powercap \\
+  /sys/firmware/acpi/tables/DSDT; do
+  expect_permission_denied "$path" /bin/cat "$path"
 done
-for path in /proc/sysrq-trigger /proc/sys/kernel/hostname; do
-  if printf x > "$path"; then
-    echo "readonly path remained writable: $path" >&2
-    exit 1
-  fi
-done
+expect_permission_denied /proc/sys/kernel/shmmax \\
+  /bin/sh -c 'printf x > "$1"' sh /proc/sys/kernel/shmmax
 """
 _SANDBOX_ASSERTIONS += _MASKED_PATH_ASSERTIONS
 

@@ -482,9 +482,10 @@ The `/proc/sys` rule intentionally has no `shm*` write exception. Songmaker
 does not write those kernel settings; the process also runs without container
 capabilities and as the unprivileged `songmaker` user, but those are additional
 constraints rather than substitutes for the AppArmor rule. The runtime proof
-checks `/proc/kcore`, `/proc/keys`, and `/proc/sched_debug` for unreadability,
-and `/proc/sysrq-trigger` plus `/proc/sys/kernel/hostname` for unwritability in
-both the web-service parent and the private Bubblewrap child.
+checks that the web-service parent and the private Bubblewrap child both receive
+`Permission denied` when reading `/proc/interrupts`, `/proc/keys`,
+`/proc/latency_stats`, `/sys/devices/virtual/powercap`, and
+`/sys/firmware/acpi/tables/DSDT`, or when writing `/proc/sys/kernel/shmmax`.
 
 An operator loads the AppArmor policy for the current host boot with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
