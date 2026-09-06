@@ -41,6 +41,24 @@ _CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
     "--ro-bind", "/", "/",
     "/bin/true",
 )
+_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
+    "--new-session",
+    "--die-with-parent",
+    "--tmpfs", "/",
+    "--dev", "/dev",
+    "--ro-bind", "/bin", "/bin",
+    "--ro-bind", "/etc", "/etc",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/lib64", "/lib64",
+    "--ro-bind", "/sbin", "/sbin",
+    "--ro-bind", "/usr", "/usr",
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-net",
+    "--proc", "/proc",
+    "--",
+    "/usr/bin/true",
+)
 
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
@@ -117,25 +135,31 @@ def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
     return app.state.background_loop_registry
 
 
+def bubblewrap_startup_probe_command() -> tuple[str, ...]:
+    """Build Codex's traced per-run Bubblewrap startup probe."""
+    return ("bwrap", *_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS)
+
+
 def _codex_image_sandbox_runtime_error() -> str | None:
     bubblewrap = shutil.which("bwrap")
     if bubblewrap is None:
         return "bubblewrap is not installed"
     try:
-        result = subprocess.run(
-            (
-                bubblewrap,
-                *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS,
-            ),
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
+        for command in (
+            (bubblewrap, *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS),
+            (bubblewrap, *bubblewrap_startup_probe_command()[1:]),
+        ):
+            result = subprocess.run(
+                command,
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return "bubblewrap user namespaces are unavailable"
     except (OSError, subprocess.TimeoutExpired):
-        return "bubblewrap user namespaces are unavailable"
-    if result.returncode != 0:
         return "bubblewrap user namespaces are unavailable"
     return None
 
