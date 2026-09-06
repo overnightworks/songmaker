@@ -9,8 +9,8 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from agent_providers.events import StreamEvent
-from songmaker_cli.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,

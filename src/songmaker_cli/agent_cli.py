@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any, Final, Literal, NotRequired, Required, Sequence, TypedDict, Unpack
 
 from agent_providers.config import current_config
-from songmaker_cli.constants import (
+from agent_providers.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
     CLAUDE_CLI_LOGGED_IN_FIELD,
     CLAUDE_CLI_STATUS_ARGS,

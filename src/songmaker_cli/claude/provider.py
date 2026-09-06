@@ -29,6 +29,20 @@ from pathlib import Path
 from typing import Final, Literal
 
 from agent_providers.config import McpServerSpec, current_config
+from agent_providers.constants import (
+    CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
+    CLAUDE_CLI_MAX_CONCURRENT_PROCESSES,
+    CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
+    CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
+    CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+    CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
+    CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
+    CLI_OUTPUT_READ_LIMIT_BYTES,
+    COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
+    COWRITER_MODELS_TIMEOUT_SECONDS,
+    JUDGE_FAILURE_TIMEOUT,
+)
 from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,  # noqa: F401 — re-exported here until the provider moves (#825, A6)
@@ -43,20 +57,6 @@ from songmaker_cli.agent_cli import (
     claude_cli_login,
     clear_claude_cli_login_cache,
     scrubbed_env,
-)
-from songmaker_cli.constants import (
-    CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
-    CLAUDE_CLI_MAX_CONCURRENT_PROCESSES,
-    CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
-    CLAUDE_CLI_SIGTERM_GRACE_SECONDS,
-    CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS,
-    CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
-    CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS,
-    CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS,
-    CLI_OUTPUT_READ_LIMIT_BYTES,
-    COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
-    COWRITER_MODELS_TIMEOUT_SECONDS,
-    JUDGE_FAILURE_TIMEOUT,
 )
 
 log = logging.getLogger(__name__)

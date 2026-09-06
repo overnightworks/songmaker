@@ -21,6 +21,7 @@ from typing import Final
 from PIL import Image, ImageOps
 
 from agent_providers.config import current_config
+from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from songmaker_cli.agent_cli import (
     CliLineChannel,
     CliRunOutcome,
@@ -35,7 +36,6 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.constants import (
     COVER_MAX_PIXELS,
     COVER_PNG_MAGIC,
-    COWRITER_CLI_TIMEOUT_SECONDS,
 )
 from songmaker_cli.cowriter.codex_process_pool import (
     CodexProcessKind,
