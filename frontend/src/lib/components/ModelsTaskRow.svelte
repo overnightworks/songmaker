@@ -222,7 +222,7 @@
 	<div class="cell cell-task">{task}</div>
 
 	<div class="cell">
-		<span class="k">{MODELS_COLUMN_PROVIDER_LABEL}</span>
+		<span class="k" aria-hidden="true">{MODELS_COLUMN_PROVIDER_LABEL}</span>
 		<select
 			class="sel"
 			aria-label={`${task} ${MODELS_COLUMN_PROVIDER_LABEL.toLowerCase()}`}
@@ -236,7 +236,7 @@
 	</div>
 
 	<div class="cell">
-		<span class="k">{MODELS_COLUMN_ROUTE_LABEL}</span>
+		<span class="k" aria-hidden="true">{MODELS_COLUMN_ROUTE_LABEL}</span>
 		<div class="rsw" role="group" aria-label={`${task} ${MODELS_COLUMN_ROUTE_LABEL.toLowerCase()}`}>
 			{#each ROUTE_ORDER as route (route)}
 				{@const view = providerView?.routes[route]}
@@ -258,7 +258,7 @@
 	</div>
 
 	<div class="cell">
-		<span class="k">{MODELS_COLUMN_MODEL_LABEL}</span>
+		<span class="k" aria-hidden="true">{MODELS_COLUMN_MODEL_LABEL}</span>
 		<select
 			class="sel"
 			class:off={modelOptions.length === 0}
@@ -281,7 +281,7 @@
 	</div>
 
 	<div class="cell">
-		<span class="k">{MODELS_COLUMN_STATUS_LABEL}</span>
+		<span class="k" aria-hidden="true">{MODELS_COLUMN_STATUS_LABEL}</span>
 		<span class="st {status.shape}"><span class="mark">{status.mark}</span>{status.text}</span>
 		{#if saved}
 			<span class="saved">✓ {MODELS_SAVED_LABEL}</span>

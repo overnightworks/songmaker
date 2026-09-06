@@ -77,9 +77,9 @@
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
 		MODELS_COLUMN_TASK_LABEL,
-		MODELS_DESCRIPTION,
 		MODELS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
+		MODELS_RETRY_LABEL,
 		MODELS_LOADING_LABEL,
 		MODELS_SAVED_LABEL,
 		MODELS_SAVE_FAILED_FALLBACK,
@@ -187,6 +187,7 @@
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
 	let cowriterBudgetSaved = $state(false);
+	let cowriterBudgetFailure = $state<string | null>(null);
 	let coverSettings = $state<CoverSettingsResponse | null>(null);
 	let judgeSettings = $state<JudgeSettings | null>(null);
 
@@ -461,7 +462,6 @@
 		reason: SafeRouteReason | null,
 		models?: string[]
 	): ModelsTaskRoute {
-		const catalogue = catalogueOf(provider, route);
 		if (providerStatusFailure) {
 			return {
 				ready: false,
@@ -470,6 +470,7 @@
 				modelsReason: providerStatusError
 			};
 		}
+		const catalogue = catalogueOf(provider, route);
 		return {
 			ready,
 			reason,
@@ -613,13 +614,14 @@
 
 	async function saveCowriterBudget(budget: number): Promise<void> {
 		cowriterBudgetSaved = false;
+		cowriterBudgetFailure = null;
 		cowriterBudget = budget;
 		const outcome = await saveCowriter(cowriterSelection);
 		if (outcome.ok) {
 			cowriterBudgetSaved = true;
 			return;
 		}
-		error = outcome.reason;
+		cowriterBudgetFailure = outcome.reason;
 	}
 
 	async function handleCreate() {
@@ -1220,7 +1222,6 @@
 		{#if tab === 'models'}
 			<section>
 				<h2>{MODELS_HEADING}</h2>
-				<p class="hint">{MODELS_DESCRIPTION}</p>
 				<div class="tt">
 					<div class="tt-head">
 						<span>{MODELS_COLUMN_TASK_LABEL}</span>
@@ -1235,7 +1236,7 @@
 							providers={cowriterProviders}
 							selection={cowriterSelection}
 							save={saveCowriter}
-							{advanced}
+							advanced={cowriterAdvanced}
 						/>
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
@@ -1289,7 +1290,7 @@
 	</div>
 {/if}
 
-{#snippet advanced()}
+{#snippet cowriterAdvanced()}
 	<label class="field-label" for="cowriter-budget">{MODELS_HISTORY_TAIL_LABEL}</label>
 	<input
 		id="cowriter-budget"
@@ -1301,6 +1302,12 @@
 	/>
 	{#if cowriterBudgetSaved}
 		<span class="saved">✓ {MODELS_SAVED_LABEL}</span>
+	{/if}
+	{#if cowriterBudgetFailure !== null}
+		<span class="budget-error" role="alert">{cowriterBudgetFailure}</span>
+		<button type="button" class="retry" onclick={() => saveCowriterBudget(cowriterBudget)}
+			>{MODELS_RETRY_LABEL}</button
+		>
 	{/if}
 {/snippet}
 
@@ -1336,6 +1343,24 @@
 		font-size: 0.72rem;
 		font-weight: 600;
 		color: var(--score-good);
+	}
+
+	.budget-error {
+		font-size: 0.76rem;
+		color: var(--score-bad);
+	}
+
+	.retry {
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		font-size: 0.72rem;
+		font-weight: 600;
+		padding: 0.18rem 0.7rem;
+		border: 1px solid var(--score-bad);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--score-bad);
+		cursor: pointer;
 	}
 
 	@media (max-width: 700px) {

@@ -246,8 +246,6 @@ export const MODELS_ROUTE_LOGGED_IN_PHRASE = 'logged in';
 export const MODELS_ROUTE_NOT_LOGGED_IN_PHRASE = 'not logged in';
 export const MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE = 'no image tool';
 export const MODELS_SAVE_FAILED_FALLBACK = 'The server rejected the change.';
-export const MODELS_DESCRIPTION =
-	'Who does what, and whether it runs. Each task saves on its own the moment you change it.';
 
 export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL =
 	'Key is set, but answering needs the Claude Code CLI login';
