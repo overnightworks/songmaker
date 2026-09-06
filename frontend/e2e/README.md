@@ -1,6 +1,6 @@
 # End-to-end flows
 
-Playwright drives the real stack — `docker-compose.ci.yml` (Postgres, Redis,
+Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, Redis,
 migrations, web) — through the click paths an operator walks by hand. Unit
 tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
@@ -135,13 +135,13 @@ workflow's own `/health`/login smoke test before Playwright even starts,
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
 the same window. What the rate limiter actually counts is measured the same
-way `docker-compose.ci.yml`'s own `IP_RATE_LIMIT` comment measures it: from
+way `docker/docker-compose.ci.yml`'s own `IP_RATE_LIMIT` comment measures it: from
 `docker compose logs songmaker-web`'s access log, filtered to the runner's
 one IP and to the API class. One full local run of the whole suite (the CI
 workflow's smoke-test curls plus both Playwright projects) measured 288 such
 requests, finishing in about 35 seconds — so the 60-second window's peak is
 that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "600"`
-override (`docker-compose.ci.yml`), which carries roughly 2x headroom over
+override (`docker/docker-compose.ci.yml`), which carries roughly 2x headroom over
 that measurement, including room for one CI retry landing inside the same
 window. Re-running the suite repeatedly against the same stack inside that
 window is cumulative, not reset per run — see "Running it locally" below. If
@@ -218,14 +218,14 @@ export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
 export ADMIN_USERNAME=e2e-ci-admin ADMIN_PASSWORD='E2eCiSmoke#2026!'
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
-docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web
 
 cd frontend
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e --project=mobile
 
-cd .. && docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml down -v
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit

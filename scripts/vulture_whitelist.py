@@ -1,6 +1,6 @@
 """Vulture whitelist — suppress false positives for intentionally unused code.
 
-Usage: vulture src/ vulture_whitelist.py
+Usage: vulture src/ scripts/vulture_whitelist.py
 """
 
 from songmaker_cli.parser import SongMeta  # noqa: F401

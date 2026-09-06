@@ -42,7 +42,7 @@ RUN uv sync --frozen --no-dev --extra server --extra mcp --extra claude
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
