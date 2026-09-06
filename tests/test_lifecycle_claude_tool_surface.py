@@ -6,6 +6,8 @@ import asyncio
 import subprocess
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from songmaker_cli.claude.provider import CliToolSurfaceError, UnavailableError
 from songmaker_cli.lifecycle import (
     report_claude_cli_tool_surface,
@@ -132,3 +134,21 @@ def test_boot_requires_the_per_run_codex_startup_probe(caplog) -> None:
         status = report_codex_image_sandbox_runtime()
 
     assert status == "not_set_up"
+
+
+@pytest.mark.parametrize(
+    "probe_error",
+    [OSError("bwrap not executable"), subprocess.TimeoutExpired(cmd="bwrap", timeout=5)],
+    ids=["oserror", "timeout"],
+)
+def test_boot_marks_the_codex_cover_path_not_set_up_when_the_probe_raises(
+    caplog, probe_error: Exception,
+) -> None:
+    caplog.set_level("INFO")
+    with patch("songmaker_cli.lifecycle.shutil.which", return_value="/usr/bin/bwrap"), patch(
+        "songmaker_cli.lifecycle.subprocess.run", side_effect=probe_error,
+    ):
+        status = report_codex_image_sandbox_runtime()
+
+    assert status == "not_set_up"
+    assert "bubblewrap user namespaces are unavailable" in caplog.text
