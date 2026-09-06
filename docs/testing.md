@@ -309,9 +309,11 @@ tests/acestep_worker/
 tests/webauth/                     The auth library on its own, against fake ports — no
 ├── webauth_arrangement.py         SQLAlchemy and no songmaker imports, so these travel
 ├── test_web_auth_config.py        with the package when it becomes its own distribution
-├── test_cookies.py                (a named arrangement module rather than a conftest:
-├── test_dependencies.py           pytest puts every test directory on sys.path, where a
-├── test_passwords.py              second conftest would shadow the repository one)
+├── test_cached_authentication.py  (a named arrangement module rather than a conftest:
+├── test_cookies.py                pytest puts every test directory on sys.path, where a
+├── test_dependencies.py           second conftest would shadow the repository one). The
+├── test_login.py                  cache branch is driven through a fakeredis-backed
+├── test_passwords.py              SessionCache installed on a bare application.
 ├── test_policies.py
 ├── test_proxies.py
 ├── test_redis_rate_limiter.py
