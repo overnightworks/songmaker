@@ -8,6 +8,7 @@ root_packages =
     agent_providers
     audio_engine
     songmaker_cli
+    webauth
 
 [importlinter:contract:independent-packages]
 name = Independent packages do not import the application
@@ -17,5 +18,22 @@ source_modules =
     acestep_worker
     agent_providers
     audio_engine
+    webauth
 forbidden_modules =
     songmaker_cli
+
+[importlinter:contract:webauth-does-not-import-agent-providers]
+name = webauth does not import agent_providers
+type = forbidden
+source_modules =
+    webauth
+forbidden_modules =
+    agent_providers
+
+[importlinter:contract:agent-providers-does-not-import-webauth]
+name = agent_providers does not import webauth
+type = forbidden
+source_modules =
+    agent_providers
+forbidden_modules =
+    webauth
