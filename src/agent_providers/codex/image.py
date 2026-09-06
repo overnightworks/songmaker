@@ -77,35 +77,28 @@ class CodexImageError(Exception):
     """A redacted failure while producing an album-cover suggestion."""
 
 
-
 class CodexImageLoginError(CodexImageError):
     """The isolated Codex CLI home has no usable login mirror."""
-
 
 
 class ImageToolBlockedError(CodexImageError):
     """The CLI reported a tool other than the sole permitted image tool."""
 
 
-
 class CodexImageArtifactError(CodexImageError):
     """The isolated run did not leave one usable PNG artifact."""
-
 
 
 class CodexImageNotCreatedError(CodexImageError):
     """The completed Codex turn did not create an image artifact."""
 
 
-
 class CodexImageTimeoutError(CodexImageError):
     """The bounded CLI call exceeded its image-generation deadline."""
 
 
-
 class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
-
 
 
 class CodexImageQuotaError(CodexImageError):
@@ -435,7 +428,6 @@ def _normalize_generated_png(source: Path, policy: ImagePolicy) -> bytes:
         raise
     except (OSError, ValueError) as exc:
         raise CodexImageArtifactError() from exc
-
 
 
 def _require_pillow():

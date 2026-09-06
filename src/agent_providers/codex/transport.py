@@ -102,8 +102,6 @@ _CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX: Final = (
 log = logging.getLogger(__name__)
 
 
-
-
 @dataclass
 class _CodexToolRoundState:
     """Protocol state accumulated while receiving one Codex CLI round."""
@@ -111,7 +109,6 @@ class _CodexToolRoundState:
     saw_success: bool = False
     error_message: str | None = None
     received_thread_id: str | None = None
-
 
 
 class CodexCliToolTransport:
@@ -255,21 +252,6 @@ class CodexCliToolTransport:
             return
         self._closed = True
         await asyncio.to_thread(self._turn_directory.cleanup)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _build_codex_tool_command(
@@ -516,20 +498,14 @@ def _completed_agent_message(event: dict[str, object]) -> str:
     return text
 
 
-
-
 def _is_code_mode_host_disabled_isolation_notice(message: str) -> bool:
     """Recognize the one Codex notice caused by this adapter's isolation."""
     return message.startswith(_CODE_MODE_HOST_DISABLED_ISOLATION_NOTICE_PREFIX)
 
 
-
-
 def _completed_turn(event: dict[str, object]) -> None:
     if not isinstance(event.get("usage"), dict):
         raise CodexCliStreamFailure("codex_cli_stream_protocol_error")
-
-
 
 
 def _raise_for_codex_outcome(
