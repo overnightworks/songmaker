@@ -10,8 +10,7 @@ from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
-from songmaker_cli.middleware import SelectiveGZipMiddleware
-from songmaker_cli.middleware.gzip import _accepts_gzip
+from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
 
 _LARGE_JSON_PAYLOAD = {"lyrics": "la " * 1000}
 _TINY_JSON_PAYLOAD = {"status": "ok"}

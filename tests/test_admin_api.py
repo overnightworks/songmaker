@@ -9,10 +9,10 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.auth import hash_password
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
 from songmaker_cli.db.queries import create_user, create_user_lora
-from songmaker_cli.middleware import SESSION_COOKIE
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.passwords import hash_password
 
 
 @pytest.fixture
@@ -374,7 +374,7 @@ def test_force_logout(client: TestClient) -> None:
 
     other_client = TestClient(client.app, cookies={})
     other_client.post("/api/auth/login", json={"username": "victim", "password": "t3stP@ssw0rd"})
-    victim_cookie = other_client.cookies.get(SESSION_COOKIE)
+    victim_cookie = other_client.cookies.get(DEFAULT_SESSION_COOKIE_NAME)
 
     sessions_resp = client.get("/api/admin/sessions")
     victim_sessions = [
@@ -386,7 +386,7 @@ def test_force_logout(client: TestClient) -> None:
     resp = client.delete(f"/api/admin/sessions/{session_hash}")
     assert resp.status_code == 200
 
-    other_client.cookies.set(SESSION_COOKIE, victim_cookie)
+    other_client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, victim_cookie)
     resp = other_client.get("/api/auth/me")
     assert resp.status_code == 401
 

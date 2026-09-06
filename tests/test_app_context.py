@@ -13,13 +13,13 @@ from songmaker_cli.app_context import (
     build_web_auth_config,
     parse_trusted_proxies,
 )
-from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import (
     REDIS_RL_IP_MEDIA_PREFIX,
     REDIS_RL_IP_PREFIX,
     REDIS_RL_IP_STREAM_PREFIX,
     REDIS_SESSION_PREFIX,
     REDIS_USER_SESSIONS_PREFIX,
+    ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.settings import get_settings
@@ -32,7 +32,7 @@ def ctx(tmp_path: Path) -> AppContext:
         db=init_test_db(tmp_path / "songmaker.db"),
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
         trusted_proxies=TrustedProxies.parse("172.16.0.0/12"),
         allowed_hosts_exact=frozenset({"songmaker.example"}),

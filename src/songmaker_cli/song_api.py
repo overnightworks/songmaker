@@ -38,6 +38,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
     COVER_NOT_FOUND,
@@ -75,11 +76,11 @@ from songmaker_cli.db.queries import (
     update_song,
 )
 from songmaker_cli.db.queries.playlists import best_playable_generation
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
     resolve_owned_reference_audio,
 )
+from webauth.dependencies import AuthenticatedUser
 
 
 def _require_owned_reference_audio(

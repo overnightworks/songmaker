@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     TURN_BLOCK_ALBUM_NOTES,
     TURN_BLOCK_CURRENT_SONG,
@@ -28,7 +29,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 
 def _fake_user(user_id: str, role: str = "user"):
@@ -85,7 +86,7 @@ def client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -107,7 +108,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

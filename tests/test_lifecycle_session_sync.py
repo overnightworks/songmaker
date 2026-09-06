@@ -36,7 +36,7 @@ def ctx(tmp_path):
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 

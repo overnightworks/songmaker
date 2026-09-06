@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import slugify
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import hash_password
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_JPEG_MAGIC,
     COVER_MAX_BYTES,
@@ -63,7 +63,8 @@ from songmaker_cli.db.queries import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -150,7 +151,7 @@ def client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=audio_dir,
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

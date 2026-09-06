@@ -12,13 +12,14 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.auth import TrustedProxies, hash_password
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.request_policies import build_rate_limit_policy
 from songmaker_cli.settings import get_settings
 from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.passwords import hash_password
 from webauth.policies import RateLimitClass
+from webauth.proxies import TrustedProxies
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"

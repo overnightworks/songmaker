@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     JUDGE_DEFAULT_PROVIDER,
@@ -46,7 +47,6 @@ from songmaker_cli.db.queries.settings import (
     set_judge_settings,
 )
 from songmaker_cli.jobs.scoring import run_scoring_job
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     ScorerOutcome,
@@ -54,6 +54,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from webauth.dependencies import AuthenticatedUser
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],
@@ -167,7 +168,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

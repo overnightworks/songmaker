@@ -56,7 +56,7 @@ from songmaker_cli.mcp_server.schemas import (
     VersionSummary,
     WriteResult,
 )
-from songmaker_cli.middleware.auth import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 MAX_SEARCH_RESULTS = 50
 

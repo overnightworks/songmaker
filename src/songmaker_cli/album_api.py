@@ -36,6 +36,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.api_models.songs import UnplayableSongSummary
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     COVER_MAX_BYTES,
@@ -91,8 +92,8 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

@@ -31,12 +31,13 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.auth import ROLE_ADMIN
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
     COVER_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
+    ROLE_ADMIN,
     AuditAction,
     ResourceType,
 )
@@ -67,8 +68,8 @@ from songmaker_cli.db.queries import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import resolve_audio_path
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

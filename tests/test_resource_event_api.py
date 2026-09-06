@@ -21,7 +21,6 @@ from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
 )
-from songmaker_cli.auth import sign_session_id
 from songmaker_cli.constants import (
     LAST_EVENT_ID_INVALID,
     POSTGRES_BIGINT_MAX,
@@ -39,9 +38,10 @@ from songmaker_cli.db.queries import (
     create_user,
     list_resource_events_after,
 )
-from songmaker_cli.middleware import SESSION_COOKIE, ResourceStreamDeadlineMiddleware
+from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 
 def _seed_stream_users(session) -> None:
@@ -70,7 +70,7 @@ def _authenticated_clients(tmp_path: Path):
                 )
             )
             client.cookies.set(
-                SESSION_COOKIE,
+                DEFAULT_SESSION_COOKIE_NAME,
                 sign_session_id(user_session.id, TEST_SECRET),
             )
             clients[username] = client
