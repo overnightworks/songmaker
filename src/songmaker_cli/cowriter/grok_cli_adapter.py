@@ -31,13 +31,7 @@ from agent_providers.process import (
     run_cli_bounded,
     scrubbed_env,
 )
-from songmaker_cli.constants import GROK_CLI_PROMPT_FILE_PLACEHOLDER
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
-from songmaker_cli.cowriter.tool_loop import (
+from agent_providers.tool_loop import (
     FinalText,
     InitialTurn,
     TextDelta,
@@ -45,6 +39,12 @@ from songmaker_cli.cowriter.tool_loop import (
     ToolCallBatch,
     ToolResultBatch,
     TransportResponse,
+)
+from songmaker_cli.constants import GROK_CLI_PROMPT_FILE_PLACEHOLDER
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
 )
 
 _AUTH_FAILURE_MARKERS: Final = ("401", "oidc", "unauthenticated")
@@ -101,10 +101,11 @@ class GrokCliToolTransport:
         # The canonical text-tool catalogue imports the optional MCP package.
         # Keep it on this tool-using path so tool-free workers can import this
         # adapter without that optional dependency.
-        from songmaker_cli.cowriter.text_tool_protocol import (
+        from agent_providers.text_tool_protocol import (
             TextToolProtocolError,
             TextToolStreamParser,
         )
+        from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
         try:
             prompt = _tool_transport_prompt(message)
@@ -135,7 +136,7 @@ class GrokCliToolTransport:
             extra_env=_grok_cli_env(),
             unset_env=("GROK_HOME",),
         ))
-        parser = TextToolStreamParser()
+        parser = TextToolStreamParser(COWRITER_TOOL_CATALOG)
         state = _GrokToolRoundState()
         started_at = time.monotonic()
         try:
@@ -194,10 +195,11 @@ class GrokCliToolTransport:
 
 
 def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         TextToolProtocolError,
         render_tool_result,
     )
+    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
     if isinstance(message, InitialTurn):
         return stdin_prompt(
@@ -211,7 +213,7 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
         value = json.loads(result.content)
     except json.JSONDecodeError:
         value = result.content
-    return render_tool_result(value).encode()
+    return render_tool_result(COWRITER_TOOL_CATALOG, value).encode()
 
 
 def _consume_grok_tool_event(
@@ -253,10 +255,10 @@ def _finish_grok_tool_round(
     started_at: float,
 ) -> tuple[TransportResponse, str]:
     """Validate one completed Grok round and produce its terminal response."""
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         FinalText as ParsedFinalText,
     )
-    from songmaker_cli.cowriter.text_tool_protocol import (
+    from agent_providers.text_tool_protocol import (
         TextToolCall,
     )
 

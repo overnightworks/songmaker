@@ -3,6 +3,13 @@
 Transports own their provider wire format.  This module owns the single
 conversation rule shared by every tool-capable route: one initial turn,
 at most eight tool rounds, then one final-text chance.
+
+The host supplies the two things this loop cannot know: the ``ToolExecutor``
+that actually runs a tool, and the sentence a caller sees when that executor
+fails — one owner for that text, in the host's error vocabulary.
+
+Self-contained by design: no application import, so the package can be
+released on its own (issue #825).
 """
 
 from __future__ import annotations
@@ -20,9 +27,10 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from songmaker_cli.constants import COWRITER_MAX_TOOL_ROUNDS
 
 log = logging.getLogger(__name__)
+
+COWRITER_MAX_TOOL_ROUNDS = 8
 
 
 @dataclass(frozen=True)
@@ -47,6 +55,18 @@ class ToolCallBatch:
     """All tool calls returned by one provider response, in source order."""
 
     calls: tuple[ToolCall, ...]
+
+
+@dataclass(frozen=True)
+class TurnOutcome:
+    """What a ``ToolExecutor`` returns for one requested invocation.
+
+    The executor never learns which call it answers, so the loop — not the
+    host — pairs this outcome with its ``tool_use_id`` into a ``ToolResult``.
+    """
+
+    content: str
+    is_error: bool
 
 
 @dataclass(frozen=True)
@@ -80,7 +100,7 @@ class FinalText:
 
 
 TransportResponse = TextDelta | ToolCallBatch | FinalText
-ToolExecutor = Callable[[str, dict[str, Any]], tuple[str, bool]]
+ToolExecutor = Callable[[str, dict[str, Any]], TurnOutcome]
 
 
 class ToolTransport(Protocol):
@@ -92,6 +112,18 @@ class ToolTransport(Protocol):
     ) -> AsyncIterator[TransportResponse]: ...
 
     def aclose(self) -> Awaitable[None]: ...
+
+
+@dataclass(frozen=True)
+class _ToolRound:
+    """Everything one round of tool execution needs beyond the calls themselves."""
+
+    executor: ToolExecutor
+    provider: str
+    route: str
+    round_index: int
+    tool_failure_message: str
+    correlation_id: str | None
 
 
 class ToolLoopError(Exception):
@@ -114,12 +146,19 @@ async def stream_tool_loop(
     messages: list[dict[str, str]],
     transport: ToolTransport,
     executor: ToolExecutor,
+    tool_failure_message: str,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one turn while executing provider-normalized tool batches.
 
     A transport sees the initial turn first.  Every subsequent request gets
     one complete ``ToolResultBatch`` so providers with native multi-call
     responses never lose their ordering or split a round into separate turns.
+
+    ``tool_failure_message`` is what an executor crash reports back to the
+    model and the user; the host owns that sentence.  ``correlation_id``
+    stamps every event this turn emits, for the host's own logs — it is
+    excluded from serialization and never reaches a wire payload.
     """
     next_message: InitialTurn | ToolResultBatch = InitialTurn(system, messages)
     text_chunks: list[str] = []
@@ -127,23 +166,29 @@ async def stream_tool_loop(
     try:
         while True:
             terminal: ToolCallBatch | FinalText | None = None
-            async for response in _stream_response_events(transport, next_message, text_chunks):
+            async for response in _stream_response_events(
+                transport, next_message, text_chunks, correlation_id,
+            ):
                 if isinstance(response, AssistantTextEvent):
                     yield response
                 else:
                     terminal = response
             if isinstance(terminal, FinalText):
-                async for event in _final_events(terminal, text_chunks):
+                async for event in _final_events(terminal, text_chunks, correlation_id):
                     yield event
                 return
             round_index = _next_round_index(round_index)
             results: list[ToolResult] = []
             async for event in _stream_tool_results(
                 terminal.calls,
-                executor,
-                provider,
-                route,
-                round_index,
+                _ToolRound(
+                    executor=executor,
+                    provider=provider,
+                    route=route,
+                    round_index=round_index,
+                    tool_failure_message=tool_failure_message,
+                    correlation_id=correlation_id,
+                ),
                 results,
             ):
                 yield event
@@ -156,19 +201,23 @@ async def _stream_response_events(
     transport: ToolTransport,
     message: InitialTurn | ToolResultBatch,
     text_chunks: list[str],
+    correlation_id: str | None,
 ) -> AsyncIterator[AssistantTextEvent | ToolCallBatch | FinalText]:
-    async for response in _stream_transport_response(transport, message, text_chunks):
+    async for response in _stream_transport_response(
+        transport, message, text_chunks, correlation_id,
+    ):
         yield response
 
 
 async def _final_events(
     terminal: FinalText,
     text_chunks: list[str],
+    correlation_id: str | None,
 ) -> AsyncIterator[AssistantTextEvent | FinalEvent]:
     if terminal.text:
         text_chunks.append(terminal.text)
-        yield AssistantTextEvent(text=terminal.text)
-    yield FinalEvent(text="".join(text_chunks).strip())
+        yield AssistantTextEvent(text=terminal.text, correlation_id=correlation_id)
+    yield FinalEvent(text="".join(text_chunks).strip(), correlation_id=correlation_id)
 
 
 def _next_round_index(round_index: int) -> int:
@@ -181,11 +230,14 @@ async def _stream_transport_response(
     transport: ToolTransport,
     message: InitialTurn | ToolResultBatch,
     text_chunks: list[str],
+    correlation_id: str | None,
 ) -> AsyncIterator[AssistantTextEvent | ToolCallBatch | FinalText]:
     terminal: ToolCallBatch | FinalText | None = None
     async for response in transport.stream(message):
         if isinstance(response, TextDelta):
-            async for event in _text_delta_events(response, text_chunks, terminal):
+            async for event in _text_delta_events(
+                response, text_chunks, terminal, correlation_id,
+            ):
                 yield event
             continue
         _validate_terminal_response(response, terminal)
@@ -199,12 +251,13 @@ async def _text_delta_events(
     response: TextDelta,
     text_chunks: list[str],
     terminal: ToolCallBatch | FinalText | None,
+    correlation_id: str | None,
 ) -> AsyncIterator[AssistantTextEvent]:
     if terminal is not None:
         raise ToolLoopProtocolError()
     if response.text:
         text_chunks.append(response.text)
-        yield AssistantTextEvent(text=response.text)
+        yield AssistantTextEvent(text=response.text, correlation_id=correlation_id)
 
 
 def _validate_terminal_response(
@@ -219,10 +272,7 @@ def _validate_terminal_response(
 
 async def _stream_tool_results(
     calls: tuple[ToolCall, ...],
-    executor: ToolExecutor,
-    provider: str,
-    route: str,
-    round_index: int,
+    tool_round: _ToolRound,
     results: list[ToolResult],
 ) -> AsyncIterator[ToolCallEvent | ToolResultEvent]:
     for call in calls:
@@ -230,38 +280,35 @@ async def _stream_tool_results(
             tool_use_id=call.tool_use_id,
             name=call.name,
             input=call.arguments,
+            correlation_id=tool_round.correlation_id,
         )
-        result, is_error = _execute_tool(executor, provider, route, round_index, call)
+        outcome = _execute_tool(tool_round, call)
         yield ToolResultEvent(
             tool_use_id=call.tool_use_id,
-            content=result,
-            is_error=is_error,
+            content=outcome.content,
+            is_error=outcome.is_error,
+            correlation_id=tool_round.correlation_id,
         )
-        results.append(ToolResult(call.tool_use_id, result, is_error))
+        results.append(ToolResult(call.tool_use_id, outcome.content, outcome.is_error))
 
 
-def _execute_tool(
-    executor: ToolExecutor,
-    provider: str,
-    route: str,
-    round_index: int,
-    call: ToolCall,
-) -> tuple[str, bool]:
+def _execute_tool(tool_round: _ToolRound, call: ToolCall) -> TurnOutcome:
     started_at = time.monotonic()
     try:
-        result, is_error = executor(call.name, call.arguments)
+        outcome = tool_round.executor(call.name, call.arguments)
     except Exception:
-        result, is_error = "Co-Writer tool failed.", True
+        outcome = TurnOutcome(tool_round.tool_failure_message, True)
     duration_ms = round((time.monotonic() - started_at) * 1000)
     log.info(
         "Co-writer tool provider=%s route=%s round=%s call_id=%s "
-        "duration_ms=%s tool=%s is_error=%s",
-        provider,
-        route,
-        round_index,
+        "correlation_id=%s duration_ms=%s tool=%s is_error=%s",
+        tool_round.provider,
+        tool_round.route,
+        tool_round.round_index,
         call.tool_use_id,
+        tool_round.correlation_id,
         duration_ms,
         call.name,
-        is_error,
+        outcome.is_error,
     )
-    return result, is_error
+    return outcome

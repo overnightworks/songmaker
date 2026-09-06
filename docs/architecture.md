@@ -705,9 +705,10 @@ gone: every module reads a Go constant from the library directly.
 The table's universe is those two `constants.py` modules, and moving the
 provider code into the library does not widen it: a module-level invariant
 that only its own module reads — the probe's caller budget in `process.py`,
-the Codex catalog's larger read limit, the Claude provider's error texts —
-stays a named constant beside its owner, exactly as it was before the move,
-and is not a value the host and the library could disagree about.
+the Codex catalog's larger read limit, the Claude provider's error texts, the
+tool loop's round cap `COWRITER_MAX_TOOL_ROUNDS` in `tool_loop.py` — stays a
+named constant beside its owner, exactly as it was before the move, and is not
+a value the host and the library could disagree about.
 
 `tests/test_agent_providers_constants.py` reads this table and holds both
 modules to it in both directions, so a constant cannot quietly change sides.
@@ -776,7 +777,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `COWRITER_DEFAULT_TAIL_TOKEN_BUDGET` | Stay | How much conversation history songmaker sends verbatim. |
 | `COWRITER_MAX_SUMMARY_CHARS` | Stay | How long that rolling summary may grow. |
 | `COWRITER_MAX_TAIL_TOKEN_BUDGET` | Stay | Upper bound a musician may set for that history budget. |
-| `COWRITER_MAX_TOOL_ROUNDS` | Stay | Bound of songmaker's tool loop; it travels with that loop, not with the constants split. |
 | `COWRITER_MIN_TAIL_TOKEN_BUDGET` | Stay | Lower bound a musician may set for that history budget. |
 | `COWRITER_SUMMARY_TAG` | Stay | The tag songmaker's rolling summary is wrapped in. |
 | `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |

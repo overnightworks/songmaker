@@ -18,12 +18,13 @@ from agent_providers.claude.provider import (
 )
 from agent_providers.events import (
     AssistantTextEvent,
-    ErrorEvent,
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
+
+A_CORRELATION_ID = "job-42"
 
 
 @pytest.fixture(autouse=True)
@@ -155,9 +156,10 @@ def test_parse_assistant_text_event() -> None:
     ev = _parse_stream_event({
         "type": "assistant",
         "message": {"content": [{"type": "text", "text": "hello"}]},
-    }, chunks)
+    }, chunks, A_CORRELATION_ID)
     assert isinstance(ev, AssistantTextEvent)
     assert ev.text == "hello"
+    assert ev.correlation_id == A_CORRELATION_ID
     assert chunks == ["hello"]
 
 
@@ -168,7 +170,7 @@ def test_parse_assistant_tool_use_event() -> None:
         "message": {"content": [{
             "type": "tool_use", "id": "tu-1", "name": "foo", "input": {"x": 1},
         }]},
-    }, chunks)
+    }, chunks, A_CORRELATION_ID)
     assert isinstance(ev, ToolCallEvent)
     assert ev.tool_use_id == "tu-1"
     assert ev.name == "foo"
@@ -184,7 +186,7 @@ def test_parse_user_tool_result_event() -> None:
             "content": [{"type": "text", "text": "ok"}],
             "is_error": False,
         }]},
-    }, [])
+    }, [], A_CORRELATION_ID)
     assert isinstance(ev, ToolResultEvent)
     assert ev.tool_use_id == "tu-1"
     assert ev.content == "ok"
@@ -199,7 +201,7 @@ def test_parse_user_tool_result_string_content() -> None:
             "tool_use_id": "tu-1",
             "content": "plain",
         }]},
-    }, [])
+    }, [], A_CORRELATION_ID)
     assert isinstance(ev, ToolResultEvent)
     assert ev.content == "plain"
 
@@ -210,37 +212,35 @@ def test_parse_user_tool_result_missing_content() -> None:
         "message": {"content": [{
             "type": "tool_result", "tool_use_id": "tu-1",
         }]},
-    }, [])
+    }, [], A_CORRELATION_ID)
     assert isinstance(ev, ToolResultEvent)
     assert ev.content == ""
 
 
 def test_parse_result_event_returns_final() -> None:
-    ev = _parse_stream_event(
-        {"type": "result", "result": "done"}, [],
-    )
+    ev = _parse_stream_event({"type": "result", "result": "done"}, [], A_CORRELATION_ID)
     assert isinstance(ev, FinalEvent)
     assert ev.text == "done"
 
 
 def test_parse_result_event_without_text_returns_none() -> None:
-    assert _parse_stream_event({"type": "result"}, []) is None
+    assert _parse_stream_event({"type": "result"}, [], A_CORRELATION_ID) is None
 
 
 def test_parse_assistant_empty_content_returns_none() -> None:
     assert _parse_stream_event(
-        {"type": "assistant", "message": {"content": []}}, [],
+        {"type": "assistant", "message": {"content": []}}, [], A_CORRELATION_ID,
     ) is None
 
 
 def test_parse_user_empty_content_returns_none() -> None:
     assert _parse_stream_event(
-        {"type": "user", "message": {"content": []}}, [],
+        {"type": "user", "message": {"content": []}}, [], A_CORRELATION_ID,
     ) is None
 
 
 def test_parse_unknown_type_ignored() -> None:
-    assert _parse_stream_event({"type": "system"}, []) is None
+    assert _parse_stream_event({"type": "system"}, [], A_CORRELATION_ID) is None
 
 
 # ── acall_claude_with_mcp_stream integration ─────────────────────────
@@ -460,12 +460,6 @@ def test_stream_cmd_non_stream_keeps_json() -> None:
     idx = cmd.index("--output-format")
     assert cmd[idx + 1] == "json"
     assert "--verbose" not in cmd
-
-
-def test_error_event_model() -> None:
-    ev = ErrorEvent(message="oops")
-    assert ev.type == "error"
-    assert ev.message == "oops"
 
 
 def test_iter_lines_returns_immediately_when_stdout_missing() -> None:
