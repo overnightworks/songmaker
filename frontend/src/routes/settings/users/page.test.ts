@@ -117,7 +117,7 @@ function readyRoute(models: string[]): ProviderRouteStatusResponse {
 function blockedRoute(reason: SafeRouteReason, setupLabel: string): ProviderRouteStatusResponse {
 	return {
 		models: [],
-		catalogue_failure: { code: reason.code, message: 'List needs the key' },
+		catalogue_failure: { code: reason.code, message: 'Model catalogue request failed.' },
 		readiness: {
 			state: 'not_configured',
 			capability: 'tools_available',
@@ -630,6 +630,7 @@ describe('admin models tab', () => {
 
 		expect(api.updateCoverSettings).toHaveBeenCalledWith('claude', 'cli', '');
 		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['No models']);
+		expect(rowNamed(target, 'Cover').textContent).toContain('Claude cannot draw');
 	});
 
 	it('keeps saving the scoring row against the judge settings', async () => {

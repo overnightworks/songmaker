@@ -236,6 +236,8 @@ export const MODELS_STATUS_NOT_SAVED_LABEL = 'Not saved';
 export const MODELS_OPTION_READY_LABEL = '✓ ready';
 export const MODELS_OPTION_NEEDS_API_KEY_PHRASE = 'needs its API key';
 export const MODELS_NO_MODELS_LABEL = 'No models';
+export const MODELS_LIST_NEEDS_KEY_HINT = 'List needs the key';
+export const MODELS_LIST_NEEDS_CLI_HINT = 'List needs the CLI';
 export const MODELS_SAVED_LABEL = 'Saved.';
 export const MODELS_RETRY_LABEL = 'Retry';
 export const MODELS_ADVANCED_LABEL = 'Advanced';
@@ -245,6 +247,10 @@ export const MODELS_ROUTE_KEY_NOT_SET_PHRASE = 'key not set';
 export const MODELS_ROUTE_LOGGED_IN_PHRASE = 'logged in';
 export const MODELS_ROUTE_NOT_LOGGED_IN_PHRASE = 'not logged in';
 export const MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE = 'no image tool';
+export function modelsCannotDrawHint(provider: string): string {
+	return `${provider} cannot draw`;
+}
+
 export const MODELS_SAVE_FAILED_FALLBACK = 'The server rejected the change.';
 
 export const PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL =
