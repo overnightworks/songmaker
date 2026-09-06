@@ -22,9 +22,9 @@ from agent_providers.tool_loop import (
     ToolCall,
     ToolCallBatch,
     ToolLoopLimitError,
+    ToolOutcome,
     ToolResultBatch,
     TransportResponse,
-    TurnOutcome,
     stream_tool_loop,
 )
 
@@ -78,7 +78,7 @@ def test_passes_the_complete_tool_result_batch_to_the_transport() -> None:
 
     events = asyncio.run(_events(
         transport,
-        lambda name, arguments: TurnOutcome(f"{name}:{arguments['position']}", False),
+        lambda name, arguments: ToolOutcome(f"{name}:{arguments['position']}", False),
     ))
 
     assert transport.messages == [
@@ -108,7 +108,7 @@ def test_allows_eight_tool_rounds_then_one_final_response() -> None:
     transport = _FakeTransport([*calls, [FinalText("complete")]])
 
     events = asyncio.run(
-        _events(transport, lambda _name, _arguments: TurnOutcome("ok", False)),
+        _events(transport, lambda _name, _arguments: ToolOutcome("ok", False)),
     )
 
     assert sum(isinstance(event, ToolCallEvent) for event in events) == 8
@@ -122,10 +122,10 @@ def test_rejects_a_ninth_tool_round_without_executing_it(monkeypatch) -> None:
     ]])
     executed = False
 
-    def executor(_name: str, _arguments: dict[str, Any]) -> TurnOutcome:
+    def executor(_name: str, _arguments: dict[str, Any]) -> ToolOutcome:
         nonlocal executed
         executed = True
-        return TurnOutcome("unreachable", False)
+        return ToolOutcome("unreachable", False)
 
     events = _events(transport, executor)
     with pytest.raises(ToolLoopLimitError):
@@ -135,16 +135,25 @@ def test_rejects_a_ninth_tool_round_without_executing_it(monkeypatch) -> None:
     assert transport.closed
 
 
-def test_executor_failure_returns_a_named_error_to_the_model() -> None:
+def test_executor_failure_returns_a_named_error_to_the_model(caplog) -> None:
     transport = _FakeTransport([
         [ToolCallBatch((ToolCall("call-1", "write", {"lyrics": "secret"}),))],
         [FinalText()],
     ])
 
-    def executor(_name: str, _arguments: dict[str, Any]) -> TurnOutcome:
+    def executor(_name: str, _arguments: dict[str, Any]) -> ToolOutcome:
         raise RuntimeError("secret")
 
+    caplog.set_level("INFO", logger="agent_providers.tool_loop")
     events = asyncio.run(_events(transport, executor))
+
+    assert "RuntimeError" in caplog.text
+    assert "secret" not in caplog.text
+    assert [
+        record.levelname
+        for record in caplog.records
+        if "raised" in record.getMessage()
+    ] == ["ERROR"]
 
     assert events == [
         ToolCallEvent(tool_use_id="call-1", name="write", input={"lyrics": "secret"}),
@@ -176,7 +185,7 @@ def test_aclose_stops_the_active_transport_without_a_follow_up_round() -> None:
             system="system",
             messages=[],
             transport=transport,
-            executor=lambda _name, _arguments: TurnOutcome("unused", False),
+            executor=lambda _name, _arguments: ToolOutcome("unused", False),
             tool_failure_message=A_TOOL_FAILURE_MESSAGE,
         )
         assert await anext(turn) == AssistantTextEvent(text="partial")
@@ -202,7 +211,7 @@ def test_logs_never_include_tool_input_or_result(caplog) -> None:
     caplog.set_level("INFO", logger="agent_providers.tool_loop")
 
     asyncio.run(
-        _events(transport, lambda _name, _arguments: TurnOutcome(call_json, True)),
+        _events(transport, lambda _name, _arguments: ToolOutcome(call_json, True)),
     )
 
     assert "provider=grok" in caplog.text
@@ -220,7 +229,7 @@ def test_every_event_of_a_turn_carries_the_hosts_correlation_id() -> None:
 
     events = asyncio.run(_events(
         transport,
-        lambda _name, _arguments: TurnOutcome("ok", False),
+        lambda _name, _arguments: ToolOutcome("ok", False),
         correlation_id=A_CORRELATION_ID,
     ))
 
@@ -235,7 +244,7 @@ def test_the_host_names_the_sentence_a_crashed_tool_reports() -> None:
     ])
     host_message = "This workshop could not run that tool."
 
-    def executor(_name: str, _arguments: dict[str, Any]) -> TurnOutcome:
+    def executor(_name: str, _arguments: dict[str, Any]) -> ToolOutcome:
         raise RuntimeError("secret")
 
     async def turn() -> list[object]:

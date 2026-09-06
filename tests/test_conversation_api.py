@@ -126,12 +126,20 @@ def _mock_claude(text: str = "hello from claude"):
 
 
 def _stream_events(response) -> list[dict]:
+    """Parse the SSE body, holding every frame to the published payload.
+
+    ``correlation_id`` is the host's internal handle for a turn; it rides on
+    the event objects for songmaker's own logs and must never reach a client,
+    so every frame this helper returns is checked for it.
+    """
     events: list[dict] = []
     for line in response.iter_lines():
         if not line:
             continue
         if line.startswith("data: "):
-            events.append(json.loads(line[len("data: "):]))
+            event = json.loads(line[len("data: "):])
+            assert "correlation_id" not in event
+            events.append(event)
     return events
 
 
@@ -368,6 +376,45 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         assert all(m.conversation_id == conv_id for m in msgs)
         job = session.query(Job).filter_by(type="chat").one()
         assert job.status == "completed"
+
+
+def test_a_turn_stamps_its_events_with_the_chat_job_and_streams_none_of_it(client):
+    """The turn's own job id reaches the deepest event producer and stops there.
+
+    The Claude CLI stream parser is the last hop of the real chain, so what it
+    is handed is what the endpoint really passed down — and the frames the
+    musician's browser receives still carry no trace of it.
+    """
+    c, factory = client
+    handed_down: list[str | None] = []
+
+    async def _consume(_proc, _timeout, correlation_id) -> AsyncIterator[StreamEvent]:
+        handed_down.append(correlation_id)
+        yield AssistantTextEvent(text="partial", correlation_id=correlation_id)
+        yield FinalEvent(text="partial", correlation_id=correlation_id)
+
+    async def _spawn(*_args, **_kwargs) -> MagicMock:
+        process = MagicMock()
+        process.stdin = None
+        return process
+
+    with patch(
+        "agent_providers.claude.provider._spawn_reserved_async_cli_process", _spawn,
+    ), patch(
+        "agent_providers.claude.provider._consume_stream", _consume,
+    ), patch(
+        "agent_providers.claude.provider._reap_stream_process_after_cancellation",
+        AsyncMock(),
+    ):
+        response = c.post("/api/chat/turn", json={"message": "hey"})
+
+    assert response.status_code == 200
+    events = _stream_events(response)
+    assert _final_event(events)["assistant_message"]["content"] == "partial"
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").one()
+
+    assert handed_down == [job.id]
 
 
 def test_chat_turn_completes_when_its_heartbeat_task_fails(client):

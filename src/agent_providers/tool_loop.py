@@ -58,8 +58,8 @@ class ToolCallBatch:
 
 
 @dataclass(frozen=True)
-class TurnOutcome:
-    """What a ``ToolExecutor`` returns for one requested invocation.
+class ToolOutcome:
+    """What a ``ToolExecutor`` returns for one requested tool invocation.
 
     The executor never learns which call it answers, so the loop — not the
     host — pairs this outcome with its ``tool_use_id`` into a ``ToolResult``.
@@ -100,7 +100,7 @@ class FinalText:
 
 
 TransportResponse = TextDelta | ToolCallBatch | FinalText
-ToolExecutor = Callable[[str, dict[str, Any]], TurnOutcome]
+ToolExecutor = Callable[[str, dict[str, Any]], ToolOutcome]
 
 
 class ToolTransport(Protocol):
@@ -292,12 +292,17 @@ async def _stream_tool_results(
         results.append(ToolResult(call.tool_use_id, outcome.content, outcome.is_error))
 
 
-def _execute_tool(tool_round: _ToolRound, call: ToolCall) -> TurnOutcome:
+def _execute_tool(tool_round: _ToolRound, call: ToolCall) -> ToolOutcome:
     started_at = time.monotonic()
     try:
         outcome = tool_round.executor(call.name, call.arguments)
-    except Exception:
-        outcome = TurnOutcome(tool_round.tool_failure_message, True)
+    except Exception as exc:
+        # A host executor reports a failed tool as an outcome, so anything
+        # raised past it is a defect or an infrastructure failure, not an
+        # answer. The turn survives it; the class is named so it is findable,
+        # and the message never is — it may quote the song.
+        log.error("Co-writer tool executor raised %s", type(exc).__name__)
+        outcome = ToolOutcome(tool_round.tool_failure_message, True)
     duration_ms = round((time.monotonic() - started_at) * 1000)
     log.info(
         "Co-writer tool provider=%s route=%s round=%s call_id=%s "

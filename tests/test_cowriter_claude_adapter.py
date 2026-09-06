@@ -18,7 +18,7 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from agent_providers.tool_loop import TurnOutcome
+from agent_providers.tool_loop import ToolOutcome
 from songmaker_cli.cowriter import claude_adapter
 from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, anthropic_tool_schemas
@@ -174,7 +174,7 @@ def test_claude_api_streams_deltas_and_carries_tool_errors_back_to_the_model(mon
     second = _FakeStream(["done"], _AssistantMessage([_TextBlock("done")]))
     client = _FakeClient([first, second])
     constructions = _install_anthropic(monkeypatch, client)
-    execute = MagicMock(return_value=TurnOutcome("not yours", True))
+    execute = MagicMock(return_value=ToolOutcome("not yours", True))
     monkeypatch.setattr("songmaker_cli.cowriter.tools.execute_cowriter_tool", execute)
 
     events = asyncio.run(_events(**_turn_arguments()))
