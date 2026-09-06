@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
@@ -193,6 +194,7 @@ def create_app(
     project_root: Path,
     ctx: AppContext | None = None,
 ) -> FastAPI:
+    configure_agent_providers(get_settings())
     app = FastAPI(
         title=APP_NAME,
         docs_url=None,

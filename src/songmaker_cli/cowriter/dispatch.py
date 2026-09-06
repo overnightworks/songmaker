@@ -9,6 +9,7 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.config import current_config
 from agent_providers.events import StreamEvent
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
@@ -52,7 +53,6 @@ from songmaker_cli.cowriter.tool_loop import (
 )
 from songmaker_cli.db.queries.settings import get_cover_settings
 from songmaker_cli.middleware import AuthenticatedUser
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -288,18 +288,18 @@ def call_provider_once(
 
 
 def _api_connection(provider: str) -> _ApiConnection:
-    settings = get_settings()
+    config = current_config()
     if provider == "claude":
-        api_key = _require_secret(provider, ProviderRoute.API, settings.anthropic_api_key)
+        api_key = _require_secret(provider, ProviderRoute.API, config.anthropic_api_key)
         return _ApiConnection(api_key)
     if provider == "grok":
         return _ApiConnection(
-            _require_secret(provider, ProviderRoute.API, settings.xai_api_key),
+            _require_secret(provider, ProviderRoute.API, config.xai_api_key),
             COWRITER_GROK_CHAT_URL,
         )
     if provider == "codex":
         return _ApiConnection(
-            _require_secret(provider, ProviderRoute.API, settings.openai_api_key),
+            _require_secret(provider, ProviderRoute.API, config.openai_api_key),
             COWRITER_OPENAI_CHAT_URL,
         )
     raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED)

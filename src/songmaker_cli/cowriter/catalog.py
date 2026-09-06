@@ -14,6 +14,7 @@ from typing import Final
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
+from agent_providers.config import ProviderRuntimeConfig, current_config
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
@@ -50,7 +51,6 @@ from songmaker_cli.cowriter.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from songmaker_cli.settings import Settings, get_settings
 
 _CLAUDE_PROVIDER: Final = "claude"
 _GROK_PROVIDER: Final = "grok"
@@ -183,7 +183,7 @@ def get_provider_configuration(
     provider: str,
     surface: ProviderSurface,
 ) -> ProviderConfiguration:
-    return _provider_configuration(provider, surface, get_settings())
+    return _provider_configuration(provider, surface, current_config())
 
 
 def provider_snapshot(provider: str) -> ProviderSnapshot | None:
@@ -200,9 +200,9 @@ def provider_snapshots() -> dict[str, ProviderSnapshot]:
 
 def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
     """Refresh one provider's reachability and model catalog."""
-    settings = get_settings()
+    config = current_config()
     routes = {
-        route: _refresh_provider_route(provider, route, settings)
+        route: _refresh_provider_route(provider, route, config)
         for route in ProviderRoute
     }
     cowriter = get_provider_configuration(provider, ProviderSurface.CO_WRITER)
@@ -221,11 +221,11 @@ def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
 def _refresh_provider_route(
     provider: str,
     route: ProviderRoute,
-    settings: Settings,
+    config: ProviderRuntimeConfig,
 ) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
     capability = provider_route_capability()
-    credential = _provider_api_credential(provider, settings)
+    credential = _provider_api_credential(provider, config)
     preflight = _provider_route_preflight(provider, route, credential, capability, now)
     if preflight is not None:
         return preflight
@@ -349,17 +349,17 @@ def clear_provider_snapshots() -> None:
 
 
 def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
-    settings = get_settings()
+    config = current_config()
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(provider, f"Unknown co-writer provider '{provider}'")
     if route is ProviderRoute.CLI:
-        return _models_for_setup_method(provider, _cli_setup_method_for(provider), settings)
-    key = _secret(_provider_api_credential(provider, settings).secret)
+        return _models_for_setup_method(provider, _cli_setup_method_for(provider), config)
+    key = _secret(_provider_api_credential(provider, config).secret)
     if not key:
         raise ProviderUnavailableError(
             provider, route.value, normalize_route_failure(SafeRouteReasonCode.API_KEY_NOT_SET),
         )
-    return _models_for_setup_method(provider, ProviderSetupMethod.API_KEY, settings)
+    return _models_for_setup_method(provider, ProviderSetupMethod.API_KEY, config)
 
 
 def _cli_setup_method_for(provider: str) -> ProviderSetupMethod:
@@ -382,7 +382,7 @@ def models_with_active_model(models: list[str], active_model: str | None) -> lis
 def _models_for_setup_method(
     provider: str,
     method: ProviderSetupMethod,
-    settings: Settings,
+    config: ProviderRuntimeConfig,
 ) -> list[str]:
     if method is ProviderSetupMethod.CLAUDE_CLI:
         return _list_claude_cli_models()
@@ -391,7 +391,7 @@ def _models_for_setup_method(
     if method is ProviderSetupMethod.CODEX_CLI:
         return _list_codex_cli_models()
 
-    key = _secret(_provider_api_credential(provider, settings).secret)
+    key = _secret(_provider_api_credential(provider, config).secret)
     if provider == _GROK_PROVIDER:
         return _list_grok_models(key)
     if provider == _CODEX_PROVIDER:
@@ -407,9 +407,9 @@ def _models_for_setup_method(
 def _provider_configuration(
     provider: str,
     surface: ProviderSurface,
-    settings: Settings,
+    config: ProviderRuntimeConfig,
 ) -> ProviderConfiguration:
-    credential = _provider_api_credential(provider, settings)
+    credential = _provider_api_credential(provider, config)
     key_is_set = bool(_secret(credential.secret))
     cli_method = _cli_setup_method(provider)
     if key_is_set:
@@ -469,19 +469,19 @@ def _anthropic_sdk_available() -> bool:
 
 
 def _provider_api_credential(
-    provider: str, settings: Settings,
+    provider: str, config: ProviderRuntimeConfig,
 ) -> _ProviderApiCredential:
     if provider == _CLAUDE_PROVIDER:
         return _ProviderApiCredential(
-            settings.anthropic_api_key, ANTHROPIC_API_KEY_ENVIRONMENT,
+            config.anthropic_api_key, ANTHROPIC_API_KEY_ENVIRONMENT,
         )
     if provider == _GROK_PROVIDER:
         return _ProviderApiCredential(
-            settings.xai_api_key, XAI_API_KEY_ENVIRONMENT,
+            config.xai_api_key, XAI_API_KEY_ENVIRONMENT,
         )
     if provider == _CODEX_PROVIDER:
         return _ProviderApiCredential(
-            settings.openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
+            config.openai_api_key, OPENAI_API_KEY_ENVIRONMENT,
         )
     if provider not in COWRITER_PROVIDERS:
         raise ProviderUnavailableError(

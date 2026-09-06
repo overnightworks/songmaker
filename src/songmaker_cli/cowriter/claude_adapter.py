@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from agent_providers.config import current_config
 from agent_providers.events import StreamEvent
 from songmaker_cli.claude.provider import (
     CliBinaryUnavailableError,
@@ -38,7 +39,6 @@ from songmaker_cli.cowriter.tool_loop import (
     stream_tool_loop,
 )
 from songmaker_cli.middleware import AuthenticatedUser
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -255,10 +255,10 @@ def call_claude_once(
     the MCP-attached multi-turn co-writer chat that ``stream_claude_turn``
     gives a real song-editing session.
     """
-    settings = get_settings()
+    config = current_config()
     api_key = (
-        settings.anthropic_api_key.get_secret_value()
-        if settings.anthropic_api_key else None
+        config.anthropic_api_key.get_secret_value()
+        if config.anthropic_api_key else None
     )
     response = call_claude(
         prompt,
