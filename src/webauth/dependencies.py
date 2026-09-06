@@ -185,7 +185,7 @@ def _authenticate_from_cache(
     created_at = cached.created_at
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
-    _reject_session_older_than_absolute_limit(created_at, _now(), config)
+    _reject_session_older_than_absolute_limit(created_at, datetime.now(timezone.utc), config)
 
     if not cached.is_active:
         raise HTTPException(403, ACCOUNT_DISABLED_DETAIL)
@@ -226,10 +226,8 @@ def _authenticate_from_store(
     config: WebAuthConfig,
 ) -> AuthenticatedUser:
     record = sessions.load(session_id)
-    now = _now()
-
-    expires_at = record.expires_at.replace(tzinfo=timezone.utc) if record else None
-    if not record or expires_at < now:
+    now = datetime.now(timezone.utc)
+    if record is None or record.expires_at.replace(tzinfo=timezone.utc) < now:
         raise HTTPException(401, SESSION_EXPIRED_DETAIL)
 
     created_at = record.created_at.replace(tzinfo=timezone.utc)
@@ -282,7 +280,3 @@ def _populate_cache(
         )
     except Exception:
         log.warning("Redis session cache populate failed")
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
