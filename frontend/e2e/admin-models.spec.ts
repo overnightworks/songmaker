@@ -45,9 +45,9 @@ import { readSeededLibrary } from './seed';
 
 /**
  * What each test costs the API, measured on a green run against the CI recipe:
- * 11 for the table walked at four desktop widths, 23 for the Cover row's save
- * and reload, 46 for the co-writer turn (a cold album open, the song, the chat
- * and the return to the tab), 9 for the phone cards. One ceiling for the file,
+ * 11 for the table walked at four desktop widths, 24 for the Cover row's save,
+ * reload and restore, 46 for the co-writer turn (a cold album open, the song,
+ * the chat and the return to the tab), 9 for the phone cards. One ceiling for the file,
  * the same way `album-address.spec.ts` carries one for its four, with headroom
  * for the retry CI allows. The budget is a ceiling, not a knob: a flow that
  * suddenly needs several more round trips is a regression, so find the extra
