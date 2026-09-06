@@ -17,11 +17,13 @@ from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import TrustedProxies, hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
 from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.cookies import sign_session_id
+from webauth.passwords import hash_password
+from webauth.proxies import TrustedProxies
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -124,7 +126,7 @@ def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -173,7 +175,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -188,7 +190,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
 @pytest.fixture
 def auth_server_app(tmp_path: Path):
     from songmaker_cli.db.queries import create_album, create_session, create_user
-    from songmaker_cli.middleware import SESSION_COOKIE
+    from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
     audio_dir = tmp_path / "audio"
     data_dir = tmp_path / "data"
@@ -231,12 +233,12 @@ def auth_server_app(tmp_path: Path):
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
-    yield client, owner_sid, other_sid, SESSION_COOKIE, owner_id, other_id
+    yield client, owner_sid, other_sid, DEFAULT_SESSION_COOKIE_NAME, owner_id, other_id
 
 
 def test_get_audio_own_files_allowed(auth_server_app) -> None:
@@ -283,7 +285,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -467,7 +469,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
             db=factory,
             audio_dir=audio_dir,
             data_dir=data_dir,
-            session_secret=TEST_SECRET,
+            signing_key=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
@@ -634,7 +636,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
@@ -691,7 +693,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
@@ -744,7 +746,7 @@ def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
@@ -842,7 +844,7 @@ def test_cors_wildcard_invalid_raises(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
@@ -869,7 +871,7 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
@@ -912,7 +914,7 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
             db=factory,
             audio_dir=audio_dir,
             data_dir=data_dir,
-            session_secret=TEST_SECRET,
+            signing_key=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
@@ -969,7 +971,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -1002,7 +1004,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -1040,7 +1042,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -1097,7 +1099,7 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -1214,7 +1216,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
@@ -1261,7 +1263,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
@@ -1305,7 +1307,7 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
@@ -1349,7 +1351,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=redis,
+        signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
@@ -1391,7 +1393,7 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     return TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1446,7 +1448,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
@@ -1735,7 +1737,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
 
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=sync_redis,
+        signing_key=TEST_SECRET, redis=sync_redis,
     )
     client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1790,7 +1792,7 @@ def test_metrics_endpoint_offline_worker(
 
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=redis,
+        signing_key=TEST_SECRET, redis=redis,
     )
     client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1820,7 +1822,7 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
         db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1832,9 +1834,9 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
 
 
 def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
-    from songmaker_cli.auth import hash_password
     from songmaker_cli.db.queries import create_user, get_user_by_username
     from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
+    from webauth.passwords import hash_password
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -1843,7 +1845,7 @@ def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
 
     ctx = AppContext(
         db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1860,7 +1862,7 @@ def test_auto_setup_admin_skips_without_env_vars(
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
         db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
@@ -1874,7 +1876,7 @@ def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
         db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
         _auto_setup_admin(ctx)
@@ -1907,7 +1909,7 @@ def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
         db=factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)

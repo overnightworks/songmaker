@@ -53,7 +53,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
-from songmaker_cli.auth import hash_password
+from songmaker_cli.auth_dependencies import require_admin
 from songmaker_cli.constants import (
     MODEL_CONFIG_PATHS,
     AuditAction,
@@ -90,9 +90,10 @@ from songmaker_cli.db.queries import (
     update_user,
 )
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
-from songmaker_cli.middleware import AuthenticatedUser, require_admin
 from songmaker_cli.settings import get_settings
-from webauth.session_store import SessionCache
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
+from webauth.session_store import installed_session_cache
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _clear_user_session_cache(request: Request, user_id: str) -> None:
-    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    session_cache = installed_session_cache(request.app)
     if not session_cache:
         return
     try:
@@ -345,7 +346,7 @@ def force_logout_endpoint(
         if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
             delete_session(db, sess.id)
             db.commit()
-            session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+            session_cache = installed_session_cache(request.app)
             if session_cache:
                 try:
                     session_cache.delete(sess.id, sess.user_id)

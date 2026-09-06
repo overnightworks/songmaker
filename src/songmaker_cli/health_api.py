@@ -35,6 +35,7 @@ from songmaker_cli.lifecycle import (
     CodexImageSandboxRuntimeHealth,
     codex_image_sandbox_runtime_health,
 )
+from webauth.session_store import installed_session_cache
 
 router = APIRouter()
 
@@ -384,7 +385,7 @@ async def health_check(request: Request) -> JSONResponse:
         for name, health in background_loop_health.items()
     })
 
-    session_cache = getattr(request.app.state, "session_cache", None)
+    session_cache = installed_session_cache(request.app)
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )

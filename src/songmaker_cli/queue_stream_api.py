@@ -29,6 +29,7 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioFileNotFoundError
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     REDIS_RL_QUEUE_STREAM_PREFIX,
@@ -36,7 +37,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import list_songs
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     PinnedBytesExceededError,
     QueueStreamSource,
@@ -49,6 +49,7 @@ from songmaker_cli.queue_streams import (
     track_source_from_generation,
     unpin_snapshot,
 )
+from webauth.dependencies import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()

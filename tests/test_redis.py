@@ -11,11 +11,11 @@ from conftest import TEST_SECRET
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import hash_password
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import RedisHttpMetrics, create_redis, redis_health
 from songmaker_cli.server import create_app
+from webauth.passwords import hash_password
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path,
         session.commit()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=fake_redis,
+        signing_key=TEST_SECRET, redis=fake_redis,
     )
     return ctx, audio_dir, data_dir, project_root
 
@@ -151,7 +151,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
         session.commit()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=broken_redis,
+        signing_key=TEST_SECRET, redis=broken_redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={}, raise_server_exceptions=False)

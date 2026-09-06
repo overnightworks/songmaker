@@ -14,6 +14,7 @@ from slugify import slugify
 from sqlalchemy import event
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_MISMATCH,
@@ -26,7 +27,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Song, User, Version
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 USER_A = "user-a"
 USER_B = "user-b"
@@ -102,7 +103,7 @@ def _library_env(tmp_path: Path) -> tuple[object, object]:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     return factory, ctx

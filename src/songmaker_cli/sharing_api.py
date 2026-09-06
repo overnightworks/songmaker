@@ -43,7 +43,7 @@ from songmaker_cli.audio_paths import (
     require_existing_audio_path,
     resolve_audio_path,
 )
-from songmaker_cli.auth import resolve_client_ip
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
     AUDIO_MEDIA_TYPES,
@@ -77,7 +77,6 @@ from songmaker_cli.db.queries import (
     shared_song_audio_filename_is_presented,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     QueueStreamManifest,
     build_queue_stream_snapshot,
@@ -87,6 +86,8 @@ from songmaker_cli.queue_streams import (
     queue_stream_audio_path,
     track_source_from_generation,
 )
+from webauth.dependencies import AuthenticatedUser
+from webauth.proxies import resolve_client_ip
 from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()

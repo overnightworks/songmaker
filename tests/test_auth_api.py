@@ -11,10 +11,11 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.auth import CSRF_COOKIE, TrustedProxies, hash_password
 from songmaker_cli.db.queries import create_user
-from songmaker_cli.middleware import SESSION_COOKIE
 from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.passwords import hash_password
+from webauth.proxies import TrustedProxies
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -71,7 +72,7 @@ def test_setup_creates_admin(client: TestClient) -> None:
     data = resp.json()
     assert data["username"] == "myadmin"
     assert data["role"] == "admin"
-    assert SESSION_COOKIE in resp.cookies
+    assert DEFAULT_SESSION_COOKIE_NAME in resp.cookies
 
 
 def test_setup_rejected_when_admin_exists(client: TestClient) -> None:
@@ -99,7 +100,7 @@ def test_login_success(client: TestClient) -> None:
     resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
     assert resp.status_code == 200
     assert resp.json()["username"] == "admin"
-    assert SESSION_COOKIE in resp.cookies
+    assert DEFAULT_SESSION_COOKIE_NAME in resp.cookies
 
 
 def test_login_wrong_password(client: TestClient) -> None:
@@ -252,8 +253,8 @@ def test_session_cookies_are_secure_behind_trusted_https_proxy(client: TestClien
     resp = _login_from_peer(client, _TRUSTED_PEER, {"x-forwarded-proto": "https"})
 
     assert resp.status_code == 200
-    assert "Secure" in _cookie_attributes(resp, SESSION_COOKIE)
-    assert "Secure" in _cookie_attributes(resp, CSRF_COOKIE)
+    assert "Secure" in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
+    assert "Secure" in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
 
 
 def test_session_cookies_are_plain_when_the_peer_is_not_a_trusted_proxy(
@@ -265,8 +266,8 @@ def test_session_cookies_are_plain_when_the_peer_is_not_a_trusted_proxy(
     resp = _login_from_peer(client, _UNTRUSTED_PEER, {"x-forwarded-proto": "https"})
 
     assert resp.status_code == 200
-    assert "Secure" not in _cookie_attributes(resp, SESSION_COOKIE)
-    assert "Secure" not in _cookie_attributes(resp, CSRF_COOKIE)
+    assert "Secure" not in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
+    assert "Secure" not in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
 
 
 def test_a_prepended_forwarded_proto_cannot_outvote_the_proxy(client: TestClient) -> None:
@@ -282,8 +283,8 @@ def test_a_prepended_forwarded_proto_cannot_outvote_the_proxy(client: TestClient
     )
 
     assert resp.status_code == 200
-    assert "Secure" not in _cookie_attributes(resp, SESSION_COOKIE)
-    assert "Secure" not in _cookie_attributes(resp, CSRF_COOKIE)
+    assert "Secure" not in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
+    assert "Secure" not in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
 
 
 # -- Logout -------------------------------------------------------------------
@@ -300,12 +301,12 @@ def test_logout(client: TestClient) -> None:
 def test_logout_invalidates_session_in_db(client: TestClient) -> None:
     _seed_admin(client)
     _login(client, "admin", "admin12345")
-    cookie = client.cookies.get(SESSION_COOKIE)
+    cookie = client.cookies.get(DEFAULT_SESSION_COOKIE_NAME)
     resp = client.delete("/api/auth/session")
     assert resp.status_code == 200
 
     other = TestClient(client.app, cookies={})
-    other.cookies.set(SESSION_COOKIE, cookie)
+    other.cookies.set(DEFAULT_SESSION_COOKIE_NAME, cookie)
     resp = other.get("/api/auth/me")
     assert resp.status_code == 401
 

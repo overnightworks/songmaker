@@ -12,8 +12,8 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.queries.auth import get_user
-from songmaker_cli.middleware.auth import AuthenticatedUser
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 USER_ID_ENV = "SONGMAKER_MCP_USER_ID"
 

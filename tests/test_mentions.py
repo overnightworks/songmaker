@@ -15,9 +15,10 @@ from pydantic import ValidationError
 from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 
 def _fake_user(user_id: str, role: str = "user"):
@@ -79,7 +80,7 @@ def client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -101,7 +102,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

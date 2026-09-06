@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from redis import Redis
+    from starlette.applications import Starlette
 
     from webauth.config import SessionKeyPrefixes
+
+SESSION_CACHE_STATE_ATTRIBUTE: Final = "session_cache"
 
 
 class CachedSessionData(BaseModel):
@@ -149,3 +152,17 @@ class SessionCache:
                 session_id = key[len(prefix):]
                 result.append((session_id, ttl))
         return result
+
+
+def install_session_cache(app: Starlette, cache: SessionCache) -> None:
+    """Publish ``cache`` on ``app`` so every request can reach it."""
+    setattr(app.state, SESSION_CACHE_STATE_ATTRIBUTE, cache)
+
+
+def installed_session_cache(app: Starlette) -> SessionCache | None:
+    """The cache ``app`` was started with, or None when it runs without one.
+
+    Absence is not an error: every reader falls back to the database, which
+    stays authoritative for who a session belongs to.
+    """
+    return getattr(app.state, SESSION_CACHE_STATE_ATTRIBUTE, None)

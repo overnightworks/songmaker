@@ -55,8 +55,8 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
-from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 SKIP_NO_PG = pytest.mark.skipif(
@@ -285,7 +285,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=b"test",
+        signing_key=b"test",
         redis=None,  # type: ignore[arg-type]
     )
     ctx.audio_dir.mkdir()

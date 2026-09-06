@@ -261,6 +261,13 @@ REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
 # Session
 HTTP_MAX_USER_AGENT_LENGTH = 500
 
+# The role name stored on every user row. `webauth` compares against whatever
+# `WebAuthConfig.admin_role` carries; this is the value songmaker injects.
+ROLE_ADMIN: Final = "admin"
+
+# How far back a job rate limit counts an account's earlier jobs.
+RATE_LIMIT_WINDOW_SECONDS: Final = 3600
+
 # Global generation defaults
 PRESET_GLOBAL_DEFAULTS_NAME = "__global_defaults__"
 

@@ -182,7 +182,7 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
         db=db_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=b"a" * 64,
+        signing_key=b"a" * 64,
         redis=MagicMock(),
     )
     assert cleanup_expired_resource_events(ctx) == 1

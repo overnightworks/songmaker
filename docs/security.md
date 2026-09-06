@@ -24,7 +24,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`middleware/auth.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
+1. **Dependency-based auth** (`webauth/dependencies.py`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
 2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth/setup endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
@@ -266,7 +266,7 @@ stream lifetime, so the connection was still pinned one level up (measured:
 `enter=1, exit=0` after the first body chunk, `exit=1` only once the stream
 closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
 thread-offloads the whole handler body, exactly like
-`api_stream_resource_events`; auth (`get_current_user(request, session)`)
+`api_stream_resource_events`; auth (`authenticate_request(request, session)` from `auth_dependencies.py`)
 and the access check run as plain function calls against one short-lived
 `ctx.db()` session that closes before the lease is acquired or the
 `StreamingResponse` is even constructed, and every poll opens and closes

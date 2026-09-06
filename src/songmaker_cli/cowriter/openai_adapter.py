@@ -28,7 +28,7 @@ from songmaker_cli.cowriter.tool_loop import (
     TransportResponse,
     stream_tool_loop,
 )
-from songmaker_cli.middleware import AuthenticatedUser
+from webauth.dependencies import AuthenticatedUser
 
 
 async def stream_openai_compatible_turn(

@@ -58,16 +58,9 @@ from songmaker_cli.lifecycle import (
     session_sync_loop,
     stale_job_reaper_loop,
 )
-from songmaker_cli.middleware import (
-    AccessLogMiddleware,
-    BodySizeLimitMiddleware,
-    CsrfOriginMiddleware,
-    CsrfTokenMiddleware,
-    IpRateLimitMiddleware,
-    ResourceStreamDeadlineMiddleware,
-    SecurityHeadersMiddleware,
-    SelectiveGZipMiddleware,
-)
+from songmaker_cli.middleware.access_log import AccessLogMiddleware
+from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.request_policies import (
     build_body_size_policy,
     build_csrf_policy,
@@ -75,6 +68,13 @@ from songmaker_cli.request_policies import (
     build_security_headers_policy,
 )
 from songmaker_cli.settings import CoverExecutor, get_settings
+from webauth.middleware import (
+    BodySizeLimitMiddleware,
+    CsrfOriginMiddleware,
+    CsrfTokenMiddleware,
+    IpRateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 log = logging.getLogger(__name__)
 
@@ -220,12 +220,12 @@ def create_app(
     app.state.ctx = ctx
     from songmaker_cli.redis_client import RedisHttpMetrics
     from webauth.config import install_web_auth_config
-    from webauth.session_store import SessionCache
+    from webauth.session_store import SessionCache, install_session_cache
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
-    app.state.session_cache = SessionCache(ctx.redis, web_auth.session_key_prefixes)
+    install_session_cache(app, SessionCache(ctx.redis, web_auth.session_key_prefixes))
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
@@ -391,7 +391,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         db=init_db(settings.database_url),
         audio_dir=audio_dir,
         data_dir=data_dir,
-        session_secret=settings.session_secret.get_secret_value().encode(),
+        signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
         trusted_proxies=parse_trusted_proxies(settings),
         allowed_hosts_exact=hosts_exact,

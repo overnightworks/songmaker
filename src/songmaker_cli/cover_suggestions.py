@@ -12,8 +12,7 @@ from typing import Final, Protocol
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
+from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, ROLE_ADMIN, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     count_cover_jobs_since,

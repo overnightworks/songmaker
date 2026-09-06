@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COWRITER_MAX_TOOL_ROUNDS,
     SETTING_CLAUDE_SCORING_MODEL,
@@ -71,7 +72,7 @@ from songmaker_cli.db.queries.settings import (
     set_provider_routes,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],
@@ -184,7 +185,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

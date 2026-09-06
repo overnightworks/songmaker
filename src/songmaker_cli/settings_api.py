@@ -40,6 +40,7 @@ from songmaker_cli.api_models.settings import (
     ProviderSurfaceStatus,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.auth_dependencies import get_current_user, require_admin
 from songmaker_cli.config import (
     get_builtin_defaults,
     load_generation_defaults,
@@ -88,7 +89,7 @@ from songmaker_cli.db.queries.settings import (
     toggle_model,
     update_preset,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
+from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
     from songmaker_cli.cowriter.catalog import ProviderSnapshot, ProviderSurface

@@ -21,8 +21,8 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.constants import HTTP_MAX_USER_AGENT_LENGTH
+from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.constants import ROLE_ADMIN
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
@@ -35,13 +35,13 @@ from songmaker_cli.db.queries import (
     record_login_attempt,
     user_count,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.settings import get_settings
 from webauth.config import WebAuthConfig, web_auth_config
 from webauth.cookies import generate_csrf_token, sign_session_id
+from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password, verify_password_constant_time
-from webauth.proxies import request_is_https, resolve_client_ip
-from webauth.session_store import SessionCache
+from webauth.proxies import client_user_agent, request_is_https, resolve_client_ip
+from webauth.session_store import installed_session_cache
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
 def _cache_session(
     request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
 ) -> None:
-    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    session_cache = installed_session_cache(request.app)
     if not session_cache:
         return
     max_age = web_auth_config(request).session_max_age_seconds
@@ -67,17 +67,13 @@ def _cache_session(
 
 
 def _clear_user_cache(request: Request, user_id: str) -> None:
-    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    session_cache = installed_session_cache(request.app)
     if not session_cache:
         return
     try:
         session_cache.delete_user_sessions(user_id)
     except Exception:
         log.warning("Redis session cache clear failed")
-
-
-def _client_user_agent(request: Request) -> str:
-    return request.headers.get("user-agent", "")[:HTTP_MAX_USER_AGENT_LENGTH]
 
 
 def _set_session_cookie(
@@ -128,7 +124,7 @@ def setup(
         raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
 
     ip = resolve_client_ip(request)
-    ua = _client_user_agent(request)
+    ua = client_user_agent(request)
     try:
         user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
         db.flush()
@@ -181,7 +177,7 @@ def login(
     _begin_exclusive(db, _SESSION_CAP_LOCK_ID)
 
     record_login_attempt(db, ip, req.username, success=True)
-    ua = _client_user_agent(request)
+    ua = client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(
         seconds=config.session_max_age_seconds,
     )
@@ -193,7 +189,7 @@ def login(
         db, user.id, get_settings().max_concurrent_sessions_per_user,
     )
 
-    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    session_cache = installed_session_cache(request.app)
     if session_cache is not None:
         try:
             for pruned_id in pruned_ids:
@@ -265,7 +261,7 @@ def logout(
         delete_session(db, session_id)
         db.commit()
 
-        session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+        session_cache = installed_session_cache(request.app)
         if session_cache:
             try:
                 session_cache.delete(session_id, current_user.id)
@@ -326,7 +322,7 @@ def change_password(
     delete_user_sessions(db, current_user.id)
 
     ip = resolve_client_ip(request)
-    ua = _client_user_agent(request)
+    ua = client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(
         seconds=config.session_max_age_seconds,
     )

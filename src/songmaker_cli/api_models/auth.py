@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from songmaker_cli.auth import check_password_strength
+from webauth.passwords import check_password_strength
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import AuditLog, LoginAttempt, User, UserSession

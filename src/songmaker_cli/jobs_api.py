@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session
-from songmaker_cli.auth import ROLE_ADMIN
+from songmaker_cli.auth_dependencies import authenticate_request, get_current_user
 from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_STREAM_CONNECTION_SECONDS,
@@ -25,6 +25,7 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     REDIS_JOB_STREAM_LEASE_GLOBAL_KEY,
     REDIS_JOB_STREAM_LEASE_USER_PREFIX,
+    ROLE_ADMIN,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
@@ -35,9 +36,9 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import get_job, get_queue_position, record_audit, update_job_status
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
     # tied to the response lifecycle holds a connection.
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
-        user = get_current_user(request, session)
+        user = authenticate_request(request, session)
         _check_job_access(session, job_id, user)
         session.commit()
     limiter, lease_token = _acquire_job_stream_lease(request, user.id)

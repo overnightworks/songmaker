@@ -51,7 +51,7 @@ def ctx(tmp_path: Path) -> AppContext:
     factory = init_test_db(tmp_path / "songmaker.db")
     return AppContext(
         db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
 
 

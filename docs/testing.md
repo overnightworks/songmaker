@@ -306,6 +306,17 @@ tests/acestep_worker/
 ├── test_task_store.py
 └── test_wrapper.py
 
+tests/webauth/                     The auth library on its own, against fake ports — no
+├── webauth_arrangement.py         SQLAlchemy and no songmaker imports, so these travel
+├── test_web_auth_config.py        with the package when it becomes its own distribution
+├── test_cookies.py                (a named arrangement module rather than a conftest:
+├── test_dependencies.py           pytest puts every test directory on sys.path, where a
+├── test_passwords.py              second conftest would shadow the repository one)
+├── test_policies.py
+├── test_proxies.py
+├── test_redis_rate_limiter.py
+└── test_session_store.py
+
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
 │                                  resource-event decimal SSE payloads
