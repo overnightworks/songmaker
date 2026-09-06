@@ -27,8 +27,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
-from pydantic import BaseModel, Field
-
+from agent_providers.events import (
+    AssistantTextEvent,
+    ErrorEvent,  # noqa: F401 — re-exported here until the provider moves (#825, A6)
+    FinalEvent,
+    StreamEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from songmaker_cli import agent_cli
 from songmaker_cli.agent_cli import (
     CliLogin,
@@ -178,44 +184,6 @@ class _ClaudeCliProcessPoolSaturated(UnavailableError):
 @dataclass
 class ClaudeResponse:
     text: str
-
-
-# ── Stream event models ────────────────────────────────────────────
-
-
-class StreamEvent(BaseModel):
-    """Base class for all streamed Claude events."""
-
-    type: str
-
-
-class AssistantTextEvent(StreamEvent):
-    type: Literal["assistant_text"] = "assistant_text"
-    text: str
-
-
-class ToolCallEvent(StreamEvent):
-    type: Literal["tool_call"] = "tool_call"
-    tool_use_id: str
-    name: str
-    input: dict = Field(default_factory=dict)
-
-
-class ToolResultEvent(StreamEvent):
-    type: Literal["tool_result"] = "tool_result"
-    tool_use_id: str
-    content: str
-    is_error: bool = False
-
-
-class FinalEvent(StreamEvent):
-    type: Literal["final"] = "final"
-    text: str
-
-
-class ErrorEvent(StreamEvent):
-    type: Literal["error"] = "error"
-    message: str
 
 
 # ── Public interface ───────────────────────────────────────────────
