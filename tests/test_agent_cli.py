@@ -12,6 +12,7 @@ import time
 from unittest.mock import patch
 
 import pytest
+from conftest import override_provider_runtime
 
 from songmaker_cli import agent_cli
 from songmaker_cli.agent_cli import (
@@ -1385,7 +1386,7 @@ def test_cancelling_a_line_channel_discards_unread_output() -> None:
     ],
 )
 def test_credential_probe_names_malformed_mounted_credentials(
-    tmp_path, monkeypatch, checker: str, payload: str, detail: str,
+    tmp_path, checker: str, payload: str, detail: str,
 ) -> None:
     credential_file = tmp_path / f"{checker}.json"
     credential_file.write_text(payload)
@@ -1394,8 +1395,8 @@ def test_credential_probe_names_malformed_mounted_credentials(
         if checker == "grok"
         else agent_cli.codex_cli_access_token_is_present
     )
-    constant = "GROK_CLI_AUTH_FILE" if checker == "grok" else "CODEX_CLI_AUTH_FILE"
-    monkeypatch.setattr(agent_cli, constant, credential_file)
+    field = "grok_cli_auth_file" if checker == "grok" else "codex_cli_auth_file"
+    override_provider_runtime(**{field: credential_file})
 
     with pytest.raises(AgentCliUnavailableError, match=detail):
         function()
