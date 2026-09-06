@@ -22,7 +22,7 @@ const TAKE_FIXTURE = fileURLToPath(new URL('./fixtures/take.mp3', import.meta.ur
 // prettier-ignore
 test.skip( // NOSONAR S1607: dedicated override required.
 	process.env.E2E_VOICES_STACK !== '1',
-	'Voices proof requires the docker-compose.e2e-voices.yml worker override.'
+	'Voices proof requires the docker/docker-compose.e2e-voices.yml worker override.'
 );
 
 interface VoiceState {

@@ -35,7 +35,7 @@ def _write_env_file(path: Path, values: dict[str, str]) -> Path:
 
     Values are single-quoted: that is the one quoting both readers of this
     file agree on — the shell that sources it here and the dotenv parser
-    the app itself uses — and it is what .env.docker.example tells the
+    the app itself uses — and it is what docker/.env.docker.example tells the
     operator to do for a value carrying spaces or shell characters.
     """
     env_file = path / ".env"

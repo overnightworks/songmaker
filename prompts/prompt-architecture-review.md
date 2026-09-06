@@ -8,7 +8,7 @@ Your job is to find what's NEW. Anything already documented as known/accepted sh
 
 1. **Read [`CLAUDE.md`](../CLAUDE.md)** (auto-loaded) — especially the "Code Patterns", "Plan-writing convention", and "Known Technical Debt" sections. The accepted-constraint items in Known Technical Debt are deliberate trade-offs (Claude CLI bind mounts, scoring CI exclusion, single-node worker pool, etc.) — flagging them is noise.
 
-2. **Read [`BACKLOG.md`](../BACKLOG.md)** at the project root. Every section there is **already known and tracked**. If you find something that's already in the backlog, do not surface it as a finding. Use the backlog as a "what's already on the radar" filter.
+2. **Read the live board** (`gh issue list --repo overnightworks/songmaker --state open --json number,title,milestone,labels`). Every open item there is **already known and tracked**. If you find something that's already an open issue, do not surface it as a finding. Use the board as a "what's already on the radar" filter.
 
 3. **Read recent git history** (`git log --oneline -30`). Don't flag things that just shipped. The recent quick-wins / refactors are the most likely source of false-positive findings.
 
@@ -95,39 +95,32 @@ Read the entire codebase. Then tear it apart across these dimensions:
 
 ## Output Format
 
-After producing the review (sections below), **append your real findings to `BACKLOG.md`** under a new section so the user can triage them. The chat output is for the user to read; the BACKLOG entries are for the future agent who will execute the fix.
+After producing the review (sections below), **open one distributor GitHub issue — with a milestone — holding your real findings** as a numbered list with evidence, per the repository's standing review-findings rule (CLAUDE.md "Work item" row; operator rulings 24./25.08.2026: a review yields exactly one distributor issue, never a fresh issue per finding at review time). The chat output is for the user to read; the distributor issue is for the future agent who will execute the fix.
 
-### How to write findings into BACKLOG.md
+### How to write findings into the distributor issue
 
-Append a new section to `BACKLOG.md` (do NOT modify existing sections):
+Open it with `gh issue create --repo overnightworks/songmaker --milestone <milestone> --title "Architecture review findings ({YYYY-MM-DD})" --body-file <file>`, with a body shaped as:
 
 ```markdown
----
+Findings from a brutal architecture review on {date}. Each is numbered; the operator promotes an accepted one to its own dispatched issue when it is actually built, folds it into an existing owner, or retires it here with one sentence why.
 
-## Pending triage (from {YYYY-MM-DD} architecture review)
-
-Each entry below was surfaced by a brutal architecture review on {date}. The user reviews this section and either promotes accepted items (status → Proposed, move to the appropriate section above) or deletes rejected items. Git history preserves rejected items if you ever change your mind.
-
-### {Short title — what's wrong, in 5–8 words}
-**Status:** Needs triage
+### 1. {Short title — what's wrong, in 5–8 words}
 **Severity:** HIGH | MEDIUM | LOW
 **Goal:** {1–2 sentences: what's wrong, what the fix produces}
-**Decisions you'd recommend:** {bullets — what you'd lock in if the user accepts. The user may override.}
+**Decisions you'd recommend:** {bullets — what you'd lock in if the operator accepts. They may override.}
 **Hard constraints:** {bullets — things the future executor must not violate. CLAUDE.md conventions, engine isolation, etc.}
 **Evidence:** {file:line citations from your review. The future executor will re-grep, but giving them the starting point saves 5 minutes.}
-**First step:** read the live code, design + execute (per CLAUDE.md "Plan-writing convention" — concept notes only, no symbol lists or step orderings).
 
 ### {next finding}
 ...
 ```
 
-**Rules for the BACKLOG entries:**
-- One entry per finding. ~10–20 lines each.
+**Rules for the distributor issue:**
+- One numbered finding per entry. ~10–20 lines each.
 - Severity is your call: HIGH = correctness/security/data-loss risk, MEDIUM = real bug-class waiting to bite, LOW = quality / cosmetic / minor.
-- Mark every entry `**Status:** Needs triage`. The user will change it after reviewing.
 - Do **not** include symbol inventories, line counts, file-by-file diff sketches, or step-by-step orderings. Per CLAUDE.md "Plan-writing convention", those rot. Concept only.
-- Do **not** include findings that are already in BACKLOG.md or the recent git history. That's noise.
-- If you find something that's covered by an existing BACKLOG entry but with new specifics, add the specifics as a comment under the existing entry (do not create a new section).
+- Do **not** include findings that are already open on the board or in the recent git history. That's noise.
+- Label the issue so it is discoverable as this review's output; the distributor closes once every finding is landed, folded into an owner, or retired.
 
 ### Chat output structure
 
@@ -171,18 +164,18 @@ One paragraph. Is this codebase ready to onboard a second contributor? What woul
 
 ### Triage summary
 
-After appending findings to `BACKLOG.md`, output a one-screen triage summary:
+After opening the distributor issue, output a one-screen triage summary:
 
 ```
-Appended {N} findings to BACKLOG.md "Pending triage" section:
+Opened distributor issue #{n} ({url}) with {N} findings:
   HIGH:   {n}  ({short title}, {short title}, ...)
   MEDIUM: {n}  ({short title}, ...)
   LOW:    {n}  ({short title}, ...)
 
-Review the section and either promote items (status → Proposed, move to the appropriate section) or delete the rejected ones.
+The operator triages each numbered finding and either dispatches it as its own issue or retires it here with one sentence why.
 ```
 
-If the entire review is clean and there's nothing to add, say so in one line and do NOT touch BACKLOG.md.
+If the entire review is clean and there's nothing to add, say so in one line and do NOT open an issue.
 
 ## Rules
 

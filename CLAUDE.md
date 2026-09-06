@@ -75,12 +75,13 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts src/lib/servic
 
 `python scripts/check_no_silent_fallbacks.py src/` is cheap; run it when
 touching `src/`. `python scripts/generate_types.py --check` when touching
-API models.
+API models. `python scripts/check_root_layout.py` when adding or moving a
+root-level file.
 
 **Full suite is CI only** (or when the operator explicitly asks):
 
 ```bash
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
 python scripts/generate_types.py --check
 lint-imports
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
@@ -150,7 +151,7 @@ These are conventions that aren't obvious from reading a single file:
 ## Known Technical Debt
 
 - **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery.
-- **Scoring modules excluded from CI coverage.** All seven scorers in `scoring/` are listed in `.coveragerc-ci` `omit`. Reason: the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights, and adding them blows up image size and runtime for a single-developer project. Local coverage runs include them.
+- **Scoring modules excluded from CI coverage.** All seven scorers in `scoring/` are listed in `.github/workflows/coveragerc-ci` `omit`. Reason: the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights, and adding them blows up image size and runtime for a single-developer project. Local coverage runs include them.
 - **Stale numba JIT cache in librosa segfaults scorer tests after `uv sync`.** librosa caches compiled gufuncs as `.nbc`/`.nbi` files inside `librosa/__pycache__/` (NOT `~/.numba_cache`). When `uv sync` upgrades numba, numpy, or librosa, the old cache files survive and the new numba runtime segfaults trying to load them. Symptom: `pytest tests/test_scorers.py` crashes with "Fatal Python error: Segmentation fault" deep inside `numba/np/ufunc/gufunc.py` called from `librosa.pyin`. Fix: `find .venv/lib/python*/site-packages/librosa \( -name "*.nbc" -o -name "*.nbi" \) -delete`. Numba rebuilds the cache on first call (~1s extra on the first scorer test). Run after any dependency upgrade that touches the librosa/numba/numpy stack.
 - **Claude CLI bind mounts in `docker-compose.yml`** never expose an operator profile. The web container and scoring worker each own a writable `.claude` profile and mount only the Claude CLI binary and redacted credential mirror read-only with `create_host_path: false`; Grok and Codex use their HTTP APIs and have no mount. Claude creates `~/.claude.json` in its own profile when needed. `ANTHROPIC_API_KEY` enables Claude's judge and catalog SDK path, but not the co-writer, which needs the CLI with Songmaker's MCP tools; retain the web Claude CLI mirror for co-writer turns. See `docs/security.md`, "Agent-CLI Mounts".
 - **Redis is authoritative for session expiry.** The session sync loop in `lifecycle.py` syncs Redis TTL → DB `expires_at` every 5 minutes. This is intentional — Redis-first reads avoid DB writes on every request. The DB copy is a backup for audit/recovery, not the source of truth.
