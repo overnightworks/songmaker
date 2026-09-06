@@ -446,6 +446,46 @@ capability. AppArmor remains the mount-shape boundary inside the nested user
 and mount namespaces, while Compose still drops every container capability and
 sets `no-new-privileges:true`; neither profile replaces the other.
 
+### Masks by AppArmor instead of Docker
+
+`songmaker-web` sets `systempaths=unconfined`. Docker normally overlays its
+masked and read-only system paths, but those overmounts make Bubblewrap's fresh
+`--proc /proc` mount fail the kernel's `mount_too_revealing` check: a new procfs
+in the user namespace needs a source `/proc` without those overmounts. The
+`songmaker-web` AppArmor profile therefore enforces the relevant path policy
+instead. This is a path-access replacement, not an inode-hiding replacement:
+it applies to every task carrying `songmaker-web`, including the Bubblewrap
+child, but does not hide an inode or block alias paths. A fresh child procfs
+would not retain Docker's proc masks in any case.
+
+| Docker system path | `songmaker-web` rule |
+| --- | --- |
+| `/proc/acpi` | `deny /proc/acpi{,/**} rwklx` |
+| `/proc/asound` | `deny /proc/asound{,/**} rwklx` |
+| `/proc/interrupts` | `deny /proc/interrupts{,/**} rwklx` |
+| `/proc/kcore` | `deny /proc/kcore{,/**} rwklx` |
+| `/proc/keys` | `deny /proc/keys{,/**} rwklx` |
+| `/proc/latency_stats` | `deny /proc/latency_stats{,/**} rwklx` |
+| `/proc/sched_debug` | `deny /proc/sched_debug{,/**} rwklx` |
+| `/proc/scsi` | `deny /proc/scsi{,/**} rwklx` |
+| `/proc/timer_list` | `deny /proc/timer_list{,/**} rwklx` |
+| `/proc/timer_stats` | `deny /proc/timer_stats{,/**} rwklx` |
+| `/sys/devices/virtual/powercap` | `deny /sys/devices/virtual/powercap{,/**} rwklx` |
+| `/sys/firmware` | `deny /sys/firmware{,/**} rwklx` |
+| `/proc/bus` | `deny /proc/bus{,/**} w` |
+| `/proc/fs` | `deny /proc/fs{,/**} w` |
+| `/proc/irq` | `deny /proc/irq{,/**} w` |
+| `/proc/sys` | `deny /proc/sys{,/**} w` |
+| `/proc/sysrq-trigger` | `deny /proc/sysrq-trigger{,/**} rwklx` (stricter than Docker's read-only mask) |
+
+The `/proc/sys` rule intentionally has no `shm*` write exception. Songmaker
+does not write those kernel settings; the process also runs without container
+capabilities and as the unprivileged `songmaker` user, but those are additional
+constraints rather than substitutes for the AppArmor rule. The runtime proof
+checks `/proc/kcore`, `/proc/keys`, and `/proc/sched_debug` for unreadability,
+and `/proc/sysrq-trigger` plus `/proc/sys/kernel/hostname` for unwritability in
+both the web-service parent and the private Bubblewrap child.
+
 An operator loads the AppArmor policy for the current host boot with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
 `docker compose up -d songmaker-web`. The script does not install the profile
@@ -487,11 +527,13 @@ deliberate #666 trade-off because the alternative is Option 2.
 `lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin three different
 Codex Bubblewrap forms because they answer different questions:
 
-- The **boot check** is Codex's startup capability probe, not a cover-command
-  execution. Its literal argv is `bwrap --unshare-user --unshare-net --ro-bind
-  / / /bin/true`. Source: the Codex 0.147.0 Linux binary's embedded string,
-  confirmed by the boot check's direct `subprocess.run` assertion. It asks only
-  whether Bubblewrap can create the namespace and read-only root at all.
+- The **boot check** requires both Codex's startup capability probe and its
+  per-run startup probe. The capability probe's literal argv is `bwrap
+  --unshare-user --unshare-net --ro-bind / / /bin/true`. Source: the Codex
+  0.147.0 Linux binary's embedded string, confirmed by the boot check's direct
+  `subprocess.run` assertion. It asks whether Bubblewrap can create the
+  namespace and read-only root at all; the second form below proves the fresh
+  procfs setup as well. `ready` means that both commands succeeded.
 - Codex then runs this **per-run startup probe** before its sandbox command.
   `strace -f -e trace=execve -s 400 codex sandbox -- /bin/true` on 06.09.2026
   (Codex 0.147.0) recorded its literal argv:
@@ -501,9 +543,9 @@ Codex Bubblewrap forms because they answer different questions:
   ```
 
   The startup probe is an empty private root, not the read-only-root form from
-  the boot check. The post-rollout proof runs this exact form before its G4
-  command and its test pins every argument, so an AppArmor rule cannot be kept
-  without the observed command that needs it.
+  the capability probe. The boot check and post-rollout proof run this exact
+  form before the G4 command, and their tests pin every argument, so an AppArmor
+  rule cannot be kept without the observed command that needs it.
 - The **post-rollout proof** uses the real read-only command form, with its
   terminal command replaced by G4 assertions. Source: `strace -f -e
   trace=execve -s 400` of `codex sandbox --sandbox-state-json … -- /bin/true`
