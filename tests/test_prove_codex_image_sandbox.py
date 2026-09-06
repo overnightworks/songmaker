@@ -61,6 +61,11 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     assert f'"{proof.EMPTY_CAPABILITY_MASK}"' in assertions
     assert "EMPTY_CAPABILITY_MASK" not in assertions
     assert "1.1.1.1" in assertions
+    assert "/proc/kcore" in assertions
+    assert "/proc/keys" in assertions
+    assert "/proc/sched_debug" in assertions
+    assert "/proc/sysrq-trigger" in assertions
+    assert "/proc/sys/kernel/hostname" in assertions
 
 
 def test_bubblewrap_startup_probe_matches_the_traced_codex_preflight_form() -> None:
@@ -117,6 +122,16 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
         "-T",
         proof.WEB_SERVICE,
         *proof.bubblewrap_startup_probe_command(),
+    ) in commands
+    assert (
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        proof.WEB_SERVICE,
+        "/bin/sh",
+        "-ec",
+        proof._MASKED_PATH_ASSERTIONS,
     ) in commands
     sandbox = next(
         command
