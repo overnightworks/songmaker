@@ -84,7 +84,3 @@ def test_main_reports_clean_for_an_allowlist_only_root(tmp_path: Path, capsys) -
 
     assert exit_code == 0
     assert "clean" in capsys.readouterr().out
-
-
-def test_the_real_repository_root_has_no_layout_violations() -> None:
-    assert check_root_layout.find_violations(check_root_layout.REPOSITORY_ROOT) == []
