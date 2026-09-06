@@ -54,7 +54,17 @@ class McpServerSpec(BaseModel):
 
 
 class ProviderRuntimeConfig(BaseModel):
-    """Every deployment fact the provider layer needs, as one immutable value."""
+    """Every deployment fact the provider layer needs, as one immutable value.
+
+    ``cli_working_directory_root`` is the directory below which every turn
+    creates its private working directory, so a deployment that confines the
+    agent CLIs — songmaker sandboxes them under ``/tmp`` — states that root
+    once instead of inheriting whatever ``TMPDIR`` happens to be.
+    ``cli_prompt_file_prefix`` names the temporary file a prompt too private
+    for a command line is written to, and ``cli_prompt_file_placeholder`` is
+    the argument a transport writes in that file's place until it exists.
+    All three carry the host's name, so the host states them.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -76,6 +86,10 @@ class ProviderRuntimeConfig(BaseModel):
 
     codex_max_concurrent_processes: int = Field(ge=1)
     codex_max_concurrent_image_runs: int = Field(ge=1)
+
+    cli_working_directory_root: Path
+    cli_prompt_file_prefix: str = Field(min_length=1)
+    cli_prompt_file_placeholder: str = Field(min_length=1)
 
     secret_env_keys: tuple[str, ...]
 
