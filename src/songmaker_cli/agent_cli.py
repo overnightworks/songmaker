@@ -1,4 +1,4 @@
-"""Bounded, cached login probes for mounted agent CLIs."""
+"""Bounded probes for mounted agent CLIs."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
     CODEX_CLI_BINARY,
     CODEX_CLI_LOGGED_IN_MARKER,
     CODEX_CLI_LOGGED_OUT_MARKER,
+    CODEX_CLI_MODELS_ARGS,
     CODEX_CLI_STATUS_ARGS,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     GROK_CLI_AUTH_FILE,
@@ -42,6 +43,8 @@ from songmaker_cli.constants import (
     GROK_CLI_STATUS_ARGS,
     SECRET_ENV_KEYS,
 )
+
+CODEX_CLI_MODEL_CATALOG_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
 
 
 class AgentCliUnavailableError(Exception):
@@ -1181,6 +1184,24 @@ def _probe_codex_login() -> CliLogin:
     if output is None:
         return LOGGED_OUT
     return _parse_codex_login(output)
+
+
+def codex_cli_model_catalog() -> str:
+    """Return the current JSON catalog emitted by ``codex debug models``."""
+    binary = shutil.which(CODEX_CLI_BINARY)
+    if binary is None:
+        raise AgentCliUnavailableError("codex debug models did not return a catalog")
+    outcome = run_cli_bounded(
+        (binary, *CODEX_CLI_MODELS_ARGS),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS,
+        stderr="devnull",
+        output_read_limit_bytes=CODEX_CLI_MODEL_CATALOG_OUTPUT_READ_LIMIT_BYTES,
+    )
+    if not outcome.complete or outcome.returncode != 0:
+        raise AgentCliUnavailableError("codex debug models did not return a catalog")
+    return outcome.stdout
 
 
 def _parse_codex_login(output: str) -> CliLogin:

@@ -588,8 +588,9 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 Each new turn captures its provider, model, and explicit `cli` or `api` route
 before its SSE generator starts; `cowriter/dispatch.py` only executes that
 route and returns one normalized route failure instead of trying its sibling.
-`cowriter/catalog.py` refreshes both routes per provider independently, and
-the settings responses project the selected route for legacy callers while
+`cowriter/catalog.py` refreshes both routes per provider independently; the
+Codex CLI route reads its model catalogue from the mounted CLI's `codex debug models`
+JSON output. The settings responses project the selected route for legacy callers while
 also returning the route-keyed readiness and catalogue snapshots. The Judge
 remains API-only. Claude's API route plus Grok's and Codex's CLI routes own the
 same shared co-writer tool loop; the CLI routes carry calls and results in the
