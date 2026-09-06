@@ -11,8 +11,8 @@ from urllib.parse import quote
 
 import pytest
 
+from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
-from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.cowriter import grok_cli_adapter
 from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.cowriter.tool_loop import (

@@ -12,9 +12,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user

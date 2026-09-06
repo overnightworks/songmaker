@@ -15,10 +15,10 @@ from conftest import TEST_SECRET, make_fake_redis, refresh_provider_snapshots
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_providers.events import FinalEvent, ToolCallEvent
 from songmaker_cli.agent_cli import LOGGED_OUT, CliLogin, GrokCliStatus
 from songmaker_cli.api_models.settings import ProviderSurfaceState, ProviderSurfaceStatus
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
 from songmaker_cli.constants import (
     COWRITER_MAX_TOOL_ROUNDS,
     SETTING_CLAUDE_SCORING_MODEL,

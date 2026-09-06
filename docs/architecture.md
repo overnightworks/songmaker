@@ -616,7 +616,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 
