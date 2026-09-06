@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from agent_providers.codex.image import generate_codex_cover_image
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
-from songmaker_cli.cowriter.codex_cli_adapter import generate_codex_cover_image
 from songmaker_cli.jobs._runtime import _update_job
 from songmaker_cli.settings import Settings, get_settings
 

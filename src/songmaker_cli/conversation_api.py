@@ -29,6 +29,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from agent_providers.errors import (
+    ProviderUnavailableError,
+    SafeRouteReason,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.events import (
     FinalEvent,
 )
@@ -70,12 +76,6 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
-from agent_providers.errors import (
-    ProviderUnavailableError,
-    SafeRouteReason,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (

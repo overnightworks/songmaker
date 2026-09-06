@@ -11,9 +11,18 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime
+from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
 
+from agent_providers.codex import image as codex_image
+from agent_providers.codex import protocol as codex_protocol
+from agent_providers.codex import transport as codex_transport
+from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
+from agent_providers.errors import (
+    CodexProcessPoolSaturatedError,
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+)
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from agent_providers.process import CliRunOutcome, CliRunReason
 from agent_providers.tool_loop import (
@@ -24,15 +33,18 @@ from agent_providers.tool_loop import (
     ToolResultBatch,
     stream_tool_loop,
 )
-from songmaker_cli.cowriter import codex_cli_adapter
-from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
-from agent_providers.errors import (
-    CodexProcessPoolSaturatedError,
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-)
+from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
+from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
 A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
+A_COVER_POLICY = COVER_IMAGE_POLICY
+
+
+def _transport() -> codex_transport.CodexCliToolTransport:
+    """Build the transport under test with songmaker's own tool catalog."""
+    return codex_transport.CodexCliToolTransport(
+        model="codex-test", catalog=COWRITER_TOOL_CATALOG,
+    )
 
 _REDACTED_CODEX_LOGIN = {
     "auth_mode": "chatgpt",
@@ -65,7 +77,7 @@ def test_cover_image_capability_requires_every_codex_mount(
         codex_resources_directory=resources,
     )
 
-    assert codex_cli_adapter.codex_cover_image_capability_is_available()
+    assert codex_image.codex_cover_image_capability_is_available()
 
     if missing == "cli":
         cli.unlink()
@@ -74,7 +86,7 @@ def test_cover_image_capability_requires_every_codex_mount(
     else:
         resources.rmdir()
 
-    assert not codex_cli_adapter.codex_cover_image_capability_is_available()
+    assert not codex_image.codex_cover_image_capability_is_available()
 
 
 @pytest.fixture(autouse=True)
@@ -83,11 +95,7 @@ def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     override_provider_runtime(codex_cli_auth_file=mirror)
     process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
-    monkeypatch.setattr(
-        codex_cli_adapter,
-        "get_codex_process_pool",
-        lambda: process_pool,
-    )
+    use_codex_process_pool(monkeypatch, process_pool)
     return mirror
 
 
@@ -194,10 +202,10 @@ def test_codex_tool_command_pins_read_only_isolation_for_start_and_resume() -> N
         "--model", model,
     )
 
-    assert codex_cli_adapter._build_codex_tool_command(model) == (
+    assert codex_transport._build_codex_tool_command(model) == (
         "codex", "exec", "--sandbox", "read-only", *common, "-",
     )
-    assert codex_cli_adapter._build_codex_tool_command(
+    assert codex_transport._build_codex_tool_command(
         model,
         thread_id=thread_id,
     ) == ("codex", "exec", "resume", *common, thread_id, "-")
@@ -245,9 +253,9 @@ def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(mon
         scrubbed_calls += 1
         return {"PATH": "/test/bin"}
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
-    monkeypatch.setattr(codex_cli_adapter, "scrubbed_env", scrubbed_environment)
-    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_transport, "scrubbed_env", scrubbed_environment)
+    transport = _transport()
     events = asyncio.run(_collect_tool_events(_codex_tool_events(
         transport,
         lambda _name, _arguments: ToolOutcome('{"songs":[]}', False),
@@ -264,12 +272,12 @@ def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(mon
         assert "--ephemeral" not in command
         assert kwargs["stdin_payload"] in prompts
         assert kwargs["output_read_limit_bytes"] == (
-            codex_cli_adapter.CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES
+            codex_protocol.CODEX_CLI_TURN_OUTPUT_READ_LIMIT_BYTES
         )
         assert kwargs["deadline"] == first_kwargs["deadline"]
         assert kwargs["extra_env"]["CODEX_HOME"].endswith("/codex-home")
         assert kwargs["extra_env"]["PATH"] == "/test/bin"
-        for config in (*codex_cli_adapter._CODEX_TOOL_ISOLATION_CONFIGS,
+        for config in (*codex_transport._CODEX_TOOL_ISOLATION_CONFIGS,
                        'sandbox_mode="read-only"'):
             assert config in command
     assert prompts == [
@@ -286,18 +294,18 @@ def test_codex_tool_transport_uses_an_empty_private_work_directory_on_resume(mon
     ("fixture-codex-thread-527", "--dangerously-bypass-approvals-and-sandbox"),
 )
 def test_codex_tool_transport_rejects_non_uuid_thread_ids(thread_id: str) -> None:
-    with pytest.raises(codex_cli_adapter._CodexCliStreamFailure):
-        codex_cli_adapter._thread_started_id({"thread_id": thread_id})
+    with pytest.raises(codex_protocol.CodexCliStreamFailure):
+        codex_transport._thread_started_id({"thread_id": thread_id})
 
 
 def test_codex_tool_transport_rejects_a_multi_result_batch_without_a_resume(monkeypatch) -> None:
     calls: list = []
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _runner([
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _runner([
         b'{"type":"thread.started","thread_id":"52700000-0000-4000-8000-000000000000"}\n',
         b'{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n',
         b'{"type":"turn.completed","usage":{}}\n',
     ], _outcome(), calls))
-    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    transport = _transport()
 
     async def reject_batch() -> None:
         assert [item async for item in transport.stream(InitialTurn("system", []))]
@@ -325,7 +333,7 @@ def test_codex_tool_transport_ignores_its_code_mode_host_isolation_notice(
 ) -> None:
     calls: list = []
     monkeypatch.setattr(
-        codex_cli_adapter,
+        codex_protocol,
         "run_cli_bounded",
         _runner(
             _fixture_lines(fixture_name),
@@ -333,8 +341,8 @@ def test_codex_tool_transport_ignores_its_code_mode_host_isolation_notice(
             calls,
         ),
     )
-    caplog.set_level("INFO", logger="songmaker_cli.cowriter.codex_cli_adapter")
-    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    caplog.set_level("INFO", logger="agent_providers.codex.transport")
+    transport = _transport()
 
     events = asyncio.run(_collect_tool_events(_codex_tool_events(
         transport,
@@ -365,8 +373,8 @@ def test_codex_tool_transport_aborts_for_an_unrelated_completed_error_item(monke
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
-    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
+    transport = _transport()
 
     async def collect() -> None:
         turn = transport.stream(InitialTurn("system", []))
@@ -379,7 +387,7 @@ def test_codex_tool_transport_aborts_for_an_unrelated_completed_error_item(monke
     assert aborted.is_set()
 
 
-@pytest.mark.parametrize("item_type", sorted(codex_cli_adapter._BLOCKED_ITEM_TYPES))
+@pytest.mark.parametrize("item_type", sorted(codex_protocol.BLOCKED_ITEM_TYPES))
 def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
     monkeypatch,
     item_type,
@@ -400,7 +408,7 @@ def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
     executed = False
 
     def executor(_name, _arguments):
@@ -409,7 +417,7 @@ def test_codex_tool_transport_aborts_native_tools_before_the_loop_executes(
         return ToolOutcome("unreachable", False)
 
     async def collect() -> None:
-        transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+        transport = _transport()
         with pytest.raises(ProviderUnavailableError) as raised:
             async for _ in _codex_tool_events(transport, executor):
                 pass
@@ -452,9 +460,9 @@ def test_codex_tool_transport_cleans_its_home_and_does_not_log_protocol_text(
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
-    caplog.set_level("INFO", logger="songmaker_cli.cowriter.codex_cli_adapter")
-    transport = codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
+    caplog.set_level("INFO", logger="agent_providers.codex.transport")
+    transport = _transport()
 
     async def collect_and_close() -> None:
         assert isinstance(
@@ -471,7 +479,7 @@ def test_codex_tool_transport_cleans_its_home_and_does_not_log_protocol_text(
 
 def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch) -> None:
     process_pool = CodexProcessPool(maximum_processes=1, maximum_image_runs=1)
-    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    use_codex_process_pool(monkeypatch, process_pool)
     callbacks: dict[str, object] = {}
 
     def fake_runner(_command, **kwargs):
@@ -487,10 +495,10 @@ def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch)
             reason=CliRunReason.DEADLINE_BEFORE_SPAWN,
         )
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
     reservation = process_pool.reserve(CodexProcessKind.TEXT)
 
-    codex_cli_adapter._run_reserved_codex_cli(
+    codex_protocol.run_reserved_codex_cli(
         reservation,
         ("codex", "exec"),
         stdin_payload=b"prompt",
@@ -519,29 +527,29 @@ def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> 
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
 
-    assert codex_cli_adapter.generate_codex_cover_image(
-        "prompt", deadline=10_000_000,
+    assert codex_image.generate_codex_cover_image(
+        "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
     ).startswith(b"\x89PNG")
 
 
 @pytest.mark.parametrize(
     ("outcome", "expected_error", "expected_message", "expected_retry_at"),
     (
-        (_outcome(stderr="401 Unauthorized"), codex_cli_adapter.CodexImageLoginError, None, None),
+        (_outcome(stderr="401 Unauthorized"), codex_image.CodexImageLoginError, None, None),
         (
             _outcome(
                 complete=False,
                 reason=CliRunReason.DEADLINE_WHILE_READING,
             ),
-            codex_cli_adapter.CodexImageTimeoutError,
+            codex_image.CodexImageTimeoutError,
             None,
             None,
         ),
         (
             _outcome(returncode=1, complete=False),
-            codex_cli_adapter.CodexImageCliError,
+            codex_image.CodexImageCliError,
             None,
             None,
         ),
@@ -553,7 +561,7 @@ def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> 
                     '"error":{"message":"401 Unauthorized: token expired"}}\n'
                 ),
             ),
-            codex_cli_adapter.CodexImageLoginError,
+            codex_image.CodexImageLoginError,
             None,
             None,
         ),
@@ -562,7 +570,7 @@ def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> 
                 returncode=1,
                 stdout=(_FIXTURES / "codex-cover-quota-exceeded.jsonl").read_text(),
             ),
-            codex_cli_adapter.CodexImageQuotaError,
+            codex_image.CodexImageQuotaError,
             "usage limit",
             "Sep 7th, 2026 8:45 PM",
         ),
@@ -575,7 +583,7 @@ def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> 
                     '"error":{"message":"The requested model is unavailable."}}\n'
                 ),
             ),
-            codex_cli_adapter.CodexImageCliError,
+            codex_image.CodexImageCliError,
             "The requested model is unavailable.",
             None,
         ),
@@ -596,10 +604,10 @@ def test_codex_cover_image_names_terminal_cli_failures(
     expected_message: str | None,
     expected_retry_at: str | None,
 ) -> None:
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _image_runner(outcome))
 
     with pytest.raises(expected_error) as raised:
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     if expected_message is not None:
         assert expected_message in str(raised.value)
@@ -610,10 +618,10 @@ def test_codex_cover_image_names_terminal_cli_failures(
 @pytest.mark.parametrize(
     ("artifact_count", "expected_error"),
     (
-        (0, codex_cli_adapter.CodexImageNotCreatedError),
+        (0, codex_image.CodexImageNotCreatedError),
         (
             2,
-            codex_cli_adapter.CodexImageArtifactError,
+            codex_image.CodexImageArtifactError,
         ),
     ),
     ids=("missing-png", "ambiguous-pngs"),
@@ -634,18 +642,18 @@ def test_codex_cover_image_rejects_missing_or_ambiguous_generated_artifacts(
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
 
     with pytest.raises(expected_error):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
 
 def test_codex_cover_image_rejects_the_recorded_no_image_turn(monkeypatch) -> None:
     outcome = _outcome(stdout=(_FIXTURES / "codex-cover-no-image-events.jsonl").read_text())
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", _image_runner(outcome))
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _image_runner(outcome))
 
-    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.ImageToolBlockedError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
 
 @pytest.mark.parametrize(
@@ -665,9 +673,9 @@ def test_codex_public_adapters_reject_unusable_login_mirrors(
         auth_file.write_text(json.dumps(document))
     override_provider_runtime(codex_cli_auth_file=auth_file)
 
-    with pytest.raises(codex_cli_adapter.CodexImageLoginError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.CodexImageLoginError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
     with pytest.raises(ProviderUnavailableError) as raised:
-        codex_cli_adapter.CodexCliToolTransport(model="codex-test")
+        _transport()
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
