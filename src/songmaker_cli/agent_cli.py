@@ -44,6 +44,8 @@ from songmaker_cli.constants import (
     SECRET_ENV_KEYS,
 )
 
+CODEX_CLI_MODEL_CATALOG_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
+
 
 class AgentCliUnavailableError(Exception):
     """Raised when a CLI's login response does not match its contract."""
@@ -1186,10 +1188,20 @@ def _probe_codex_login() -> CliLogin:
 
 def codex_cli_model_catalog() -> str:
     """Return the current JSON catalog emitted by ``codex debug models``."""
-    output = _cli_output(CODEX_CLI_BINARY, CODEX_CLI_MODELS_ARGS)
-    if output is None:
+    binary = shutil.which(CODEX_CLI_BINARY)
+    if binary is None:
         raise AgentCliUnavailableError("codex debug models did not return a catalog")
-    return output
+    outcome = run_cli_bounded(
+        (binary, *CODEX_CLI_MODELS_ARGS),
+        stdin_payload=None,
+        read="all",
+        deadline=time.monotonic() + COWRITER_MODELS_TIMEOUT_SECONDS,
+        stderr="devnull",
+        output_read_limit_bytes=CODEX_CLI_MODEL_CATALOG_OUTPUT_READ_LIMIT_BYTES,
+    )
+    if not outcome.complete or outcome.returncode != 0:
+        raise AgentCliUnavailableError("codex debug models did not return a catalog")
+    return outcome.stdout
 
 
 def _parse_codex_login(output: str) -> CliLogin:

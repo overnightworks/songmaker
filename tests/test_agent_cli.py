@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -37,8 +38,6 @@ from songmaker_cli.constants import (
     CLAUDE_CLI_AUTH_METHOD_FIELD,
     CLAUDE_CLI_LOGGED_IN_FIELD,
     CLI_OUTPUT_READ_LIMIT_BYTES,
-    CODEX_CLI_BINARY,
-    CODEX_CLI_MODELS_ARGS,
     SECRET_ENV_KEYS,
 )
 
@@ -183,17 +182,29 @@ def test_codex_that_cannot_be_asked_counts_as_logged_out() -> None:
         assert codex_cli_login().logged_in is False
 
 
-def test_codex_model_catalog_uses_the_bounded_cli_output() -> None:
-    catalog = '{"models": []}'
+def test_codex_model_catalog_reads_past_the_login_probe_limit(monkeypatch) -> None:
+    catalog_length = CLI_OUTPUT_READ_LIMIT_BYTES + 1
+    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: sys.executable)
+    monkeypatch.setattr(
+        agent_cli,
+        "CODEX_CLI_MODELS_ARGS",
+        (
+            "-c",
+            (
+                "import sys; "
+                f"sys.stdout.write('x' * {catalog_length}); "
+                "sys.stderr.write('not catalog output')"
+            ),
+        ),
+    )
 
-    with _a_cli_that_says(catalog) as output:
-        assert codex_cli_model_catalog() == catalog
-
-    output.assert_called_once_with(CODEX_CLI_BINARY, CODEX_CLI_MODELS_ARGS)
+    assert codex_cli_model_catalog() == "x" * catalog_length
 
 
-def test_codex_model_catalog_that_cannot_be_read_raises() -> None:
-    with _a_cli_that_says(None), pytest.raises(
+def test_codex_model_catalog_without_a_binary_raises(monkeypatch) -> None:
+    monkeypatch.setattr(agent_cli.shutil, "which", lambda _binary: None)
+
+    with pytest.raises(
         AgentCliUnavailableError,
         match="did not return a catalog",
     ):
