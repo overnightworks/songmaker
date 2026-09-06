@@ -223,7 +223,7 @@ class Settings(BaseSettings):
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120
     # Range-request media (`/audio/*` and its Media-class siblings, see
-    # `middleware/rate_limit.py`) is a distinct budget class from plain API
+    # `request_policies.py`) is a distinct budget class from plain API
     # calls (issue #257): a single MP3 played with normal scrubbing is
     # estimated at roughly 40 range requests (order-of-magnitude from
     # typical browser Range-chunking behavior -- estimated, not measured; no

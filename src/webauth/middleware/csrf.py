@@ -1,38 +1,44 @@
-"""CSRF protection middleware -- double-submit cookie and origin checking."""
+"""CSRF protection -- double-submit cookie and origin checking."""
 
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Final
 from urllib.parse import urlparse
 
-from fastapi import Request
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from webauth.config import web_auth_config
 from webauth.cookies import verify_csrf_token, verify_session_cookie
 
-_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+if TYPE_CHECKING:
+    from starlette.requests import Request
 
-_FORM_CONTENT_TYPES = frozenset({
+    from webauth.policies import CsrfPolicy
+
+_MUTATING_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+_FORM_CONTENT_TYPES: Final = frozenset({
     "application/x-www-form-urlencoded",
     "multipart/form-data",
     "text/plain",
 })
 
-_LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
-
-_CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login", "/api/auth/setup"})
-_CSRF_EXEMPT_PREFIXES: tuple[str, ...] = ("/api/internal/",)
+_LOCALHOST_PATTERN: Final = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
 
 
 class CsrfTokenMiddleware(BaseHTTPMiddleware):
+    """Reject a state-changing request whose CSRF token does not match its session."""
+
+    def __init__(self, app, policy: CsrfPolicy, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(app, **kwargs)
+        self._policy = policy
+
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if (
             request.method in _MUTATING_METHODS
-            and request.url.path.startswith("/api/")
-            and request.url.path not in _CSRF_EXEMPT_PATHS
-            and not any(request.url.path.startswith(p) for p in _CSRF_EXEMPT_PREFIXES)
+            and self._policy.requires_token(request.url.path)
         ):
             config = web_auth_config(request)
             header_token = request.headers.get(config.csrf_header_name)
@@ -64,10 +70,16 @@ def _is_allowed_host(
 
 
 class CsrfOriginMiddleware(BaseHTTPMiddleware):
+    """Reject a state-changing request that a foreign page originated."""
+
+    def __init__(self, app, policy: CsrfPolicy, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(app, **kwargs)
+        self._policy = policy
+
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if (
             request.method in _MUTATING_METHODS
-            and request.url.path.startswith("/api/")
+            and self._policy.requires_same_origin(request.url.path)
         ):
             origin = request.headers.get("origin") or request.headers.get("referer")
             if origin:

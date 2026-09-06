@@ -15,8 +15,10 @@ from fastapi.testclient import TestClient
 from songmaker_cli.auth import TrustedProxies, hash_password
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
-from songmaker_cli.middleware.rate_limit import RateLimitClass, _classify_path
+from songmaker_cli.request_policies import build_rate_limit_policy
+from songmaker_cli.settings import get_settings
 from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.policies import RateLimitClass
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -145,7 +147,6 @@ def test_score_rate_limit_for_user(client: TestClient) -> None:
 
 def test_active_job_limit(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("MAX_USER_ACTIVE_JOBS", "1")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     _login_as(client, "user")
     user_id = _get_user_id(client)
@@ -168,7 +169,6 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
     from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobType
 
     monkeypatch.setenv("MAX_USER_ACTIVE_JOBS", "1")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     _login_as(client, "user")
     user_id = _get_user_id(client)
@@ -238,7 +238,6 @@ def test_generate_job_does_not_block_score(client: TestClient) -> None:
 
 def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("MAX_QUEUE_DEPTH", "10")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     _login_as(client, "user")
 
@@ -260,7 +259,6 @@ def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
 @pytest.fixture
 def ip_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
     build_dir = tmp_path / "frontend" / "build"
@@ -372,7 +370,13 @@ def test_ipv4_mapped_and_plain_forms_share_one_budget(
     assert _check_from(ip_limited_client, "203.0.113.1") == 429
 
 
-# ── Path classification (_classify_path) ────────────────────────────
+# ── Path classification ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def rate_limit_policy():
+    return build_rate_limit_policy(get_settings())
+
 
 # Media: `/audio/*`, the authenticated queue-stream audio route (review
 # finding 2a: previously untested), and every public share's audio route.
@@ -421,8 +425,8 @@ def test_ipv4_mapped_and_plain_forms_share_one_budget(
     # still classifies as Media -- it has a filename segment after "audio/".
     ("/shared/audio/audio/owner/file.mp3", RateLimitClass.MEDIA),
 ])
-def test_classify_path(path: str, expected_class: RateLimitClass) -> None:
-    assert _classify_path(path) == expected_class
+def test_classify_path(rate_limit_policy, path: str, expected_class: RateLimitClass) -> None:
+    assert rate_limit_policy.classify(path) == expected_class
 
 
 # ── Rate limit classes (issue #257) ─────────────────────────────────
@@ -433,7 +437,6 @@ def class_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
     monkeypatch.setenv("MEDIA_RATE_LIMIT", "2")
     monkeypatch.setenv("STREAM_RATE_LIMIT", "2")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
     yield client
@@ -519,7 +522,6 @@ def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
     # Setup itself spends 2 API-class calls (login + share), so the budget
     # needs headroom above that before the test's own assertions run.
     monkeypatch.setenv("IP_RATE_LIMIT", "5")
-    from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
     client, _ = make_test_app(tmp_path, seed_db=_seed_shared_album_data)
     admin_audio_dir = tmp_path / "audio" / "admin_user"

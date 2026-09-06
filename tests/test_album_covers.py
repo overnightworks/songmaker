@@ -46,7 +46,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, User
 from songmaker_cli.db.queries import create_user, get_album, soft_delete_album
-from songmaker_cli.middleware.body_size import body_limit_for_path, is_large_upload_path
+from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 
 ALICE_PASSWORD = "alicepass1"
@@ -128,16 +128,16 @@ def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
 
 
-def test_cover_upload_path_is_large_and_sized_to_cover_budget() -> None:
-    assert is_large_upload_path("/api/albums/alice-album/cover")
-    assert not is_large_upload_path("/api/albums/alice-album/cover", "PUT")
-    assert not is_large_upload_path("/api/albums/alice-album/cover/extra")
-    assert not is_large_upload_path("/api/albums//cover")
-    assert body_limit_for_path("/api/albums/alice-album/cover") == COVER_UPLOAD_BODY_MAX_BYTES
+def test_only_the_album_cover_post_route_gets_the_cover_budget() -> None:
+    policy = build_body_size_policy(get_settings())
+
+    assert policy.max_bytes("/api/albums/alice-album/cover", "POST") == COVER_UPLOAD_BODY_MAX_BYTES
+    assert policy.max_bytes("/api/albums/alice-album/cover", "PUT") == JSON_REQUEST_BODY_MAX_BYTES
     assert (
-        body_limit_for_path("/api/albums/alice-album/cover", "PUT")
+        policy.max_bytes("/api/albums/alice-album/cover/extra", "POST")
         == JSON_REQUEST_BODY_MAX_BYTES
     )
+    assert policy.max_bytes("/api/albums//cover", "POST") == JSON_REQUEST_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES > JSON_REQUEST_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES > COVER_MAX_BYTES
 

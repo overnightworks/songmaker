@@ -644,7 +644,7 @@ events.
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
 | `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, the rest of the code moves in slice by slice. `songmaker_cli.claude.provider` re-exports the event family until the provider itself follows |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
-| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `session_store.py` owns the Redis session cache. `songmaker_cli.auth` re-exports the moved symbols until the middleware and the auth router follow |
+| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares. `songmaker_cli.auth` and `songmaker_cli.middleware` re-export the moved symbols until the auth dependencies and the auth router follow |
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, Redis client and key prefixes, cookie and
@@ -658,6 +658,15 @@ songmaker's own data — users, sessions, login attempts, audit entries — reac
 the library through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
 endpoint owns the request's transaction.
+
+The same seam carries the four request policies in `webauth.policies`. The
+library owns what a rate limit, a CSRF check, a body cap, and a response header
+are; which of songmaker's paths each applies to is a product decision built in
+`songmaker_cli/request_policies.py` — the budget classes and their paths, the
+CSRF-protected and token-exempt routes, the upload routes that may exceed the
+JSON body cap, and the CSP line with its inline-script hashes and cacheability
+rules. `server.create_app` hands each policy to the middleware that reads it;
+no middleware reads songmaker's settings.
 
 The provider layer never reads songmaker's settings. Its binaries, credential
 mirrors, mounted Codex resources, chat model, API keys, process caps, the
