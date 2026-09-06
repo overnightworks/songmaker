@@ -589,6 +589,17 @@
 		flex-wrap: wrap;
 	}
 
+	@media (max-width: 1180px) {
+		.tt-row {
+			grid-template-columns: 7.5rem 9rem 10.5rem 11rem minmax(0, 1fr);
+			gap: 0.6rem;
+			font-size: 0.95em;
+		}
+		.tt-sub {
+			padding-left: 8.6rem;
+		}
+	}
+
 	@media (max-width: 768px) {
 		.tt-row {
 			grid-template-columns: minmax(0, 1fr);

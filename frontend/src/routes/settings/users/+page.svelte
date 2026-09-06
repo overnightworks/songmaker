@@ -1358,6 +1358,14 @@
 		cursor: pointer;
 	}
 
+	@media (max-width: 1180px) {
+		.tt-head {
+			grid-template-columns: 7.5rem 9rem 10.5rem 11rem minmax(0, 1fr);
+			gap: 0.6rem;
+			font-size: 0.95em;
+		}
+	}
+
 	@media (max-width: 768px) {
 		.tt {
 			border: 0;
