@@ -32,7 +32,6 @@ from songmaker_cli.api_models.settings import (
     DefaultConfigResponse,
     JudgeSettingsRequest,
     JudgeSettingsResponse,
-    ProviderNotConfiguredDetail,
     ProviderRouteReadiness,
     ProviderRouteStatusResponse,
     ProviderStatusResponse,
@@ -52,8 +51,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.queries import (
     delete_all_user_rate_limits,
-    get_active_cowriter_settings,
-    get_active_judge_settings,
     get_all_global_rate_limits,
     get_raw_stored_cowriter_settings,
     get_user,
@@ -87,6 +84,7 @@ from songmaker_cli.db.queries.settings import (
     set_cowriter_tail_token_budget,
     set_default_preset,
     set_judge_settings,
+    stored_provider_is_retired,
     toggle_model,
     update_preset,
 )
@@ -97,6 +95,7 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 
+JUDGE_ROUTE = "api"
 PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
 PRESET_NOT_FOUND_DETAIL = "Preset not found"
 USER_NOT_FOUND_DETAIL = "User not found"
@@ -458,12 +457,6 @@ def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
     return readiness
 
 
-def _surface_status(provider: str, surface: "ProviderSurface") -> ProviderSurfaceStatus:
-    from songmaker_cli.cowriter.catalog import provider_snapshot
-
-    return _surface_status_from_snapshot(provider, surface, provider_snapshot(provider), None)
-
-
 def _surface_status_from_snapshot(
     provider: str,
     surface: "ProviderSurface",
@@ -539,16 +532,18 @@ def _surface_status_from_snapshot(
     raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
 
 
-def _models_for_provider(
-    provider: str,
-    active_model: str | None,
-    route: str,
-) -> tuple[list[str], str | None]:
+def _live_catalogue(provider: str, route: str) -> list[str]:
+    """The models this provider lists on that route right now.
+
+    Empty when the catalogue is unavailable — an unverified provider, a failed
+    listing, or a route the provider is not set up for all list nothing.
+    """
     from songmaker_cli.cowriter.catalog import provider_snapshot
 
-    return _models_from_route_snapshot(
-        active_model, provider_snapshot(provider), route,
+    models, _unavailable = _models_from_route_snapshot(
+        None, provider_snapshot(provider), route,
     )
+    return models
 
 
 def _models_from_route_snapshot(
@@ -687,67 +682,56 @@ def api_get_cowriter_settings(
         raise HTTPException(422, str(exc)) from exc
 
 
-def _require_provider_can_answer(provider: str, surface: "ProviderSurface") -> None:
-    status = _surface_status(provider, surface)
-    if status.state is ProviderSurfaceState.CONFIGURED:
-        return
-    raise HTTPException(
-        422,
-        ProviderNotConfiguredDetail(
-            provider=provider,
-            surface=surface.value,
-            status=status,
-        ).model_dump(mode="json", exclude_none=True),
-    )
-
-
-def _matches_complete_stored_provider_and_model(
-    stored_provider: str | None,
-    stored_model: str | None,
+def _require_selectable_model(
     provider: str,
     model: str,
-    stored_routes: dict[str, str],
-    routes: dict[str, str],
-) -> bool:
-    """Only a complete persisted pair can make a co-writer save unchanged."""
-    return (
-        stored_provider not in (None, "")
-        and stored_model not in (None, "")
-        and provider == stored_provider
-        and model == stored_model
-        and routes[provider] == stored_routes[provider]
-    )
+    catalogue: list[str],
+    row_model: str,
+) -> None:
+    """Accept a model the provider lists, the one this row already carries, or
+    no model at all while the catalogue lists nothing.
+
+    An empty model is a deliberate saved value there: the row shows "No models"
+    with its reason, and the next turn or job fails with that named reason.
+    """
+    if model in catalogue or (model != "" and model == row_model):
+        return
+    if model == "" and not catalogue:
+        return
+    raise HTTPException(422, f"Unknown {provider} model '{model}'")
+
+
+def _model_the_provider_row_shows(session: Session, provider: str) -> str:
+    """The model this provider's row carries today, saved or defaulted.
+
+    A saved provider that no longer exists leaves the rows nothing to keep.
+    """
+    if stored_provider_is_retired(get_raw_stored_cowriter_settings(session).provider):
+        return ""
+    return get_cowriter_models_by_provider(session)[provider]
 
 
 @router.put(
     "/settings/cowriter",
-    responses={
-        422: {"description": "Co-writer selection or configuration is invalid"},
-        503: {"description": "Co-writer model catalog is unavailable"},
-    },
+    responses={422: {"description": "Co-writer provider, route, or model is unknown"}},
 )
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> CowriterSettingsResponse:
+    """Save the choice on its form alone; whether it runs is the row's status."""
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
             422, f"Unknown co-writer provider '{req.provider}'",
         )
-    stored_settings = get_raw_stored_cowriter_settings(session)
-    active_settings = get_active_cowriter_settings(session)
-    stored_routes, routes = _cowriter_routes(session, req)
-    settings_changed = not _matches_complete_stored_provider_and_model(
-        stored_settings.provider,
-        stored_settings.model,
+    routes = _cowriter_routes(session, req)
+    _require_selectable_model(
         req.provider,
         req.model,
-        stored_routes,
-        routes,
+        _live_catalogue(req.provider, routes[req.provider]),
+        _model_the_provider_row_shows(session, req.provider),
     )
-    if settings_changed:
-        _validate_cowriter_selection(req, active_settings, routes)
     set_cowriter_settings(session, req.provider, req.model, routes)
     if req.tail_token_budget is not None:
         try:
@@ -765,51 +749,12 @@ def api_set_cowriter_settings(
     return _cowriter_response(session)
 
 
-def _cowriter_routes(
-    session: Session,
-    req: CowriterSettingsRequest,
-) -> tuple[dict[str, str], dict[str, str]]:
+def _cowriter_routes(session: Session, req: CowriterSettingsRequest) -> dict[str, str]:
     try:
         stored_routes = get_effective_provider_routes(session)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return stored_routes, req.provider_routes or stored_routes
-
-
-def _validate_cowriter_selection(
-    req: CowriterSettingsRequest,
-    active_settings,
-    routes: dict[str, str],
-) -> None:
-    from songmaker_cli.cowriter.catalog import provider_snapshot
-
-    selected_route = routes[req.provider]
-    statuses = _route_statuses(provider_snapshot(req.provider), None)
-    _require_ready_route(statuses[selected_route])
-    current_model = (
-        active_settings.model
-        if active_settings is not None and req.provider == active_settings.provider
-        else None
-    )
-    allowed_models, catalog_error = _models_for_provider(
-        req.provider,
-        current_model,
-        selected_route,
-    )
-    if catalog_error:
-        raise HTTPException(503, catalog_error)
-    if req.model not in allowed_models:
-        raise HTTPException(422, f"Unknown {req.provider} model '{req.model}'")
-
-
-def _require_ready_route(selected_status) -> None:
-    if selected_status.readiness.state == "ready":
-        return
-    reason = selected_status.readiness.reason or selected_status.catalogue_failure
-    raise HTTPException(
-        422,
-        reason.model_dump(mode="json") if reason else "Selected route is unverified",
-    )
+    return req.provider_routes or stored_routes
 
 
 # ── Judge (lyrical-coherence) provider settings ─────────────────────
@@ -827,7 +772,7 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
         models, error = _models_from_route_snapshot(
             model if name == provider else None,
             snapshots.get(name),
-            "api",
+            JUDGE_ROUTE,
         )
         models_by_provider[name] = models
         if error:
@@ -859,38 +804,24 @@ def api_get_judge_settings(
 
 @router.put(
     "/settings/judge",
-    responses={
-        422: {"description": "Judge selection or provider configuration is invalid"},
-        503: {"description": "Judge model catalog is unavailable"},
-    },
+    responses={422: {"description": "Judge provider or model is unknown"}},
 )
 def api_set_judge_settings(
     req: JudgeSettingsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> JudgeSettingsResponse:
+    """Save the choice on its form alone; whether it runs is the row's status."""
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
-    from songmaker_cli.cowriter.catalog import ProviderSurface
-
-    _require_provider_can_answer(req.provider, ProviderSurface.JUDGE)
-    active_settings = get_active_judge_settings(session)
-    allowed, catalog_error = _models_for_provider(
+    _require_selectable_model(
         req.provider,
-        active_settings.model
-        if active_settings is not None and req.provider == active_settings.provider
-        else None,
-        "api",
+        req.model,
+        _live_catalogue(req.provider, JUDGE_ROUTE),
+        get_judge_model(session, req.provider),
     )
-    if catalog_error:
-        raise HTTPException(503, catalog_error)
-    if req.model not in allowed:
-        raise HTTPException(
-            422,
-            f"Unknown {req.provider} model '{req.model}'",
-        )
     set_judge_settings(session, req.provider, req.model)
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,

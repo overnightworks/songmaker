@@ -201,8 +201,6 @@ export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
 };
 export const PROVIDER_UNVERIFIED_DETAIL = 'Provider check is still running in the background';
 export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
-export const PROVIDER_COWRITER_SURFACE_PREFIX = 'co-writer:';
-export const PROVIDER_JUDGE_SURFACE_PREFIX = 'judge:';
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
 export const PROVIDER_ROUTE_API_LABEL = 'API';
 

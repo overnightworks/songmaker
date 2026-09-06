@@ -381,10 +381,18 @@ def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
     )
 
 
+def stored_provider_is_retired(stored_provider: str | None) -> bool:
+    """Whether a saved provider names one this build no longer supports.
+
+    Nothing saved is not retired: those rows fall back to their named defaults.
+    """
+    return stored_provider not in (None, "") and stored_provider not in COWRITER_PROVIDERS
+
+
 def get_active_cowriter_settings(session: Session) -> ActiveCowriterSettings | None:
     """Resolve the active co-writer pair unless its saved provider was retired."""
     stored = get_raw_stored_cowriter_settings(session)
-    if stored.provider not in (None, "") and stored.provider not in COWRITER_PROVIDERS:
+    if stored_provider_is_retired(stored.provider):
         return None
     provider = get_cowriter_provider(session)
     model = get_cowriter_model(session, provider)
@@ -396,7 +404,7 @@ def get_active_cowriter_settings(session: Session) -> ActiveCowriterSettings | N
 def get_active_judge_settings(session: Session) -> ActiveJudgeSettings | None:
     """Resolve the active judge pair unless its saved provider was retired."""
     stored = get_raw_stored_judge_settings(session)
-    if stored.provider not in (None, "") and stored.provider not in COWRITER_PROVIDERS:
+    if stored_provider_is_retired(stored.provider):
         return None
     provider = get_judge_provider(session)
     model = get_judge_model(session, provider)
