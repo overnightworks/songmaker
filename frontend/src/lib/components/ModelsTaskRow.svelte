@@ -3,9 +3,16 @@
 
 	export type ModelsRouteKey = 'cli' | 'api';
 
+	export const MODELS_ROUTE_NOT_AVAILABLE_CODE = 'not_available_for_task';
+
+	export interface ModelsRouteReason {
+		code: SafeRouteReason['code'] | typeof MODELS_ROUTE_NOT_AVAILABLE_CODE;
+		message: string;
+	}
+
 	export interface ModelsTaskRoute {
 		ready: boolean;
-		reason: SafeRouteReason | null;
+		reason: ModelsRouteReason | null;
 		models: string[];
 		modelsReason?: string | null;
 	}
@@ -25,6 +32,10 @@
 	export type ModelsSaveOutcome = { ok: true } | { ok: false; reason: string };
 
 	export const MODELS_ROUTES: ModelsRouteKey[] = ['cli', 'api'];
+
+	function offersRoute(entry: ModelsTaskProvider, route: ModelsRouteKey): boolean {
+		return entry.routes[route].reason?.code !== MODELS_ROUTE_NOT_AVAILABLE_CODE;
+	}
 </script>
 
 <script lang="ts">
@@ -54,7 +65,8 @@
 		MODELS_STATUS_READY_KEY_LABEL,
 		PROVIDER_ROUTE_API_LABEL,
 		PROVIDER_ROUTE_CLI_LABEL,
-		modelsCannotDrawHint
+		modelsCannotDrawHint,
+		modelsRouteNotAvailablePhrase
 	} from '$lib/constants';
 
 	interface Props {
@@ -62,11 +74,10 @@
 		providers: ModelsTaskProvider[];
 		selection: ModelsTaskSelection;
 		save: (selection: ModelsTaskSelection) => Promise<ModelsSaveOutcome>;
-		routeSelectable?: boolean;
 		advanced?: Snippet;
 	}
 
-	let { task, providers, selection, save, routeSelectable = true, advanced }: Props = $props();
+	let { task, providers, selection, save, advanced }: Props = $props();
 
 	const taskId = $derived(task.toLowerCase().replace(/\s+/g, '-'));
 	const routeReasonsId = $derived(`${taskId}-route-reasons`);
@@ -93,7 +104,10 @@
 		return route === 'cli' ? MODELS_ROUTE_LOGGED_IN_PHRASE : MODELS_ROUTE_KEY_SET_PHRASE;
 	}
 
-	function failurePhrase(reason: SafeRouteReason, route: ModelsRouteKey): string {
+	function failurePhrase(reason: ModelsRouteReason, route: ModelsRouteKey): string {
+		if (reason.code === MODELS_ROUTE_NOT_AVAILABLE_CODE) {
+			return modelsRouteNotAvailablePhrase(task);
+		}
 		if (reason.code === 'api_key_not_set') return MODELS_ROUTE_KEY_NOT_SET_PHRASE;
 		if (reason.code === 'no_image_tool') return MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE;
 		if (reason.code === 'cli_login_not_configured' && route === 'cli') {
@@ -110,13 +124,13 @@
 		return `${routeLabel(route)} · ${failurePhrase(view.reason, route)}`;
 	}
 
-	function reasonsOf(): { route: ModelsRouteKey; text: string; warn: boolean }[] {
+	function reasonsOf(): { route: ModelsRouteKey; text: string; selected: boolean }[] {
 		const others = MODELS_ROUTES.filter((route) => route !== current.route);
 		const shown = routeView?.ready === false ? [current.route, ...others] : others;
 		return shown.flatMap((route) => {
 			const text = routeReason(route);
 			if (text === null) return [];
-			return [{ route, text, warn: route === current.route }];
+			return [{ route, text, selected: route === current.route }];
 		});
 	}
 
@@ -145,7 +159,7 @@
 					current.route === 'cli' ? MODELS_STATUS_READY_CLI_LABEL : MODELS_STATUS_READY_KEY_LABEL
 			};
 		}
-		const reason = routeView.reason as SafeRouteReason;
+		const reason = routeView.reason as ModelsRouteReason;
 		if (reason.code === 'api_key_not_set') {
 			return { shape: 'warn', mark: '!', text: MODELS_STATUS_NEEDS_API_KEY_LABEL };
 		}
@@ -164,14 +178,15 @@
 	}
 
 	function providerOptionLabel(entry: ModelsTaskProvider): string {
-		if (MODELS_ROUTES.some((route) => entry.routes[route].ready)) {
+		const offered = MODELS_ROUTES.filter((route) => offersRoute(entry, route));
+		if (offered.some((route) => entry.routes[route].ready)) {
 			return `${entry.label} ${MODELS_OPTION_READY_LABEL}`;
 		}
-		const keyMissing = MODELS_ROUTES.some(
+		const keyMissing = offered.some(
 			(route) => entry.routes[route].reason?.code === 'api_key_not_set'
 		);
 		if (keyMissing) return `${entry.label} · ${MODELS_OPTION_NEEDS_API_KEY_PHRASE}`;
-		for (const route of MODELS_ROUTES) {
+		for (const route of offered) {
 			const reason = entry.routes[route].reason;
 			if (reason) return `${entry.label} · ${failurePhrase(reason, route)}`;
 		}
@@ -185,7 +200,9 @@
 
 	function routeFor(entry: ModelsTaskProvider | undefined, preferred: ModelsRouteKey) {
 		if (!entry || entry.routes[preferred].ready) return preferred;
-		const ready = MODELS_ROUTES.filter((route) => entry.routes[route].ready);
+		const ready = MODELS_ROUTES.filter(
+			(route) => entry.routes[route].ready && offersRoute(entry, route)
+		);
 		return ready.length === 1 ? ready[0] : preferred;
 	}
 
@@ -272,14 +289,14 @@
 					class:picked-dead={chosen && view?.ready !== true}
 					class:dead={!chosen && view?.ready !== true}
 					aria-pressed={chosen}
-					disabled={!routeSelectable}
+					disabled={providerView !== undefined && !offersRoute(providerView, route)}
 					onclick={() => chooseRoute(route)}>{routeLabel(route)}</button
 				>
 			{/each}
 		</div>
 		<span id={routeReasonsId}>
 			{#each routeReasons as reason (reason.route)}
-				<small class="why" class:warn={reason.warn}>{reason.text}</small>
+				<small class="why" class:selected={reason.selected}>{reason.text}</small>
 			{/each}
 		</span>
 	</div>
@@ -421,7 +438,11 @@
 		color: var(--text-muted);
 	}
 	.rsw button.picked-dead {
-		border: 1px dashed var(--score-ok);
+		border: 1px dashed var(--border);
+		color: var(--text-muted);
+	}
+	.tt-row.warn .rsw button.picked-dead {
+		border-color: var(--score-ok);
 		color: var(--score-ok);
 	}
 
@@ -432,7 +453,7 @@
 		line-height: 1.35;
 		color: var(--text-muted);
 	}
-	.why.warn {
+	.tt-row.warn .why.selected {
 		color: var(--score-ok);
 	}
 

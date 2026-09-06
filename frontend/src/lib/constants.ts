@@ -247,6 +247,10 @@ export const MODELS_ROUTE_KEY_NOT_SET_PHRASE = 'key not set';
 export const MODELS_ROUTE_LOGGED_IN_PHRASE = 'logged in';
 export const MODELS_ROUTE_NOT_LOGGED_IN_PHRASE = 'not logged in';
 export const MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE = 'no image tool';
+export function modelsRouteNotAvailablePhrase(task: string): string {
+	return `not available for ${task.toLowerCase()}`;
+}
+
 export function modelsCannotDrawHint(provider: string): string {
 	return `${provider} cannot draw`;
 }

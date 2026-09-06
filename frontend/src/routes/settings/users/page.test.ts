@@ -667,6 +667,23 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('✓Ready · key set');
 	});
 
+	it('shows scoring its API route and greys the CLI it has no way to use', async () => {
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		const scoring = rowNamed(target, 'Scoring');
+		const cli = routeButton(scoring, 'CLI');
+		expect(cli).toHaveClass('dead');
+		expect(cli.disabled).toBe(true);
+		expect(reasons(scoring)).toContain('CLI · not available for scoring');
+		expect(routeButton(scoring, 'API')).toHaveClass('on');
+
+		cli.click();
+		await flush();
+
+		expect(api.updateJudgeSettings).not.toHaveBeenCalled();
+	});
+
 	it('shows a scoring provider that cannot answer as its own grey row', async () => {
 		api.fetchJudgeSettings.mockResolvedValue({
 			provider: 'grok',

@@ -54,7 +54,10 @@
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
-	import ModelsTaskRow, { MODELS_ROUTES } from '$lib/components/ModelsTaskRow.svelte';
+	import ModelsTaskRow, {
+		MODELS_ROUTES,
+		MODELS_ROUTE_NOT_AVAILABLE_CODE
+	} from '$lib/components/ModelsTaskRow.svelte';
 	import type {
 		ModelsRouteKey,
 		ModelsSaveOutcome,
@@ -86,6 +89,7 @@
 		MODELS_TASK_COVER_LABEL,
 		MODELS_TASK_COWRITER_LABEL,
 		MODELS_TASK_SCORING_LABEL,
+		modelsRouteNotAvailablePhrase,
 		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
 		PROVIDER_COWRITER_SURFACE_PREFIX,
@@ -511,7 +515,16 @@
 	}
 
 	function scoringRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
-		if (route !== JUDGE_ROUTE) return transportRoute(provider, route);
+		if (route !== JUDGE_ROUTE) {
+			return {
+				ready: false,
+				reason: {
+					code: MODELS_ROUTE_NOT_AVAILABLE_CODE,
+					message: modelsRouteNotAvailablePhrase(MODELS_TASK_SCORING_LABEL)
+				},
+				models: []
+			};
+		}
 		const surface = providerStatusFor(provider)?.judge;
 		if (!surface) return taskRoute(provider, route, false, null);
 		return taskRoute(provider, route, surface.state === 'configured', judgeReason(surface));
@@ -1262,7 +1275,6 @@
 							providers={scoringProviders}
 							selection={scoringSelection}
 							save={saveScoring}
-							routeSelectable={false}
 						/>
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
