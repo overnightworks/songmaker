@@ -65,6 +65,7 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "fastapi": frozenset({"fastapi"}),
     "faster-whisper": frozenset({"faster_whisper"}),
     "huggingface-hub": frozenset({"huggingface_hub"}),
+    "import-linter": frozenset({"importlinter"}),
     "librosa": frozenset({"librosa"}),
     "mcp": frozenset({"mcp"}),
     "mutagen": frozenset({"mutagen"}),

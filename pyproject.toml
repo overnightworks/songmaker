@@ -67,6 +67,7 @@ dev = [
     "pytest-cov>=7.0,<8",
     "pytest-xdist>=3.8,<4",
     "ruff>=0.4,<1",
+    "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
     # Reads back what monitoring/alertmanager-entrypoint.sh generates, so
     # its escaping is asserted against a real YAML parser instead of
@@ -89,6 +90,7 @@ where = ["src"]
 include = [
     "acestep_engine*",
     "acestep_worker*",
+    "agent_providers*",
     "audio_engine*",
     "songmaker_cli*",
 ]
