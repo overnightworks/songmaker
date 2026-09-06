@@ -112,6 +112,8 @@ export {
 	updateCowriterSettings,
 	fetchJudgeSettings,
 	updateJudgeSettings,
+	fetchCoverSettings,
+	updateCoverSettings,
 	fetchProviderStatus,
 	fetchBuiltinDefaults,
 	fetchDefaultConfig,

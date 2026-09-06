@@ -35,21 +35,33 @@
 		updateCowriterSettings,
 		fetchJudgeSettings,
 		updateJudgeSettings,
+		fetchCoverSettings,
+		updateCoverSettings,
 		fetchProviderStatus
 	} from '$lib/api/client';
 	import type { AvailableModel } from '$lib/api/client';
 	import type {
+		CoverSettingsResponse,
 		CowriterSettings,
 		JudgeSettings,
 		ProviderNotConfiguredDetail,
 		ProviderRouteStatusResponse,
 		ProviderStatus,
-		ProviderSurfaceStatus
+		ProviderSurfaceStatus,
+		SafeRouteReason
 	} from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
+	import ModelsTaskRow from '$lib/components/ModelsTaskRow.svelte';
+	import type {
+		ModelsRouteKey,
+		ModelsSaveOutcome,
+		ModelsTaskProvider,
+		ModelsTaskRoute,
+		ModelsTaskSelection
+	} from '$lib/components/ModelsTaskRow.svelte';
 	import {
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
@@ -60,48 +72,31 @@
 		ADMIN_VOICES_OWNER_LABEL,
 		ADMIN_VOICES_STATUS_LABEL,
 		ADMIN_VOICES_TAB_LABEL,
+		MODELS_ADVANCED_LABEL,
+		MODELS_COLUMN_MODEL_LABEL,
+		MODELS_COLUMN_PROVIDER_LABEL,
+		MODELS_COLUMN_ROUTE_LABEL,
+		MODELS_COLUMN_STATUS_LABEL,
+		MODELS_COLUMN_TASK_LABEL,
+		MODELS_DESCRIPTION,
+		MODELS_HEADING,
+		MODELS_HISTORY_TAIL_LABEL,
+		MODELS_LOADING_LABEL,
+		MODELS_SAVED_LABEL,
+		MODELS_SAVE_FAILED_FALLBACK,
+		MODELS_TASK_COVER_LABEL,
+		MODELS_TASK_COWRITER_LABEL,
+		MODELS_TASK_SCORING_LABEL,
 		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
-		PROVIDER_CONFIGURED_LABEL,
 		PROVIDER_COWRITER_SURFACE_PREFIX,
 		PROVIDER_JUDGE_SURFACE_PREFIX,
-		PROVIDER_KEY_ONLY_LABEL,
-		PROVIDER_LOGIN_ONLY_LABEL,
-		PROVIDER_MISSING_DEPENDENCY_LABEL,
-		PROVIDER_NOT_CONFIGURED_LABEL,
-		PROVIDER_UNVERIFIED_DETAIL,
-		PROVIDER_UNVERIFIED_LABEL,
-		PROVIDER_STATUS_DESCRIPTION,
-		PROVIDER_STATUS_EMPTY_MESSAGE,
-		PROVIDER_STATUS_REFRESHING_MESSAGE,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
+		PROVIDER_UNVERIFIED_DETAIL,
 		providerCliLoginNeedsApiKeyDetail,
 		providerConfiguredDetail,
 		providerMissingDependencyDetail,
-		providerMissingRequirementDetail,
-		COWRITER_MODEL_CURRENT_NOT_IN_CATALOG,
-		COWRITER_SAVE_CHANGED,
-		COWRITER_SAVE_MODEL_REQUIRED,
-		COWRITER_SAVE_NOTHING_CHANGED,
-		COWRITER_SAVE_SAVED,
-		PROVIDER_ROUTE_API_LABEL,
-		PROVIDER_ROUTE_ACTIVE_LABEL,
-		PROVIDER_ROUTE_BROKEN_LABEL,
-		PROVIDER_ROUTE_CLI_LABEL,
-		PROVIDER_ROUTE_CONFIGURATION_REQUIRED,
-		PROVIDER_ROUTE_KEY_NOT_SET_LABEL,
-		PROVIDER_ROUTE_KEY_SET_LABEL,
-		PROVIDER_ROUTE_MODELS_LABEL,
-		PROVIDER_ROUTE_NO_MODELS_LABEL,
-		PROVIDER_ROUTE_NOT_SET_UP_LABEL,
-		PROVIDER_ROUTE_READY_LABEL,
-		PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL,
-		PROVIDER_ROUTE_STILL_ACTIVE_LABEL,
-		PROVIDER_ROUTE_TURN_BLOCKED_LABEL,
-		PROVIDER_ROUTE_UNAVAILABLE_DETAIL,
-		PROVIDER_ROUTE_UNAVAILABLE_LABEL,
-		providerRouteBlockedDetail,
-		providerRouteModelLabel
+		providerMissingRequirementDetail
 	} from '$lib/constants';
 	import {
 		COMPACT_SELECT_CLASS,
@@ -188,21 +183,13 @@
 	let creating = $state(false);
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
-	let loadingProviderStatuses = $state(false);
 	let providerStatusError = $state('');
 
 	let cowriterSettings = $state<CowriterSettings | null>(null);
-	let cowriterProvider = $state('claude');
-	let cowriterModel = $state('');
 	let cowriterBudget = $state(0);
-	let cowriterRoutes = $state<Record<string, 'cli' | 'api'>>({});
-	let savingCowriter = $state(false);
-	let cowriterSaveSucceeded = $state(false);
-
+	let cowriterBudgetSaved = $state(false);
+	let coverSettings = $state<CoverSettingsResponse | null>(null);
 	let judgeSettings = $state<JudgeSettings | null>(null);
-	let judgeProvider = $state('claude');
-	let judgeModel = $state('');
-	let savingJudge = $state(false);
 
 	let resetPasswordUserId = $state<string | null>(null);
 	let resetPasswordValue = $state('');
@@ -411,291 +398,226 @@
 		return `${providerLabel(error.responseDetail.provider)} ${surfacePrefix} ${surfaceDetail(error.responseDetail.status)}`;
 	}
 
-	function providerDetail(status: ProviderStatus): string[] {
-		const cowriter = surfaceDetail(status.cowriter);
-		const judge = surfaceDetail(status.judge);
-		return cowriter === judge
-			? [cowriter]
-			: [
-					`${PROVIDER_COWRITER_SURFACE_PREFIX} ${cowriter}`,
-					`${PROVIDER_JUDGE_SURFACE_PREFIX} ${judge}`
-				];
+	const JUDGE_ROUTE: ModelsRouteKey = 'api';
+	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
+	const TASK_ROUTES: ModelsRouteKey[] = ['cli', 'api'];
+
+	function loadModelsTab(): void {
+		void loadProviderStatuses();
+		void loadCowriterSettings();
+		void loadCoverSettings();
+		void loadJudgeSettings();
 	}
 
-	function worstState(status: ProviderStatus): ProviderSurfaceStatus['state'] {
-		const stateRank: Record<ProviderSurfaceStatus['state'], number> = {
-			unconfigured: 0,
-			missing_dependency: 1,
-			cli_login_needs_api_key: 2,
-			api_key_needs_cli_login: 2,
-			unverified: 3,
-			configured: 4
-		};
-		return stateRank[status.cowriter.state] <= stateRank[status.judge.state]
-			? status.cowriter.state
-			: status.judge.state;
-	}
-
-	function surfaceFor(provider: string, surface: 'cowriter' | 'judge') {
-		return providerStatusFor(provider)?.[surface];
-	}
-
-	function answering(provider: string, surface: 'cowriter' | 'judge'): boolean {
-		return surfaceFor(provider, surface)?.state === 'configured';
-	}
-
-	function pickerStatus(provider: string, surface: 'cowriter' | 'judge'): string {
-		const status = surfaceFor(provider, surface);
-		const state = status?.state;
-		if (state === 'missing_dependency') return PROVIDER_MISSING_DEPENDENCY_LABEL;
-		if (state === 'unverified') return PROVIDER_UNVERIFIED_LABEL;
-		if (state === 'cli_login_needs_api_key') return PROVIDER_LOGIN_ONLY_LABEL;
-		return state === 'api_key_needs_cli_login'
-			? PROVIDER_KEY_ONLY_LABEL
-			: PROVIDER_NOT_CONFIGURED_LABEL;
-	}
-
-	function pickerReason(provider: string, surface: 'cowriter' | 'judge'): string {
-		const status = surfaceFor(provider, surface);
-		return status ? surfaceDetail(status) : PROVIDER_STATUS_UNAVAILABLE_DETAIL;
-	}
-
-	async function loadModelsTab() {
-		loadingProviderStatuses = true;
+	async function loadProviderStatuses(): Promise<void> {
 		providerStatusError = '';
 		try {
 			providerStatuses = await fetchProviderStatus();
 		} catch (e) {
 			providerStatuses = [];
-			providerStatusError = e instanceof Error ? e.message : 'Failed to load provider status';
-		} finally {
-			loadingProviderStatuses = false;
+			providerStatusError = e instanceof Error ? e.message : PROVIDER_STATUS_UNAVAILABLE_DETAIL;
 		}
+	}
+
+	async function loadCowriterSettings(): Promise<void> {
 		try {
 			cowriterSettings = await fetchCowriterSettings();
-			cowriterProvider = cowriterSettings.provider;
-			cowriterModel = cowriterSettings.model;
 			cowriterBudget = cowriterSettings.tail_token_budget;
-			cowriterRoutes = { ...(cowriterSettings.provider_routes ?? {}) };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load co-writer settings';
 		}
+	}
+
+	async function loadCoverSettings(): Promise<void> {
+		try {
+			coverSettings = await fetchCoverSettings();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load cover settings';
+		}
+	}
+
+	async function loadJudgeSettings(): Promise<void> {
 		try {
 			judgeSettings = await fetchJudgeSettings();
-			judgeProvider = judgeSettings.provider;
-			judgeModel = judgeSettings.model;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load scoring settings';
 		}
 	}
 
-	type ProviderRoute = 'cli' | 'api';
+	const providerStatusFailure = $derived<SafeRouteReason | null>(
+		providerStatusError === '' ? null : { code: 'route_failed', message: providerStatusError }
+	);
 
-	function selectedCowriterRoute(provider: string): ProviderRoute | undefined {
-		return cowriterRoutes[provider] ?? cowriterSettings?.provider_routes?.[provider];
-	}
-
-	function routeStatus(
+	function catalogueOf(
 		provider: string,
-		route: ProviderRoute | undefined
+		route: ModelsRouteKey
 	): ProviderRouteStatusResponse | undefined {
-		return route ? cowriterSettings?.provider_routes_status?.[provider]?.[route] : undefined;
+		return providerStatusFor(provider)?.cowriter_routes?.[route];
 	}
 
-	function routeStateLabel(status: ProviderRouteStatusResponse | undefined): string {
-		if (!status) return PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL;
-		if (status?.readiness.state === 'ready') return PROVIDER_ROUTE_READY_LABEL;
-		if (status?.readiness.state === 'disturbed') return PROVIDER_ROUTE_BROKEN_LABEL;
-		return PROVIDER_ROUTE_NOT_SET_UP_LABEL;
-	}
-
-	function routeReason(
-		status: ProviderRouteStatusResponse | undefined,
-		route: ProviderRoute
-	): string {
-		if (!status) return PROVIDER_STATUS_UNAVAILABLE_DETAIL;
-		if (route === 'api' && status.readiness.state === 'ready') return PROVIDER_ROUTE_KEY_SET_LABEL;
-		if (route === 'api' && status.readiness.reason?.code === 'api_key_not_set') {
-			return PROVIDER_ROUTE_KEY_NOT_SET_LABEL;
+	function taskRoute(
+		provider: string,
+		route: ModelsRouteKey,
+		ready: boolean,
+		reason: SafeRouteReason | null
+	): ModelsTaskRoute {
+		const catalogue = catalogueOf(provider, route);
+		if (providerStatusFailure) {
+			return {
+				ready: false,
+				reason: providerStatusFailure,
+				models: [],
+				modelsReason: providerStatusError
+			};
 		}
+		return {
+			ready,
+			reason,
+			models: catalogue?.models ?? [],
+			modelsReason: catalogue?.catalogue_failure?.message ?? reason?.message ?? null
+		};
+	}
+
+	function transportRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
+		const readiness = catalogueOf(provider, route)?.readiness;
+		return taskRoute(
+			provider,
+			route,
+			readiness?.state === 'ready',
+			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null
+		);
+	}
+
+	function coverRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
+		const readiness = providerStatusFor(provider)?.cover_routes?.[route];
+		return taskRoute(
+			provider,
+			route,
+			readiness?.state === 'ready',
+			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null
+		);
+	}
+
+	function judgeReason(surface: ProviderSurfaceStatus): SafeRouteReason | null {
+		if (surface.state === 'configured' || surface.state === 'unverified') return null;
+		if (surface.state === 'missing_dependency') {
+			return { code: 'cli_binary_unavailable', message: surfaceDetail(surface) };
+		}
+		return surface.needs === 'cli_login'
+			? { code: 'cli_login_not_configured', message: surfaceDetail(surface) }
+			: { code: 'api_key_not_set', message: surfaceDetail(surface) };
+	}
+
+	function scoringRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
+		if (route !== JUDGE_ROUTE) return transportRoute(provider, route);
+		const surface = providerStatusFor(provider)?.judge;
+		if (!surface) return taskRoute(provider, route, false, null);
+		return taskRoute(provider, route, surface.state === 'configured', judgeReason(surface));
+	}
+
+	function taskProviders(
+		routeOf: (provider: string, route: ModelsRouteKey) => ModelsTaskRoute,
+		selected: string
+	): ModelsTaskProvider[] {
+		const names =
+			providerStatuses.length > 0 ? providerStatuses.map((status) => status.provider) : [selected];
+		return names.map((provider) => ({
+			provider,
+			label: providerLabel(provider),
+			routes: { cli: routeOf(provider, 'cli'), api: routeOf(provider, 'api') }
+		}));
+	}
+
+	function storedRoute(provider: string): ModelsRouteKey {
+		const stored = cowriterSettings?.provider_routes?.[provider];
+		if (stored) return stored;
 		return (
-			status.readiness.reason?.message ??
-			status.catalogue_failure?.message ??
-			status.readiness.setup_label
+			TASK_ROUTES.find((route) => catalogueOf(provider, route)?.readiness.state === 'ready') ??
+			FALLBACK_ROUTE
 		);
 	}
 
-	function routeCatalogDetail(status: ProviderRouteStatusResponse | undefined): string | undefined {
-		if (!status) return undefined;
-		if (status.catalog_version) return `Version ${status.catalog_version}`;
-		return status.catalog_source ?? undefined;
-	}
+	const cowriterProviders = $derived(
+		taskProviders(transportRoute, cowriterSettings?.provider ?? '')
+	);
+	const cowriterSelection = $derived<ModelsTaskSelection>({
+		provider: cowriterSettings?.provider ?? '',
+		route: storedRoute(cowriterSettings?.provider ?? ''),
+		model: cowriterSettings?.model ?? ''
+	});
+	const coverProviders = $derived(taskProviders(coverRoute, coverSettings?.provider ?? ''));
+	const coverSelection = $derived<ModelsTaskSelection>({
+		provider: coverSettings?.provider ?? '',
+		route: coverSettings?.route ?? FALLBACK_ROUTE,
+		model: coverSettings?.model ?? ''
+	});
+	const scoringProviders = $derived(taskProviders(scoringRoute, judgeSettings?.provider ?? ''));
+	const scoringSelection = $derived<ModelsTaskSelection>({
+		provider: judgeSettings?.provider ?? '',
+		route: JUDGE_ROUTE,
+		model: judgeSettings?.model ?? ''
+	});
 
-	function routeIsReady(provider: string, route: ProviderRoute | undefined): boolean {
-		const status = routeStatus(provider, route);
-		return cowriterRouteStatusAvailable
-			? status?.readiness.state === 'ready'
-			: answering(provider, 'cowriter');
-	}
-
-	function routeModels(provider: string, route: ProviderRoute | undefined): string[] {
-		const status = routeStatus(provider, route);
-		if (!cowriterRouteStatusAvailable) {
-			return cowriterSettings?.models_by_provider?.[provider] ?? [];
-		}
-		if (!status) return [];
-		const retainedModel = status.retained_model_id;
-		return retainedModel && !status.models.includes(retainedModel)
-			? [...status.models, retainedModel]
-			: status.models;
-	}
-
-	function completeCowriterRoutes(): Record<string, ProviderRoute> | undefined {
-		if (!cowriterSettings || !cowriterRouteStatusAvailable) return undefined;
-		const entries = cowriterSettings.allowed_providers.map(
-			(provider) => [provider, selectedCowriterRoute(provider)] as const
+	function saveFailureReason(e: unknown): string {
+		return (
+			providerNotConfiguredMessage(e) ??
+			(e instanceof Error ? e.message : MODELS_SAVE_FAILED_FALLBACK)
 		);
-		if (entries.some(([, route]) => route === undefined)) return undefined;
-		return Object.fromEntries(entries) as Record<string, ProviderRoute>;
 	}
 
-	const cowriterRouteStatusAvailable = $derived(
-		cowriterSettings?.provider_routes_status !== undefined
-	);
-	const cowriterRoute = $derived(selectedCowriterRoute(cowriterProvider));
-	const selectedCowriterRouteStatus = $derived(routeStatus(cowriterProvider, cowriterRoute));
-	const cowriterModels = $derived(routeModels(cowriterProvider, cowriterRoute));
-	const cowriterModelsError = $derived(
-		selectedCowriterRouteStatus?.catalogue_failure?.message ??
-			cowriterSettings?.models_errors?.[cowriterProvider]
-	);
-	const cowriterModelsSource = $derived(
-		routeCatalogDetail(selectedCowriterRouteStatus) ??
-			cowriterSettings?.models_sources?.[cowriterProvider]
-	);
-	const cowriterCurrentModelNotInCatalog = $derived(
-		selectedCowriterRouteStatus?.retained_model_id ??
-			cowriterSettings?.current_models_not_in_catalog?.[cowriterProvider]
-	);
-	const cowriterSelectedRouteReady = $derived(routeIsReady(cowriterProvider, cowriterRoute));
-	const cowriterRoutesToSave = $derived(completeCowriterRoutes());
-	const cowriterHasReadyRoute = $derived(
-		cowriterSettings?.allowed_providers.some((provider) =>
-			(['cli', 'api'] as const).some((route) => routeIsReady(provider, route))
-		) ?? false
-	);
-	const cowriterDirty = $derived(
-		cowriterSettings !== null &&
-			(cowriterProvider !== cowriterSettings.provider ||
-				cowriterModel !== cowriterSettings.model ||
-				cowriterBudget !== cowriterSettings.tail_token_budget ||
-				cowriterSettings.allowed_providers.some(
-					(provider) => cowriterRoutes[provider] !== cowriterSettings?.provider_routes?.[provider]
-				))
-	);
-	const cowriterCanSave = $derived(
-		cowriterDirty &&
-			cowriterModel !== '' &&
-			cowriterSelectedRouteReady &&
-			(!cowriterRouteStatusAvailable || cowriterRoutesToSave !== undefined) &&
-			!savingCowriter
-	);
-	const cowriterSaveReason = $derived(
-		savingCowriter
-			? ''
-			: cowriterDirty
-				? cowriterRouteStatusAvailable && cowriterRoutesToSave === undefined
-					? PROVIDER_ROUTE_CONFIGURATION_REQUIRED
-					: cowriterModel === ''
-						? COWRITER_SAVE_MODEL_REQUIRED
-						: COWRITER_SAVE_CHANGED
-				: cowriterSaveSucceeded
-					? COWRITER_SAVE_SAVED
-					: COWRITER_SAVE_NOTHING_CHANGED
-	);
-
-	const judgeModels = $derived(judgeSettings?.models_by_provider?.[judgeProvider] ?? []);
-	const judgeModelsError = $derived(judgeSettings?.models_errors?.[judgeProvider]);
-	const judgeDirty = $derived(
-		judgeSettings !== null &&
-			(judgeProvider !== judgeSettings.provider || judgeModel !== judgeSettings.model)
-	);
-	const judgeCanSave = $derived(judgeDirty && judgeModel !== '' && !savingJudge);
-
-	function savedCowriterModel(provider: string, models: string[]): string | null {
-		const savedModel =
-			cowriterSettings?.selected_models_by_provider?.[provider] ??
-			(cowriterSettings?.provider === provider ? cowriterSettings.model : undefined);
-		return savedModel && models.includes(savedModel) ? savedModel : null;
+	function routeMapWith(selection: ModelsTaskSelection): Record<string, ModelsRouteKey> {
+		const routes = Object.fromEntries(
+			cowriterProviders.map((entry) => [entry.provider, storedRoute(entry.provider)])
+		);
+		return { ...routes, [selection.provider]: selection.route };
 	}
 
-	function cowriterCardModel(provider: string, models: string[]): string {
-		if (provider === cowriterProvider) return cowriterModel;
-		return savedCowriterModel(provider, models) ?? models[0] ?? '';
-	}
-
-	function selectCowriterProvider(provider: string): void {
-		cowriterProvider = provider;
-		const models = routeModels(provider, selectedCowriterRoute(provider));
-		cowriterModel = savedCowriterModel(provider, models) ?? models[0] ?? '';
-	}
-
-	function selectCowriterRoute(provider: string, route: ProviderRoute): void {
-		cowriterRoutes = { ...cowriterRoutes, [provider]: route };
-		if (provider !== cowriterProvider) return;
-		const models = routeModels(provider, route);
-		if (models.includes(cowriterModel)) return;
-		cowriterModel = models[0] ?? '';
-	}
-
-	function selectJudgeProvider(provider: string): void {
-		judgeProvider = provider;
-		if (judgeSettings && provider === judgeSettings.provider) {
-			judgeModel = judgeSettings.model;
-			return;
-		}
-		const models = judgeSettings?.models_by_provider?.[provider] ?? [];
-		judgeModel = models[0] ?? '';
-	}
-
-	async function handleSaveCowriter() {
-		savingCowriter = true;
-		error = '';
+	async function saveCowriter(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
 		try {
 			cowriterSettings = await updateCowriterSettings(
-				cowriterProvider,
-				cowriterModel,
+				selection.provider,
+				selection.model,
 				cowriterBudget,
-				cowriterRoutesToSave
+				routeMapWith(selection)
 			);
-			cowriterProvider = cowriterSettings.provider;
-			cowriterModel = cowriterSettings.model;
 			cowriterBudget = cowriterSettings.tail_token_budget;
-			cowriterRoutes = { ...(cowriterSettings.provider_routes ?? {}) };
-			cowriterSaveSucceeded = true;
+			return { ok: true };
 		} catch (e) {
-			error =
-				providerNotConfiguredMessage(e) ??
-				(e instanceof Error ? e.message : 'Failed to save co-writer settings');
-		} finally {
-			savingCowriter = false;
+			return { ok: false, reason: saveFailureReason(e) };
 		}
 	}
 
-	async function handleSaveJudge() {
-		savingJudge = true;
-		error = '';
+	async function saveCover(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
 		try {
-			judgeSettings = await updateJudgeSettings(judgeProvider, judgeModel);
-			judgeProvider = judgeSettings.provider;
-			judgeModel = judgeSettings.model;
+			coverSettings = await updateCoverSettings(
+				selection.provider,
+				selection.route,
+				selection.model
+			);
+			return { ok: true };
 		} catch (e) {
-			error =
-				providerNotConfiguredMessage(e) ??
-				(e instanceof Error ? e.message : 'Failed to save scoring settings');
-		} finally {
-			savingJudge = false;
+			return { ok: false, reason: saveFailureReason(e) };
 		}
+	}
+
+	async function saveScoring(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
+		try {
+			judgeSettings = await updateJudgeSettings(selection.provider, selection.model);
+			return { ok: true };
+		} catch (e) {
+			return { ok: false, reason: saveFailureReason(e) };
+		}
+	}
+
+	async function saveCowriterBudget(budget: number): Promise<void> {
+		cowriterBudgetSaved = false;
+		cowriterBudget = budget;
+		const outcome = await saveCowriter(cowriterSelection);
+		if (outcome.ok) {
+			cowriterBudgetSaved = true;
+			return;
+		}
+		error = outcome.reason;
 	}
 
 	async function handleCreate() {
@@ -1295,373 +1217,49 @@
 
 		{#if tab === 'models'}
 			<section>
-				<h2>Providers</h2>
-				<p class="hint">{PROVIDER_STATUS_DESCRIPTION}</p>
-				{#if providerStatuses.length > 0}
-					<div class="provider-status-list">
-						{#each providerStatuses as status (status.provider)}
-							{@const state = worstState(status)}
-							<div
-								class="provider-status-row"
-								class:ok={state === 'configured'}
-								class:unverified={state === 'unverified'}
-								class:partial={state === 'unverified' ||
-									state === 'cli_login_needs_api_key' ||
-									state === 'api_key_needs_cli_login'}
-								class:bad={state === 'missing_dependency' || state === 'unconfigured'}
-							>
-								<span class="dot"></span>
-								<span>
-									<span class="name">{providerLabel(status.provider)}</span>
-									{#each providerDetail(status) as line (line)}
-										<span class="detail">{line}</span>
-									{/each}
-								</span>
-							</div>
-						{/each}
+				<h2>{MODELS_HEADING}</h2>
+				<p class="hint">{MODELS_DESCRIPTION}</p>
+				<div class="tt">
+					<div class="tt-head">
+						<span>{MODELS_COLUMN_TASK_LABEL}</span>
+						<span>{MODELS_COLUMN_PROVIDER_LABEL}</span>
+						<span>{MODELS_COLUMN_ROUTE_LABEL}</span>
+						<span>{MODELS_COLUMN_MODEL_LABEL}</span>
+						<span>{MODELS_COLUMN_STATUS_LABEL}</span>
 					</div>
-					{#if loadingProviderStatuses}
-						<p>{PROVIDER_STATUS_REFRESHING_MESSAGE}</p>
+					{#if cowriterSettings}
+						<ModelsTaskRow
+							task={MODELS_TASK_COWRITER_LABEL}
+							providers={cowriterProviders}
+							selection={cowriterSelection}
+							save={saveCowriter}
+							{advanced}
+						/>
+					{:else}
+						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}
-				{:else if loadingProviderStatuses}
-					<p>Loading...</p>
-				{:else if providerStatusError}
-					<p class="error">{providerStatusError}</p>
-				{:else}
-					<p>{PROVIDER_STATUS_EMPTY_MESSAGE}</p>
-				{/if}
-			</section>
-
-			<section>
-				<h2>Co-Writer</h2>
-				<p class="hint">
-					Provider and model that answer your next message. The model list is loaded live from that
-					provider.
-				</p>
-				{#if cowriterSettings}
-					<div class="claude-form">
-						<div class="active-banner">
-							<span class="dot"></span>
-							<span>
-								<b
-									>{cowriterDirty
-										? PROVIDER_ROUTE_STILL_ACTIVE_LABEL
-										: PROVIDER_ROUTE_ACTIVE_LABEL}</b
-								>
-								<span class="model"
-									>{providerLabel(cowriterSettings.provider)} · {cowriterSettings.provider_routes?.[
-										cowriterSettings.provider
-									]?.toUpperCase() ?? PROVIDER_ROUTE_API_LABEL} · {cowriterSettings.model}</span
-								>
-							</span>
-						</div>
-						{#if cowriterDirty}
-							<div class="change-banner">
-								<span
-									>Saving switches the co-writer to <strong
-										>{providerLabel(cowriterProvider)} · {cowriterModel || '…'}</strong
-									>. Earlier messages stay as they are; only the next reply changes.</span
-								>
-							</div>
-						{/if}
-						{#if cowriterRouteStatusAvailable}
-							{#if !cowriterHasReadyRoute}
-								<div class="blocked-banner" role="alert">
-									<span>●</span>
-									<span
-										><strong>{PROVIDER_ROUTE_UNAVAILABLE_LABEL}</strong><br
-										/>{PROVIDER_ROUTE_UNAVAILABLE_DETAIL}</span
-									>
-								</div>
-							{:else if !cowriterSelectedRouteReady && cowriterRoute}
-								<div class="blocked-banner" role="alert">
-									<span>●</span>
-									<span
-										><strong>{PROVIDER_ROUTE_TURN_BLOCKED_LABEL}</strong><br
-										/>{providerRouteBlockedDetail(
-											providerLabel(cowriterProvider),
-											cowriterRoute,
-											routeStateLabel(selectedCowriterRouteStatus),
-											routeReason(selectedCowriterRouteStatus, cowriterRoute)
-										)}</span
-									>
-								</div>
-							{/if}
-							<div class="claude-field">
-								<span class="field-label">{PROVIDER_ROUTE_MODELS_LABEL}</span>
-								<div class="route-grid">
-									{#each cowriterSettings.allowed_providers as provider (provider)}
-										{@const selectedRoute = selectedCowriterRoute(provider)}
-										{@const cliStatus = routeStatus(provider, 'cli')}
-										{@const apiStatus = routeStatus(provider, 'api')}
-										{@const models = routeModels(provider, selectedRoute)}
-										{@const selectedStatus = routeStatus(provider, selectedRoute)}
-										{@const selectedRouteReady = routeIsReady(provider, selectedRoute)}
-										<div
-											class="route-card"
-											class:selected={provider === cowriterProvider}
-											class:unavailable={!selectedRouteReady}
-										>
-											<div class="route-card-head">
-												<button
-													type="button"
-													class="route-provider"
-													class:selected={provider === cowriterProvider}
-													aria-pressed={provider === cowriterProvider}
-													onclick={() => selectCowriterProvider(provider)}
-													>{providerLabel(provider)}</button
-												>
-												<div class="route-switch" aria-label={`${providerLabel(provider)} route`}>
-													<button
-														type="button"
-														class:selected={selectedRoute === 'cli'}
-														aria-label={`Use ${providerLabel(provider)} ${PROVIDER_ROUTE_CLI_LABEL} route`}
-														aria-pressed={selectedRoute === 'cli'}
-														onclick={() => selectCowriterRoute(provider, 'cli')}
-														>{PROVIDER_ROUTE_CLI_LABEL}</button
-													>
-													<button
-														type="button"
-														class:selected={selectedRoute === 'api'}
-														aria-label={`Use ${providerLabel(provider)} ${PROVIDER_ROUTE_API_LABEL} route`}
-														aria-pressed={selectedRoute === 'api'}
-														onclick={() => selectCowriterRoute(provider, 'api')}
-														>{PROVIDER_ROUTE_API_LABEL}</button
-													>
-												</div>
-											</div>
-											<div class="route-status-list">
-												<div
-													class="route-status"
-													class:ready={routeStateLabel(cliStatus) === PROVIDER_ROUTE_READY_LABEL}
-													class:broken={routeStateLabel(cliStatus) === PROVIDER_ROUTE_BROKEN_LABEL}
-													class:not-set-up={routeStateLabel(cliStatus) ===
-														PROVIDER_ROUTE_NOT_SET_UP_LABEL}
-													class:unavailable={routeStateLabel(cliStatus) ===
-														PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL}
-												>
-													<span class="dot"></span><span
-														><strong
-															>{PROVIDER_ROUTE_CLI_LABEL} · {routeStateLabel(cliStatus)}</strong
-														><small>{routeReason(cliStatus, 'cli')}</small></span
-													>
-												</div>
-												<div
-													class="route-status"
-													class:ready={routeStateLabel(apiStatus) === PROVIDER_ROUTE_READY_LABEL}
-													class:broken={routeStateLabel(apiStatus) === PROVIDER_ROUTE_BROKEN_LABEL}
-													class:not-set-up={routeStateLabel(apiStatus) ===
-														PROVIDER_ROUTE_NOT_SET_UP_LABEL}
-													class:unavailable={routeStateLabel(apiStatus) ===
-														PROVIDER_ROUTE_STATUS_UNAVAILABLE_LABEL}
-												>
-													<span class="dot"></span><span
-														><strong
-															>{PROVIDER_ROUTE_API_LABEL} · {routeStateLabel(apiStatus)}</strong
-														><small>{routeReason(apiStatus, 'api')}</small></span
-													>
-												</div>
-											</div>
-											<div class="route-model">
-												<label for={`cowriter-model-${provider}`}
-													>{providerRouteModelLabel(selectedRoute)}</label
-												>
-												<select
-													id={`cowriter-model-${provider}`}
-													value={cowriterCardModel(provider, models)}
-													disabled={provider !== cowriterProvider ||
-														models.length === 0 ||
-														!selectedRouteReady}
-													onchange={(event) =>
-														(cowriterModel = (event.currentTarget as HTMLSelectElement).value)}
-												>
-													{#if models.length === 0}
-														<option value="">{PROVIDER_ROUTE_NO_MODELS_LABEL}</option>
-													{:else}
-														{#each models as model (model)}
-															<option value={model}
-																>{model}{selectedStatus?.retained_model_id === model
-																	? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
-																	: ''}</option
-															>
-														{/each}
-													{/if}
-												</select>
-												{#if routeCatalogDetail(selectedStatus)}<p class="hint">
-														{routeCatalogDetail(selectedStatus)}
-													</p>{/if}
-												{#if selectedStatus?.catalogue_failure?.message}<p class="hint">
-														{selectedStatus.catalogue_failure.message}
-													</p>{/if}
-											</div>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{:else}
-							<div class="claude-field">
-								<span class="field-label" id="cowriter-provider-label">Provider</span>
-								<div class="provider-picker" role="group" aria-labelledby="cowriter-provider-label">
-									{#each cowriterSettings.allowed_providers as provider (provider)}
-										{@const canAnswer = answering(provider, 'cowriter')}
-										<button
-											type="button"
-											class="provider-pill"
-											class:selected={cowriterProvider === provider}
-											aria-pressed={cowriterProvider === provider}
-											disabled={!canAnswer}
-											onclick={() => selectCowriterProvider(provider)}
-										>
-											<span class="name">{providerLabel(provider)}</span>
-											<span
-												class="pill-status"
-												class:status-ok={canAnswer}
-												class:status-bad={!canAnswer}
-											>
-												{canAnswer ? PROVIDER_CONFIGURED_LABEL : pickerStatus(provider, 'cowriter')}
-											</span>
-											{#if !canAnswer}
-												<span class="pill-reason">{pickerReason(provider, 'cowriter')}</span>
-											{/if}
-										</button>
-									{/each}
-								</div>
-							</div>
-							<div class="claude-field">
-								<label for="cowriter-model"
-									>{cowriterRouteStatusAvailable
-										? providerRouteModelLabel(cowriterRoute)
-										: 'Model'}</label
-								>
-								<select
-									id="cowriter-model"
-									bind:value={cowriterModel}
-									disabled={cowriterModels.length === 0}
-								>
-									{#if cowriterModels.length === 0 && cowriterModel}
-										<option value={cowriterModel}
-											>{cowriterModel} (current — live list unavailable)</option
-										>
-									{/if}
-									{#each cowriterModels as model (model)}
-										<option value={model}
-											>{model}{cowriterCurrentModelNotInCatalog === model
-												? ` (${COWRITER_MODEL_CURRENT_NOT_IN_CATALOG})`
-												: ''}</option
-										>
-									{/each}
-								</select>
-								{#if cowriterModelsSource}
-									<p class="hint">{cowriterModelsSource}</p>
-								{/if}
-								{#if cowriterModelsError}
-									<p class="hint">{cowriterModelsError}</p>
-								{/if}
-							</div>
-						{/if}
-						<div class="claude-field">
-							<label for="cowriter-budget">History tail (tokens)</label>
-							<input
-								id="cowriter-budget"
-								type="number"
-								bind:value={cowriterBudget}
-								min="2000"
-								max="100000"
-							/>
-						</div>
-						<div class="btn-row">
-							<button class="save-btn" onclick={handleSaveCowriter} disabled={!cowriterCanSave}>
-								{savingCowriter ? 'Saving...' : 'Save Co-Writer'}
-							</button>
-							<span class="save-reason">{cowriterSaveReason}</span>
-						</div>
-					</div>
-				{:else}
-					<p>Loading...</p>
-				{/if}
-			</section>
-
-			<section>
-				<h2>Scoring</h2>
-				<p class="hint">
-					Provider and model that judge how closely the sung lyrics match what you wrote. Its own
-					choice, independent of the co-writer.
-				</p>
-				{#if judgeSettings}
-					<div class="claude-form">
-						<div class="active-banner">
-							<span class="dot"></span>
-							<span>
-								<b>{judgeDirty ? 'Still active' : 'Active'}</b>
-								<span class="model"
-									>{providerLabel(judgeSettings.provider)} · {judgeSettings.model}</span
-								>
-							</span>
-						</div>
-						{#if judgeDirty}
-							<div class="change-banner">
-								<span
-									>Saving switches the judge to <strong
-										>{providerLabel(judgeProvider)} · {judgeModel || '…'}</strong
-									>. Already-scored generations keep their scores; only the next scoring run
-									changes.</span
-								>
-							</div>
-						{/if}
-						<div class="claude-field">
-							<span class="field-label" id="judge-provider-label">Provider</span>
-							<div class="provider-picker" role="group" aria-labelledby="judge-provider-label">
-								{#each judgeSettings.allowed_providers as provider (provider)}
-									{@const canAnswer = answering(provider, 'judge')}
-									<button
-										type="button"
-										class="provider-pill"
-										class:selected={judgeProvider === provider}
-										aria-pressed={judgeProvider === provider}
-										disabled={!canAnswer}
-										onclick={() => selectJudgeProvider(provider)}
-									>
-										<span class="name">{providerLabel(provider)}</span>
-										<span
-											class="pill-status"
-											class:status-ok={canAnswer}
-											class:status-bad={!canAnswer}
-										>
-											{canAnswer ? PROVIDER_CONFIGURED_LABEL : pickerStatus(provider, 'judge')}
-										</span>
-										{#if !canAnswer}
-											<span class="pill-reason">{pickerReason(provider, 'judge')}</span>
-										{/if}
-									</button>
-								{/each}
-							</div>
-						</div>
-						<div class="claude-field">
-							<label for="judge-model">Model</label>
-							<select id="judge-model" bind:value={judgeModel} disabled={judgeModels.length === 0}>
-								{#if judgeModels.length === 0 && judgeModel}
-									<option value={judgeModel}>{judgeModel} (current — live list unavailable)</option>
-								{/if}
-								{#each judgeModels as model (model)}
-									<option value={model}>{model}</option>
-								{/each}
-							</select>
-							{#if judgeModelsError}
-								<p class="hint">{judgeModelsError}</p>
-							{/if}
-						</div>
-						<div class="btn-row">
-							<button class="save-btn" onclick={handleSaveJudge} disabled={!judgeCanSave}>
-								{savingJudge ? 'Saving...' : 'Save Scoring'}
-							</button>
-							<span class="save-reason"
-								>{judgeDirty ? 'Changed, not saved yet.' : 'Nothing changed.'}</span
-							>
-						</div>
-					</div>
-				{:else}
-					<p>Loading...</p>
-				{/if}
+					{#if coverSettings}
+						<ModelsTaskRow
+							task={MODELS_TASK_COVER_LABEL}
+							providers={coverProviders}
+							selection={coverSelection}
+							save={saveCover}
+						/>
+					{:else}
+						<p class="hint">{MODELS_LOADING_LABEL}</p>
+					{/if}
+					{#if judgeSettings}
+						<ModelsTaskRow
+							task={MODELS_TASK_SCORING_LABEL}
+							providers={scoringProviders}
+							selection={scoringSelection}
+							save={saveScoring}
+							routeSelectable={false}
+						/>
+					{:else}
+						<p class="hint">{MODELS_LOADING_LABEL}</p>
+					{/if}
+				</div>
 			</section>
 		{/if}
 
@@ -1689,7 +1287,63 @@
 	</div>
 {/if}
 
+
+{#snippet advanced()}
+	<label class="field-label" for="cowriter-budget">{MODELS_HISTORY_TAIL_LABEL}</label>
+	<input
+		id="cowriter-budget"
+		type="number"
+		min="2000"
+		max="100000"
+		value={cowriterBudget}
+		onchange={(event) => saveCowriterBudget(Number(event.currentTarget.value))}
+	/>
+	{#if cowriterBudgetSaved}
+		<span class="saved">✓ {MODELS_SAVED_LABEL}</span>
+	{/if}
+{/snippet}
 <style>
+	.tt {
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.tt-head {
+		display: grid;
+		grid-template-columns: 9rem 11rem 12.5rem 14rem minmax(0, 1fr);
+		gap: 0.85rem;
+		padding: 0.45rem 0.85rem;
+		border-left: 3px solid transparent;
+		background: var(--surface);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.09em;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+
+	.field-label {
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+
+	.saved {
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--score-good);
+	}
+
+	@media (max-width: 700px) {
+		.tt {
+			border: 0;
+		}
+		.tt-head {
+			display: none;
+		}
+	}
 	.denied {
 		display: flex;
 		align-items: center;
