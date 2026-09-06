@@ -12,7 +12,7 @@ Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation
 
 ```bash
 # 1. First-time setup
-cp .env.docker.example .env     # edit with your secrets — see file for required fields
+cp docker/.env.docker.example .env     # edit with your secrets — see file for required fields
 docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
 # (see CLAUDE.md "Docker" section for the full reasoning).
@@ -69,7 +69,7 @@ These are the four secrets that must be set or `Settings` will raise `Validation
 | `SONGMAKER_INTERNAL_TOKEN` | Shared secret for worker → web internal API auth |
 | `HF_TOKEN` | Hugging Face token for downloading ACE-Step + scoring model weights |
 
-Generate secrets with `python3 -c "import secrets; print(secrets.token_hex(32))"`. See [`.env.docker.example`](.env.docker.example) for the full list including all optional overrides.
+Generate secrets with `python3 -c "import secrets; print(secrets.token_hex(32))"`. See [`docker/.env.docker.example`](docker/.env.docker.example) for the full list including all optional overrides.
 
 ## Local toolchain (tests, lint, IDE)
 

@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  COMPOSE_FILES: -f docker-compose.yml -f docker-compose.ci.yml
+  COMPOSE_FILES: -f docker-compose.yml -f docker/docker-compose.ci.yml
   WEB_PORT: 8080
   # Throwaway values for an ephemeral, single-run CI database — never reused,
   # never real secrets.

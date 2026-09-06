@@ -259,7 +259,7 @@ def test_container_entrypoints_match_runtime_configuration() -> None:
 
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     web_dockerfile = (REPOSITORY_ROOT / CONTAINERS["web"].dockerfile).read_text()
-    web_entrypoint = (REPOSITORY_ROOT / "docker-entrypoint.sh").read_text()
+    web_entrypoint = (REPOSITORY_ROOT / "docker" / "docker-entrypoint.sh").read_text()
 
     assert pyproject["project"]["scripts"]["songmaker"] == "songmaker_cli.main:main"
     assert 'ENTRYPOINT ["/app/docker-entrypoint.sh"]' in web_dockerfile

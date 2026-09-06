@@ -22,7 +22,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -34,7 +34,7 @@ Before the first CI scan, an operator must disable **Automatic Analysis** in the
 
 The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
-Coverage exclusions are intentionally narrower and identical in `.coveragerc-ci` and `sonar-project.properties`: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
+Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci` and `sonar-project.properties`: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
 
 The profile deliberately ignores two repository-wide smells. `python:S9100` is ignored for `tests/**` because these pytest fixtures use `yield` as setup syntax without teardown; changing them to `return` would only optimize a test-style diagnostic and add no product value. `docker:S7031` is ignored for `**/*Dockerfile*` because separate `RUN` instructions mark intentional install, cache, permission, and model-warmup boundaries; the pattern covers both `Dockerfile` and the repository's `*.Dockerfile` names. These exceptions are limited to their named paths and rules; other Sonar findings remain visible.
 
@@ -45,11 +45,11 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
-- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.coveragerc-ci`)
+- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.github/workflows/coveragerc-ci`)
 
 ## Coverage Targets
 
-- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.
@@ -63,10 +63,10 @@ while issue #31 remains open. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
-| E2E | Boots the CI stack (`docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
+| E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` (the frontend audit retries registry outages and annotates an inconclusive result) |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
 | Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
@@ -172,7 +172,7 @@ create a real approval or make a network request.
 ## End-to-end flows
 
 `frontend/e2e/` drives the real stack — Postgres, Redis, migrations and the web
-container from `docker-compose.ci.yml` — through the click paths an operator
+container from `docker/docker-compose.ci.yml` — through the click paths an operator
 walks by hand. Unit tests keep missing those: every operator bug from
 2026-08-23 (dead picker, ▶ after an album switch, shuffle, 429 storm) passed
 them.
@@ -227,10 +227,10 @@ budget rule.
 
 ### Voices E2E worker
 
-The Voices browser flow adds `docker-compose.e2e-voices.yml` to the normal CI
+The Voices browser flow adds `docker/docker-compose.e2e-voices.yml` to the normal CI
 stack. It starts the test-only worker at
 `tests/e2e_fixtures/fake_training_worker.py`; the Library E2E continues to use
-only `docker-compose.ci.yml`.
+only `docker/docker-compose.ci.yml`.
 
 Run it under the probe lock with the isolated project and port:
 
@@ -245,8 +245,8 @@ flock /tmp/songmaker-probe.lock env \
   ADMIN_PASSWORD='E2eCiSmoke#2026!' \
   PUBLIC_BASE_URL=http://localhost:18080 \
   E2E_BASE_URL=http://localhost:18080 \
-  docker compose -f docker-compose.yml -f docker-compose.ci.yml \
-  -f docker-compose.e2e-voices.yml up -d --build --wait \
+  docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
+  -f docker/docker-compose.e2e-voices.yml up -d --build --wait \
   postgres redis migrate songmaker-web songmaker-music-worker \
   songmaker-voices-e2e-worker
 ```
