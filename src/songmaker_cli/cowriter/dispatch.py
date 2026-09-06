@@ -355,8 +355,10 @@ def cover_image_provider_method(session: Session) -> CoverImageDispatch:
     try:
         route = ProviderRoute(selection.route)
     except ValueError as exc:
-        raise _unavailable(
-            selection.provider, ProviderRoute.CLI, SafeRouteReasonCode.ROUTE_FAILED,
+        raise ProviderUnavailableError(
+            selection.provider,
+            selection.route,
+            normalize_route_failure(SafeRouteReasonCode.ROUTE_FAILED),
         ) from exc
     capability = cover_image_capability(selection.provider, route)
     if not capability.carries_image_tool:

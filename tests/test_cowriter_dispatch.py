@@ -408,6 +408,16 @@ def test_a_saved_provider_without_an_image_tool_is_named_never_swapped(tmp_path:
     assert raised.value.provider == "claude"
 
 
+def test_a_saved_route_this_build_does_not_know_is_named_not_guessed(tmp_path: Path) -> None:
+    session = _cover_session(tmp_path, "codex", "grpc", "")
+
+    with pytest.raises(ProviderUnavailableError) as raised:
+        dispatch.cover_image_provider_method(session)
+
+    assert raised.value.route == "grpc"
+    assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
+
+
 def test_codex_cover_route_reports_an_unavailable_cli_probe(
     monkeypatch, tmp_path: Path,
 ) -> None:
