@@ -10,6 +10,9 @@ from typing import Final
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
+    COVER_DEFAULT_MODEL,
+    COVER_DEFAULT_PROVIDER,
+    COVER_DEFAULT_ROUTE,
     COWRITER_DEFAULT_PROVIDER,
     COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
@@ -19,6 +22,9 @@ from songmaker_cli.constants import (
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
+    SETTING_COVER_MODEL,
+    SETTING_COVER_PROVIDER,
+    SETTING_COVER_ROUTE,
     SETTING_COWRITER_MODEL,
     SETTING_COWRITER_PROVIDER,
     SETTING_COWRITER_PROVIDER_MODEL_PREFIX,
@@ -48,6 +54,15 @@ class RawStoredJudgeSettings:
 
     provider: str | None
     model: str | None
+
+
+@dataclass(frozen=True)
+class CoverSettings:
+    """The saved cover provider selection, with defaults when unset."""
+
+    provider: str
+    route: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -514,6 +529,22 @@ def get_judge_model(session: Session, provider: str) -> str:
 def set_judge_settings(session: Session, provider: str, model: str) -> None:
     set_claude_model(session, SETTING_JUDGE_PROVIDER, provider)
     set_claude_model(session, SETTING_JUDGE_MODEL, model)
+
+
+def get_cover_settings(session: Session) -> CoverSettings:
+    """Return the saved cover selection, or the named defaults where unset."""
+    return CoverSettings(
+        provider=_get_claude_model_row(session, SETTING_COVER_PROVIDER) or COVER_DEFAULT_PROVIDER,
+        route=_get_claude_model_row(session, SETTING_COVER_ROUTE) or COVER_DEFAULT_ROUTE,
+        model=_get_claude_model_row(session, SETTING_COVER_MODEL) or COVER_DEFAULT_MODEL,
+    )
+
+
+def set_cover_settings(session: Session, provider: str, route: str, model: str) -> None:
+    """Persist the cover selection, including one no route can currently run."""
+    set_claude_model(session, SETTING_COVER_PROVIDER, provider)
+    set_claude_model(session, SETTING_COVER_ROUTE, route)
+    set_claude_model(session, SETTING_COVER_MODEL, model)
 
 
 def get_cowriter_tail_token_budget(session: Session) -> int:

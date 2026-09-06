@@ -227,6 +227,18 @@ export interface CoverRequest {
 	seed?: number | null;
 }
 
+export interface CoverSettingsRequest {
+	provider: string;
+	route: string;
+	model: string;
+}
+
+export interface CoverSettingsResponse {
+	provider: string;
+	route: 'cli' | 'api';
+	model: string;
+}
+
 export interface CoverSuggestionResponse {
 	id: string;
 	url: string;
@@ -669,6 +681,7 @@ export interface ProviderStatus {
 	cowriter: ProviderSurfaceStatus;
 	judge: ProviderSurfaceStatus;
 	cowriter_routes?: Record<'cli' | 'api', ProviderRouteStatusResponse>;
+	cover_routes: Record<'cli' | 'api', ProviderRouteReadiness>;
 }
 
 export interface ProviderSurfaceStatus {
@@ -823,7 +836,7 @@ export interface ResourceResyncEvent {
 }
 
 export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_capacity_exhausted' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'route_failed';
+	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_capacity_exhausted' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'no_image_tool' | 'route_failed';
 	message: string;
 }
 
