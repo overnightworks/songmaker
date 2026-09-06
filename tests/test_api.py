@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -27,12 +28,9 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.middleware import (
-    SESSION_COOKIE,
-    AuthenticatedUser,
-    SelectiveGZipMiddleware,
-    get_current_user,
-)
+from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.dependencies import AuthenticatedUser
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -63,7 +61,7 @@ def client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=audio_dir,
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -86,7 +84,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -146,7 +144,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -198,7 +196,7 @@ def _make_authed_client(
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -480,7 +478,7 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -583,7 +581,7 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -732,7 +730,7 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -2729,22 +2727,22 @@ def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
 def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
     from datetime import timedelta
 
-    from songmaker_cli.auth import sign_session_id
     from songmaker_cli.db.queries import create_session
+    from webauth.cookies import sign_session_id
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     with ctx.db() as session:
         user_session = create_session(session, user_id, expires_at)
         session.commit()
         session_id = user_session.id
-    return sign_session_id(session_id, ctx.session_secret)
+    return sign_session_id(session_id, ctx.signing_key)
 
 
 def _authenticate_job_stream_client(
     client: TestClient, user_id: str = _DEFAULT_USER_ID,
 ) -> None:
     client.cookies.set(
-        SESSION_COOKIE, _sign_job_stream_session(client.app.state.ctx, user_id),
+        DEFAULT_SESSION_COOKIE_NAME, _sign_job_stream_session(client.app.state.ctx, user_id),
     )
 
 
@@ -3018,7 +3016,7 @@ def _make_pool_capacity_limited_client(
     audio_dir.mkdir(parents=True, exist_ok=True)
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
     app = FastAPI()
     install_app_context(app, ctx)
@@ -3045,7 +3043,7 @@ def _job_stream_scope(job_id: str, *, cookie: str) -> dict:
         "root_path": "",
         "headers": [
             (b"host", b"testserver"),
-            (b"cookie", f"{SESSION_COOKIE}={cookie}".encode()),
+            (b"cookie", f"{DEFAULT_SESSION_COOKIE_NAME}={cookie}".encode()),
         ],
         "client": ("testclient", 50_000),
         "server": ("testserver", 80),
@@ -3790,7 +3788,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
@@ -4296,7 +4294,7 @@ def test_bulk_delete_other_user(tmp_path: Path) -> None:
         db=factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
@@ -4339,7 +4337,7 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
         db=factory,
         audio_dir=audio_dir,
         data_dir=tmp_path / "data",
-        session_secret=TEST_SECRET,
+        signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.api import router

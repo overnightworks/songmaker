@@ -17,10 +17,6 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.audio_paths import AudioFileNotFoundError
-from songmaker_cli.auth import (
-    RATE_LIMIT_WINDOW_SECONDS,
-    ROLE_ADMIN,
-)
 from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
     HTTP_NOT_FOUND,
@@ -29,6 +25,8 @@ from songmaker_cli.constants import (
     PAGE_ADMIN_MAX_LIMIT,
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
+    RATE_LIMIT_WINDOW_SECONDS,
+    ROLE_ADMIN,
     SETTING_CHAT_RATE_LIMIT,
     SETTING_GENERATION_RATE_LIMIT,
     SETTING_MAX_QUEUE_DEPTH,
@@ -63,9 +61,9 @@ from songmaker_cli.db.queries import (
     recover_stale_jobs_by_age_and_type,
     resolve_rate_limit,
 )
-from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
+from webauth.dependencies import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimiter
 
 if TYPE_CHECKING:
@@ -137,9 +135,9 @@ def lock_lora_capacity(session: Session) -> None:
 def check_redis_health(request) -> None:
     """Reject mutation requests when Redis is degraded (fail-closed)."""
     from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
-    from webauth.session_store import SessionCache
+    from webauth.session_store import installed_session_cache
 
-    cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    cache = installed_session_cache(request.app)
     if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 

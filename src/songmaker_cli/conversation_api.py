@@ -52,6 +52,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import get_db_session
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
@@ -103,7 +104,7 @@ from songmaker_cli.db.queries import (
     upsert_user_memory,
 )
 from songmaker_cli.db.queries.conversations import append_message
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
     from songmaker_cli.cowriter.catalog import ProviderRoute

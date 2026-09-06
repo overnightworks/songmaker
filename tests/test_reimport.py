@@ -11,11 +11,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth import hash_password
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
+from webauth.passwords import hash_password
 
 TEST_SECRET = b"a" * 64
 USER_ID = "u-reimport"
@@ -201,7 +201,7 @@ def test_extract_seed_with_mutagen(tmp_path: Path) -> None:
 
 
 def _fake_user():
-    from songmaker_cli.middleware import AuthenticatedUser
+    from webauth.dependencies import AuthenticatedUser
     return lambda: AuthenticatedUser(
         id=USER_ID, username="reimporter", role="admin", is_active=True,
     )
@@ -221,13 +221,13 @@ def reimport_client(tmp_path: Path):
 
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=_make_fake_redis(),
+        signing_key=TEST_SECRET, redis=_make_fake_redis(),
     )
 
     from fastapi import FastAPI
 
     from songmaker_cli.api import router
-    from songmaker_cli.middleware import get_current_user
+    from songmaker_cli.auth_dependencies import get_current_user
 
     app = FastAPI()
     install_app_context(app, ctx)

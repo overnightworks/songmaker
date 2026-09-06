@@ -483,7 +483,7 @@ def make_test_app(
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=TEST_SECRET, redis=redis,
+        signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})

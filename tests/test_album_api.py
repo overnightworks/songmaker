@@ -15,7 +15,6 @@ import pytest
 from conftest import login_and_csrf, make_test_app
 from sqlalchemy import event
 
-from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import (
     ALBUM_SLUG_MAX_LENGTH,
     Album,
@@ -25,6 +24,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
+from webauth.passwords import hash_password
 
 _ADMIN_USER = "admin"
 _ADMIN_PASSWORD = "admin12345"

@@ -50,6 +50,7 @@ from songmaker_cli.arq_pool import (
     is_music_worker_healthy,
     is_scoring_worker_healthy,
 )
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
@@ -78,7 +79,7 @@ from songmaker_cli.db.queries import (
     unpick_generation,
     update_job_status,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

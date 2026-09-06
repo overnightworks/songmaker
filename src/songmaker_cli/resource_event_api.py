@@ -20,6 +20,7 @@ from songmaker_cli.api_models import (
     ResourceResyncEvent,
 )
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth_dependencies import authenticate_request
 from songmaker_cli.constants import (
     LAST_EVENT_ID_INVALID,
     POSTGRES_BIGINT_MAX,
@@ -47,7 +48,6 @@ from songmaker_cli.db.queries import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.middleware import get_current_user
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
 from webauth.rate_limit import RedisRateLimiter
@@ -473,7 +473,7 @@ async def _leased_resource_event_generator(
 def api_stream_resource_events(request: Request) -> StreamingResponse:
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
-        user = get_current_user(request, session)
+        user = authenticate_request(request, session)
         high_water_mark = get_resource_event_high_water_mark(session, user.id)
         oldest_retained = get_oldest_resource_event_sequence(session, user.id)
         session.commit()

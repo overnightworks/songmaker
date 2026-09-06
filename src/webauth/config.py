@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 MIN_SESSION_SECRET_CHARS: Final = 32
 DEFAULT_LOGIN_RATE_WINDOW_SECONDS: Final = 300
+DEFAULT_MAX_USER_AGENT_CHARS: Final = 500
 DEFAULT_ADMIN_ROLE: Final = "admin"
 DEFAULT_USER_ROLE: Final = "user"
 
@@ -71,6 +72,7 @@ class WebAuthConfig:
     session_cookie_name: str = DEFAULT_SESSION_COOKIE_NAME
     csrf_cookie_name: str = DEFAULT_CSRF_COOKIE_NAME
     csrf_header_name: str = DEFAULT_CSRF_HEADER_NAME
+    max_user_agent_chars: int = DEFAULT_MAX_USER_AGENT_CHARS
     admin_role: str = DEFAULT_ADMIN_ROLE
     user_role: str = DEFAULT_USER_ROLE
 

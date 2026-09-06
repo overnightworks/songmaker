@@ -104,12 +104,8 @@ def reset_password(
     password: Annotated[str, Parameter(help="New password (min 8 chars)")],
 ) -> None:
     """Reset a user's password (requires local DB access)."""
-    from songmaker_cli.auth import (
-        MIN_PASSWORD_LENGTH,
-        check_password_strength,
-        hash_password,
-    )
     from songmaker_cli.db.engine import init_db, resolve_database_url
+    from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength, hash_password
 
     if len(password) < MIN_PASSWORD_LENGTH:
         print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")

@@ -36,6 +36,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool
 from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     LORA_ACTIVE_STATUSES,
@@ -71,8 +72,8 @@ from songmaker_cli.db.queries import (
     update_user_lora_sample,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.settings import get_settings
+from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 
