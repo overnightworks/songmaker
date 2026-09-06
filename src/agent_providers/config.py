@@ -1,10 +1,11 @@
 """The runtime configuration a host application injects into the provider layer.
 
 The provider layer runs Claude, Grok and Codex on someone else's machine: its
-binaries, credential mirrors, mounted resource directories, chat model and API
-keys are deployment facts the host owns, not values this package may guess. It
-therefore reads them from one frozen value the host installs once per process
-via :func:`configure`, instead of reaching into an application settings module.
+binaries, credential mirrors, mounted resource directories, chat model, API
+keys and the MCP server a co-writer turn attaches are deployment facts the host
+owns, not values this package may guess. It therefore reads them from one
+frozen value the host installs once per process via :func:`configure`, instead
+of reaching into an application settings module.
 
 Nothing is installed by default. :func:`current_config` raises
 :class:`ProviderRuntimeNotConfiguredError` until the host has configured the
@@ -25,6 +26,31 @@ import threading
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+
+
+class McpServerSpec(BaseModel):
+    """The one stdio MCP server a host attaches to a co-writer turn.
+
+    The provider layer knows no MCP server of its own. It writes this
+    declaration into the temporary ``--mcp-config`` file the CLI reads,
+    pre-approves the server's tools on the command line, and refuses to run a
+    turn unless the CLI announces exactly ``tool_names`` — so the host, not
+    this package, decides what a prompt carrying untrusted content can reach.
+
+    ``environment`` is written into that file in the order given, with
+    ``user_id_environment_variable`` appended per turn; the file is mode 0600,
+    which is why credentials belong here and never on the command line.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=1)
+    command: str = Field(min_length=1)
+    args: tuple[str, ...] = ()
+    environment: dict[str, SecretStr] = Field(default_factory=dict)
+    user_id_environment_variable: str = Field(min_length=1)
+    config_file_prefix: str = Field(min_length=1)
+    tool_names: frozenset[str] = Field(min_length=1)
 
 
 class ProviderRuntimeConfig(BaseModel):
@@ -52,6 +78,8 @@ class ProviderRuntimeConfig(BaseModel):
     codex_max_concurrent_cover_runs: int = Field(ge=1)
 
     secret_env_keys: tuple[str, ...]
+
+    mcp_server: McpServerSpec | None
 
 
 class ProviderRuntimeNotConfiguredError(RuntimeError):
