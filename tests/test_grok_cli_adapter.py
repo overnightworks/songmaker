@@ -135,7 +135,9 @@ def test_grok_tool_transport_starts_then_resumes_with_prompt_files_only(monkeypa
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
     events = asyncio.run(_collect_tool_events(
-        _tool_transport_events(transport, lambda _name, _arguments: TurnOutcome('{"songs":[]}', False)),
+        _tool_transport_events(
+            transport, lambda _name, _arguments: TurnOutcome('{"songs":[]}', False),
+        ),
     ))
 
     assert isinstance(events[0], ToolCallEvent)
@@ -533,7 +535,9 @@ def test_closing_the_tool_loop_aborts_and_reaps_the_grok_runner(monkeypatch) -> 
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
     async def close_turn() -> None:
-        turn = _tool_transport_events(transport, lambda _name, _arguments: TurnOutcome("unused", False))
+        turn = _tool_transport_events(
+            transport, lambda _name, _arguments: TurnOutcome("unused", False),
+        )
         assert await anext(turn) == AssistantTextEvent(text="partial")
         started.set()
         await turn.aclose()
