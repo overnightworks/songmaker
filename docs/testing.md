@@ -209,7 +209,13 @@ request budget per shell.
 - **One login per run.** Global setup authenticates once, seeds an album, songs,
   takes, a pick and a share link through the public API, and hands its session
   to every attempt as storage state. Mutable fixtures (the playlist) are seeded
-  per attempt so a retry starts clean.
+  per attempt so a retry starts clean. `auth-flows.spec.ts` is the one file that
+  signs in itself: signing in, being locked out, signing out and expiring are
+  what it proves (#872), so it starts from an explicitly empty storage state and
+  drives the login form. Its own numbers — the request budget, the failed
+  attempts it costs, and the `LOGIN_RATE_LIMIT` / `LOGIN_LOCKOUT_*` overrides in
+  `docker/docker-compose.ci.yml` that carry them — live in
+  `frontend/e2e/README.md`.
 - **Selectors are roles and accessible names** from `frontend/src/lib/constants.ts`.
   No `data-testid`. A row that cannot be found by its accessible name is an
   accessibility defect, not a selector problem.
