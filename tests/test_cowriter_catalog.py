@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
+import pytest
 
+from songmaker_cli.agent_cli import AgentCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
     DependencyUnavailableProvider,
     ProviderRoute,
@@ -48,14 +52,70 @@ def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
     assert list_provider_models("claude", ProviderRoute.CLI) == ["opus", "sonnet"]
 
 
-def test_codex_cli_catalog_defaults_to_terra_without_removing_gpt_5_6():
+def test_codex_cli_catalog_lists_visible_models_from_the_cli_catalog(monkeypatch):
+    fixture = Path(__file__).parent / "fixtures" / "codex-debug-models.json"
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        fixture.read_text,
+    )
+
     assert list_provider_models("codex", ProviderRoute.CLI) == [
-        "gpt-5.6-terra",
-        "gpt-5.6",
         "gpt-5.6-sol",
+        "gpt-5.6-terra",
         "gpt-5.6-luna",
-        "gpt-6-astra",
+        "gpt-5.5",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex-spark",
     ]
+
+
+def test_codex_cli_catalog_sorts_same_priority_models_by_slug(monkeypatch):
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        lambda: json.dumps({
+            "models": [
+                {"slug": "gpt-z", "visibility": "list", "priority": 1},
+                {"slug": "gpt-a", "visibility": "list", "priority": 1},
+            ],
+        }),
+    )
+
+    assert list_provider_models("codex", ProviderRoute.CLI) == ["gpt-a", "gpt-z"]
+
+
+def test_codex_cli_catalog_rejects_an_unreachable_cli(monkeypatch):
+    def unavailable() -> str:
+        raise AgentCliUnavailableError("catalog command failed")
+
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        unavailable,
+    )
+
+    with pytest.raises(ProviderModelCatalogUnavailableError) as raised:
+        list_provider_models("codex", ProviderRoute.CLI)
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        "not-json",
+        json.dumps({"models": [{"slug": "gpt-5.6", "visibility": "list", "priority": "1"}]}),
+        json.dumps({"models": [{"slug": "gpt-5.6", "visibility": "hide", "priority": 1}]}),
+    ),
+)
+def test_codex_cli_catalog_rejects_an_invalid_catalog(monkeypatch, payload):
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        lambda: payload,
+    )
+
+    with pytest.raises(ProviderModelCatalogUnavailableError) as raised:
+        list_provider_models("codex", ProviderRoute.CLI)
+
+    assert raised.value.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
 
 
 def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
