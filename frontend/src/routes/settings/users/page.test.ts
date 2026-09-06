@@ -706,17 +706,9 @@ describe('admin models tab', () => {
 	});
 
 	it('names a rejected save in a red sub-row with a retry', async () => {
+		const rejection = "Unknown grok model 'grok-4'";
 		api.updateCowriterSettings.mockRejectedValue(
-			new ApiError(422, 'Provider not configured', '/api/settings/cowriter', null, {
-				provider: 'grok',
-				surface: 'cowriter',
-				status: {
-					state: 'unconfigured',
-					needs: 'api_key',
-					setup_method: null,
-					environment_key: 'XAI_API_KEY'
-				}
-			})
+			new ApiError(422, rejection, '/api/settings/cowriter', null, rejection)
 		);
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
@@ -724,7 +716,7 @@ describe('admin models tab', () => {
 		await choose(providerSelect(target, 'Co-Writer'), 'grok');
 
 		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
-		expect(failure.textContent).toContain('Grok co-writer: Missing XAI_API_KEY');
+		expect(failure.textContent).toContain(rejection);
 		expect(requireElement<HTMLButtonElement>(failure, '.retry').textContent?.trim()).toBe('Retry');
 
 		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ provider: 'grok', model: '' }));
