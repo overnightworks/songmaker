@@ -63,7 +63,6 @@ class CodexCliStreamFailure(Exception):
         self.code = code
 
 
-
 class CodexLoginMirrorError(Exception):
     """The redacted Codex login mirror cannot start an isolated CLI."""
 
@@ -187,7 +186,6 @@ def event_item_type(event: dict[str, object]) -> str:
     return item_type
 
 
-
 def event_item(event: dict[str, object]) -> dict[str, object]:
     item = event.get("item")
     if not isinstance(item, dict):
@@ -200,7 +198,6 @@ def top_level_error_message(event: dict[str, object]) -> str:
     if not isinstance(message, str):
         raise CodexCliStreamFailure("codex_cli_stream_protocol_error")
     return message
-
 
 
 def failed_turn_message(event: dict[str, object]) -> str:
@@ -218,7 +215,6 @@ def codex_cli_failure_reason(*messages: str | None) -> SafeRouteReasonCode:
     if any(_contains_auth_failure(message) for message in messages):
         return SafeRouteReasonCode.CLI_AUTH_REJECTED
     return SafeRouteReasonCode.CLI_PROTOCOL_ERROR
-
 
 
 def _contains_auth_failure(value: str | None) -> bool:
