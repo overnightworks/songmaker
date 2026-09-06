@@ -642,7 +642,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate; the transports, tool loop and sandbox blocks move in slice by slice |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak; the transports and sandbox blocks move in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares, `dependencies.py` the `current_user_dependency` factory that yields the session and admin dependencies; the login route with its advisory lock stays in the application |
 
@@ -705,9 +705,10 @@ gone: every module reads a Go constant from the library directly.
 The table's universe is those two `constants.py` modules, and moving the
 provider code into the library does not widen it: a module-level invariant
 that only its own module reads — the probe's caller budget in `process.py`,
-the Codex catalog's larger read limit, the Claude provider's error texts —
-stays a named constant beside its owner, exactly as it was before the move,
-and is not a value the host and the library could disagree about.
+the Codex catalog's larger read limit, the Claude provider's error texts, the
+tool loop's round cap `COWRITER_MAX_TOOL_ROUNDS` in `tool_loop.py` — stays a
+named constant beside its owner, exactly as it was before the move, and is not
+a value the host and the library could disagree about.
 
 `tests/test_agent_providers_constants.py` reads this table and holds both
 modules to it in both directions, so a constant cannot quietly change sides.
@@ -776,7 +777,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `COWRITER_DEFAULT_TAIL_TOKEN_BUDGET` | Stay | How much conversation history songmaker sends verbatim. |
 | `COWRITER_MAX_SUMMARY_CHARS` | Stay | How long that rolling summary may grow. |
 | `COWRITER_MAX_TAIL_TOKEN_BUDGET` | Stay | Upper bound a musician may set for that history budget. |
-| `COWRITER_MAX_TOOL_ROUNDS` | Stay | Bound of songmaker's tool loop; it travels with that loop, not with the constants split. |
 | `COWRITER_MIN_TAIL_TOKEN_BUDGET` | Stay | Lower bound a musician may set for that history budget. |
 | `COWRITER_SUMMARY_TAG` | Stay | The tag songmaker's rolling summary is wrapped in. |
 | `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |

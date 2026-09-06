@@ -21,12 +21,7 @@ from agent_providers.constants import (
     COWRITER_CLI_TIMEOUT_SECONDS,
 )
 from agent_providers.events import StreamEvent
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
-from songmaker_cli.cowriter.tool_loop import (
+from agent_providers.tool_loop import (
     FinalText,
     InitialTurn,
     TextDelta,
@@ -37,6 +32,11 @@ from songmaker_cli.cowriter.tool_loop import (
     ToolResultBatch,
     TransportResponse,
     stream_tool_loop,
+)
+from songmaker_cli.cowriter.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
 )
 from webauth.dependencies import AuthenticatedUser
 
@@ -49,6 +49,7 @@ async def stream_claude_turn(
     system: str,
     model: str,
     messages: list[dict[str, str]],
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     stream = acall_claude_with_mcp_stream(
         prompt="",
@@ -57,6 +58,7 @@ async def stream_claude_turn(
         model=model,
         messages=messages,
         timeout_seconds=COWRITER_CLI_TIMEOUT_SECONDS,
+        correlation_id=correlation_id,
     )
     try:
         async for event in stream:
@@ -79,6 +81,7 @@ async def stream_claude_api_turn(
     messages: list[dict[str, str]],
     session: Session,
     user: AuthenticatedUser,
+    correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one Claude API co-writer turn through the shared tool catalog."""
     from songmaker_cli.cowriter.tools import anthropic_tool_schemas, execute_cowriter_tool
@@ -105,6 +108,10 @@ async def stream_claude_api_turn(
                 executor=lambda name, arguments: execute_cowriter_tool(
                     session, user, name, arguments,
                 ),
+                tool_failure_message=normalize_route_failure(
+                    SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
+                ).message,
+                correlation_id=correlation_id,
             ):
                 yield event
     except ToolLoopLimitError as exc:

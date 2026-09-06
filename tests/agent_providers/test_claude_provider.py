@@ -715,49 +715,6 @@ def test_acall_cli_refuses_a_cli_the_gate_rejects(_no_tool_gate_open, monkeypatc
     create.assert_not_called()
 
 
-def test_call_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
-    """The gate resolves the CLI's symlink to its literal build path
-    (#351 Finding 4); ``_call_cli`` must run that same path, not whatever
-    ``_find_claude_binary`` alone would return."""
-    monkeypatch.setattr(
-        provider,
-        "verify_no_builtin_cli_tools",
-        lambda *, deadline=None: "/opt/claude/versions/2.1.257",
-    )
-    monkeypatch.setattr(
-        provider,
-        "_find_claude_binary",
-        lambda: "/usr/local/bin/claude",
-    )
-    mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
-
-    with patch("subprocess.run", return_value=mock_proc) as mock_run:
-        _call_cli("hello")
-
-    assert mock_run.call_args[0][0][0] == "/opt/claude/versions/2.1.257"
-
-
-def test_acall_cli_executes_the_binary_the_gate_verified(monkeypatch) -> None:
-    monkeypatch.setattr(
-        provider,
-        "averify_no_builtin_cli_tools",
-        AsyncMock(return_value="/opt/claude/versions/2.1.257"),
-    )
-    monkeypatch.setattr(
-        provider,
-        "_find_claude_binary",
-        lambda: "/usr/local/bin/claude",
-    )
-    proc = MagicMock(returncode=0)
-    proc.communicate = AsyncMock(return_value=(b'{"result":"ok"}', b""))
-    create = AsyncMock(return_value=proc)
-
-    with patch("asyncio.create_subprocess_exec", create):
-        asyncio.run(_acall_cli("hello"))
-
-    assert create.call_args.args[0] == "/opt/claude/versions/2.1.257"
-
-
 def test_healthy_cowriter_turn_holds_its_process_pool_reservation_until_it_exits(
     monkeypatch,
 ) -> None:
@@ -1028,7 +985,7 @@ def test_a_deployment_without_an_mcp_server_streams_the_tool_free_command_line(
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
     monkeypatch.setattr(provider, "_reap_stream_process_after_cancellation", AsyncMock())
 
-    async def one_final_event(_proc, _timeout):
+    async def one_final_event(_proc, _timeout, _correlation_id):
         yield FinalEvent(text="done")
 
     monkeypatch.setattr(provider, "_consume_stream", one_final_event)
@@ -1179,23 +1136,85 @@ def test_tool_surface_is_probed_with_the_cowriter_restrictions(
     assert "--mcp-config" in probe
 
 
-def test_the_cowriter_turn_runs_the_same_command_its_probe_verified(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    """One value flows from the gate into the turn: the resolved build path.
+def _mounted_build(tmp_path, monkeypatch) -> Path:
+    """A mounted ``claude`` symlink into a versioned build, as deployment has it.
 
-    The mounted ``claude`` is a symlink into a versioned build, so the two
-    command lines only agree if the turn really carries what the gate
-    returned. Both must also carry the same tool-isolation flags — a probe
-    that verified a different command line than the turn executes would
-    prove nothing about the turn.
+    The two command lines can only agree on this build path if the turn
+    really carries what the gate resolved and returned, rather than resolving
+    the mounted name a second time itself.
     """
     build = tmp_path / "claude-2.1.257"
     build.write_bytes(b"cli-build-one")
     mounted = tmp_path / "claude"
     mounted.symlink_to(build)
     monkeypatch.setattr(provider, "_find_claude_binary", lambda: str(mounted))
+    return build
+
+
+def _assert_the_turn_runs_what_the_probe_verified(
+    probed: list[str],
+    executed: list[str],
+    build: Path,
+    *,
+    mcp_attached: bool,
+) -> None:
+    """A probe that verified a different command line proves nothing about a turn."""
+    assert probed[0] == executed[0] == str(build)
+    isolation_flags = ["--tools", "--setting-sources"]
+    if mcp_attached:
+        isolation_flags.append("--allowedTools")
+    for flag in isolation_flags:
+        assert _flag_value(probed, flag) == _flag_value(executed, flag)
+    for flag in ("--strict-mcp-config", "--disable-slash-commands"):
+        assert flag in probed
+        assert flag in executed
+    assert ("--mcp-config" in probed) is mcp_attached
+    assert ("--mcp-config" in executed) is mcp_attached
+    assert ("--allowedTools" in probed) is mcp_attached
+    assert ("--allowedTools" in executed) is mcp_attached
+
+
+def _spawned_async_cli(commands: list[tuple[str, ...]], stdout: bytes):
+    async def fake_exec(*cmd, **_kw):
+        commands.append(cmd)
+        spawned = MagicMock(pid=4242, returncode=0)
+        spawned.communicate = AsyncMock(return_value=(stdout, b""))
+        return spawned
+
+    return fake_exec
+
+
+def test_the_cowriter_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    build = _mounted_build(tmp_path, monkeypatch)
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", verify_cli_tool_surface)
+    probe_commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
+    turn_commands: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        "asyncio.create_subprocess_exec",
+        _spawned_async_cli(turn_commands, b'{"result": "ok"}'),
+    )
+
+    asyncio.run(provider.acall_claude_with_mcp(prompt="hi", user_id="u-1"))
+
+    _assert_the_turn_runs_what_the_probe_verified(
+        list(probe_commands[0]), list(turn_commands[0]), build, mcp_attached=True,
+    )
+
+
+def test_the_streamed_cowriter_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """The streaming twin of the co-writer turn carries the same assurance.
+
+    It builds its own command line from the gate's answer, so a future
+    caller that re-resolved the mounted binary would ship a turn nobody
+    verified.
+    """
+    build = _mounted_build(tmp_path, monkeypatch)
     monkeypatch.setattr(provider, "verify_cli_tool_surface", verify_cli_tool_surface)
     probe_commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
     turn_commands: list[tuple[str, ...]] = []
@@ -1203,20 +1222,73 @@ def test_the_cowriter_turn_runs_the_same_command_its_probe_verified(
     async def fake_exec(*cmd, **_kw):
         turn_commands.append(cmd)
         spawned = MagicMock(pid=4242, returncode=0)
-        spawned.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
+        spawned.stdin = None
         return spawned
 
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(provider, "_reap_stream_process_after_cancellation", AsyncMock())
 
-    asyncio.run(provider.acall_claude_with_mcp(prompt="hi", user_id="u-1"))
+    async def one_final_event(_proc, _timeout, _correlation_id):
+        yield FinalEvent(text="done")
 
-    probed, executed = list(probe_commands[0]), list(turn_commands[0])
-    assert probed[0] == executed[0] == str(build)
-    for flag in ("--tools", "--setting-sources", "--allowedTools"):
-        assert _flag_value(probed, flag) == _flag_value(executed, flag)
-    assert "--strict-mcp-config" in probed and "--strict-mcp-config" in executed
-    assert "--disable-slash-commands" in probed
-    assert "--disable-slash-commands" in executed
+    monkeypatch.setattr(provider, "_consume_stream", one_final_event)
+
+    async def collect() -> list[StreamEvent]:
+        return [
+            event
+            async for event in provider.acall_claude_with_mcp_stream("hi", user_id="u-1")
+        ]
+
+    assert [event.text for event in asyncio.run(collect())] == ["done"]
+    _assert_the_turn_runs_what_the_probe_verified(
+        list(probe_commands[0]), list(turn_commands[0]), build, mcp_attached=True,
+    )
+
+
+def test_the_tool_free_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """``_call_cli`` — the judge's and the legacy chat endpoint's shared funnel.
+
+    Its gate holds the CLI to no tool at all, so probe and turn must agree on
+    the same build and the same isolation flags, and neither may attach an
+    MCP server.
+    """
+    build = _mounted_build(tmp_path, monkeypatch)
+    monkeypatch.setattr(provider, "verify_no_builtin_cli_tools", verify_no_builtin_cli_tools)
+    probe_commands = _answer_with(monkeypatch, _init_line([]))
+    turn = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
+
+    with patch("subprocess.run", return_value=turn) as run:
+        _call_cli("hello")
+
+    _assert_the_turn_runs_what_the_probe_verified(
+        list(probe_commands[0]), list(run.call_args[0][0]), build, mcp_attached=False,
+    )
+
+
+def test_the_async_tool_free_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """``_acall_cli`` carries the same assurance as its synchronous twin."""
+    build = _mounted_build(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        provider, "averify_no_builtin_cli_tools", averify_no_builtin_cli_tools,
+    )
+    probe_commands = _answer_with(monkeypatch, _init_line([]))
+    turn_commands: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        "asyncio.create_subprocess_exec",
+        _spawned_async_cli(turn_commands, b'{"result":"ok"}'),
+    )
+
+    asyncio.run(_acall_cli("hello"))
+
+    _assert_the_turn_runs_what_the_probe_verified(
+        list(probe_commands[0]), list(turn_commands[0]), build, mcp_attached=False,
+    )
 
 
 def test_tool_surface_gate_expects_no_tool_when_no_mcp_server_is_configured(
