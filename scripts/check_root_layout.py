@@ -24,6 +24,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 
 ALLOWED_ROOT_ENTRIES: dict[str, str] = {
+    ".agent-claim": "agent-claim looks for its board configuration in the repository root",
     "README.md": "entry document",
     "AGENTS.md": "entry document",
     "CLAUDE.md": "entry document",

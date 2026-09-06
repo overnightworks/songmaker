@@ -14,6 +14,7 @@ import check_root_layout  # noqa: E402
 
 DIRECTORY_ENTRIES = frozenset(
     {
+        ".agent-claim",
         ".git",
         ".github",
         "docker",
