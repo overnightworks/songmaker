@@ -266,7 +266,7 @@ stream lifetime, so the connection was still pinned one level up (measured:
 `enter=1, exit=0` after the first body chunk, `exit=1` only once the stream
 closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
 thread-offloads the whole handler body, exactly like
-`api_stream_resource_events`; auth (`get_current_user(request, session)`)
+`api_stream_resource_events`; auth (`authenticate_request(request, session)` from `auth_dependencies.py`)
 and the access check run as plain function calls against one short-lived
 `ctx.db()` session that closes before the lease is acquired or the
 `StreamingResponse` is even constructed, and every poll opens and closes

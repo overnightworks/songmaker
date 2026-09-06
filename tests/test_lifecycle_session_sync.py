@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from conftest import TEST_SECRET, make_fake_redis
+from fastapi import FastAPI
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_SESSION_PREFIX, REDIS_USER_SESSIONS_PREFIX
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
-from songmaker_cli.lifecycle import _sync_sessions
+from songmaker_cli.lifecycle import _sync_sessions, session_sync_loop
 from webauth.config import SessionKeyPrefixes
 from webauth.session_store import SessionCache
 
@@ -137,3 +139,15 @@ def test_session_sync_purges_database_expiry_when_redis_has_no_sessions(
     assert _sync_sessions(ctx, session_cache) == 0
     with ctx.db() as session:
         assert session.get(UserSession, "expired") is None
+
+
+def test_the_sync_loop_refuses_to_run_without_the_cache_it_reconciles(
+    ctx: AppContext,
+) -> None:
+    """Redis owns session expiry; a loop started without that cache would
+    silently reconcile nothing at all."""
+    app = FastAPI()
+    app.state.ctx = ctx
+
+    with pytest.raises(RuntimeError, match="session cache"):
+        asyncio.run(session_sync_loop(app))
