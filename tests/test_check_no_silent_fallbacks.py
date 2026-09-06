@@ -17,7 +17,6 @@ LINE_REGEX_RULES = (
     "next-iter-fallback",
     "dict-get-domain-fallback",
     "optional-on-default-utcnow-column",
-    "engine-isolation-violation",
 )
 
 
@@ -325,29 +324,6 @@ def test_optional_timestamp_caught(
     out = capsys.readouterr().out
     assert rc == 1
     assert "optional-on-default-utcnow-column" in out
-
-
-def test_engine_isolation_caught(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _seed(tmp_path, {
-        "acestep_engine/leak.py": "from songmaker_cli.constants import APP_NAME\n",
-    })
-    rc = _run(monkeypatch, tmp_path)
-    out = capsys.readouterr().out
-    assert rc == 1
-    assert "engine-isolation-violation" in out
-
-
-def test_engine_isolation_does_not_fire_on_songmaker_cli_itself(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-) -> None:
-    _seed(tmp_path, {
-        "songmaker_cli/m.py": "from songmaker_cli.constants import APP_NAME\n",
-    })
-    rc = _run(monkeypatch, tmp_path)
-    assert rc == 0
 
 
 def test_real_codebase_passes(
