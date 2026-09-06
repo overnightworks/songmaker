@@ -9,8 +9,11 @@ via :func:`configure`, instead of reaching into an application settings module.
 Nothing is installed by default. :func:`current_config` raises
 :class:`ProviderRuntimeNotConfiguredError` until the host has configured the
 process, so a forgotten call fails loudly at the first provider turn rather
-than silently running against a guessed path. :func:`reset_config` drops the
-installation again — the test-suite counterpart of clearing a settings cache.
+than silently running against a guessed path. A process configures once, so
+replacing an installed configuration with a *different* one raises
+:class:`ProviderRuntimeAlreadyConfiguredError` rather than letting the later
+caller quietly win; :func:`reset_config` drops the installation again — the
+test-suite counterpart of clearing a settings cache.
 
 Self-contained by design: pydantic only, no application import, so the package
 can be released on its own (issue #825).
@@ -55,9 +58,19 @@ class ProviderRuntimeNotConfiguredError(RuntimeError):
     """A provider ran before its host installed a runtime configuration."""
 
 
+class ProviderRuntimeAlreadyConfiguredError(RuntimeError):
+    """A second, differing configuration was installed over a live one."""
+
+
 _NOT_CONFIGURED_DETAIL = (
     "The agent-provider runtime is unconfigured. Call "
     "agent_providers.config.configure() during application startup."
+)
+
+_ALREADY_CONFIGURED_DETAIL = (
+    "The agent-provider runtime is already configured with a different value. "
+    "A process configures once; call agent_providers.config.reset_config() "
+    "first to install another one."
 )
 
 _configured: ProviderRuntimeConfig | None = None
@@ -65,9 +78,17 @@ _configuration_lock = threading.Lock()
 
 
 def configure(config: ProviderRuntimeConfig) -> None:
-    """Install the host's configuration as this process's provider runtime."""
+    """Install the host's configuration as this process's provider runtime.
+
+    Installing the same value again is a no-op, so a host may call this from
+    every startup path it owns without ordering them. Installing a differing
+    one is refused: two owners disagreeing about one deployment is a defect,
+    and letting the later caller win would silently discard the earlier value.
+    """
     global _configured
     with _configuration_lock:
+        if _configured is not None and _configured != config:
+            raise ProviderRuntimeAlreadyConfiguredError(_ALREADY_CONFIGURED_DETAIL)
         _configured = config
 
 

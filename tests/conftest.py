@@ -146,12 +146,24 @@ def override_provider_runtime(**deployment_facts) -> None:
     directory belong here rather than in a patched module constant: the
     provider layer reads them from the injected configuration, which the
     autouse fixture above rebuilds for every test.
-    """
-    from agent_providers.config import ProviderRuntimeConfig, configure, current_config
 
-    configure(
-        ProviderRuntimeConfig(**{**current_config().model_dump(), **deployment_facts}),
+    Deliberately replaces the installation rather than adding to it, because
+    ``configure()`` refuses a differing second value. A test that overrides
+    before building its app therefore fails loudly when ``create_app``
+    installs songmaker's own facts over it, instead of silently losing them.
+    """
+    from agent_providers.config import (
+        ProviderRuntimeConfig,
+        configure,
+        current_config,
+        reset_config,
     )
+
+    replacement = ProviderRuntimeConfig(
+        **{**current_config().model_dump(), **deployment_facts},
+    )
+    reset_config()
+    configure(replacement)
 
 
 @pytest.fixture(autouse=True)
