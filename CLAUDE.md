@@ -75,7 +75,8 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts src/lib/servic
 
 `python scripts/check_no_silent_fallbacks.py src/` is cheap; run it when
 touching `src/`. `python scripts/generate_types.py --check` when touching
-API models.
+API models. `python scripts/check_root_layout.py` when adding or moving a
+root-level file.
 
 **Full suite is CI only** (or when the operator explicitly asks):
 

@@ -54,6 +54,9 @@ jobs:
       - name: No silent-fallback smell check
         run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
 
+      - name: Repository root layout
+        run: uv run --no-sync --frozen --no-build python scripts/check_root_layout.py
+
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
