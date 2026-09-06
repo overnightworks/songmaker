@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,7 +16,13 @@ from songmaker_cli.auth_stores import (
 )
 from songmaker_cli.constants import AuditAction
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import AuditLog, ResourceEventCursor, UserSession
+from songmaker_cli.db.models import (
+    AuditLog,
+    LoginAttempt,
+    ResourceEventCursor,
+    User,
+    UserSession,
+)
 from webauth.ports import (
     AuditSink,
     LoginAttemptStore,
@@ -105,11 +112,11 @@ def test_an_unknown_session_is_absent(sessions) -> None:
     assert sessions.load("does-not-exist") is None
 
 
-def test_touching_a_session_writes_its_new_origin_without_committing(
+def test_touching_a_session_writes_its_new_origin_onto_the_record(
     users, sessions, session,
 ) -> None:
-    """The endpoint owns the transaction: a request that fails afterwards must
-    leave the session exactly as it was."""
+    """`touch` hands nothing back: the caller keeps working with the record it
+    loaded, so the new origin has to land on that object."""
     user = users.create("nina", _PASSWORD_HASH, "user")
     created = sessions.create(
         user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0",
@@ -122,8 +129,6 @@ def test_touching_a_session_writes_its_new_origin_without_committing(
     assert created.ip_address == "9.9.9.9"
     assert created.user_agent == "New/2.0"
     assert created.expires_at == renewed
-    session.rollback()
-    assert sessions.load(created.id).ip_address == "1.2.3.4"
 
 
 def test_deleting_a_session_leaves_the_others_alone(users, sessions, session) -> None:
@@ -202,3 +207,109 @@ def test_a_changed_user_agent_is_audited_without_repeating_the_string(
     entry = session.query(AuditLog).one()
     assert entry.action == AuditAction.SESSION_UA_CHANGE
     assert entry.detail == "ua_changed"
+
+
+@dataclass(frozen=True)
+class _StoredRows:
+    """Everything the auth stores can write, as the database holds it."""
+
+    users: frozenset[str]
+    sessions: frozenset[tuple[str, str, str]]
+    login_attempts: frozenset[str]
+    audit_entries: frozenset[str]
+
+    @classmethod
+    def of(cls, session) -> _StoredRows:
+        return cls(
+            users=frozenset(row.id for row in session.query(User).all()),
+            sessions=frozenset(
+                (row.id, row.ip_address, row.user_agent)
+                for row in session.query(UserSession).all()
+            ),
+            login_attempts=frozenset(row.id for row in session.query(LoginAttempt).all()),
+            audit_entries=frozenset(row.id for row in session.query(AuditLog).all()),
+        )
+
+
+@dataclass(frozen=True)
+class _SeededStores:
+    session: object
+    users: UserStore
+    sessions: SessionRecordStore
+    attempts: LoginAttemptStore
+    audit: AuditSink
+    user_id: str
+    session_ids: tuple[str, ...]
+
+
+@pytest.fixture
+def seeded(users, sessions, attempts, audit, session) -> _SeededStores:
+    user = users.create("nina", _PASSWORD_HASH, "user")
+    first = sessions.create(user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0")
+    second = sessions.create(user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0")
+    session.commit()
+    return _SeededStores(
+        session=session, users=users, sessions=sessions, attempts=attempts, audit=audit,
+        user_id=user.id, session_ids=(first.id, second.id),
+    )
+
+
+@pytest.mark.parametrize(
+    "write",
+    [
+        pytest.param(
+            lambda s: s.users.create("rob", _PASSWORD_HASH, "user"), id="creating a user",
+        ),
+        pytest.param(
+            lambda s: s.sessions.create(
+                s.user_id, _expiry(), ip_address="5.6.7.8", user_agent="New/2.0",
+            ),
+            id="creating a session",
+        ),
+        pytest.param(
+            lambda s: s.sessions.touch(
+                s.sessions.load(s.session_ids[0]),
+                ip_address="9.9.9.9", user_agent="New/2.0", expires_at=_expiry(hours=2),
+            ),
+            id="touching a session",
+        ),
+        pytest.param(
+            lambda s: s.sessions.delete(s.session_ids[0]), id="deleting a session",
+        ),
+        pytest.param(
+            lambda s: s.sessions.delete_for_user(s.user_id), id="deleting a user's sessions",
+        ),
+        pytest.param(
+            lambda s: s.sessions.prune_overflow(s.user_id, 1), id="pruning overflow sessions",
+        ),
+        pytest.param(
+            lambda s: s.attempts.record(
+                ip_address="1.2.3.4", username="nina", success=False,
+            ),
+            id="recording a login attempt",
+        ),
+        pytest.param(
+            lambda s: s.audit.session_identity_changed(SessionIdentityChanged(
+                change=SessionIdentityChange.IP_ADDRESS,
+                user_id=s.user_id,
+                session_id=s.session_ids[0],
+                previous="1.2.3.4",
+                current="9.9.9.9",
+            )),
+            id="auditing a moved session",
+        ),
+    ],
+)
+def test_no_store_write_survives_the_endpoints_rollback(
+    seeded: _SeededStores, write,
+) -> None:
+    """The endpoint owns the transaction. A request that fails after the auth
+    machinery wrote must leave the database exactly as it found it — no half
+    session, no orphan audit line, no attempt counted against the visitor."""
+    before = _StoredRows.of(seeded.session)
+
+    write(seeded)
+
+    assert _StoredRows.of(seeded.session) != before
+    seeded.session.rollback()
+    assert _StoredRows.of(seeded.session) == before
