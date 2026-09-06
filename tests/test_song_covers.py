@@ -29,6 +29,7 @@ from songmaker_cli.constants import (
     COVER_VARIANT_DETAIL,
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
+    JSON_REQUEST_BODY_MAX_BYTES,
     REIMPORT_BODY_MAX_BYTES,
     SONG_COVER_DIRNAME,
 )
@@ -47,7 +48,7 @@ from songmaker_cli.db.queries import (
     soft_delete_album,
     soft_delete_song,
 )
-from songmaker_cli.middleware.body_size import body_limit_for_path, is_large_upload_path
+from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 
 ALICE_PASSWORD = "alicepass1"
@@ -133,16 +134,18 @@ def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
 
 
 def test_song_cover_upload_path_is_cover_sized_and_reimport_unchanged() -> None:
-    assert is_large_upload_path("/api/songs/alice-song/cover")
-    assert not is_large_upload_path("/api/songs/alice-song/cover/extra")
-    assert not is_large_upload_path("/api/songs//cover")
-    assert body_limit_for_path("/api/songs/alice-song/cover") == COVER_UPLOAD_BODY_MAX_BYTES
-    assert is_large_upload_path("/api/songs/alice-song/reimport")
-    assert body_limit_for_path("/api/songs/alice-song/reimport") == REIMPORT_BODY_MAX_BYTES
+    policy = build_body_size_policy(get_settings())
+
+    assert policy.max_bytes("/api/songs/alice-song/cover", "POST") == COVER_UPLOAD_BODY_MAX_BYTES
+    assert (
+        policy.max_bytes("/api/songs/alice-song/cover/extra", "POST")
+        == JSON_REQUEST_BODY_MAX_BYTES
+    )
+    assert policy.max_bytes("/api/songs//cover", "POST") == JSON_REQUEST_BODY_MAX_BYTES
+    assert policy.max_bytes("/api/songs/alice-song/reimport", "POST") == REIMPORT_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES != REIMPORT_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES > COVER_MAX_BYTES
-    assert is_large_upload_path("/api/audio/upload")
-    assert body_limit_for_path("/api/audio/upload") == AUDIO_UPLOAD_BODY_MAX_BYTES
+    assert policy.max_bytes("/api/audio/upload", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert AUDIO_UPLOAD_BODY_MAX_BYTES != COVER_UPLOAD_BODY_MAX_BYTES
 
 

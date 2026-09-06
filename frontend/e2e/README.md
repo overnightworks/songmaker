@@ -140,9 +140,9 @@ library flow's own number drifted into three values before issue #326) are
 **not** what the server's own IP rate
 limit sees, and issue #344 is the reason that distinction is written down
 explicitly rather than assumed: a `FlowGuard` only counts `/api/*` requests
-the page itself made, so it misses HTML document navigations (`_classify_path`
-in `middleware/rate_limit.py` puts every unrecognized path, including a plain
-page load, in the same API class — fail closed, not fail open), the CI
+the page itself made, so it misses HTML document navigations (the rate-limit
+policy puts every unrecognized path, including a plain page load, in the same
+API class — fail closed, not fail open), the CI
 workflow's own `/health`/login smoke test before Playwright even starts,
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
