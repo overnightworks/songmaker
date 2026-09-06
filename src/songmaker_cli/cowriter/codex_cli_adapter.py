@@ -20,18 +20,18 @@ from typing import Final
 
 from PIL import Image, ImageOps
 
+from agent_providers.claude.provider import (
+    flatten_messages,
+    stdin_prompt,
+)
 from agent_providers.config import current_config
 from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS
-from songmaker_cli.agent_cli import (
+from agent_providers.process import (
     CliLineChannel,
     CliRunOutcome,
     CliRunReason,
     run_cli_bounded,
     scrubbed_env,
-)
-from songmaker_cli.claude.provider import (
-    flatten_messages,
-    stdin_prompt,
 )
 from songmaker_cli.constants import (
     COVER_MAX_PIXELS,

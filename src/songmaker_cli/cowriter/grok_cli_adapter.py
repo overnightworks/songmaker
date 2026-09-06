@@ -15,21 +15,21 @@ from dataclasses import dataclass
 from typing import Final
 from urllib.parse import quote
 
+from agent_providers.claude.provider import (
+    flatten_messages,
+    stdin_prompt,
+)
 from agent_providers.config import current_config
 from agent_providers.constants import (
     COWRITER_CLI_TIMEOUT_SECONDS,
     COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY,
     GROK_CLI_STREAMING_OUTPUT_FORMAT,
 )
-from songmaker_cli.agent_cli import (
+from agent_providers.process import (
     CliLineChannel,
     CliRunOutcome,
     run_cli_bounded,
     scrubbed_env,
-)
-from songmaker_cli.claude.provider import (
-    flatten_messages,
-    stdin_prompt,
 )
 from songmaker_cli.constants import GROK_CLI_PROMPT_FILE_PLACEHOLDER
 from songmaker_cli.cowriter.errors import (

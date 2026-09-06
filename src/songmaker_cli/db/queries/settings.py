@@ -9,6 +9,7 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.constants import COWRITER_PROVIDERS
 from songmaker_cli.constants import (
     COVER_DEFAULT_MODEL,
     COVER_DEFAULT_PROVIDER,
@@ -17,7 +18,6 @@ from songmaker_cli.constants import (
     COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
-    COWRITER_PROVIDERS,
     JUDGE_DEFAULT_PROVIDER,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
@@ -86,7 +86,7 @@ def _provider_routes_row(session: Session) -> RateLimitSetting | None:
 
 def _legacy_default_provider_routes() -> dict[str, str]:
     """Preserve the pre-route dispatcher selection for an unset setting only."""
-    from songmaker_cli.agent_cli import (
+    from agent_providers.process import (
         AgentCliUnavailableError,
         codex_cli_access_token_is_present,
         grok_cli_token_is_present,

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from songmaker_cli.claude.provider import CliToolSurfaceError, UnavailableError
+from agent_providers.claude.provider import CliToolSurfaceError, UnavailableError
 from songmaker_cli.lifecycle import (
     codex_image_sandbox_runtime_health,
     record_codex_image_sandbox_runtime_health,
@@ -35,7 +35,7 @@ def _boot(caplog, verify: AsyncMock) -> tuple[str, str]:
     the log text is what the boot log shows."""
     caplog.set_level("INFO")
     with patch(
-        "songmaker_cli.claude.provider.verify_cli_tool_surface", verify,
+        "agent_providers.claude.provider.verify_cli_tool_surface", verify,
     ):
         status = asyncio.run(report_claude_cli_tool_surface())
     return status, caplog.text

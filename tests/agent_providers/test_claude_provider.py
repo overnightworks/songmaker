@@ -18,10 +18,8 @@ import pytest
 from conftest import fake_cli_process, override_provider_runtime
 from pydantic import SecretStr
 
-from agent_providers.config import McpServerSpec, current_config
-from agent_providers.events import FinalEvent, StreamEvent
-from songmaker_cli.claude import provider
-from songmaker_cli.claude.provider import (
+from agent_providers.claude import provider
+from agent_providers.claude.provider import (
     ClaudeResponse,
     CliToolSurfaceError,
     UnavailableError,
@@ -45,11 +43,13 @@ from songmaker_cli.claude.provider import (
     verify_cli_tool_surface,
     verify_no_builtin_cli_tools,
 )
-from songmaker_cli.constants import (
+from agent_providers.config import McpServerSpec, current_config
+from agent_providers.constants import (
     CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
-    SECRET_ENV_KEYS,
 )
+from agent_providers.events import AssistantTextEvent, FinalEvent, StreamEvent
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 
 # The exact string a co-writer command line must carry, written out rather
@@ -125,7 +125,7 @@ def _leaked_secret_env_values() -> dict[str, str]:
 
 def test_call_claude_routes_to_api_with_key() -> None:
     resp = ClaudeResponse(text="hi")
-    with patch("songmaker_cli.claude.provider._call_api", return_value=resp) as mock:
+    with patch("agent_providers.claude.provider._call_api", return_value=resp) as mock:
         result = call_claude("hello", api_key="sk-test")
     mock.assert_called_once()
     assert result.text == "hi"
@@ -133,7 +133,7 @@ def test_call_claude_routes_to_api_with_key() -> None:
 
 def test_call_claude_routes_to_cli_without_key() -> None:
     resp = ClaudeResponse(text="yo")
-    with patch("songmaker_cli.claude.provider._call_cli", return_value=resp) as mock:
+    with patch("agent_providers.claude.provider._call_cli", return_value=resp) as mock:
         result = call_claude("hello")
     mock.assert_called_once()
     assert result.text == "yo"
@@ -148,7 +148,7 @@ def test_acall_claude_routes_to_api_with_key() -> None:
 
     resp = ClaudeResponse(text="async hi")
     mock = AsyncMock(return_value=resp)
-    with patch("songmaker_cli.claude.provider._acall_api", mock):
+    with patch("agent_providers.claude.provider._acall_api", mock):
         result = asyncio.run(acall_claude("hello", api_key="sk-test"))
     mock.assert_called_once()
     assert result.text == "async hi"
@@ -160,7 +160,7 @@ def test_acall_claude_routes_to_cli_without_key() -> None:
 
     resp = ClaudeResponse(text="async yo")
     mock = AsyncMock(return_value=resp)
-    with patch("songmaker_cli.claude.provider._acall_cli", mock):
+    with patch("agent_providers.claude.provider._acall_cli", mock):
         result = asyncio.run(acall_claude("hello"))
     mock.assert_called_once()
     assert result.text == "async yo"
@@ -174,12 +174,15 @@ def test_is_available_with_api_key() -> None:
 
 
 def test_is_available_with_cli_binary() -> None:
-    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value="/usr/bin/claude"):
+    with patch(
+        "agent_providers.claude.provider._find_claude_binary",
+        return_value="/usr/bin/claude",
+    ):
         assert is_available(api_key=None) is True
 
 
 def test_is_available_neither() -> None:
-    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
+    with patch("agent_providers.claude.provider._find_claude_binary", return_value=None):
         assert is_available(api_key=None) is False
 
 
@@ -190,11 +193,11 @@ def test_cli_login_status_delegates_to_the_shared_runner() -> None:
     runner_status = provider.CliLogin(logged_in=True, auth_method="claude.ai")
     with (
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
+            "agent_providers.claude.provider._find_claude_binary",
             return_value="/mounted/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.claude_cli_login",
+            "agent_providers.claude.provider.claude_cli_login",
             return_value=runner_status,
         ) as login,
     ):
@@ -207,9 +210,9 @@ def test_cli_login_status_delegates_to_the_shared_runner() -> None:
 def test_cli_login_status_without_a_binary_delegates_the_unavailable_probe() -> None:
     logged_out = provider.CliLogin(logged_in=False, auth_method=None)
     with (
-        patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None),
+        patch("agent_providers.claude.provider._find_claude_binary", return_value=None),
         patch(
-            "songmaker_cli.claude.provider.claude_cli_login",
+            "agent_providers.claude.provider.claude_cli_login",
             return_value=logged_out,
         ) as login,
     ):
@@ -221,7 +224,7 @@ def test_cli_login_status_without_a_binary_delegates_the_unavailable_probe() -> 
 
 def test_clearing_the_provider_login_cache_delegates_to_the_runner() -> None:
     with patch(
-        "songmaker_cli.claude.provider.clear_claude_cli_login_cache",
+        "agent_providers.claude.provider.clear_claude_cli_login_cache",
     ) as clear:
         clear_cli_login_status_cache()
 
@@ -247,11 +250,11 @@ def test_list_cli_model_aliases_parses_available_line() -> None:
     )
     with (
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
+            "agent_providers.claude.provider._find_claude_binary",
             return_value="/usr/bin/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
+            "agent_providers.claude.provider.subprocess.run",
             return_value=_model_command_result(stdout),
         ),
     ):
@@ -274,11 +277,11 @@ def test_list_cli_model_aliases_parses_available_line() -> None:
 def test_list_cli_model_aliases_unexpected_output_raises_named_error() -> None:
     with (
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
+            "agent_providers.claude.provider._find_claude_binary",
             return_value="/usr/bin/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
+            "agent_providers.claude.provider.subprocess.run",
             return_value=_model_command_result("no usable output here\n"),
         ),
     ):
@@ -287,7 +290,7 @@ def test_list_cli_model_aliases_unexpected_output_raises_named_error() -> None:
 
 
 def test_list_cli_model_aliases_no_binary_raises_named_error() -> None:
-    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
+    with patch("agent_providers.claude.provider._find_claude_binary", return_value=None):
         with pytest.raises(UnavailableError, match="Claude CLI not found"):
             list_cli_model_aliases()
 
@@ -295,11 +298,11 @@ def test_list_cli_model_aliases_no_binary_raises_named_error() -> None:
 def test_list_cli_model_aliases_timeout_raises_named_error() -> None:
     with (
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
+            "agent_providers.claude.provider._find_claude_binary",
             return_value="/usr/bin/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
+            "agent_providers.claude.provider.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=15),
         ),
     ):
@@ -310,11 +313,11 @@ def test_list_cli_model_aliases_timeout_raises_named_error() -> None:
 def test_list_cli_model_aliases_nonzero_exit_raises_named_error() -> None:
     with (
         patch(
-            "songmaker_cli.claude.provider._find_claude_binary",
+            "agent_providers.claude.provider._find_claude_binary",
             return_value="/usr/bin/claude",
         ),
         patch(
-            "songmaker_cli.claude.provider.subprocess.run",
+            "agent_providers.claude.provider.subprocess.run",
             return_value=_model_command_result("", returncode=1),
         ),
     ):
@@ -415,7 +418,7 @@ def test_judge_api_timeout_uses_the_shared_timeout_reason() -> None:
 
     with (
         patch.dict("sys.modules", {"anthropic": mock_anthropic}),
-        patch("songmaker_cli.claude.provider.time.monotonic", return_value=100.0),
+        patch("agent_providers.claude.provider.time.monotonic", return_value=100.0),
     ):
         with pytest.raises(UnavailableError) as exc:
             _call_api("hello", "sk-test", None, "claude-sonnet-4-6", 1024, deadline=110.0)
@@ -445,7 +448,7 @@ def test_judge_cli_gives_the_provider_request_the_remaining_budget(
 
     incrementing_monotonic_clock.step = 2.5
     with (
-        patch("songmaker_cli.claude.provider.verify_no_builtin_cli_tools", gate),
+        patch("agent_providers.claude.provider.verify_no_builtin_cli_tools", gate),
         patch("subprocess.run", return_value=completed) as run,
     ):
         result = call_claude(
@@ -659,7 +662,7 @@ def test_call_cli_no_binary(monkeypatch) -> None:
     # safety; undo that here so this test proves the real gate — not a
     # stand-in for it — is what surfaces "no binary" through _call_cli.
     monkeypatch.setattr(provider, "verify_no_builtin_cli_tools", verify_no_builtin_cli_tools)
-    with patch("songmaker_cli.claude.provider._find_claude_binary", return_value=None):
+    with patch("agent_providers.claude.provider._find_claude_binary", return_value=None):
         with pytest.raises(UnavailableError, match="Claude CLI not found"):
             _call_cli("hello")
 
@@ -1083,7 +1086,7 @@ def claude_binary(tmp_path: Path):
     binary = tmp_path / "claude"
     binary.write_bytes(b"cli-build-one")
     with patch(
-        "songmaker_cli.claude.provider._require_claude_binary",
+        "agent_providers.claude.provider._require_claude_binary",
         return_value=str(binary),
     ):
         yield binary
@@ -1176,6 +1179,46 @@ def test_tool_surface_is_probed_with_the_cowriter_restrictions(
     assert "--mcp-config" in probe
 
 
+def test_the_cowriter_turn_runs_the_same_command_its_probe_verified(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """One value flows from the gate into the turn: the resolved build path.
+
+    The mounted ``claude`` is a symlink into a versioned build, so the two
+    command lines only agree if the turn really carries what the gate
+    returned. Both must also carry the same tool-isolation flags — a probe
+    that verified a different command line than the turn executes would
+    prove nothing about the turn.
+    """
+    build = tmp_path / "claude-2.1.257"
+    build.write_bytes(b"cli-build-one")
+    mounted = tmp_path / "claude"
+    mounted.symlink_to(build)
+    monkeypatch.setattr(provider, "_find_claude_binary", lambda: str(mounted))
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", verify_cli_tool_surface)
+    probe_commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
+    turn_commands: list[tuple[str, ...]] = []
+
+    async def fake_exec(*cmd, **_kw):
+        turn_commands.append(cmd)
+        spawned = MagicMock(pid=4242, returncode=0)
+        spawned.communicate = AsyncMock(return_value=(b'{"result": "ok"}', b""))
+        return spawned
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    asyncio.run(provider.acall_claude_with_mcp(prompt="hi", user_id="u-1"))
+
+    probed, executed = list(probe_commands[0]), list(turn_commands[0])
+    assert probed[0] == executed[0] == str(build)
+    for flag in ("--tools", "--setting-sources", "--allowedTools"):
+        assert _flag_value(probed, flag) == _flag_value(executed, flag)
+    assert "--strict-mcp-config" in probed and "--strict-mcp-config" in executed
+    assert "--disable-slash-commands" in probed
+    assert "--disable-slash-commands" in executed
+
+
 def test_tool_surface_gate_expects_no_tool_when_no_mcp_server_is_configured(
     claude_binary,
     monkeypatch,
@@ -1223,7 +1266,7 @@ def test_tool_surface_probe_stops_the_session_it_started(
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
-    monkeypatch.setattr(provider.agent_cli, "_process_group_exists", lambda _pid: False)
+    monkeypatch.setattr(provider.process, "_process_group_exists", lambda _pid: False)
 
     asyncio.run(verify_cli_tool_surface())
 
@@ -1914,7 +1957,7 @@ def test_tool_surface_is_reprobed_after_a_genuine_symlink_retarget(
     symlink.symlink_to(target_a)
 
     with patch(
-        "songmaker_cli.claude.provider._require_claude_binary",
+        "agent_providers.claude.provider._require_claude_binary",
         return_value=str(symlink),
     ):
         commands = _answer_with(
@@ -1948,7 +1991,7 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_is_not_trusted(
     approval. A zombie always wins, regardless of what was read, and
     before parsing, the MCP check, or the verdict ever run."""
     _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
+    monkeypatch.setattr(provider.process, "_reap_process_group", lambda _proc: True)
 
     probe = verify_cli_tool_surface()
     with pytest.raises(provider._ZombieProbeError):
@@ -1971,16 +2014,16 @@ def test_zombie_probe_keeps_its_pool_slot_until_the_runner_confirms_reap(
         "Popen",
         lambda *_args, **_kwargs: fake_cli_process(_init_line([])),
     )
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _process: True)
+    monkeypatch.setattr(provider.process, "_reap_process_group", lambda _process: True)
 
     def await_background_reap(process, callback) -> None:
         background_started.set()
         assert allow_background_reap.wait(timeout=1)
         process.poll()
-        provider.agent_cli._notify_reaped(callback, process.pid, became_zombie=True)
+        provider.process._notify_reaped(callback, process.pid, became_zombie=True)
         background_finished.set()
 
-    monkeypatch.setattr(provider.agent_cli, "_reap_in_background", await_background_reap)
+    monkeypatch.setattr(provider.process, "_reap_in_background", await_background_reap)
 
     with pytest.raises(provider._ZombieProbeError):
         verify_no_builtin_cli_tools()
@@ -2003,7 +2046,7 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
         _init_line(_ALL_SONGMAKER_TOOLS),
         _init_line(_ALL_SONGMAKER_TOOLS),
     )
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
+    monkeypatch.setattr(provider.process, "_reap_process_group", lambda _proc: True)
     clock = {"now": time.monotonic()}
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
 
@@ -2023,7 +2066,7 @@ def test_tool_surface_a_clean_read_followed_by_a_zombie_gets_the_zombie_ttl(
 
     # Past the zombie TTL a fresh probe runs — and this time the process
     # exits cleanly, so it should actually succeed.
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: False)
+    monkeypatch.setattr(provider.process, "_reap_process_group", lambda _proc: False)
     clock["now"] += provider.CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS + 1
     _run_with_clock(verify_cli_tool_surface(), clock)
     assert len(commands) == 2
@@ -2034,12 +2077,12 @@ def test_zombie_failure_uses_the_event_loop_clock_when_the_loop_is_offset(
     monkeypatch,
 ) -> None:
     commands = _answer_with(monkeypatch, _init_line(_ALL_SONGMAKER_TOOLS))
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", lambda _proc: True)
+    monkeypatch.setattr(provider.process, "_reap_process_group", lambda _proc: True)
     loop = asyncio.new_event_loop()
     monotonic = time.monotonic
     monkeypatch.setattr(loop, "time", lambda: monotonic() - 43_000)
     monkeypatch.setattr(provider, "time", SimpleNamespace(monotonic=loop.time))
-    monkeypatch.setattr(provider.agent_cli.time, "monotonic", loop.time)
+    monkeypatch.setattr(provider.process.time, "monotonic", loop.time)
 
     try:
         probe = verify_cli_tool_surface()
@@ -2086,7 +2129,7 @@ def test_tool_surface_probe_normalizes_a_broken_pipe_during_write(
         return proc
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
+    monkeypatch.setattr(provider.process, "_reap_process_group", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
 
     started = time.monotonic()
@@ -2427,8 +2470,8 @@ def test_probe_with_a_stalled_pipe_reaps_and_releases_its_admission(
         return False
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
-    monkeypatch.setattr(provider.agent_cli.selectors, "DefaultSelector", StalledPipeSelector)
+    monkeypatch.setattr(provider.process, "_reap_process_group", fake_reap)
+    monkeypatch.setattr(provider.process.selectors, "DefaultSelector", StalledPipeSelector)
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 5.0)
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
     incrementing_monotonic_clock.step = 0
@@ -2486,7 +2529,7 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
         return True
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
+    monkeypatch.setattr(provider.process, "_reap_process_group", fake_reap)
 
     async def verify_after_cleanup() -> None:
         loop = asyncio.get_running_loop()
@@ -2550,10 +2593,10 @@ def test_probe_reaps_a_process_whose_popen_call_returns_after_the_deadline(
         return thread
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(provider.agent_cli, "_reap_process_group", fake_reap)
+    monkeypatch.setattr(provider.process, "_reap_process_group", fake_reap)
     monkeypatch.setattr(provider, "CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS", 0.02)
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", 1)
-    monkeypatch.setattr(provider.agent_cli.threading, "Thread", tracked_thread)
+    monkeypatch.setattr(provider.process.threading, "Thread", tracked_thread)
 
     started = time.monotonic()
     with pytest.raises(UnavailableError, match="did not start"):
@@ -2752,7 +2795,7 @@ def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch
     def fail_start(_runner: threading.Thread) -> None:
         raise RuntimeError("thread start failed")
 
-    monkeypatch.setattr(provider.agent_cli.threading.Thread, "start", fail_start)
+    monkeypatch.setattr(provider.process.threading.Thread, "start", fail_start)
 
     deadline = time.monotonic() + 1
     with pytest.raises(RuntimeError, match="thread start failed"):
@@ -2875,7 +2918,7 @@ def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) ->
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
     monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
-    caplog.set_level("WARNING", logger="songmaker_cli.claude.provider")
+    caplog.set_level("WARNING", logger="agent_providers.claude.provider")
 
     events = asyncio.run(
         _collect_stream_events(
@@ -2884,8 +2927,8 @@ def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) ->
     )
 
     assert events == [
-        provider.AssistantTextEvent(text="draft"),
-        provider.FinalEvent(text="final"),
+        AssistantTextEvent(text="draft"),
+        FinalEvent(text="final"),
     ]
     assert "malformed JSON" in caplog.text
 
@@ -2943,7 +2986,7 @@ def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) ->
             return proc
 
         async def fake_consume(*_args, **_kwargs):
-            yield provider.AssistantTextEvent(text="partial")
+            yield AssistantTextEvent(text="partial")
             await asyncio.Future()
 
         async def fake_reap(_proc) -> bool:
@@ -3188,7 +3231,7 @@ def test_no_builtin_gate_sync_twin_kills_a_still_running_probe(
 
     monkeypatch.setattr(provider.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(provider.os, "killpg", lambda pid, _sig: killed.append(pid))
-    monkeypatch.setattr(provider.agent_cli, "_process_group_exists", lambda _pid: False)
+    monkeypatch.setattr(provider.process, "_process_group_exists", lambda _pid: False)
 
     verify_no_builtin_cli_tools()
 

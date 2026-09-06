@@ -9,6 +9,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from agent_providers.claude import provider
+from agent_providers.claude.provider import (
+    UnavailableError,
+    _parse_stream_event,
+    _safe_json_loads,
+    acall_claude_with_mcp_stream,
+)
 from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,
@@ -16,13 +23,6 @@ from agent_providers.events import (
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
-)
-from songmaker_cli.claude import provider
-from songmaker_cli.claude.provider import (
-    UnavailableError,
-    _parse_stream_event,
-    _safe_json_loads,
-    acall_claude_with_mcp_stream,
 )
 
 
@@ -438,8 +438,8 @@ def test_malformed_stream_log_does_not_include_line_content(caplog) -> None:
 
 
 def test_stream_cmd_uses_stream_json_and_verbose() -> None:
+    from agent_providers.claude.provider import _build_mcp_cli_cmd
     from agent_providers.config import current_config
-    from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
     cmd = _build_mcp_cli_cmd(
         "claude", "opus", "/tmp/mcp.json", current_config().mcp_server, stream=True,
@@ -451,8 +451,8 @@ def test_stream_cmd_uses_stream_json_and_verbose() -> None:
 
 
 def test_stream_cmd_non_stream_keeps_json() -> None:
+    from agent_providers.claude.provider import _build_mcp_cli_cmd
     from agent_providers.config import current_config
-    from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
     cmd = _build_mcp_cli_cmd(
         "claude", "opus", "/tmp/mcp.json", current_config().mcp_server,
@@ -469,7 +469,7 @@ def test_error_event_model() -> None:
 
 
 def test_iter_lines_returns_immediately_when_stdout_missing() -> None:
-    from songmaker_cli.claude.provider import _iter_lines
+    from agent_providers.claude.provider import _iter_lines
 
     async def _run() -> list[bytes]:
         out: list[bytes] = []

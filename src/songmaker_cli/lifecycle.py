@@ -212,7 +212,10 @@ def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
 
 async def provider_status_refresh_loop(app: FastAPI) -> None:
     """Refresh provider reachability and catalogs outside request handling."""
-    from songmaker_cli.constants import CLI_LOGIN_STATUS_CACHE_SECONDS, COWRITER_PROVIDERS
+    from agent_providers.constants import (
+        CLI_LOGIN_STATUS_CACHE_SECONDS,
+        COWRITER_PROVIDERS,
+    )
     from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
 
     registry = background_loop_registry(app)
@@ -622,7 +625,7 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified
       never coming up) — a different kind of unavailability, not evidence
       of drift, but also not the same claim as "checked and clean".
     """
-    from songmaker_cli.claude.provider import (
+    from agent_providers.claude.provider import (
         CliToolSurfaceError,
         UnavailableError,
         verify_cli_tool_surface,
