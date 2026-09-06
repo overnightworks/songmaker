@@ -9,15 +9,16 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime
+from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
 
 import songmaker_cli.cover_runner as cover_runner
+from agent_providers.codex import protocol as codex_protocol
+from agent_providers.codex.image import CodexImageCliError, CodexImageQuotaError
+from agent_providers.codex.pool import CodexProcessPool
 from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError, CodexImageQuotaError
-from agent_providers.codex.pool import CodexProcessPool
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
@@ -282,10 +283,8 @@ def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
             reason=CliRunReason.COMPLETE,
         )
 
-    from songmaker_cli.cowriter import codex_cli_adapter
-
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
-    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
+    use_codex_process_pool(monkeypatch, process_pool)
     monkeypatch.setattr(
         cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
@@ -345,11 +344,9 @@ def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
             reason=CliRunReason.CANCELLED,
         )
 
-    from songmaker_cli.cowriter import codex_cli_adapter
-
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
-    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
+    use_codex_process_pool(monkeypatch, process_pool)
     return spawned, abort_requested, allow_reap, reaped, process_pool
 
 

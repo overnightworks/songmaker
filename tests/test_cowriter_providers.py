@@ -21,6 +21,10 @@ from conftest import (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_providers.errors import (
+    ProviderModelCatalogUnavailableError,
+    ProviderUnavailableError,
+)
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
@@ -37,10 +41,6 @@ from songmaker_cli.constants import (
     SETTING_JUDGE_PROVIDER,
 )
 from songmaker_cli.cowriter.catalog import ProviderRoute, list_provider_models
-from agent_providers.errors import (
-    ProviderModelCatalogUnavailableError,
-    ProviderUnavailableError,
-)
 from songmaker_cli.cowriter.openai_adapter import (
     _parse_tool_call,
     stream_openai_compatible_turn,

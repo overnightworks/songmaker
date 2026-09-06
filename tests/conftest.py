@@ -166,6 +166,20 @@ def override_provider_runtime(**deployment_facts) -> None:
     configure(replacement)
 
 
+def use_codex_process_pool(monkeypatch, process_pool) -> None:
+    """Give every Codex module that admits a process the same test pool.
+
+    Admission is asked for in three places — the tool transport, the image
+    route, and the shared runner that binds and reaps a reservation — so a
+    test that sizes the pool has to reach all three or it silently measures
+    the process-wide one.
+    """
+    from agent_providers.codex import image, protocol, transport
+
+    for module in (image, protocol, transport):
+        monkeypatch.setattr(module, "get_codex_process_pool", lambda: process_pool)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_codex_process_pool():
     """Keep each test independent of Codex CLI process reservations."""

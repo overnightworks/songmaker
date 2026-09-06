@@ -10,7 +10,16 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
+from agent_providers.codex.image import (
+    CodexImageCliError,
+    CodexImageError,
+    CodexImageLoginError,
+    CodexImageNotCreatedError,
+    CodexImageQuotaError,
+    ImageToolBlockedError,
+)
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
+from agent_providers.errors import CodexProcessPoolSaturatedError
 from songmaker_cli.constants import (
     COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
@@ -40,15 +49,6 @@ from songmaker_cli.constants import (
     JobStatus,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter.codex_cli_adapter import (
-    CodexImageCliError,
-    CodexImageError,
-    CodexImageLoginError,
-    CodexImageNotCreatedError,
-    CodexImageQuotaError,
-    ImageToolBlockedError,
-)
-from agent_providers.errors import CodexProcessPoolSaturatedError
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
     NoCapacityError,

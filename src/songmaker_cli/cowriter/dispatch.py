@@ -12,10 +12,8 @@ from sqlalchemy.orm import Session
 from agent_providers.claude.provider import (
     UnavailableError as ClaudeUnavailableError,
 )
-from agent_providers.codex.transport import (
-    CodexCliToolTransport,
-    codex_cover_image_capability_is_available,
-)
+from agent_providers.codex.image import codex_cover_image_capability_is_available
+from agent_providers.codex.transport import CodexCliToolTransport
 from agent_providers.config import current_config
 from agent_providers.constants import (
     COWRITER_GROK_CHAT_URL,
