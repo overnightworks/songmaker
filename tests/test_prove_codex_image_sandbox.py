@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,6 +16,28 @@ assert _SPEC.loader is not None
 proof = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
+
+
+@pytest.fixture
+def dash() -> str:
+    dash_path = shutil.which("dash")
+    if dash_path is None:
+        pytest.skip("dash is not installed on this host")
+    if os.geteuid() == 0:
+        pytest.skip("root ignores a 0o555 directory, so a refused write cannot be proven")
+    return dash_path
+
+
+def run_probe_under_dash(
+    dash: str, path: Path, *, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    script = f"""set -eu
+{proof.refused_write_probe(str(path))}\
+echo probe-passed
+"""
+    return subprocess.run(
+        [dash, "-c", script], capture_output=True, text=True, cwd=cwd
+    )
 
 
 def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() -> None:
@@ -71,6 +96,45 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     ):
         assert path in assertions
     assert "Permission denied" in assertions
+
+
+def test_refused_write_probe_reads_a_refused_write_as_false_under_dash(
+    dash: str, tmp_path: Path
+) -> None:
+    read_only_directory = tmp_path / "read-only"
+    read_only_directory.mkdir(mode=0o555)
+    refused_target = read_only_directory / "sandbox-write-probe"
+
+    result = run_probe_under_dash(dash, refused_target)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "probe-passed"
+    assert not refused_target.exists()
+
+
+def test_refused_write_probe_still_fails_the_script_on_a_successful_write(
+    dash: str, tmp_path: Path
+) -> None:
+    writable_target = tmp_path / "sandbox-write-probe"
+
+    result = run_probe_under_dash(dash, writable_target)
+
+    assert result.returncode == 1
+    assert "sandbox wrote outside CODEX_HOME" in result.stderr
+    assert "probe-passed" not in result.stdout
+    assert writable_target.exists()
+
+
+def test_refused_write_probe_quotes_a_path_containing_a_space(
+    dash: str, tmp_path: Path
+) -> None:
+    target = tmp_path / "sp ace" / "x"
+
+    result = run_probe_under_dash(dash, target, cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "probe-passed"
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_bubblewrap_startup_probe_matches_the_traced_codex_preflight_form() -> None:

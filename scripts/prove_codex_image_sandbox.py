@@ -35,16 +35,30 @@ CODEX_READ_ONLY_PERMISSION_PROFILE = (
     f'{{"path":{{"type":"path","path":"{SANDBOX_CODEX_HOME}"}},"access":"write"}}'
     ']},"network":"restricted"}'
 )
+
+
+def refused_write_probe(path: str) -> str:
+    """Shell fragment that fails the script when `path` is writable.
+
+    `:` is a POSIX special builtin, so under dash a failed redirection on it
+    (e.g. `: > path` against a read-only target) exits the *shell instance*
+    outright instead of yielding a plain false exit status for the `if` to
+    test — bash treats it as an ordinary false condition, dash does not. The
+    subshell confines that fatal exit to itself; the enclosing `if` only ever
+    observes the subshell's exit status, so a refused write reads as false on
+    both shells and a successful write still reports the failure.
+    """
+    return f"""if ( : > "{path}" ) 2>/dev/null; then
+  echo 'sandbox wrote outside CODEX_HOME' >&2
+  exit 1
+fi
+"""
+
+
 _SANDBOX_ASSERTIONS = f"""set -eu
 : > "$CODEX_HOME/allowed"
-if : > /app/songmaker-sandbox-write-probe; then
-  echo 'sandbox wrote outside CODEX_HOME' >&2
-  exit 1
-fi
-if : > /tmp/outside-codex-home; then
-  echo 'sandbox wrote outside CODEX_HOME' >&2
-  exit 1
-fi
+{refused_write_probe("/app/songmaker-sandbox-write-probe")}\
+{refused_write_probe("/tmp/outside-codex-home")}\
 test "$(awk '/^NoNewPrivs:/ {{ print $2 }}' /proc/self/status)" = 1
 test "$(awk '/^CapEff:/ {{ print $2 }}' /proc/self/status)" = "{EMPTY_CAPABILITY_MASK}"
 """ + """/app/.venv/bin/python - <<'PY'
