@@ -3,9 +3,10 @@
 ``agent_providers`` refuses to run until a host installs its deployment facts
 (see ``agent_providers.config``). This module is where songmaker states them:
 the container's credential mirrors and mounted Codex resources, the Claude
-chat model, the API keys, and the Codex process caps. Every process that can
-reach a provider calls :func:`configure_agent_providers` at startup — the web
-application in ``server.create_app`` and both arq workers in
+chat model, the API keys, the Codex process caps, and the MCP server a
+co-writer turn attaches. Every process that can reach a provider calls
+:func:`configure_agent_providers` at startup — the web application in
+``server.create_app`` and both arq workers in
 ``worker_base.WorkerBase.on_startup``, since neither worker runs a lifespan.
 """
 
@@ -25,6 +26,7 @@ from songmaker_cli.constants import (
     GROK_CLI_BINARY,
     SECRET_ENV_KEYS,
 )
+from songmaker_cli.cowriter.mcp_spec import songmaker_mcp_server
 from songmaker_cli.settings import Settings
 
 GROK_CLI_SESSION_ROOT: Final = Path.home() / ".grok" / "sessions"
@@ -63,5 +65,6 @@ def configure_agent_providers(settings: Settings) -> None:
             codex_max_concurrent_processes=settings.codex_cli_max_concurrent_processes,
             codex_max_concurrent_cover_runs=settings.cover_max_concurrent_runs,
             secret_env_keys=SECRET_ENV_KEYS,
+            mcp_server=songmaker_mcp_server(settings.database_url),
         ),
     )
