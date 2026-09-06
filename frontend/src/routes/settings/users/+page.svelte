@@ -72,7 +72,6 @@
 		ADMIN_VOICES_OWNER_LABEL,
 		ADMIN_VOICES_STATUS_LABEL,
 		ADMIN_VOICES_TAB_LABEL,
-		MODELS_ADVANCED_LABEL,
 		MODELS_COLUMN_MODEL_LABEL,
 		MODELS_COLUMN_PROVIDER_LABEL,
 		MODELS_COLUMN_ROUTE_LABEL,
@@ -459,7 +458,8 @@
 		provider: string,
 		route: ModelsRouteKey,
 		ready: boolean,
-		reason: SafeRouteReason | null
+		reason: SafeRouteReason | null,
+		models?: string[]
 	): ModelsTaskRoute {
 		const catalogue = catalogueOf(provider, route);
 		if (providerStatusFailure) {
@@ -473,7 +473,7 @@
 		return {
 			ready,
 			reason,
-			models: catalogue?.models ?? [],
+			models: models ?? catalogue?.models ?? [],
 			modelsReason: catalogue?.catalogue_failure?.message ?? reason?.message ?? null
 		};
 	}
@@ -490,11 +490,13 @@
 
 	function coverRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
 		const readiness = providerStatusFor(provider)?.cover_routes?.[route];
+		const canDraw = readiness?.state === 'ready';
 		return taskRoute(
 			provider,
 			route,
-			readiness?.state === 'ready',
-			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null
+			canDraw,
+			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null,
+			canDraw ? undefined : []
 		);
 	}
 
@@ -1287,7 +1289,6 @@
 	</div>
 {/if}
 
-
 {#snippet advanced()}
 	<label class="field-label" for="cowriter-budget">{MODELS_HISTORY_TAIL_LABEL}</label>
 	<input
@@ -1302,6 +1303,7 @@
 		<span class="saved">✓ {MODELS_SAVED_LABEL}</span>
 	{/if}
 {/snippet}
+
 <style>
 	.tt {
 		border: 1px solid var(--border);
