@@ -414,6 +414,36 @@ describe('models task row', () => {
 		expect(save).not.toHaveBeenCalled();
 	});
 
+	it('reads its reasons out with the control they belong to', async () => {
+		const target = await renderRow({
+			providers: [GROK_WITHOUT_KEY],
+			selection: { provider: 'grok', route: 'api', model: '' }
+		});
+
+		const describedRoutes = requireElement(target, '.rsw').getAttribute('aria-describedby');
+		expect(describedRoutes).not.toBeNull();
+		expect(requireElement(target, `#${describedRoutes}`).textContent).toContain(
+			'API · key not set'
+		);
+
+		const describedModels = selectNamed(target, 'model').getAttribute('aria-describedby');
+		expect(describedModels).not.toBeNull();
+		expect(requireElement(target, `#${describedModels}`).textContent).toContain(
+			'List needs the key'
+		);
+	});
+
+	it('announces a save without stealing focus', async () => {
+		const target = await renderRow();
+		const confirmation = requireElement(target, '.saved');
+		expect(confirmation.getAttribute('aria-live')).toBe('polite');
+		expect(confirmation.textContent?.trim()).toBe('');
+
+		await choose(selectNamed(target, 'model'), 'sonnet');
+
+		expect(confirmation.textContent).toContain(MODELS_SAVED_LABEL);
+	});
+
 	it('keeps task extras behind a collapsed Advanced disclosure', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);

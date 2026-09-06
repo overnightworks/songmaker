@@ -54,7 +54,7 @@
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
-	import ModelsTaskRow from '$lib/components/ModelsTaskRow.svelte';
+	import ModelsTaskRow, { MODELS_ROUTES } from '$lib/components/ModelsTaskRow.svelte';
 	import type {
 		ModelsRouteKey,
 		ModelsSaveOutcome,
@@ -400,7 +400,6 @@
 
 	const JUDGE_ROUTE: ModelsRouteKey = 'api';
 	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
-	const TASK_ROUTES: ModelsRouteKey[] = ['cli', 'api'];
 
 	function loadModelsTab(): void {
 		void loadProviderStatuses();
@@ -537,7 +536,7 @@
 		const stored = cowriterSettings?.provider_routes?.[provider];
 		if (stored) return stored;
 		return (
-			TASK_ROUTES.find((route) => catalogueOf(provider, route)?.readiness.state === 'ready') ??
+			MODELS_ROUTES.find((route) => catalogueOf(provider, route)?.readiness.state === 'ready') ??
 			FALLBACK_ROUTE
 		);
 	}
@@ -1306,9 +1305,9 @@
 		value={cowriterBudget}
 		onchange={(event) => saveCowriterBudget(Number(event.currentTarget.value))}
 	/>
-	{#if cowriterBudgetSaved}
-		<span class="saved">✓ {MODELS_SAVED_LABEL}</span>
-	{/if}
+	<span class="saved" aria-live="polite"
+		>{cowriterBudgetSaved ? `✓ ${MODELS_SAVED_LABEL}` : ''}</span
+	>
 	{#if cowriterBudgetFailure !== null}
 		<span class="budget-error" role="alert">{cowriterBudgetFailure}</span>
 		<button type="button" class="retry" onclick={() => saveCowriterBudget(cowriterBudget)}
@@ -1817,11 +1816,5 @@
 	.model-status {
 		font-size: 0.7rem;
 		opacity: 0.7;
-	}
-
-	@media (max-width: 760px) {
-		.route-grid {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

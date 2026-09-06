@@ -24,7 +24,7 @@
 
 	export type ModelsSaveOutcome = { ok: true } | { ok: false; reason: string };
 
-	const ROUTE_ORDER: ModelsRouteKey[] = ['cli', 'api'];
+	export const MODELS_ROUTES: ModelsRouteKey[] = ['cli', 'api'];
 </script>
 
 <script lang="ts">
@@ -68,6 +68,10 @@
 
 	let { task, providers, selection, save, routeSelectable = true, advanced }: Props = $props();
 
+	const taskId = $derived(task.toLowerCase().replace(/\s+/g, '-'));
+	const routeReasonsId = $derived(`${taskId}-route-reasons`);
+	const modelsHintId = $derived(`${taskId}-models-hint`);
+
 	let pending = $state<ModelsTaskSelection | null>(null);
 	let saved = $state(false);
 	let failure = $state<string | null>(null);
@@ -107,7 +111,7 @@
 	}
 
 	function reasonsOf(): { route: ModelsRouteKey; text: string; warn: boolean }[] {
-		const others = ROUTE_ORDER.filter((route) => route !== current.route);
+		const others = MODELS_ROUTES.filter((route) => route !== current.route);
 		const shown = routeView?.ready === false ? [current.route, ...others] : others;
 		return shown.flatMap((route) => {
 			const text = routeReason(route);
@@ -160,14 +164,14 @@
 	}
 
 	function providerOptionLabel(entry: ModelsTaskProvider): string {
-		if (ROUTE_ORDER.some((route) => entry.routes[route].ready)) {
+		if (MODELS_ROUTES.some((route) => entry.routes[route].ready)) {
 			return `${entry.label} ${MODELS_OPTION_READY_LABEL}`;
 		}
-		const keyMissing = ROUTE_ORDER.some(
+		const keyMissing = MODELS_ROUTES.some(
 			(route) => entry.routes[route].reason?.code === 'api_key_not_set'
 		);
 		if (keyMissing) return `${entry.label} · ${MODELS_OPTION_NEEDS_API_KEY_PHRASE}`;
-		for (const route of ROUTE_ORDER) {
+		for (const route of MODELS_ROUTES) {
 			const reason = entry.routes[route].reason;
 			if (reason) return `${entry.label} · ${failurePhrase(reason, route)}`;
 		}
@@ -181,7 +185,7 @@
 
 	function routeFor(entry: ModelsTaskProvider | undefined, preferred: ModelsRouteKey) {
 		if (!entry || entry.routes[preferred].ready) return preferred;
-		const ready = ROUTE_ORDER.filter((route) => entry.routes[route].ready);
+		const ready = MODELS_ROUTES.filter((route) => entry.routes[route].ready);
 		return ready.length === 1 ? ready[0] : preferred;
 	}
 
@@ -253,8 +257,13 @@
 
 	<div class="cell">
 		<span class="k" aria-hidden="true">{MODELS_COLUMN_ROUTE_LABEL}</span>
-		<div class="rsw" role="group" aria-label={`${task} ${MODELS_COLUMN_ROUTE_LABEL.toLowerCase()}`}>
-			{#each ROUTE_ORDER as route (route)}
+		<div
+			class="rsw"
+			role="group"
+			aria-label={`${task} ${MODELS_COLUMN_ROUTE_LABEL.toLowerCase()}`}
+			aria-describedby={routeReasons.length > 0 ? routeReasonsId : undefined}
+		>
+			{#each MODELS_ROUTES as route (route)}
 				{@const view = providerView?.routes[route]}
 				{@const chosen = current.route === route}
 				<button
@@ -268,9 +277,11 @@
 				>
 			{/each}
 		</div>
-		{#each routeReasons as reason (reason.route)}
-			<small class="why" class:warn={reason.warn}>{reason.text}</small>
-		{/each}
+		<span id={routeReasonsId}>
+			{#each routeReasons as reason (reason.route)}
+				<small class="why" class:warn={reason.warn}>{reason.text}</small>
+			{/each}
+		</span>
 	</div>
 
 	<div class="cell">
@@ -279,6 +290,7 @@
 			class="sel"
 			class:off={modelOptions.length === 0}
 			aria-label={`${task} ${MODELS_COLUMN_MODEL_LABEL.toLowerCase()}`}
+			aria-describedby={modelsHint !== null ? modelsHintId : undefined}
 			value={current.model}
 			disabled={modelOptions.length === 0}
 			onchange={(event) => chooseModel(event.currentTarget.value)}
@@ -292,16 +304,14 @@
 			{/if}
 		</select>
 		{#if modelsHint !== null}
-			<small class="hint">{modelsHint}</small>
+			<small class="hint" id={modelsHintId}>{modelsHint}</small>
 		{/if}
 	</div>
 
 	<div class="cell">
 		<span class="k" aria-hidden="true">{MODELS_COLUMN_STATUS_LABEL}</span>
 		<span class="st {status.shape}"><span class="mark">{status.mark}</span>{status.text}</span>
-		{#if saved}
-			<span class="saved">✓ {MODELS_SAVED_LABEL}</span>
-		{/if}
+		<span class="saved" aria-live="polite">{saved ? `✓ ${MODELS_SAVED_LABEL}` : ''}</span>
 	</div>
 </div>
 
