@@ -25,7 +25,7 @@ WORKDIR /app
 # Install dependencies first (cached unless pyproject.toml/uv.lock change)
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
-    uv sync --frozen --no-dev --extra server --extra mcp --extra claude && \
+    uv sync --frozen --no-dev --extra server --extra mcp --extra api --extra image && \
     rm -rf src/songmaker_cli/__init__.py
 
 # Copy source code (only this layer rebuilds on code changes)
@@ -38,7 +38,7 @@ COPY alembic.ini ./
 # context, and a hand-picked list would silently miss the next operational
 # script someone adds.
 COPY scripts/ scripts/
-RUN uv sync --frozen --no-dev --extra server --extra mcp --extra claude
+RUN uv sync --frozen --no-dev --extra server --extra mcp --extra api --extra image
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 

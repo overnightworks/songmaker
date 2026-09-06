@@ -77,7 +77,7 @@ The local Python `.venv` exists for **tests, type checking, and IDE autocomplete
 
 ```bash
 # One-time setup
-uv sync --extra server --extra scoring --extra whisper --extra mcp --extra dev
+uv sync --extra server --extra scoring --extra whisper --extra mcp --extra image --extra dev
 
 # Run the test suite
 pytest tests/ -n auto -q
