@@ -530,10 +530,6 @@
 		return taskRoute(provider, route, surface.state === 'configured', judgeReason(surface));
 	}
 
-	function storedCoverProvider(): string[] {
-		return coverSettings ? [coverSettings.provider] : [];
-	}
-
 	function taskProviders(
 		routeOf: (provider: string, route: ModelsRouteKey) => ModelsTaskRoute,
 		names: string[]
@@ -561,10 +557,7 @@
 		route: storedRoute(cowriterSettings?.provider ?? ''),
 		model: cowriterSettings?.model ?? ''
 	});
-	const coverProviderNames = $derived(
-		cowriterProviderNames.length > 0 ? cowriterProviderNames : storedCoverProvider()
-	);
-	const coverProviders = $derived(taskProviders(coverRoute, coverProviderNames));
+	const coverProviders = $derived(taskProviders(coverRoute, cowriterProviderNames));
 	const coverSelection = $derived<ModelsTaskSelection>({
 		provider: coverSettings?.provider ?? '',
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
@@ -1259,7 +1252,7 @@
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}
-					{#if coverSettings}
+					{#if coverSettings && cowriterSettings}
 						<ModelsTaskRow
 							task={MODELS_TASK_COVER_LABEL}
 							providers={coverProviders}
