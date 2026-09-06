@@ -145,19 +145,17 @@ def _final_event(events: list[dict]) -> dict:
 
 
 def test_mcp_cli_cmd_includes_required_flags():
-    from songmaker_cli.claude.provider import (
-        MCP_ALLOWED_TOOLS,
-        _build_mcp_cli_cmd,
-    )
+    from agent_providers.config import current_config
+    from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
     cmd = _build_mcp_cli_cmd(
-        "claude", "claude-opus-4-6", "/tmp/mcp.json",
+        "claude", "claude-opus-4-6", "/tmp/mcp.json", current_config().mcp_server,
     )
     assert "--mcp-config" in cmd
     assert cmd[cmd.index("--mcp-config") + 1] == "/tmp/mcp.json"
     assert "--strict-mcp-config" in cmd
     assert "--allowedTools" in cmd
-    assert MCP_ALLOWED_TOOLS in cmd
+    assert "mcp__songmaker__*" in cmd
     assert "hi" not in cmd
     assert "sysprompt" not in cmd
     joined = " ".join(cmd)
@@ -166,9 +164,10 @@ def test_mcp_cli_cmd_includes_required_flags():
 
 
 def test_mcp_config_passes_user_id_to_subprocess_env():
+    from agent_providers.config import current_config
     from songmaker_cli.claude.provider import _build_mcp_config
 
-    cfg = json.loads(_build_mcp_config("user-xyz"))
+    cfg = json.loads(_build_mcp_config(current_config().mcp_server, "user-xyz"))
     srv = cfg["mcpServers"]["songmaker"]
     assert srv["env"]["SONGMAKER_MCP_USER_ID"] == "user-xyz"
     assert "DATABASE_URL" in srv["env"]

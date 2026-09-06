@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
+import stat
 import subprocess
 import threading
 import time
@@ -15,10 +16,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import anyio
 import pytest
 from conftest import fake_cli_process, override_provider_runtime
+from pydantic import SecretStr
 
+from agent_providers.config import McpServerSpec, current_config
+from agent_providers.events import FinalEvent, StreamEvent
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import (
-    MCP_ALLOWED_TOOLS,
     ClaudeResponse,
     CliToolSurfaceError,
     UnavailableError,
@@ -47,6 +50,16 @@ from songmaker_cli.constants import (
     JUDGE_FAILURE_TIMEOUT,
     SECRET_ENV_KEYS,
 )
+from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
+
+# The exact string a co-writer command line must carry, written out rather
+# than derived from the code under test.
+SONGMAKER_ALLOWED_TOOLS = "mcp__songmaker__*"
+
+
+def _configured_mcp_server():
+    """The MCP server songmaker installs for the provider layer."""
+    return current_config().mcp_server
 
 
 def _reset_cli_process_pool_for_test() -> None:
@@ -605,7 +618,7 @@ def test_cowriter_cli_surfaces_a_missing_or_failed_binary(
     failure: str,
 ) -> None:
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     if failure == "missing":
         spawn = AsyncMock(side_effect=FileNotFoundError())
@@ -756,7 +769,7 @@ def test_healthy_cowriter_turn_holds_its_process_pool_reservation_until_it_exits
 
     proc.communicate = AsyncMock(side_effect=communicate)
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     monkeypatch.setattr(
         provider.asyncio,
@@ -783,7 +796,7 @@ def test_cowriter_refuses_a_healthy_turn_when_the_shared_process_pool_is_full(
     process_cap = 2
     monkeypatch.setattr(provider, "CLAUDE_CLI_MAX_CONCURRENT_PROCESSES", process_cap)
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     release = asyncio.Event()
     started = [asyncio.Event() for _ in range(process_cap)]
@@ -901,23 +914,23 @@ def _flag_value(cmd: list[str], flag: str) -> str:
 
 
 def test_cowriter_command_offers_no_builtin_tool() -> None:
-    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json", _configured_mcp_server())
 
     assert _flag_value(cmd, "--tools") == ""
-    assert _flag_value(cmd, "--allowedTools") == MCP_ALLOWED_TOOLS
+    assert _flag_value(cmd, "--allowedTools") == SONGMAKER_ALLOWED_TOOLS
     assert "--disallowedTools" not in cmd
     assert "bypassPermissions" not in cmd
 
 
 def test_cowriter_command_ignores_the_mounted_settings_file() -> None:
-    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json", _configured_mcp_server())
 
     assert _flag_value(cmd, "--setting-sources") == ""
     assert "--strict-mcp-config" in cmd
 
 
 def test_cowriter_command_disables_slash_commands() -> None:
-    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json", _configured_mcp_server())
 
     assert "--disable-slash-commands" in cmd
 
@@ -930,11 +943,110 @@ def test_tool_free_command_offers_no_tool_at_all() -> None:
     assert "--disable-slash-commands" in cmd
 
 
+# ── the host declares its MCP server; this module holds no literal ────
+
+
+def test_the_written_mcp_config_is_the_json_the_cli_expects() -> None:
+    """Byte for byte, because the CLI parses this file and the file carries
+    the database credentials: key order, separators, the unwrapped secrets
+    and the turn's user appended last are all part of the contract."""
+    spec = McpServerSpec(
+        name="probe-server",
+        command="/usr/bin/python3",
+        args=("-m", "probe.server"),
+        environment={
+            "DATABASE_URL": SecretStr("postgresql://u:p@db/x"),
+            "REDIS_URL": SecretStr("unused-here"),
+        },
+        user_id_environment_variable="PROBE_USER_ID",
+        config_file_prefix="probe-",
+        tool_names=frozenset({"get_song"}),
+    )
+
+    assert provider._build_mcp_config(spec, "u-1") == (
+        '{"mcpServers": {"probe-server": {"command": "/usr/bin/python3", '
+        '"args": ["-m", "probe.server"], "env": {"DATABASE_URL": '
+        '"postgresql://u:p@db/x", "REDIS_URL": "unused-here", '
+        '"PROBE_USER_ID": "u-1"}}}}'
+    )
+
+
+def test_the_mcp_config_file_is_readable_only_by_its_owner() -> None:
+    path = provider._write_mcp_config(_configured_mcp_server(), "u-1")
+    try:
+        assert Path(path).name.startswith("songmaker-mcp-")
+        assert stat.S_IMODE(Path(path).stat().st_mode) == 0o600
+        assert Path(path).read_text() == provider._build_mcp_config(
+            _configured_mcp_server(), "u-1",
+        )
+    finally:
+        Path(path).unlink()
+
+
+def test_a_deployment_without_an_mcp_server_runs_the_tool_free_command_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``mcp_server=None`` is a valid configuration: the co-writer turn then
+    runs the same command line the judge does — no ``--mcp-config``, no
+    ``--allowedTools`` — and writes no config file at all."""
+    override_provider_runtime(mcp_server=None)
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(
+        provider,
+        "_write_mcp_config",
+        lambda *_args: pytest.fail("no MCP config may be written without a server"),
+    )
+    process = MagicMock(pid=1, returncode=0)
+    process.communicate = AsyncMock(return_value=(b'{"result":"ok"}', b""))
+    spawn = AsyncMock(return_value=process)
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+
+    response = asyncio.run(provider.acall_claude_with_mcp("hi", user_id="u-1", model="opus"))
+
+    assert response.text == "ok"
+    assert list(spawn.await_args.args) == _build_cli_cmd("claude", "opus")
+    assert "--mcp-config" not in spawn.await_args.args
+    assert "--allowedTools" not in spawn.await_args.args
+
+
+def test_a_deployment_without_an_mcp_server_streams_the_tool_free_command_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    override_provider_runtime(mcp_server=None)
+    monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
+    monkeypatch.setattr(
+        provider,
+        "_write_mcp_config",
+        lambda *_args: pytest.fail("no MCP config may be written without a server"),
+    )
+    process = MagicMock(pid=1, returncode=0)
+    process.stdin = None
+    spawn = AsyncMock(return_value=process)
+    monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
+    monkeypatch.setattr(provider, "_reap_stream_process_after_cancellation", AsyncMock())
+
+    async def one_final_event(_proc, _timeout):
+        yield FinalEvent(text="done")
+
+    monkeypatch.setattr(provider, "_consume_stream", one_final_event)
+
+    async def collect() -> list[StreamEvent]:
+        return [
+            event
+            async for event in acall_claude_with_mcp_stream("hi", user_id="u-1", model="opus")
+        ]
+
+    assert [event.text for event in asyncio.run(collect())] == ["done"]
+    assert list(spawn.await_args.args) == _build_cli_cmd("claude", "opus", stream=True)
+    assert "--mcp-config" not in spawn.await_args.args
+    assert "--allowedTools" not in spawn.await_args.args
+
+
 # ── tool-surface verification ───────────────────────────────────────
 #
 # Two gates share one probe mechanism (see the block comment above
 # ``verify_cli_tool_surface`` in provider.py): the MCP-attached one used by
-# the co-writer, expecting exactly the eleven songmaker tools, and the
+# the co-writer, expecting exactly the configured server's tools, and the
 # no-builtin-tools one used by ``_call_cli``/``_acall_cli``, expecting none
 # at all. Both are exercised below.
 
@@ -990,10 +1102,10 @@ def _answer_with(monkeypatch, *lines: bytes) -> list[tuple[str, ...]]:
     return commands
 
 
-_ALL_SONGMAKER_TOOLS = sorted(provider._EXPECTED_MCP_TOOL_NAMES)
+_ALL_SONGMAKER_TOOLS = sorted(f"mcp__songmaker__{name}" for name in MCP_TOOL_NAMES)
 
 
-def test_tool_surface_accepts_a_cli_offering_exactly_the_eleven_songmaker_tools(
+def test_tool_surface_accepts_a_cli_offering_exactly_the_configured_mcp_tools(
     claude_binary,
     monkeypatch,
 ) -> None:
@@ -1016,7 +1128,7 @@ def test_tool_surface_rejects_a_cli_offering_an_unlisted_tool(
     assert "Bash" in str(exc.value)
 
 
-def test_tool_surface_rejects_a_cli_offering_fewer_than_the_eleven_tools(
+def test_tool_surface_rejects_a_cli_offering_fewer_than_the_configured_tools(
     claude_binary,
     monkeypatch,
 ) -> None:
@@ -1060,8 +1172,44 @@ def test_tool_surface_is_probed_with_the_cowriter_restrictions(
     assert _flag_value(probe, "--setting-sources") == ""
     assert "--strict-mcp-config" in probe
     assert "--disable-slash-commands" in probe
-    assert _flag_value(probe, "--allowedTools") == MCP_ALLOWED_TOOLS
+    assert _flag_value(probe, "--allowedTools") == SONGMAKER_ALLOWED_TOOLS
     assert "--mcp-config" in probe
+
+
+def test_tool_surface_gate_expects_no_tool_when_no_mcp_server_is_configured(
+    claude_binary,
+    monkeypatch,
+) -> None:
+    """Without a configured MCP server the co-writer runs the tool-free
+    command line, so its gate must hold the CLI to the tool-free
+    expectation — and probe without ``--mcp-config``, which the
+    scoring-worker container could not answer anyway."""
+    override_provider_runtime(mcp_server=None)
+    monkeypatch.setattr(provider, "averify_no_builtin_cli_tools", averify_no_builtin_cli_tools)
+    commands = _answer_with(monkeypatch, _init_line([]))
+
+    binary = asyncio.run(verify_cli_tool_surface())
+
+    assert binary == str(claude_binary)
+    assert "--mcp-config" not in commands[0]
+    assert "--allowedTools" not in commands[0]
+    assert provider.claude_cli_tool_surface_health() == "ok"
+
+
+def test_tool_surface_gate_refuses_any_tool_when_no_mcp_server_is_configured(
+    claude_binary,
+    monkeypatch,
+) -> None:
+    override_provider_runtime(mcp_server=None)
+    monkeypatch.setattr(provider, "averify_no_builtin_cli_tools", averify_no_builtin_cli_tools)
+    _answer_with(monkeypatch, _init_line(["Bash"]))
+
+    probe = verify_cli_tool_surface()
+    with pytest.raises(CliToolSurfaceError) as exc:
+        asyncio.run(probe)
+
+    assert "Bash" in str(exc.value)
+    assert provider.claude_cli_tool_surface_health() == "drift"
 
 
 def test_tool_surface_probe_stops_the_session_it_started(
@@ -1556,7 +1704,7 @@ def test_tool_surface_treats_a_failed_mcp_connection_as_a_failure_not_a_permanen
     monkeypatch,
 ) -> None:
     """#351 round 3, Finding 1: a failed MCP connection reports a valid
-    init event with tools=[] — the same shape "all eleven genuinely
+    init event with tools=[] — the same shape "every tool genuinely
     missing" has. Confusing the two used to cache the failure forever in
     the success cache, which no repair — not even a later clean probe —
     could ever override. It must instead be a short-lived failure: a
@@ -2154,7 +2302,7 @@ def test_tool_surface_probe_deadline_includes_the_default_executor_queue(
             binary = str(claude_binary)
             probe = provider._probe_cli_surface_async(
                 binary,
-                mcp_config_path=None,
+                mcp=None,
                 deadline=deadline,
             )
             bounded_probe = asyncio.wait_for(probe, timeout=1)
@@ -2183,7 +2331,7 @@ def test_delayed_probe_start_is_a_probe_failure_not_a_judge_timeout(
 
     binary = str(claude_binary)
     with pytest.raises(UnavailableError) as exc:
-        provider._probe_cli_surface_sync(binary, mcp_config_path=None, deadline=100.0)
+        provider._probe_cli_surface_sync(binary, mcp=None, deadline=100.0)
 
     assert not isinstance(exc.value, provider._JudgeTimeoutExhausted)
     assert str(exc.value) == "Claude CLI probe preflight budget was already exhausted"
@@ -2208,7 +2356,7 @@ def test_async_probe_waits_for_cleanup_after_its_answer_budget_is_exhausted(
         probe = asyncio.create_task(
             provider._probe_cli_surface_async(
                 "claude",
-                mcp_config_path=None,
+                mcp=None,
                 deadline=loop.time(),
             ),
         )
@@ -2345,7 +2493,7 @@ def test_async_probe_returns_a_zombie_after_cleanup_crosses_its_answer_deadline(
         probe = asyncio.create_task(
             provider._probe_cli_surface_async(
                 str(claude_binary),
-                mcp_config_path=None,
+                mcp=None,
                 deadline=loop.time() + 0.02,
             )
         )
@@ -2471,7 +2619,7 @@ def test_tool_surface_probe_refuses_to_start_when_the_zombie_pool_is_saturated(
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
     monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_wait_for_zombie_reap", AsyncMock(return_value=False))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     spawned: list[object] = []
     monkeypatch.setattr(
@@ -2608,7 +2756,7 @@ def test_probe_runner_start_failure_releases_its_unbound_reservation(monkeypatch
 
     deadline = time.monotonic() + 1
     with pytest.raises(RuntimeError, match="thread start failed"):
-        provider._probe_cli_surface_sync("claude", mcp_config_path=None, deadline=deadline)
+        provider._probe_cli_surface_sync("claude", mcp=None, deadline=deadline)
 
     reservation = provider._reserve_zombie_admission()
     assert reservation is not None
@@ -2725,7 +2873,7 @@ def test_public_claude_stream_skips_malformed_cli_output(monkeypatch, caplog) ->
 
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
     caplog.set_level("WARNING", logger="songmaker_cli.claude.provider")
 
@@ -2750,7 +2898,7 @@ def test_public_claude_stream_names_a_nonzero_cli_exit(monkeypatch) -> None:
 
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
@@ -2765,7 +2913,7 @@ def test_public_claude_stream_names_a_missing_binary(monkeypatch) -> None:
 
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
     monkeypatch.setattr(provider, "_spawn_reserved_async_cli_process", spawn)
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     stream = acall_claude_with_mcp_stream(prompt="hi", user_id="u-1")
@@ -2781,7 +2929,7 @@ def test_stream_reap_completes_before_a_cancelled_closer_returns(monkeypatch) ->
     so cancelling the closer must not cancel that work halfway through.
     """
     monkeypatch.setattr(provider, "verify_cli_tool_surface", AsyncMock(return_value="claude"))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     async def _run() -> None:
@@ -2899,7 +3047,7 @@ def test_stream_failure_starts_one_background_reaper(
     monkeypatch.setattr(provider.os, "killpg", lambda _pid, _signal: None)
     monkeypatch.setattr(provider, "_wait_for_sigterm_exit", AsyncMock(return_value=False))
     monkeypatch.setattr(provider, "_wait_for_zombie_reap", AsyncMock(return_value=False))
-    monkeypatch.setattr(provider, "_write_mcp_config", lambda _user_id: "unused")
+    monkeypatch.setattr(provider, "_write_mcp_config", lambda _spec, _user_id: "unused")
     monkeypatch.setattr(provider, "_unlink_quiet", lambda _path: None)
 
     async def _run() -> None:
@@ -3136,17 +3284,21 @@ def test_no_builtin_gate_sync_and_async_share_one_cache(
 # ── expected MCP tool names track the real server registration ────────
 
 
-def test_expected_mcp_tool_names_matches_the_registered_mcp_server() -> None:
-    """provider._EXPECTED_MCP_TOOL_NAMES is a literal tuple, not an import
+def test_mcp_spec_tool_names_match_the_registered_mcp_server() -> None:
+    """cowriter/mcp_spec.py names the tools as a literal, not as an import
     from mcp_server.server (that would pull in the ``mcp`` package, which
     the scoring-worker container does not install — see CLAUDE.md). This
-    is the drift check that keeps the literal list honest against the
-    server's own registration instead."""
+    is the drift check that keeps the literal honest against the server's
+    own registration instead — set equality, so a tool that disappears
+    fails as loudly as one that appears."""
     from songmaker_cli.mcp_server.server import build_server
 
     server = build_server(session_factory=lambda: None)
     registered = asyncio.run(server.list_tools())
-    registered_names = {f"{provider.COWRITER_TOOL_PREFIX}{tool.name}" for tool in registered}
+    registered_names = {tool.name for tool in registered}
 
     assert len(registered_names) == 12
-    assert registered_names == provider._EXPECTED_MCP_TOOL_NAMES
+    assert registered_names == MCP_TOOL_NAMES, (
+        "the spec promises tools the server does not register, or the server "
+        "registers tools the co-writer gate would refuse"
+    )
