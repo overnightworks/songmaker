@@ -10,17 +10,35 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import check_root_layout  # noqa: E402
 
+DIRECTORY_ENTRIES = frozenset(
+    {
+        ".git",
+        ".github",
+        "docker",
+        "docs",
+        "frontend",
+        "monitoring",
+        "plans",
+        "prompts",
+        "scripts",
+        "src",
+        "tests",
+        "vendor",
+    }
+)
+
 
 def _seed_allowlisted_root(repository_root: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repository_root, check=True)
-    for name in check_root_layout.ALLOWED_ROOT_FILES:
-        (repository_root / name).write_text("placeholder\n")
-    for name in check_root_layout.ALLOWED_ROOT_DIRS:
-        if name == ".git":
-            continue
-        directory = repository_root / name
-        directory.mkdir()
-        (directory / "keep.txt").write_text("placeholder\n")
+    for name in check_root_layout.ALLOWED_ROOT_ENTRIES:
+        if name in DIRECTORY_ENTRIES:
+            if name == ".git":
+                continue
+            directory = repository_root / name
+            directory.mkdir()
+            (directory / "keep.txt").write_text("placeholder\n")
+        else:
+            (repository_root / name).write_text("placeholder\n")
     subprocess.run(["git", "add", "-A"], cwd=repository_root, check=True)
 
 
@@ -74,7 +92,7 @@ def test_main_names_the_placement_for_a_violating_file(tmp_path: Path, capsys) -
     assert exit_code == 1
     captured = capsys.readouterr()
     assert "stray_helper.py" in captured.err
-    assert "belongs in the directory of its owner" in captured.err
+    assert "move it next to its owner" in captured.err
 
 
 def test_main_reports_clean_for_an_allowlist_only_root(tmp_path: Path, capsys) -> None:
