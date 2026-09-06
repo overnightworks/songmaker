@@ -564,6 +564,11 @@ describe('admin models tab', () => {
 			'Codex ✓ ready',
 			'Grok · no image tool'
 		]);
+		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
+			'Claude ✓ ready',
+			'Codex ✓ ready',
+			'Grok · needs its API key'
+		]);
 	});
 
 	it('keeps every provider offered while the reachability probe is pending', async () => {

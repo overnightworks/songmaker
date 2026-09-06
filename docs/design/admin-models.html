@@ -387,7 +387,9 @@
 	.rsw b { padding: .16rem .55rem; border-radius: 999px; font-weight: 600; color: var(--ink-soft); }
 	.rsw b.on { background: var(--violet); color: #fff; }
 	.rsw b.dead { color: var(--rule-strong); }
-	.rsw b.picked-dead { border: 1px dashed var(--warn-ink); color: var(--warn-ink); padding: .1rem .45rem; }
+	.rsw b.picked-dead { border: 1px dashed var(--rule-strong); color: var(--muted); padding: .1rem .45rem; }
+	.tt-row.warn .rsw b.picked-dead,
+	.tcard.warn .rsw b.picked-dead { border-color: var(--warn-ink); color: var(--warn-ink); }
 
 	.why { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.35; color: var(--muted); }
 	.why.warn { color: var(--warn-ink); }
@@ -1105,7 +1107,7 @@
 							<span class="sel">Claude<span class="caret">⌄</span></span>
 						</span>
 						<span>
-							<span class="rsw"><b class="dead">CLI</b><b>API</b></span>
+							<span class="rsw"><b class="picked-dead">CLI</b><b>API</b></span>
 							<small class="why">CLI · no image tool</small>
 						</span>
 						<span>
