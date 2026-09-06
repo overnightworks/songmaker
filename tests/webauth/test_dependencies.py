@@ -147,6 +147,12 @@ def an_auth_app(record: FakeSessionRecord | None) -> AuthApp:
     def admin(user: AuthenticatedUser = Depends(dependencies.admin_user)) -> dict[str, str]:
         return {"username": user.username}
 
+    @app.get("/session-id")
+    def session_id(
+        verified: str = Depends(dependencies.verified_session_id),
+    ) -> dict[str, str]:
+        return {"session_id": verified}
+
     return AuthApp(
         client=TestClient(app, cookies={}, headers={"user-agent": CLIENT_USER_AGENT}),
         sessions=sessions,
@@ -306,3 +312,45 @@ def test_the_admin_route_refuses_the_same_cookie_the_protected_route_refuses(
 
     assert response.status_code == 401
     assert response.json()["detail"] == AUTHENTICATION_REQUIRED_DETAIL
+
+
+def test_a_route_can_name_the_session_the_request_proved_it_holds(
+    auth_app: AuthApp,
+) -> None:
+    response = auth_app.get("/session-id", cookie=auth_app.signed_cookie())
+
+    assert response.status_code == 200
+    assert response.json() == {"session_id": SESSION_ID}
+
+
+@pytest.mark.parametrize(
+    ("record", "cookie", "status", "detail"),
+    [
+        pytest.param(a_session(), None, 401, AUTHENTICATION_REQUIRED_DETAIL, id="no cookie"),
+        pytest.param(
+            a_session(remaining=-timedelta(seconds=1)),
+            SESSION_ID,
+            401,
+            SESSION_EXPIRED_DETAIL,
+            id="a session past its expiry",
+        ),
+        pytest.param(
+            a_session(user=FakeUser(is_active=False)),
+            SESSION_ID,
+            403,
+            ACCOUNT_DISABLED_DETAIL,
+            id="a deactivated account",
+        ),
+    ],
+)
+def test_no_session_is_named_where_no_account_would_be_admitted(
+    record: FakeSessionRecord, cookie: str | None, status: int, detail: str,
+) -> None:
+    app = an_auth_app(record)
+
+    response = app.get(
+        "/session-id", cookie=None if cookie is None else app.signed_cookie(),
+    )
+
+    assert response.status_code == status
+    assert response.json()["detail"] == detail
