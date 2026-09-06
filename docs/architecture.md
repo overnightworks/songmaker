@@ -620,13 +620,19 @@ events.
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 
-The provider layer never reads songmaker's settings. Its binaries, credential
-mirrors, mounted Codex resources, chat model, API keys, process caps, and
-secret-scrub list arrive as one frozen `ProviderRuntimeConfig`, installed by
+The provider layer reads songmaker's settings in exactly one remaining place:
+`claude/provider.py::_build_mcp_config` still calls `get_settings()` for the
+`DATABASE_URL` it hands the MCP subprocess, until #837 moves that into an
+`McpServerSpec` port. Everything else — binaries, credential mirrors, mounted
+Codex resources, chat model, API keys, process caps, and the secret-scrub list
+— arrives as one frozen `ProviderRuntimeConfig`, installed by
 `songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
 two places call it: `server.create_app` for the web container, and
 `worker_base.WorkerBase.on_startup` for the music and scoring workers, which run
-no lifespan. A process that never configures gets a loud
+no lifespan. Installing the same value again is a no-op, so those two paths need
+no ordering; installing a differing one raises
+`ProviderRuntimeAlreadyConfiguredError` rather than letting the later caller
+quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
 
