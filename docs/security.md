@@ -453,39 +453,56 @@ masked and read-only system paths, but those overmounts make Bubblewrap's fresh
 `--proc /proc` mount fail the kernel's `mount_too_revealing` check: a new procfs
 in the user namespace needs a source `/proc` without those overmounts. The
 `songmaker-web` AppArmor profile therefore enforces the relevant path policy
-instead. This is a path-access replacement, not an inode-hiding replacement:
-it applies to every task carrying `songmaker-web`, including the Bubblewrap
-child, but does not hide an inode or block alias paths. A fresh child procfs
-would not retain Docker's proc masks in any case.
+instead, for every task carrying `songmaker-web`, including the Bubblewrap
+child. A fresh child procfs would not retain Docker's proc masks in any case,
+and `/sys` is where the rules do the real work: the cover command's
+`--ro-bind / /` carries the now-unmasked host `/sys` into the sandbox, so
+`/sys/firmware` and `/sys/devices/virtual/powercap` are out of reach there by
+AppArmor alone.
+
+This is a path-access replacement, not an inode-hiding replacement. Alias walks
+are covered: AppArmor mediates the resolved pathname, so a walk through
+`/proc/self/root/...` or `/proc/1/root/...` is denied like the plain path. What
+remains true is narrower — the inode itself stays present instead of being
+covered by an overmount, and a second mount of the same tree would carry a
+pathname the profile does not name. Every rule therefore uses the `{,/,/**}`
+form: AppArmor matches a directory only with its trailing slash, so without the
+middle alternative the directory itself stayed listable while only its contents
+were denied.
 
 | Docker system path | `songmaker-web` rule |
 | --- | --- |
-| `/proc/acpi` | `deny /proc/acpi{,/**} rwklx` |
-| `/proc/asound` | `deny /proc/asound{,/**} rwklx` |
-| `/proc/interrupts` | `deny /proc/interrupts{,/**} rwklx` |
-| `/proc/kcore` | `deny /proc/kcore{,/**} rwklx` |
-| `/proc/keys` | `deny /proc/keys{,/**} rwklx` |
-| `/proc/latency_stats` | `deny /proc/latency_stats{,/**} rwklx` |
-| `/proc/sched_debug` | `deny /proc/sched_debug{,/**} rwklx` |
-| `/proc/scsi` | `deny /proc/scsi{,/**} rwklx` |
-| `/proc/timer_list` | `deny /proc/timer_list{,/**} rwklx` |
-| `/proc/timer_stats` | `deny /proc/timer_stats{,/**} rwklx` |
-| `/sys/devices/virtual/powercap` | `deny /sys/devices/virtual/powercap{,/**} rwklx` |
-| `/sys/firmware` | `deny /sys/firmware{,/**} rwklx` |
-| `/proc/bus` | `deny /proc/bus{,/**} w` |
-| `/proc/fs` | `deny /proc/fs{,/**} w` |
-| `/proc/irq` | `deny /proc/irq{,/**} w` |
-| `/proc/sys` | `deny /proc/sys{,/**} w` |
-| `/proc/sysrq-trigger` | `deny /proc/sysrq-trigger{,/**} rwklx` (stricter than Docker's read-only mask) |
+| `/proc/acpi` | `deny /proc/acpi{,/,/**} rwklx` |
+| `/proc/asound` | `deny /proc/asound{,/,/**} rwklx` |
+| `/proc/interrupts` | `deny /proc/interrupts{,/,/**} rwklx` |
+| `/proc/kcore` | `deny /proc/kcore{,/,/**} rwklx` |
+| `/proc/keys` | `deny /proc/keys{,/,/**} rwklx` |
+| `/proc/latency_stats` | `deny /proc/latency_stats{,/,/**} rwklx` |
+| `/proc/sched_debug` | `deny /proc/sched_debug{,/,/**} rwklx` |
+| `/proc/scsi` | `deny /proc/scsi{,/,/**} rwklx` |
+| `/proc/timer_list` | `deny /proc/timer_list{,/,/**} rwklx` |
+| `/proc/timer_stats` | `deny /proc/timer_stats{,/,/**} rwklx` |
+| `/sys/devices/virtual/powercap` | `deny /sys/devices/virtual/powercap{,/,/**} rwklx` |
+| `/sys/firmware` | `deny /sys/firmware{,/,/**} rwklx` |
+| `/proc/bus` | `deny /proc/bus{,/,/**} w` |
+| `/proc/fs` | `deny /proc/fs{,/,/**} w` |
+| `/proc/irq` | `deny /proc/irq{,/,/**} w` |
+| `/proc/sys` | `deny /proc/sys{,/,/**} w` |
+| `/proc/sysrq-trigger` | `deny /proc/sysrq-trigger{,/,/**} rwklx` (stricter than Docker's read-only mask) |
 
-The `/proc/sys` rule intentionally has no `shm*` write exception. Songmaker
-does not write those kernel settings; the process also runs without container
-capabilities and as the unprivileged `songmaker` user, but those are additional
-constraints rather than substitutes for the AppArmor rule. The runtime proof
-checks that the web-service parent and the private Bubblewrap child both receive
-`Permission denied` when reading `/proc/interrupts`, `/proc/keys`,
-`/proc/latency_stats`, `/sys/devices/virtual/powercap`, and
-`/sys/firmware/memmap/1/type`, or when writing `/proc/sys/kernel/shmmax`.
+The `/proc/sys` rule intentionally has no `shm*` write exception: Songmaker
+does not write those kernel settings.
+
+The runtime proof checks that the web-service parent and the private Bubblewrap
+child both receive `Permission denied` when reading `/proc/interrupts`,
+`/proc/keys`, `/proc/latency_stats`, `/sys/devices/virtual/powercap`, and
+`/sys/firmware/memmap/1/type`. Those five reads discriminate: nothing but the
+AppArmor rules denies them, so dropping a rule fails the proof. The sixth check,
+the write to `/proc/sys/kernel/shmmax`, does not. That file is root-owned and
+mode 0644 while the container runs as the unprivileged `songmaker` user, so DAC
+denies the write on its own and the check would still pass with
+`deny /proc/sys{,/,/**} w` removed. It stands only as a regression guard against
+the mask section disappearing entirely, never as evidence for the write rule.
 
 An operator loads the AppArmor policy for the current host boot with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
@@ -584,6 +601,11 @@ sudo scripts/apparmor/install.sh
 docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
 ```
+
+The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv,
+so it runs from the main checkout with its virtualenv, or from a worktree with
+`PYTHONPATH=<worktree>/src`. An `ImportError` there is a missing import path,
+not a sandbox failure.
 
 Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
