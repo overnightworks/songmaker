@@ -1,5 +1,6 @@
 import type {
 	Capabilities,
+	CoverSettingsResponse,
 	CowriterSettings,
 	JudgeSettings,
 	PresetItem,
@@ -85,6 +86,22 @@ export async function updateJudgeSettings(provider: string, model: string): Prom
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ provider, model })
+	});
+}
+
+export async function fetchCoverSettings(): Promise<CoverSettingsResponse> {
+	return apiFetch<CoverSettingsResponse>('/api/settings/cover');
+}
+
+export async function updateCoverSettings(
+	provider: string,
+	route: 'cli' | 'api',
+	model: string
+): Promise<CoverSettingsResponse> {
+	return apiFetch<CoverSettingsResponse>('/api/settings/cover', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ provider, route, model })
 	});
 }
 
