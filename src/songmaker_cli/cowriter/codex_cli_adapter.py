@@ -19,6 +19,7 @@ from typing import Final
 
 from PIL import Image, ImageOps
 
+from agent_providers.config import current_config
 from songmaker_cli.agent_cli import (
     CliLineChannel,
     CliRunOutcome,
@@ -27,14 +28,10 @@ from songmaker_cli.agent_cli import (
     scrubbed_env,
 )
 from songmaker_cli.claude.provider import (
-    _flatten_messages,
-    _stdin_prompt,
+    flatten_messages,
+    stdin_prompt,
 )
 from songmaker_cli.constants import (
-    CODEX_CLI_AUTH_FILE,
-    CODEX_CLI_BINARY,
-    CODEX_CODE_MODE_HOST_BINARY,
-    CODEX_RESOURCES_DIRECTORY,
     COVER_MAX_PIXELS,
     COVER_PNG_MAGIC,
     COWRITER_CLI_TIMEOUT_SECONDS,
@@ -198,10 +195,11 @@ class _CodexToolRoundState:
 
 def codex_cover_image_capability_is_available() -> bool:
     """Whether this process has every mounted dependency for a cover image turn."""
-    code_mode_host = Path(CODEX_CODE_MODE_HOST_BINARY)
-    resources = Path(CODEX_RESOURCES_DIRECTORY)
+    config = current_config()
+    code_mode_host = config.codex_code_mode_host_binary
+    resources = config.codex_resources_directory
     return (
-        shutil.which(CODEX_CLI_BINARY) is not None
+        shutil.which(config.codex_cli_binary) is not None
         and code_mode_host.is_file()
         and os.access(code_mode_host, os.X_OK)
         and resources.is_dir()
@@ -491,7 +489,7 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
     still writes a blank refresh field so an unexpectedly unredacted source
     cannot give the child a renewable login.
     """
-    source = Path(CODEX_CLI_AUTH_FILE)
+    source = current_config().codex_cli_auth_file
     target = codex_home / "auth.json"
     try:
         if not source.is_file():
@@ -545,7 +543,7 @@ def _copy_codex_login_mirror(codex_home: Path) -> None:
 def _build_codex_image_command(model: str) -> tuple[str, ...]:
     """Return the fixed command for the image-only Codex route."""
     return (
-        CODEX_CLI_BINARY,
+        current_config().codex_cli_binary,
         "exec",
         "--json",
         "--sandbox",
@@ -559,7 +557,7 @@ def _build_codex_image_command(model: str) -> tuple[str, ...]:
 def _build_codex_command(*, sandbox: str, model: str | None = None) -> tuple[str, ...]:
     """Build one isolated Codex command for the selected sandbox and model."""
     return (
-        CODEX_CLI_BINARY,
+        current_config().codex_cli_binary,
         "exec",
         "--json",
         "--sandbox",
@@ -752,9 +750,10 @@ def _build_codex_tool_command(
         "--model",
         model,
     )
+    binary = current_config().codex_cli_binary
     if thread_id is None:
         return (
-            CODEX_CLI_BINARY,
+            binary,
             "exec",
             "--sandbox",
             "read-only",
@@ -762,7 +761,7 @@ def _build_codex_tool_command(
             "-",
         )
     return (
-        CODEX_CLI_BINARY,
+        binary,
         "exec",
         "resume",
         *common,
@@ -819,9 +818,9 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     )
 
     if isinstance(message, InitialTurn):
-        return _stdin_prompt(
+        return stdin_prompt(
             message.system,
-            _flatten_messages("", message.messages),
+            flatten_messages("", message.messages),
         ).encode()
     if len(message.results) != 1:
         raise TextToolProtocolError()

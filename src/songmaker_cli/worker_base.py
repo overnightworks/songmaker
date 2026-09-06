@@ -14,6 +14,7 @@ from typing import ClassVar
 
 from arq.connections import RedisSettings
 
+from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.constants import (
     ARQ_HEALTH_CHECK_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
@@ -97,6 +98,7 @@ class WorkerBase:
         from songmaker_cli.logging_config import configure_logging
 
         configure_logging()
+        configure_agent_providers(self._settings)
 
         log.info("%s worker starting up...", self.worker_name())
         await self._recover_on_startup(ctx)

@@ -12,10 +12,10 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final
 from urllib.parse import quote
 
+from agent_providers.config import current_config
 from songmaker_cli.agent_cli import (
     CliLineChannel,
     CliRunOutcome,
@@ -23,13 +23,12 @@ from songmaker_cli.agent_cli import (
     scrubbed_env,
 )
 from songmaker_cli.claude.provider import (
-    _flatten_messages,
-    _stdin_prompt,
+    flatten_messages,
+    stdin_prompt,
 )
 from songmaker_cli.constants import (
     COWRITER_CLI_TIMEOUT_SECONDS,
     COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY,
-    GROK_CLI_BINARY,
     GROK_CLI_PROMPT_FILE_PLACEHOLDER,
     GROK_CLI_STREAMING_OUTPUT_FORMAT,
 )
@@ -201,9 +200,9 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
     )
 
     if isinstance(message, InitialTurn):
-        return _stdin_prompt(
+        return stdin_prompt(
             message.system,
-            _flatten_messages("", message.messages),
+            flatten_messages("", message.messages),
         ).encode()
     if len(message.results) != 1:
         raise TextToolProtocolError()
@@ -281,7 +280,7 @@ def _build_grok_cli_tool_command(
     session_id: str | None = None,
 ) -> tuple[str, ...]:
     command = [
-        GROK_CLI_BINARY,
+        current_config().grok_cli_binary,
         "--prompt-file",
         GROK_CLI_PROMPT_FILE_PLACEHOLDER,
         "--output-format",
@@ -313,7 +312,7 @@ def _stream_session_id(event: dict[str, object]) -> str:
 
 def _remove_grok_sessions_for_cwd(cwd: str) -> None:
     """Delete the session subtree selected by this private CWD only."""
-    session_tree = Path.home() / ".grok" / "sessions" / quote(cwd, safe="")
+    session_tree = current_config().grok_cli_session_root / quote(cwd, safe="")
     if session_tree.exists():
         shutil.rmtree(session_tree)
 

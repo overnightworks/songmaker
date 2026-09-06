@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import glob
 import json
 import logging
 import os
@@ -27,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
+from agent_providers.config import current_config
 from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,  # noqa: F401 — re-exported here until the provider moves (#825, A6)
@@ -40,9 +42,9 @@ from songmaker_cli.agent_cli import (
     CliLogin,
     claude_cli_login,
     clear_claude_cli_login_cache,
+    scrubbed_env,
 )
 from songmaker_cli.constants import (
-    CLAUDE_CLI_BINARY,
     CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
     CLAUDE_CLI_MAX_CONCURRENT_PROCESSES,
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
@@ -55,7 +57,6 @@ from songmaker_cli.constants import (
     COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
-    SECRET_ENV_KEYS,
 )
 from songmaker_cli.settings import get_settings
 
@@ -199,7 +200,7 @@ def call_claude(
     timeout_seconds: float | None = None,
 ) -> ClaudeResponse:
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     if api_key:
         log.info("Claude: using API backend (model=%s)", model)
@@ -217,7 +218,7 @@ async def acall_claude(
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     if api_key:
         log.info("Claude: using async API backend (model=%s)", model)
         return await _acall_api(prompt, api_key, system, model, max_tokens, messages)
@@ -243,13 +244,13 @@ async def acall_claude_with_mcp(
     (the Anthropic SDK does not expose MCP servers).
     """
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     binary = await verify_cli_tool_surface()
-    flat_prompt = _flatten_messages(prompt, messages)
-    stdin_body = _stdin_prompt(system, flat_prompt)
+    flat_prompt = flatten_messages(prompt, messages)
+    stdin_body = stdin_prompt(system, flat_prompt)
     config_path = _write_mcp_config(user_id)
     cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=False)
-    env = _scrub_env()
+    env = scrubbed_env()
     log.info("Claude: MCP+CLI backend (model=%s, user=%s)", model, user_id)
 
     try:
@@ -315,13 +316,13 @@ async def acall_claude_with_mcp_stream(
     are logged and skipped rather than raising.
     """
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     binary = await verify_cli_tool_surface()
-    flat_prompt = _flatten_messages(prompt, messages)
-    stdin_body = _stdin_prompt(system, flat_prompt)
+    flat_prompt = flatten_messages(prompt, messages)
+    stdin_body = stdin_prompt(system, flat_prompt)
     config_path = _write_mcp_config(user_id)
     cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=True)
-    env = _scrub_env()
+    env = scrubbed_env()
     log.info("Claude: streaming MCP+CLI (model=%s, user=%s)", model, user_id)
 
     try:
@@ -523,7 +524,7 @@ def list_cli_model_aliases() -> list[str]:
             capture_output=True,
             text=True,
             timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
-            env=_scrub_env(),
+            env=scrubbed_env(),
         )
     except subprocess.TimeoutExpired as exc:
         raise UnavailableError(
@@ -591,7 +592,8 @@ def _build_api_kwargs(
     return kwargs
 
 
-def _flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str:
+def flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str:
+    """Render a chat history as the single prompt a CLI turn reads from stdin."""
     if messages is None:
         return prompt
     parts = []
@@ -647,7 +649,8 @@ def _build_mcp_config(user_id: str) -> str:
     return json.dumps(config)
 
 
-def _stdin_prompt(system: str | None, prompt: str) -> str:
+def stdin_prompt(system: str | None, prompt: str) -> str:
+    """Prepend the system instruction to the prompt a CLI turn reads from stdin."""
     if system:
         return f"{system}\n\n{prompt}"
     return prompt
@@ -1723,13 +1726,6 @@ def _mcp_connected(payload: dict) -> bool:
     )
 
 
-def _scrub_env() -> dict[str, str]:
-    env = os.environ.copy()
-    for key in SECRET_ENV_KEYS:
-        env.pop(key, None)
-    return env
-
-
 def _parse_cli_output(stdout: str) -> str:
     try:
         outer = json.loads(stdout)
@@ -1844,12 +1840,12 @@ def _call_cli(
     having to remember it.
     """
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     binary = verify_no_builtin_cli_tools()
-    flat_prompt = _flatten_messages(prompt, messages)
-    stdin_body = _stdin_prompt(system, flat_prompt)
+    flat_prompt = flatten_messages(prompt, messages)
+    stdin_body = stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)
-    env = _scrub_env()
+    env = scrubbed_env()
 
     reservation = _reserve_zombie_admission()
     if reservation is None:
@@ -1906,12 +1902,12 @@ async def _acall_cli(
     sits in the call path both share, not in ``chat_api.py`` itself.
     """
     if model is None:
-        model = get_settings().claude_chat_model
+        model = current_config().claude_chat_model
     binary = await averify_no_builtin_cli_tools()
-    flat_prompt = _flatten_messages(prompt, messages)
-    stdin_body = _stdin_prompt(system, flat_prompt)
+    flat_prompt = flatten_messages(prompt, messages)
+    stdin_body = stdin_prompt(system, flat_prompt)
     cmd = _build_cli_cmd(binary, model)
-    env = _scrub_env()
+    env = scrubbed_env()
 
     try:
         proc = await _spawn_reserved_async_cli_process(
@@ -1955,17 +1951,16 @@ async def _acall_cli(
 
 
 def _find_claude_binary() -> str | None:
-    found = shutil.which(CLAUDE_CLI_BINARY)
+    config = current_config()
+    found = shutil.which(config.claude_cli_binary)
     if found:
         log.debug("Found claude binary on PATH: %s", found)
         return found
 
-    ext_dir = Path.home() / ".vscode" / "extensions"
-    if ext_dir.is_dir():
-        for ext in sorted(ext_dir.glob("anthropic.claude-code-*"), reverse=True):
-            candidate = ext / "resources" / "native-binary" / CLAUDE_CLI_BINARY
-            if candidate.is_file():
-                return str(candidate)
+    for pattern in config.claude_cli_binary_search_globs:
+        for candidate in sorted(glob.glob(pattern), reverse=True):
+            if Path(candidate).is_file():
+                return candidate
 
     return None
 
