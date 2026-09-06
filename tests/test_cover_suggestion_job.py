@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from conftest import override_provider_runtime
 from PIL import Image
 
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
@@ -169,7 +170,7 @@ def _install_fake_codex_cli(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
     return calls
 
@@ -352,7 +353,7 @@ def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
@@ -382,7 +383,7 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     assert codex_cli_adapter.generate_codex_cover_image(
@@ -427,7 +428,7 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
@@ -579,7 +580,7 @@ def test_codex_image_ignores_non_generated_png_assets(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     assert codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000).startswith(
@@ -602,7 +603,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     with pytest.raises(codex_cli_adapter.CodexImageNotCreatedError):
@@ -631,7 +632,7 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     with pytest.raises(codex_cli_adapter.CodexImageArtifactError):
@@ -658,7 +659,7 @@ def test_codex_image_timeout_cleans_its_private_directory(
         _reap_fake_codex_process(kwargs)
         return result
 
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
 
     with pytest.raises(codex_cli_adapter.CodexImageTimeoutError):
@@ -681,7 +682,7 @@ def test_codex_image_names_missing_or_incomplete_login_mirrors(
     auth_file = tmp_path / "auth.json"
     if document is not None:
         auth_file.write_text(json.dumps(document))
-    monkeypatch.setattr(codex_cli_adapter, "CODEX_CLI_AUTH_FILE", str(auth_file))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
 
     with pytest.raises(codex_cli_adapter.CodexImageLoginError):
         codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)

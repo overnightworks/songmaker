@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from conftest import override_provider_runtime
 
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
@@ -540,6 +541,8 @@ def test_closing_the_tool_loop_aborts_and_reaps_the_grok_runner(monkeypatch) -> 
 def test_grok_tool_transport_removes_its_private_session_tree_and_redacts_logs(
     monkeypatch, tmp_path, caplog,
 ) -> None:
+    session_root = tmp_path / ".grok" / "sessions"
+    override_provider_runtime(grok_cli_session_root=session_root)
     calls = []
     lyrics = "private lyrics"
     song_id = "song-private"
@@ -553,9 +556,7 @@ def test_grok_tool_transport_removes_its_private_session_tree_and_redacts_logs(
 
     def run_cli_bounded(command, **kwargs):
         calls.append((command, kwargs))
-        session_tree = (
-            tmp_path / ".grok" / "sessions" / quote(kwargs["cwd"], safe="") / _SESSION_ID
-        )
+        session_tree = session_root / quote(kwargs["cwd"], safe="") / _SESSION_ID
         session_tree.mkdir(parents=True)
         (session_tree / "prompt_history.jsonl").write_text(f"{lyrics} {song_id}")
         for line in _tool_round_lines(tool_call):
@@ -565,7 +566,6 @@ def test_grok_tool_transport_removes_its_private_session_tree_and_redacts_logs(
         return outcome
 
     monkeypatch.setattr(grok_cli_adapter, "run_cli_bounded", run_cli_bounded)
-    monkeypatch.setattr(grok_cli_adapter.Path, "home", lambda: tmp_path)
     caplog.set_level("INFO", logger="songmaker_cli.cowriter.grok_cli_adapter")
     transport = grok_cli_adapter.GrokCliToolTransport(model="grok-test")
 
@@ -578,7 +578,7 @@ def test_grok_tool_transport_removes_its_private_session_tree_and_redacts_logs(
 
     asyncio.run(collect_and_close())
     cwd = calls[0][1]["cwd"]
-    assert not (tmp_path / ".grok" / "sessions" / quote(cwd, safe="")).exists()
+    assert not (session_root / quote(cwd, safe="")).exists()
     for forbidden in (lyrics, song_id, call_json, stderr_document, "prompt_history"):
         assert forbidden not in caplog.text
 

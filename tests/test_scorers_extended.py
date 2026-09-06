@@ -12,7 +12,7 @@ import pytest
 
 librosa = pytest.importorskip("librosa")
 
-from conftest import read_wav, write_wav
+from conftest import override_provider_runtime, read_wav, write_wav
 from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
 from songmaker_cli.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.parser import SongMeta
@@ -785,31 +785,23 @@ def test_judge_uses_the_model_from_its_config_not_a_hardcoded_default() -> None:
     assert mock_call_claude.call_args.kwargs["model"] == "test-model"
 
 
-def test_judge_claude_call_gets_its_credential_from_settings(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The Claude path still resolves its credential through Settings
-    (#315), not something the adapter invents — ``call_claude`` must always
-    receive the configured key explicitly rather than pick one up itself."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "settings-key")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+def test_judge_claude_call_gets_its_credential_from_the_provider_runtime() -> None:
+    """The Claude path still resolves its credential through the injected
+    provider runtime (#315), not something the adapter invents — ``call_claude``
+    must always receive the configured key explicitly rather than pick one up
+    itself."""
+    override_provider_runtime(anthropic_api_key="runtime-key")
 
     with _claude_answers('{"score": 7, "issues": [], "summary": "ok"}') as mock_call_claude:
         _judge(_child_result("hello world"), SongMeta(prompt="test", lyrics=_LYRICS))
 
-    assert mock_call_claude.call_args.kwargs["api_key"] == "settings-key"
-    get_settings.cache_clear()
+    assert mock_call_claude.call_args.kwargs["api_key"] == "runtime-key"
 
 
-def test_judge_routes_to_the_configured_provider_and_no_other(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_judge_routes_to_the_configured_provider_and_no_other() -> None:
     """The judge is provider-neutral (#315): a grok judge must call grok's
     adapter with grok's own credential, never fall back to Claude."""
-    monkeypatch.setenv("XAI_API_KEY", "grok-key")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(xai_api_key="grok-key")
 
     with (
         patch(
@@ -832,14 +824,10 @@ def test_judge_routes_to_the_configured_provider_and_no_other(
     claude_call.assert_not_called()
 
 
-def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured() -> None:
     """An unset credential for the chosen provider is a named failure, never
     a silent fallback to Claude (#315)."""
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(xai_api_key=None)
 
     with patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call:
         judged = _judge(

@@ -6,8 +6,8 @@ import threading
 from dataclasses import dataclass
 from enum import StrEnum
 
+from agent_providers.config import current_config
 from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
-from songmaker_cli.settings import get_settings
 
 
 class CodexProcessKind(StrEnum):
@@ -107,9 +107,9 @@ def get_codex_process_pool() -> CodexProcessPool:
     global _process_pool
     with _process_pool_lock:
         if _process_pool is None:
-            settings = get_settings()
+            config = current_config()
             _process_pool = CodexProcessPool(
-                maximum_processes=settings.codex_cli_max_concurrent_processes,
-                maximum_cover_runs=settings.cover_max_concurrent_runs,
+                maximum_processes=config.codex_max_concurrent_processes,
+                maximum_cover_runs=config.codex_max_concurrent_cover_runs,
             )
         return _process_pool

@@ -11,7 +11,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, refresh_provider_snapshots
+from conftest import (
+    TEST_SECRET,
+    make_fake_redis,
+    override_provider_runtime,
+    refresh_provider_snapshots,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -433,7 +438,7 @@ def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
 
 def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatch):
     client, factory = admin_client
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    override_provider_runtime(openai_api_key=None)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models", list_provider_models,
     )
@@ -578,7 +583,7 @@ def test_claude_api_without_its_sdk_cannot_be_selected_for_the_cowriter(
     monkeypatch,
 ):
     client, _ = admin_client
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    override_provider_runtime(anthropic_api_key="test-key")
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False)
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
     refresh_provider_snapshots()
@@ -844,13 +849,8 @@ def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_c
                 "songmaker_cli.cowriter.dispatch.stream_openai_compatible_turn",
                 _oai,
             ),
-            patch.dict("os.environ", {
-                "XAI_API_KEY": "grok-key",
-                "OPENAI_API_KEY": "openai-key",
-            }, clear=False),
         ):
-            from songmaker_cli.settings import get_settings
-            get_settings.cache_clear()
+            override_provider_runtime(xai_api_key="grok-key", openai_api_key="openai-key")
             resp = client.post("/api/chat/turn", json={"message": "hello"})
         events = _stream_events(resp)
         assert any(event.get("type") == "final" for event in events)
@@ -873,9 +873,7 @@ def test_missing_credentials_named_error_no_persist(
 ):
     client, factory = admin_client
     client.put("/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.6"})
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    override_provider_runtime(xai_api_key=None)
     called = {"claude": False, "oai": False}
 
     async def _claude(**_k):
@@ -1043,12 +1041,8 @@ def test_openai_adapter_emits_same_event_types(admin_client, every_provider_is_c
         async def post(self, *_a, **_k):
             return _Resp()
 
-    with (
-        patch("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client),
-        patch.dict("os.environ", {"XAI_API_KEY": "k"}, clear=False),
-    ):
-        from songmaker_cli.settings import get_settings
-        get_settings.cache_clear()
+    override_provider_runtime(xai_api_key="k")
+    with patch("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client):
         resp = client.post("/api/chat/turn", json={"message": "hi"})
     types = [event["type"] for event in _stream_events(resp)]
     assert types.count("final") == 1
@@ -1121,6 +1115,21 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
     assert isinstance(events[-1], FinalEvent)
     assert events[-1].text == "done"
     assert execute.call_count == 8
+
+
+_API_KEY_FIELD_BY_ENVIRONMENT = {
+    "ANTHROPIC_API_KEY": "anthropic_api_key",
+    "XAI_API_KEY": "xai_api_key",
+    "OPENAI_API_KEY": "openai_api_key",
+}
+
+
+def _configure_only_these_api_keys(**keys_by_environment: str) -> None:
+    """Leave the named provider API keys configured and every other one unset."""
+    override_provider_runtime(**{
+        field: keys_by_environment.get(environment)
+        for environment, field in _API_KEY_FIELD_BY_ENVIRONMENT.items()
+    })
 
 
 def _status(
@@ -1280,10 +1289,7 @@ def test_provider_status_projects_the_catalog_contract(
     sdk_available,
     expected,
 ):
-    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
-        monkeypatch.delenv(key, raising=False)
-    for key, value in keys.items():
-        monkeypatch.setenv(key, value)
+    _configure_only_these_api_keys(**keys)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.find_spec",
         lambda _name: object() if sdk_available else None,
@@ -1318,7 +1324,7 @@ def test_provider_status_projects_the_catalog_contract(
 def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api_key(
     admin_client, monkeypatch,
 ):
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    override_provider_runtime(xai_api_key=None)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.grok_cli_token_is_present", lambda: True,
     )
@@ -1374,8 +1380,7 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
 def test_refresh_records_unparseable_cli_output_as_unconfigured(
     admin_client, monkeypatch, provider,
 ):
-    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
-        monkeypatch.delenv(key, raising=False)
+    _configure_only_these_api_keys()
     _stub_cli_runners(monkeypatch)
 
     if provider == "claude":
@@ -1460,8 +1465,7 @@ def test_settings_responses_project_one_snapshot_generation_per_provider(
 def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkeypatch, provider):
     from songmaker_cli import agent_cli
 
-    for key in ("ANTHROPIC_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"):
-        monkeypatch.delenv(key, raising=False)
+    _configure_only_these_api_keys()
     _stub_cli_runners(monkeypatch)
 
     def timed_out():
@@ -1607,10 +1611,10 @@ def test_cover_settings_are_admin_only(admin_client):
 
 
 def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
-    admin_client, monkeypatch,
+    admin_client,
 ):
     client, factory = admin_client
-    monkeypatch.setenv("ANTHROPIC_API_KEY", TEST_SECRET.decode())
+    override_provider_runtime(anthropic_api_key=TEST_SECRET.decode())
 
     assert client.get("/api/settings/cover").json() == {
         "provider": "codex", "route": "cli", "model": "",
@@ -1772,10 +1776,7 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
 
 def test_cowriter_put_rejects_an_unready_selected_route(admin_client, monkeypatch):
     client, _ = admin_client
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    get_settings.cache_clear()
+    override_provider_runtime(anthropic_api_key=None)
     refresh_provider_snapshots()
 
     response = client.put(

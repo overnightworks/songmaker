@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from conftest import override_provider_runtime
 
 from songmaker_cli.agent_cli import AgentCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
@@ -32,7 +33,7 @@ def _models_payload(*model_ids: str) -> dict:
 
 
 def test_api_catalog_uses_only_the_explicit_provider_endpoint(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    override_provider_runtime(xai_api_key="test-key")
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("grok-4.6", "grok-imagine-image")
     monkeypatch.setattr(
@@ -119,7 +120,7 @@ def test_codex_cli_catalog_rejects_an_invalid_catalog(monkeypatch, payload):
 
 
 def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    override_provider_runtime(anthropic_api_key="test-key")
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("claude-sonnet-4-6")
     monkeypatch.setattr(
@@ -131,7 +132,7 @@ def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch)
 
 
 def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    override_provider_runtime(anthropic_api_key="test-key")
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False)
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
     monkeypatch.setattr(
@@ -152,7 +153,7 @@ def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog
 
 
 def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    override_provider_runtime(xai_api_key="test-key")
 
     def unavailable(*_args, **_kwargs):
         raise httpx.ConnectError("offline")
@@ -180,7 +181,7 @@ def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
 
 
 def test_snapshot_refreshes_both_routes(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    override_provider_runtime(xai_api_key="test-key")
     monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
         "songmaker_cli.cowriter.catalog.list_provider_models",
