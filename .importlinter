@@ -1,0 +1,21 @@
+# The application may build on the independent packages; none of them may
+# depend on the application. CI runs `lint-imports` over the real import
+# graph, so an indirect chain is caught as well as a direct import.
+[importlinter]
+root_packages =
+    acestep_engine
+    acestep_worker
+    agent_providers
+    audio_engine
+    songmaker_cli
+
+[importlinter:contract:independent-packages]
+name = Independent packages do not import the application
+type = forbidden
+source_modules =
+    acestep_engine
+    acestep_worker
+    agent_providers
+    audio_engine
+forbidden_modules =
+    songmaker_cli

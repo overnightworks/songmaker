@@ -22,7 +22,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov-report=term-missing --cov-fail-under=93 --cov-config=.coveragerc-ci
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -63,7 +63,7 @@ while issue #31 remains open. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 93% coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
