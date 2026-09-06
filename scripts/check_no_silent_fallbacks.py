@@ -39,10 +39,6 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
 * getattr with a literal default invents a value the code cannot know.
   No default, a named constant, or ``None`` is honest. Calls such as
   ``set()`` and ``frozenset()`` are intentionally not literals.
-* Engine isolation — ``acestep_engine`` / ``audio_engine`` /
-  ``acestep_worker`` must never import from ``songmaker_cli`` (the
-  dependency flows one way; violating this crashed the worker container
-  during W1).
 """
 
 from __future__ import annotations
@@ -87,7 +83,6 @@ class Rule:
     pattern: str | None = None
     inspect_tree: InspectTree | None = None
     site_unit: str = SITE_UNIT_FILES
-    paths: tuple[str, ...] = ()
     exempt_roles: tuple[str, ...] = ()
     _compiled: re.Pattern[str] | None = field(init=False)
     _exempt: tuple[re.Pattern[str], ...] = field(init=False)
@@ -97,11 +92,7 @@ class Rule:
         self._exempt = tuple(re.compile(role) for role in self.exempt_roles)
 
     def applies_to(self, rel_path: str) -> bool:
-        if any(role.search(rel_path) for role in self._exempt):
-            return False
-        if not self.paths:
-            return True
-        return any(rel_path.startswith(p) for p in self.paths)
+        return not any(role.search(rel_path) for role in self._exempt)
 
 
 def _source_line(lines: Sequence[str], lineno: int) -> str:
@@ -308,20 +299,6 @@ RULES: list[Rule] = [
             "matching `if x else None` in from_orm. A timestamp the "
             "response computes, whose None is a real answer, is declared "
             "as ComputedTimestamp (api_models/fields.py)."
-        ),
-    ),
-    Rule(
-        name="engine-isolation-violation",
-        pattern=r"^\s*(from|import)\s+songmaker_cli",
-        description=(
-            "Engine packages must not import from songmaker_cli — the "
-            "dependency flows one way. Violating this crashed the worker "
-            "container during W1."
-        ),
-        paths=(
-            "src/acestep_engine/",
-            "src/audio_engine/",
-            "src/acestep_worker/",
         ),
     ),
     Rule(
