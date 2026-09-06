@@ -261,6 +261,7 @@ CODEX_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.codex/auth.json"
 CODEX_CODE_MODE_HOST_BINARY: Final[str] = "/usr/local/bin/codex-code-mode-host"
 CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
 CODEX_CLI_STATUS_ARGS: Final[tuple[str, ...]] = ("login", "status")
+CODEX_CLI_MODELS_ARGS: Final[tuple[str, ...]] = ("debug", "models")
 CODEX_CLI_LOGGED_IN_MARKER: Final[str] = "Logged in using "
 CODEX_CLI_LOGGED_OUT_MARKER: Final[str] = "Not logged in"
 COWRITER_SUMMARY_TAG = "conversation_summary"

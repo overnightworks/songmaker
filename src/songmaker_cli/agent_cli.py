@@ -1,4 +1,4 @@
-"""Bounded, cached login probes for mounted agent CLIs."""
+"""Bounded probes for mounted agent CLIs."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
     CODEX_CLI_BINARY,
     CODEX_CLI_LOGGED_IN_MARKER,
     CODEX_CLI_LOGGED_OUT_MARKER,
+    CODEX_CLI_MODELS_ARGS,
     CODEX_CLI_STATUS_ARGS,
     COWRITER_MODELS_TIMEOUT_SECONDS,
     GROK_CLI_AUTH_FILE,
@@ -1181,6 +1182,14 @@ def _probe_codex_login() -> CliLogin:
     if output is None:
         return LOGGED_OUT
     return _parse_codex_login(output)
+
+
+def codex_cli_model_catalog() -> str:
+    """Return the current JSON catalog emitted by ``codex debug models``."""
+    output = _cli_output(CODEX_CLI_BINARY, CODEX_CLI_MODELS_ARGS)
+    if output is None:
+        raise AgentCliUnavailableError("codex debug models did not return a catalog")
+    return output
 
 
 def _parse_codex_login(output: str) -> CliLogin:

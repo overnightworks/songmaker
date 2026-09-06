@@ -26,6 +26,7 @@ from songmaker_cli.agent_cli import (
     _cli_output,
     claude_cli_login,
     clear_agent_cli_caches,
+    codex_cli_model_catalog,
     codex_cli_login,
     grok_cli_status,
     run_cli,
@@ -178,6 +179,23 @@ def test_codex_without_a_login_is_logged_out() -> None:
 def test_codex_that_cannot_be_asked_counts_as_logged_out() -> None:
     with _a_cli_that_says(None):
         assert codex_cli_login().logged_in is False
+
+
+def test_codex_model_catalog_uses_the_bounded_cli_output() -> None:
+    catalog = '{"models": []}'
+
+    with _a_cli_that_says(catalog) as output:
+        assert codex_cli_model_catalog() == catalog
+
+    output.assert_called_once()
+
+
+def test_codex_model_catalog_that_cannot_be_read_raises() -> None:
+    with _a_cli_that_says(None), pytest.raises(
+        AgentCliUnavailableError,
+        match="did not return a catalog",
+    ):
+        codex_cli_model_catalog()
 
 
 def test_codex_answering_in_words_we_do_not_know_raises() -> None:
