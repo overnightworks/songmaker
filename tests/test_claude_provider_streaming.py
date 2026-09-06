@@ -9,14 +9,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from songmaker_cli.claude import provider
-from songmaker_cli.claude.provider import (
+from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
+)
+from songmaker_cli.claude import provider
+from songmaker_cli.claude.provider import (
     UnavailableError,
     _parse_stream_event,
     _safe_json_loads,

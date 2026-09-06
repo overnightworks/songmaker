@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
-from songmaker_cli.claude.provider import AssistantTextEvent, StreamEvent
+from agent_providers.events import AssistantTextEvent, StreamEvent
 from songmaker_cli.cowriter import claude_adapter
 
 

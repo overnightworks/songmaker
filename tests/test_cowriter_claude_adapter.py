@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from songmaker_cli.claude.provider import (
+from agent_providers.events import (
     AssistantTextEvent,
     FinalEvent,
     ToolCallEvent,

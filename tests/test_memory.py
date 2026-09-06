@@ -11,8 +11,8 @@ from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.constants import (
     TURN_BLOCK_ALBUM_NOTES,
     TURN_BLOCK_CURRENT_SONG,
