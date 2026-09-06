@@ -15,6 +15,19 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from agent_providers.config import ProviderRuntimeConfig, current_config
+from agent_providers.constants import (
+    ANTHROPIC_API_VERSION,
+    COWRITER_ANTHROPIC_MODELS_URL,
+    COWRITER_CLAUDE_MODEL_PREFIX,
+    COWRITER_GROK_MODEL_PREFIX,
+    COWRITER_GROK_MODELS_URL,
+    COWRITER_GROK_NON_CHAT_MARKERS,
+    COWRITER_MODELS_TIMEOUT_SECONDS,
+    COWRITER_OPENAI_CHAT_PREFIXES,
+    COWRITER_OPENAI_MODELS_URL,
+    COWRITER_OPENAI_NON_CHAT_MARKERS,
+    COWRITER_PROVIDERS,
+)
 from songmaker_cli.agent_cli import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
@@ -30,19 +43,6 @@ from songmaker_cli.claude.provider import (
 )
 from songmaker_cli.claude.provider import (
     UnavailableError as ClaudeCliUnavailableError,
-)
-from songmaker_cli.constants import (
-    ANTHROPIC_API_VERSION,
-    COWRITER_ANTHROPIC_MODELS_URL,
-    COWRITER_CLAUDE_MODEL_PREFIX,
-    COWRITER_GROK_MODEL_PREFIX,
-    COWRITER_GROK_MODELS_URL,
-    COWRITER_GROK_NON_CHAT_MARKERS,
-    COWRITER_MODELS_TIMEOUT_SECONDS,
-    COWRITER_OPENAI_CHAT_PREFIXES,
-    COWRITER_OPENAI_MODELS_URL,
-    COWRITER_OPENAI_NON_CHAT_MARKERS,
-    COWRITER_PROVIDERS,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderModelCatalogUnavailableError,

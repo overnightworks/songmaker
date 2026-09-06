@@ -9,6 +9,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from agent_providers.config import current_config
+from agent_providers.constants import (
+    COWRITER_CLAUDE_API_MAX_TOKENS,
+    COWRITER_CLI_TIMEOUT_SECONDS,
+)
 from agent_providers.events import StreamEvent
 from songmaker_cli.claude.provider import (
     CliBinaryUnavailableError,
@@ -16,10 +20,6 @@ from songmaker_cli.claude.provider import (
     UnavailableError,
     acall_claude_with_mcp_stream,
     call_claude,
-)
-from songmaker_cli.constants import (
-    COWRITER_CLAUDE_API_MAX_TOKENS,
-    COWRITER_CLI_TIMEOUT_SECONDS,
 )
 from songmaker_cli.cowriter.errors import (
     ProviderUnavailableError,
