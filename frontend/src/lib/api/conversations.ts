@@ -4,7 +4,7 @@ import type {
 	ConversationListResponse,
 	ConversationMessagesResponse
 } from './types';
-import { COWRITER_TURN_TIMEOUT_MS } from '$lib/constants';
+import { COWRITER_TURN_PATH, COWRITER_TURN_TIMEOUT_MS } from '$lib/constants';
 import { apiFetch, sseFetch } from './fetch';
 
 export type CoWriterStreamEvent =
@@ -40,7 +40,7 @@ export interface CoWriterTurnRequest {
 
 export function streamCoWriterTurn(req: CoWriterTurnRequest): AsyncGenerator<CoWriterStreamEvent> {
 	return sseFetch<CoWriterStreamEvent>(
-		'/api/chat/turn',
+		COWRITER_TURN_PATH,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

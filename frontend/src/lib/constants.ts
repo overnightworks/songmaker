@@ -493,6 +493,7 @@ export function librarySharesStatusLabel(total: number): string {
 	return `${LIBRARY_SHARES_LABEL}${LIBRARY_SHARES_COUNT_SEP}${total}`;
 }
 
+export const COWRITER_TURN_PATH = '/api/chat/turn';
 export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';

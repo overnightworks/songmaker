@@ -13,6 +13,8 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `kinetic-strip.spec.ts`    | The take strip's kinetic scrolling (issue #358) against a real render, in both layouts its own container query switches it between: dragged, released with momentum that coasts past where the drag stopped, and a click that catches it mid-roll without opening the take it lands on — then a plain click still opens one, the wheel is proven directly against the dispatched event (native on the column layout, converted on the row layout), and Home/End/arrow keys follow the real axis. A third test proves the strip's absence on the compact shell at phone width, not kinetic behaviour — there is nothing of this action's to exercise there yet (WriteColumn.svelte's own `!compact` guard) |
 
+| `admin-models.spec.ts` | The admin Models tab (issues #820, #846): one row per task with both routes offered and the unusable one greyed with its reason, `No models` where no route is set up, a collapsed Advanced, and every column — Status included — still on screen at 1920, 1440, 1280 and 1024px, where the card the table sits in is hundreds of pixels narrower than the viewport. Then a save the server keeps even though no route can run it, a co-writer turn that ends with its named reason instead of switching provider quietly, and, at 375px, one card per task with labelled lines and no sideways scroll. Replaces `admin-routes.spec.ts`, whose per-provider route cards Fassung 2 removed |
+
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
 changes the route, which is the same code on both shells, and both projects
@@ -123,6 +125,14 @@ co-writer toggle, playing two takes), against a ceiling of 35; the
 mobile-absence test costs 15 and never comes close. Seeding the strip's own
 takes never touches this budget at all — it runs directly against the
 database (`seedTakeStripSong`), the same way the rail's filler albums do.
+
+`admin-models.spec.ts` carries its own file-wide ceiling,
+`MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 11 for the table at four
+desktop widths, 23 for the Cover row's save and reload, 46 for the co-writer
+turn and 9 for the phone cards, against a shared 60. Its three desktop tests
+run on **desktop only** and its card test on **mobile only** — the table and
+the cards are two different surfaces, so each is driven where it exists rather
+than skipped in the other shell.
 
 Summed together, the per-flow `FlowGuard` totals above (158 `/api` requests
 on **desktop**, 59 on **mobile**) are **not** what the server's own IP rate
