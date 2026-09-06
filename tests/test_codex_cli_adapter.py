@@ -21,6 +21,7 @@ from agent_providers.tool_loop import (
     ToolCallBatch,
     ToolResult,
     ToolResultBatch,
+    TurnOutcome,
     stream_tool_loop,
 )
 from songmaker_cli.cowriter import codex_cli_adapter
