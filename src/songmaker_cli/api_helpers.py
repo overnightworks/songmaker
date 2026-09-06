@@ -137,7 +137,7 @@ def lock_lora_capacity(session: Session) -> None:
 def check_redis_health(request) -> None:
     """Reject mutation requests when Redis is degraded (fail-closed)."""
     from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:

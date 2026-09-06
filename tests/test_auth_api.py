@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from songmaker_cli.auth import CSRF_COOKIE, TrustedProxies, hash_password
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware import SESSION_COOKIE
+from webauth.config import install_web_auth_config, installed_web_auth_config
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -164,8 +165,12 @@ def _cookie_attributes(resp: httpx.Response, name: str) -> set[str]:
 
 
 def _trust_docker_network(client: TestClient) -> None:
-    client.app.state.ctx = dataclasses.replace(
-        client.app.state.ctx, trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
+    install_web_auth_config(
+        client.app,
+        dataclasses.replace(
+            installed_web_auth_config(client.app),
+            trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
+        ),
     )
 
 
@@ -435,7 +440,7 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
 
 def test_login_populates_redis(client: TestClient) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _seed_admin(client)
     session_cache: SessionCache = client.app.state.session_cache
@@ -452,7 +457,7 @@ def test_login_populates_redis(client: TestClient) -> None:
 
 def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _seed_admin(client)
     session_cache: SessionCache = client.app.state.session_cache
@@ -610,7 +615,7 @@ def test_login_commit_failure_does_not_leave_redis_session(client: TestClient) -
 
 
 def test_logout_clears_redis(client: TestClient) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _seed_admin(client)
     _login(client, "admin", "admin12345")
@@ -629,7 +634,7 @@ def test_logout_clears_redis(client: TestClient) -> None:
 
 
 def test_password_change_clears_old_populates_new(client: TestClient) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     _seed_admin(client)
     _login(client, "admin", "admin12345")
@@ -655,7 +660,7 @@ def test_password_change_clears_old_populates_new(client: TestClient) -> None:
 
 
 def test_setup_populates_redis(client: TestClient) -> None:
-    from songmaker_cli.redis_client import SessionCache
+    from webauth.session_store import SessionCache
 
     session_cache: SessionCache = client.app.state.session_cache
     client.post("/api/auth/setup", json={"username": "myadmin", "password": "secure1234"})

@@ -211,3 +211,11 @@ def test_str_enums_json_serialize_as_value():
         "resource": "song",
         "action": "share",
     }
+
+
+def test_the_job_rate_limit_window_is_an_hour() -> None:
+    """It bounds how many generations an account may start; changing it
+    silently changes every account's allowance."""
+    from songmaker_cli.auth import RATE_LIMIT_WINDOW_SECONDS
+
+    assert RATE_LIMIT_WINDOW_SECONDS == 3600

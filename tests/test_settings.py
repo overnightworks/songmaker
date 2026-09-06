@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
-from songmaker_cli.settings import CoverExecutor, Settings
+from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 
 
 def _required_settings() -> dict[str, str]:
@@ -104,3 +104,17 @@ def test_rejects_non_positive_voice_capacity(setting: str) -> None:
     required = _required_settings()
     with pytest.raises(ValidationError):
         Settings(**required, **{setting: 0})
+
+
+def test_default_settings_values() -> None:
+    settings = get_settings()
+    assert settings.login_rate_limit == 5
+    assert settings.session_max_age_seconds == 60 * 60 * 24 * 30
+    assert settings.session_absolute_max_age_seconds == 60 * 60 * 24 * 90
+    assert settings.generation_rate_limit_user == 3
+    assert settings.scoring_rate_limit_user == 10
+    assert settings.max_queue_depth == 100
+    assert settings.max_user_active_jobs == 10
+    assert settings.login_lockout_threshold == 15
+    assert settings.login_lockout_window_seconds == 3600
+    assert settings.max_concurrent_sessions_per_user == 10

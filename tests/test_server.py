@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -19,6 +21,7 @@ from songmaker_cli.auth import TrustedProxies, hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
+from webauth.config import install_web_auth_config, installed_web_auth_config
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -508,6 +511,22 @@ def test_body_size_limit_rejects_large_content_length(server_app: TestClient) ->
     assert resp.status_code == 413
 
 
+@contextmanager
+def _trusting_the_proxy_network(server_app: TestClient):
+    """Serve the block as if the deployment sat behind its Docker gateway."""
+    installed = installed_web_auth_config(server_app.app)
+    install_web_auth_config(
+        server_app.app,
+        dataclasses.replace(
+            installed, trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
+        ),
+    )
+    try:
+        yield
+    finally:
+        install_web_auth_config(server_app.app, installed)
+
+
 def _get_through_peer(
     server_app: TestClient, peer_ip: str, headers: dict[str, str] | list[tuple[str, str]],
 ) -> httpx.Response:
@@ -516,11 +535,8 @@ def _get_through_peer(
 
 
 def test_hsts_header_on_https_behind_trusted_proxy(server_app: TestClient) -> None:
-    server_app.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
-    try:
+    with _trusting_the_proxy_network(server_app):
         resp = _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-proto": "https"})
-    finally:
-        server_app.app.state.ctx.trusted_proxies = TrustedProxies()
     assert "Strict-Transport-Security" in resp.headers
     assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
 
@@ -533,11 +549,8 @@ def test_hsts_header_not_set_without_trusted_proxy(server_app: TestClient) -> No
 def test_hsts_header_not_set_for_peer_outside_the_trusted_network(
     server_app: TestClient,
 ) -> None:
-    server_app.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
-    try:
+    with _trusting_the_proxy_network(server_app):
         resp = _get_through_peer(server_app, _UNTRUSTED_PEER, {"x-forwarded-proto": "https"})
-    finally:
-        server_app.app.state.ctx.trusted_proxies = TrustedProxies()
     assert "Strict-Transport-Security" not in resp.headers
 
 
@@ -553,14 +566,10 @@ def test_access_log_names_the_forwarded_client(
 ) -> None:
     """The log is what an operator reads after an incident — it must name the
     visitor, not the one gateway address every visitor arrives through."""
-    server_app.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
-    try:
-        with caplog.at_level("INFO"):
-            _get_through_peer(
-                server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
-            )
-    finally:
-        server_app.app.state.ctx.trusted_proxies = TrustedProxies()
+    with _trusting_the_proxy_network(server_app), caplog.at_level("INFO"):
+        _get_through_peer(
+            server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
+        )
 
     messages = _access_log_messages(caplog)
     assert messages
@@ -570,12 +579,8 @@ def test_access_log_names_the_forwarded_client(
 def test_access_log_names_the_peer_when_the_chain_is_malformed(
     server_app: TestClient, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    server_app.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
-    try:
-        with caplog.at_level("INFO"):
-            _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
-    finally:
-        server_app.app.state.ctx.trusted_proxies = TrustedProxies()
+    with _trusting_the_proxy_network(server_app), caplog.at_level("INFO"):
+        _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
 
     messages = _access_log_messages(caplog)
     assert messages
@@ -585,15 +590,12 @@ def test_access_log_names_the_peer_when_the_chain_is_malformed(
 def test_hsts_follows_the_rightmost_forwarded_proto(server_app: TestClient) -> None:
     """A client that prepends its own X-Forwarded-Proto: https cannot make the
     server claim HTTPS — only the value the closest proxy appended counts."""
-    server_app.app.state.ctx.trusted_proxies = TrustedProxies.parse(_PROXY_NETWORK)
-    try:
+    with _trusting_the_proxy_network(server_app):
         resp = _get_through_peer(
             server_app,
             _TRUSTED_PEER,
             [("x-forwarded-proto", "https"), ("x-forwarded-proto", "http")],
         )
-    finally:
-        server_app.app.state.ctx.trusted_proxies = TrustedProxies()
     assert "Strict-Transport-Security" not in resp.headers
 
 
