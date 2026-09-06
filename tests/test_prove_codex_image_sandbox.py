@@ -63,6 +63,28 @@ def test_bubblewrap_probe_matches_the_traced_codex_read_only_execution_form() ->
     assert "1.1.1.1" in assertions
 
 
+def test_bubblewrap_startup_probe_matches_the_traced_codex_preflight_form() -> None:
+    assert proof.bubblewrap_startup_probe_command() == (
+        "bwrap",
+        "--new-session",
+        "--die-with-parent",
+        "--tmpfs", "/",
+        "--dev", "/dev",
+        "--ro-bind", "/bin", "/bin",
+        "--ro-bind", "/etc", "/etc",
+        "--ro-bind", "/lib", "/lib",
+        "--ro-bind", "/lib64", "/lib64",
+        "--ro-bind", "/sbin", "/sbin",
+        "--ro-bind", "/usr", "/usr",
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-net",
+        "--proc", "/proc",
+        "--",
+        "/usr/bin/true",
+    )
+
+
 def test_prove_checks_the_custom_profile_and_default_profile_negative_control() -> None:
     commands: list[tuple[str, ...]] = []
 
@@ -88,6 +110,14 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
         if command[:4] == ("docker", "compose", "exec", "-T") and "/bin/mkdir" in command
     )
     assert f"{proof.SANDBOX_CODEX_HOME}/.codex" in prepare
+    assert (
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        proof.WEB_SERVICE,
+        *proof.bubblewrap_startup_probe_command(),
+    ) in commands
     sandbox = next(
         command
         for command in commands
