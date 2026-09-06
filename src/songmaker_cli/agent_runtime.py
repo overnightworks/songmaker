@@ -63,7 +63,7 @@ def configure_agent_providers(settings: Settings) -> None:
             codex_code_mode_host_binary=Path(CODEX_CODE_MODE_HOST_BINARY),
             codex_resources_directory=Path(CODEX_RESOURCES_DIRECTORY),
             codex_max_concurrent_processes=settings.codex_cli_max_concurrent_processes,
-            codex_max_concurrent_cover_runs=settings.cover_max_concurrent_runs,
+            codex_max_concurrent_image_runs=settings.cover_max_concurrent_runs,
             secret_env_keys=SECRET_ENV_KEYS,
             mcp_server=songmaker_mcp_server(settings.database_url),
         ),

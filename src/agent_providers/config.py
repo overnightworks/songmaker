@@ -75,7 +75,7 @@ class ProviderRuntimeConfig(BaseModel):
     codex_resources_directory: Path
 
     codex_max_concurrent_processes: int = Field(ge=1)
-    codex_max_concurrent_cover_runs: int = Field(ge=1)
+    codex_max_concurrent_image_runs: int = Field(ge=1)
 
     secret_env_keys: tuple[str, ...]
 

@@ -40,7 +40,7 @@ from songmaker_cli.cowriter.codex_cli_adapter import (
     CodexCliToolTransport,
     codex_cover_image_capability_is_available,
 )
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReason,
     SafeRouteReasonCode,

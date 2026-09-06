@@ -23,7 +23,7 @@ from agent_providers.tool_loop import (
     stream_tool_loop,
 )
 from songmaker_cli.cowriter import grok_cli_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 
 A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
 

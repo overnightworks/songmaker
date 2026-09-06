@@ -28,9 +28,9 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter import codex_cli_adapter
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
+from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
@@ -65,7 +65,7 @@ def _reap_fake_codex_process(kwargs: dict) -> None:
 
 @pytest.fixture(autouse=True)
 def codex_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
     monkeypatch.setattr(
         codex_cli_adapter,
         "get_codex_process_pool",
@@ -522,8 +522,8 @@ def test_cover_job_names_a_busy_codex_process_pool(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory, audio_dir, job_id = cover_job
-    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
-    process_pool.reserve(CodexProcessKind.COVER)
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_image_runs=1)
+    process_pool.reserve(CodexProcessKind.IMAGE)
     _install_fake_codex_cli(monkeypatch, tmp_path)
     monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
     monkeypatch.setattr(

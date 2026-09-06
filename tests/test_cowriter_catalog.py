@@ -22,7 +22,7 @@ from songmaker_cli.cowriter.catalog import (
     models_with_active_model,
     refresh_provider_snapshot,
 )
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     SafeRouteReasonCode,
 )

@@ -20,7 +20,7 @@ from agent_providers.events import (
 )
 from agent_providers.tool_loop import ToolOutcome
 from songmaker_cli.cowriter import claude_adapter
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, anthropic_tool_schemas
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User

@@ -23,7 +23,7 @@ from agent_providers.tool_loop import (
     TransportResponse,
     stream_tool_loop,
 )
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,

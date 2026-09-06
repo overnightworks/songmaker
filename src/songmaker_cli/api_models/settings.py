@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, RootModel, field_validator, model_validat
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
 from songmaker_cli.constants import MEMORY_MAX_LENGTH
-from songmaker_cli.cowriter.errors import SafeRouteReason
+from agent_providers.errors import SafeRouteReason
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import GenerationPreset

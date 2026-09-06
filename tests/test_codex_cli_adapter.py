@@ -25,8 +25,8 @@ from agent_providers.tool_loop import (
     stream_tool_loop,
 )
 from songmaker_cli.cowriter import codex_cli_adapter
-from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
-from songmaker_cli.cowriter.errors import (
+from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
+from agent_providers.errors import (
     CodexProcessPoolSaturatedError,
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -82,7 +82,7 @@ def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror = tmp_path / "auth.json"
     mirror.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     override_provider_runtime(codex_cli_auth_file=mirror)
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
     monkeypatch.setattr(
         codex_cli_adapter,
         "get_codex_process_pool",
@@ -470,7 +470,7 @@ def test_codex_tool_transport_cleans_its_home_and_does_not_log_protocol_text(
 
 
 def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch) -> None:
-    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_image_runs=1)
     monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
     callbacks: dict[str, object] = {}
 

@@ -35,7 +35,7 @@ from agent_providers.tool_loop import (
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
