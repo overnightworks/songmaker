@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import importlib
 import os
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
@@ -117,3 +119,9 @@ def test_every_package_beside_the_application_is_under_contract() -> None:
         APPLICATION_PACKAGE,
     }
     assert _named_modules(CONTRACT_SECTION, "forbidden_modules") == {APPLICATION_PACKAGE}
+
+
+def test_the_independent_package_exposes_a_pep440_version() -> None:
+    independent_package = importlib.import_module(INDEPENDENT_PACKAGE)
+
+    Version(independent_package.__version__)
