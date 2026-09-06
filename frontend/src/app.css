@@ -49,6 +49,9 @@
 	--rail-width: 264px;
 	--rail-collapsed-width: 52px;
 	--settings-content-max-width: 640px;
+	/* Admin is the one settings surface whose content is a table rather than a
+	   form: 640px of reading width cannot hold the Models table's five columns. */
+	--settings-admin-content-max-width: 1200px;
 
 	/* Button tokens */
 	--btn-radius-pill: 16px;

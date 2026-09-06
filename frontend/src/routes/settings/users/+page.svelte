@@ -1216,7 +1216,7 @@
 		{/if}
 
 		{#if tab === 'models'}
-			<section>
+			<section class="models-table-frame">
 				<h2>{MODELS_HEADING}</h2>
 				<div class="tt">
 					<div class="tt-head">
@@ -1307,16 +1307,47 @@
 {/snippet}
 
 <style>
+	/* The head lives here and the rows live in ModelsTaskRow, so the column
+	   geometry is published once as tokens rather than kept in step by hand.
+	   Every track may shrink below its width: how much room the table has is
+	   decided by the card it sits in, not by the viewport — a docked panel or
+	   an open rail takes hundreds of pixels the viewport still counts (#846) —
+	   so the widths below are what a column takes when the room is there. Only
+	   Status keeps a floor, because a status nobody can read is the one thing
+	   this table exists to show. */
+	.models-table-frame {
+		container-type: inline-size;
+		container-name: models-table;
+	}
+
 	.tt {
+		--models-columns: minmax(0, 9rem) minmax(0, 11rem) minmax(0, 12.5rem) minmax(0, 14rem)
+			minmax(9rem, 1fr);
+		--models-gap: 0.85rem;
+		--models-sub-indent: 10.7rem;
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		overflow: hidden;
 	}
 
+	/* The picture steps the columns down at 1180px of its own full-bleed
+	   canvas; here the same step belongs where the wide columns stop fitting
+	   the card — 46.5rem of columns, four gaps, the padding and the Status
+	   floor. */
+	@container models-table (max-width: 960px) {
+		.tt {
+			--models-columns: minmax(0, 7.5rem) minmax(0, 9rem) minmax(0, 10.5rem) minmax(0, 11rem)
+				minmax(8rem, 1fr);
+			--models-gap: 0.6rem;
+			--models-sub-indent: 8.6rem;
+			font-size: 0.95em;
+		}
+	}
+
 	.tt-head {
 		display: grid;
-		grid-template-columns: 9rem 11rem 12.5rem 14rem minmax(0, 1fr);
-		gap: 0.85rem;
+		grid-template-columns: var(--models-columns);
+		gap: var(--models-gap);
 		padding: 0.45rem 0.85rem;
 		border-left: 3px solid transparent;
 		background: var(--surface);
@@ -1356,14 +1387,6 @@
 		background: transparent;
 		color: var(--score-bad);
 		cursor: pointer;
-	}
-
-	@media (max-width: 1180px) {
-		.tt-head {
-			grid-template-columns: 7.5rem 9rem 10.5rem 11rem minmax(0, 1fr);
-			gap: 0.6rem;
-			font-size: 0.95em;
-		}
 	}
 
 	@media (max-width: 768px) {

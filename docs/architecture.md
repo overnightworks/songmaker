@@ -619,9 +619,14 @@ with `Saved.`; a rejected save is a red sub-row with the reason and a retry.
 Because the dispatch never falls back to a sibling route, a saved but unusable
 combination is kept, and it is the next turn or job that ends with the named
 error — the table shows that state, it does not prevent it. Keys and logins
-appear as state only, never as values. Below 768px each row becomes one card
-per task with the same labelled lines; `frontend/e2e/admin-models.spec.ts`
-drives the surface at both widths.
+appear as state only, never as values. How much room the five columns have is
+answered by the card the table sits in rather than by the viewport — the same
+reasoning as the editor's own container query (#185), since the rail and a
+docked panel take hundreds of pixels the viewport still counts — so the column
+geometry is published once as tokens on that card (`--models-columns`) and read
+by both the header row and `ModelsTaskRow.svelte`. Below 768px each row becomes
+one card per task with the same labelled lines;
+`frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
 
 Claude's API route plus Grok's and Codex's CLI routes own the
 same shared co-writer tool loop; the CLI routes carry calls and results in the
