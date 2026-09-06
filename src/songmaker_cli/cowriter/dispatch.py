@@ -9,6 +9,9 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.claude.provider import (
+    UnavailableError as ClaudeUnavailableError,
+)
 from agent_providers.config import current_config
 from agent_providers.constants import (
     COWRITER_GROK_CHAT_URL,
@@ -16,12 +19,9 @@ from agent_providers.constants import (
     COWRITER_PROVIDERS,
 )
 from agent_providers.events import StreamEvent
-from songmaker_cli.agent_cli import (
+from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
-)
-from songmaker_cli.claude.provider import (
-    UnavailableError as ClaudeUnavailableError,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.catalog import ProviderRoute

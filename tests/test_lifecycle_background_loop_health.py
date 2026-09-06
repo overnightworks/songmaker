@@ -254,7 +254,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 def test_provider_status_loop_fills_snapshots_and_is_healthy(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:
-    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from agent_providers.constants import COWRITER_PROVIDERS
     from songmaker_cli.cowriter.catalog import (
         ConfiguredProvider,
         ProviderRoute,
@@ -317,7 +317,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
 def test_provider_status_loop_marks_the_sweep_failed_but_continues_refreshing(
     monkeypatch,
 ) -> None:
-    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from agent_providers.constants import COWRITER_PROVIDERS
 
     registry = BackgroundLoopRegistry()
     app = SimpleNamespace(state=SimpleNamespace(background_loop_registry=registry))

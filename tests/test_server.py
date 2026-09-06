@@ -308,7 +308,7 @@ def test_testclient_lifespan_does_not_start_provider_probe_process(
         started += 1
         raise AssertionError("TestClient lifespan started a provider probe process")
 
-    monkeypatch.setattr("songmaker_cli.agent_cli.subprocess.Popen", _counting_popen)
+    monkeypatch.setattr("agent_providers.process.subprocess.Popen", _counting_popen)
     client, _ = make_test_app(tmp_path)
 
     with client:

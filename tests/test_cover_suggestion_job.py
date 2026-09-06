@@ -12,7 +12,7 @@ import pytest
 from conftest import override_provider_runtime
 from PIL import Image
 
-from songmaker_cli.agent_cli import CliRunOutcome, CliRunReason
+from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,

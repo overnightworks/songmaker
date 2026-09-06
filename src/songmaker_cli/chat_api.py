@@ -8,6 +8,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from agent_providers.claude.provider import (
+    UnavailableError,
+    acall_claude,
+    is_available,
+)
 from songmaker_cli.api_helpers import (
     check_redis_health,
     check_song_access,
@@ -23,11 +28,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.settings import SendChatRequest
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.claude.provider import (
-    UnavailableError,
-    acall_claude,
-    is_available,
-)
 from songmaker_cli.constants import (
     JobStatus,
     JobType,

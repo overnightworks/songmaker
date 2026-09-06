@@ -8,11 +8,9 @@ from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,
     FinalEvent,
-    StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
-from songmaker_cli.claude import provider
 from songmaker_cli.conversation_api import _sse_format
 
 A_TURN = [
@@ -57,12 +55,3 @@ def test_a_tool_result_defaults_to_a_successful_result():
         'data: {"type": "tool_result", "tool_use_id": "call-1", "content": "Ballad in D",'
         ' "is_error": false}\n\n'
     )
-
-
-@pytest.mark.parametrize(
-    "event_class",
-    [AssistantTextEvent, ErrorEvent, FinalEvent, StreamEvent, ToolCallEvent, ToolResultEvent],
-    ids=lambda event_class: event_class.__name__,
-)
-def test_the_claude_provider_re_exports_the_event_family(event_class):
-    assert getattr(provider, event_class.__name__) is event_class

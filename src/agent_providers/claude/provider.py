@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
+from agent_providers import process
 from agent_providers.config import McpServerSpec, current_config
 from agent_providers.constants import (
     CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS,
@@ -45,14 +46,12 @@ from agent_providers.constants import (
 )
 from agent_providers.events import (
     AssistantTextEvent,
-    ErrorEvent,  # noqa: F401 — re-exported here until the provider moves (#825, A6)
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
-from songmaker_cli import agent_cli
-from songmaker_cli.agent_cli import (
+from agent_providers.process import (
     CliLogin,
     claude_cli_login,
     clear_claude_cli_login_cache,
@@ -1435,7 +1434,7 @@ async def _probe_cli_surface_async(
     Delegates to the sync gate on a worker thread, rather than spawning
     through ``asyncio.create_subprocess_exec`` directly. That keeps a stuck
     spawn away from the event loop; the sync gate delegates process handling
-    to ``agent_cli.run_cli_bounded``.
+    to ``process.run_cli_bounded``.
 
     Reading the ``system`` init event and then killing the session bounds
     but does not eliminate the API call's cost: the full probe prompt is
@@ -1489,7 +1488,7 @@ def _probe_cli_surface_sync(
         released = True
 
     try:
-        outcome = agent_cli.run_cli_bounded(
+        outcome = process.run_cli_bounded(
             _tool_surface_probe_cmd(binary, mcp=mcp),
             stdin_payload=_TOOL_SURFACE_PROBE_PROMPT.encode(),
             read="first_line",
@@ -1504,26 +1503,26 @@ def _probe_cli_surface_sync(
         if not released:
             _release_zombie_reservation(reservation)
         raise
-    if outcome.reason is agent_cli.CliRunReason.SPAWN_FAILED:
+    if outcome.reason is process.CliRunReason.SPAWN_FAILED:
         if not released:
             _release_zombie_reservation(reservation)
         raise UnavailableError(f"Claude CLI probe failed to run: {outcome.spawn_error}")
-    if outcome.reason is agent_cli.CliRunReason.DEADLINE_BEFORE_SPAWN:
+    if outcome.reason is process.CliRunReason.DEADLINE_BEFORE_SPAWN:
         raise UnavailableError("Claude CLI probe did not start within its budget")
-    if outcome.reason is agent_cli.CliRunReason.CLEANUP_OVERRAN:
+    if outcome.reason is process.CliRunReason.CLEANUP_OVERRAN:
         raise UnavailableError("Claude CLI probe cleanup did not finish within its budget")
     if outcome.became_zombie:
         raise _ZombieProbeError("Claude CLI probe process outlived SIGKILL")
-    if outcome.reason is agent_cli.CliRunReason.IO_ERROR:
+    if outcome.reason is process.CliRunReason.IO_ERROR:
         raise UnavailableError(f"Claude CLI probe failed to run: {outcome.io_error}")
     if outcome.reason in {
-        agent_cli.CliRunReason.DEADLINE_WHILE_WRITING,
-        agent_cli.CliRunReason.DEADLINE_WHILE_READING,
+        process.CliRunReason.DEADLINE_WHILE_WRITING,
+        process.CliRunReason.DEADLINE_WHILE_READING,
     }:
         raise UnavailableError("Claude CLI probe did not answer within its budget")
-    if outcome.reason is agent_cli.CliRunReason.OUTPUT_LIMIT_REACHED:
+    if outcome.reason is process.CliRunReason.OUTPUT_LIMIT_REACHED:
         raise UnavailableError("Claude CLI probe output exceeded its read limit")
-    if outcome.reason is not agent_cli.CliRunReason.COMPLETE:
+    if outcome.reason is not process.CliRunReason.COMPLETE:
         raise RuntimeError(f"Unexpected Claude CLI probe outcome: {outcome.reason}")
     return _parse_announced_surface(outcome.stdout.encode(), mcp=mcp)
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from agent_providers.constants import COWRITER_PROVIDERS
 from songmaker_cli.api_helpers import gen_params_to_json
 from songmaker_cli.api_models import (
     GenerationDefaultsRequest,
@@ -45,7 +46,6 @@ from songmaker_cli.config import (
     save_generation_defaults,
 )
 from songmaker_cli.constants import (
-    COWRITER_PROVIDERS,
     AuditAction,
     ResourceType,
 )

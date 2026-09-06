@@ -191,13 +191,13 @@ def _no_claude_cli_tool_surface_probe():
 
     with (
         patch(
-            "songmaker_cli.claude.provider.verify_cli_tool_surface", AsyncMock(),
+            "agent_providers.claude.provider.verify_cli_tool_surface", AsyncMock(),
         ),
         patch(
-            "songmaker_cli.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
+            "agent_providers.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
         ),
         patch(
-            "songmaker_cli.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
+            "agent_providers.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
         ),
     ):
         yield
@@ -507,7 +507,7 @@ def make_song_md():
 
 def refresh_provider_snapshots() -> None:
     """Refresh every provider after a test changes its catalog dependencies."""
-    from songmaker_cli.constants import COWRITER_PROVIDERS
+    from agent_providers.constants import COWRITER_PROVIDERS
     from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
 
     for provider in COWRITER_PROVIDERS:

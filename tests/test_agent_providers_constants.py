@@ -7,15 +7,13 @@ from pathlib import Path
 from typing import Final
 
 import agent_providers.constants as library_constants
-from songmaker_cli import constants as application_constants
 
 PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
 ARCHITECTURE_DOC: Final = PROJECT_ROOT / "docs" / "architecture.md"
 LIBRARY_MODULE: Final = PROJECT_ROOT / "src" / "agent_providers" / "constants.py"
 APPLICATION_MODULE: Final = PROJECT_ROOT / "src" / "songmaker_cli" / "constants.py"
 PROVIDER_SOURCES: Final = (
-    PROJECT_ROOT / "src" / "songmaker_cli" / "agent_cli.py",
-    PROJECT_ROOT / "src" / "songmaker_cli" / "claude",
+    PROJECT_ROOT / "src" / "agent_providers",
     PROJECT_ROOT / "src" / "songmaker_cli" / "cowriter",
 )
 
@@ -87,15 +85,6 @@ def test_the_application_owns_every_stay_constant_alone() -> None:
 
     assert stay <= _defined_names(APPLICATION_MODULE)
     assert {name for name in stay if hasattr(library_constants, name)} == set()
-
-
-def test_every_go_constant_is_still_reachable_through_the_transitional_re_export() -> None:
-    """A6 deletes this test together with the shim it guards."""
-    go = _documented_names(GO)
-
-    assert {name: getattr(application_constants, name) for name in go} == {
-        name: getattr(library_constants, name) for name in go
-    }
 
 
 def test_no_provider_module_reaches_the_application_for_a_go_constant() -> None:

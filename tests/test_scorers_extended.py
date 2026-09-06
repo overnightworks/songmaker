@@ -14,7 +14,7 @@ librosa = pytest.importorskip("librosa")
 
 from conftest import override_provider_runtime, read_wav, write_wav
 from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
-from songmaker_cli.constants import JUDGE_FAILURE_TIMEOUT
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     AudioBoxScore,
@@ -652,7 +652,7 @@ def _judge(scores: SongScores, meta: SongMeta | None, **overrides: object) -> So
 
 
 def _claude_answers(text: str) -> object:
-    from songmaker_cli.claude.provider import ClaudeResponse
+    from agent_providers.claude.provider import ClaudeResponse
 
     return patch(
         "songmaker_cli.cowriter.claude_adapter.call_claude",
