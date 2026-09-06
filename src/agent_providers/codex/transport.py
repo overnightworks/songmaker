@@ -46,12 +46,12 @@ from songmaker_cli.constants import (
     COVER_MAX_PIXELS,
     COVER_PNG_MAGIC,
 )
-from songmaker_cli.cowriter.codex_process_pool import (
+from agent_providers.codex.pool import (
     CodexProcessKind,
     CodexProcessReservation,
     get_codex_process_pool,
 )
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     CodexProcessPoolSaturatedError,
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -417,7 +417,7 @@ def _run_codex_image_cli(
     """Reap the CLI promptly when its streamed events leave the image gate."""
     channel = CliLineChannel(CODEX_CLI_LINE_CHANNEL_CAPACITY)
     event_gate = _CodexImageEventGate(codex_home=codex_home)
-    reservation = get_codex_process_pool().reserve(CodexProcessKind.COVER)
+    reservation = get_codex_process_pool().reserve(CodexProcessKind.IMAGE)
 
     def run() -> None:
         result = _run_reserved_codex_cli(

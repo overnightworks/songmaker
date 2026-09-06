@@ -37,7 +37,7 @@ from songmaker_cli.constants import (
     SETTING_JUDGE_PROVIDER,
 )
 from songmaker_cli.cowriter.catalog import ProviderRoute, list_provider_models
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
 )

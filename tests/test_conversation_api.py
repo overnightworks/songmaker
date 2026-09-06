@@ -21,7 +21,7 @@ from agent_providers.events import (
 )
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,

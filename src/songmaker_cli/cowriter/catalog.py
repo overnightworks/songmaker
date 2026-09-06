@@ -44,7 +44,7 @@ from agent_providers.process import (
     grok_cli_status,
     grok_cli_token_is_present,
 )
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
     SafeRouteReason,

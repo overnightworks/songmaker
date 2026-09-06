@@ -70,7 +70,7 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReason,
     SafeRouteReasonCode,

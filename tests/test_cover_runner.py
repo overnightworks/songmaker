@@ -17,7 +17,7 @@ from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.codex_cli_adapter import CodexImageCliError, CodexImageQuotaError
-from songmaker_cli.cowriter.codex_process_pool import CodexProcessPool
+from agent_providers.codex.pool import CodexProcessPool
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
@@ -263,7 +263,7 @@ def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
         },
     }))
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
     transcript = (
         Path(__file__).parent / "fixtures" / "codex-cover-quota-exceeded.jsonl"
     ).read_text()
@@ -324,7 +324,7 @@ def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
     abort_requested = threading.Event()
     allow_reap = threading.Event()
     reaped = threading.Event()
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
 
     def fake_runner(_command, **kwargs):
         kwargs["on_spawned"](123)

@@ -41,7 +41,7 @@ from agent_providers.tool_loop import (
     TransportResponse,
 )
 from songmaker_cli.constants import GROK_CLI_PROMPT_FILE_PLACEHOLDER
-from songmaker_cli.cowriter.errors import (
+from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,

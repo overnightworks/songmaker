@@ -32,7 +32,7 @@ from songmaker_cli.cowriter.codex_cli_adapter import (
     generate_codex_cover_image,
 )
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch, cover_image_provider_method
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
+from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,

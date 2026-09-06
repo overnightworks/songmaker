@@ -48,7 +48,7 @@ from songmaker_cli.cowriter.codex_cli_adapter import (
     CodexImageQuotaError,
     ImageToolBlockedError,
 )
-from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
+from agent_providers.errors import CodexProcessPoolSaturatedError
 from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import (
     NoCapacityError,

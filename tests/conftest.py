@@ -169,7 +169,7 @@ def override_provider_runtime(**deployment_facts) -> None:
 @pytest.fixture(autouse=True)
 def _isolate_codex_process_pool():
     """Keep each test independent of Codex CLI process reservations."""
-    import songmaker_cli.cowriter.codex_process_pool as pool_mod
+    import agent_providers.codex.pool as pool_mod
 
     pool_mod._process_pool = None
     yield
