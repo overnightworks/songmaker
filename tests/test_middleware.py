@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_fake_redis
+from conftest import install_app_context, make_fake_redis
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -30,13 +30,8 @@ def _db(tmp_path: Path):
 
 
 def _build_auth_app(_db, redis=None):
-    from songmaker_cli.app_context import (
-        AppContext,
-        build_web_auth_config,
-        get_db_session,
-    )
-    from songmaker_cli.settings import get_settings
-    from webauth.config import install_web_auth_config
+    from songmaker_cli.app_context import AppContext, get_db_session
+    from webauth.config import installed_web_auth_config
     from webauth.session_store import SessionCache
 
     if redis is None:
@@ -46,10 +41,10 @@ def _build_auth_app(_db, redis=None):
         session_secret=_TEST_SECRET, redis=redis,
     )
     app = FastAPI()
-    app.state.ctx = ctx
-    web_auth = build_web_auth_config(ctx, get_settings())
-    install_web_auth_config(app, web_auth)
-    app.state.session_cache = SessionCache(redis, web_auth.session_key_prefixes)
+    install_app_context(app, ctx)
+    app.state.session_cache = SessionCache(
+        redis, installed_web_auth_config(app).session_key_prefixes,
+    )
 
     @app.get("/protected")
     def protected(

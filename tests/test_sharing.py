@@ -10,7 +10,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
+from conftest import (
+    TEST_SECRET,
+    install_app_context,
+    login_and_csrf,
+    make_fake_redis,
+    make_test_app,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
@@ -1644,7 +1650,7 @@ def _inventory_client(tmp_path: Path, user_id: str, role: str = "user"):
         redis=make_fake_redis(),
     )
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = (
         lambda: AuthenticatedUser(id=user_id, username=f"test-{user_id}", role=role, is_active=True)
     )

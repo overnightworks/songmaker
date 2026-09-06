@@ -8,7 +8,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
+from conftest import (
+    TEST_SECRET,
+    install_app_context,
+    login_and_csrf,
+    make_fake_redis,
+    make_test_app,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -149,7 +155,7 @@ def client(tmp_path: Path) -> TestClient:
     )
     from songmaker_cli.api import router
     app = FastAPI()
-    app.state.ctx = ctx
+    install_app_context(app, ctx)
     app.dependency_overrides[get_current_user] = _fake_user()
     app.include_router(router)
     yield TestClient(app)
