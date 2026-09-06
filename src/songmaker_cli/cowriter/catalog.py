@@ -596,7 +596,7 @@ def _list_codex_cli_models() -> list[str]:
             raise ValueError("codex debug models did not return a visible model")
         if len({model.slug for model in visible_models}) != len(visible_models):
             raise ValueError("codex debug models returned duplicate model slugs")
-    except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+    except (ValidationError, ValueError) as exc:
         raise ProviderModelCatalogUnavailableError(
             _CODEX_PROVIDER,
             "could not parse codex CLI model catalog",
