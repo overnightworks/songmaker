@@ -1119,7 +1119,7 @@ def test_per_user_open_rate_reads_settings_override(
 ) -> None:
     """The limit is a settings field, not the constant it used to be
     (issue #294): a `RESOURCE_EVENT_STREAM_OPEN_LIMIT` env override, the
-    same shape CI applies in `docker-compose.ci.yml`, must be what the
+    same shape CI applies in `docker/docker-compose.ci.yml`, must be what the
     limiter actually enforces rather than the unconfigurable production
     default."""
     monkeypatch.setenv("RESOURCE_EVENT_STREAM_OPEN_LIMIT", "2")

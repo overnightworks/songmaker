@@ -362,7 +362,7 @@ services:
     logging: *service-logging
     # Only the four non-secret values travel as environment (they are
     # readable in `docker inspect`, which for a hostname, a port and two
-    # addresses is what they already are in .env.docker.example). The
+    # addresses is what they already are in docker/.env.docker.example). The
     # password does NOT: it is mounted as the smtp_password secret below
     # and read by Alertmanager itself from /run/secrets/smtp_password
     # (smtp_auth_password_file in the template), so it never reaches this

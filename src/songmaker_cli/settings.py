@@ -257,7 +257,7 @@ class Settings(BaseSettings):
     # than `stream_rate_limit` above because this stream also holds a leased
     # DB connection for its whole lifetime (see resource_event_api.py). CI
     # overrides this the same way it overrides `ip_rate_limit`
-    # (docker-compose.ci.yml): the e2e suite reuses one seeded user across
+    # (docker/docker-compose.ci.yml): the e2e suite reuses one seeded user across
     # every browser context, so its opens are additive against this single
     # per-user budget in a way production traffic across many real users
     # never is.

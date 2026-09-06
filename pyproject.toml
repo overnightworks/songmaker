@@ -124,7 +124,7 @@ line-length = 100
 select = ["E", "F", "W", "I"]
 
 [tool.ruff.lint.per-file-ignores]
-"vulture_whitelist.py" = ["E402", "I001"]
+"scripts/vulture_whitelist.py" = ["E402", "I001"]
 "tests/test_scorers.py" = ["E402", "I001"]
 "tests/test_scorers_extended.py" = ["E402", "I001"]
 
