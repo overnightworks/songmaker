@@ -22,6 +22,9 @@ from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
 from songmaker_cli.constants import (
     COWRITER_MAX_TOOL_ROUNDS,
     SETTING_CLAUDE_SCORING_MODEL,
+    SETTING_COVER_MODEL,
+    SETTING_COVER_PROVIDER,
+    SETTING_COVER_ROUTE,
     SETTING_COWRITER_MODEL,
     SETTING_COWRITER_PROVIDER,
     SETTING_JUDGE_MODEL,
@@ -51,6 +54,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.settings import (
+    get_cover_settings,
     get_cowriter_model,
     get_cowriter_models_by_provider,
     get_cowriter_provider,
@@ -1587,6 +1591,143 @@ def test_provider_status_requires_admin(admin_client):
         client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
 
     assert resp.status_code == 403
+
+
+def test_cover_settings_are_admin_only(admin_client):
+    client, _ = admin_client
+    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    try:
+        assert client.get("/api/settings/cover").status_code == 403
+        assert client.put(
+            "/api/settings/cover",
+            json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
+        ).status_code == 403
+    finally:
+        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+
+
+def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
+    admin_client, monkeypatch,
+):
+    client, factory = admin_client
+    monkeypatch.setenv("ANTHROPIC_API_KEY", TEST_SECRET.decode())
+
+    assert client.get("/api/settings/cover").json() == {
+        "provider": "codex", "route": "cli", "model": "",
+    }
+    response = client.put(
+        "/api/settings/cover",
+        json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "claude", "route": "api", "model": "claude-sonnet-4-6",
+    }
+    assert TEST_SECRET.decode() not in response.text
+    with factory() as session:
+        assert get_cover_settings(session).provider == "claude"
+        assert get_cover_settings(session).route == "api"
+        assert get_cover_settings(session).model == "claude-sonnet-4-6"
+        stored = {
+            setting.setting_key: setting.value_text
+            for setting in session.query(RateLimitSetting).filter(
+                RateLimitSetting.setting_key.in_(
+                    {SETTING_COVER_PROVIDER, SETTING_COVER_ROUTE, SETTING_COVER_MODEL},
+                ),
+            )
+        }
+    assert stored == {
+        SETTING_COVER_PROVIDER: "claude",
+        SETTING_COVER_ROUTE: "api",
+        SETTING_COVER_MODEL: "claude-sonnet-4-6",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"provider": "openai", "route": "cli", "model": ""},
+        {"provider": "codex", "route": "grpc", "model": ""},
+    ],
+)
+def test_cover_settings_reject_an_unknown_provider_or_route(admin_client, payload):
+    client, factory = admin_client
+
+    assert client.put("/api/settings/cover", json=payload).status_code == 422
+
+    with factory() as session:
+        assert get_cover_settings(session).provider == "codex"
+        assert get_cover_settings(session).route == "cli"
+
+
+def test_cover_settings_accept_an_empty_model(admin_client):
+    client, factory = admin_client
+
+    response = client.put(
+        "/api/settings/cover", json={"provider": "codex", "route": "cli", "model": ""},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["model"] == ""
+    with factory() as session:
+        assert get_cover_settings(session).model == ""
+
+
+def _cover_routes(client) -> dict[str, dict]:
+    return {
+        item["provider"]: item["cover_routes"]
+        for item in client.get("/api/settings/providers").json()
+    }
+
+
+def test_provider_status_grants_the_image_tool_only_to_a_ready_codex_cli(
+    admin_client, monkeypatch,
+):
+    client, _ = admin_client
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: True,
+    )
+
+    cover_routes = _cover_routes(client)
+
+    assert cover_routes["codex"]["cli"] == {
+        "state": "ready",
+        "capability": "tools_available",
+        "reason": None,
+        "probed_at": None,
+        "setup_label": "CLI login",
+    }
+    for provider, routes in cover_routes.items():
+        for route, readiness in routes.items():
+            if (provider, route) == ("codex", "cli"):
+                continue
+            assert readiness["state"] == "not_configured"
+            assert readiness["capability"] == "text_only"
+            assert readiness["reason"] == {
+                "code": "no_image_tool", "message": "no image tool",
+            }
+
+
+def test_provider_status_names_a_codex_cover_route_that_is_not_signed_in(
+    admin_client, monkeypatch,
+):
+    client, _ = admin_client
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: False,
+    )
+
+    codex_cli = _cover_routes(client)["codex"]["cli"]
+
+    assert codex_cli["state"] == "not_configured"
+    assert codex_cli["capability"] == "tools_available"
+    assert codex_cli["reason"]["code"] == "cli_login_not_configured"
 
 
 def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(

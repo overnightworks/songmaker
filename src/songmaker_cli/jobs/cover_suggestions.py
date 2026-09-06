@@ -8,7 +8,6 @@ from pathlib import Path
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cowriter.codex_cli_adapter import generate_codex_cover_image
-from songmaker_cli.cowriter.dispatch import cover_image_provider_method
 from songmaker_cli.jobs._runtime import _update_job
 from songmaker_cli.settings import Settings, get_settings
 
@@ -40,7 +39,6 @@ async def run_cover_suggestion_job(
         audio_dir=audio_dir,
         settings=settings,
         image_generator=generate_codex_cover_image,
-        provider_method=cover_image_provider_method,
     )
 
 

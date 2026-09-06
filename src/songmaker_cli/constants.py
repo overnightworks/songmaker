@@ -39,7 +39,7 @@ JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
 )
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."
-CODEX_COVER_IMAGE_CAPABILITY_UNAVAILABLE: Final[str] = "Codex cover generation is unavailable"
+COVER_IMAGE_TOOL_UNAVAILABLE_ERROR: Final[str] = "{provider} · no image tool"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -149,6 +149,15 @@ SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
 SETTING_PROVIDER_ROUTES = "provider_routes"
 SETTING_JUDGE_PROVIDER = "judge_provider"
 SETTING_JUDGE_MODEL = "judge_model"
+SETTING_COVER_PROVIDER = "cover_provider"
+SETTING_COVER_ROUTE = "cover_route"
+SETTING_COVER_MODEL = "cover_model"
+# Cover is its own task with its own provider, route, and model. Its defaults
+# keep today's behaviour: the Codex CLI route, run without an explicit model
+# flag, which is what an empty model means everywhere on the cover path (#822).
+COVER_DEFAULT_PROVIDER: Final[str] = "codex"
+COVER_DEFAULT_ROUTE: Final[str] = "cli"
+COVER_DEFAULT_MODEL: Final[str] = ""
 # The judge is its own task with its own provider choice (not coupled to the
 # co-writer's), but its default must not move the goalposts on day one: the
 # default provider stays Claude, and get_judge_model() falls back to the
@@ -772,6 +781,7 @@ class ResourceType(StrEnum):
     CLAUDE_MODELS = "claude_models"
     COWRITER = "cowriter"
     JUDGE = "judge"
+    COVER = "cover"
     RATE_LIMITS = "rate_limits"
     JOB = "job"
     SESSION = "session"
