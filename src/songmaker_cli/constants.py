@@ -40,6 +40,7 @@ JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."
 JOB_ERROR_COVER_IMAGE_CLI_FAILED: Final[str] = "Codex could not draw: {message}"
+JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS: Final[int] = 200
 JOB_ERROR_COVER_IMAGE_QUOTA: Final[str] = "Codex usage limit reached. Try again later."
 JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY: Final[str] = (
     "Codex usage limit reached, try again after {retry_at}."

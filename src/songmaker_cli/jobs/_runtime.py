@@ -15,6 +15,7 @@ from songmaker_cli.constants import (
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
     JOB_ERROR_COVER_CLI_BUSY,
     JOB_ERROR_COVER_CLI_LOGIN,
+    JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS,
     JOB_ERROR_COVER_IMAGE_CLI_FAILED,
     JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_ERROR_COVER_IMAGE_NOT_CREATED,
@@ -82,7 +83,7 @@ class JudgeFailureError(Exception):
 
 
 def _sanitize_error(exc: Exception, job_id: str) -> str:
-    """Return the fixed musician-facing message and log the raw failure."""
+    """Return the musician-facing message and log the raw failure in full."""
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
     for error_type, sanitizer in _ERROR_SANITIZERS:
         if isinstance(exc, error_type):
@@ -109,7 +110,8 @@ def _sanitize_codex_image_cli_error(exc: CodexImageCliError) -> str:
     message = str(exc)
     if not message:
         return JOB_ERROR_COVER_IMAGE_FAILED
-    return JOB_ERROR_COVER_IMAGE_CLI_FAILED.format(message=message)
+    first_line = message.splitlines()[0][:JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS]
+    return JOB_ERROR_COVER_IMAGE_CLI_FAILED.format(message=first_line)
 
 
 def _default_error_message(exc: Exception) -> str:

@@ -200,8 +200,30 @@ def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
         assert session.get(Job, job_id).status == JobStatus.RUNNING
 
 
-def test_web_runner_records_the_shared_cover_error_terminal_state(
-    tmp_path: Path, monkeypatch,
+@pytest.mark.parametrize(
+    ("raised", "expected_job_error"),
+    (
+        (CodexImageCliError(), JOB_ERROR_COVER_IMAGE_FAILED),
+        (
+            CodexImageQuotaError(
+                "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+                "to purchase more credits or try again at Sep 7th, 2026 8:45 PM.",
+                retry_at="Sep 7th, 2026 8:45 PM",
+            ),
+            "Codex usage limit reached, try again after Sep 7th, 2026 8:45 PM.",
+        ),
+        (
+            CodexImageCliError("The requested model is unavailable."),
+            "Codex could not draw: The requested model is unavailable.",
+        ),
+    ),
+    ids=("generic-cli-error", "usage-limit", "cli-error-with-message"),
+)
+def test_web_runner_names_the_cause_in_the_job_error(
+    tmp_path: Path,
+    monkeypatch,
+    raised: Exception,
+    expected_job_error: str,
 ) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     monkeypatch.setattr(
@@ -209,7 +231,7 @@ def test_web_runner_records_the_shared_cover_error_terminal_state(
     )
 
     def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
-        raise CodexImageCliError()
+        raise raised
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
 
@@ -220,27 +242,53 @@ def test_web_runner_records_the_shared_cover_error_terminal_state(
     with factory() as session:
         job = session.get(Job, job_id)
         assert job.status == JobStatus.FAILED
-        assert job.error == JOB_ERROR_COVER_IMAGE_FAILED
+        assert job.error == expected_job_error
         assert job.error_type == "cover_suggestion_error"
         assert list(job.album.cover_suggestions) == []
 
 
-def test_web_runner_names_the_codex_usage_limit_in_job_error_and_log(
+def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
     tmp_path: Path, monkeypatch, caplog,
 ) -> None:
+    """Drive the real adapter with a faked CLI process, not a faked image generator."""
     factory, audio_dir, job_id = _cover_job(tmp_path)
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text(json.dumps({
+        "auth_mode": "chatgpt",
+        "last_refresh": "2026-09-05T00:00:00Z",
+        "tokens": {
+            "id_token": "id-token",
+            "access_token": "access-token",
+            "account_id": "account-id",
+        },
+    }))
+    override_provider_runtime(codex_cli_auth_file=auth_file)
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
+    transcript = (
+        Path(__file__).parent / "fixtures" / "codex-cover-quota-exceeded.jsonl"
+    ).read_text()
+
+    def fake_runner(_command, **kwargs) -> CliRunOutcome:
+        kwargs["on_spawned"](123)
+        kwargs["on_reaped"](123, False)
+        return CliRunOutcome(
+            started=True,
+            spawn_error=None,
+            returncode=1,
+            stdout=transcript,
+            stderr="",
+            complete=True,
+            became_zombie=False,
+            reason=CliRunReason.COMPLETE,
+        )
+
+    from songmaker_cli.cowriter import codex_cli_adapter
+
+    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
     monkeypatch.setattr(
         cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
-    codex_message = (
-        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
-        "to purchase more credits or try again at Sep 7th, 2026 8:45 PM."
-    )
-
-    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
-        raise CodexImageQuotaError(codex_message, retry_at="Sep 7th, 2026 8:45 PM")
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
     caplog.set_level("ERROR", logger="songmaker_cli.jobs._runtime")
 
     assert asyncio.run(cover_runner.run_next_cover_job(
@@ -252,31 +300,7 @@ def test_web_runner_names_the_codex_usage_limit_in_job_error_and_log(
         assert job.status == JobStatus.FAILED
         assert job.error == "Codex usage limit reached, try again after Sep 7th, 2026 8:45 PM."
         assert job.error_type == "cover_suggestion_error"
-    assert codex_message in caplog.text
-
-
-def test_web_runner_names_the_codex_turn_failure_in_job_error(
-    tmp_path: Path, monkeypatch,
-) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
-        raise CodexImageCliError("The requested model is unavailable.")
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
-
-    assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
-    ))
-
-    with factory() as session:
-        job = session.get(Job, job_id)
-        assert job.status == JobStatus.FAILED
-        assert job.error == "Codex could not draw: The requested model is unavailable."
-        assert job.error_type == "cover_suggestion_error"
+    assert "You've hit your usage limit" in caplog.text
 
 
 def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[

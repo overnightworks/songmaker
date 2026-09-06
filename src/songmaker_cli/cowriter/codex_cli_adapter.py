@@ -595,6 +595,8 @@ def _raise_for_codex_image_outcome(outcome: CliRunOutcome) -> None:
     message = _codex_image_turn_failure_message(outcome.stdout)
     if message is None:
         raise CodexImageCliError()
+    if _codex_cli_failure_reason(message) is SafeRouteReasonCode.CLI_AUTH_REJECTED:
+        raise CodexImageLoginError()
     if _USAGE_LIMIT_MARKER in message.lower():
         match = _USAGE_LIMIT_RETRY_AT_PATTERN.search(message)
         raise CodexImageQuotaError(
