@@ -624,12 +624,10 @@ events.
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; the package skeleton exists, the code moves in slice by slice |
 
-The provider layer reads songmaker's settings in exactly one remaining place:
-`claude/provider.py::_build_mcp_config` still calls `get_settings()` for the
-`DATABASE_URL` it hands the MCP subprocess, until #837 moves that into an
-`McpServerSpec` port. Everything else — binaries, credential mirrors, mounted
-Codex resources, chat model, API keys, process caps, and the secret-scrub list
-— arrives as one frozen `ProviderRuntimeConfig`, installed by
+The provider layer never reads songmaker's settings. Its binaries, credential
+mirrors, mounted Codex resources, chat model, API keys, process caps, the
+secret-scrub list, and the MCP server a co-writer turn attaches all arrive as
+one frozen `ProviderRuntimeConfig`, installed by
 `songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
 two places call it: `server.create_app` for the web container, and
 `worker_base.WorkerBase.on_startup` for the music and scoring workers, which run
@@ -639,6 +637,13 @@ no ordering; installing a differing one raises
 quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
+
+The MCP server a co-writer turn attaches is part of that configuration:
+`ProviderRuntimeConfig.mcp_server` carries an `McpServerSpec`, and songmaker
+declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outside
+`mcp_server/`, whose package import pulls in the `mcp` extra the scoring worker
+does not install. `None` is a valid value: a deployment without an MCP server
+runs its co-writer turns on the tool-free command line and gate.
 
 These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` and `webauth` also never import each other. The `.importlinter` contract states these boundaries and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
 

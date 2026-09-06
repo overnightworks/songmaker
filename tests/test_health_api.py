@@ -22,8 +22,11 @@ from conftest import fake_cli_process, make_test_app
 from songmaker_cli.claude import provider
 from songmaker_cli.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker
 from songmaker_cli.lifecycle import BackgroundLoopName
+
+_ALL_SONGMAKER_TOOLS = sorted(f"mcp__songmaker__{name}" for name in MCP_TOOL_NAMES)
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +72,7 @@ def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
     binary = tmp_path / "claude"
     binary.write_bytes(b"cli-build")
     _use_real_gate_with_fake_cli(
-        monkeypatch, binary, _init_line(sorted(provider._EXPECTED_MCP_TOOL_NAMES)),
+        monkeypatch, binary, _init_line(_ALL_SONGMAKER_TOOLS),
     )
 
     client, _ = make_test_app(tmp_path)
@@ -272,7 +275,7 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
         clean_binary = tmp_path / "claude-clean"
         clean_binary.write_bytes(b"cli-build")
         _use_real_gate_with_fake_cli(
-            monkeypatch, clean_binary, _init_line(sorted(provider._EXPECTED_MCP_TOOL_NAMES)),
+            monkeypatch, clean_binary, _init_line(_ALL_SONGMAKER_TOOLS),
         )
         asyncio.run(_real_verify_cli_tool_surface())
         after_clean = client.get("/health").json()["claude_cli_tool_surface"]
@@ -300,7 +303,7 @@ def test_health_drift_does_not_by_itself_mark_the_server_degraded(
     clean_binary.write_bytes(b"cli-build")
     clean_client, _ = make_test_app(tmp_path)
     _use_real_gate_with_fake_cli(
-        monkeypatch, clean_binary, _init_line(sorted(provider._EXPECTED_MCP_TOOL_NAMES)),
+        monkeypatch, clean_binary, _init_line(_ALL_SONGMAKER_TOOLS),
     )
     with clean_client:
         clean_status = clean_client.get("/health").json()["status"]

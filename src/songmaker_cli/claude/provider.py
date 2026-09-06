@@ -19,16 +19,16 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 import threading
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
-from agent_providers.config import current_config
+from agent_providers.config import McpServerSpec, current_config
 from agent_providers.events import (
     AssistantTextEvent,
     ErrorEvent,  # noqa: F401 — re-exported here until the provider moves (#825, A6)
@@ -58,17 +58,12 @@ from songmaker_cli.constants import (
     COWRITER_MODELS_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
 )
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 _sync_clients: dict[str, object] = {}
 _async_clients: dict[str, object] = {}
 _client_lock = threading.Lock()
-
-MCP_SERVER_NAME: Final = "songmaker"
-COWRITER_TOOL_PREFIX: Final = f"mcp__{MCP_SERVER_NAME}__"
-MCP_ALLOWED_TOOLS: Final = f"{COWRITER_TOOL_PREFIX}*"
 
 _NO_BUILTIN_TOOLS: Final = ""
 _NO_SETTING_SOURCES: Final = ""
@@ -97,30 +92,6 @@ _TOOL_ISOLATION_FLAGS: Final = (
     "--disable-slash-commands",
 )
 
-# The exact tool names `mcp_server/server.py` registers. Kept as a literal
-# tuple rather than imported from that module: importing it would pull in
-# `mcp` and `sqlalchemy`, and this module must stay importable in the
-# scoring-worker container, which does not install the `mcp` extra (see
-# CLAUDE.md's packaging-boundary note). `tests/test_mcp_server.py` pins the
-# server's own registration; a dedicated drift test compares the two sets so
-# this list cannot go stale without a test failing.
-_EXPECTED_MCP_TOOL_NAMES: Final[frozenset[str]] = frozenset(
-    f"{COWRITER_TOOL_PREFIX}{name}"
-    for name in (
-        "list_albums",
-        "list_songs",
-        "search_songs",
-        "get_song",
-        "get_version",
-        "get_generation",
-        "create_song",
-        "update_song_lyrics",
-        "update_song_prompt",
-        "update_song_style",
-        "rename_song",
-        "suggest_album_cover",
-    )
-)
 _NO_TOOLS_EXPECTED: Final[frozenset[str]] = frozenset()
 
 # Never a real user: the probe only lists the MCP server's advertised tools,
@@ -235,25 +206,24 @@ async def acall_claude_with_mcp(
     messages: list[dict[str, str]] | None = None,
     timeout_seconds: int = 600,
 ) -> ClaudeResponse:
-    """Call the Claude CLI with the songmaker MCP server attached.
+    """Call the Claude CLI with the host's MCP server attached.
 
-    Spawns the CLI which in turn spawns the MCP server subprocess with
-    ``SONGMAKER_MCP_USER_ID`` set. Claude's built-in tools are removed from
-    the session; only ``mcp__songmaker__*`` is reachable. This path exists
-    exclusively for the co-writer chat flow and requires the CLI backend
-    (the Anthropic SDK does not expose MCP servers).
+    Spawns the CLI which in turn spawns the MCP server subprocess with the
+    turn's user in its environment. Claude's built-in tools are removed from
+    the session; only that server's tools are reachable — or none at all,
+    where the host configured no MCP server. This path exists exclusively for
+    the co-writer chat flow and requires the CLI backend (the Anthropic SDK
+    does not expose MCP servers).
     """
     if model is None:
         model = current_config().claude_chat_model
     binary = await verify_cli_tool_surface()
     flat_prompt = flatten_messages(prompt, messages)
     stdin_body = stdin_prompt(system, flat_prompt)
-    config_path = _write_mcp_config(user_id)
-    cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=False)
     env = scrubbed_env()
     log.info("Claude: MCP+CLI backend (model=%s, user=%s)", model, user_id)
 
-    try:
+    with _cowriter_cli_command(binary, model, user_id, stream=False) as cmd:
         try:
             proc = await _spawn_reserved_async_cli_process(
                 *cmd,
@@ -279,8 +249,6 @@ async def acall_claude_with_mcp(
         except BaseException:
             await _reap_process_group(proc)
             raise
-    finally:
-        _unlink_quiet(config_path)
 
     stdout = stdout_bytes.decode()
     if proc.returncode != 0:
@@ -320,12 +288,10 @@ async def acall_claude_with_mcp_stream(
     binary = await verify_cli_tool_surface()
     flat_prompt = flatten_messages(prompt, messages)
     stdin_body = stdin_prompt(system, flat_prompt)
-    config_path = _write_mcp_config(user_id)
-    cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=True)
     env = scrubbed_env()
     log.info("Claude: streaming MCP+CLI (model=%s, user=%s)", model, user_id)
 
-    try:
+    with _cowriter_cli_command(binary, model, user_id, stream=True) as cmd:
         try:
             proc = await _spawn_reserved_async_cli_process(
                 *cmd,
@@ -347,8 +313,6 @@ async def acall_claude_with_mcp_stream(
                 yield event
         finally:
             await _reap_stream_process_after_cancellation(proc)
-    finally:
-        _unlink_quiet(config_path)
 
 
 async def _consume_stream(
@@ -606,43 +570,54 @@ def flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str:
 def _build_cli_cmd(
     binary: str,
     model: str,
+    *,
+    stream: bool = False,
 ) -> list[str]:
     """Command for a single-turn completion that needs no tools at all."""
-    return [
+    cmd = [
         binary,
         "-p",
         "--model",
         model,
         "--output-format",
-        "json",
+        "stream-json" if stream else "json",
         *_TOOL_ISOLATION_FLAGS,
     ]
+    if stream:
+        cmd.append("--verbose")
+    return cmd
 
 
-_MCP_SUBPROCESS_PLACEHOLDER = "unused-in-mcp-subprocess"
+def _mcp_tool_prefix(spec: McpServerSpec) -> str:
+    """The CLI namespaces an MCP tool as ``mcp__<server>__<tool>``; a spec
+    carries the bare names its server registers."""
+    return f"mcp__{spec.name}__"
 
 
-def _build_mcp_config(user_id: str) -> str:
-    """Serialize the temporary --mcp-config payload for our stdio server.
+def _mcp_allowed_tools(spec: McpServerSpec) -> str:
+    return f"{_mcp_tool_prefix(spec)}*"
 
-    The JSON is written to a mode-0600 file so database credentials never appear
-    in ``/proc/<pid>/cmdline`` or process listings. Only DATABASE_URL and
-    SONGMAKER_MCP_USER_ID are consumed by the subprocess; placeholder values
-    satisfy settings validation for the other required fields.
+
+def _expected_mcp_tool_names(spec: McpServerSpec) -> frozenset[str]:
+    prefix = _mcp_tool_prefix(spec)
+    return frozenset(f"{prefix}{name}" for name in spec.tool_names)
+
+
+def _build_mcp_config(spec: McpServerSpec, user_id: str) -> str:
+    """Serialize the temporary --mcp-config payload for the host's stdio server.
+
+    The JSON is written to a mode-0600 file so the credentials the host put in
+    ``spec.environment`` never appear in ``/proc/<pid>/cmdline`` or process
+    listings. The turn's user is the one value this layer adds.
     """
-    settings = get_settings()
+    environment = {name: value.get_secret_value() for name, value in spec.environment.items()}
+    environment[spec.user_id_environment_variable] = user_id
     config = {
         "mcpServers": {
-            MCP_SERVER_NAME: {
-                "command": sys.executable,
-                "args": ["-m", "songmaker_cli.mcp_server"],
-                "env": {
-                    "DATABASE_URL": settings.database_url,
-                    "REDIS_URL": _MCP_SUBPROCESS_PLACEHOLDER,
-                    "SESSION_SECRET": _MCP_SUBPROCESS_PLACEHOLDER,
-                    "SONGMAKER_INTERNAL_TOKEN": _MCP_SUBPROCESS_PLACEHOLDER,
-                    "SONGMAKER_MCP_USER_ID": user_id,
-                },
+            spec.name: {
+                "command": spec.command,
+                "args": list(spec.args),
+                "env": environment,
             },
         },
     }
@@ -656,10 +631,10 @@ def stdin_prompt(system: str | None, prompt: str) -> str:
     return prompt
 
 
-def _write_mcp_config(user_id: str) -> str:
-    handle, path = tempfile.mkstemp(prefix="songmaker-mcp-", suffix=".json")
+def _write_mcp_config(spec: McpServerSpec, user_id: str) -> str:
+    handle, path = tempfile.mkstemp(prefix=spec.config_file_prefix, suffix=".json")
     with os.fdopen(handle, "w", encoding="utf-8") as fh:
-        fh.write(_build_mcp_config(user_id))
+        fh.write(_build_mcp_config(spec, user_id))
     os.chmod(path, 0o600)
     return path
 
@@ -675,14 +650,15 @@ def _build_mcp_cli_cmd(
     binary: str,
     model: str,
     config_path: str,
+    spec: McpServerSpec,
     *,
     stream: bool = False,
 ) -> list[str]:
-    """Command for a co-writer turn: our MCP tools and nothing else.
+    """Command for a co-writer turn: the host's MCP tools and nothing else.
 
-    ``--allowedTools`` pre-approves the songmaker MCP tools so the session
-    never needs a permission answer nobody is there to give. Everything else
-    is either absent (``--tools ""``) or falls through to the CLI's default
+    ``--allowedTools`` pre-approves that server's tools so the session never
+    needs a permission answer nobody is there to give. Everything else is
+    either absent (``--tools ""``) or falls through to the CLI's default
     permission mode, which in ``--print`` mode can only refuse.
     """
     output_format = "stream-json" if stream else "json"
@@ -695,7 +671,7 @@ def _build_mcp_cli_cmd(
         output_format,
         *_TOOL_ISOLATION_FLAGS,
         "--allowedTools",
-        MCP_ALLOWED_TOOLS,
+        _mcp_allowed_tools(spec),
         "--mcp-config",
         config_path,
     ]
@@ -704,13 +680,41 @@ def _build_mcp_cli_cmd(
     return cmd
 
 
+@contextmanager
+def _cowriter_cli_command(
+    binary: str,
+    model: str,
+    user_id: str,
+    *,
+    stream: bool,
+) -> Iterator[list[str]]:
+    """The co-writer's command line, for as long as its MCP config file lives.
+
+    A deployment that configures no MCP server (``mcp_server=None``) runs the
+    tool-free command line instead — no ``--mcp-config``, no ``--allowedTools``,
+    and ``verify_cli_tool_surface()`` verified it against the tool-free
+    expectation. Nothing is written to disk on that route.
+    """
+    spec = current_config().mcp_server
+    if spec is None:
+        yield _build_cli_cmd(binary, model, stream=stream)
+        return
+    config_path = _write_mcp_config(spec, user_id)
+    try:
+        yield _build_mcp_cli_cmd(binary, model, config_path, spec, stream=stream)
+    finally:
+        _unlink_quiet(config_path)
+
+
 # ── Tool-surface verification ──────────────────────────────────────
 #
 # Two gates share the machinery below, one per invocation shape:
 #
 # - ``verify_cli_tool_surface()`` guards the co-writer's MCP-attached turn
-#   (``acall_claude_with_mcp*``): the CLI must announce exactly the eleven
-#   ``mcp__songmaker__*`` tools, nothing more and nothing less.
+#   (``acall_claude_with_mcp*``): the CLI must announce exactly the tools of
+#   the host's ``McpServerSpec``, nothing more and nothing less. A host that
+#   configured no MCP server routes that turn — and this gate — to the
+#   tool-free shape below instead.
 # - ``verify_no_builtin_cli_tools()`` / ``averify_no_builtin_cli_tools()``
 #   guard every tool-free turn (``_call_cli`` / ``_acall_cli`` — the legacy
 #   chat endpoint and the lyrical-coherence judge both funnel through these):
@@ -744,14 +748,14 @@ def _build_mcp_cli_cmd(
 #   spawns another zombie.
 #
 # Deliberately two probe kinds, not one reused kind: the MCP-attached probe
-# spawns the songmaker MCP server subprocess, which needs the ``mcp``
-# extra — registering and listing its tools touches no database, only a
-# tool *call* does, so that is not the reason for the split. The scoring-
-# worker container does not install ``mcp`` (see CLAUDE.md's packaging-
-# boundary note), so this probe would always fail there — verified live
-# against the real CLI that a missing MCP connection reports zero tools,
-# not the eleven expected (see docs/security.md). The no-MCP probe never
-# attaches ``--mcp-config`` at all, so it needs neither and is the one
+# spawns the host's MCP server subprocess, which for songmaker needs the
+# ``mcp`` extra — registering and listing its tools touches no database,
+# only a tool *call* does, so that is not the reason for the split. The
+# scoring-worker container does not install ``mcp`` (see CLAUDE.md's
+# packaging-boundary note), so this probe would always fail there —
+# verified live against the real CLI that a missing MCP connection reports
+# zero tools, not the expected set (see docs/security.md). The no-MCP probe
+# never attaches ``--mcp-config`` at all, so it needs neither and is the one
 # safe to run from every container.
 #
 # The no-MCP check does not need the MCP-attached one's stronger guarantee:
@@ -769,6 +773,16 @@ class BinaryBuild:
     path: str
     mtime_ns: int
     size: int
+
+
+@dataclass(frozen=True)
+class _AttachedMcpServer:
+    """The MCP server a probe attaches, and the temporary config file that
+    tells the CLI how to reach it. ``None`` in its place means the probe
+    attaches nothing — the tool-free shape."""
+
+    spec: McpServerSpec
+    config_path: str
 
 
 @dataclass(frozen=True)
@@ -933,16 +947,16 @@ async def shutdown_tool_surface_background_tasks() -> None:
 
 
 async def verify_cli_tool_surface() -> str:
-    """Raise unless the mounted CLI reaches nothing but our eleven MCP
+    """Raise unless the mounted CLI reaches nothing but the host's MCP
     tools; return the resolved binary path to run the real turn with.
 
     Probes with the same ``--mcp-config`` a real co-writer turn attaches, so
-    "clean" means the CLI is actually still connecting our MCP server and
+    "clean" means the CLI is actually still connecting that MCP server and
     reporting exactly its tools — not merely reporting no built-ins with
     nothing attached to compare against. A connection that fails to
     establish, with nothing *else* wrong, is a probe *failure*
     (short-lived, retried on the next call), never a "the CLI offers zero
-    of our eleven tools" verdict (permanent, per build) — the two look
+    of the expected tools" verdict (permanent, per build) — the two look
     identical in the raw ``tools`` list alone, so ``mcp_connected`` is what
     tells them apart. But an unexpected tool or a slash command is a
     permanent mismatch regardless of ``mcp_connected`` — a CLI reporting
@@ -951,31 +965,22 @@ async def verify_cli_tool_surface() -> str:
     seconds would let it look clean again far too soon. See
     ``_evaluate_tool_surface`` for where that split actually happens.
 
+    A host that configures no MCP server (``mcp_server=None``) runs its
+    co-writer turns on the tool-free command line, so this gate verifies
+    that shape instead: no tool at all, the same expectation the judge and
+    the legacy chat endpoint are held to.
+
     Also records the outcome as the live ``/health`` state (round 7,
     Finding 4) — on every call, cache hit or fresh probe alike, so that
     state always reflects this gate's most recent answer rather than a
     value frozen at boot.
     """
-
-    async def probe(deadline: float) -> _AnnouncedSurface:
-        config_path = _write_mcp_config(_TOOL_SURFACE_PROBE_USER_ID)
-        try:
-            return await _probe_cli_surface_async(
-                build.path,
-                mcp_config_path=config_path,
-                deadline=deadline,
-            )
-        finally:
-            _unlink_quiet(config_path)
-
+    spec = current_config().mcp_server
     try:
-        build, key = _tool_surface_key(_EXPECTED_MCP_TOOL_NAMES)
-        result = await _verify_tool_surface_async(
-            build,
-            key,
-            probe,
-            timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
-        )
+        if spec is None:
+            result = await averify_no_builtin_cli_tools()
+        else:
+            result = await _verify_mcp_tool_surface(spec)
     except CliToolSurfaceError:
         _record_tool_surface_health("drift")
         raise
@@ -986,6 +991,27 @@ async def verify_cli_tool_surface() -> str:
     return result
 
 
+async def _verify_mcp_tool_surface(spec: McpServerSpec) -> str:
+    async def probe(deadline: float) -> _AnnouncedSurface:
+        config_path = _write_mcp_config(spec, _TOOL_SURFACE_PROBE_USER_ID)
+        try:
+            return await _probe_cli_surface_async(
+                build.path,
+                mcp=_AttachedMcpServer(spec, config_path),
+                deadline=deadline,
+            )
+        finally:
+            _unlink_quiet(config_path)
+
+    build, key = _tool_surface_key(_expected_mcp_tool_names(spec))
+    return await _verify_tool_surface_async(
+        build,
+        key,
+        probe,
+        timeout_seconds=CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS,
+    )
+
+
 async def averify_no_builtin_cli_tools() -> str:
     """Async twin of ``verify_no_builtin_cli_tools`` for ``_acall_cli``."""
     build, key = _tool_surface_key(_NO_TOOLS_EXPECTED)
@@ -993,7 +1019,7 @@ async def averify_no_builtin_cli_tools() -> str:
     async def probe(deadline: float) -> _AnnouncedSurface:
         return await _probe_cli_surface_async(
             build.path,
-            mcp_config_path=None,
+            mcp=None,
             deadline=deadline,
         )
 
@@ -1017,7 +1043,7 @@ def verify_no_builtin_cli_tools() -> str:
     def probe(probe_deadline: float) -> _AnnouncedSurface:
         return _probe_cli_surface_sync(
             build.path,
-            mcp_config_path=None,
+            mcp=None,
             deadline=probe_deadline,
         )
 
@@ -1342,7 +1368,7 @@ def _evaluate_tool_surface(
 
     if surface.mcp_connected is False and not unexpected_tools and not slash_commands:
         raise UnavailableError(
-            "Claude CLI could not connect the songmaker MCP server — "
+            "Claude CLI could not connect the co-writer MCP server — "
             "cannot verify its tool surface",
         )
 
@@ -1375,7 +1401,7 @@ def _binary_build(binary: str) -> BinaryBuild:
     return BinaryBuild(str(resolved), stat.st_mtime_ns, stat.st_size)
 
 
-def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list[str]:
+def _tool_surface_probe_cmd(binary: str, *, mcp: _AttachedMcpServer | None) -> list[str]:
     cmd = [
         binary,
         "-p",
@@ -1385,8 +1411,13 @@ def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list
         "--no-session-persistence",
         *_TOOL_ISOLATION_FLAGS,
     ]
-    if mcp_config_path is not None:
-        cmd += ["--allowedTools", MCP_ALLOWED_TOOLS, "--mcp-config", mcp_config_path]
+    if mcp is not None:
+        cmd += [
+            "--allowedTools",
+            _mcp_allowed_tools(mcp.spec),
+            "--mcp-config",
+            mcp.config_path,
+        ]
     return cmd
 
 
@@ -1396,7 +1427,7 @@ def _tool_surface_probe_cmd(binary: str, *, mcp_config_path: str | None) -> list
 async def _probe_cli_surface_async(
     binary: str,
     *,
-    mcp_config_path: str | None,
+    mcp: _AttachedMcpServer | None,
     deadline: float,
 ) -> _AnnouncedSurface:
     """What a session built like ``cmd`` announces it can reach.
@@ -1422,7 +1453,7 @@ async def _probe_cli_surface_async(
             asyncio.to_thread(
                 _probe_cli_surface_sync,
                 binary,
-                mcp_config_path=mcp_config_path,
+                mcp=mcp,
                 deadline=deadline,
             ),
             timeout=remaining + _cleanup_margin_seconds(),
@@ -1437,7 +1468,7 @@ async def _probe_cli_surface_async(
 def _probe_cli_surface_sync(
     binary: str,
     *,
-    mcp_config_path: str | None,
+    mcp: _AttachedMcpServer | None,
     deadline: float,
 ) -> _AnnouncedSurface:
     """Run one tool-surface probe through the shared bounded CLI runner."""
@@ -1459,7 +1490,7 @@ def _probe_cli_surface_sync(
 
     try:
         outcome = agent_cli.run_cli_bounded(
-            _tool_surface_probe_cmd(binary, mcp_config_path=mcp_config_path),
+            _tool_surface_probe_cmd(binary, mcp=mcp),
             stdin_payload=_TOOL_SURFACE_PROBE_PROMPT.encode(),
             read="first_line",
             deadline=deadline,
@@ -1494,10 +1525,7 @@ def _probe_cli_surface_sync(
         raise UnavailableError("Claude CLI probe output exceeded its read limit")
     if outcome.reason is not agent_cli.CliRunReason.COMPLETE:
         raise RuntimeError(f"Unexpected Claude CLI probe outcome: {outcome.reason}")
-    return _parse_announced_surface(
-        outcome.stdout.encode(),
-        mcp_attached=mcp_config_path is not None,
-    )
+    return _parse_announced_surface(outcome.stdout.encode(), mcp=mcp)
 
 
 # ── reap: async ──────────────────────────────────────────────────────
@@ -1688,7 +1716,11 @@ async def _spawn_reserved_async_cli_process(
     return proc
 
 
-def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _AnnouncedSurface:
+def _parse_announced_surface(
+    raw_line: bytes,
+    *,
+    mcp: _AttachedMcpServer | None,
+) -> _AnnouncedSurface:
     payload = _safe_json_loads(raw_line)
     if (
         payload is None
@@ -1707,20 +1739,20 @@ def _parse_announced_surface(raw_line: bytes, *, mcp_attached: bool) -> _Announc
     return _AnnouncedSurface(
         tools=tuple(tools),
         slash_commands=tuple(commands),
-        mcp_connected=_mcp_connected(payload) if mcp_attached else None,
+        mcp_connected=None if mcp is None else _mcp_connected(payload, mcp.spec.name),
     )
 
 
-def _mcp_connected(payload: dict) -> bool:
-    """Whether the init event's own ``mcp_servers`` list reports our server
-    connected — read instead of assumed, because a failed connection
+def _mcp_connected(payload: dict, server_name: str) -> bool:
+    """Whether the init event's own ``mcp_servers`` list reports the attached
+    server connected — read instead of assumed, because a failed connection
     reports the same empty ``tools`` a clean tool-free CLI would."""
     servers = payload.get("mcp_servers")
     if not isinstance(servers, list):
         return False
     return any(
         isinstance(server, dict)
-        and server.get("name") == MCP_SERVER_NAME
+        and server.get("name") == server_name
         and server.get("status") == "connected"
         for server in servers
     )
