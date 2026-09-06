@@ -527,7 +527,7 @@
 		flex-wrap: wrap;
 	}
 
-	@media (max-width: 700px) {
+	@media (max-width: 768px) {
 		.tt-row {
 			grid-template-columns: minmax(0, 1fr);
 			gap: 0.3rem;
