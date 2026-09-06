@@ -36,6 +36,7 @@
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
 		MODELS_NO_MODELS_LABEL,
+		MODELS_OPTION_NEEDS_API_KEY_PHRASE,
 		MODELS_OPTION_READY_LABEL,
 		MODELS_RETRY_LABEL,
 		MODELS_ROUTE_KEY_NOT_SET_PHRASE,
@@ -149,7 +150,7 @@
 		const keyMissing = ROUTE_ORDER.some(
 			(route) => entry.routes[route].reason?.code === 'api_key_not_set'
 		);
-		if (keyMissing) return `${entry.label} · ${MODELS_STATUS_NEEDS_API_KEY_LABEL.toLowerCase()}`;
+		if (keyMissing) return `${entry.label} · ${MODELS_OPTION_NEEDS_API_KEY_PHRASE}`;
 		for (const route of ROUTE_ORDER) {
 			const reason = entry.routes[route].reason;
 			if (reason) return `${entry.label} · ${failurePhrase(reason, route)}`;

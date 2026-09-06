@@ -234,6 +234,7 @@ export const MODELS_STATUS_READY_KEY_LABEL = 'Ready · key set';
 export const MODELS_STATUS_NEEDS_API_KEY_LABEL = 'Needs its API key';
 export const MODELS_STATUS_NOT_SAVED_LABEL = 'Not saved';
 export const MODELS_OPTION_READY_LABEL = '✓ ready';
+export const MODELS_OPTION_NEEDS_API_KEY_PHRASE = 'needs its API key';
 export const MODELS_NO_MODELS_LABEL = 'No models';
 export const MODELS_SAVED_LABEL = 'Saved.';
 export const MODELS_RETRY_LABEL = 'Retry';
