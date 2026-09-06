@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from starlette.applications import Starlette
 from starlette.requests import Request
 
 from webauth.cookies import (
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
 
     from pydantic import SecretStr
     from redis import Redis
+    from starlette.applications import Starlette
 
     from webauth.proxies import TrustedProxies
 
