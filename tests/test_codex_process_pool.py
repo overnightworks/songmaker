@@ -3,9 +3,33 @@
 from __future__ import annotations
 
 import pytest
+from conftest import override_provider_runtime
 
-from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
+from songmaker_cli.cowriter.codex_process_pool import (
+    CodexProcessKind,
+    CodexProcessPool,
+    get_codex_process_pool,
+)
 from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
+
+
+def test_the_process_wide_pool_admits_only_as_many_runs_as_the_runtime_allows() -> None:
+    override_provider_runtime(
+        codex_max_concurrent_processes=2,
+        codex_max_concurrent_cover_runs=1,
+    )
+
+    get_codex_process_pool().reserve(CodexProcessKind.COVER)
+
+    with pytest.raises(CodexProcessPoolSaturatedError) as raised:
+        get_codex_process_pool().reserve(CodexProcessKind.COVER)
+
+    assert raised.value.scope == "cover"
+
+
+def test_every_caller_shares_the_one_process_wide_pool() -> None:
+    assert get_codex_process_pool() is get_codex_process_pool()
+
 
 
 def test_total_cap_counts_text_cover_and_unspawned_reservations() -> None:
