@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.auth_stores import DatabaseLoginAttemptStore
 from songmaker_cli.constants import ROLE_ADMIN
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
@@ -37,11 +38,19 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.settings import get_settings
 from webauth.config import WebAuthConfig, web_auth_config
-from webauth.cookies import generate_csrf_token, sign_session_id
 from webauth.dependencies import AuthenticatedUser
+from webauth.login import (
+    clear_session_cookies,
+    enforce_login_attempt_limits,
+    issue_session_cookies,
+    password_admits_account,
+)
 from webauth.passwords import hash_password, verify_password_constant_time
-from webauth.proxies import client_user_agent, request_is_https, resolve_client_ip
+from webauth.proxies import client_user_agent, resolve_client_ip
 from webauth.session_store import installed_session_cache
+
+if TYPE_CHECKING:
+    from songmaker_cli.db.models import User
 
 log = logging.getLogger(__name__)
 
@@ -74,33 +83,6 @@ def _clear_user_cache(request: Request, user_id: str) -> None:
         session_cache.delete_user_sessions(user_id)
     except Exception:
         log.warning("Redis session cache clear failed")
-
-
-def _set_session_cookie(
-    response: Response, session_id: str, config: WebAuthConfig, request: Request,
-) -> None:
-    secure = request_is_https(request)
-    signed = sign_session_id(session_id, config.signing_key)
-    max_age = config.session_max_age_seconds
-    response.set_cookie(
-        config.session_cookie_name,
-        signed,
-        max_age=max_age,
-        httponly=True,
-        samesite="strict",
-        secure=secure,
-        path="/",
-    )
-    csrf_token = generate_csrf_token(session_id, config.signing_key)
-    response.set_cookie(  # NOSONAR The client must read this CSRF token for double-submit.
-        config.csrf_cookie_name,
-        csrf_token,
-        max_age=max_age,
-        httponly=False,
-        samesite="strict",
-        secure=secure,
-        path="/",
-    )
 
 
 @router.get("/setup-required")
@@ -144,7 +126,7 @@ def setup(
         raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
-    _set_session_cookie(response, user_session.id, config, request)
+    issue_session_cookies(response, request, user_session.id, config)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
 
@@ -166,7 +148,12 @@ def login(
 ) -> UserResponse:
     ip = resolve_client_ip(request)
 
-    _check_login_attempt_limits(db, ip, req.username, config)
+    enforce_login_attempt_limits(
+        DatabaseLoginAttemptStore(db),
+        ip_address=ip,
+        username=req.username,
+        config=config,
+    )
     user = _authenticate_login(db, ip, req)
 
     assert not db.new and not db.dirty and not db.deleted, (
@@ -210,39 +197,13 @@ def login(
                 log.warning("Redis session cache delete failed after login commit failure")
         raise
 
-    _set_session_cookie(response, user_session.id, config, request)
+    issue_session_cookies(response, request, user_session.id, config)
     return UserResponse.from_orm(user)
 
 
-def _check_login_attempt_limits(
-    db: Session, ip: str, username: str, config: WebAuthConfig,
-) -> None:
-    lockout_failures = count_recent_failed_attempts(
-        db, ip, config.login_lockout_window_seconds, username=username,
-    )
-    if lockout_failures >= config.login_lockout_threshold:
-        raise HTTPException(
-            429,
-            "Account temporarily locked due to repeated failed attempts. Try again later.",
-            headers={"Retry-After": str(config.login_lockout_window_seconds)},
-        )
-    window = config.login_rate_window_seconds
-    ip_failures = count_recent_failed_attempts(db, ip, window)
-    user_failures = count_recent_failed_attempts(db, ip, window, username=username)
-    if ip_failures >= config.login_rate_limit or user_failures >= config.login_rate_limit:
-        raise HTTPException(
-            429,
-            "Too many login attempts. Try again later.",
-            headers={"Retry-After": str(window)},
-        )
-
-
-def _authenticate_login(db: Session, ip: str, req: LoginRequest):
+def _authenticate_login(db: Session, ip: str, req: LoginRequest) -> User:
     user = get_user_by_username(db, req.username)
-    password_valid = verify_password_constant_time(
-        req.password, user.password_hash if user else None,
-    )
-    if user is not None and password_valid and user.is_active:
+    if password_admits_account(req.password, user):
         return user
     record_login_attempt(db, ip, req.username, success=False)
     db.commit()
@@ -268,9 +229,7 @@ def logout(
             except Exception:
                 log.warning("Redis session cache delete failed on logout")
 
-    config = web_auth_config(request)
-    response.delete_cookie(config.session_cookie_name, path="/")
-    response.delete_cookie(config.csrf_cookie_name, path="/")
+    clear_session_cookies(response, web_auth_config(request))
     return StatusResponse(status="ok")
 
 
@@ -334,5 +293,5 @@ def change_password(
 
     _clear_user_cache(request, current_user.id)
     _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
-    _set_session_cookie(response, new_session.id, config, request)
+    issue_session_cookies(response, request, new_session.id, config)
     return StatusResponse(status="ok")
