@@ -12,7 +12,7 @@ import httpx
 import pytest
 from conftest import override_provider_runtime
 
-from agent_providers import openai_adapter, tool_loop
+from agent_providers import dispatch, openai_adapter, tool_loop
 from agent_providers.catalog import ProviderRoute
 from agent_providers.claude import adapter as claude_adapter
 from agent_providers.claude.provider import (
@@ -43,7 +43,7 @@ from agent_providers.tool_loop import (
 )
 from agent_providers.tools import openai_tool_schemas
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter import dispatch
+from songmaker_cli.cowriter import routing
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
@@ -72,7 +72,7 @@ class _Stream(AsyncIterator[StreamEvent]):
 
 async def _events(provider: str, route: ProviderRoute) -> list[StreamEvent]:
     return [
-        event async for event in dispatch.stream_cowriter_turn(
+        event async for event in routing.stream_cowriter_turn(
             provider=provider,
             route=route,
             model="model",
@@ -262,7 +262,7 @@ def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
         with factory() as session:
             return [
                 event
-                async for event in dispatch.stream_cowriter_turn(
+                async for event in routing.stream_cowriter_turn(
                     provider=provider,
                     route=ProviderRoute.CLI,
                     model=f"{provider}-test",
@@ -318,7 +318,7 @@ def test_closing_a_cli_turn_aborts_its_transport(monkeypatch, provider, transpor
     monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
 
     async def close_turn():
-        turn = dispatch.stream_cowriter_turn(
+        turn = routing.stream_cowriter_turn(
             provider=provider,
             route=ProviderRoute.CLI,
             model="model",
@@ -410,7 +410,7 @@ def test_the_saved_cover_selection_resolves_to_its_route_and_model(
     _mount_a_signed_in_codex_cli(monkeypatch)
     session = _cover_session(tmp_path, "codex", "cli", "gpt-5.4")
 
-    assert dispatch.cover_image_provider_method(session) == dispatch.CoverImageDispatch(
+    assert routing.cover_image_provider_method(session) == routing.CoverImageDispatch(
         provider="codex", route=ProviderRoute.CLI, model="gpt-5.4",
     )
 
@@ -419,7 +419,7 @@ def test_a_saved_provider_without_an_image_tool_is_named_never_swapped(tmp_path:
     session = _cover_session(tmp_path, "claude", "cli", "")
 
     with pytest.raises(CoverImageToolUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.provider == "claude"
 
@@ -428,7 +428,7 @@ def test_a_saved_route_this_build_does_not_know_is_named_not_guessed(tmp_path: P
     session = _cover_session(tmp_path, "codex", "grpc", "")
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.route == "grpc"
     assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
@@ -446,7 +446,7 @@ def test_codex_cover_route_reports_an_unavailable_cli_probe(
     session = _cover_session(tmp_path, "codex", "cli", "")
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
 

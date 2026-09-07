@@ -805,7 +805,7 @@ def test_judge_routes_to_the_configured_provider_and_no_other() -> None:
 
     with (
         patch(
-            "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
+            "agent_providers.dispatch.call_openai_compatible_once",
             return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
         ) as grok_call,
         patch("agent_providers.claude.adapter.call_claude") as claude_call,

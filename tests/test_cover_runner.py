@@ -23,7 +23,7 @@ from agent_providers.codex.image import (
 from agent_providers.codex.pool import CodexProcessPool
 from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
-from songmaker_cli.cowriter.dispatch import CoverImageDispatch
+from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries import update_job_status
