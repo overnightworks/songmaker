@@ -155,7 +155,10 @@ COWRITER_TOOL_CATALOG: ToolCatalog = ToolCatalog(
         ),
         ToolDeclaration(
             name="list_songs",
-            description="List songs. Without album_id, every owned song; with album_id, that album.",
+            description=(
+                "List songs. Without album_id, every owned song; "
+                "with album_id, that album."
+            ),
             parameters=_object({"album_id": _STRING}),
         ),
         ToolDeclaration(
@@ -223,7 +226,10 @@ COWRITER_TOOL_CATALOG: ToolCatalog = ToolCatalog(
         ),
         ToolDeclaration(
             name="suggest_album_cover",
-            description="Request three album cover suggestions. Returns the queued job ID and status.",
+            description=(
+                "Request three album cover suggestions. "
+                "Returns the queued job ID and status."
+            ),
             parameters=_object({"album_id": _STRING}, ["album_id"]),
         ),
     ),

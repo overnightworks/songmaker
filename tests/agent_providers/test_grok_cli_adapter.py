@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
-from conftest import override_provider_runtime
+from provider_test_support import COWRITER_TOOL_CATALOG, override_provider_runtime
 
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
@@ -24,7 +24,6 @@ from agent_providers.tool_loop import (
     ToolResultBatch,
     stream_tool_loop,
 )
-from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
 A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
 

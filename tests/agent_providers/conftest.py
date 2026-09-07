@@ -21,6 +21,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from provider_test_support import MCP_TOOL_NAMES, SECRET_ENV_KEYS, close_fake_cli_pipes
 
 from agent_providers.config import (
     McpServerSpec,
@@ -28,7 +29,6 @@ from agent_providers.config import (
     configure,
     reset_config,
 )
-from provider_test_support import MCP_TOOL_NAMES, SECRET_ENV_KEYS, close_fake_cli_pipes
 
 _SAMPLE_ROOT = Path("/tmp/agent-providers-tests")
 
