@@ -39,12 +39,24 @@ def pytest_configure(config: pytest.Config) -> None:
     module ``conftest``, so loading this one replaces ``sys.modules["conftest"]``
     and every flat songmaker test collected afterwards would resolve
     ``from conftest import ...`` to this package instead of the root
-    ``tests/conftest.py``. pytest keeps its own reference to this module for
-    fixture discovery, so dropping the bare alias once it is loaded lets those
-    imports re-resolve to the root conftest with no effect on the fixtures here.
+    ``tests/conftest.py``.
+
+    The bare alias is restored to the *pytest-registered* root conftest module,
+    not merely dropped: dropping it makes the next flat import re-execute
+    ``tests/conftest.py`` as a second module object, whose module-level state
+    (the ``_fake_cli_processes`` list its autouse ``_close_fake_cli_pipes``
+    drains) then diverges from the registered instance's — so flat callers'
+    pipes leak, order-dependently. pytest registers each conftest under its
+    absolute path, so the registered instance is retrieved by that key and put
+    back under the bare name. In the extracted lib repo there is no root
+    conftest to restore, so the alias for this module is dropped instead.
     """
-    module = sys.modules.get("conftest")
-    if module is not None and getattr(module, "__file__", None) == __file__:
+    root_conftest = config.pluginmanager.get_plugin(
+        str(Path(__file__).parents[1] / "conftest.py"),
+    )
+    if root_conftest is not None:
+        sys.modules["conftest"] = root_conftest
+    elif getattr(sys.modules.get("conftest"), "__file__", None) == __file__:
         del sys.modules["conftest"]
 
 _SAMPLE_ROOT = Path("/tmp/agent-providers-tests")

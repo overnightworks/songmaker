@@ -12,6 +12,7 @@ from urllib.parse import quote
 import pytest
 from provider_test_support import COWRITER_TOOL_CATALOG, override_provider_runtime
 
+from agent_providers.config import current_config
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from agent_providers.grok import transport as grok_cli_adapter
@@ -105,7 +106,7 @@ def test_grok_tool_command_pins_native_tool_and_web_isolation() -> None:
     common = (
         "grok",
         "--prompt-file",
-        "<songmaker-private-prompt>",
+        current_config().cli_prompt_file_placeholder,
         "--output-format",
         "streaming-json",
         "--deny",
