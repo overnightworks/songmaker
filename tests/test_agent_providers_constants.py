@@ -8,14 +8,11 @@ from typing import Final
 
 import agent_providers.constants as library_constants
 
-PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
+PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
 ARCHITECTURE_DOC: Final = PROJECT_ROOT / "docs" / "architecture.md"
-LIBRARY_MODULE: Final = PROJECT_ROOT / "src" / "agent_providers" / "constants.py"
+LIBRARY_MODULE: Final = Path(library_constants.__file__)
 APPLICATION_MODULE: Final = PROJECT_ROOT / "src" / "songmaker_cli" / "constants.py"
-PROVIDER_SOURCES: Final = (
-    PROJECT_ROOT / "src" / "agent_providers",
-    PROJECT_ROOT / "src" / "songmaker_cli" / "cowriter",
-)
+PROVIDER_SOURCES: Final = (PROJECT_ROOT / "src" / "songmaker_cli" / "cowriter",)
 
 GO: Final = "Go"
 STAY: Final = "Stay"

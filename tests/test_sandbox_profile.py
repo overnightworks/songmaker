@@ -5,8 +5,7 @@ seccomp profile that permits Bubblewrap's namespace setup, and the AppArmor
 profile that permits exactly the private Codex-home mounts the library binds.
 Both are checked here against the values in ``agent_providers`` — a prefix or a
 syscall that drifts from the code is a mount or a namespace the sandbox would
-silently refuse. The files live under ``scripts/`` today; S1 repoints these
-tests at the vendored deployment path after the extraction (issue #825).
+silently refuse. The files live under ``scripts/`` today.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from agent_providers.sandbox.paths import (
     CODEX_TOOL_TURN_DIRECTORY_PREFIX,
 )
 
-REPOSITORY_ROOT = Path(__file__).parents[2]
+REPOSITORY_ROOT = Path(__file__).parents[1]
 SECCOMP_DIRECTORY = REPOSITORY_ROOT / "scripts" / "seccomp"
 APPARMOR_PROFILE_PATH = REPOSITORY_ROOT / "scripts" / "apparmor" / "songmaker-web"
 
