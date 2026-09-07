@@ -543,6 +543,22 @@ preserves the observed inherited mount flags during remounts. Compose applies
 the profile only to `songmaker-web`, drops every container capability, and sets
 `no-new-privileges:true`.
 
+The three prefixes those private homes carry — the cover turn's, the
+Co-Writer turn's, and the proof's — live in `agent_providers/sandbox/paths.py`
+and nowhere else. The provider layer creates the directories, this profile is
+the only thing that permits their mounts, and
+`tests/test_prove_codex_image_sandbox.py` reads the module and every rule form
+in the profile, including its brace lists, so a rename that reaches only one
+of them is a red test instead of a silently refused mount. A project that
+embeds `agent_providers` takes those prefixes and derives its own profile from
+them. The profile *name* is a parameter wherever it is used —
+`sudo scripts/apparmor/install.sh [profile]`,
+`python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
+`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`, and one
+test holds those three defaults and the profile file's own declaration to that
+one name. The installer refuses a name that is not a profile file beside it,
+so a typo never reaches `apparmor_parser`.
+
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
 
@@ -619,10 +635,13 @@ docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
 ```
 
-The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv,
-so it runs from the main checkout with its virtualenv, or from a worktree with
+The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv
+and `agent_providers.sandbox.paths` for its probe directory, so it runs from
+the main checkout with its virtualenv, or from a worktree with
 `PYTHONPATH=<worktree>/src`. An `ImportError` there is a missing import path,
-not a sandbox failure.
+not a sandbox failure. Both the installer and the proof take the profile name
+as an optional first argument; a stack proven under another profile passes it
+to both.
 
 Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use

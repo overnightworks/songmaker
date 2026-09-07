@@ -3,19 +3,25 @@
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from agent_providers.sandbox.paths import (
+    CODEX_HOME_DIRECTORY_NAME,
+    CODEX_SANDBOX_PROOF_DIRECTORY,
+)
 from songmaker_cli.lifecycle import bubblewrap_startup_probe_command
 
 WEB_SERVICE = "songmaker-web"
-WEB_PROFILE = "songmaker-web"
+DEFAULT_WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
 EMPTY_CAPABILITY_MASK = "0000000000000000"
-SANDBOX_CODEX_HOME = "/tmp/songmaker-codex-sandbox-probe/codex-home"
-SANDBOX_WORKDIR = "/tmp/songmaker-codex-sandbox-probe/workdir"
+SANDBOX_ROOT = f"/tmp/{CODEX_SANDBOX_PROOF_DIRECTORY}"
+SANDBOX_CODEX_HOME = f"{SANDBOX_ROOT}/{CODEX_HOME_DIRECTORY_NAME}"
+SANDBOX_WORKDIR = f"{SANDBOX_ROOT}/workdir"
 CODEX_BINARY = "/usr/local/bin/codex"
 _PROTECTED_CODEX_HOME_PATHS = (".git", ".agents", ".codex")
 _NAMESPACE_DENIAL_OUTPUTS = (
@@ -168,7 +174,7 @@ def _required_output(result: CommandResult, description: str) -> str:
     raise RuntimeError(f"{description} failed:\n{result.stderr.strip()}")
 
 
-def _verify_web_profile(run: CommandRunner) -> None:
+def _verify_web_profile(run: CommandRunner, profile_name: str) -> None:
     container_id = _required_output(
         run(("docker", "compose", "ps", "-q", WEB_SERVICE)),
         f"finding the {WEB_SERVICE} container",
@@ -179,9 +185,9 @@ def _verify_web_profile(run: CommandRunner) -> None:
         run(("docker", "inspect", "--format", "{{.AppArmorProfile}}", container_id)),
         f"reading {WEB_SERVICE}'s AppArmor profile",
     )
-    if profile != WEB_PROFILE:
+    if profile != profile_name:
         raise RuntimeError(
-            f"{WEB_SERVICE} has AppArmor profile {profile!r}, expected {WEB_PROFILE!r}"
+            f"{WEB_SERVICE} has AppArmor profile {profile!r}, expected {profile_name!r}"
         )
 
 
@@ -252,20 +258,40 @@ def _verify_default_profile_still_blocks_bubblewrap(run: CommandRunner) -> None:
         )
 
 
-def prove(run: CommandRunner = _run) -> None:
-    """Check the positive profile and the docker-default negative control."""
-    _verify_web_profile(run)
+def prove(run: CommandRunner = _run, *, profile_name: str) -> None:
+    """Check the named profile and the docker-default negative control."""
+    _verify_web_profile(run, profile_name)
     _verify_sandbox(run)
     _verify_default_profile_still_blocks_bubblewrap(run)
 
 
-def main() -> int:
+def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
+    """Read the AppArmor profile the running web service is proven against.
+
+    A deployment that embeds this stack under another name proves that name;
+    songmaker's own profile is the default.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "profile_name",
+        nargs="?",
+        default=DEFAULT_WEB_PROFILE,
+        help=f"AppArmor profile {WEB_SERVICE} must run under (default: %(default)s)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    profile_name = parse_arguments(sys.argv[1:] if argv is None else argv).profile_name
     try:
-        prove()
+        prove(profile_name=profile_name)
     except RuntimeError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
-    print("PASS: songmaker-web runs Bubblewrap under songmaker-web; docker-default blocks it.")
+    print(
+        f"PASS: {WEB_SERVICE} runs Bubblewrap under {profile_name}; "
+        f"{DEFAULT_DOCKER_PROFILE} blocks it."
+    )
     return 0
 
 
