@@ -172,9 +172,10 @@ its Redis entry dropped, which is exactly how a 90-day-old session looks once
 the cache key's own 30-day TTL has run out. The server still decides; nothing
 is intercepted.
 
-Summed together, the per-flow `FlowGuard` totals above (351 `/api` requests on
-**desktop** and 98 on **mobile**, read off one green run -- CI run
-34039372545, 2026-09-06 -- rather than carried forward, which is how the
+Summed together, the per-flow `FlowGuard` totals above (436 `/api` requests on
+**desktop** and 178 on **mobile**, read off one green run -- CI run
+34058495442, 2026-09-07, with `auth-flows.spec.ts`; of that, 86 and 80 are its
+own -- rather than carried forward, which is how the
 library flow's own number drifted into three values before issue #326) are
 **not** what the server's own IP rate
 limit sees, and issue #344 is the reason that distinction is written down
@@ -195,7 +196,10 @@ that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "2000"`
 override (`docker/docker-compose.ci.yml`), which carries several times the headroom
 that measurement needs, including room for one CI retry landing inside the
 same window. That 288 has not been re-measured since `admin-models.spec.ts`
-was added, and the sum above is not a substitute for it: when it matters,
+and `auth-flows.spec.ts` were added -- and the second of those also brings
+document navigations of its own, since its flows reload the tab and reopen the
+app rather than staying inside one SPA session -- and the sum above is not a
+substitute for it: when it matters,
 measure it from the access log the same way rather than trusting the total. Re-running the suite repeatedly against the same stack inside that
 window is cumulative, not reset per run — see "Running it locally" below. If
 this suite gains more specs, re-measure the same way rather than trusting
