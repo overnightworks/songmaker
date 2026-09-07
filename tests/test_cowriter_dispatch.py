@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Final
 from unittest.mock import MagicMock
 
 import httpx
@@ -17,6 +18,7 @@ from agent_providers.claude.provider import (
     CliToolSurfaceError,
     UnavailableError,
 )
+from agent_providers.constants import COWRITER_GROK_CHAT_URL, COWRITER_OPENAI_CHAT_URL
 from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -662,3 +664,101 @@ def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_atte
         asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.API_KEY_NOT_SET
+
+
+# ── Route-selection pin (A9, #873) ──────────────────────────────────
+#
+# One table for every provider and route a musician can save today, so the
+# library/app split of the dispatch cannot quietly re-point a route.  The
+# cover routes are pinned by ``test_only_the_codex_cli_route_owns_an_image_tool``
+# and ``test_the_saved_cover_selection_resolves_to_its_route_and_model`` above.
+
+_COWRITER_ROUTE_TARGETS: Final = (
+    ("claude", ProviderRoute.CLI, "stream_claude_turn"),
+    ("claude", ProviderRoute.API, "stream_claude_api_turn"),
+    ("grok", ProviderRoute.CLI, "GrokCliToolTransport"),
+    ("grok", ProviderRoute.API, "stream_openai_compatible_turn"),
+    ("codex", ProviderRoute.CLI, "CodexCliToolTransport"),
+    ("codex", ProviderRoute.API, "stream_openai_compatible_turn"),
+)
+
+_JUDGE_ROUTE_TARGETS: Final = (
+    ("claude", "call_claude_once", None),
+    ("grok", "call_openai_compatible_once", COWRITER_GROK_CHAT_URL),
+    ("codex", "call_openai_compatible_once", COWRITER_OPENAI_CHAT_URL),
+)
+
+
+class _FinishingTransport:
+    async def stream(self, _message):
+        yield FinalText()
+
+    async def aclose(self):
+        pass
+
+
+def _record_every_cowriter_route(monkeypatch) -> list[str]:
+    """Replace every transport entry point with one that only names itself."""
+    taken: list[str] = []
+
+    def _empty_stream(name):
+        async def _stream(**_kwargs):
+            taken.append(name)
+            return
+            yield  # pragma: no cover
+
+        return _stream
+
+    def _transport(name):
+        def _factory(**_kwargs):
+            taken.append(name)
+            return _FinishingTransport()
+
+        return _factory
+
+    for name in ("stream_claude_turn", "stream_claude_api_turn", "stream_openai_compatible_turn"):
+        monkeypatch.setattr(dispatch, name, _empty_stream(name))
+    for name in ("GrokCliToolTransport", "CodexCliToolTransport"):
+        monkeypatch.setattr(dispatch, name, _transport(name))
+    return taken
+
+
+@pytest.mark.parametrize(
+    ("provider", "route", "expected_target"), _COWRITER_ROUTE_TARGETS,
+)
+def test_every_saved_cowriter_route_selects_exactly_one_transport(
+    monkeypatch, provider: str, route: ProviderRoute, expected_target: str,
+) -> None:
+    override_provider_runtime(
+        anthropic_api_key="test-key", xai_api_key="test-key", openai_api_key="test-key",
+    )
+    taken = _record_every_cowriter_route(monkeypatch)
+
+    asyncio.run(_events(provider, route))
+
+    assert taken == [expected_target]
+
+
+@pytest.mark.parametrize(("provider", "expected_target", "expected_url"), _JUDGE_ROUTE_TARGETS)
+def test_every_judge_provider_selects_exactly_one_api_adapter(
+    monkeypatch, provider: str, expected_target: str, expected_url: str | None,
+) -> None:
+    override_provider_runtime(
+        anthropic_api_key="test-key", xai_api_key="test-key", openai_api_key="test-key",
+    )
+    taken: list[tuple[str, str | None]] = []
+
+    def _record(name):
+        def _call(**kwargs):
+            taken.append((name, kwargs.get("api_url")))
+            return "verdict"
+
+        return _call
+
+    for name in ("call_claude_once", "call_openai_compatible_once"):
+        monkeypatch.setattr(dispatch, name, _record(name))
+
+    assert dispatch.call_provider_once(
+        provider=provider, model="model", prompt="prompt", timeout=5,
+    ) == "verdict"
+    assert taken == [(expected_target, expected_url)]

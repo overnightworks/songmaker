@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -24,6 +25,8 @@ from fastapi.testclient import TestClient
 from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
 )
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
@@ -1963,3 +1966,159 @@ def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():
         )
 
     assert raised.value.reason.code.value == "tool_protocol_error"
+
+
+# ── Provider-status response pin (A9, #873) ─────────────────────────
+#
+# ``GET /api/settings/providers`` feeds the admin "Models" table.  The pin
+# drives it from one fixed snapshot set so the whole response body — not a
+# field the assertion happens to name — is compared byte for byte.
+
+_PINNED_PROBED_AT = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
+
+
+def _pinned_route_snapshot(
+    *,
+    models: tuple[str, ...] = (),
+    catalogue_failure: SafeRouteReasonCode | None = None,
+    catalog_source: str | None = None,
+    readiness: str,
+    reason: SafeRouteReasonCode | None = None,
+    setup_label: str,
+):
+    from songmaker_cli.cowriter.catalog import (
+        ProviderRouteCapability,
+        ProviderRouteReadinessState,
+        ProviderRouteSnapshot,
+    )
+
+    return ProviderRouteSnapshot(
+        models,
+        normalize_route_failure(catalogue_failure) if catalogue_failure else None,
+        catalog_source,
+        None,
+        ProviderRouteReadinessState(readiness),
+        ProviderRouteCapability.TOOLS_AVAILABLE,
+        normalize_route_failure(reason) if reason else None,
+        _PINNED_PROBED_AT,
+        setup_label,
+    )
+
+
+def _pinned_snapshots(claude_judge):
+    from songmaker_cli.cowriter.catalog import (
+        CliLoginNeedsApiKeyProvider,
+        ProviderNeed,
+        ProviderRoute,
+        ProviderSetupMethod,
+        ProviderSnapshot,
+        UnconfiguredProvider,
+    )
+
+    unconfigured = UnconfiguredProvider("x", ProviderNeed.API_KEY, "X_API_KEY")
+    judges = {
+        "claude": claude_judge,
+        "grok": CliLoginNeedsApiKeyProvider(
+            "grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY",
+        ),
+        "codex": UnconfiguredProvider("codex", ProviderNeed.API_KEY, "OPENAI_API_KEY"),
+    }
+    routes = {
+        "claude": {
+            ProviderRoute.CLI: _pinned_route_snapshot(
+                models=("claude-opus-4-6",), catalog_source="provider CLI",
+                readiness="ready", setup_label="CLI login",
+            ),
+            ProviderRoute.API: _pinned_route_snapshot(
+                readiness="not_configured",
+                reason=SafeRouteReasonCode.API_KEY_NOT_SET, setup_label="API key",
+            ),
+        },
+        "grok": {
+            ProviderRoute.CLI: _pinned_route_snapshot(
+                readiness="not_configured",
+                reason=SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED,
+                setup_label="CLI login",
+            ),
+            ProviderRoute.API: _pinned_route_snapshot(
+                models=("grok-4.6",), catalog_source="provider API",
+                readiness="ready", setup_label="API key",
+            ),
+        },
+        "codex": {
+            ProviderRoute.CLI: _pinned_route_snapshot(
+                catalogue_failure=SafeRouteReasonCode.CATALOGUE_HTTP_ERROR,
+                readiness="disturbed",
+                reason=SafeRouteReasonCode.CATALOGUE_HTTP_ERROR,
+                setup_label="CLI login",
+            ),
+            ProviderRoute.API: _pinned_route_snapshot(
+                models=("gpt-5.4",), catalog_source="provider API",
+                readiness="ready", setup_label="API key",
+            ),
+        },
+    }
+    return {
+        provider: ProviderSnapshot(
+            cowriter=unconfigured,
+            judge=judges[provider],
+            probed_at=_PINNED_PROBED_AT,
+            routes=routes[provider],
+        )
+        for provider in sorted(LIVE_CATALOG)
+    }
+
+
+def _pinned_cover_capability(provider: str, route):
+    from songmaker_cli.cowriter.catalog import ProviderRoute
+    from songmaker_cli.cowriter.dispatch import CoverImageCapability
+
+    if provider == "codex" and route is ProviderRoute.CLI:
+        return CoverImageCapability(carries_image_tool=True, failure=None)
+    return CoverImageCapability(
+        carries_image_tool=False,
+        failure=normalize_route_failure(SafeRouteReasonCode.NO_IMAGE_TOOL),
+    )
+
+
+def _claude_judge_configurations():
+    from songmaker_cli.cowriter.catalog import (
+        ConfiguredProvider,
+        DependencyUnavailableProvider,
+        ProviderSetupMethod,
+    )
+
+    return {
+        "ready": ConfiguredProvider(
+            "claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY",
+        ),
+        "capability_missing": DependencyUnavailableProvider("claude", "anthropic"),
+    }
+
+
+def _pinned_response_body(case: str) -> bytes:
+    return (
+        Path(__file__).with_name("fixtures") / f"provider_status_{case}.json"
+    ).read_bytes()
+
+
+@pytest.mark.parametrize("case", ["ready", "capability_missing"])
+def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
+    admin_client, monkeypatch, case: str,
+) -> None:
+    client, factory = admin_client
+    with factory() as session:
+        set_provider_routes(session, {"claude": "cli", "grok": "api", "codex": "cli"})
+        session.commit()
+    snapshots = _pinned_snapshots(_claude_judge_configurations()[case])
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.catalog.provider_snapshots", lambda: snapshots,
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.dispatch.cover_image_capability", _pinned_cover_capability,
+    )
+
+    response = client.get("/api/settings/providers")
+
+    assert response.status_code == 200
+    assert response.content == _pinned_response_body(case)
