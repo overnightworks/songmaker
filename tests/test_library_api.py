@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
@@ -27,7 +28,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Song, User, Version
-from webauth.dependencies import AuthenticatedUser
 
 USER_A = "user-a"
 USER_B = "user-b"

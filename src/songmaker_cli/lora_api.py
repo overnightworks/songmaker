@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     check_lora_access,
@@ -73,7 +74,6 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.settings import get_settings
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

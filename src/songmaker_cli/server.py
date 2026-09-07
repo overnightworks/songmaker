@@ -22,6 +22,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from webauth.middleware import (
+    BodySizeLimitMiddleware,
+    CsrfOriginMiddleware,
+    CsrfTokenMiddleware,
+    IpRateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.app_context import (
@@ -68,13 +75,6 @@ from songmaker_cli.request_policies import (
     build_security_headers_policy,
 )
 from songmaker_cli.settings import CoverExecutor, get_settings
-from webauth.middleware import (
-    BodySizeLimitMiddleware,
-    CsrfOriginMiddleware,
-    CsrfTokenMiddleware,
-    IpRateLimitMiddleware,
-    SecurityHeadersMiddleware,
-)
 
 log = logging.getLogger(__name__)
 
@@ -218,9 +218,10 @@ def create_app(
         ctx = _create_default_context(audio_dir, data_dir)
 
     app.state.ctx = ctx
-    from songmaker_cli.redis_client import RedisHttpMetrics
     from webauth.config import install_web_auth_config
     from webauth.session_store import SessionCache, install_session_cache
+
+    from songmaker_cli.redis_client import RedisHttpMetrics
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)

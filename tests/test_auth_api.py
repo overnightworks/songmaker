@@ -10,13 +10,13 @@ import httpx
 import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
-
-from songmaker_cli.db.models import UserSession
-from songmaker_cli.db.queries import create_user
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
 from webauth.proxies import TrustedProxies
+
+from songmaker_cli.db.models import UserSession
+from songmaker_cli.db.queries import create_user
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -458,8 +458,9 @@ def test_login_populates_redis(client: TestClient) -> None:
 
 
 def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     from webauth.session_store import SessionCache
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
 
     _seed_admin(client)
     session_cache: SessionCache = client.app.state.session_cache

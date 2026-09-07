@@ -81,13 +81,13 @@ root-level file.
 **Full suite is CI only** (or when the operator explicitly asks):
 
 ```bash
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
 python scripts/generate_types.py --check
 lint-imports
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-- CI enforces 93% backend coverage (`songmaker_cli` + engines + `acestep_worker` + `agent_providers` + `webauth`; scoring modules excluded — require GPU extras) and 90% statements / 93% lines for the frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
+- CI enforces 93% backend coverage (`songmaker_cli` + engines + `acestep_worker` + `agent_providers`; scoring modules excluded — require GPU extras) and 90% statements / 93% lines for the frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
 - Docs (`docs/`) must stay accurate after changes
 - Open work lives in GitHub Issues with a milestone. Do not add items to a markdown backlog.
 
@@ -130,7 +130,7 @@ These are conventions that aren't obvious from reading a single file:
 
 - **Query functions `flush()`, endpoints `commit()`.** `get_db_session` does NOT auto-commit. Forgetting `session.commit()` in an endpoint = silent data loss. Exception: "commit then raise" in `auth_api.py` login (must persist failed attempt before returning 401).
 - **`from_orm()` classmethods on response models.** Never hand-build response dicts. Add a `from_orm()` to the Pydantic model.
-- **Packages beside the application are independent.** `acestep_engine`, `audio_engine`, `acestep_worker`, `agent_providers`, AND `webauth` must never import from `songmaker_cli`. Dependency flows one way. The acestep-worker container is a slim image that does NOT install `songmaker_cli` — any import from `songmaker_cli` in `acestep_worker/` will crash the container at startup with `ModuleNotFoundError: No module named 'songmaker_cli'`. Each engine package owns its own `settings.py` (`acestep_engine/settings.py`, `acestep_worker/settings.py`). `agent_providers` and `webauth` never import each other either. The `.importlinter` contract owns that boundary; verify with `lint-imports`, which CI runs over the real import graph, so an indirect chain is caught as well as a direct import.
+- **Packages beside the application are independent.** `acestep_engine`, `audio_engine`, `acestep_worker`, and `agent_providers` must never import from `songmaker_cli`. Dependency flows one way. The acestep-worker container is a slim image that does NOT install `songmaker_cli` — any import from `songmaker_cli` in `acestep_worker/` will crash the container at startup with `ModuleNotFoundError: No module named 'songmaker_cli'`. Each engine package owns its own `settings.py` (`acestep_engine/settings.py`, `acestep_worker/settings.py`). `agent_providers` never imports `webauth` either — the auth library is no longer in this repository: it installs as `overnightworks-webauth` from the release wheel of tag `v0.1.0` of [overnightworks/webauth](https://github.com/overnightworks/webauth) (#879), with its own tests there, and `include_external_packages` lets the contract check that direction against the installed distribution. The `.importlinter` contract owns that boundary; verify with `lint-imports`, which CI runs over the real import graph, so an indirect chain is caught as well as a direct import.
 - **Ownership checks on every resource endpoint.** Use `check_song_access()`, `check_album_access()`, `check_generation_access()` from `api_helpers.py`. Never skip, even for GET.
 - **Middleware order is security-critical.** See comment block in `server.py`. Do not reorder.
 - **DB queries split by domain.** `db/queries/songs.py`, `db/queries/auth.py`, `db/queries/jobs.py`. New queries go in the matching file, re-exported from `db/queries/__init__.py`.

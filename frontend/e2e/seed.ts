@@ -736,7 +736,7 @@ export async function deleteAccount(api: APIRequestContext, userId: string): Pro
  * side.
  *
  * `user_sessions.created_at` is the whole of what that check reads
- * (`_reject_session_older_than_absolute_limit` in `webauth/dependencies.py`),
+ * (`_reject_session_older_than_absolute_limit` in `webauth.dependencies`),
  * and the Redis copy carries a `created_at` of its own, written at login. So a
  * session that has genuinely outlived `SESSION_ABSOLUTE_MAX_AGE` is one whose
  * row is that old and whose cache entry is gone — which is exactly how a

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import Pagination, page_has_more, parse_required_search_query
 from songmaker_cli.api_models import (
@@ -45,7 +46,6 @@ from songmaker_cli.queue_stream_api import (
     check_queue_stream_rate_limit,
     resolve_library_pool_membership,
 )
-from webauth.dependencies import AuthenticatedUser
 
 router = APIRouter()
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from conftest import login_and_csrf, make_test_app
 from fastapi.testclient import TestClient
+from webauth.passwords import hash_password
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
@@ -20,7 +21,6 @@ from songmaker_cli.db.models import Album, User
 from songmaker_cli.db.queries import create_user_lora
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
-from webauth.passwords import hash_password
 
 
 @pytest.mark.parametrize("path", [

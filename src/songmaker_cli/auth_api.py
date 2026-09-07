@@ -9,6 +9,17 @@ from typing import TYPE_CHECKING, Final
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.config import WebAuthConfig, web_auth_config
+from webauth.dependencies import AuthenticatedUser
+from webauth.login import (
+    clear_session_cookies,
+    enforce_login_attempt_limits,
+    issue_session_cookies,
+    password_admits_account,
+)
+from webauth.passwords import hash_password, verify_password_constant_time
+from webauth.proxies import client_user_agent, resolve_client_ip
+from webauth.session_store import installed_session_cache
 
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import (
@@ -37,17 +48,6 @@ from songmaker_cli.db.queries import (
     user_count,
 )
 from songmaker_cli.settings import get_settings
-from webauth.config import WebAuthConfig, web_auth_config
-from webauth.dependencies import AuthenticatedUser
-from webauth.login import (
-    clear_session_cookies,
-    enforce_login_attempt_limits,
-    issue_session_cookies,
-    password_admits_account,
-)
-from webauth.passwords import hash_password, verify_password_constant_time
-from webauth.proxies import client_user_agent, resolve_client_ip
-from webauth.session_store import installed_session_cache
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import User

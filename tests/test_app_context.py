@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from conftest import TEST_SECRET, make_fake_redis
+from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import (
     AppContext,
@@ -23,7 +24,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.settings import get_settings
-from webauth.proxies import TrustedProxies
 
 
 @pytest.fixture

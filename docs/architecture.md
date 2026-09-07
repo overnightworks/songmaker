@@ -646,7 +646,28 @@ events.
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
 | `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak, `errors.py` owns the named route failures every transport raises, `catalog.py` owns the per-route model listing and the four-case provider setup answer, `dispatch.py` owns running one named route with the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py` own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port the host lends the image route, `grok/transport.py` owns the Grok CLI turn, and `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover image turn (`image.py`); the sandbox blocks move in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
-| `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares, `dependencies.py` the `current_user_dependency` factory that yields the account, admin, and verified-session-id dependencies, `login.py` the transaction-free parts of signing in and out (cookie issuing and clearing, the attempt limits, the constant-time credential check); the login route with its advisory lock stays in the application |
+
+### The auth library (`webauth`, external)
+
+The auth layer left this repository with #879. It ships as the distribution
+`overnightworks-webauth` from
+[overnightworks/webauth](https://github.com/overnightworks/webauth) and is
+pinned in the `server` extra to the release wheel of tag `v0.1.0`; `uv.lock`
+records that wheel's hash, so every image installs the same bytes and no image
+needs `git`. The import package is still `webauth`, so nothing in
+`songmaker_cli` changed when the source moved. Its own tests moved with it.
+
+Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
+`passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity
+decision, `ports.py` names the stores the host supplies, `policies.py` the four
+request policies it supplies, `session_store.py` the Redis session cache,
+`rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF,
+body-size and security-header middlewares, `dependencies.py` the
+`current_user_dependency` factory that yields the account, admin, and
+verified-session-id dependencies, and `login.py` the transaction-free parts of
+signing in and out (cookie issuing and clearing, the attempt limits, the
+constant-time credential check). The login route with its advisory lock stays
+in the application.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, Redis client and key prefixes, cookie and
@@ -794,7 +815,7 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `MODEL_ALLOWED_CLAUDE` | Stay | Allow-list of the legacy `/settings/claude-models` endpoint. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
-These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` and `webauth` also never import each other. The `.importlinter` contract states these boundaries and CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
+These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` never imports the external `webauth` either; because `include_external_packages` is on, `.importlinter` checks that direction against the installed distribution, while webauth's own boundaries are contracted in its repository. CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
 
 ## Data Model
 

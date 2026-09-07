@@ -12,10 +12,10 @@ from __future__ import annotations
 import structlog
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser, current_user_dependency
 
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_stores import DatabaseAuditSink, DatabaseSessionRecordStore
-from webauth.dependencies import AuthenticatedUser, current_user_dependency
 
 
 def _session_record_store(

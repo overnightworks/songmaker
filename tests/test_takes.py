@@ -11,6 +11,7 @@ import pytest
 from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.app_context import AppContext
@@ -27,7 +28,6 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from webauth.dependencies import AuthenticatedUser
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 

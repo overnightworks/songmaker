@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
+from webauth.config import (
+    RateLimitKeyPrefixes,
+    SessionKeyPrefixes,
+    WebAuthConfig,
+)
+from webauth.proxies import TrustedProxies
 
 from songmaker_cli.constants import (
     HTTP_MAX_USER_AGENT_LENGTH,
@@ -20,12 +26,6 @@ from songmaker_cli.constants import (
     REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
 )
-from webauth.config import (
-    RateLimitKeyPrefixes,
-    SessionKeyPrefixes,
-    WebAuthConfig,
-)
-from webauth.proxies import TrustedProxies
 
 if TYPE_CHECKING:
     from redis import Redis

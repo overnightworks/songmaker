@@ -21,6 +21,7 @@ from conftest import (
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.catalog import ProviderRoute, list_provider_models
 from agent_providers.errors import (
@@ -77,7 +78,6 @@ from songmaker_cli.db.queries.settings import (
     set_provider_routes,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
-from webauth.dependencies import AuthenticatedUser
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from conftest import install_app_context
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.api_models.generation_params import (
@@ -21,7 +22,6 @@ from songmaker_cli.jobs.generation import (
     _apply_user_lora_path,
     _extract_user_lora_id,
 )
-from webauth.dependencies import AuthenticatedUser
 
 USER_A = "u-alice"
 USER_B = "u-bob"

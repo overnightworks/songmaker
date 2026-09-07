@@ -10,6 +10,9 @@ from conftest import install_app_context, make_fake_redis
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
 
 from songmaker_cli.auth_dependencies import (
     get_current_user,
@@ -18,9 +21,6 @@ from songmaker_cli.auth_dependencies import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_session, create_user
-from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
-from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 _TEST_SECRET = b"a" * 64
 
@@ -31,9 +31,10 @@ def _db(tmp_path: Path):
 
 
 def _build_auth_app(_db, redis=None):
-    from songmaker_cli.app_context import AppContext, get_db_session
     from webauth.config import installed_web_auth_config
     from webauth.session_store import SessionCache, install_session_cache
+
+    from songmaker_cli.app_context import AppContext, get_db_session
 
     if redis is None:
         redis = make_fake_redis()

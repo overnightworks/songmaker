@@ -11,6 +11,7 @@ from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.api_models import ChatTurnV2Request
@@ -18,7 +19,6 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
-from webauth.dependencies import AuthenticatedUser
 
 
 def _fake_user(user_id: str, role: str = "user"):
