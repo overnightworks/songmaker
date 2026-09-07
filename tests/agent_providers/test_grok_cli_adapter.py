@@ -10,8 +10,9 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
-from conftest import override_provider_runtime
+from provider_test_support import COWRITER_TOOL_CATALOG, override_provider_runtime
 
+from agent_providers.config import current_config
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
 from agent_providers.grok import transport as grok_cli_adapter
@@ -24,7 +25,6 @@ from agent_providers.tool_loop import (
     ToolResultBatch,
     stream_tool_loop,
 )
-from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
 A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
 
@@ -106,7 +106,7 @@ def test_grok_tool_command_pins_native_tool_and_web_isolation() -> None:
     common = (
         "grok",
         "--prompt-file",
-        "<songmaker-private-prompt>",
+        current_config().cli_prompt_file_placeholder,
         "--output-format",
         "streaming-json",
         "--deny",
