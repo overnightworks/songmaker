@@ -24,6 +24,7 @@ from agent_providers.errors import (
     SafeRouteReasonCode,
 )
 from agent_providers.events import AssistantTextEvent, FinalEvent, ToolCallEvent
+from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from agent_providers.tool_loop import (
     InitialTurn,
@@ -173,9 +174,13 @@ def _fixture_lines(name: str) -> list[bytes]:
     return [line.encode() + b"\n" for line in (_FIXTURES / name).read_text().splitlines()]
 
 
+_PNG_FIXTURE_SIZE = (300, 100)
+_PNG_FIXTURE_PIXELS = _PNG_FIXTURE_SIZE[0] * _PNG_FIXTURE_SIZE[1]
+
+
 def _png_bytes() -> bytes:
     output = BytesIO()
-    Image.new("RGB", (300, 100), (20, 80, 160)).save(output, format="PNG")
+    Image.new("RGB", _PNG_FIXTURE_SIZE, (20, 80, 160)).save(output, format="PNG")
     return output.getvalue()
 
 
@@ -553,25 +558,75 @@ def test_deadline_before_spawn_keeps_the_codex_slot_until_late_reap(monkeypatch)
     assert process_pool.reservation_count() == 0
 
 
-def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> None:
-    def create_image(codex_home: Path) -> None:
+def _generated_png_runner() -> object:
+    """A Codex run that leaves exactly one generated PNG in its private home."""
+    def run_cli_bounded(_command, **kwargs):
+        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
         artifact = codex_home / "generated_images" / "thread" / "cover.png"
         artifact.parent.mkdir(parents=True)
         artifact.write_bytes(_png_bytes())
-
-    def run_cli_bounded(_command, **kwargs):
-        codex_home = Path(kwargs["extra_env"]["CODEX_HOME"])
-        create_image(codex_home)
         outcome = _outcome(stdout=_image_event_stream(codex_home))
         kwargs["on_spawned"](1)
         kwargs["on_reaped"](1, False)
         return outcome
 
-    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
+    return run_cli_bounded
+
+
+def _host_image_policy(
+    *,
+    maximum_source_bytes: int = 8 * 1024 * 1024,
+    maximum_pixels: int = 20_000_000,
+    output_edge_pixels: int = 256,
+) -> ImagePolicy:
+    """A host's own image bounds, stated without songmaker's cover constants."""
+    return ImagePolicy(
+        maximum_source_bytes=maximum_source_bytes,
+        maximum_pixels=maximum_pixels,
+        output_edge_pixels=output_edge_pixels,
+        output_format="PNG",
+        output_signature=b"\x89PNG\r\n\x1a\n",
+    )
+
+
+def test_codex_cover_image_accepts_the_recorded_imagegen_stream(monkeypatch) -> None:
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _generated_png_runner())
 
     assert codex_image.generate_codex_cover_image(
         "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
     ).startswith(b"\x89PNG")
+
+
+def test_a_generated_image_is_returned_in_the_shape_the_host_asked_for(monkeypatch) -> None:
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _generated_png_runner())
+
+    payload = codex_image.generate_codex_cover_image(
+        "prompt",
+        policy=_host_image_policy(output_edge_pixels=64),
+        deadline=10_000_000,
+    )
+
+    with Image.open(BytesIO(payload)) as normalized:
+        assert (normalized.format, normalized.size) == ("PNG", (64, 64))
+
+
+@pytest.mark.parametrize(
+    "policy",
+    (
+        _host_image_policy(maximum_pixels=_PNG_FIXTURE_PIXELS - 1),
+        _host_image_policy(maximum_source_bytes=1),
+    ),
+    ids=("more-pixels-than-the-host-allows", "more-bytes-than-the-host-allows"),
+)
+def test_a_generated_image_outside_the_hosts_bounds_is_refused(
+    monkeypatch, policy: ImagePolicy,
+) -> None:
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", _generated_png_runner())
+
+    with pytest.raises(codex_image.CodexImageArtifactError):
+        codex_image.generate_codex_cover_image(
+            "prompt", policy=policy, deadline=10_000_000,
+        )
 
 
 @pytest.mark.parametrize(
