@@ -213,7 +213,7 @@ COWRITER_MAX_SUMMARY_CHARS = 12_000
 # the Claude judge's fallback until a judge_provider/judge_model pair is
 # configured (#315, get_judge_model()) — once that pair exists it takes over
 # and scoring_model has no further effect. The co-writer reads its live
-# catalog instead (cowriter/catalog.py). Retire this list with chat_api.py's
+# catalog instead (agent_providers/catalog.py). Retire this list with chat_api.py's
 # cleanup.
 MODEL_ALLOWED_CLAUDE = frozenset({
     "claude-opus-4-6",

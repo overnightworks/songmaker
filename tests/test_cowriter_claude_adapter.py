@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from agent_providers import tool_loop
+from agent_providers.claude import adapter as claude_adapter
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.events import (
     AssistantTextEvent,
@@ -20,8 +21,9 @@ from agent_providers.events import (
     ToolResultEvent,
 )
 from agent_providers.tool_loop import ToolOutcome
-from songmaker_cli.cowriter import claude_adapter
-from songmaker_cli.cowriter.tools import COWRITER_TOOLS, anthropic_tool_schemas
+from agent_providers.tools import anthropic_tool_schemas
+from songmaker_cli.cowriter import tools as cowriter_tools
+from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, COWRITER_TOOLS
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User
 from webauth.dependencies import AuthenticatedUser
@@ -144,18 +146,22 @@ def _turn_arguments(
     session: object | None = None,
     user: AuthenticatedUser | None = None,
 ) -> dict[str, object]:
+    bound_session = session or MagicMock()
+    bound_user = user or AuthenticatedUser(id="u", username="u", role="user", is_active=True)
     return {
         "api_key": "test-key",
         "system": "system",
         "model": "claude-test",
         "messages": [{"role": "user", "content": "hello"}],
-        "session": session or MagicMock(),
-        "user": user or AuthenticatedUser(id="u", username="u", role="user", is_active=True),
+        "executor": lambda name, arguments: cowriter_tools.execute_cowriter_tool(
+            bound_session, bound_user, name, arguments,
+        ),
+        "tool_schemas": anthropic_tool_schemas(COWRITER_TOOL_CATALOG),
     }
 
 
 def test_anthropic_schemas_derive_from_the_shared_tool_catalog() -> None:
-    schemas = anthropic_tool_schemas()
+    schemas = anthropic_tool_schemas(COWRITER_TOOL_CATALOG)
 
     assert [schema["name"] for schema in schemas] == [tool.name for tool in COWRITER_TOOLS]
     assert [schema["input_schema"] for schema in schemas] == [

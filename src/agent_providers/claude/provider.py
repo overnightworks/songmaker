@@ -1872,7 +1872,7 @@ def _call_cli(
     deadline: float | None = None,
 ) -> ClaudeResponse:
     """The tool-free CLI backend behind both ``call_claude()`` and the
-    lyrical-coherence judge (``claude_adapter.call_claude_once``).
+    lyrical-coherence judge (``claude.adapter.call_claude_once``).
 
     Every caller of this function carries content we did not write —
     lyrics, chat history, a Whisper transcript — into the CLI, so the

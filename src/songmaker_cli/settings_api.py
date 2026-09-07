@@ -92,7 +92,7 @@ from songmaker_cli.db.queries.settings import (
 from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
-    from songmaker_cli.cowriter.catalog import ProviderSnapshot, ProviderSurface
+    from songmaker_cli.provider_status import ProviderSnapshot, ProviderSurface
 
 router = APIRouter()
 
@@ -407,7 +407,7 @@ def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> list[ProviderStatusResponse]:
-    from songmaker_cli.cowriter.catalog import ProviderSurface, provider_snapshots
+    from songmaker_cli.provider_status import ProviderSurface, provider_snapshots
 
     snapshots = provider_snapshots()
     routes = get_effective_provider_routes(session)
@@ -430,13 +430,13 @@ def api_get_provider_status(
 
 def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
     """Project the one image-capability answer for every route of one provider."""
-    from songmaker_cli.cowriter.catalog import (
+    from agent_providers.catalog import (
         ProviderRoute,
         ProviderRouteCapability,
         ProviderRouteReadinessState,
         route_setup_label,
     )
-    from songmaker_cli.cowriter.dispatch import cover_image_capability
+    from agent_providers.dispatch import cover_image_capability
 
     readiness: dict[str, ProviderRouteReadiness] = {}
     for route in ProviderRoute:
@@ -464,14 +464,13 @@ def _surface_status_from_snapshot(
     snapshot: "ProviderSnapshot | None",
     selected_route: str | None = None,
 ) -> ProviderSurfaceStatus:
-    from songmaker_cli.cowriter.catalog import (
-        ApiKeyNeedsCliLoginProvider,
-        CliLoginNeedsApiKeyProvider,
-        ConfiguredProvider,
-        DependencyUnavailableProvider,
-        ProviderSurface,
-        UnconfiguredProvider,
+    from agent_providers.catalog import (
+        ProviderCapabilityMissing,
+        ProviderNeedsKey,
+        ProviderNotLoggedIn,
+        ProviderReady,
     )
+    from songmaker_cli.provider_status import ProviderSurface
 
     if snapshot is None:
         return ProviderSurfaceStatus(state=ProviderSurfaceState.UNVERIFIED)
@@ -495,14 +494,14 @@ def _surface_status_from_snapshot(
         )
     configuration = snapshot.cowriter if surface is ProviderSurface.CO_WRITER else snapshot.judge
     match configuration:
-        case ConfiguredProvider():
+        case ProviderReady():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.CONFIGURED,
                 setup_method=configuration.method.value,
                 environment_key=configuration.environment_key,
                 probed_at=snapshot.probed_at.isoformat(),
             )
-        case CliLoginNeedsApiKeyProvider():
+        case ProviderNeedsKey():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.CLI_LOGIN_NEEDS_API_KEY,
                 needs="api_key",
@@ -510,23 +509,16 @@ def _surface_status_from_snapshot(
                 environment_key=configuration.missing_environment_key,
                 probed_at=snapshot.probed_at.isoformat(),
             )
-        case ApiKeyNeedsCliLoginProvider():
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.API_KEY_NEEDS_CLI_LOGIN,
-                needs="cli_login",
-                setup_method="api_key",
-                probed_at=snapshot.probed_at.isoformat(),
-            )
-        case DependencyUnavailableProvider():
+        case ProviderCapabilityMissing():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.MISSING_DEPENDENCY,
                 missing_dependency=configuration.dependency,
                 probed_at=snapshot.probed_at.isoformat(),
             )
-        case UnconfiguredProvider():
+        case ProviderNotLoggedIn():
             return ProviderSurfaceStatus(
                 state=ProviderSurfaceState.UNCONFIGURED,
-                needs=configuration.need.value,
+                needs="api_key",
                 environment_key=configuration.missing_environment_key,
                 probed_at=snapshot.probed_at.isoformat(),
             )
@@ -539,7 +531,7 @@ def _live_catalogue(provider: str, route: str) -> list[str]:
     Empty when the catalogue is unavailable — an unverified provider, a failed
     listing, or a route the provider is not set up for all list nothing.
     """
-    from songmaker_cli.cowriter.catalog import provider_snapshot
+    from songmaker_cli.provider_status import provider_snapshot
 
     models, _unavailable = _models_from_route_snapshot(
         None, provider_snapshot(provider), route,
@@ -552,7 +544,7 @@ def _models_from_route_snapshot(
     snapshot: "ProviderSnapshot | None",
     route: str,
 ) -> tuple[list[str], str | None]:
-    from songmaker_cli.cowriter.catalog import models_with_active_model
+    from agent_providers.catalog import models_with_active_model
 
     if snapshot is None:
         return [], "Provider model catalog is unverified"
@@ -574,7 +566,7 @@ def _provider_probe_times(
 
 
 def _cowriter_response(session) -> CowriterSettingsResponse:
-    from songmaker_cli.cowriter.catalog import provider_snapshots
+    from songmaker_cli.provider_status import provider_snapshots
 
     provider = get_cowriter_provider(session)
     model = get_cowriter_model(session, provider)
@@ -624,7 +616,7 @@ def _route_statuses(
     snapshot: "ProviderSnapshot | None",
     active_model: str | None,
 ) -> dict[str, ProviderRouteStatusResponse]:
-    from songmaker_cli.cowriter.catalog import (
+    from agent_providers.catalog import (
         ProviderRoute,
         ProviderRouteReadinessState,
         models_with_active_model,
@@ -762,7 +754,7 @@ def _cowriter_routes(session: Session, req: CowriterSettingsRequest) -> dict[str
 
 
 def _judge_response(session: Session) -> JudgeSettingsResponse:
-    from songmaker_cli.cowriter.catalog import provider_snapshots
+    from songmaker_cli.provider_status import provider_snapshots
 
     provider = get_judge_provider(session)
     model = get_judge_model(session, provider)
@@ -862,7 +854,7 @@ def api_set_cover_settings(
     session: Session = Depends(get_db_session),
 ) -> CoverSettingsResponse:
     """Persist the cover selection, including one no route can currently run."""
-    from songmaker_cli.cowriter.catalog import ProviderRoute
+    from agent_providers.catalog import ProviderRoute
 
     if req.provider not in COWRITER_PROVIDERS:
         raise HTTPException(422, f"Unknown cover provider '{req.provider}'")

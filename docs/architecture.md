@@ -579,14 +579,15 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
-| Co-writer | Dispatches the selected Claude, Grok, or Codex provider; the judge is configured separately | `cowriter/dispatch.py`, `cowriter/catalog.py`, `cowriter/*_adapter.py` |
+| Co-writer | Binds the musician's session and tools to the provider route the library then runs; the judge is configured separately | `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
 
 `db/queries/settings.py` owns the complete instance-wide Co-Writer route map
 and the independent Cover and Judge selections. Each task captures its provider,
-model, and explicit `cli` or `api` route before work begins. `cowriter/dispatch.py`
+model, and explicit `cli` or `api` route before work begins.
+`agent_providers/dispatch.py`
 owns the resulting adapter decision for all three: Co-Writer executes its
 selected route, the Judge calls its selected API adapter through
 `call_provider_once`, and Cover asks `cover_image_capability(provider, route)`,
@@ -596,7 +597,8 @@ it, `/api/settings/providers` projects it per route as `cover_routes`, and no
 endpoint preflights the mounted CLI on its own. A selected route never falls
 back to its sibling, so a Cover selection without an image tool ends its job
 named (`<Provider> · no image tool`) instead of quietly running Codex.
-`cowriter/catalog.py` refreshes both routes per provider independently; the
+`agent_providers/catalog.py` probes both routes per provider independently and
+`provider_status.py` refreshes and caches one snapshot per provider; the
 Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
@@ -642,7 +644,7 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak, `errors.py` owns the named route failures every transport raises, `images.py` owns the `ImagePolicy` port the host lends the image route, `grok/transport.py` owns the Grok CLI turn, and `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover image turn (`image.py`); the sandbox blocks move in slice by slice |
+| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak, `errors.py` owns the named route failures every transport raises, `catalog.py` owns the per-route model listing and the four-case provider setup answer, `dispatch.py` owns running one named route with the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py` own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port the host lends the image route, `grok/transport.py` owns the Grok CLI turn, and `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover image turn (`image.py`); the sandbox blocks move in slice by slice |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 | `webauth` | Auth layer (sessions, cookies, rate limits, audit), extracted into its own distribution by #825; `config.py` owns the `WebAuthConfig` the host installs, `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity decision, `ports.py` names the stores the host supplies, `policies.py` names the four request policies it supplies, `session_store.py` owns the Redis session cache, `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF, body-size and security-header middlewares, `dependencies.py` the `current_user_dependency` factory that yields the account, admin, and verified-session-id dependencies, `login.py` the transaction-free parts of signing in and out (cookie issuing and clearing, the attempt limits, the constant-time credential check); the login route with its advisory lock stays in the application |
 

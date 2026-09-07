@@ -648,7 +648,7 @@ def test_chat_turn_marks_job_cancelled_when_stream_generator_closes(client):
                 "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
                 _keep_heartbeat,
             ), patch(
-                "songmaker_cli.cowriter.claude_adapter.acall_claude_with_mcp_stream",
+                "agent_providers.claude.adapter.acall_claude_with_mcp_stream",
                 _acall,
             ):
                 response = await api_chat_turn(

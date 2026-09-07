@@ -216,7 +216,7 @@ async def provider_status_refresh_loop(app: FastAPI) -> None:
         CLI_LOGIN_STATUS_CACHE_SECONDS,
         COWRITER_PROVIDERS,
     )
-    from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
+    from songmaker_cli.provider_status import refresh_provider_snapshot
 
     registry = background_loop_registry(app)
     while True:

@@ -655,7 +655,7 @@ def _claude_answers(text: str) -> object:
     from agent_providers.claude.provider import ClaudeResponse
 
     return patch(
-        "songmaker_cli.cowriter.claude_adapter.call_claude",
+        "agent_providers.claude.adapter.call_claude",
         return_value=ClaudeResponse(text=text),
     )
 
@@ -719,7 +719,7 @@ def test_judge_records_claudes_verdict_alongside_the_childs_scores() -> None:
 
 def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     with patch(
-        "songmaker_cli.cowriter.claude_adapter.call_claude",
+        "agent_providers.claude.adapter.call_claude",
         side_effect=RuntimeError("Claude unreachable"),
     ):
         judged = _judge(
@@ -751,7 +751,7 @@ def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budge
 
     with (
         patch(
-            "songmaker_cli.cowriter.claude_adapter.call_claude",
+            "agent_providers.claude.adapter.call_claude",
             side_effect=ignores_timeout,
         ),
         patch(
@@ -805,10 +805,10 @@ def test_judge_routes_to_the_configured_provider_and_no_other() -> None:
 
     with (
         patch(
-            "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
+            "agent_providers.dispatch.call_openai_compatible_once",
             return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
         ) as grok_call,
-        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+        patch("agent_providers.claude.adapter.call_claude") as claude_call,
     ):
         judged = _judge(
             _child_result("hello world"),
@@ -829,7 +829,7 @@ def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured() -> None:
     a silent fallback to Claude (#315)."""
     override_provider_runtime(xai_api_key=None)
 
-    with patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call:
+    with patch("agent_providers.claude.adapter.call_claude") as claude_call:
         judged = _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
