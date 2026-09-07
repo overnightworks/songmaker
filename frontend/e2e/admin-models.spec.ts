@@ -100,7 +100,7 @@ function modelSelect(page: Page, task: string): Locator {
 /**
  * A task's row and the table's header row. Both are grids of cells rather than
  * landmarks, so neither has an accessible name of its own to ask for -- two of
- * the three structural selectors this file uses. A row is narrowed by the task's own
+ * the four structural selectors this file uses. A row is narrowed by the task's own
  * labelled controls, so it can never match a neighbouring task.
  */
 function taskRow(page: Page, task: string): Locator {
@@ -119,6 +119,40 @@ function columnHeader(page: Page, column: string): Locator {
  */
 function taskStatus(page: Page, task: string): Locator {
 	return taskRow(page, task).locator('.st');
+}
+
+/**
+ * The closed provider field -- the box a person reads before opening the list.
+ * It is drawn beside the native select rather than being it (#883), because a
+ * native select can only show its selected option's own text and that text
+ * carries the option's state. Being decoration for the screen reader, it has no
+ * role to ask for, which makes it the fourth and last structural selector here.
+ */
+function providerField(page: Page, task: string): Locator {
+	return taskRow(page, task).locator('.pick-face');
+}
+
+/**
+ * Both halves of #820 line 5 in one measurement: the closed field reads as the
+ * provider's bare name with nothing cut off it, while the option that field
+ * stands for still carries that provider's state. This is the sentence M3 broke
+ * -- "Claude · needs its API k" -- so it is asked at every width the operator
+ * works at rather than once.
+ */
+async function expectProviderNameShownWhole(page: Page, task: string): Promise<void> {
+	const field = providerField(page, task);
+	await expect(field).toBeVisible();
+
+	const shown = ((await field.textContent()) ?? '').trim();
+	const chosen = (
+		(await providerSelect(page, task).locator('option:checked').textContent()) ?? ''
+	).trim();
+	expect(chosen.startsWith(shown)).toBe(true);
+	expect(chosen.length).toBeGreaterThan(shown.length);
+
+	// Whatever the field holds, it renders all of it: nothing overflows its box,
+	// so nothing is clipped or replaced by an ellipsis.
+	expect(await field.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 }
 
 async function expectSaved(page: Page, task: string): Promise<void> {
@@ -215,6 +249,13 @@ test('the Models table keeps every task, route, model and status on screen at ev
 			await expect(columnHeader(page, column)).toBeInViewport();
 		}
 		await expect(scoringStatus).toBeInViewport();
+		for (const task of [
+			MODELS_TASK_COWRITER_LABEL,
+			MODELS_TASK_COVER_LABEL,
+			MODELS_TASK_SCORING_LABEL
+		]) {
+			await expectProviderNameShownWhole(page, task);
+		}
 		await expectNoSidewaysScroll(page);
 		await attachShot(page, testInfo, `admin-models-${width}`);
 	}
@@ -239,15 +280,21 @@ test('a task keeps the provider it was given, even one no route can run', async 
 	const options = await cover
 		.locator('option')
 		.evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
-	const next = options.find((option) => option !== before);
-	expect(next, 'the Cover row offers more than one provider').toBeTruthy();
+	const chosen = options.indexOf(before);
+	const neighbour = chosen + 1 < options.length ? chosen + 1 : chosen - 1;
+	expect(options[neighbour], 'the Cover row offers more than one provider').toBeTruthy();
 
 	try {
-		await cover.selectOption(next as string);
+		// Chosen from the keyboard, because the box a person reads is drawn beside
+		// the native select rather than being it (#883): only a select that still
+		// takes focus and still answers the arrow keys can be driven this way.
+		await cover.focus();
+		await page.keyboard.press(neighbour > chosen ? 'ArrowDown' : 'ArrowUp');
+		await expect(cover).toHaveValue(options[neighbour]);
 		await expectSaved(page, MODELS_TASK_COVER_LABEL);
 
 		await openModelsTab(page);
-		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(next as string);
+		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(options[neighbour]);
 	} finally {
 		// The selection is instance-wide and outlives the test, so it is put back
 		// through the same control: `album-cover.spec.ts` runs against this stack
@@ -323,6 +370,16 @@ test('at 375px every task is a card with its own labelled lines', async ({
 	await expect(scoringStatus).toContainText(MODELS_STATUS_NEEDS_API_KEY_LABEL);
 	await scoringStatus.scrollIntoViewIfNeeded();
 	await expect(scoringStatus).toBeInViewport();
+
+	// The narrowest provider column there is, and the name still stands in it
+	// whole (#820, line 5; #883).
+	for (const task of [
+		MODELS_TASK_COWRITER_LABEL,
+		MODELS_TASK_COVER_LABEL,
+		MODELS_TASK_SCORING_LABEL
+	]) {
+		await expectProviderNameShownWhole(page, task);
+	}
 
 	await expectNoSidewaysScroll(page);
 	await attachShot(page, testInfo, 'admin-models-375', true);
