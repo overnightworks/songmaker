@@ -1130,6 +1130,34 @@ wheels = [
 ]
 
 [[package]]
+name = "overnightworks-webauth"
+version = "0.1.0"
+source = { url = "https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "bcrypt" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "redis" },
+]
+wheels = [
+    { url = "https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl", hash = "sha256:35bd36c8da42d19542f14b08bb76c1a787d02b78e96452a0e76a0256690582cc" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bcrypt", specifier = ">=4.0,<6" },
+    { name = "fakeredis", extras = ["lua"], marker = "extra == 'dev'", specifier = ">=2,<3" },
+    { name = "fastapi", specifier = ">=0.100,<1" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<1" },
+    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2,<3" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<10" },
+    { name = "redis", specifier = ">=5.0,<9" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "packaging"
 version = "24.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1682,6 +1710,7 @@ server = [
     { name = "bcrypt" },
     { name = "fastapi" },
     { name = "mutagen" },
+    { name = "overnightworks-webauth" },
     { name = "psycopg2-binary" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
@@ -1722,6 +1751,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "nvidia-ml-py3", marker = "extra == 'scoring'", specifier = ">=7.352,<8" },
+    { name = "overnightworks-webauth", marker = "extra == 'server'", url = "https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },
