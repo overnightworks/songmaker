@@ -88,10 +88,17 @@ const ACCOUNT_PASSWORD = 'E2eFlows!2026';
 const WRONG_PASSWORD = 'E2eFlows!2025';
 
 // The words the person reads, from `stores/auth.ts` and the pages themselves.
-// The store collapses both of the server's 429 details into one line, so the
-// spec reads the distinction off the response instead of the screen.
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid username or password.';
 const REFUSED_LOGIN_MESSAGE = 'Too many attempts. Try again later.';
+// The store collapses both of the server's 429 details into this one line, so
+// the screen cannot say which refusal arrived. The lockout flow is about the
+// per-account one (`ACCOUNT_LOCKED_DETAIL`, `webauth/login.py`) and reads that
+// off the response body -- otherwise a stack whose per-IP budget trips first
+// (`TOO_MANY_LOGIN_ATTEMPTS_DETAIL`; production's 5 is below the lockout's 15)
+// would answer 429 too and the flow would pass having proved the other
+// sentence.
+const ACCOUNT_LOCKED_DETAIL =
+	'Account temporarily locked due to repeated failed attempts. Try again later.';
 const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
 const LOGOUT_LABEL = 'Logout';
 const SUBMIT_LABEL = 'Enter';
@@ -191,6 +198,12 @@ async function sessionCookie(context: BrowserContext): Promise<Cookie | undefine
 /** The signed cookie is `<session id>.<hmac>` (`webauth/cookies.py`). */
 function sessionIdOf(cookie: Cookie): string {
 	return cookie.value.slice(0, cookie.value.lastIndexOf('.'));
+}
+
+/** The refusal the lockout flow is about, named by the server itself. */
+async function expectAccountLocked(refusal: Response): Promise<void> {
+	expect(refusal.status()).toBe(429);
+	expect((await refusal.json()).detail).toBe(ACCOUNT_LOCKED_DETAIL);
 }
 
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
@@ -321,14 +334,26 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 	await expect(page.getByText(REFUSED_LOGIN_MESSAGE)).toBeVisible();
 	await attachShot(page, testInfo, 'auth-locked-out');
 
-	// The refusal names how long it stands, and the right password does not get
-	// past it either -- the lock is on the account, not on the typing.
+	// Which refusal this is, from the server's own words rather than from the
+	// one line the store shows for either.
+	await expectAccountLocked(refusal as Response);
+
+	// It names how long it stands, and the right password does not get past it
+	// either -- the lock is on the account, not on the typing.
 	const retryAfter = Number((refusal as Response).headers()['retry-after']);
 	expect(Number.isInteger(retryAfter)).toBe(true);
 	expect(retryAfter).toBeGreaterThan(0);
-	expect((await submitLogin(page, account.username, account.password)).status()).toBe(429);
+	await expectAccountLocked(await submitLogin(page, account.username, account.password));
 
 	if (retryAfter > MAX_HONOURED_RETRY_AFTER_SECONDS) {
+		// Locally a stack may state an hour, and a run does not sit that out. In
+		// CI it means the stack is not configured as this flow needs, and a
+		// half-driven flow that still reports green is worse than a red one.
+		if (process.env.CI) {
+			throw new Error(
+				`the stack states a ${retryAfter}s lockout, more than a run honours — check the LOGIN_LOCKOUT_* overrides in docker/docker-compose.ci.yml`
+			);
+		}
 		testInfo.annotations.push({
 			type: 'not driven',
 			description: `the stack states ${retryAfter}s; a run honours a wait, it does not sit one out`
