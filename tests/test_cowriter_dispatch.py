@@ -679,20 +679,38 @@ def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_atte
 # cover routes are pinned by ``test_only_the_codex_cli_route_owns_an_image_tool``
 # and ``test_the_saved_cover_selection_resolves_to_its_route_and_model`` above.
 
+# One distinct key per provider, so a route that reached the right transport
+# with someone else's key fails the pin instead of passing it.
+_ANTHROPIC_KEY: Final = "anthropic-only-key"
+_XAI_KEY: Final = "xai-only-key"
+_OPENAI_KEY: Final = "openai-only-key"
+
+# A CLI route spends a subscription login, never a key, so it must be handed
+# none — that is the answer these rows pin.
 _COWRITER_ROUTE_TARGETS: Final = (
-    ("claude", ProviderRoute.CLI, "stream_claude_turn"),
-    ("claude", ProviderRoute.API, "stream_claude_api_turn"),
-    ("grok", ProviderRoute.CLI, "GrokCliToolTransport"),
-    ("grok", ProviderRoute.API, "stream_openai_compatible_turn"),
-    ("codex", ProviderRoute.CLI, "CodexCliToolTransport"),
-    ("codex", ProviderRoute.API, "stream_openai_compatible_turn"),
+    ("claude", ProviderRoute.CLI, "stream_claude_turn", None),
+    ("claude", ProviderRoute.API, "stream_claude_api_turn", _ANTHROPIC_KEY),
+    ("grok", ProviderRoute.CLI, "GrokCliToolTransport", None),
+    ("grok", ProviderRoute.API, "stream_openai_compatible_turn", _XAI_KEY),
+    ("codex", ProviderRoute.CLI, "CodexCliToolTransport", None),
+    ("codex", ProviderRoute.API, "stream_openai_compatible_turn", _OPENAI_KEY),
 )
 
+# ``call_claude_once`` reads the installed configuration itself, so it is
+# handed no key of its own.
 _JUDGE_ROUTE_TARGETS: Final = (
-    ("claude", "call_claude_once", None),
-    ("grok", "call_openai_compatible_once", COWRITER_GROK_CHAT_URL),
-    ("codex", "call_openai_compatible_once", COWRITER_OPENAI_CHAT_URL),
+    ("claude", "call_claude_once", None, None),
+    ("grok", "call_openai_compatible_once", COWRITER_GROK_CHAT_URL, _XAI_KEY),
+    ("codex", "call_openai_compatible_once", COWRITER_OPENAI_CHAT_URL, _OPENAI_KEY),
 )
+
+
+def _configure_one_key_per_provider() -> None:
+    override_provider_runtime(
+        anthropic_api_key=_ANTHROPIC_KEY,
+        xai_api_key=_XAI_KEY,
+        openai_api_key=_OPENAI_KEY,
+    )
 
 
 class _FinishingTransport:
@@ -703,21 +721,21 @@ class _FinishingTransport:
         pass
 
 
-def _record_every_cowriter_route(monkeypatch) -> list[str]:
-    """Replace every transport entry point with one that only names itself."""
-    taken: list[str] = []
+def _record_every_cowriter_route(monkeypatch) -> list[tuple[str, str | None]]:
+    """Replace every transport entry point with one that names itself and its key."""
+    taken: list[tuple[str, str | None]] = []
 
     def _empty_stream(name):
-        async def _stream(**_kwargs):
-            taken.append(name)
+        async def _stream(**kwargs):
+            taken.append((name, kwargs.get("api_key")))
             return
             yield  # pragma: no cover
 
         return _stream
 
     def _transport(name):
-        def _factory(**_kwargs):
-            taken.append(name)
+        def _factory(**kwargs):
+            taken.append((name, kwargs.get("api_key")))
             return _FinishingTransport()
 
         return _factory
@@ -730,33 +748,39 @@ def _record_every_cowriter_route(monkeypatch) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    ("provider", "route", "expected_target"), _COWRITER_ROUTE_TARGETS,
+    ("provider", "route", "expected_target", "expected_key"), _COWRITER_ROUTE_TARGETS,
 )
 def test_every_saved_cowriter_route_selects_exactly_one_transport(
-    monkeypatch, provider: str, route: ProviderRoute, expected_target: str,
+    monkeypatch,
+    provider: str,
+    route: ProviderRoute,
+    expected_target: str,
+    expected_key: str | None,
 ) -> None:
-    override_provider_runtime(
-        anthropic_api_key="test-key", xai_api_key="test-key", openai_api_key="test-key",
-    )
+    _configure_one_key_per_provider()
     taken = _record_every_cowriter_route(monkeypatch)
 
     asyncio.run(_events(provider, route))
 
-    assert taken == [expected_target]
+    assert taken == [(expected_target, expected_key)]
 
 
-@pytest.mark.parametrize(("provider", "expected_target", "expected_url"), _JUDGE_ROUTE_TARGETS)
+@pytest.mark.parametrize(
+    ("provider", "expected_target", "expected_url", "expected_key"), _JUDGE_ROUTE_TARGETS,
+)
 def test_every_judge_provider_selects_exactly_one_api_adapter(
-    monkeypatch, provider: str, expected_target: str, expected_url: str | None,
+    monkeypatch,
+    provider: str,
+    expected_target: str,
+    expected_url: str | None,
+    expected_key: str | None,
 ) -> None:
-    override_provider_runtime(
-        anthropic_api_key="test-key", xai_api_key="test-key", openai_api_key="test-key",
-    )
-    taken: list[tuple[str, str | None]] = []
+    _configure_one_key_per_provider()
+    taken: list[tuple[str, str | None, str | None]] = []
 
     def _record(name):
         def _call(**kwargs):
-            taken.append((name, kwargs.get("api_url")))
+            taken.append((name, kwargs.get("api_url"), kwargs.get("api_key")))
             return "verdict"
 
         return _call
@@ -767,4 +791,4 @@ def test_every_judge_provider_selects_exactly_one_api_adapter(
     assert dispatch.call_provider_once(
         provider=provider, model="model", prompt="prompt", timeout=5,
     ) == "verdict"
-    assert taken == [(expected_target, expected_url)]
+    assert taken == [(expected_target, expected_url, expected_key)]
