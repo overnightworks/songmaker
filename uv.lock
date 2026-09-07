@@ -1130,6 +1130,32 @@ wheels = [
 ]
 
 [[package]]
+name = "overnightworks-agent-providers"
+version = "0.1.0"
+source = { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.0/overnightworks_agent_providers-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+wheels = [
+    { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.0/overnightworks_agent_providers-0.1.0-py3-none-any.whl", hash = "sha256:abd5ae053a4413a5bb3d8ed6b13ac0e455a72b7f7e44a9dfed1f3fdad8e6e433" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.26,<2" },
+    { name = "anyio", specifier = ">=4,<5" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2,<3" },
+    { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<10" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
+]
+provides-extras = ["api", "image", "dev"]
+
+[[package]]
 name = "overnightworks-webauth"
 version = "0.1.0"
 source = { url = "https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl" }
@@ -1710,6 +1736,7 @@ server = [
     { name = "bcrypt" },
     { name = "fastapi" },
     { name = "mutagen" },
+    { name = "overnightworks-agent-providers" },
     { name = "overnightworks-webauth" },
     { name = "psycopg2-binary" },
     { name = "python-dotenv" },
@@ -1751,6 +1778,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "nvidia-ml-py3", marker = "extra == 'scoring'", specifier = ">=7.352,<8" },
+    { name = "overnightworks-agent-providers", marker = "extra == 'server'", url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.0/overnightworks_agent_providers-0.1.0-py3-none-any.whl" },
     { name = "overnightworks-webauth", marker = "extra == 'server'", url = "https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },

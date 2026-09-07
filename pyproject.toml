@@ -51,6 +51,10 @@ server = [
     # release wheel of an immutable tag, because the slim images have no git
     # and the acestep-worker installs with --require-hashes.
     "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl",
+    # The provider layer lives in its own repository since #886. Bare in the
+    # server extra so its api/image capabilities do not leak anthropic into the
+    # music worker or Pillow into the scoring worker (A8).
+    "overnightworks-agent-providers @ https://github.com/overnightworks/agent-providers/releases/download/v0.1.0/overnightworks_agent_providers-0.1.0-py3-none-any.whl",
 ]
 # The provider layer's two optional capabilities (issue #825): its HTTP-API
 # routes and the Claude SDK, and the image route that normalizes a generated
@@ -100,7 +104,6 @@ where = ["src"]
 include = [
     "acestep_engine*",
     "acestep_worker*",
-    "agent_providers*",
     "audio_engine*",
     "songmaker_cli*",
 ]

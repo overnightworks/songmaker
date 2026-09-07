@@ -644,7 +644,6 @@ events.
 | Package | Purpose |
 |---------|---------|
 | `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `agent_providers` | Provider layer for the agent CLIs and APIs, extracted into its own distribution by #825; `events.py` owns the streamed turn events every transport yields, `config.py` owns the `ProviderRuntimeConfig` the host installs, `constants.py` owns the mechanics that are the same in every deployment, `process.py` owns the one bounded CLI process layer, `claude/provider.py` owns the Claude CLI and API backends with their tool-surface gate, `tools.py` owns the `ToolCatalog` port the host lends it, `tool_loop.py` owns the transport-independent tool loop and `text_tool_protocol.py` the text wire format both subscription CLIs speak, `errors.py` owns the named route failures every transport raises, `catalog.py` owns the per-route model listing and the four-case provider setup answer, `dispatch.py` owns running one named route with the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py` own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port the host lends the image route, `grok/transport.py` owns the Grok CLI turn, and `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover image turn (`image.py`), and `sandbox/paths.py` owns the private directory names both Codex turns and the host's mount policy have to agree on — songmaker's AppArmor profile spells them and a test holds it to that module, so an embedding project derives its profile from the library instead of guessing it |
 | `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 
 ### The auth library (`webauth`, external)
@@ -690,6 +689,39 @@ CSRF-protected and token-exempt routes, the upload routes that may exceed the
 JSON body cap, and the CSP line with its inline-script hashes and cacheability
 rules. `server.create_app` hands each policy to the middleware that reads it;
 no middleware reads songmaker's settings.
+
+### The provider library (`agent_providers`, external)
+
+The provider layer left this repository with #886. It ships as the distribution
+`overnightworks-agent-providers` from
+[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
+and is pinned in the `server` extra to the release wheel of tag `v0.1.0`;
+`uv.lock` records that wheel's hash, so every image installs the same bytes and
+no image needs `git`. The pin is bare — not `[api,image]` in its brackets — so
+the library's own optional capabilities never leak `anthropic` into the music
+worker or Pillow into the scoring worker. The import package is still
+`agent_providers`, so nothing in `songmaker_cli` changed when the source moved.
+Its own tests moved with it.
+
+Inside the library, `events.py` owns the streamed turn events every transport
+yields, `config.py` owns the `ProviderRuntimeConfig` the host installs,
+`constants.py` owns the mechanics that are the same in every deployment,
+`process.py` owns the one bounded CLI process layer, `claude/provider.py` owns
+the Claude CLI and API backends with their tool-surface gate, `tools.py` owns
+the `ToolCatalog` port the host lends it, `tool_loop.py` owns the
+transport-independent tool loop and `text_tool_protocol.py` the text wire format
+both subscription CLIs speak, `errors.py` owns the named route failures every
+transport raises, `catalog.py` owns the per-route model listing and the
+four-case provider setup answer, `dispatch.py` owns running one named route with
+the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py`
+own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port the
+host lends the image route, `grok/transport.py` owns the Grok CLI turn, and
+`codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes
+share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover
+image turn (`image.py`), and `sandbox/paths.py` owns the private directory names
+both Codex turns and the host's mount policy have to agree on — songmaker's
+AppArmor profile spells them and a test holds it to that module, so an embedding
+project derives its profile from the library instead of guessing it.
 
 The provider layer never reads songmaker's settings. Its binaries, credential
 mirrors, mounted Codex resources, chat model, API keys, process caps, the
@@ -815,7 +847,7 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `MODEL_ALLOWED_CLAUDE` | Stay | Allow-list of the legacy `/settings/claude-models` endpoint. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
-These packages and `acestep_worker` never import `songmaker_cli` — the dependency runs one way. `agent_providers` never imports the external `webauth` either; because `include_external_packages` is on, `.importlinter` checks that direction against the installed distribution, while webauth's own boundaries are contracted in its repository. CI's `lint-imports` step breaks the build on a violation, reading the real import graph rather than grepping the package directories.
+The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `agent_providers` and `webauth` are now installed distributions rather than directories under `src/`, and their own boundaries are contracted in their repositories; because `include_external_packages` is on, `.importlinter` still resolves them in songmaker's real import graph. CI's `lint-imports` step breaks the build on a violation, reading that graph rather than grepping the package directories.
 
 ## Data Model
 
