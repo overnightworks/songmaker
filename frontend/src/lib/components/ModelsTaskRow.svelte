@@ -124,6 +124,7 @@
 	const providerName = $derived(providerView?.label ?? current.provider);
 	const routeView = $derived(providerView?.routes[current.route]);
 	const modelOptions = $derived(modelOptionsOf(routeView?.models ?? [], current.model));
+	const noModels = $derived(modelOptions.length === 0);
 	const status = $derived(statusOf());
 	const routeReasons = $derived(reasonsOf());
 	const modelsHint = $derived(modelsHintOf());
@@ -151,7 +152,7 @@
 	}
 
 	function modelsHintOf(): string | null {
-		if (modelOptions.length > 0) return null;
+		if (!noModels) return null;
 		const reason = routeView?.reason;
 		if (!reason) return routeView?.modelsReason ?? null;
 		if (reason.code === 'api_key_not_set') return MODELS_LIST_NEEDS_KEY_HINT;
@@ -322,23 +323,26 @@
 
 	<div class="cell">
 		<span class="k" aria-hidden="true">{MODELS_COLUMN_MODEL_LABEL}</span>
-		<select
-			class="sel"
-			class:off={modelOptions.length === 0}
-			aria-label={`${task} ${MODELS_COLUMN_MODEL_LABEL.toLowerCase()}`}
-			aria-describedby={modelsHint !== null ? modelsHintId : undefined}
-			value={current.model}
-			disabled={modelOptions.length === 0}
-			onchange={(event) => chooseModel(event.currentTarget.value)}
-		>
-			{#if modelOptions.length === 0}
-				<option value="">{MODELS_NO_MODELS_LABEL}</option>
-			{:else}
-				{#each modelOptions as model (model)}
-					<option value={model}>{model}</option>
-				{/each}
-			{/if}
-		</select>
+		<div class="pick">
+			<select
+				aria-label={`${task} ${MODELS_COLUMN_MODEL_LABEL.toLowerCase()}`}
+				aria-describedby={modelsHint !== null ? modelsHintId : undefined}
+				value={current.model}
+				disabled={noModels}
+				onchange={(event) => chooseModel(event.currentTarget.value)}
+			>
+				{#if noModels}
+					<option value="">{MODELS_NO_MODELS_LABEL}</option>
+				{:else}
+					{#each modelOptions as model (model)}
+						<option value={model}>{model}</option>
+					{/each}
+				{/if}
+			</select>
+			<span class="pick-face" class:off={noModels} aria-hidden="true"
+				>{noModels ? MODELS_NO_MODELS_LABEL : current.model}</span
+			>
+		</div>
 		{#if modelsHint !== null}
 			<small class="hint" id={modelsHintId}>{modelsHint}</small>
 		{/if}
@@ -419,7 +423,9 @@
 	   Chromium: markup inside an <option> is flattened back into that text, and
 	   a `title` reaches neither the list nor the accessible name -- so the field
 	   a person reads is drawn here and the native control keeps the interaction,
-	   transparent on top of it and still the focus target. */
+	   transparent on top of it and still the focus target. The model field is
+	   drawn the same way, having no state to move but the picture's one caret to
+	   share: two dropdowns side by side in a row cannot wear different glyphs. */
 	.pick {
 		position: relative;
 		min-width: 0;
@@ -431,6 +437,9 @@
 		height: 100%;
 		opacity: 0;
 		cursor: pointer;
+	}
+	.pick select:disabled {
+		cursor: default;
 	}
 	.pick-face {
 		display: flex;
@@ -448,8 +457,7 @@
 		outline-offset: 1px;
 	}
 
-	.pick-face,
-	.sel {
+	.pick-face {
 		width: 100%;
 		padding: 0.34rem 0.45rem;
 		border: 1px solid var(--border);
@@ -458,7 +466,7 @@
 		color: var(--text);
 		font-size: 0.8rem;
 	}
-	.sel.off {
+	.pick-face.off {
 		border-style: dashed;
 		color: var(--text-muted);
 	}

@@ -110,9 +110,15 @@ function optionLabels(select: HTMLSelectElement): string[] {
 	return Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
 }
 
-/** What the closed provider field reads as, the way a person sees it. */
-function providerFieldText(root: ParentNode): string {
-	return requireElement(root, '.pick-face').textContent?.trim() ?? '';
+/** The box drawn beside a select, inside the same `.pick` -- what a person reads. */
+function fieldOf(select: HTMLSelectElement): HTMLElement {
+	const pick = select.parentElement;
+	if (!pick) throw new Error('Expected the select to sit in its field');
+	return requireElement<HTMLElement>(pick, '.pick-face');
+}
+
+function fieldText(root: ParentNode, column: string): string {
+	return fieldOf(selectNamed(root, column)).textContent?.trim() ?? '';
 }
 
 function routeButton(root: ParentNode, route: ModelsRouteKey): HTMLButtonElement {
@@ -170,7 +176,7 @@ describe('models task row', () => {
 	it('reads as the provider name alone while the states stay in the options', async () => {
 		const target = await renderRow();
 
-		expect(providerFieldText(target)).toBe('Claude');
+		expect(fieldText(target, 'provider')).toBe('Claude');
 		expect(optionLabels(selectNamed(target, 'provider'))).toContain('Claude ✓ ready');
 	});
 
@@ -179,7 +185,7 @@ describe('models task row', () => {
 
 		await choose(selectNamed(target, 'provider'), 'grok');
 
-		expect(providerFieldText(target)).toBe('Grok');
+		expect(fieldText(target, 'provider')).toBe('Grok');
 		expect(selectNamed(target, 'provider').value).toBe('grok');
 	});
 
@@ -190,7 +196,7 @@ describe('models task row', () => {
 		const providers = selectNamed(target, 'provider');
 		providers.focus();
 		expect(document.activeElement).toBe(providers);
-		expect(requireElement(target, '.pick-face').getAttribute('aria-hidden')).toBe('true');
+		expect(fieldOf(providers).getAttribute('aria-hidden')).toBe('true');
 
 		await choose(providers, 'grok');
 
@@ -256,6 +262,15 @@ describe('models task row', () => {
 		const models = selectNamed(target, 'model');
 		expect(optionLabels(models)).toEqual([MODELS_NO_MODELS_LABEL]);
 		expect(models.disabled).toBe(true);
+		expect(fieldText(target, 'model')).toBe(MODELS_NO_MODELS_LABEL);
+		expect(fieldOf(models).classList.contains('off')).toBe(true);
+	});
+
+	it('reads as the model it is set to, in the same field shape as the provider', async () => {
+		const target = await renderRow();
+
+		expect(fieldText(target, 'model')).toBe('opus');
+		expect(fieldOf(selectNamed(target, 'model')).classList.contains('off')).toBe(false);
 	});
 
 	it.each([

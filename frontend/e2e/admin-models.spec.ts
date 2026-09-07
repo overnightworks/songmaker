@@ -122,14 +122,25 @@ function taskStatus(page: Page, task: string): Locator {
 }
 
 /**
- * The closed provider field -- the box a person reads before opening the list.
- * It is drawn beside the native select rather than being it (#883), because a
- * native select can only show its selected option's own text and that text
- * carries the option's state. Being decoration for the screen reader, it has no
- * role to ask for, which makes it the fourth and last structural selector here.
+ * The box a person reads for a select -- drawn beside the native control inside
+ * the same field, rather than being it (#883), because a native select can only
+ * show its selected option's own text and the provider's options carry their
+ * state in that text. Both selects in a row are built this way, so both wear the
+ * picture's one caret. Being decoration for the screen reader it has no role to
+ * ask for, which makes it the fourth and last structural selector here.
  */
-function providerField(page: Page, task: string): Locator {
-	return taskRow(page, task).locator('.pick-face');
+function fieldOf(select: Locator): Locator {
+	return select.locator('xpath=..').locator('.pick-face');
+}
+
+/**
+ * The field renders all of what it holds: nothing overflows its box, so nothing
+ * is clipped or replaced by an ellipsis. This is the half of M3's defect that
+ * applies to any field -- the model's included, which carries no state.
+ */
+async function expectFieldShownWhole(field: Locator): Promise<void> {
+	await expect(field).toBeVisible();
+	expect(await field.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 }
 
 /**
@@ -140,8 +151,8 @@ function providerField(page: Page, task: string): Locator {
  * works at rather than once.
  */
 async function expectProviderNameShownWhole(page: Page, task: string): Promise<void> {
-	const field = providerField(page, task);
-	await expect(field).toBeVisible();
+	const field = fieldOf(providerSelect(page, task));
+	await expectFieldShownWhole(field);
 
 	const shown = ((await field.textContent()) ?? '').trim();
 	const chosen = (
@@ -149,10 +160,6 @@ async function expectProviderNameShownWhole(page: Page, task: string): Promise<v
 	).trim();
 	expect(chosen.startsWith(shown)).toBe(true);
 	expect(chosen.length).toBeGreaterThan(shown.length);
-
-	// Whatever the field holds, it renders all of it: nothing overflows its box,
-	// so nothing is clipped or replaced by an ellipsis.
-	expect(await field.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 }
 
 async function expectSaved(page: Page, task: string): Promise<void> {
@@ -255,6 +262,7 @@ test('the Models table keeps every task, route, model and status on screen at ev
 			MODELS_TASK_SCORING_LABEL
 		]) {
 			await expectProviderNameShownWhole(page, task);
+			await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
 		}
 		await expectNoSidewaysScroll(page);
 		await attachShot(page, testInfo, `admin-models-${width}`);
@@ -379,6 +387,7 @@ test('at 375px every task is a card with its own labelled lines', async ({
 		MODELS_TASK_SCORING_LABEL
 	]) {
 		await expectProviderNameShownWhole(page, task);
+		await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
 	}
 
 	await expectNoSidewaysScroll(page);
