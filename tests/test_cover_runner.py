@@ -14,7 +14,11 @@ from PIL import Image
 
 import songmaker_cli.cover_runner as cover_runner
 from agent_providers.codex import protocol as codex_protocol
-from agent_providers.codex.image import CodexImageCliError, CodexImageQuotaError
+from agent_providers.codex.image import (
+    CodexImageCliError,
+    CodexImageEncoderUnavailableError,
+    CodexImageQuotaError,
+)
 from agent_providers.codex.pool import CodexProcessPool
 from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
@@ -217,8 +221,14 @@ def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
             CodexImageCliError("The requested model is unavailable."),
             "Codex could not draw: The requested model is unavailable.",
         ),
+        (CodexImageEncoderUnavailableError(), JOB_ERROR_COVER_IMAGE_FAILED),
     ),
-    ids=("generic-cli-error", "usage-limit", "cli-error-with-message"),
+    ids=(
+        "generic-cli-error",
+        "usage-limit",
+        "cli-error-with-message",
+        "no-image-encoder-installed",
+    ),
 )
 def test_web_runner_names_the_cause_in_the_job_error(
     tmp_path: Path,
