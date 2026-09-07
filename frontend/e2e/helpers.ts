@@ -92,7 +92,8 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
-async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
+/** The rail's own navigation — behind the drawer on the compact shell. */
+export async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 	if (shell === 'mobile') {
 		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
 		if (!(await drawer.isVisible())) {
@@ -134,6 +135,22 @@ export async function boundingBoxes(...locators: Locator[]): Promise<RenderedBox
 }
 
 /**
+ * Paths whose refusal is the behaviour a flow is there to prove rather than a
+ * guard-rail failure. `auth-flows.spec.ts` drives real ones — a locked account,
+ * a session the server no longer honours, an admin page a non-admin asks for —
+ * and Chromium reports every refused fetch as a console error of its own, on
+ * top of the response itself. Both are forgiven on exactly these paths and
+ * nowhere else; a 5xx never is.
+ */
+export interface FlowGuardOptions {
+	refusalsExpectedOn?: readonly string[];
+}
+
+const REFUSED_STATUSES: readonly number[] = [401, 403, 429];
+const REFUSED_RESOURCE_CONSOLE_MESSAGE =
+	/^Failed to load resource: the server responded with a status of (401|403|429)\b/;
+
+/**
  * Fails the flow on a rate-limited or failed response, on a browser console
  * error, and on an uncaught page exception — and counts what the flow costs
  * the API.
@@ -142,7 +159,10 @@ export class FlowGuard {
 	private readonly failures: string[] = [];
 	private apiRequests = 0;
 
-	constructor(page: Page) {
+	constructor(page: Page, options: FlowGuardOptions = {}) {
+		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
+		const refusalIsExpectedOn = (url: string): boolean =>
+			refusalsExpectedOn.includes(new URL(url).pathname);
 		page.on('request', (request) => {
 			if (new URL(request.url()).pathname.startsWith(API_PATH_PREFIX)) this.apiRequests += 1;
 		});
@@ -166,12 +186,18 @@ export class FlowGuard {
 		});
 		page.on('response', (response) => {
 			const status = response.status();
+			if (REFUSED_STATUSES.includes(status) && refusalIsExpectedOn(response.url())) return;
 			if (status === 429 || status >= 500) {
 				this.failures.push(`${status} from ${response.url()}`);
 			}
 		});
 		page.on('console', (message) => {
-			if (message.type() === 'error') this.failures.push(`console error: ${message.text()}`);
+			if (message.type() !== 'error') return;
+			const reportsAnExpectedRefusal =
+				REFUSED_RESOURCE_CONSOLE_MESSAGE.test(message.text()) &&
+				refusalIsExpectedOn(message.location().url);
+			if (reportsAnExpectedRefusal) return;
+			this.failures.push(`console error: ${message.text()}`);
 		});
 		page.on('pageerror', (error) => {
 			this.failures.push(`uncaught page error: ${error.message}`);

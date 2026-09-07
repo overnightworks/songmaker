@@ -13,6 +13,7 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | `playlist-address.spec.ts` | A playlist address pasted into a tab that knows nothing else, on its own, and an unknown playlist slug states the address names nothing rather than redirecting away (issue #286) — the last new address of #265's chain, a sibling of `/` rather than nested under `/album/<slug>`                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `kinetic-strip.spec.ts`    | The take strip's kinetic scrolling (issue #358) against a real render, in both layouts its own container query switches it between: dragged, released with momentum that coasts past where the drag stopped, and a click that catches it mid-roll without opening the take it lands on — then a plain click still opens one, the wheel is proven directly against the dispatched event (native on the column layout, converted on the row layout), and Home/End/arrow keys follow the real axis. A third test proves the strip's absence on the compact shell at phone width, not kinetic behaviour — there is nothing of this action's to exercise there yet (WriteColumn.svelte's own `!compact` guard) |
 | `admin-models.spec.ts`     | The admin Models tab (issues #820, #846): one row per task with both routes offered and the unusable one greyed with its reason, `No models` where no route is set up, a collapsed Advanced, and every column — Status included — still on screen at 1920, 1440, 1280 and 1024px, where the card the table sits in is hundreds of pixels narrower than the viewport. Then a save the server keeps even though no route can run it, a co-writer turn that ends with its named reason instead of switching provider quietly, and, at 375px, one card per task with labelled lines and no sideways scroll. Replaces `admin-routes.spec.ts`, whose per-provider route cards Fassung 2 removed                 |
+| `auth-flows.spec.ts`       | The auth chain B1-B5 as a musician meets it (issue #872): signing in from a tab that knows nothing; wrong passwords repeated until the account is locked, with the readable refusal, its `Retry-After` waited out and the account admitted again; signing out, where the cookie the browser gave up is offered back and the server still refuses it; a session that survives a reload; the admin page refused for a non-admin, 403 on the wire and not one control rendered; and a session past the absolute maximum age landing back on the login page. Both shells drive all six, the compact one at 375px                                                                                              |
 
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
@@ -133,9 +134,48 @@ run on **desktop only** and its card test on **mobile only** — the table and
 the cards are two different surfaces, so each is driven where it exists rather
 than skipped in the other shell.
 
-Summed together, the per-flow `FlowGuard` totals above (351 `/api` requests on
-**desktop** and 98 on **mobile**, read off one green run -- CI run
-34039372545, 2026-09-06 -- rather than carried forward, which is how the
+`auth-flows.spec.ts` carries its own, `AUTH_FLOW_API_REQUEST_BUDGET` (local to
+the spec): measured over both shells (desktop / 375px) at 13/13 for the
+sign-in, 19/19 for the reload, 14/14 for the sign-out and the refused return,
+18/15 for the refused admin page, 13/12 for the expired session and 11/11 for
+the lockout, against a shared ceiling of 30. Its own arrangement -- one
+non-admin account per project, created through `POST /api/admin/users` and
+deleted again in `afterAll` -- does not touch that budget: like the rail's
+filler albums, it runs from the run's API context rather than the page. What
+this spec does spend that no other one does is _failed_ logins: measured at
+exactly 3 per project (`login_attempts`, one lockout sequence), so 6 per suite
+run and 12 across CI's one retry. The stack's short-window budget counts those
+per IP and the whole run comes from one address, which is why
+`docker/docker-compose.ci.yml` raises `LOGIN_RATE_LIMIT` to 40 -- more than
+three times the measured worst case -- and lowers `LOGIN_LOCKOUT_THRESHOLD` to
+3 with `LOGIN_LOCKOUT_WINDOW` at 60 seconds, so the refusal the spec drives is
+the per-_account_ lockout on its own throwaway user and the wait it honours
+fits inside a run. Production stays at 5 / 15 / 3600.
+
+Two things that flow needs and no other one does are worth naming here. Its
+tests start logged out, which takes an explicitly empty
+`storageState: { cookies: [], origins: [] }` -- `undefined` reads as "not
+overridden" in `test.use` and silently leaves the project's signed-in admin
+state in place, which looks exactly like a passing flow until you notice the
+wall it is standing on. And a refusal it drives is reported twice: once as the
+response, and once as a console error Chromium writes for every failed fetch,
+so `FlowGuard` takes a `refusalsExpectedOn` list of paths where a 401, 403 or
+429 is the sentence under proof. Everywhere else, and for any 5xx, the guard is
+unchanged.
+
+The absolute-age flow cannot wait its own limit out: `SESSION_ABSOLUTE_MAX_AGE`
+is 90 days, it is stack-wide, and lowering it would kill the one storage-state
+session the whole suite runs on (`global-setup.ts`). So
+`ageSessionPastAbsoluteLimit` (`seed.ts`) makes that one session genuinely too
+old from the stack's side -- 91 days off its `user_sessions.created_at` row and
+its Redis entry dropped, which is exactly how a 90-day-old session looks once
+the cache key's own 30-day TTL has run out. The server still decides; nothing
+is intercepted.
+
+Summed together, the per-flow `FlowGuard` totals above (436 `/api` requests on
+**desktop** and 178 on **mobile**, read off one green run -- CI run
+34058495442, 2026-09-07, with `auth-flows.spec.ts`; of that, 86 and 80 are its
+own -- rather than carried forward, which is how the
 library flow's own number drifted into three values before issue #326) are
 **not** what the server's own IP rate
 limit sees, and issue #344 is the reason that distinction is written down
@@ -156,7 +196,10 @@ that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "2000"`
 override (`docker/docker-compose.ci.yml`), which carries several times the headroom
 that measurement needs, including room for one CI retry landing inside the
 same window. That 288 has not been re-measured since `admin-models.spec.ts`
-was added, and the sum above is not a substitute for it: when it matters,
+and `auth-flows.spec.ts` were added -- and the second of those also brings
+document navigations of its own, since its flows reload the tab and reopen the
+app rather than staying inside one SPA session -- and the sum above is not a
+substitute for it: when it matters,
 measure it from the access log the same way rather than trusting the total. Re-running the suite repeatedly against the same stack inside that
 window is cumulative, not reset per run — see "Running it locally" below. If
 this suite gains more specs, re-measure the same way rather than trusting
