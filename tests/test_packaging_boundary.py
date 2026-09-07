@@ -71,6 +71,7 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "mutagen": frozenset({"mutagen"}),
     "numba": frozenset({"numba"}),
     "nvidia-ml-py3": frozenset({"nvidia_smi", "pynvml"}),
+    "overnightworks-webauth": frozenset({"webauth"}),
     "pillow": frozenset({"PIL"}),
     "psycopg2-binary": frozenset({"psycopg2"}),
     "pytest": frozenset({"_pytest", "py", "pytest"}),

@@ -19,8 +19,8 @@ CONTRACT_FILE = REPOSITORY_ROOT / ".importlinter"
 CONTRACT_SECTION = "importlinter:contract:independent-packages"
 APPLICATION_PACKAGE = "songmaker_cli"
 INDEPENDENT_PACKAGE = "agent_providers"
-SIBLING_PACKAGE = "webauth"
-INDEPENDENT_PACKAGES = (INDEPENDENT_PACKAGE, SIBLING_PACKAGE)
+EXTERNAL_SIBLING_PACKAGE = "webauth"
+INDEPENDENT_PACKAGES = (INDEPENDENT_PACKAGE, EXTERNAL_SIBLING_PACKAGE)
 INJECTED_IMPORT = f"from {APPLICATION_PACKAGE} import constants\n"
 FORBIDDEN_CHAIN = f"{INDEPENDENT_PACKAGE} -> {APPLICATION_PACKAGE}.constants"
 UNCOPIED_ARTEFACTS = shutil.ignore_patterns("__pycache__", "*.egg-info")
@@ -112,30 +112,30 @@ def test_an_application_import_in_an_independent_package_breaks_the_contract(
     assert FORBIDDEN_CHAIN in completed.stdout, completed.stdout
 
 
-@pytest.mark.parametrize(
-    ("importer", "imported"),
-    [
-        (INDEPENDENT_PACKAGE, SIBLING_PACKAGE),
-        (SIBLING_PACKAGE, INDEPENDENT_PACKAGE),
-    ],
-)
-def test_sibling_independent_packages_do_not_import_each_other(
-    tmp_path: Path, importer: str, imported: str,
+def test_the_independent_package_does_not_import_the_sibling_library(
+    tmp_path: Path,
 ) -> None:
+    """The auth library ships from its own repository since #879, so the
+    contract that keeps the two siblings apart is checked against the
+    installed distribution rather than against a directory under ``src``."""
     project_root = _copy_of_this_tree(tmp_path)
-    package_init = project_root / "src" / importer / "__init__.py"
+    package_init = project_root / "src" / INDEPENDENT_PACKAGE / "__init__.py"
     package_init.write_text(
-        package_init.read_text(encoding="utf-8") + f"import {imported}\n",
+        package_init.read_text(encoding="utf-8")
+        + f"import {EXTERNAL_SIBLING_PACKAGE}\n",
         encoding="utf-8",
     )
 
     completed = _lint_imports(project_root)
 
     assert completed.returncode == 1, (
-        f"lint-imports accepted {importer} importing sibling package {imported}.\n"
+        f"lint-imports accepted {INDEPENDENT_PACKAGE} importing "
+        f"{EXTERNAL_SIBLING_PACKAGE}.\n"
         f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
     )
-    assert f"{importer} -> {imported}" in completed.stdout, completed.stdout
+    assert (
+        f"{INDEPENDENT_PACKAGE} -> {EXTERNAL_SIBLING_PACKAGE}" in completed.stdout
+    ), completed.stdout
 
 
 def test_every_package_beside_the_application_is_under_contract() -> None:
