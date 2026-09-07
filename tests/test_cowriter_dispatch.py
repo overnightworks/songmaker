@@ -39,9 +39,12 @@ from agent_providers.tool_loop import (
     ToolCallBatch,
     ToolOutcome,
 )
+from agent_providers.tools import openai_tool_schemas
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
+from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.catalog import ProviderRoute
+from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
@@ -602,8 +605,10 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
                 model="model",
                 system="system",
                 messages=[],
-                session=MagicMock(),
-                user=MagicMock(),
+                executor=lambda name, arguments: cowriter_tools.execute_cowriter_tool(
+                    MagicMock(), MagicMock(), name, arguments,
+                ),
+                tool_schemas=openai_tool_schemas(COWRITER_TOOL_CATALOG),
             )
         ]
 

@@ -79,3 +79,30 @@ class ToolCatalog(BaseModel):
     def declaration(self, name: str) -> ToolDeclaration | None:
         """Return the declared tool of that name, or nothing if undeclared."""
         return next((tool for tool in self.tools if tool.name == name), None)
+
+
+def anthropic_tool_schemas(catalog: ToolCatalog) -> list[dict[str, Any]]:
+    """Render a catalog in the shape the Anthropic Messages API expects."""
+    return [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.parameters,
+        }
+        for tool in catalog.tools
+    ]
+
+
+def openai_tool_schemas(catalog: ToolCatalog) -> list[dict[str, Any]]:
+    """Render a catalog in the shape OpenAI-compatible chat APIs expect."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            },
+        }
+        for tool in catalog.tools
+    ]

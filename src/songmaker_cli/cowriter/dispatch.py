@@ -33,12 +33,17 @@ from agent_providers.process import (
     codex_cli_access_token_is_present,
 )
 from agent_providers.tool_loop import (
+    ToolExecutor,
     ToolLoopLimitError,
     ToolLoopProtocolError,
     ToolTransport,
     stream_tool_loop,
 )
-from agent_providers.tools import ToolCatalog
+from agent_providers.tools import (
+    ToolCatalog,
+    anthropic_tool_schemas,
+    openai_tool_schemas,
+)
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.claude_adapter import (
@@ -172,14 +177,16 @@ def _stream_for_route(
             )
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
     connection = _api_connection(provider)
+    catalog = _tool_catalog()
+    executor = _cowriter_executor(session, user)
     if provider == "claude":
         return stream_claude_api_turn(
             api_key=connection.api_key,
             system=system,
             model=model,
             messages=messages,
-            session=session,
-            user=user,
+            executor=executor,
+            tool_schemas=anthropic_tool_schemas(catalog),
             correlation_id=correlation_id,
         )
     return stream_openai_compatible_turn(
@@ -189,8 +196,8 @@ def _stream_for_route(
         model=model,
         system=system,
         messages=messages,
-        session=session,
-        user=user,
+        executor=executor,
+        tool_schemas=openai_tool_schemas(catalog),
         correlation_id=correlation_id,
     )
 
@@ -251,6 +258,13 @@ def _tool_catalog() -> ToolCatalog:
     return COWRITER_TOOL_CATALOG
 
 
+def _cowriter_executor(session: Session, user: AuthenticatedUser) -> ToolExecutor:
+    """Bind the requesting musician's session to songmaker's tool executor."""
+    from songmaker_cli.cowriter.tools import execute_cowriter_tool
+
+    return lambda name, arguments: execute_cowriter_tool(session, user, name, arguments)
+
+
 async def _stream_cli_tool_turn(
     *,
     provider: str,
@@ -262,8 +276,6 @@ async def _stream_cli_tool_turn(
     correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run one CLI text-protocol transport through the authorized tool loop."""
-    from songmaker_cli.cowriter.tools import execute_cowriter_tool
-
     try:
         async for event in stream_tool_loop(
             provider=provider,
@@ -271,9 +283,7 @@ async def _stream_cli_tool_turn(
             system=system,
             messages=messages,
             transport=transport,
-            executor=lambda name, arguments: execute_cowriter_tool(
-                session, user, name, arguments,
-            ),
+            executor=_cowriter_executor(session, user),
             tool_failure_message=normalize_route_failure(
                 SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
             ).message,

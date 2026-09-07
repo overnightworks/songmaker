@@ -181,31 +181,6 @@ COWRITER_TOOL_CATALOG: ToolCatalog = ToolCatalog(
 """The same catalog the provider layer renders, parses and validates against."""
 
 
-def openai_tool_schemas() -> list[dict[str, Any]]:
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters,
-            },
-        }
-        for tool in COWRITER_TOOLS
-    ]
-
-
-def anthropic_tool_schemas() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.parameters,
-        }
-        for tool in COWRITER_TOOLS
-    ]
-
-
 def _serialize(result: Any) -> str:
     if isinstance(result, list):
         return json.dumps(
