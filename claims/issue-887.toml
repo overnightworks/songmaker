@@ -1,0 +1,8 @@
+claim_id = "619eca6810f14ad0aeed0a37b598b9b2"
+agent = "claude-head"
+role = "builder"
+base = "6e7acbaeef10efe42f5edd54fd2a7849ad1c9ab6"
+branch = "claude/issue-887-prep"
+scope = ["tests"]
+opened_commit = "fed891c2fc1f3fb108648a346d6d687adfab03fc"
+whole_reason = "Alle Lib-Tests, ihre neue conftest, das Support-Modul und die umsortierten Profil-Tests"
