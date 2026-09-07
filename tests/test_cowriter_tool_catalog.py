@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_providers.text_tool_protocol import render_tool_catalog
+
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import (
     COWRITER_TOOL_CATALOG,

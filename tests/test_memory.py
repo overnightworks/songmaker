@@ -7,12 +7,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from agent_providers.events import AssistantTextEvent, FinalEvent
 from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
-from agent_providers.events import AssistantTextEvent, FinalEvent
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (

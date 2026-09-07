@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 from agent_providers.codex.image import generate_codex_cover_image
+
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.jobs._runtime import _update_job

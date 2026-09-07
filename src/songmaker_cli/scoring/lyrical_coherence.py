@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import BaseModel, ConfigDict, field_validator
-
 from agent_providers.claude.provider import parse_json_response
 from agent_providers.constants import (
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
 )
 from agent_providers.dispatch import call_provider_once
+from pydantic import BaseModel, ConfigDict, field_validator
+
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     LyricalCoherenceScore,

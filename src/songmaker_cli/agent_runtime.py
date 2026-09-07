@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Final
 
 from agent_providers.config import ProviderRuntimeConfig, configure
+
 from songmaker_cli.constants import (
     CLAUDE_CLI_BINARY,
     CLI_PROMPT_FILE_PREFIX,

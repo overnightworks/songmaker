@@ -2281,6 +2281,7 @@ def test_song_chat_failure_leaves_no_empty_conversation(
     from unittest.mock import AsyncMock, patch
 
     from agent_providers.claude.provider import UnavailableError
+
     from songmaker_cli.db.models import Conversation
 
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))

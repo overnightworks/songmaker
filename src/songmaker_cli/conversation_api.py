@@ -24,12 +24,6 @@ from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReason,
@@ -39,6 +33,12 @@ from agent_providers.errors import (
 from agent_providers.events import (
     FinalEvent,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_generation_access,
@@ -187,6 +187,7 @@ def build_cowriter_system_prompt(
     tool_protocol = ""
     if text_tool_protocol:
         from agent_providers.text_tool_protocol import render_tool_catalog
+
         from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
         tool_protocol = f"\n\n{render_tool_catalog(COWRITER_TOOL_CATALOG)}"

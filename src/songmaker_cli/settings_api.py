@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
-from agent_providers.constants import COWRITER_PROVIDERS
 from songmaker_cli.api_helpers import gen_params_to_json
 from songmaker_cli.api_models import (
     GenerationDefaultsRequest,
@@ -470,6 +470,7 @@ def _surface_status_from_snapshot(
         ProviderNotLoggedIn,
         ProviderReady,
     )
+
     from songmaker_cli.provider_status import ProviderSurface
 
     if snapshot is None:

@@ -5,9 +5,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
+from agent_providers.errors import SafeRouteReason
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
-from agent_providers.errors import SafeRouteReason
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
 from songmaker_cli.constants import MEMORY_MAX_LENGTH

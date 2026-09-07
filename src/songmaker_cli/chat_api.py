@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers.claude.provider import (
     UnavailableError,
     acall_claude,
     is_available,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.api_helpers import (
     check_redis_health,
     check_song_access,

@@ -6,7 +6,6 @@ include_external_packages = True
 root_packages =
     acestep_engine
     acestep_worker
-    agent_providers
     audio_engine
     songmaker_cli
 
@@ -16,15 +15,6 @@ type = forbidden
 source_modules =
     acestep_engine
     acestep_worker
-    agent_providers
     audio_engine
 forbidden_modules =
     songmaker_cli
-
-[importlinter:contract:agent-providers-does-not-import-webauth]
-name = agent_providers does not import webauth
-type = forbidden
-source_modules =
-    agent_providers
-forbidden_modules =
-    webauth

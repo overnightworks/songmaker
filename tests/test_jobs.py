@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
 import pytest
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
 from acestep_engine.models import AceStepConfig
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,

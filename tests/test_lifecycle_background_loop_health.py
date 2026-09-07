@@ -256,6 +256,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
 ) -> None:
     from agent_providers.catalog import ProviderReady, ProviderRoute, ProviderSetupMethod
     from agent_providers.constants import COWRITER_PROVIDERS
+
     from songmaker_cli.provider_status import provider_snapshot
 
     monkeypatch.setattr(

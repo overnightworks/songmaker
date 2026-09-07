@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from conftest import (
     TEST_SECRET,
     install_app_context,
@@ -26,7 +27,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user

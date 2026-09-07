@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from agent_providers.errors import SafeRouteReasonCode, normalize_route_failure
 from agent_providers.events import (
     AssistantTextEvent,
@@ -11,6 +10,7 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
+
 from songmaker_cli.conversation_api import (
     ChatTurnFailureFrame,
     ChatTurnRouteErrorFrame,
