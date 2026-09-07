@@ -20,6 +20,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
 
 from songmaker_cli.api_helpers import slugify
 from songmaker_cli.app_context import AppContext
@@ -63,8 +65,6 @@ from songmaker_cli.db.queries import (
     set_playlist_cover_key,
     update_playlist,
 )
-from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 _DEFAULT_USER_ID = "u-test"
 

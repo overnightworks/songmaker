@@ -12,6 +12,8 @@ import pytest
 from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
@@ -29,8 +31,6 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
-from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.dependencies import AuthenticatedUser
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -2727,8 +2727,9 @@ def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
 def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
     from datetime import timedelta
 
-    from songmaker_cli.db.queries import create_session
     from webauth.cookies import sign_session_id
+
+    from songmaker_cli.db.queries import create_session
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     with ctx.db() as session:
@@ -3778,10 +3779,11 @@ def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
+    from webauth.middleware import BodySizeLimitMiddleware
+
     from songmaker_cli.api import router
     from songmaker_cli.request_policies import build_body_size_policy
     from songmaker_cli.settings import get_settings
-    from webauth.middleware import BodySizeLimitMiddleware
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(

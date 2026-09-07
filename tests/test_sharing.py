@@ -19,14 +19,14 @@ from conftest import (
 )
 from fastapi.testclient import TestClient
 from sqlalchemy import event
+from webauth.cookies import sign_session_id
+from webauth.passwords import hash_password
+from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
-from webauth.cookies import sign_session_id
-from webauth.passwords import hash_password
-from webauth.proxies import TrustedProxies
 
 # The four share endpoints require PUBLIC_BASE_URL (#339); conftest.py sets
 # the test-wide default ("Required env vars for Settings construction at
@@ -1479,8 +1479,9 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> Non
 
 
 def test_share_album_ownership_enforced(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import create_album, create_session, create_user
     from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+
+    from songmaker_cli.db.queries import create_album, create_session, create_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1638,11 +1639,11 @@ def _seed_inventory(session) -> None:
 
 def _inventory_client(tmp_path: Path, user_id: str, role: str = "user"):
     from fastapi import FastAPI
+    from webauth.dependencies import AuthenticatedUser
 
     from songmaker_cli.api import router
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.auth_dependencies import get_current_user
-    from webauth.dependencies import AuthenticatedUser
 
     factory = _inventory_factory(tmp_path)
     ctx = AppContext(

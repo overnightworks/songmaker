@@ -12,6 +12,7 @@ from time import monotonic
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from webauth.rate_limit import RedisRateLimiter
 
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import (
@@ -50,7 +51,6 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
-from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)

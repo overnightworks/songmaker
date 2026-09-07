@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
+from webauth.dependencies import AuthenticatedUser
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
@@ -56,7 +57,6 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.settings import get_settings
-from webauth.dependencies import AuthenticatedUser
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 SKIP_NO_PG = pytest.mark.skipif(

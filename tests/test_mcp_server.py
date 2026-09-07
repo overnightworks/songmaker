@@ -14,12 +14,12 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.mcp_server import auth, server, tools
-from webauth.dependencies import AuthenticatedUser
 
 
 @pytest.fixture

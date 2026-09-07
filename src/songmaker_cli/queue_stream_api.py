@@ -10,6 +10,8 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+from webauth.rate_limit import RedisRateLimiter
 
 import songmaker_cli.constants as _consts
 from songmaker_cli import queue_streams
@@ -49,8 +51,6 @@ from songmaker_cli.queue_streams import (
     track_source_from_generation,
     unpin_snapshot,
 )
-from webauth.dependencies import AuthenticatedUser
-from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 

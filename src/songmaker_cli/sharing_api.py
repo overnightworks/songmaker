@@ -9,6 +9,9 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+from webauth.proxies import resolve_client_ip
+from webauth.rate_limit import RedisRateLimiter
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import (
@@ -86,9 +89,6 @@ from songmaker_cli.queue_streams import (
     queue_stream_audio_path,
     track_source_from_generation,
 )
-from webauth.dependencies import AuthenticatedUser
-from webauth.proxies import resolve_client_ip
-from webauth.rate_limit import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)

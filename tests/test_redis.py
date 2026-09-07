@@ -9,13 +9,13 @@ import fakeredis
 import pytest
 from conftest import TEST_SECRET
 from fastapi.testclient import TestClient
+from webauth.passwords import hash_password
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import RedisHttpMetrics, create_redis, redis_health
 from songmaker_cli.server import create_app
-from webauth.passwords import hash_password
 
 
 @pytest.fixture

@@ -7,6 +7,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from webauth.ports import (
+    AuditSink,
+    LoginAttemptStore,
+    SessionIdentityChange,
+    SessionIdentityChanged,
+    SessionRecordStore,
+    UserStore,
+)
 
 from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
@@ -22,14 +30,6 @@ from songmaker_cli.db.models import (
     ResourceEventCursor,
     User,
     UserSession,
-)
-from webauth.ports import (
-    AuditSink,
-    LoginAttemptStore,
-    SessionIdentityChange,
-    SessionIdentityChanged,
-    SessionRecordStore,
-    UserStore,
 )
 
 _PASSWORD_HASH = "hashed"

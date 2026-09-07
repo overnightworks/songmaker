@@ -14,6 +14,7 @@ from conftest import TEST_SECRET, make_fake_redis, make_test_app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
 import songmaker_cli.resource_event_api as resource_api
@@ -41,7 +42,6 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.settings import get_settings
-from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 
 def _seed_stream_users(session) -> None:
