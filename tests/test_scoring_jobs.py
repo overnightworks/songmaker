@@ -74,7 +74,7 @@ def test_scoring_job_is_importable_without_the_mcp_package() -> None:
     poisoned in ``sys.modules`` proves the whole chain that
     ``songmaker_cli.jobs.scoring`` pulls in — through
     ``scoring.lyrical_coherence`` -> ``cowriter.dispatch`` ->
-    ``cowriter.openai_adapter`` — stays importable without it.
+    ``agent_providers.openai_adapter`` — stays importable without it.
     """
     script = (
         "import sys\n"
@@ -319,7 +319,7 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
             "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
             return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
         ) as grok_call,
-        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+        patch("agent_providers.claude.adapter.call_claude") as claude_call,
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 
@@ -353,7 +353,7 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
                 return_value=_scoring_result_with_transcript(),
             )),
         ),
-        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+        patch("agent_providers.claude.adapter.call_claude") as claude_call,
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 

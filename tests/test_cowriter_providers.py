@@ -29,6 +29,10 @@ from agent_providers.errors import (
     normalize_route_failure,
 )
 from agent_providers.events import FinalEvent, ToolCallEvent
+from agent_providers.openai_adapter import (
+    _parse_tool_call,
+    stream_openai_compatible_turn,
+)
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
 from agent_providers.tools import openai_tool_schemas
@@ -46,10 +50,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.catalog import ProviderRoute, list_provider_models
-from songmaker_cli.cowriter.openai_adapter import (
-    _parse_tool_call,
-    stream_openai_compatible_turn,
-)
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -1062,7 +1062,7 @@ def test_openai_adapter_emits_same_event_types(admin_client, every_provider_is_c
             return _Resp()
 
     override_provider_runtime(xai_api_key="k")
-    with patch("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client):
+    with patch("agent_providers.openai_adapter.httpx.AsyncClient", _Client):
         resp = client.post("/api/chat/turn", json={"message": "hi"})
     types = [event["type"] for event in _stream_events(resp)]
     assert types.count("final") == 1
@@ -1116,7 +1116,7 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
         async def post(self, *_args, **_kwargs):
             return _Response(responses.pop(0))
 
-    monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
+    monkeypatch.setattr("agent_providers.openai_adapter.httpx.AsyncClient", _Client)
     execute = MagicMock(return_value=ToolOutcome("[]", False))
     monkeypatch.setattr(
         "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,

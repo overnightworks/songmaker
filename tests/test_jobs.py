@@ -1495,7 +1495,7 @@ def stubbed_claude_judge():
     from agent_providers.claude.provider import ClaudeResponse
 
     with patch(
-        "songmaker_cli.cowriter.claude_adapter.call_claude",
+        "agent_providers.claude.adapter.call_claude",
         return_value=ClaudeResponse(text='{"score": 6, "issues": [], "summary": "fine"}'),
     ) as judge:
         yield judge
