@@ -275,7 +275,7 @@ async def _stream_cli_tool_turn(
 def call_provider_once(
     *, provider: str, model: str, prompt: str, timeout: int, system: str | None = None,
 ) -> str:
-    """Call the Judge's API-only, tool-free provider adapter."""
+    """Run one tool-free completion on the provider's HTTP API."""
     if provider not in COWRITER_PROVIDERS or not model:
         raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED)
     try:

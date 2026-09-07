@@ -1566,7 +1566,7 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
 
     client, _ = admin_client
     secret_stderr = "/home/operator/.claude/credentials.json: permission denied"
-    def _configured_catalog(provider, surface, settings):
+    def _configured_catalog(provider, _cli_methods):
         if provider == "claude":
             return catalog.ProviderReady(
                 provider, catalog.ProviderSetupMethod.CLAUDE_CLI,
@@ -1581,7 +1581,9 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
             return catalog._list_claude_cli_models()
         return list(LIVE_CATALOG[provider])
 
-    monkeypatch.setattr(catalog, "_provider_configuration", _configured_catalog)
+    monkeypatch.setattr(
+        "songmaker_cli.provider_status.provider_configuration", _configured_catalog,
+    )
     monkeypatch.setattr(catalog, "list_provider_models", _list_provider_models)
     monkeypatch.setattr(catalog, "_cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
