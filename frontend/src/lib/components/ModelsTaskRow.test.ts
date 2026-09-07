@@ -110,6 +110,17 @@ function optionLabels(select: HTMLSelectElement): string[] {
 	return Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
 }
 
+/** The box drawn beside a select, inside the same `.pick` -- what a person reads. */
+function fieldOf(select: HTMLSelectElement): HTMLElement {
+	const pick = select.parentElement;
+	if (!pick) throw new Error('Expected the select to sit in its field');
+	return requireElement<HTMLElement>(pick, '.pick-face');
+}
+
+function fieldText(root: ParentNode, column: string): string {
+	return fieldOf(selectNamed(root, column)).textContent?.trim() ?? '';
+}
+
 function routeButton(root: ParentNode, route: ModelsRouteKey): HTMLButtonElement {
 	const label = route === 'cli' ? 'CLI' : 'API';
 	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('.rsw button')).find(
@@ -160,6 +171,37 @@ describe('models task row', () => {
 			'Codex · no image tool'
 		]);
 		expect(Array.from(providers.options).some((option) => option.disabled)).toBe(false);
+	});
+
+	it('reads as the provider name alone while the states stay in the options', async () => {
+		const target = await renderRow();
+
+		expect(fieldText(target, 'provider')).toBe('Claude');
+		expect(optionLabels(selectNamed(target, 'provider'))).toContain('Claude ✓ ready');
+	});
+
+	it('names the provider the row holds while its save is still in flight', async () => {
+		const target = await renderRow({ save: vi.fn(() => new Promise<ModelsSaveOutcome>(() => {})) });
+
+		await choose(selectNamed(target, 'provider'), 'grok');
+
+		expect(fieldText(target, 'provider')).toBe('Grok');
+		expect(selectNamed(target, 'provider').value).toBe('grok');
+	});
+
+	it('leaves the choosing to the native control the keyboard reaches', async () => {
+		const save = vi.fn().mockResolvedValue({ ok: true });
+		const target = await renderRow({ save });
+
+		const providers = selectNamed(target, 'provider');
+		providers.focus();
+		expect(document.activeElement).toBe(providers);
+		expect(fieldOf(providers).getAttribute('aria-hidden')).toBe('true');
+
+		await choose(providers, 'grok');
+
+		expect(save).toHaveBeenCalledWith({ provider: 'grok', route: 'cli', model: '' });
+		expect(target.textContent).toContain(MODELS_SAVED_LABEL);
 	});
 
 	it('keeps both route pills alive when both routes are set up', async () => {
@@ -220,6 +262,15 @@ describe('models task row', () => {
 		const models = selectNamed(target, 'model');
 		expect(optionLabels(models)).toEqual([MODELS_NO_MODELS_LABEL]);
 		expect(models.disabled).toBe(true);
+		expect(fieldText(target, 'model')).toBe(MODELS_NO_MODELS_LABEL);
+		expect(fieldOf(models).classList.contains('off')).toBe(true);
+	});
+
+	it('reads as the model it is set to, in the same field shape as the provider', async () => {
+		const target = await renderRow();
+
+		expect(fieldText(target, 'model')).toBe('opus');
+		expect(fieldOf(selectNamed(target, 'model')).classList.contains('off')).toBe(false);
 	});
 
 	it.each([
