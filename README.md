@@ -91,6 +91,12 @@ cd frontend && pnpm install && pnpm test:coverage && pnpm lint && pnpm check && 
 
 Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
 
+The auth layer is an external dependency: `overnightworks-webauth` is pinned in
+the `server` extra to the release wheel of tag `v0.1.0` of
+[overnightworks/webauth](https://github.com/overnightworks/webauth) and
+hash-locked in `uv.lock`, so `uv sync` installs it like any other dependency and
+its own tests run in that repository.
+
 ## Backup
 
 Both PostgreSQL and the audio files Docker volume must be backed up together. See [`scripts/BACKUP.md`](scripts/BACKUP.md) for the setup, cron, and restore instructions. The default `BACKUP_DIR` is `/mnt/backup/songmaker` but can be overridden via env var.
@@ -110,6 +116,7 @@ BACKUP_DIR=/path/to/backup ./scripts/backup.sh
 - [docs/testing.md](docs/testing.md) — test structure, fixtures, coverage targets
 - [docs/acestep.md](docs/acestep.md) — ACE-Step integration, model variants, worker pool, generation parameters
 - [plans/](plans/) — design plans for in-flight and proposed work. Each has a `**Status:**` header.
+- [overnightworks/webauth](https://github.com/overnightworks/webauth) — the extracted auth library songmaker installs by tag
 
 ## License
 

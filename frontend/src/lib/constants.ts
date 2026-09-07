@@ -506,7 +506,7 @@ export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
 
-// Shown when the backend's IP rate limiter (`webauth/middleware/rate_limit.py`)
+// Shown when the backend's IP rate limiter (`webauth.middleware.rate_limit`)
 // rejects a request with 429 — the budget classes it enforces
 // (API/Media/Stream) mean this is now rare during ordinary use, but a
 // burst can still happen, and a client that silently stalls reads as
