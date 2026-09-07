@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+from provider_test_support import COWRITER_TOOL_CATALOG
 
 from agent_providers.text_tool_protocol import (
     FinalText,
@@ -16,7 +17,6 @@ from agent_providers.text_tool_protocol import (
     render_tool_result,
 )
 from agent_providers.tools import ToolCatalog, ToolDeclaration, ToolProtocolMarkup
-from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
 
 def _call(payload: str) -> str:

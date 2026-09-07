@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import override_provider_runtime
+from provider_test_support import override_provider_runtime
 
 from agent_providers.codex.pool import (
     CodexProcessKind,
