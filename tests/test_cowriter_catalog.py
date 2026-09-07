@@ -8,8 +8,6 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from conftest import override_provider_runtime
-
 from agent_providers.catalog import (
     ProviderCapabilityMissing,
     ProviderRoute,
@@ -23,6 +21,8 @@ from agent_providers.errors import (
     SafeRouteReasonCode,
 )
 from agent_providers.process import AgentCliUnavailableError
+from conftest import override_provider_runtime
+
 from songmaker_cli.provider_status import (
     ProviderSurface,
     get_provider_configuration,

@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Final
 
+from agent_providers.constants import COWRITER_PROVIDERS
 from sqlalchemy.orm import Session
 
-from agent_providers.constants import COWRITER_PROVIDERS
 from songmaker_cli.constants import (
     COVER_DEFAULT_MODEL,
     COVER_DEFAULT_PROVIDER,

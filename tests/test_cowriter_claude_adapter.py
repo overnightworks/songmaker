@@ -10,8 +10,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers import tool_loop
 from agent_providers.claude import adapter as claude_adapter
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
@@ -23,6 +21,8 @@ from agent_providers.events import (
 )
 from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import anthropic_tool_schemas
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, COWRITER_TOOLS
 from songmaker_cli.db.engine import init_test_db

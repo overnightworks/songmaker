@@ -7,14 +7,14 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app
-
 from agent_providers.config import (
     ProviderRuntimeAlreadyConfiguredError,
     ProviderRuntimeNotConfiguredError,
     current_config,
     reset_config,
 )
+from conftest import make_test_app
+
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.constants import (
     CODEX_CLI_AUTH_FILE,

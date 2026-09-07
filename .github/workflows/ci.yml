@@ -67,7 +67,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci | tee pytest-output.txt
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci | tee pytest-output.txt
 
       - name: Coverage summary
         if: always()

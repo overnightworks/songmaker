@@ -22,7 +22,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -354,6 +354,15 @@ The auth library's own tests are not in this repository. They moved with
 in #879 and run in that repository's CI; songmaker installs the released wheel
 and proves the auth surface it builds on it through `test_auth_api.py`,
 `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
+
+The provider library's own tests likewise left with it. They moved with
+`agent_providers` to
+[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
+in #886 and run in that repository's CI; songmaker installs the released wheel
+(tag `v0.1.0`) and proves the surface it builds on it — the co-writer, the
+lyrical-coherence judge, and the tool-surface health it republishes on
+`/health` — through `test_conversation_api.py`,
+`test_lifecycle_claude_tool_surface.py`, and `test_health_api.py`.
 
 ## Testing Patterns
 

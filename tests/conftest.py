@@ -131,6 +131,7 @@ def _configure_agent_provider_runtime():
     starts from a configuration built the same way and drops it afterwards.
     """
     from agent_providers.config import reset_config
+
     from songmaker_cli.agent_runtime import configure_agent_providers
     from songmaker_cli.settings import Settings
 
@@ -523,6 +524,7 @@ def make_song_md():
 def refresh_provider_snapshots() -> None:
     """Refresh every provider after a test changes its catalog dependencies."""
     from agent_providers.constants import COWRITER_PROVIDERS
+
     from songmaker_cli.provider_status import refresh_provider_snapshot
 
     for provider in COWRITER_PROVIDERS:

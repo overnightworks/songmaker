@@ -8,11 +8,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -25,6 +20,11 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
+from conftest import TEST_SECRET, install_app_context, make_fake_redis
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db

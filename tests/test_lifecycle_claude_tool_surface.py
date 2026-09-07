@@ -7,8 +7,8 @@ import subprocess
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from agent_providers.claude.provider import CliToolSurfaceError, UnavailableError
+
 from songmaker_cli.lifecycle import (
     codex_image_sandbox_runtime_health,
     record_codex_image_sandbox_runtime_health,

@@ -91,11 +91,13 @@ cd frontend && pnpm install && pnpm test:coverage && pnpm lint && pnpm check && 
 
 Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
 
-The auth layer is an external dependency: `overnightworks-webauth` is pinned in
+The auth layer and the provider layer are external dependencies:
+`overnightworks-webauth` and `overnightworks-agent-providers` are each pinned in
 the `server` extra to the release wheel of tag `v0.1.0` of
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and
-hash-locked in `uv.lock`, so `uv sync` installs it like any other dependency and
-its own tests run in that repository.
+[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
+and hash-locked in `uv.lock`, so `uv sync` installs them like any other
+dependency and their own tests run in those repositories.
 
 ## Backup
 
@@ -117,6 +119,7 @@ BACKUP_DIR=/path/to/backup ./scripts/backup.sh
 - [docs/acestep.md](docs/acestep.md) — ACE-Step integration, model variants, worker pool, generation parameters
 - [plans/](plans/) — design plans for in-flight and proposed work. Each has a `**Status:**` header.
 - [overnightworks/webauth](https://github.com/overnightworks/webauth) — the extracted auth library songmaker installs by tag
+- [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers) — the extracted provider library songmaker installs by tag
 
 ## License
 

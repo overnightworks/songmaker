@@ -12,9 +12,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers.catalog import ProviderRoute
 from agent_providers.dispatch import cover_image_capability
 from agent_providers.dispatch import stream_cowriter_turn as stream_provider_turn
@@ -26,6 +23,9 @@ from agent_providers.errors import (
 from agent_providers.events import StreamEvent
 from agent_providers.tool_loop import ToolExecutor
 from agent_providers.tools import ToolCatalog
+from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.db.queries.settings import get_cover_settings
 
