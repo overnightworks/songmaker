@@ -12,6 +12,7 @@ import pytest
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
 
+from agent_providers.catalog import ProviderRoute
 from agent_providers.codex import image as codex_image
 from agent_providers.codex import protocol as codex_protocol
 from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
@@ -35,7 +36,6 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
-from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version

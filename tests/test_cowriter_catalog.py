@@ -10,20 +10,22 @@ import httpx
 import pytest
 from conftest import override_provider_runtime
 
+from agent_providers.catalog import (
+    ProviderCapabilityMissing,
+    ProviderRoute,
+    ProviderRouteCapability,
+    ProviderRouteReadinessState,
+    list_provider_models,
+    models_with_active_model,
+)
 from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     SafeRouteReasonCode,
 )
 from agent_providers.process import AgentCliUnavailableError
-from songmaker_cli.cowriter.catalog import (
-    DependencyUnavailableProvider,
-    ProviderRoute,
-    ProviderRouteCapability,
-    ProviderRouteReadinessState,
+from songmaker_cli.provider_status import (
     ProviderSurface,
     get_provider_configuration,
-    list_provider_models,
-    models_with_active_model,
     refresh_provider_snapshot,
 )
 
@@ -37,7 +39,7 @@ def test_api_catalog_uses_only_the_explicit_provider_endpoint(monkeypatch):
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("grok-4.6", "grok-imagine-image")
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.httpx.get",
+        "agent_providers.catalog.httpx.get",
         lambda *_args, **_kwargs: response,
     )
 
@@ -46,7 +48,7 @@ def test_api_catalog_uses_only_the_explicit_provider_endpoint(monkeypatch):
 
 def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_cli_model_aliases",
+        "agent_providers.catalog.list_cli_model_aliases",
         lambda: ("sonnet", "opus"),
     )
 
@@ -56,7 +58,7 @@ def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
 def test_codex_cli_catalog_lists_visible_models_from_the_cli_catalog(monkeypatch):
     fixture = Path(__file__).parent / "fixtures" / "codex-debug-models.json"
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        "agent_providers.catalog.codex_cli_model_catalog",
         fixture.read_text,
     )
 
@@ -72,7 +74,7 @@ def test_codex_cli_catalog_lists_visible_models_from_the_cli_catalog(monkeypatch
 
 def test_codex_cli_catalog_sorts_same_priority_models_by_slug(monkeypatch):
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        "agent_providers.catalog.codex_cli_model_catalog",
         lambda: json.dumps({
             "models": [
                 {"slug": "gpt-z", "visibility": "list", "priority": 1},
@@ -89,7 +91,7 @@ def test_codex_cli_catalog_rejects_an_unreachable_cli(monkeypatch):
         raise AgentCliUnavailableError("catalog command failed")
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        "agent_providers.catalog.codex_cli_model_catalog",
         unavailable,
     )
 
@@ -109,7 +111,7 @@ def test_codex_cli_catalog_rejects_an_unreachable_cli(monkeypatch):
 )
 def test_codex_cli_catalog_rejects_an_invalid_catalog(monkeypatch, payload):
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        "agent_providers.catalog.codex_cli_model_catalog",
         lambda: payload,
     )
 
@@ -124,7 +126,7 @@ def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch)
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("claude-sonnet-4-6")
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.httpx.get",
+        "agent_providers.catalog.httpx.get",
         lambda *_args, **_kwargs: response,
     )
 
@@ -133,10 +135,10 @@ def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch)
 
 def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog(monkeypatch):
     override_provider_runtime(anthropic_api_key="test-key")
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False)
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
+    monkeypatch.setattr("agent_providers.catalog._anthropic_sdk_available", lambda: False)
+    monkeypatch.setattr("agent_providers.catalog._cli_setup_method", lambda _provider: None)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda _provider, route: ["sonnet"] if route is ProviderRoute.CLI else (
             _ for _ in ()
         ).throw(AssertionError("catalogue must not run")),
@@ -149,7 +151,7 @@ def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog
     assert route.readiness is ProviderRouteReadinessState.DISTURBED
     assert route.reason is not None
     assert route.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
-    assert configuration == DependencyUnavailableProvider("claude", "anthropic")
+    assert configuration == ProviderCapabilityMissing("claude", "anthropic")
 
 
 def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
@@ -158,7 +160,7 @@ def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
     def unavailable(*_args, **_kwargs):
         raise httpx.ConnectError("offline")
 
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog.httpx.get", unavailable)
+    monkeypatch.setattr("agent_providers.catalog.httpx.get", unavailable)
     try:
         list_provider_models("grok", ProviderRoute.API)
     except ProviderModelCatalogUnavailableError as error:
@@ -169,7 +171,7 @@ def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
     malformed = MagicMock(status_code=200)
     malformed.json.return_value = {"unexpected": []}
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.httpx.get",
+        "agent_providers.catalog.httpx.get",
         lambda *_args, **_kwargs: malformed,
     )
     try:
@@ -182,9 +184,9 @@ def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):
 
 def test_snapshot_refreshes_both_routes(monkeypatch):
     override_provider_runtime(xai_api_key="test-key")
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True)
+    monkeypatch.setattr("agent_providers.catalog._cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, route: [f"{provider}-{route.value}"],
     )
 
@@ -208,9 +210,9 @@ def test_cli_probe_failure_is_isolated_to_its_provider_route(monkeypatch):
             raise AgentCliUnavailableError("broken credentials")
         return True
 
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_is_logged_in", failing_login)
+    monkeypatch.setattr("agent_providers.catalog._cli_is_logged_in", failing_login)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, route: [f"{provider}-{route.value}"],
     )
 

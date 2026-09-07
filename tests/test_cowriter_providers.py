@@ -22,6 +22,7 @@ from conftest import (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_providers.catalog import ProviderRoute, list_provider_models
 from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
@@ -49,7 +50,6 @@ from songmaker_cli.constants import (
     SETTING_JUDGE_PROVIDER,
 )
 from songmaker_cli.cowriter import tools as cowriter_tools
-from songmaker_cli.cowriter.catalog import ProviderRoute, list_provider_models
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -138,7 +138,7 @@ def test_provider_routes_are_compact_complete_and_reject_malformed_values(tmp_pa
 @pytest.fixture(autouse=True)
 def _clear_agent_cli_caches():
     from agent_providers.process import clear_agent_cli_caches
-    from songmaker_cli.cowriter.catalog import clear_provider_snapshots
+    from songmaker_cli.provider_status import clear_provider_snapshots
 
     clear_agent_cli_caches()
     clear_provider_snapshots()
@@ -180,7 +180,7 @@ def _seed(session, user_id: str) -> None:
 @pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, _route: list(LIVE_CATALOG[provider]),
     )
     factory = init_db(tmp_path / "cowriter.db")
@@ -436,17 +436,17 @@ def test_codex_cli_catalog_is_returned_and_can_be_saved(admin_client, monkeypatc
     client, factory = admin_client
     override_provider_runtime(openai_api_key=None)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models", list_provider_models,
+        "agent_providers.catalog.list_provider_models", list_provider_models,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present", lambda: True,
+        "agent_providers.catalog.codex_cli_access_token_is_present", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_model_catalog",
+        "agent_providers.catalog.codex_cli_model_catalog",
         lambda: '{"models": [{"slug": "gpt-5.6-terra", "visibility": "list", "priority": 1}]}',
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._cli_is_logged_in", lambda _provider: True,
+        "agent_providers.catalog._cli_is_logged_in", lambda _provider: True,
     )
     refresh_provider_snapshots()
     from songmaker_cli.db.queries.settings import set_provider_routes
@@ -517,7 +517,7 @@ def test_default_model_id_is_added_to_the_claude_cli_catalog_on_fresh_install(
         "codex": LIVE_CATALOG["codex"],
     }
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, _route: aliases[provider],
     )
     refresh_provider_snapshots()
@@ -584,7 +584,7 @@ def test_claude_api_catalog_is_ready_for_the_cowriter_and_judge(
         ),
         pytest.param(
             lambda monkeypatch: monkeypatch.setattr(
-                "songmaker_cli.cowriter.catalog._anthropic_sdk_available", lambda: False,
+                "agent_providers.catalog._anthropic_sdk_available", lambda: False,
             ),
             "api_http_error",
             id="sdk-missing",
@@ -597,7 +597,7 @@ def test_cowriter_save_keeps_a_route_that_cannot_answer_and_names_why(
     """Ruled line 8: the unusable choice is stored, the row names the reason."""
     client, factory = admin_client
     override_provider_runtime(anthropic_api_key="test-key")
-    monkeypatch.setattr("songmaker_cli.cowriter.catalog._cli_setup_method", lambda _provider: None)
+    monkeypatch.setattr("agent_providers.catalog._cli_setup_method", lambda _provider: None)
     break_claude_api(monkeypatch)
     refresh_provider_snapshots()
 
@@ -1318,15 +1318,15 @@ def test_provider_status_projects_the_catalog_contract(
 ):
     _configure_only_these_api_keys(**keys)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.find_spec",
+        "agent_providers.catalog.find_spec",
         lambda _name: object() if sdk_available else None,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.grok_cli_token_is_present",
+        "agent_providers.catalog.grok_cli_token_is_present",
         lambda: grok_login.logged_in,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.codex_cli_access_token_is_present",
+        "agent_providers.catalog.codex_cli_access_token_is_present",
         lambda: codex_login.logged_in,
     )
     grok = GrokCliStatus(login=grok_login, model_names=("grok-4.6",))
@@ -1353,7 +1353,7 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
 ):
     override_provider_runtime(xai_api_key=None)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.grok_cli_token_is_present", lambda: True,
+        "agent_providers.catalog.grok_cli_token_is_present", lambda: True,
     )
     _stub_cli_runners(
         monkeypatch,
@@ -1415,12 +1415,13 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
     else:
         monkeypatch.setattr("agent_providers.process._cli_output", lambda *_args: "not status")
     refresh_provider_snapshots()
-    from songmaker_cli.cowriter.catalog import UnconfiguredProvider, provider_snapshot
+    from agent_providers.catalog import ProviderNotLoggedIn
+    from songmaker_cli.provider_status import provider_snapshot
 
     snapshot = provider_snapshot(provider)
     assert snapshot is not None
-    assert isinstance(snapshot.cowriter, UnconfiguredProvider)
-    assert isinstance(snapshot.judge, UnconfiguredProvider)
+    assert isinstance(snapshot.cowriter, ProviderNotLoggedIn)
+    assert isinstance(snapshot.judge, ProviderNotLoggedIn)
     assert snapshot.probed_at is not None
 
     client, _ = admin_client
@@ -1438,23 +1439,19 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
 def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
     monkeypatch, provider,
 ):
+    from agent_providers.catalog import ProviderRoute, ProviderRouteReadinessState
     from agent_providers.process import AgentCliUnavailableError
-    from songmaker_cli.cowriter.catalog import (
-        ProviderRoute,
-        ProviderRouteReadinessState,
-        provider_snapshot,
-        refresh_provider_snapshot,
-    )
+    from songmaker_cli.provider_status import provider_snapshot, refresh_provider_snapshot
 
     def unavailable_cli(_provider: str) -> bool:
         raise AgentCliUnavailableError("unavailable")
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        "agent_providers.catalog._cli_is_logged_in",
         unavailable_cli,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda name, _route: [f"{name}-model"],
     )
 
@@ -1467,17 +1464,17 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
 def test_settings_responses_project_one_snapshot_generation_per_provider(
     admin_client, monkeypatch,
 ):
-    from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
+    from agent_providers.catalog import ProviderReady, ProviderSetupMethod
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.get_provider_configuration",
-        lambda provider, _surface: ConfiguredProvider(
+        "songmaker_cli.provider_status.get_provider_configuration",
+        lambda provider, _surface: ProviderReady(
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
     refresh_provider_snapshots()
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.provider_snapshot",
+        "songmaker_cli.provider_status.provider_snapshot",
         lambda _provider: (_ for _ in ()).throw(AssertionError("individual snapshot read")),
     )
 
@@ -1552,7 +1549,7 @@ def test_models_errors_cover_every_provider_not_only_the_saved_one(
         return list(LIVE_CATALOG[provider])
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
+        "agent_providers.catalog.list_provider_models", _list_provider_models,
     )
     refresh_provider_snapshots()
     settings = client.get("/api/settings/cowriter").json()
@@ -1565,16 +1562,16 @@ def test_models_errors_cover_every_provider_not_only_the_saved_one(
 def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
     admin_client, monkeypatch,
 ):
-    import songmaker_cli.cowriter.catalog as catalog
+    import agent_providers.catalog as catalog
 
     client, _ = admin_client
     secret_stderr = "/home/operator/.claude/credentials.json: permission denied"
     def _configured_catalog(provider, surface, settings):
         if provider == "claude":
-            return catalog.ConfiguredProvider(
+            return catalog.ProviderReady(
                 provider, catalog.ProviderSetupMethod.CLAUDE_CLI,
             )
-        return catalog.ConfiguredProvider(
+        return catalog.ProviderReady(
             provider, catalog.ProviderSetupMethod.API_KEY,
             f"{provider.upper()}_API_KEY",
         )
@@ -1815,7 +1812,7 @@ def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(
         return list(LIVE_CATALOG[provider])
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models", _list_provider_models,
+        "agent_providers.catalog.list_provider_models", _list_provider_models,
     )
     refresh_provider_snapshots()
     settings = client.get("/api/settings/judge").json()
@@ -1840,7 +1837,7 @@ def test_cowriter_save_with_unchanged_provider_and_model_survives_a_down_catalog
             provider, f"could not list {provider} models",
         )
 
-    with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):
+    with patch("agent_providers.catalog.list_provider_models", side_effect=_down):
         budget_only = client.put(
             "/api/settings/cowriter",
             json={"provider": "grok", "model": "grok-4.6", "tail_token_budget": 30000},
@@ -1885,7 +1882,7 @@ def test_cowriter_save_that_actually_changes_the_model_still_needs_a_live_catalo
             provider, f"could not list {provider} models",
         )
 
-    with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):
+    with patch("agent_providers.catalog.list_provider_models", side_effect=_down):
         refresh_provider_snapshots()
         resp = client.put(
             "/api/settings/cowriter",
@@ -1952,7 +1949,7 @@ def test_judge_save_keeps_its_persisted_model_while_the_catalogue_is_down(
             provider, f"could not list {provider} models",
         )
 
-    with patch("songmaker_cli.cowriter.catalog.list_provider_models", side_effect=_down):
+    with patch("agent_providers.catalog.list_provider_models", side_effect=_down):
         refresh_provider_snapshots()
         again = client.put("/api/settings/judge", json=request)
         unknown = client.put("/api/settings/judge", json={"provider": "grok", "model": "grok-4.5"})
@@ -1995,7 +1992,7 @@ def _pinned_route_snapshot(
     reason: SafeRouteReasonCode | None = None,
     setup_label: str,
 ):
-    from songmaker_cli.cowriter.catalog import (
+    from agent_providers.catalog import (
         ProviderRouteCapability,
         ProviderRouteReadinessState,
         ProviderRouteSnapshot,
@@ -2015,22 +2012,19 @@ def _pinned_route_snapshot(
 
 
 def _pinned_snapshots(claude_judge):
-    from songmaker_cli.cowriter.catalog import (
-        CliLoginNeedsApiKeyProvider,
-        ProviderNeed,
+    from agent_providers.catalog import (
+        ProviderNeedsKey,
+        ProviderNotLoggedIn,
         ProviderRoute,
         ProviderSetupMethod,
-        ProviderSnapshot,
-        UnconfiguredProvider,
     )
+    from songmaker_cli.provider_status import ProviderSnapshot
 
-    unconfigured = UnconfiguredProvider("x", ProviderNeed.API_KEY, "X_API_KEY")
+    unconfigured = ProviderNotLoggedIn("x", "X_API_KEY")
     judges = {
         "claude": claude_judge,
-        "grok": CliLoginNeedsApiKeyProvider(
-            "grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY",
-        ),
-        "codex": UnconfiguredProvider("codex", ProviderNeed.API_KEY, "OPENAI_API_KEY"),
+        "grok": ProviderNeedsKey("grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY"),
+        "codex": ProviderNotLoggedIn("codex", "OPENAI_API_KEY"),
     }
     routes = {
         "claude": {
@@ -2079,7 +2073,7 @@ def _pinned_snapshots(claude_judge):
 
 
 def _pinned_cover_capability(provider: str, route):
-    from songmaker_cli.cowriter.catalog import ProviderRoute
+    from agent_providers.catalog import ProviderRoute
     from songmaker_cli.cowriter.dispatch import CoverImageCapability
 
     if provider == "codex" and route is ProviderRoute.CLI:
@@ -2091,17 +2085,15 @@ def _pinned_cover_capability(provider: str, route):
 
 
 def _claude_judge_configurations():
-    from songmaker_cli.cowriter.catalog import (
-        ConfiguredProvider,
-        DependencyUnavailableProvider,
+    from agent_providers.catalog import (
+        ProviderCapabilityMissing,
+        ProviderReady,
         ProviderSetupMethod,
     )
 
     return {
-        "ready": ConfiguredProvider(
-            "claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY",
-        ),
-        "capability_missing": DependencyUnavailableProvider("claude", "anthropic"),
+        "ready": ProviderReady("claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY"),
+        "capability_missing": ProviderCapabilityMissing("claude", "anthropic"),
     }
 
 
@@ -2121,7 +2113,7 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
         session.commit()
     snapshots = _pinned_snapshots(_claude_judge_configurations()[case])
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.provider_snapshots", lambda: snapshots,
+        "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,
     )
     monkeypatch.setattr(
         "songmaker_cli.cowriter.dispatch.cover_image_capability", _pinned_cover_capability,

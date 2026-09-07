@@ -9,6 +9,7 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.catalog import ProviderRoute
 from agent_providers.claude.adapter import (
     call_claude_once,
     stream_claude_api_turn,
@@ -54,7 +55,6 @@ from agent_providers.tools import (
     openai_tool_schemas,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.db.queries.settings import get_cover_settings
 from webauth.dependencies import AuthenticatedUser
 

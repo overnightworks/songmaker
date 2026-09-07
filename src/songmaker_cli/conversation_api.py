@@ -108,7 +108,7 @@ from songmaker_cli.db.queries.conversations import append_message
 from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
-    from songmaker_cli.cowriter.catalog import ProviderRoute
+    from agent_providers.catalog import ProviderRoute
 
 log = logging.getLogger(__name__)
 
@@ -625,7 +625,7 @@ def _chat_turn_context(
 
 
 def _chat_turn_provider(session: Session) -> tuple[str, ProviderRoute, str]:
-    from songmaker_cli.cowriter.catalog import ProviderRoute
+    from agent_providers.catalog import ProviderRoute
 
     try:
         provider = get_cowriter_provider(session)
@@ -705,7 +705,7 @@ async def _chat_event_generator(
     prepared: PreparedChatTurn,
     lifecycle: ChatTurnLifecycle,
 ) -> AsyncIterator[str]:
-    from songmaker_cli.cowriter.catalog import (
+    from agent_providers.catalog import (
         ProviderRoute,
         ProviderRouteCapability,
         provider_route_capability,
