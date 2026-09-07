@@ -11,8 +11,12 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
+from provider_test_support import (
+    COWRITER_TOOL_CATALOG,
+    override_provider_runtime,
+    use_codex_process_pool,
+)
 
 from agent_providers.codex import image as codex_image
 from agent_providers.codex import protocol as codex_protocol
@@ -34,11 +38,15 @@ from agent_providers.tool_loop import (
     ToolResultBatch,
     stream_tool_loop,
 )
-from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
-from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 
 A_TOOL_FAILURE_MESSAGE = "Co-Writer tool failed."
-A_COVER_POLICY = COVER_IMAGE_POLICY
+A_COVER_POLICY = ImagePolicy(
+    maximum_source_bytes=8 * 1024 * 1024,
+    maximum_pixels=20_000_000,
+    output_edge_pixels=1024,
+    output_format="PNG",
+    output_signature=b"\x89PNG\r\n\x1a\n",
+)
 
 
 def _transport() -> codex_transport.CodexCliToolTransport:
