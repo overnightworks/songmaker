@@ -14,9 +14,9 @@ list names its own owner.
 from __future__ import annotations
 
 import pytest
+from agent_providers.config import current_config
 
 from acestep_worker.constants import SECRET_ENV_KEYS as WORKER_SECRET_ENV_KEYS
-from agent_providers.config import current_config
 from songmaker_cli.constants import SECRET_ENV_KEYS as CLI_SECRET_ENV_KEYS
 
 EXPECTED_SECRET_ENV_KEYS = frozenset({

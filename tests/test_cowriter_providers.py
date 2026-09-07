@@ -12,17 +12,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import (
-    TEST_SECRET,
-    install_app_context,
-    make_fake_redis,
-    override_provider_runtime,
-    refresh_provider_snapshots,
-)
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers.catalog import ProviderRoute, list_provider_models
 from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
@@ -38,6 +27,17 @@ from agent_providers.openai_adapter import (
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
 from agent_providers.tools import openai_tool_schemas
+from conftest import (
+    TEST_SECRET,
+    install_app_context,
+    make_fake_redis,
+    override_provider_runtime,
+    refresh_provider_snapshots,
+)
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -138,6 +138,7 @@ def test_provider_routes_are_compact_complete_and_reject_malformed_values(tmp_pa
 @pytest.fixture(autouse=True)
 def _clear_agent_cli_caches():
     from agent_providers.process import clear_agent_cli_caches
+
     from songmaker_cli.provider_status import clear_provider_snapshots
 
     clear_agent_cli_caches()
@@ -1399,6 +1400,7 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
         monkeypatch.setattr("agent_providers.process._cli_output", lambda *_args: "not status")
     refresh_provider_snapshots()
     from agent_providers.catalog import ProviderNotLoggedIn
+
     from songmaker_cli.provider_status import provider_snapshot
 
     snapshot = provider_snapshot(provider)
@@ -1424,6 +1426,7 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
 ):
     from agent_providers.catalog import ProviderRoute, ProviderRouteReadinessState
     from agent_providers.process import AgentCliUnavailableError
+
     from songmaker_cli.provider_status import provider_snapshot, refresh_provider_snapshot
 
     def unavailable_cli(_provider: str) -> bool:
@@ -2003,6 +2006,7 @@ def _pinned_snapshots(claude_judge):
         ProviderRoute,
         ProviderSetupMethod,
     )
+
     from songmaker_cli.provider_status import ProviderSnapshot
 
     unconfigured = ProviderNotLoggedIn("x", "X_API_KEY")

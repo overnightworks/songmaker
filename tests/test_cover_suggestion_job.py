@@ -9,9 +9,6 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime, use_codex_process_pool
-from PIL import Image
-
 from agent_providers.catalog import ProviderRoute
 from agent_providers.codex import image as codex_image
 from agent_providers.codex import protocol as codex_protocol
@@ -22,6 +19,9 @@ from agent_providers.errors import (
     normalize_route_failure,
 )
 from agent_providers.process import CliRunOutcome, CliRunReason
+from conftest import override_provider_runtime, use_codex_process_pool
+from PIL import Image
+
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,

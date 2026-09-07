@@ -7,9 +7,6 @@ import logging
 from contextlib import suppress
 from typing import Callable
 
-from sqlalchemy.orm import Session
-
-from acestep_engine.errors import AudioDownloadError
 from agent_providers.codex.image import (
     CodexImageCliError,
     CodexImageError,
@@ -20,6 +17,9 @@ from agent_providers.codex.image import (
 )
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from agent_providers.errors import CodexProcessPoolSaturatedError
+from sqlalchemy.orm import Session
+
+from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
     COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,

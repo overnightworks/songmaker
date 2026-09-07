@@ -118,6 +118,7 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from agent_providers.claude.provider import shutdown_tool_surface_background_tasks
+
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams

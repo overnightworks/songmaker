@@ -8,8 +8,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import songmaker_cli.music_worker as mw_mod
 from agent_providers.config import reset_config
+
+import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.constants import (
     AuditAction,
     CoverExecutor,

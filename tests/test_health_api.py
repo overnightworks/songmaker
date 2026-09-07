@@ -17,10 +17,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import fake_cli_process, make_test_app
-
 from agent_providers.claude import provider
 from agent_providers.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
+from conftest import fake_cli_process, make_test_app
+
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker

@@ -16,9 +16,8 @@ from __future__ import annotations
 import sys
 from typing import Final
 
-from pydantic import SecretStr
-
 from agent_providers.config import McpServerSpec
+from pydantic import SecretStr
 
 MCP_SERVER_NAME: Final = "songmaker"
 MCP_CONFIG_FILE_PREFIX: Final = "songmaker-mcp-"

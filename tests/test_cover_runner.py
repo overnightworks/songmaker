@@ -9,10 +9,6 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime, use_codex_process_pool
-from PIL import Image
-
-import songmaker_cli.cover_runner as cover_runner
 from agent_providers.catalog import ProviderRoute
 from agent_providers.codex import protocol as codex_protocol
 from agent_providers.codex.image import (
@@ -22,6 +18,10 @@ from agent_providers.codex.image import (
 )
 from agent_providers.codex.pool import CodexProcessPool
 from agent_providers.process import CliRunOutcome, CliRunReason
+from conftest import override_provider_runtime, use_codex_process_pool
+from PIL import Image
+
+import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db

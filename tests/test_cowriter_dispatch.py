@@ -10,9 +10,6 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from conftest import override_provider_runtime
-from webauth.dependencies import AuthenticatedUser
-
 from agent_providers import dispatch, openai_adapter, tool_loop
 from agent_providers.catalog import ProviderRoute
 from agent_providers.claude import adapter as claude_adapter
@@ -43,6 +40,9 @@ from agent_providers.tool_loop import (
     ToolOutcome,
 )
 from agent_providers.tools import openai_tool_schemas
+from conftest import override_provider_runtime
+from webauth.dependencies import AuthenticatedUser
+
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import routing
 from songmaker_cli.cowriter import tools as cowriter_tools
@@ -747,6 +747,7 @@ def _record_every_cowriter_route(monkeypatch) -> list[tuple[str, str | None]]:
     return taken
 
 
+@pytest.mark.acceptance("ACC-COWRITER-12")
 @pytest.mark.parametrize(
     ("provider", "route", "expected_target", "expected_key"), _COWRITER_ROUTE_TARGETS,
 )
