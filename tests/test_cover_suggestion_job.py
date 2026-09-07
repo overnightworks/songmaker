@@ -9,9 +9,17 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import override_provider_runtime
+from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
 
+from agent_providers.codex import image as codex_image
+from agent_providers.codex import protocol as codex_protocol
+from agent_providers.codex.pool import CodexProcessKind, CodexProcessPool
+from agent_providers.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.process import CliRunOutcome, CliRunReason
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
@@ -26,15 +34,9 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.cowriter import codex_cli_adapter
+from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.codex_process_pool import CodexProcessKind, CodexProcessPool
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
@@ -51,6 +53,7 @@ _REDACTED_CODEX_LOGIN = {
         "refresh_token": "",
     },
 }
+A_COVER_POLICY = COVER_IMAGE_POLICY
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -65,12 +68,8 @@ def _reap_fake_codex_process(kwargs: dict) -> None:
 
 @pytest.fixture(autouse=True)
 def codex_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_cover_runs=1)
-    monkeypatch.setattr(
-        codex_cli_adapter,
-        "get_codex_process_pool",
-        lambda: process_pool,
-    )
+    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
+    use_codex_process_pool(monkeypatch, process_pool)
 
 
 def _png_bytes(*, size: tuple[int, int] = (300, 100)) -> bytes:
@@ -171,7 +170,7 @@ def _install_fake_codex_cli(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
     return calls
 
 
@@ -196,7 +195,7 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
         paths = [item.png_path for item in suggestions]
     assert len(calls) == 3
     assert all(
-        call["command"] == codex_cli_adapter._build_codex_image_command("") for call in calls
+        call["command"] == codex_image._build_codex_image_command("") for call in calls
     )
     assert all(call["stdin_payload"] is not None for call in calls)
     assert all(len(call["stdin_payload"].decode()) <= COVER_PROMPT_MAX_CHARS for call in calls)
@@ -328,8 +327,8 @@ def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
     mutate(records)
     event_stream = "\n".join(json.dumps(record) for record in records)
 
-    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
-        codex_cli_adapter._validate_codex_image_events(
+    with pytest.raises(codex_image.ImageToolBlockedError):
+        codex_image._validate_codex_image_events(
             event_stream, codex_home=codex_home,
         )
 
@@ -354,10 +353,10 @@ def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.ImageToolBlockedError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     assert observed_abort.is_set()
 
@@ -384,10 +383,10 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    assert codex_cli_adapter.generate_codex_cover_image(
-        "prompt", deadline=10_000_000,
+    assert codex_image.generate_codex_cover_image(
+        "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
     ).startswith(b"\x89PNG")
     assert channels
     assert all(not channel.abort_requested() for channel in channels)
@@ -429,10 +428,10 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.ImageToolBlockedError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.ImageToolBlockedError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     assert observed_abort.is_set()
 
@@ -522,10 +521,10 @@ def test_cover_job_names_a_busy_codex_process_pool(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory, audio_dir, job_id = cover_job
-    process_pool = CodexProcessPool(maximum_processes=1, maximum_cover_runs=1)
-    process_pool.reserve(CodexProcessKind.COVER)
+    process_pool = CodexProcessPool(maximum_processes=1, maximum_image_runs=1)
+    process_pool.reserve(CodexProcessKind.IMAGE)
     _install_fake_codex_cli(monkeypatch, tmp_path)
-    monkeypatch.setattr(codex_cli_adapter, "get_codex_process_pool", lambda: process_pool)
+    use_codex_process_pool(monkeypatch, process_pool)
     monkeypatch.setattr(
         "songmaker_cli.cover_runner.cover_image_provider_method",
         lambda _session: _codex_cover_dispatch(),
@@ -581,11 +580,11 @@ def test_codex_image_ignores_non_generated_png_assets(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    assert codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000).startswith(
-        b"\x89PNG"
-    )
+    assert codex_image.generate_codex_cover_image(
+        "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
+    ).startswith(b"\x89PNG")
 
 
 def test_codex_image_rejects_an_artifact_outside_its_private_home(
@@ -604,10 +603,10 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.CodexImageNotCreatedError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.CodexImageNotCreatedError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     assert outside.exists()
     assert homes
@@ -633,10 +632,10 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.CodexImageArtifactError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.CodexImageArtifactError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     assert (outside / "cover.png").exists()
     assert homes
@@ -660,10 +659,10 @@ def test_codex_image_timeout_cleans_its_private_directory(
         return result
 
     override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_cli_adapter, "run_cli_bounded", fake_runner)
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_cli_adapter.CodexImageTimeoutError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.CodexImageTimeoutError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
     assert homes
     assert all(not home.exists() for home in homes)
@@ -684,8 +683,8 @@ def test_codex_image_names_missing_or_incomplete_login_mirrors(
         auth_file.write_text(json.dumps(document))
     override_provider_runtime(codex_cli_auth_file=auth_file)
 
-    with pytest.raises(codex_cli_adapter.CodexImageLoginError):
-        codex_cli_adapter.generate_codex_cover_image("prompt", deadline=10_000_000)
+    with pytest.raises(codex_image.CodexImageLoginError):
+        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
 
 def test_cancelled_cover_job_removes_its_staging_group(

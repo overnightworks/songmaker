@@ -12,9 +12,24 @@ from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from threading import Event, Lock
+from typing import Final
 
+from agent_providers.codex.image import (
+    CodexImageCliError,
+    CodexImageError,
+    CodexImageLoginError,
+    CodexImageTimeoutError,
+    generate_codex_cover_image,
+)
+from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
+from agent_providers.images import ImagePolicy
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
+    COVER_GENERATED_EDGE_PIXELS,
+    COVER_GENERATED_IMAGE_FORMAT,
+    COVER_MAX_BYTES,
+    COVER_MAX_PIXELS,
+    COVER_PNG_MAGIC,
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
     JOB_ERROR_COVER_IMAGE_FAILED,
@@ -24,15 +39,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
-from songmaker_cli.cowriter.codex_cli_adapter import (
-    CodexImageCliError,
-    CodexImageError,
-    CodexImageLoginError,
-    CodexImageTimeoutError,
-    generate_codex_cover_image,
-)
 from songmaker_cli.cowriter.dispatch import CoverImageDispatch, cover_image_provider_method
-from songmaker_cli.cowriter.errors import ProviderUnavailableError, SafeRouteReasonCode
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,
@@ -49,6 +56,13 @@ log = logging.getLogger(__name__)
 
 COVER_RUNNER_POLL_INTERVAL_SECONDS = 1.0
 _CODEX_COVER_IMAGE_GENERATOR = generate_codex_cover_image
+COVER_IMAGE_POLICY: Final[ImagePolicy] = ImagePolicy(
+    maximum_source_bytes=COVER_MAX_BYTES,
+    maximum_pixels=COVER_MAX_PIXELS,
+    output_edge_pixels=COVER_GENERATED_EDGE_PIXELS,
+    output_format=COVER_GENERATED_IMAGE_FORMAT,
+    output_signature=COVER_PNG_MAGIC,
+)
 
 
 class CoverJobCancellationRegistry:
@@ -423,11 +437,20 @@ async def _generate_cover_image(
     model: str,
 ) -> bytes:
     """Await one image generation and reap its CLI before task cancellation escapes."""
-    if abort_signal is None or image_generator is not _CODEX_COVER_IMAGE_GENERATOR:
+    if image_generator is not _CODEX_COVER_IMAGE_GENERATOR:
         return await asyncio.to_thread(image_generator, prompt, deadline=deadline, model=model)
+    if abort_signal is None:
+        return await asyncio.to_thread(
+            image_generator,
+            prompt,
+            policy=COVER_IMAGE_POLICY,
+            deadline=deadline,
+            model=model,
+        )
     generation = asyncio.create_task(asyncio.to_thread(
         image_generator,
         prompt,
+        policy=COVER_IMAGE_POLICY,
         deadline=deadline,
         abort_signal=abort_signal,
         model=model,

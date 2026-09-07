@@ -600,7 +600,7 @@ def _with_private_prompt_file(
         raise ValueError("Prompt bytes require a prompt file index")
     if prompt_file_arg_index < 0 or prompt_file_arg_index >= len(argv):
         raise ValueError("Prompt file index is outside the CLI command")
-    descriptor, path = tempfile.mkstemp(prefix="songmaker-cli-prompt-")
+    descriptor, path = tempfile.mkstemp(prefix=current_config().cli_prompt_file_prefix)
     try:
         with os.fdopen(descriptor, "wb") as prompt_file:
             prompt_file.write(prompt_file_bytes)

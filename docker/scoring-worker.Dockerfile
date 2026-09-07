@@ -20,7 +20,7 @@ COPY --chown=songmaker pyproject.toml uv.lock ./
 # distribution, so this locked sync alone may build it. Every dependency
 # remains resolved from uv.lock.
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper --extra claude # NOSONAR
+    --extra server --extra scoring --extra whisper --extra api # NOSONAR
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
