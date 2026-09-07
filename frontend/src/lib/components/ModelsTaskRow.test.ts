@@ -110,6 +110,11 @@ function optionLabels(select: HTMLSelectElement): string[] {
 	return Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
 }
 
+/** What the closed provider field reads as, the way a person sees it. */
+function providerFieldText(root: ParentNode): string {
+	return requireElement(root, '.pick-face').textContent?.trim() ?? '';
+}
+
 function routeButton(root: ParentNode, route: ModelsRouteKey): HTMLButtonElement {
 	const label = route === 'cli' ? 'CLI' : 'API';
 	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('.rsw button')).find(
@@ -160,6 +165,37 @@ describe('models task row', () => {
 			'Codex · no image tool'
 		]);
 		expect(Array.from(providers.options).some((option) => option.disabled)).toBe(false);
+	});
+
+	it('reads as the provider name alone while the states stay in the options', async () => {
+		const target = await renderRow();
+
+		expect(providerFieldText(target)).toBe('Claude');
+		expect(optionLabels(selectNamed(target, 'provider'))).toContain('Claude ✓ ready');
+	});
+
+	it('names the provider the row holds while its save is still in flight', async () => {
+		const target = await renderRow({ save: vi.fn(() => new Promise<ModelsSaveOutcome>(() => {})) });
+
+		await choose(selectNamed(target, 'provider'), 'grok');
+
+		expect(providerFieldText(target)).toBe('Grok');
+		expect(selectNamed(target, 'provider').value).toBe('grok');
+	});
+
+	it('leaves the choosing to the native control the keyboard reaches', async () => {
+		const save = vi.fn().mockResolvedValue({ ok: true });
+		const target = await renderRow({ save });
+
+		const providers = selectNamed(target, 'provider');
+		providers.focus();
+		expect(document.activeElement).toBe(providers);
+		expect(requireElement(target, '.pick-face').getAttribute('aria-hidden')).toBe('true');
+
+		await choose(providers, 'grok');
+
+		expect(save).toHaveBeenCalledWith({ provider: 'grok', route: 'cli', model: '' });
+		expect(target.textContent).toContain(MODELS_SAVED_LABEL);
 	});
 
 	it('keeps both route pills alive when both routes are set up', async () => {
