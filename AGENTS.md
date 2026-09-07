@@ -1,6 +1,6 @@
 # Repository agent guidance
 
-- Before every repository edit, use the globally installed `agent-claim` CLI
+- Before every repository edit, use the globally installed `aco` CLI
   to check the live ledger and claim the exact write scope. Subagents remain
   within their parent's live claim and do not take overlapping claims.
 - Work autonomously within the operator-authorized scope. Prefer the clean,
@@ -27,10 +27,12 @@
     Projects-classic GraphQL error.
 - The board reads a work item's contract from the typed `agent-claim` fenced
   block, not prose markers (`body_contract = "block"` in
-  `.agent-claim/board.toml`; see the `agent-claim` README's "Typed body
-  contract" section for the schema). Every hand-created item (`gh issue
-  create`, an operator-opened issue) must carry the four-line block —
-  `cut` is the only command that writes it automatically.
+  `.agent-claim/board.toml` — the fenced-block token and this config path
+  intentionally keep the old name even though the command is now `aco`; see
+  the `agent-coordination` README's "Typed body contract" section for the
+  schema). Every hand-created item (`gh issue create`, an operator-opened
+  issue) must carry the four-line block — `cut` is the only command that
+  writes it automatically.
 
 ## Repository layout
 
