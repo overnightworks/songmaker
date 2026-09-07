@@ -54,7 +54,7 @@ def test_songmaker_installs_its_container_mounts_and_credentials() -> None:
     assert config.codex_code_mode_host_binary == Path(CODEX_CODE_MODE_HOST_BINARY)
     assert config.codex_resources_directory == Path(CODEX_RESOURCES_DIRECTORY)
     assert config.codex_max_concurrent_processes == settings.codex_cli_max_concurrent_processes
-    assert config.codex_max_concurrent_cover_runs == settings.cover_max_concurrent_runs
+    assert config.codex_max_concurrent_image_runs == settings.cover_max_concurrent_runs
 
 
 def test_installing_the_same_deployment_facts_again_changes_nothing() -> None:

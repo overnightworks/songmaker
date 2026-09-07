@@ -12,13 +12,22 @@ from sqlalchemy.orm import Session
 from agent_providers.claude.provider import (
     UnavailableError as ClaudeUnavailableError,
 )
+from agent_providers.codex.image import codex_cover_image_capability_is_available
+from agent_providers.codex.transport import CodexCliToolTransport
 from agent_providers.config import current_config
 from agent_providers.constants import (
     COWRITER_GROK_CHAT_URL,
     COWRITER_OPENAI_CHAT_URL,
     COWRITER_PROVIDERS,
 )
+from agent_providers.errors import (
+    ProviderUnavailableError,
+    SafeRouteReason,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.events import StreamEvent
+from agent_providers.grok.transport import GrokCliToolTransport
 from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
@@ -29,6 +38,7 @@ from agent_providers.tool_loop import (
     ToolTransport,
     stream_tool_loop,
 )
+from agent_providers.tools import ToolCatalog
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.claude_adapter import (
@@ -36,17 +46,6 @@ from songmaker_cli.cowriter.claude_adapter import (
     stream_claude_api_turn,
     stream_claude_turn,
 )
-from songmaker_cli.cowriter.codex_cli_adapter import (
-    CodexCliToolTransport,
-    codex_cover_image_capability_is_available,
-)
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReason,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
-from songmaker_cli.cowriter.grok_cli_adapter import GrokCliToolTransport
 from songmaker_cli.cowriter.openai_adapter import (
     call_openai_compatible_once,
     stream_openai_compatible_turn,
@@ -212,7 +211,7 @@ async def _stream_grok_cli_tool_turn(
         messages=messages,
         session=session,
         user=user,
-        transport=GrokCliToolTransport(model=model),
+        transport=GrokCliToolTransport(model=model, catalog=_tool_catalog()),
         correlation_id=correlation_id,
     ):
         yield event
@@ -234,10 +233,22 @@ async def _stream_codex_cli_tool_turn(
         messages=messages,
         session=session,
         user=user,
-        transport=CodexCliToolTransport(model=model),
+        transport=CodexCliToolTransport(model=model, catalog=_tool_catalog()),
         correlation_id=correlation_id,
     ):
         yield event
+
+
+def _tool_catalog() -> ToolCatalog:
+    """Load songmaker's tool catalog only where a tool-using turn needs it.
+
+    Its module reaches the MCP tool implementations, and the scoring worker
+    installs no ``mcp`` extra, so importing it at module scope would keep
+    that container from importing this router at all.
+    """
+    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
+
+    return COWRITER_TOOL_CATALOG
 
 
 async def _stream_cli_tool_turn(

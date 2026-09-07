@@ -36,6 +36,13 @@ from agent_providers.constants import (
     COWRITER_OPENAI_NON_CHAT_MARKERS,
     COWRITER_PROVIDERS,
 )
+from agent_providers.errors import (
+    ProviderModelCatalogUnavailableError,
+    ProviderUnavailableError,
+    SafeRouteReason,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
@@ -43,13 +50,6 @@ from agent_providers.process import (
     codex_cli_model_catalog,
     grok_cli_status,
     grok_cli_token_is_present,
-)
-from songmaker_cli.cowriter.errors import (
-    ProviderModelCatalogUnavailableError,
-    ProviderUnavailableError,
-    SafeRouteReason,
-    SafeRouteReasonCode,
-    normalize_route_failure,
 )
 
 _CLAUDE_PROVIDER: Final = "claude"

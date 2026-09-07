@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from agent_providers.config import current_config
-from songmaker_cli.cowriter.errors import CodexProcessPoolSaturatedError
+from agent_providers.errors import CodexProcessPoolSaturatedError
 
 
 class CodexProcessKind(StrEnum):
     """The two Codex process classes with distinct admission limits."""
 
     TEXT = "text"
-    COVER = "cover"
+    IMAGE = "image"
 
 
 @dataclass(eq=False)
@@ -28,15 +28,15 @@ class CodexProcessReservation:
 class CodexProcessPool:
     """Keep reserved, live, and zombie Codex processes within their caps."""
 
-    def __init__(self, *, maximum_processes: int, maximum_cover_runs: int) -> None:
+    def __init__(self, *, maximum_processes: int, maximum_image_runs: int) -> None:
         if maximum_processes < 1:
             raise ValueError("Codex process cap must be at least one")
-        if maximum_cover_runs < 1:
-            raise ValueError("Codex cover cap must be at least one")
-        if maximum_cover_runs > maximum_processes:
-            raise ValueError("Codex cover cap cannot exceed the total process cap")
+        if maximum_image_runs < 1:
+            raise ValueError("Codex image cap must be at least one")
+        if maximum_image_runs > maximum_processes:
+            raise ValueError("Codex image cap cannot exceed the total process cap")
         self._maximum_processes = maximum_processes
-        self._maximum_cover_runs = maximum_cover_runs
+        self._maximum_image_runs = maximum_image_runs
         self._lock = threading.Lock()
         self._reservations: set[CodexProcessReservation] = set()
 
@@ -46,10 +46,10 @@ class CodexProcessPool:
             if len(self._reservations) >= self._maximum_processes:
                 raise CodexProcessPoolSaturatedError(kind=kind, scope="total")
             if (
-                kind is CodexProcessKind.COVER
-                and self._cover_reservation_count() >= self._maximum_cover_runs
+                kind is CodexProcessKind.IMAGE
+                and self._image_reservation_count() >= self._maximum_image_runs
             ):
-                raise CodexProcessPoolSaturatedError(kind=kind, scope="cover")
+                raise CodexProcessPoolSaturatedError(kind=kind, scope="image")
             reservation = CodexProcessReservation(kind=kind)
             self._reservations.add(reservation)
             return reservation
@@ -86,14 +86,14 @@ class CodexProcessPool:
         with self._lock:
             return len(self._reservations)
 
-    def cover_reservation_count(self) -> int:
-        """Return cover slots, including unbound and zombie reservations."""
+    def image_reservation_count(self) -> int:
+        """Return image slots, including unbound and zombie reservations."""
         with self._lock:
-            return self._cover_reservation_count()
+            return self._image_reservation_count()
 
-    def _cover_reservation_count(self) -> int:
+    def _image_reservation_count(self) -> int:
         return sum(
-            reservation.kind is CodexProcessKind.COVER
+            reservation.kind is CodexProcessKind.IMAGE
             for reservation in self._reservations
         )
 
@@ -110,6 +110,6 @@ def get_codex_process_pool() -> CodexProcessPool:
             config = current_config()
             _process_pool = CodexProcessPool(
                 maximum_processes=config.codex_max_concurrent_processes,
-                maximum_cover_runs=config.codex_max_concurrent_cover_runs,
+                maximum_image_runs=config.codex_max_concurrent_image_runs,
             )
         return _process_pool

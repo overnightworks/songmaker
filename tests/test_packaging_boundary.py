@@ -31,7 +31,7 @@ CONTAINERS = {
     "web": ContainerSpec(
         "songmaker-web",
         Path("Dockerfile"),
-        frozenset({"server", "mcp", "claude"}),
+        frozenset({"server", "mcp", "api", "image"}),
         "songmaker_cli.main",
         ("songmaker_cli.main", "songmaker_cli.server"),
         None,
@@ -39,7 +39,7 @@ CONTAINERS = {
     "scoring-worker": ContainerSpec(
         "songmaker-scoring-worker",
         Path("docker/scoring-worker.Dockerfile"),
-        frozenset({"server", "scoring", "whisper", "claude"}),
+        frozenset({"server", "scoring", "whisper", "api"}),
         "songmaker_cli.scoring_worker",
         ("songmaker_cli.scoring_worker",),
         ("songmaker_cli.scoring_worker.ScoringWorkerSettings",),
@@ -47,7 +47,7 @@ CONTAINERS = {
     "music-worker": ContainerSpec(
         "songmaker-music-worker",
         Path("docker/music-worker.Dockerfile"),
-        frozenset({"server"}),
+        frozenset({"server", "image"}),
         "songmaker_cli.music_worker",
         ("songmaker_cli.music_worker",),
         ("songmaker_cli.music_worker.MusicWorkerSettings",),
@@ -94,14 +94,37 @@ def _normalized_distribution(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
+def _requirement_distribution(requirement: str) -> str:
+    match = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", requirement)
+    assert match, f"could not parse dependency {requirement!r}"
+    return _normalized_distribution(match.group())
+
+
+def _core_distributions() -> frozenset[str]:
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
+    return frozenset(
+        _requirement_distribution(requirement)
+        for requirement in pyproject["project"]["dependencies"]
+    )
+
+
+def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
+    """Map every genuinely optional distribution to the extras that install it.
+
+    A distribution the project also requires unconditionally is installed in
+    every container whatever its extras, so naming it in an extra says what
+    that extra needs without making it omittable — ``httpx`` is both
+    songmaker's own HTTP client and part of the provider layer's ``api``
+    capability (issue #871).
+    """
+    pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
+    core = _core_distributions()
     result: dict[str, set[str]] = {}
     for extra, requirements in pyproject["project"]["optional-dependencies"].items():
         for requirement in requirements:
-            match = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", requirement)
-            assert match, f"could not parse optional dependency {requirement!r}"
-            distribution = _normalized_distribution(match.group())
+            distribution = _requirement_distribution(requirement)
+            if distribution in core:
+                continue
             result.setdefault(distribution, set()).add(extra)
     return {distribution: frozenset(extras) for distribution, extras in result.items()}
 
@@ -287,7 +310,10 @@ def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() ->
         )
         assert roots == metadata_roots
 
-    assert extras_by_distribution["anthropic"] == frozenset({"claude"})
+    assert extras_by_distribution["anthropic"] == frozenset({"api"})
+    assert extras_by_distribution["pillow"] == frozenset({"image"})
+    assert "httpx" in _core_distributions()
+    assert "httpx" not in extras_by_distribution
     assert "hiredis" not in _root_owning_extras()
     assert "lupa" not in _root_owning_extras()
 
@@ -325,6 +351,30 @@ def test_the_mcp_server_spec_imports_without_the_mcp_extra() -> None:
 
     assert completed.returncode == 0, (
         f"songmaker_cli.cowriter.mcp_spec reached an omitted optional "
+        f"dependency.\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+    )
+
+
+def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
+    """The scoring worker reaches the cover job's error names through
+    ``jobs/_runtime.py`` but never produces an image, so it installs the
+    ``api`` extra and not ``image``. Pillow must therefore stay behind the
+    one call that encodes a picture (issue #871)."""
+    spec = CONTAINERS["scoring-worker"]
+    blocked_roots = frozenset(
+        root for root, owners in _root_owning_extras().items()
+        if not owners & spec.extras
+    )
+    assert "PIL" in blocked_roots
+
+    completed = _run_with_blocked_optional_imports(
+        spec,
+        blocked_roots,
+        "importlib.import_module('agent_providers.codex.image')",
+    )
+
+    assert completed.returncode == 0, (
+        f"agent_providers.codex.image reached an omitted optional "
         f"dependency.\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
     )
 

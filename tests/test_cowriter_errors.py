@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_failure
+from agent_providers.errors import SafeRouteReasonCode, normalize_route_failure
 
 
 @pytest.mark.parametrize(

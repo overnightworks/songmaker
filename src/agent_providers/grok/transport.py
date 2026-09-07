@@ -25,11 +25,25 @@ from agent_providers.constants import (
     COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY,
     GROK_CLI_STREAMING_OUTPUT_FORMAT,
 )
+from agent_providers.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.process import (
     CliLineChannel,
     CliRunOutcome,
     run_cli_bounded,
     scrubbed_env,
+)
+from agent_providers.text_tool_protocol import (
+    FinalText as ParsedFinalText,
+)
+from agent_providers.text_tool_protocol import (
+    TextToolCall,
+    TextToolProtocolError,
+    TextToolStreamParser,
+    render_tool_result,
 )
 from agent_providers.tool_loop import (
     FinalText,
@@ -40,19 +54,18 @@ from agent_providers.tool_loop import (
     ToolResultBatch,
     TransportResponse,
 )
-from songmaker_cli.constants import GROK_CLI_PROMPT_FILE_PLACEHOLDER
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
+from agent_providers.tools import ToolCatalog
 
 _AUTH_FAILURE_MARKERS: Final = ("401", "oidc", "unauthenticated")
+# "usage" is dropped with the rest: this transport reports no token deltas
+# yet. Surfacing them as a `UsageEvent` is named follow-up work on #825
+# (planner gap 7, atelier-2 port requirement 7) and starts here.
 _IGNORED_EVENT_TYPES: Final = frozenset({"thought", "usage", "available_commands", "plan"})
 _PROMPT_FILE_ARGUMENT_INDEX: Final = 2
 # Grok owns this larger bound because a 600-second streamed turn can include
 # substantial thought and usage NDJSON before its final answer.
 GROK_CLI_TURN_OUTPUT_READ_LIMIT_BYTES: Final = 4 * 1024 * 1024
+GROK_CLI_TURN_DIRECTORY_PREFIX: Final = "songmaker-grok-cli-"
 
 log = logging.getLogger(__name__)
 
@@ -82,9 +95,13 @@ class GrokCliToolTransport:
     removes that tree only after the bounded runner has reaped its process.
     """
 
-    def __init__(self, *, model: str) -> None:
+    def __init__(self, *, model: str, catalog: ToolCatalog) -> None:
         self._model = model
-        self._turn_directory = tempfile.TemporaryDirectory(prefix="songmaker-grok-cli-")
+        self._catalog = catalog
+        self._turn_directory = tempfile.TemporaryDirectory(
+            prefix=GROK_CLI_TURN_DIRECTORY_PREFIX,
+            dir=current_config().cli_working_directory_root,
+        )
         os.chmod(self._turn_directory.name, 0o700)
         self._deadline = time.monotonic() + COWRITER_CLI_TIMEOUT_SECONDS
         self._session_id: str | None = None
@@ -98,17 +115,8 @@ class GrokCliToolTransport:
         """Stream one response and retain its server-issued session ID."""
         if self._closed:
             raise RuntimeError("Grok CLI tool transport is closed")
-        # The canonical text-tool catalogue imports the optional MCP package.
-        # Keep it on this tool-using path so tool-free workers can import this
-        # adapter without that optional dependency.
-        from agent_providers.text_tool_protocol import (
-            TextToolProtocolError,
-            TextToolStreamParser,
-        )
-        from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
-
         try:
-            prompt = _tool_transport_prompt(message)
+            prompt = _tool_transport_prompt(self._catalog, message)
         except TextToolProtocolError:
             raise ProviderUnavailableError(
                 "grok",
@@ -136,7 +144,7 @@ class GrokCliToolTransport:
             extra_env=_grok_cli_env(),
             unset_env=("GROK_HOME",),
         ))
-        parser = TextToolStreamParser(COWRITER_TOOL_CATALOG)
+        parser = TextToolStreamParser(self._catalog)
         state = _GrokToolRoundState()
         started_at = time.monotonic()
         try:
@@ -194,13 +202,10 @@ class GrokCliToolTransport:
         await asyncio.to_thread(_cleanup_grok_turn_directory, self._turn_directory)
 
 
-def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
-    from agent_providers.text_tool_protocol import (
-        TextToolProtocolError,
-        render_tool_result,
-    )
-    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
-
+def _tool_transport_prompt(
+    catalog: ToolCatalog,
+    message: InitialTurn | ToolResultBatch,
+) -> bytes:
     if isinstance(message, InitialTurn):
         return stdin_prompt(
             message.system,
@@ -213,13 +218,13 @@ def _tool_transport_prompt(message: InitialTurn | ToolResultBatch) -> bytes:
         value = json.loads(result.content)
     except json.JSONDecodeError:
         value = result.content
-    return render_tool_result(COWRITER_TOOL_CATALOG, value).encode()
+    return render_tool_result(catalog, value).encode()
 
 
 def _consume_grok_tool_event(
     event_type: str,
     event: dict[str, object],
-    parser,
+    parser: TextToolStreamParser,
     state: _GrokToolRoundState,
     channel: CliLineChannel,
 ) -> str | None:
@@ -250,18 +255,11 @@ def _finish_grok_tool_round(
     is_resume: bool,
     expected_session_id: str | None,
     state: _GrokToolRoundState,
-    parser,
+    parser: TextToolStreamParser,
     round_index: int,
     started_at: float,
 ) -> tuple[TransportResponse, str]:
     """Validate one completed Grok round and produce its terminal response."""
-    from agent_providers.text_tool_protocol import (
-        FinalText as ParsedFinalText,
-    )
-    from agent_providers.text_tool_protocol import (
-        TextToolCall,
-    )
-
     _raise_for_grok_outcome(outcome, state.saw_end, state.error_message)
     session_id = state.received_session_id
     if session_id is None or (is_resume and session_id != expected_session_id):
@@ -281,10 +279,11 @@ def _build_grok_cli_tool_command(
     model: str,
     session_id: str | None = None,
 ) -> tuple[str, ...]:
+    config = current_config()
     command = [
-        current_config().grok_cli_binary,
+        config.grok_cli_binary,
         "--prompt-file",
-        GROK_CLI_PROMPT_FILE_PLACEHOLDER,
+        config.cli_prompt_file_placeholder,
         "--output-format",
         GROK_CLI_STREAMING_OUTPUT_FORMAT,
         "--deny",

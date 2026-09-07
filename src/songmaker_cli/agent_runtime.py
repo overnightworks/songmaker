@@ -12,18 +12,21 @@ co-writer turn attaches. Every process that can reach a provider calls
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Final
 
 from agent_providers.config import ProviderRuntimeConfig, configure
 from songmaker_cli.constants import (
     CLAUDE_CLI_BINARY,
+    CLI_PROMPT_FILE_PREFIX,
     CODEX_CLI_AUTH_FILE,
     CODEX_CLI_BINARY,
     CODEX_CODE_MODE_HOST_BINARY,
     CODEX_RESOURCES_DIRECTORY,
     GROK_CLI_AUTH_FILE,
     GROK_CLI_BINARY,
+    GROK_CLI_PROMPT_FILE_PLACEHOLDER,
     SECRET_ENV_KEYS,
 )
 from songmaker_cli.cowriter.mcp_spec import songmaker_mcp_server
@@ -63,7 +66,10 @@ def configure_agent_providers(settings: Settings) -> None:
             codex_code_mode_host_binary=Path(CODEX_CODE_MODE_HOST_BINARY),
             codex_resources_directory=Path(CODEX_RESOURCES_DIRECTORY),
             codex_max_concurrent_processes=settings.codex_cli_max_concurrent_processes,
-            codex_max_concurrent_cover_runs=settings.cover_max_concurrent_runs,
+            codex_max_concurrent_image_runs=settings.cover_max_concurrent_runs,
+            cli_working_directory_root=Path(tempfile.gettempdir()),
+            cli_prompt_file_prefix=CLI_PROMPT_FILE_PREFIX,
+            cli_prompt_file_placeholder=GROK_CLI_PROMPT_FILE_PLACEHOLDER,
             secret_env_keys=SECRET_ENV_KEYS,
             mcp_server=songmaker_mcp_server(settings.database_url),
         ),

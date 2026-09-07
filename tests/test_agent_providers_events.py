@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from agent_providers.errors import SafeRouteReasonCode, normalize_route_failure
 from agent_providers.events import (
     AssistantTextEvent,
     FinalEvent,
@@ -15,7 +16,6 @@ from songmaker_cli.conversation_api import (
     ChatTurnRouteErrorFrame,
     _sse_format,
 )
-from songmaker_cli.cowriter.errors import SafeRouteReasonCode, normalize_route_failure
 
 A_CORRELATION_ID = "job-42"
 

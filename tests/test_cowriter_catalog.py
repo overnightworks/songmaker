@@ -10,6 +10,10 @@ import httpx
 import pytest
 from conftest import override_provider_runtime
 
+from agent_providers.errors import (
+    ProviderModelCatalogUnavailableError,
+    SafeRouteReasonCode,
+)
 from agent_providers.process import AgentCliUnavailableError
 from songmaker_cli.cowriter.catalog import (
     DependencyUnavailableProvider,
@@ -21,10 +25,6 @@ from songmaker_cli.cowriter.catalog import (
     list_provider_models,
     models_with_active_model,
     refresh_provider_snapshot,
-)
-from songmaker_cli.cowriter.errors import (
-    ProviderModelCatalogUnavailableError,
-    SafeRouteReasonCode,
 )
 
 

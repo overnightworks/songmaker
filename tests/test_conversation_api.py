@@ -12,6 +12,11 @@ from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from agent_providers.errors import (
+    ProviderUnavailableError,
+    SafeRouteReasonCode,
+    normalize_route_failure,
+)
 from agent_providers.events import (
     AssistantTextEvent,
     FinalEvent,
@@ -21,11 +26,6 @@ from agent_providers.events import (
 )
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.cowriter.errors import (
-    ProviderUnavailableError,
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
