@@ -58,6 +58,10 @@ from agent_providers.process import (
     CliRunReason,
     scrubbed_env,
 )
+from agent_providers.sandbox.paths import (
+    CODEX_HOME_DIRECTORY_NAME,
+    CODEX_TOOL_TURN_DIRECTORY_PREFIX,
+)
 from agent_providers.text_tool_protocol import (
     FinalText as ParsedFinalText,
 )
@@ -78,7 +82,6 @@ from agent_providers.tool_loop import (
 )
 from agent_providers.tools import ToolCatalog
 
-CODEX_TOOL_TURN_DIRECTORY_PREFIX: Final = "songmaker-codex-tool-"
 _CODEX_TOOL_ISOLATION_CONFIGS: Final = (
     CODEX_APPROVAL_POLICY_NEVER_CONFIG,
     CODEX_EMPTY_MCP_SERVERS_CONFIG,
@@ -129,7 +132,7 @@ class CodexCliToolTransport:
         os.chmod(self._turn_directory.name, 0o700)
         turn_root = Path(self._turn_directory.name)
         self._work_directory = turn_root / "work"
-        self._codex_home = turn_root / "codex-home"
+        self._codex_home = turn_root / CODEX_HOME_DIRECTORY_NAME
         self._work_directory.mkdir(mode=0o700)
         self._codex_home.mkdir(mode=0o700)
         try:

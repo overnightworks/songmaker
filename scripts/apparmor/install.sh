@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly profile_name='songmaker-web'
+readonly profile_name="${1:-songmaker-web}"
 readonly script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly profile_path="${script_dir}/${profile_name}"
+
+if [[ "${profile_name}" == */* || ! -f "${profile_path}" ]]; then
+  printf '%s is not the name of a profile file next to this script.\n' "${profile_name}" >&2
+  exit 1
+fi
 
 if (( EUID != 0 )); then
   printf '%s\n' 'Run this script as root: loading an AppArmor profile changes the host kernel policy.' >&2

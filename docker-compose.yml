@@ -165,7 +165,7 @@ services:
     # Bubblewrap needs an explicit user-namespace permission; the custom
     # profile retains Docker's default denials and permits only its setup mounts.
     security_opt:
-      - apparmor=songmaker-web
+      - apparmor=${SONGMAKER_APPARMOR_PROFILE:-songmaker-web}
       - seccomp=scripts/seccomp/songmaker-web.json
       - no-new-privileges:true
       # Bubblewrap mounts a fresh procfs only when Docker does not overmount
