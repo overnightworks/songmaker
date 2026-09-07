@@ -20,7 +20,7 @@ from agent_providers.constants import (
     CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS,
     JUDGE_FAILURE_TIMEOUT,
 )
-from songmaker_cli.cowriter.dispatch import call_provider_once
+from agent_providers.dispatch import call_provider_once
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     LyricalCoherenceScore,

@@ -75,8 +75,8 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
+from songmaker_cli.cowriter.routing import stream_cowriter_turn
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,

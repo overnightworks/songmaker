@@ -436,7 +436,7 @@ def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
         ProviderRouteReadinessState,
         route_setup_label,
     )
-    from songmaker_cli.cowriter.dispatch import cover_image_capability
+    from agent_providers.dispatch import cover_image_capability
 
     readiness: dict[str, ProviderRouteReadiness] = {}
     for route in ProviderRoute:

@@ -36,7 +36,7 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
-from songmaker_cli.cowriter.dispatch import CoverImageDispatch
+from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
@@ -242,10 +242,10 @@ def test_a_saved_codex_model_reaches_the_image_cli_as_its_model_flag(
         session.commit()
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: True,
+        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -283,10 +283,10 @@ def test_cover_job_asks_the_selected_codex_route_to_sign_in(
 ) -> None:
     factory, audio_dir, job_id = cover_job
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: False,
+        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: False,
     )
     monkeypatch.setattr(
         "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",

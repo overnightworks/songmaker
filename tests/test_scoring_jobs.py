@@ -73,7 +73,7 @@ def test_scoring_job_is_importable_without_the_mcp_package() -> None:
     server into its import path (#315). A fresh interpreter with ``mcp``
     poisoned in ``sys.modules`` proves the whole chain that
     ``songmaker_cli.jobs.scoring`` pulls in — through
-    ``scoring.lyrical_coherence`` -> ``cowriter.dispatch`` ->
+    ``scoring.lyrical_coherence`` -> ``agent_providers.dispatch`` ->
     ``agent_providers.openai_adapter`` — stays importable without it.
     """
     script = (
@@ -316,7 +316,7 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
             )),
         ),
         patch(
-            "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
+            "agent_providers.dispatch.call_openai_compatible_once",
             return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
         ) as grok_call,
         patch("agent_providers.claude.adapter.call_claude") as claude_call,

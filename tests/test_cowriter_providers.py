@@ -863,9 +863,9 @@ def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_c
         captured.clear()
         client.put("/api/settings/cowriter", json={"provider": provider, "model": model})
         with (
-            patch("songmaker_cli.cowriter.dispatch.stream_claude_turn", _claude),
+            patch("agent_providers.dispatch.stream_claude_turn", _claude),
             patch(
-                "songmaker_cli.cowriter.dispatch.stream_openai_compatible_turn",
+                "agent_providers.dispatch.stream_openai_compatible_turn",
                 _oai,
             ),
         ):
@@ -904,8 +904,8 @@ def test_missing_credentials_named_error_no_persist(
         yield FinalEvent(text="no")
 
     with (
-        patch("songmaker_cli.cowriter.dispatch.stream_claude_turn", _claude),
-        patch("songmaker_cli.cowriter.dispatch.stream_openai_compatible_turn", _oai),
+        patch("agent_providers.dispatch.stream_claude_turn", _claude),
+        patch("agent_providers.dispatch.stream_openai_compatible_turn", _oai),
     ):
         resp = client.post("/api/chat/turn", json={"message": "hi"})
     events = _stream_events(resp)
@@ -1714,10 +1714,10 @@ def test_provider_status_grants_the_image_tool_only_to_a_ready_codex_cli(
 ):
     client, _ = admin_client
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: True,
+        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: True,
     )
 
     cover_routes = _cover_routes(client)
@@ -1745,10 +1745,10 @@ def test_provider_status_names_a_codex_cover_route_that_is_not_signed_in(
 ):
     client, _ = admin_client
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cover_image_capability_is_available", lambda: True,
+        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.codex_cli_access_token_is_present", lambda: False,
+        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: False,
     )
 
     codex_cli = _cover_routes(client)["codex"]["cli"]
@@ -2074,7 +2074,7 @@ def _pinned_snapshots(claude_judge):
 
 def _pinned_cover_capability(provider: str, route):
     from agent_providers.catalog import ProviderRoute
-    from songmaker_cli.cowriter.dispatch import CoverImageCapability
+    from agent_providers.dispatch import CoverImageCapability
 
     if provider == "codex" and route is ProviderRoute.CLI:
         return CoverImageCapability(carries_image_tool=True, failure=None)
@@ -2116,7 +2116,7 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
         "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.dispatch.cover_image_capability", _pinned_cover_capability,
+        "agent_providers.dispatch.cover_image_capability", _pinned_cover_capability,
     )
 
     response = client.get("/api/settings/providers")
