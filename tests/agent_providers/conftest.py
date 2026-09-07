@@ -54,8 +54,8 @@ _SAMPLE_RUNTIME = ProviderRuntimeConfig(
     codex_max_concurrent_processes=4,
     codex_max_concurrent_image_runs=2,
     cli_working_directory_root=Path(tempfile.gettempdir()),
-    cli_prompt_file_prefix="agent-cli-prompt-",
-    cli_prompt_file_placeholder="__PROMPT_FILE__",
+    cli_prompt_file_prefix="songmaker-cli-prompt-",
+    cli_prompt_file_placeholder="<songmaker-private-prompt>",
     secret_env_keys=SECRET_ENV_KEYS,
     mcp_server=_SAMPLE_MCP_SERVER,
 )
