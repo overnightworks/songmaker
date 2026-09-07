@@ -12,7 +12,7 @@ import time
 from unittest.mock import patch
 
 import pytest
-from conftest import override_provider_runtime
+from provider_test_support import SECRET_ENV_KEYS, override_provider_runtime
 
 from agent_providers import process
 from agent_providers.constants import (
@@ -40,7 +40,6 @@ from agent_providers.process import (
     run_cli_bounded,
     scrubbed_env,
 )
-from songmaker_cli.constants import SECRET_ENV_KEYS
 
 GROK_LOGGED_IN = """You are logged in with grok.com.
 

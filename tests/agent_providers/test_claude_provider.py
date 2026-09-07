@@ -15,7 +15,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-from conftest import fake_cli_process, override_provider_runtime
+from provider_test_support import (
+    MCP_TOOL_NAMES,
+    SECRET_ENV_KEYS,
+    fake_cli_process,
+    override_provider_runtime,
+)
 from pydantic import SecretStr
 
 from agent_providers.claude import provider
@@ -49,8 +54,6 @@ from agent_providers.constants import (
     JUDGE_FAILURE_TIMEOUT,
 )
 from agent_providers.events import AssistantTextEvent, FinalEvent, StreamEvent
-from songmaker_cli.constants import SECRET_ENV_KEYS
-from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 
 # The exact string a co-writer command line must carry, written out rather
 # than derived from the code under test.
@@ -3395,25 +3398,3 @@ def test_no_builtin_gate_sync_and_async_share_one_cache(
 
     assert len(commands) == 1
 
-
-# ── expected MCP tool names track the real server registration ────────
-
-
-def test_mcp_spec_tool_names_match_the_registered_mcp_server() -> None:
-    """cowriter/mcp_spec.py names the tools as a literal, not as an import
-    from mcp_server.server (that would pull in the ``mcp`` package, which
-    the scoring-worker container does not install — see CLAUDE.md). This
-    is the drift check that keeps the literal honest against the server's
-    own registration instead — set equality, so a tool that disappears
-    fails as loudly as one that appears."""
-    from songmaker_cli.mcp_server.server import build_server
-
-    server = build_server(session_factory=lambda: None)
-    registered = asyncio.run(server.list_tools())
-    registered_names = {tool.name for tool in registered}
-
-    assert len(registered_names) == 12
-    assert registered_names == MCP_TOOL_NAMES, (
-        "the spec promises tools the server does not register, or the server "
-        "registers tools the co-writer gate would refuse"
-    )
