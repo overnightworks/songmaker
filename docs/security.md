@@ -1,5 +1,13 @@
 # Songmaker Security
 
+The auth layer itself is not in this repository. `webauth` ships as the
+distribution `overnightworks-webauth` from
+[overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
+the `server` extra to the release wheel of tag `v0.1.0` and hash-locked in
+`uv.lock` (#879). Module names below such as `webauth.dependencies` are its
+import paths; which of songmaker's paths each policy applies to remains
+songmaker's decision, built in `request_policies.py`.
+
 ## Authentication
 
 Session-based auth with bcrypt password hashing (12 rounds).
@@ -24,7 +32,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`webauth/dependencies.py`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
    The logout route names the session it deletes through the factory's
    `verified_session_id` dependency, which resolves `get_current_user` first —
    so a session is only ever deleted after the request proved it holds it, and
@@ -190,7 +198,7 @@ path.
 Every request is subject to a global per-IP rate limit, split into three budget
 classes (issue #257) so that one traffic pattern cannot exhaust the budget
 another pattern from the same IP needs. `RateLimitPolicy.classify`
-(`webauth/policies.py`) is the single place that maps a path to a class, and
+(`webauth.policies`) is the single place that maps a path to a class, and
 the paths it reads are songmaker's own, built by
 `request_policies.build_rate_limit_policy` and installed on the middleware in
 `server.create_app`; every request gets exactly one class, and an unrecognized
@@ -294,7 +302,7 @@ matching the resource-event lease.
 
 ## Security Headers
 
-`SecurityHeadersMiddleware` (`webauth/middleware/security_headers.py`) writes
+`SecurityHeadersMiddleware` (`webauth.middleware.security_headers`) writes
 them; the CSP line, its inline-script hashes, and which paths may be cached
 come from songmaker's `SecurityHeadersPolicy`
 (`request_policies.build_security_headers_policy`).
@@ -327,7 +335,7 @@ All responses include:
 
 ## Request Size Limits
 
-Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (`webauth/middleware/body_size.py`, raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
+Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (`webauth.middleware.body_size`, raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
 
 JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
 

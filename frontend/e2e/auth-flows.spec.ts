@@ -92,7 +92,7 @@ const INVALID_CREDENTIALS_MESSAGE = 'Invalid username or password.';
 const REFUSED_LOGIN_MESSAGE = 'Too many attempts. Try again later.';
 // The store collapses both of the server's 429 details into this one line, so
 // the screen cannot say which refusal arrived. The lockout flow is about the
-// per-account one (`ACCOUNT_LOCKED_DETAIL`, `webauth/login.py`) and reads that
+// per-account one (`ACCOUNT_LOCKED_DETAIL`, `webauth.login`) and reads that
 // off the response body -- otherwise a stack whose per-IP budget trips first
 // (`TOO_MANY_LOGIN_ATTEMPTS_DETAIL`; production's 5 is below the lockout's 15)
 // would answer 429 too and the flow would pass having proved the other
@@ -195,7 +195,7 @@ async function sessionCookie(context: BrowserContext): Promise<Cookie | undefine
 	return cookies.find((cookie) => cookie.name === SESSION_COOKIE);
 }
 
-/** The signed cookie is `<session id>.<hmac>` (`webauth/cookies.py`). */
+/** The signed cookie is `<session id>.<hmac>` (`webauth.cookies`). */
 function sessionIdOf(cookie: Cookie): string {
 	return cookie.value.slice(0, cookie.value.lastIndexOf('.'));
 }
