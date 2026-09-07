@@ -522,7 +522,7 @@ def make_song_md():
 def refresh_provider_snapshots() -> None:
     """Refresh every provider after a test changes its catalog dependencies."""
     from agent_providers.constants import COWRITER_PROVIDERS
-    from songmaker_cli.cowriter.catalog import refresh_provider_snapshot
+    from songmaker_cli.provider_status import refresh_provider_snapshot
 
     for provider in COWRITER_PROVIDERS:
         refresh_provider_snapshot(provider)
@@ -530,11 +530,11 @@ def refresh_provider_snapshots() -> None:
 
 @pytest.fixture
 def every_provider_is_configured(monkeypatch):
-    from songmaker_cli.cowriter.catalog import ConfiguredProvider, ProviderSetupMethod
+    from agent_providers.catalog import ProviderReady, ProviderSetupMethod
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.get_provider_configuration",
-        lambda provider, surface: ConfiguredProvider(
+        "songmaker_cli.provider_status.get_provider_configuration",
+        lambda provider, surface: ProviderReady(
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
@@ -544,11 +544,11 @@ def every_provider_is_configured(monkeypatch):
         openai_api_key="test-key",
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        "agent_providers.catalog._cli_is_logged_in",
         lambda _provider: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._anthropic_sdk_available",
+        "agent_providers.catalog._anthropic_sdk_available",
         lambda: True,
     )
     refresh_provider_snapshots()

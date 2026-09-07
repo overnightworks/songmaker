@@ -13,6 +13,7 @@ import pytest
 from conftest import override_provider_runtime
 
 from agent_providers import openai_adapter, tool_loop
+from agent_providers.catalog import ProviderRoute
 from agent_providers.claude import adapter as claude_adapter
 from agent_providers.claude.provider import (
     CliBinaryUnavailableError,
@@ -44,7 +45,6 @@ from agent_providers.tools import openai_tool_schemas
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import dispatch
 from songmaker_cli.cowriter import tools as cowriter_tools
-from songmaker_cli.cowriter.catalog import ProviderRoute
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
