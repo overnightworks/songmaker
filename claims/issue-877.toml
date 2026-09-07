@@ -1,8 +1,0 @@
-claim_id = "816f8f1e235b473082d05cc5fe3220b1"
-agent = "claude-head"
-role = "builder"
-base = "6e7acbaeef10efe42f5edd54fd2a7849ad1c9ab6"
-branch = "claude/issue-877-lib-a11"
-scope = ["docs"]
-opened_commit = "81d9128c79819ebdffe55d3f3bf8b9a0971e6a67"
-whole_reason = "Live-Beweis, kein Code; belegt an #825"
