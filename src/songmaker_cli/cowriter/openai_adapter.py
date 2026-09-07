@@ -7,7 +7,6 @@ from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 import httpx
-from sqlalchemy.orm import Session
 
 from agent_providers.constants import COWRITER_CLI_TIMEOUT_SECONDS
 from agent_providers.errors import (
@@ -22,13 +21,13 @@ from agent_providers.tool_loop import (
     TextDelta,
     ToolCall,
     ToolCallBatch,
+    ToolExecutor,
     ToolLoopLimitError,
     ToolLoopProtocolError,
     ToolResultBatch,
     TransportResponse,
     stream_tool_loop,
 )
-from webauth.dependencies import AuthenticatedUser
 
 
 async def stream_openai_compatible_turn(
@@ -39,16 +38,11 @@ async def stream_openai_compatible_turn(
     model: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    tool_schemas: list[dict[str, Any]],
     correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    # Imported lazily: the songmaker tool catalog pulls in the MCP server
-    # package, which only the tool-using co-writer chat needs. The judge's
-    # tool-free ``call_openai_compatible_once`` below must stay importable
-    # without the ``mcp`` extra installed (#315).
-    from songmaker_cli.cowriter.tools import execute_cowriter_tool, openai_tool_schemas
-
+    """Stream one OpenAI-compatible turn through the host's tool catalog."""
     try:
         async with httpx.AsyncClient(timeout=COWRITER_CLI_TIMEOUT_SECONDS) as client:
             transport = _OpenAITransport(
@@ -57,7 +51,7 @@ async def stream_openai_compatible_turn(
                 api_url=api_url,
                 api_key=api_key,
                 model=model,
-                tool_schemas=openai_tool_schemas(),
+                tool_schemas=tool_schemas,
             )
             async for event in stream_tool_loop(
                 provider=provider,
@@ -65,9 +59,7 @@ async def stream_openai_compatible_turn(
                 system=system,
                 messages=messages,
                 transport=transport,
-                executor=lambda name, arguments: execute_cowriter_tool(
-                    session, user, name, arguments,
-                ),
+                executor=executor,
                 tool_failure_message=normalize_route_failure(
                     SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
                 ).message,

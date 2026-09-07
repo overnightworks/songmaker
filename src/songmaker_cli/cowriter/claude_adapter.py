@@ -6,8 +6,6 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from agent_providers.claude.provider import (
     CliBinaryUnavailableError,
     CliToolSurfaceError,
@@ -32,13 +30,13 @@ from agent_providers.tool_loop import (
     TextDelta,
     ToolCall,
     ToolCallBatch,
+    ToolExecutor,
     ToolLoopLimitError,
     ToolLoopProtocolError,
     ToolResultBatch,
     TransportResponse,
     stream_tool_loop,
 )
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 
@@ -79,13 +77,11 @@ async def stream_claude_api_turn(
     system: str,
     model: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    tool_schemas: list[dict[str, Any]],
     correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one Claude API co-writer turn through the shared tool catalog."""
-    from songmaker_cli.cowriter.tools import anthropic_tool_schemas, execute_cowriter_tool
-
+    """Stream one Claude API co-writer turn through the host's tool catalog."""
     anthropic = None
     try:
         anthropic = _require_anthropic_for_cowriter()
@@ -97,7 +93,7 @@ async def stream_claude_api_turn(
             transport = _ClaudeApiTransport(
                 client=client,
                 model=model,
-                tool_schemas=anthropic_tool_schemas(),
+                tool_schemas=tool_schemas,
             )
             async for event in stream_tool_loop(
                 provider="claude",
@@ -105,9 +101,7 @@ async def stream_claude_api_turn(
                 system=system,
                 messages=messages,
                 transport=transport,
-                executor=lambda name, arguments: execute_cowriter_tool(
-                    session, user, name, arguments,
-                ),
+                executor=executor,
                 tool_failure_message=normalize_route_failure(
                     SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
                 ).message,

@@ -31,6 +31,7 @@ from agent_providers.errors import (
 from agent_providers.events import FinalEvent, ToolCallEvent
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
+from agent_providers.tools import openai_tool_schemas
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -43,12 +44,13 @@ from songmaker_cli.constants import (
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
 )
+from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.catalog import ProviderRoute, list_provider_models
 from songmaker_cli.cowriter.openai_adapter import (
     _parse_tool_call,
     stream_openai_compatible_turn,
 )
-from songmaker_cli.cowriter.tools import execute_cowriter_tool
+from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -1068,6 +1070,15 @@ def test_openai_adapter_emits_same_event_types(admin_client, every_provider_is_c
     assert "assistant_text" in types
 
 
+def _songmaker_tool_executor(session=None, user=None):
+    """Bind songmaker's tool executor the way the app's routing does."""
+    bound_session = session if session is not None else MagicMock()
+    bound_user = user or AuthenticatedUser(id="u", username="u", role="user", is_active=True)
+    return lambda name, arguments: cowriter_tools.execute_cowriter_tool(
+        bound_session, bound_user, name, arguments,
+    )
+
+
 def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch):
     responses = [
         {
@@ -1121,10 +1132,8 @@ def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch)
                 model="live-model",
                 system="system",
                 messages=[{"role": "user", "content": "hello"}],
-                session=MagicMock(),
-                user=AuthenticatedUser(
-                    id="u", username="u", role="user", is_active=True,
-                ),
+                executor=_songmaker_tool_executor(),
+                tool_schemas=openai_tool_schemas(COWRITER_TOOL_CATALOG),
             )
         ]
 
