@@ -40,7 +40,7 @@ environment values.
 
 ```bash
 # Local toolchain (tests, lint, IDE)
-uv sync --extra server --extra scoring --extra whisper --extra mcp --extra dev
+uv sync --extra server --extra scoring --extra whisper --extra mcp --extra image --extra dev
 
 # Run the live stack — agents: ALWAYS run this in the background
 # (Bash tool: run_in_background=true). Cold-cache rebuilds take 8-15 minutes
