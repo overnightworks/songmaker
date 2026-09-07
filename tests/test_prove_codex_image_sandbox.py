@@ -253,22 +253,41 @@ def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
         proof.prove(run)
 
 
+_CODEX_HOME_MOUNT = re.compile(r"/tmp/(\{[^}]+\}|[A-Za-z0-9][A-Za-z0-9.*-]*)/codex-home")
+
+
+def _profile_codex_home_prefix_sets() -> list[set[str]]:
+    """Every prefix set the AppArmor profile names before a ``codex-home``.
+
+    A single mount rule names one directory; the remount and tmpfs rules name
+    all of them at once as a brace list. Both spellings are returned as sets,
+    because a prefix dropped from either one is a mount the sandbox refuses.
+    """
+    profile = (Path(__file__).parents[1] / "scripts" / "apparmor" / "songmaker-web").read_text()
+    return [
+        {member.rstrip("*") for member in match.strip("{}").split(",")}
+        for match in _CODEX_HOME_MOUNT.findall(profile)
+    ]
+
+
 def test_the_apparmor_profile_allows_exactly_the_codex_home_prefixes_in_use() -> None:
     """A prefix renamed without the profile is a silently blocked mount.
 
     Bubblewrap binds each private Codex home from a directory named by one of
     these prefixes, and only the mounts the profile lists are permitted, so
-    the two sets have to agree. Moving the prefixes into the library is #825's
-    slice A24; this pins them so that move starts from a proof (issue #871).
+    every rule naming them has to agree with the code. Moving the prefixes
+    into the library is #825's slice A24; this pins them so that move starts
+    from a proof (issue #871).
     """
-    profile = (Path(__file__).parents[1] / "scripts" / "apparmor" / "songmaker-web").read_text()
-    allowed = {
-        name.rstrip("*")
-        for name in re.findall(r"/tmp/(songmaker-[A-Za-z0-9-]+\*?)/codex-home", profile)
-    }
-
-    assert allowed == {
+    in_use = {
         codex_image.CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
         codex_transport.CODEX_TOOL_TURN_DIRECTORY_PREFIX,
         Path(proof.SANDBOX_CODEX_HOME).parent.name,
     }
+    prefix_sets = _profile_codex_home_prefix_sets()
+
+    assert prefix_sets, "the profile names no codex-home mount at all"
+    assert set().union(*prefix_sets) == in_use
+    single_rules = [prefixes for prefixes in prefix_sets if len(prefixes) == 1]
+    assert set().union(*single_rules) == in_use
+    assert [prefixes for prefixes in prefix_sets if len(prefixes) > 1] == [in_use, in_use]
