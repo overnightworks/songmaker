@@ -1,0 +1,8 @@
+claim_id = "b28ad79ca9e14c569bad0bf8da936e25"
+agent = "songmaker-d8"
+role = "builder"
+base = "b028d9f31b17fcc25d43dc02ef5404c33cf4feee"
+branch = "songmaker-d8/issue-890-s1-tidy"
+scope = ["tests/agent_providers/test_agent_providers_constants.py", "tests/agent_providers/test_sandbox_profile.py", "tests/test_agent_providers_constants.py", "tests/test_sandbox_profile.py", "src/agent_providers/sandbox/paths.py", "docs/security.md"]
+opened_commit = "d1779abd7ce829e664cb5f48bdabf53fabe0ed4f"
+whole_reason = "S1.1 Test-Move: zwei Testdateien plus Docstrings = eine kohaerente Vortidy-Slice"
