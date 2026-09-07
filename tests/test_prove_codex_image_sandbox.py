@@ -17,7 +17,8 @@ from agent_providers.sandbox.paths import (
     CODEX_TOOL_TURN_DIRECTORY_PREFIX,
 )
 
-_SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "prove_codex_image_sandbox.py"
+_REPOSITORY_ROOT = Path(__file__).parents[1]
+_SCRIPT_PATH = _REPOSITORY_ROOT / "scripts" / "prove_codex_image_sandbox.py"
 _SPEC = importlib.util.spec_from_file_location("prove_codex_image_sandbox", _SCRIPT_PATH)
 assert _SPEC is not None
 assert _SPEC.loader is not None
@@ -25,7 +26,6 @@ proof = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
 
-_REPOSITORY_ROOT = Path(__file__).parents[1]
 _PROFILE_PATH = _REPOSITORY_ROOT / "scripts" / "apparmor" / proof.DEFAULT_WEB_PROFILE
 _INSTALL_SCRIPT = _REPOSITORY_ROOT / "scripts" / "apparmor" / "install.sh"
 AN_EMBEDDING_PROFILE = "another-host-web"
