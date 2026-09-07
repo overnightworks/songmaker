@@ -16,6 +16,7 @@ other raise, and every test here would error.
 
 from __future__ import annotations
 
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,6 +30,22 @@ from agent_providers.config import (
     configure,
     reset_config,
 )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Stop this nested conftest from shadowing the root one by its bare name.
+
+    Under pytest's prepend import mode a conftest imports as the top-level
+    module ``conftest``, so loading this one replaces ``sys.modules["conftest"]``
+    and every flat songmaker test collected afterwards would resolve
+    ``from conftest import ...`` to this package instead of the root
+    ``tests/conftest.py``. pytest keeps its own reference to this module for
+    fixture discovery, so dropping the bare alias once it is loaded lets those
+    imports re-resolve to the root conftest with no effect on the fixtures here.
+    """
+    module = sys.modules.get("conftest")
+    if module is not None and getattr(module, "__file__", None) == __file__:
+        del sys.modules["conftest"]
 
 _SAMPLE_ROOT = Path("/tmp/agent-providers-tests")
 
