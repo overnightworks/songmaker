@@ -48,8 +48,11 @@ from agent_providers.config import current_config
 from agent_providers.errors import SafeRouteReasonCode
 from agent_providers.images import ImagePolicy
 from agent_providers.process import CliLineChannel, CliRunOutcome, CliRunReason
+from agent_providers.sandbox.paths import (
+    CODEX_HOME_DIRECTORY_NAME,
+    CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
+)
 
-CODEX_IMAGE_TURN_DIRECTORY_PREFIX: Final = "songmaker-cover-codex-"
 _IMAGE_ENCODER_PACKAGE: Final = "PIL"
 _IMAGE_ENCODER_MISSING_DETAIL: Final = (
     "This deployment cannot encode an image: install the 'image' extra."
@@ -165,7 +168,7 @@ def generate_codex_cover_image(
     ) as directory:
         root = Path(directory)
         work_dir = root / "work"
-        codex_home = root / "codex-home"
+        codex_home = root / CODEX_HOME_DIRECTORY_NAME
         root.chmod(0o700)
         work_dir.mkdir(mode=0o700)
         codex_home.mkdir(mode=0o700)
