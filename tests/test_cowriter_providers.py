@@ -1210,7 +1210,7 @@ def _stub_cli_runners(
 
 
 @pytest.mark.parametrize(
-    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected"),
+    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected_judges"),
     [
         (
             {},
@@ -1219,18 +1219,15 @@ def _stub_cli_runners(
             LOGGED_OUT,
             True,
             {
-                "claude": (
-                    _status("unconfigured", needs="cli_login"),
-                    _status(
-                        "unconfigured", needs="api_key", environment_key="ANTHROPIC_API_KEY"
-                    ),
+                "claude": _status(
+                    "unconfigured", needs="api_key", environment_key="ANTHROPIC_API_KEY",
                 ),
-                "grok": (
-                    _status("unconfigured", needs="api_key", environment_key="XAI_API_KEY"),
-                ) * 2,
-                "codex": (
-                    _status("unconfigured", needs="api_key", environment_key="OPENAI_API_KEY"),
-                ) * 2,
+                "grok": _status(
+                    "unconfigured", needs="api_key", environment_key="XAI_API_KEY",
+                ),
+                "codex": _status(
+                    "unconfigured", needs="api_key", environment_key="OPENAI_API_KEY",
+                ),
             },
         ),
         (
@@ -1240,27 +1237,18 @@ def _stub_cli_runners(
             CliLogin(logged_in=True, auth_method="chatgpt"),
             True,
             {
-                "claude": (_status("configured", setup_method="claude_cli"),) * 2,
-                "grok": (
-                    _status(
-                        "configured",
-                        setup_method="grok_cli",
-                    ),
-                    _status(
-                        "cli_login_needs_api_key",
-                        needs="api_key",
-                        setup_method="grok_cli",
-                        environment_key="XAI_API_KEY",
-                    ),
+                "claude": _status("configured", setup_method="claude_cli"),
+                "grok": _status(
+                    "cli_login_needs_api_key",
+                    needs="api_key",
+                    setup_method="grok_cli",
+                    environment_key="XAI_API_KEY",
                 ),
-                "codex": (
-                    _status("configured", setup_method="codex_cli"),
-                    _status(
-                        "cli_login_needs_api_key",
-                        needs="api_key",
-                        setup_method="codex_cli",
-                        environment_key="OPENAI_API_KEY",
-                    ),
+                "codex": _status(
+                    "cli_login_needs_api_key",
+                    needs="api_key",
+                    setup_method="codex_cli",
+                    environment_key="OPENAI_API_KEY",
                 ),
             },
         ),
@@ -1271,18 +1259,15 @@ def _stub_cli_runners(
             LOGGED_OUT,
             True,
             {
-                "claude": (
-                    _status("api_key_needs_cli_login", needs="cli_login", setup_method="api_key"),
-                    _status(
-                        "configured", setup_method="api_key", environment_key="ANTHROPIC_API_KEY"
-                    ),
+                "claude": _status(
+                    "configured", setup_method="api_key", environment_key="ANTHROPIC_API_KEY",
                 ),
-                "grok": (
-                    _status("configured", setup_method="api_key", environment_key="XAI_API_KEY"),
-                ) * 2,
-                "codex": (
-                    _status("configured", setup_method="api_key", environment_key="OPENAI_API_KEY"),
-                ) * 2,
+                "grok": _status(
+                    "configured", setup_method="api_key", environment_key="XAI_API_KEY",
+                ),
+                "codex": _status(
+                    "configured", setup_method="api_key", environment_key="OPENAI_API_KEY",
+                ),
             },
         ),
         (
@@ -1292,16 +1277,13 @@ def _stub_cli_runners(
             LOGGED_OUT,
             False,
             {
-                "claude": (
-                    _status("api_key_needs_cli_login", needs="cli_login", setup_method="api_key"),
-                    _status("missing_dependency", missing_dependency="anthropic"),
+                "claude": _status("missing_dependency", missing_dependency="anthropic"),
+                "grok": _status(
+                    "unconfigured", needs="api_key", environment_key="XAI_API_KEY",
                 ),
-                "grok": (
-                    _status("unconfigured", needs="api_key", environment_key="XAI_API_KEY"),
-                ) * 2,
-                "codex": (
-                    _status("unconfigured", needs="api_key", environment_key="OPENAI_API_KEY"),
-                ) * 2,
+                "codex": _status(
+                    "unconfigured", needs="api_key", environment_key="OPENAI_API_KEY",
+                ),
             },
         ),
     ],
@@ -1314,7 +1296,7 @@ def test_provider_status_projects_the_catalog_contract(
     grok_login,
     codex_login,
     sdk_available,
-    expected,
+    expected_judges,
 ):
     _configure_only_these_api_keys(**keys)
     monkeypatch.setattr(
@@ -1341,8 +1323,9 @@ def test_provider_status_projects_the_catalog_contract(
     assert response.status_code == 200
     actual = {item["provider"]: item for item in response.json()}
     for provider, item in actual.items():
-        assert item["judge"]["state"] == expected[provider][1]["state"]
-        assert item["judge"]["probed_at"] is not None
+        judge = dict(item["judge"])
+        assert judge.pop("probed_at") is not None
+        assert judge == expected_judges[provider]
         assert set(item["cowriter_routes"]) == {"cli", "api"}
         assert item["cowriter"]["probed_at"] is not None
     assert all(count <= 1 for count in calls.values())
