@@ -39,7 +39,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
-from songmaker_cli.cowriter.dispatch import CoverImageDispatch, cover_image_provider_method
+from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provider_method
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,

@@ -1380,7 +1380,7 @@
 			<p>
 				Das Provider-Select in der Cover-Zeile ist ebenfalls Zielzustand: Der Cover-Weg ist im
 				Code heute fest die Codex-CLI — <code>cover_image_provider_method()</code> in
-				<code>src/songmaker_cli/cowriter/dispatch.py</code>, aufgerufen von
+				<code>src/songmaker_cli/cowriter/routing.py</code>, aufgerufen von
 				<code>cover_runner.py</code> und <code>jobs/cover_suggestions.py</code>, mit
 				<code>generate_codex_cover_image</code> als einzigem Generator. Ein echtes
 				Provider-Setting für Cover ist Backend-Arbeit und hat heute kein Issue.
@@ -1476,7 +1476,7 @@
 								das tatsächlich laufende, funktionierende Claude als „nicht konfiguriert" mit leerer
 								Modell-Liste — der wahre Auslöser des Nachtrags.
 							</span>
-							<code class="loc">src/songmaker_cli/cowriter/catalog.py:115-118 (Key-Pflicht für Claude) · src/songmaker_cli/cowriter/claude_adapter.py:23-31 (CLI-Aufruf ohne api_key)</code>
+							<code class="loc">src/agent_providers/catalog.py (Key-Pflicht für Claude) · src/agent_providers/claude/adapter.py (CLI-Aufruf ohne api_key)</code>
 						</li>
 						<li>
 							<span class="num">6</span>

@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
+from agent_providers.claude import adapter as claude_adapter
 from agent_providers.events import AssistantTextEvent, StreamEvent
-from songmaker_cli.cowriter import claude_adapter
 
 
 class _TrackingProviderStream(AsyncIterator[StreamEvent]):

@@ -1,10 +1,22 @@
-"""Co-writer model catalogs from provider APIs and CLI routes."""
+"""What each provider offers on each route, and what its setup still needs.
+
+Two questions live here. *Which models can this provider serve on this
+route right now* — answered by probing the mounted CLI or the provider's
+model endpoint. And *is this provider set up at all* — answered as one of
+four closed cases a host can render without re-deriving them.
+
+A host names its own surfaces (a chat, a judge, a batch job) and states per
+surface which CLI setup methods that surface can actually use; this package
+knows the providers, not the host's surfaces.
+
+Self-contained by design: no application import, so the package can be
+released on its own (issue #825).
+"""
 
 from __future__ import annotations
 
 import json
 import logging
-import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -65,9 +77,6 @@ _CODEX_CLI_HIDDEN_VISIBILITY: Final = "hide"
 
 log = logging.getLogger(__name__)
 
-_provider_snapshots_lock = threading.Lock()
-_provider_snapshots: dict[str, "ProviderSnapshot"] = {}
-
 
 class ProviderSetupMethod(StrEnum):
     API_KEY = "api_key"
@@ -82,11 +91,6 @@ class _CodexCliCatalogLine(BaseModel):
     slug: str = Field(min_length=1)
     visibility: str = Field(min_length=1)
     priority: int
-
-
-class ProviderSurface(StrEnum):
-    CO_WRITER = "cowriter"
-    JUDGE = "judge"
 
 
 class ProviderRoute(StrEnum):
@@ -106,58 +110,46 @@ class ProviderRouteCapability(StrEnum):
     TEXT_ONLY = "text_only"
 
 
-class ProviderNeed(StrEnum):
-    CLI_LOGIN = "cli_login"
-    API_KEY = "api_key"
-
-
 @dataclass(frozen=True)
-class ConfiguredProvider:
+class ProviderReady:
+    """This provider is set up for the surface that asked, and how."""
+
     provider: str
     method: ProviderSetupMethod
     environment_key: str | None = None
 
 
 @dataclass(frozen=True)
-class CliLoginNeedsApiKeyProvider:
+class ProviderNeedsKey:
+    """A CLI is signed in, but this surface can only reach the HTTP API."""
+
     provider: str
     method: ProviderSetupMethod
     missing_environment_key: str
 
 
 @dataclass(frozen=True)
-class ApiKeyNeedsCliLoginProvider:
+class ProviderNotLoggedIn:
+    """Neither an API key nor a signed-in CLI answers for this provider."""
+
     provider: str
+    missing_environment_key: str
 
 
 @dataclass(frozen=True)
-class UnconfiguredProvider:
-    provider: str
-    need: ProviderNeed
-    missing_environment_key: str | None = None
+class ProviderCapabilityMissing:
+    """A key is set, but the distribution its route needs is not installed."""
 
-
-@dataclass(frozen=True)
-class DependencyUnavailableProvider:
     provider: str
     dependency: str
 
 
 type ProviderConfiguration = (
-    ConfiguredProvider
-    | CliLoginNeedsApiKeyProvider
-    | ApiKeyNeedsCliLoginProvider
-    | DependencyUnavailableProvider
-    | UnconfiguredProvider
+    ProviderReady
+    | ProviderNeedsKey
+    | ProviderNotLoggedIn
+    | ProviderCapabilityMissing
 )
-
-
-@dataclass(frozen=True)
-class ProviderSnapshot:
-    cowriter: ProviderConfiguration
-    judge: ProviderConfiguration
-    probed_at: datetime
-    routes: dict[ProviderRoute, "ProviderRouteSnapshot"]
 
 
 @dataclass(frozen=True)
@@ -179,50 +171,9 @@ class _ProviderApiCredential:
     environment_key: str
 
 
-def get_provider_configuration(
-    provider: str,
-    surface: ProviderSurface,
-) -> ProviderConfiguration:
-    return _provider_configuration(provider, surface, current_config())
-
-
-def provider_snapshot(provider: str) -> ProviderSnapshot | None:
-    """Return a provider's last background refresh without probing."""
-    with _provider_snapshots_lock:
-        return _provider_snapshots.get(provider)
-
-
-def provider_snapshots() -> dict[str, ProviderSnapshot]:
-    """Return one consistent view of the background provider refreshes."""
-    with _provider_snapshots_lock:
-        return dict(_provider_snapshots)
-
-
-def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
-    """Refresh one provider's reachability and model catalog."""
+def probe_provider_route(provider: str, route: ProviderRoute) -> ProviderRouteSnapshot:
+    """Probe one route's credentials and model catalog, right now."""
     config = current_config()
-    routes = {
-        route: _refresh_provider_route(provider, route, config)
-        for route in ProviderRoute
-    }
-    cowriter = get_provider_configuration(provider, ProviderSurface.CO_WRITER)
-    judge = get_provider_configuration(provider, ProviderSurface.JUDGE)
-    snapshot = ProviderSnapshot(
-        cowriter=cowriter,
-        judge=judge,
-        probed_at=datetime.now(timezone.utc),
-        routes=routes,
-    )
-    with _provider_snapshots_lock:
-        _provider_snapshots[provider] = snapshot
-    return snapshot
-
-
-def _refresh_provider_route(
-    provider: str,
-    route: ProviderRoute,
-    config: ProviderRuntimeConfig,
-) -> ProviderRouteSnapshot:
     now = datetime.now(timezone.utc)
     capability = provider_route_capability()
     credential = _provider_api_credential(provider, config)
@@ -343,11 +294,6 @@ def _cli_is_logged_in(provider: str) -> bool:
     raise ValueError(f"Unknown co-writer provider '{provider}'")
 
 
-def clear_provider_snapshots() -> None:
-    with _provider_snapshots_lock:
-        _provider_snapshots.clear()
-
-
 def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
     config = current_config()
     if provider not in COWRITER_PROVIDERS:
@@ -404,48 +350,31 @@ def _models_for_setup_method(
     )
 
 
-def _provider_configuration(
+def provider_configuration(
     provider: str,
-    surface: ProviderSurface,
-    config: ProviderRuntimeConfig,
+    cli_methods: frozenset[ProviderSetupMethod],
 ) -> ProviderConfiguration:
-    credential = _provider_api_credential(provider, config)
-    key_is_set = bool(_secret(credential.secret))
+    """Say how this provider is set up for a surface that accepts ``cli_methods``.
+
+    A surface that runs a tool-using session accepts every CLI; one that only
+    needs a single completion accepts fewer. The host names its surfaces and
+    states their sets; this package answers for the provider.
+    """
+    credential = _provider_api_credential(provider, current_config())
     cli_method = _cli_setup_method(provider)
-    if key_is_set:
+    if _secret(credential.secret):
         if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
-            return DependencyUnavailableProvider(
-                provider,
-                _ANTHROPIC_SDK_DISTRIBUTION,
-            )
-        return ConfiguredProvider(
+            return ProviderCapabilityMissing(provider, _ANTHROPIC_SDK_DISTRIBUTION)
+        return ProviderReady(
             provider,
             ProviderSetupMethod.API_KEY,
             credential.environment_key,
         )
-    if cli_method is not None and _cli_carries(cli_method, surface):
-        return ConfiguredProvider(provider, cli_method)
-    if cli_method is not None:
-        return CliLoginNeedsApiKeyProvider(
-            provider,
-            cli_method,
-            credential.environment_key,
-        )
-    if key_is_set:
-        return ApiKeyNeedsCliLoginProvider(provider)
-    need = ProviderNeed.API_KEY
-    return UnconfiguredProvider(
-        provider,
-        need,
-        credential.environment_key if need is ProviderNeed.API_KEY else None,
-    )
-
-
-def _cli_carries(method: ProviderSetupMethod, surface: ProviderSurface) -> bool:
-    return method is ProviderSetupMethod.CLAUDE_CLI or (
-        method in {ProviderSetupMethod.GROK_CLI, ProviderSetupMethod.CODEX_CLI}
-        and surface is ProviderSurface.CO_WRITER
-    )
+    if cli_method is None:
+        return ProviderNotLoggedIn(provider, credential.environment_key)
+    if cli_method in cli_methods:
+        return ProviderReady(provider, cli_method)
+    return ProviderNeedsKey(provider, cli_method, credential.environment_key)
 
 
 def _cli_setup_method(provider: str) -> ProviderSetupMethod | None:

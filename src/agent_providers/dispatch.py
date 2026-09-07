@@ -1,4 +1,14 @@
-"""Route a co-writer turn through the explicitly selected provider transport."""
+"""Run one turn on the provider and route the host selected — never another.
+
+A route is chosen by the host and executed here, with no fallback: a failing
+CLI never silently becomes an HTTP call, because a musician who signed a CLI
+in did not agree to spend an API key. Everything a turn needs beyond the
+route — the tools it may call and who may run them — arrives from the host
+as a catalog and an executor.
+
+Self-contained by design: no application import, so the package can be
+released on its own (issue #825).
+"""
 
 from __future__ import annotations
 
@@ -7,8 +17,12 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy.orm import Session
-
+from agent_providers.catalog import ProviderRoute
+from agent_providers.claude.adapter import (
+    call_claude_once,
+    stream_claude_api_turn,
+    stream_claude_turn,
+)
 from agent_providers.claude.provider import (
     UnavailableError as ClaudeUnavailableError,
 )
@@ -28,30 +42,26 @@ from agent_providers.errors import (
 )
 from agent_providers.events import StreamEvent
 from agent_providers.grok.transport import GrokCliToolTransport
+from agent_providers.openai_adapter import (
+    call_openai_compatible_once,
+    stream_openai_compatible_turn,
+)
 from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
 )
 from agent_providers.tool_loop import (
+    ToolExecutor,
     ToolLoopLimitError,
     ToolLoopProtocolError,
     ToolTransport,
     stream_tool_loop,
 )
-from agent_providers.tools import ToolCatalog
-from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.claude_adapter import (
-    call_claude_once,
-    stream_claude_api_turn,
-    stream_claude_turn,
+from agent_providers.tools import (
+    ToolCatalog,
+    anthropic_tool_schemas,
+    openai_tool_schemas,
 )
-from songmaker_cli.cowriter.openai_adapter import (
-    call_openai_compatible_once,
-    stream_openai_compatible_turn,
-)
-from songmaker_cli.db.queries.settings import get_cover_settings
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 
@@ -65,15 +75,6 @@ _IMAGE_TOOL_ROUTE: Final[ProviderRoute] = ProviderRoute.CLI
 class _ApiConnection:
     api_key: str
     api_url: str | None = None
-
-
-@dataclass(frozen=True)
-class CoverImageDispatch:
-    """The saved cover route, verified to own an image tool, and its model."""
-
-    provider: str
-    route: ProviderRoute
-    model: str
 
 
 @dataclass(frozen=True)
@@ -92,8 +93,8 @@ async def stream_cowriter_turn(
     user_id: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    catalog: ToolCatalog,
     correlation_id: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     if provider not in COWRITER_PROVIDERS:
@@ -108,8 +109,8 @@ async def stream_cowriter_turn(
             user_id=user_id,
             system=system,
             messages=messages,
-            session=session,
-            user=user,
+            executor=executor,
+            catalog=catalog,
             correlation_id=correlation_id,
         )
         try:
@@ -139,8 +140,8 @@ def _stream_for_route(
     user_id: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    catalog: ToolCatalog,
     correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     if route is ProviderRoute.CLI:
@@ -157,8 +158,8 @@ def _stream_for_route(
                 model=model,
                 system=system,
                 messages=messages,
-                session=session,
-                user=user,
+                executor=executor,
+                catalog=catalog,
                 correlation_id=correlation_id,
             )
         if provider == "codex":
@@ -166,8 +167,8 @@ def _stream_for_route(
                 model=model,
                 system=system,
                 messages=messages,
-                session=session,
-                user=user,
+                executor=executor,
+                catalog=catalog,
                 correlation_id=correlation_id,
             )
         raise _unavailable(provider, route, SafeRouteReasonCode.ROUTE_FAILED)
@@ -178,8 +179,8 @@ def _stream_for_route(
             system=system,
             model=model,
             messages=messages,
-            session=session,
-            user=user,
+            executor=executor,
+            tool_schemas=anthropic_tool_schemas(catalog),
             correlation_id=correlation_id,
         )
     return stream_openai_compatible_turn(
@@ -189,8 +190,8 @@ def _stream_for_route(
         model=model,
         system=system,
         messages=messages,
-        session=session,
-        user=user,
+        executor=executor,
+        tool_schemas=openai_tool_schemas(catalog),
         correlation_id=correlation_id,
     )
 
@@ -200,8 +201,8 @@ async def _stream_grok_cli_tool_turn(
     model: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    catalog: ToolCatalog,
     correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run Grok's text protocol through the shared co-writer tool loop."""
@@ -209,9 +210,8 @@ async def _stream_grok_cli_tool_turn(
         provider="grok",
         system=system,
         messages=messages,
-        session=session,
-        user=user,
-        transport=GrokCliToolTransport(model=model, catalog=_tool_catalog()),
+        executor=executor,
+        transport=GrokCliToolTransport(model=model, catalog=catalog),
         correlation_id=correlation_id,
     ):
         yield event
@@ -222,8 +222,8 @@ async def _stream_codex_cli_tool_turn(
     model: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
+    catalog: ToolCatalog,
     correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run Codex's text protocol through the shared co-writer tool loop."""
@@ -231,24 +231,11 @@ async def _stream_codex_cli_tool_turn(
         provider="codex",
         system=system,
         messages=messages,
-        session=session,
-        user=user,
-        transport=CodexCliToolTransport(model=model, catalog=_tool_catalog()),
+        executor=executor,
+        transport=CodexCliToolTransport(model=model, catalog=catalog),
         correlation_id=correlation_id,
     ):
         yield event
-
-
-def _tool_catalog() -> ToolCatalog:
-    """Load songmaker's tool catalog only where a tool-using turn needs it.
-
-    Its module reaches the MCP tool implementations, and the scoring worker
-    installs no ``mcp`` extra, so importing it at module scope would keep
-    that container from importing this router at all.
-    """
-    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
-
-    return COWRITER_TOOL_CATALOG
 
 
 async def _stream_cli_tool_turn(
@@ -256,14 +243,11 @@ async def _stream_cli_tool_turn(
     provider: str,
     system: str,
     messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
+    executor: ToolExecutor,
     transport: ToolTransport,
     correlation_id: str | None,
 ) -> AsyncIterator[StreamEvent]:
     """Run one CLI text-protocol transport through the authorized tool loop."""
-    from songmaker_cli.cowriter.tools import execute_cowriter_tool
-
     try:
         async for event in stream_tool_loop(
             provider=provider,
@@ -271,9 +255,7 @@ async def _stream_cli_tool_turn(
             system=system,
             messages=messages,
             transport=transport,
-            executor=lambda name, arguments: execute_cowriter_tool(
-                session, user, name, arguments,
-            ),
+            executor=executor,
             tool_failure_message=normalize_route_failure(
                 SafeRouteReasonCode.TOOL_EXECUTION_FAILED,
             ).message,
@@ -293,7 +275,7 @@ async def _stream_cli_tool_turn(
 def call_provider_once(
     *, provider: str, model: str, prompt: str, timeout: int, system: str | None = None,
 ) -> str:
-    """Call the Judge's API-only, tool-free provider adapter."""
+    """Run one tool-free completion on the provider's HTTP API."""
     if provider not in COWRITER_PROVIDERS or not model:
         raise _unavailable(provider, ProviderRoute.API, SafeRouteReasonCode.ROUTE_FAILED)
     try:
@@ -376,25 +358,6 @@ def _codex_cli_image_route_failure() -> SafeRouteReason | None:
     if not signed_in:
         return normalize_route_failure(SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED)
     return None
-
-
-def cover_image_provider_method(session: Session) -> CoverImageDispatch:
-    """Resolve the saved cover selection through the one image-capability owner."""
-    selection = get_cover_settings(session)
-    try:
-        route = ProviderRoute(selection.route)
-    except ValueError as exc:
-        raise ProviderUnavailableError(
-            selection.provider,
-            selection.route,
-            normalize_route_failure(SafeRouteReasonCode.ROUTE_FAILED),
-        ) from exc
-    capability = cover_image_capability(selection.provider, route)
-    if not capability.carries_image_tool:
-        raise CoverImageToolUnavailableError(selection.provider)
-    if capability.failure is not None:
-        raise ProviderUnavailableError(selection.provider, route.value, capability.failure)
-    return CoverImageDispatch(provider=selection.provider, route=route, model=selection.model)
 
 
 def _unavailable(

@@ -254,17 +254,13 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 def test_provider_status_loop_fills_snapshots_and_is_healthy(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:
+    from agent_providers.catalog import ProviderReady, ProviderRoute, ProviderSetupMethod
     from agent_providers.constants import COWRITER_PROVIDERS
-    from songmaker_cli.cowriter.catalog import (
-        ConfiguredProvider,
-        ProviderRoute,
-        ProviderSetupMethod,
-        provider_snapshot,
-    )
+    from songmaker_cli.provider_status import provider_snapshot
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.get_provider_configuration",
-        lambda provider, _surface: ConfiguredProvider(
+        "songmaker_cli.provider_status.get_provider_configuration",
+        lambda provider, _surface: ProviderReady(
             provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
         ),
     )
@@ -277,11 +273,11 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
     }
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._cli_is_logged_in",
+        "agent_providers.catalog._cli_is_logged_in",
         lambda _provider: True,
     )
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog._anthropic_sdk_available",
+        "agent_providers.catalog._anthropic_sdk_available",
         lambda: True,
     )
 
@@ -292,7 +288,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         return [f"{provider}-model"]
 
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         list_provider_models,
     )
     monkeypatch.setattr(

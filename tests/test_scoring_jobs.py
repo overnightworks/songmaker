@@ -73,8 +73,8 @@ def test_scoring_job_is_importable_without_the_mcp_package() -> None:
     server into its import path (#315). A fresh interpreter with ``mcp``
     poisoned in ``sys.modules`` proves the whole chain that
     ``songmaker_cli.jobs.scoring`` pulls in — through
-    ``scoring.lyrical_coherence`` -> ``cowriter.dispatch`` ->
-    ``cowriter.openai_adapter`` — stays importable without it.
+    ``scoring.lyrical_coherence`` -> ``agent_providers.dispatch`` ->
+    ``agent_providers.openai_adapter`` — stays importable without it.
     """
     script = (
         "import sys\n"
@@ -157,7 +157,7 @@ def _fake_user(user_id: str, role: str = "admin"):
 @pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, _route: list(LIVE_CATALOG[provider]),
     )
     factory = init_db(tmp_path / "judge_api.db")
@@ -213,7 +213,7 @@ def test_default_judge_model_is_available_for_get_and_first_save(
         "codex": LIVE_CATALOG["codex"],
     }
     monkeypatch.setattr(
-        "songmaker_cli.cowriter.catalog.list_provider_models",
+        "agent_providers.catalog.list_provider_models",
         lambda provider, _route: aliases[provider],
     )
     refresh_provider_snapshots()
@@ -316,10 +316,10 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
             )),
         ),
         patch(
-            "songmaker_cli.cowriter.dispatch.call_openai_compatible_once",
+            "agent_providers.dispatch.call_openai_compatible_once",
             return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
         ) as grok_call,
-        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+        patch("agent_providers.claude.adapter.call_claude") as claude_call,
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 
@@ -353,7 +353,7 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
                 return_value=_scoring_result_with_transcript(),
             )),
         ),
-        patch("songmaker_cli.cowriter.claude_adapter.call_claude") as claude_call,
+        patch("agent_providers.claude.adapter.call_claude") as claude_call,
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 

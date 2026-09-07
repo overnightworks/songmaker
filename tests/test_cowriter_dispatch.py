@@ -5,18 +5,22 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Final
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
 from conftest import override_provider_runtime
 
-from agent_providers import tool_loop
+from agent_providers import dispatch, openai_adapter, tool_loop
+from agent_providers.catalog import ProviderRoute
+from agent_providers.claude import adapter as claude_adapter
 from agent_providers.claude.provider import (
     CliBinaryUnavailableError,
     CliToolSurfaceError,
     UnavailableError,
 )
+from agent_providers.constants import COWRITER_GROK_CHAT_URL, COWRITER_OPENAI_CHAT_URL
 from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
@@ -37,9 +41,11 @@ from agent_providers.tool_loop import (
     ToolCallBatch,
     ToolOutcome,
 )
+from agent_providers.tools import openai_tool_schemas
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.cowriter import claude_adapter, dispatch, openai_adapter
-from songmaker_cli.cowriter.catalog import ProviderRoute
+from songmaker_cli.cowriter import routing
+from songmaker_cli.cowriter import tools as cowriter_tools
+from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
@@ -66,7 +72,7 @@ class _Stream(AsyncIterator[StreamEvent]):
 
 async def _events(provider: str, route: ProviderRoute) -> list[StreamEvent]:
     return [
-        event async for event in dispatch.stream_cowriter_turn(
+        event async for event in routing.stream_cowriter_turn(
             provider=provider,
             route=route,
             model="model",
@@ -256,7 +262,7 @@ def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
         with factory() as session:
             return [
                 event
-                async for event in dispatch.stream_cowriter_turn(
+                async for event in routing.stream_cowriter_turn(
                     provider=provider,
                     route=ProviderRoute.CLI,
                     model=f"{provider}-test",
@@ -312,7 +318,7 @@ def test_closing_a_cli_turn_aborts_its_transport(monkeypatch, provider, transpor
     monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
 
     async def close_turn():
-        turn = dispatch.stream_cowriter_turn(
+        turn = routing.stream_cowriter_turn(
             provider=provider,
             route=ProviderRoute.CLI,
             model="model",
@@ -404,7 +410,7 @@ def test_the_saved_cover_selection_resolves_to_its_route_and_model(
     _mount_a_signed_in_codex_cli(monkeypatch)
     session = _cover_session(tmp_path, "codex", "cli", "gpt-5.4")
 
-    assert dispatch.cover_image_provider_method(session) == dispatch.CoverImageDispatch(
+    assert routing.cover_image_provider_method(session) == routing.CoverImageDispatch(
         provider="codex", route=ProviderRoute.CLI, model="gpt-5.4",
     )
 
@@ -413,7 +419,7 @@ def test_a_saved_provider_without_an_image_tool_is_named_never_swapped(tmp_path:
     session = _cover_session(tmp_path, "claude", "cli", "")
 
     with pytest.raises(CoverImageToolUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.provider == "claude"
 
@@ -422,7 +428,7 @@ def test_a_saved_route_this_build_does_not_know_is_named_not_guessed(tmp_path: P
     session = _cover_session(tmp_path, "codex", "grpc", "")
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.route == "grpc"
     assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
@@ -440,7 +446,7 @@ def test_codex_cover_route_reports_an_unavailable_cli_probe(
     session = _cover_session(tmp_path, "codex", "cli", "")
 
     with pytest.raises(ProviderUnavailableError) as raised:
-        dispatch.cover_image_provider_method(session)
+        routing.cover_image_provider_method(session)
 
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
 
@@ -600,8 +606,10 @@ def test_openai_adapter_maps_tool_limit_and_execution_sources(monkeypatch):
                 model="model",
                 system="system",
                 messages=[],
-                session=MagicMock(),
-                user=MagicMock(),
+                executor=lambda name, arguments: cowriter_tools.execute_cowriter_tool(
+                    MagicMock(), MagicMock(), name, arguments,
+                ),
+                tool_schemas=openai_tool_schemas(COWRITER_TOOL_CATALOG),
             )
         ]
 
@@ -662,3 +670,125 @@ def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_atte
         asyncio.run(events)
 
     assert raised.value.reason.code is SafeRouteReasonCode.API_KEY_NOT_SET
+
+
+# ── Route-selection pin (A9, #873) ──────────────────────────────────
+#
+# One table for every provider and route a musician can save today, so the
+# library/app split of the dispatch cannot quietly re-point a route.  The
+# cover routes are pinned by ``test_only_the_codex_cli_route_owns_an_image_tool``
+# and ``test_the_saved_cover_selection_resolves_to_its_route_and_model`` above.
+
+# One distinct key per provider, so a route that reached the right transport
+# with someone else's key fails the pin instead of passing it.
+_ANTHROPIC_KEY: Final = "anthropic-only-key"
+_XAI_KEY: Final = "xai-only-key"
+_OPENAI_KEY: Final = "openai-only-key"
+
+# A CLI route spends a subscription login, never a key, so it must be handed
+# none — that is the answer these rows pin.
+_COWRITER_ROUTE_TARGETS: Final = (
+    ("claude", ProviderRoute.CLI, "stream_claude_turn", None),
+    ("claude", ProviderRoute.API, "stream_claude_api_turn", _ANTHROPIC_KEY),
+    ("grok", ProviderRoute.CLI, "GrokCliToolTransport", None),
+    ("grok", ProviderRoute.API, "stream_openai_compatible_turn", _XAI_KEY),
+    ("codex", ProviderRoute.CLI, "CodexCliToolTransport", None),
+    ("codex", ProviderRoute.API, "stream_openai_compatible_turn", _OPENAI_KEY),
+)
+
+# ``call_claude_once`` reads the installed configuration itself, so it is
+# handed no key of its own.
+_JUDGE_ROUTE_TARGETS: Final = (
+    ("claude", "call_claude_once", None, None),
+    ("grok", "call_openai_compatible_once", COWRITER_GROK_CHAT_URL, _XAI_KEY),
+    ("codex", "call_openai_compatible_once", COWRITER_OPENAI_CHAT_URL, _OPENAI_KEY),
+)
+
+
+def _configure_one_key_per_provider() -> None:
+    override_provider_runtime(
+        anthropic_api_key=_ANTHROPIC_KEY,
+        xai_api_key=_XAI_KEY,
+        openai_api_key=_OPENAI_KEY,
+    )
+
+
+class _FinishingTransport:
+    async def stream(self, _message):
+        yield FinalText()
+
+    async def aclose(self):
+        pass
+
+
+def _record_every_cowriter_route(monkeypatch) -> list[tuple[str, str | None]]:
+    """Replace every transport entry point with one that names itself and its key."""
+    taken: list[tuple[str, str | None]] = []
+
+    def _empty_stream(name):
+        async def _stream(**kwargs):
+            taken.append((name, kwargs.get("api_key")))
+            return
+            yield  # pragma: no cover
+
+        return _stream
+
+    def _transport(name):
+        def _factory(**kwargs):
+            taken.append((name, kwargs.get("api_key")))
+            return _FinishingTransport()
+
+        return _factory
+
+    for name in ("stream_claude_turn", "stream_claude_api_turn", "stream_openai_compatible_turn"):
+        monkeypatch.setattr(dispatch, name, _empty_stream(name))
+    for name in ("GrokCliToolTransport", "CodexCliToolTransport"):
+        monkeypatch.setattr(dispatch, name, _transport(name))
+    return taken
+
+
+@pytest.mark.parametrize(
+    ("provider", "route", "expected_target", "expected_key"), _COWRITER_ROUTE_TARGETS,
+)
+def test_every_saved_cowriter_route_selects_exactly_one_transport(
+    monkeypatch,
+    provider: str,
+    route: ProviderRoute,
+    expected_target: str,
+    expected_key: str | None,
+) -> None:
+    _configure_one_key_per_provider()
+    taken = _record_every_cowriter_route(monkeypatch)
+
+    asyncio.run(_events(provider, route))
+
+    assert taken == [(expected_target, expected_key)]
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_target", "expected_url", "expected_key"), _JUDGE_ROUTE_TARGETS,
+)
+def test_every_judge_provider_selects_exactly_one_api_adapter(
+    monkeypatch,
+    provider: str,
+    expected_target: str,
+    expected_url: str | None,
+    expected_key: str | None,
+) -> None:
+    _configure_one_key_per_provider()
+    taken: list[tuple[str, str | None, str | None]] = []
+
+    def _record(name):
+        def _call(**kwargs):
+            taken.append((name, kwargs.get("api_url"), kwargs.get("api_key")))
+            return "verdict"
+
+        return _call
+
+    for name in ("call_claude_once", "call_openai_compatible_once"):
+        monkeypatch.setattr(dispatch, name, _record(name))
+
+    assert dispatch.call_provider_once(
+        provider=provider, model="model", prompt="prompt", timeout=5,
+    ) == "verdict"
+    assert taken == [(expected_target, expected_url, expected_key)]
