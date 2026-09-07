@@ -10,8 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from agent_providers.codex import image as codex_image
-from agent_providers.codex import transport as codex_transport
+from agent_providers.sandbox.paths import (
+    CODEX_HOME_DIRECTORY_NAME,
+    CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
+    CODEX_SANDBOX_PROOF_DIRECTORY,
+    CODEX_TOOL_TURN_DIRECTORY_PREFIX,
+)
 
 _SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "prove_codex_image_sandbox.py"
 _SPEC = importlib.util.spec_from_file_location("prove_codex_image_sandbox", _SCRIPT_PATH)
@@ -20,6 +24,11 @@ assert _SPEC.loader is not None
 proof = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
+
+_REPOSITORY_ROOT = Path(__file__).parents[1]
+_PROFILE_PATH = _REPOSITORY_ROOT / "scripts" / "apparmor" / proof.DEFAULT_WEB_PROFILE
+_INSTALL_SCRIPT = _REPOSITORY_ROOT / "scripts" / "apparmor" / "install.sh"
+AN_EMBEDDING_PROFILE = "another-host-web"
 
 
 @pytest.fixture
@@ -171,7 +180,7 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
         if command[:5] == ("docker", "compose", "ps", "-q", proof.WEB_SERVICE):
             return proof.CommandResult(0, "container-id\n", "")
         if command[:3] == ("docker", "inspect", "--format"):
-            return proof.CommandResult(0, f"{proof.WEB_PROFILE}\n", "")
+            return proof.CommandResult(0, f"{AN_EMBEDDING_PROFILE}\n", "")
         if command[:4] == ("docker", "compose", "images", "-q"):
             return proof.CommandResult(0, "web-image\n", "")
         if command[:2] == ("docker", "run"):
@@ -180,7 +189,7 @@ def test_prove_checks_the_custom_profile_and_default_profile_negative_control() 
             )
         return proof.CommandResult(0, "", "")
 
-    proof.prove(run)
+    proof.prove(run, profile_name=AN_EMBEDDING_PROFILE)
 
     prepare = next(
         command
@@ -228,13 +237,13 @@ def test_prove_rejects_a_successful_docker_default_probe() -> None:
         if command[:5] == ("docker", "compose", "ps", "-q", proof.WEB_SERVICE):
             return proof.CommandResult(0, "container-id\n", "")
         if command[:3] == ("docker", "inspect", "--format"):
-            return proof.CommandResult(0, f"{proof.WEB_PROFILE}\n", "")
+            return proof.CommandResult(0, f"{AN_EMBEDDING_PROFILE}\n", "")
         if command[:4] == ("docker", "compose", "images", "-q"):
             return proof.CommandResult(0, "web-image\n", "")
         return proof.CommandResult(0, "", "")
 
     with pytest.raises(RuntimeError, match="unexpectedly ran under docker-default"):
-        proof.prove(run)
+        proof.prove(run, profile_name=AN_EMBEDDING_PROFILE)
 
 
 def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
@@ -242,7 +251,7 @@ def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
         if command[:5] == ("docker", "compose", "ps", "-q", proof.WEB_SERVICE):
             return proof.CommandResult(0, "container-id\n", "")
         if command[:3] == ("docker", "inspect", "--format"):
-            return proof.CommandResult(0, f"{proof.WEB_PROFILE}\n", "")
+            return proof.CommandResult(0, f"{AN_EMBEDDING_PROFILE}\n", "")
         if command[:4] == ("docker", "compose", "images", "-q"):
             return proof.CommandResult(0, "web-image\n", "")
         if command[:2] == ("docker", "run"):
@@ -250,20 +259,21 @@ def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
         return proof.CommandResult(0, "", "")
 
     with pytest.raises(RuntimeError, match="did not fail while creating a namespace"):
-        proof.prove(run)
+        proof.prove(run, profile_name=AN_EMBEDDING_PROFILE)
 
 
-_CODEX_HOME_MOUNT = re.compile(r"/tmp/(\{[^}]+\}|[A-Za-z0-9][A-Za-z0-9.*-]*)/codex-home")
+_CODEX_HOME_MOUNT = re.compile(
+    r"/tmp/(\{[^}]+\}|[A-Za-z0-9][A-Za-z0-9.*-]*)/" + re.escape(CODEX_HOME_DIRECTORY_NAME)
+)
 
 
-def _profile_codex_home_prefix_sets() -> list[set[str]]:
+def _profile_codex_home_prefix_sets(profile: str) -> list[set[str]]:
     """Every prefix set the AppArmor profile names before a ``codex-home``.
 
     A single mount rule names one directory; the remount and tmpfs rules name
     all of them at once as a brace list. Both spellings are returned as sets,
     because a prefix dropped from either one is a mount the sandbox refuses.
     """
-    profile = (Path(__file__).parents[1] / "scripts" / "apparmor" / "songmaker-web").read_text()
     return [
         {member.rstrip("*") for member in match.strip("{}").split(",")}
         for match in _CODEX_HOME_MOUNT.findall(profile)
@@ -275,19 +285,84 @@ def test_the_apparmor_profile_allows_exactly_the_codex_home_prefixes_in_use() ->
 
     Bubblewrap binds each private Codex home from a directory named by one of
     these prefixes, and only the mounts the profile lists are permitted, so
-    every rule naming them has to agree with the code. Moving the prefixes
-    into the library is #825's slice A24; this pins them so that move starts
-    from a proof (issue #871).
+    every rule naming them has to agree with the code. The names live in
+    ``agent_providers.sandbox.paths``; this holds songmaker's profile — the
+    only file that permits those mounts — to that one owner (issue #876).
     """
     in_use = {
-        codex_image.CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
-        codex_transport.CODEX_TOOL_TURN_DIRECTORY_PREFIX,
-        Path(proof.SANDBOX_CODEX_HOME).parent.name,
+        CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
+        CODEX_TOOL_TURN_DIRECTORY_PREFIX,
+        CODEX_SANDBOX_PROOF_DIRECTORY,
     }
-    prefix_sets = _profile_codex_home_prefix_sets()
+    prefix_sets = _profile_codex_home_prefix_sets(_PROFILE_PATH.read_text())
 
     assert prefix_sets, "the profile names no codex-home mount at all"
     assert set().union(*prefix_sets) == in_use
     single_rules = [prefixes for prefixes in prefix_sets if len(prefixes) == 1]
     assert set().union(*single_rules) == in_use
     assert [prefixes for prefixes in prefix_sets if len(prefixes) > 1] == [in_use, in_use]
+
+
+def test_the_profile_name_defaults_agree_across_the_deployment() -> None:
+    """Compose, the installer and this proof name the same profile by default.
+
+    Three interfaces in three languages carry that default, and the file the
+    installer loads carries it twice — as its file name and as the profile it
+    declares. A rename that reaches only some of them either leaves the
+    service unconfined-by-typo or makes the installer load a profile the
+    service never asks for.
+    """
+    compose = (_REPOSITORY_ROOT / "docker-compose.yml").read_text()
+    installer = _INSTALL_SCRIPT.read_text()
+
+    assert f"apparmor=${{SONGMAKER_APPARMOR_PROFILE:-{proof.DEFAULT_WEB_PROFILE}}}" in compose
+    assert f'profile_name="${{1:-{proof.DEFAULT_WEB_PROFILE}}}"' in installer
+    assert _PROFILE_PATH.is_file()
+    assert f'profile "{proof.DEFAULT_WEB_PROFILE}"' in _PROFILE_PATH.read_text()
+
+
+@pytest.mark.parametrize(
+    "argv, expected_profile",
+    [([], "songmaker-web"), ([AN_EMBEDDING_PROFILE], AN_EMBEDDING_PROFILE)],
+)
+def test_the_proof_runs_against_the_named_profile_and_defaults_to_songmakers(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    expected_profile: str,
+) -> None:
+    proven: list[str] = []
+    monkeypatch.setattr(proof, "prove", lambda *, profile_name: proven.append(profile_name))
+
+    assert proof.main(argv) == 0
+
+    assert proven == [expected_profile]
+    assert (
+        f"PASS: songmaker-web runs Bubblewrap under {expected_profile}"
+        in capsys.readouterr().out
+    )
+
+
+def _run_installer(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", str(_INSTALL_SCRIPT), *arguments], capture_output=True, text=True
+    )
+
+
+@pytest.mark.parametrize("name", ["no-such-profile", "../songmaker-web"])
+def test_the_installer_refuses_a_name_that_is_not_a_profile_beside_it(name: str) -> None:
+    """The argument names a profile in this directory, never an arbitrary path."""
+    result = _run_installer(name)
+
+    assert result.returncode == 1
+    assert f"{name} is not the name of a profile file" in result.stderr
+
+
+def test_the_installer_accepts_its_default_profile_and_then_requires_root() -> None:
+    if os.geteuid() == 0:
+        pytest.skip("root would load the profile into the host kernel")
+
+    result = _run_installer()
+
+    assert result.returncode == 1
+    assert "Run this script as root" in result.stderr
