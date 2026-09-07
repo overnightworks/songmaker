@@ -747,7 +747,6 @@ def _record_every_cowriter_route(monkeypatch) -> list[tuple[str, str | None]]:
     return taken
 
 
-@pytest.mark.acceptance("ACC-COWRITER-12")
 @pytest.mark.parametrize(
     ("provider", "route", "expected_target", "expected_key"), _COWRITER_ROUTE_TARGETS,
 )
@@ -764,6 +763,21 @@ def test_every_saved_cowriter_route_selects_exactly_one_transport(
     asyncio.run(_events(provider, route))
 
     assert taken == [(expected_target, expected_key)]
+
+
+@pytest.mark.acceptance("ACC-COWRITER-12")
+def test_a_codex_turn_on_the_mirrored_cli_credential_never_falls_back_to_the_api_route(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text('{"tokens": {"access_token": "mirrored-subscription-token"}}')
+    override_provider_runtime(codex_cli_auth_file=auth_file)
+    taken = _record_every_cowriter_route(monkeypatch)
+
+    asyncio.run(_events("codex", ProviderRoute.CLI))
+
+    assert taken == [("CodexCliToolTransport", None)]
+    assert not any(target == "stream_openai_compatible_turn" for target, _key in taken)
 
 
 @pytest.mark.parametrize(
