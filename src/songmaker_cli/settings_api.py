@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.constants import COWRITER_PROVIDERS
 from songmaker_cli.api_helpers import gen_params_to_json
@@ -89,7 +90,6 @@ from songmaker_cli.db.queries.settings import (
     toggle_model,
     update_preset,
 )
-from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
     from songmaker_cli.provider_status import ProviderSnapshot, ProviderSurface

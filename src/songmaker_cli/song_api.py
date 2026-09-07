@@ -8,6 +8,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     Pagination,
@@ -80,7 +81,6 @@ from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
     resolve_owned_reference_audio,
 )
-from webauth.dependencies import AuthenticatedUser
 
 
 def _require_owned_reference_audio(

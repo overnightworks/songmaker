@@ -10,6 +10,8 @@ import pytest
 from conftest import login_and_csrf, make_test_app
 from fastapi.testclient import TestClient
 from PIL import Image
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -31,8 +33,6 @@ from songmaker_cli.cover_suggestions import (
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.db.queries import get_album
 from songmaker_cli.settings import get_settings
-from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 
 def _png_bytes() -> bytes:

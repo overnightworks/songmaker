@@ -14,6 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
+from webauth.session_store import installed_session_cache
 
 from songmaker_cli.acestep_state import (
     read_download_in_progress,
@@ -91,9 +94,6 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
-from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
-from webauth.session_store import installed_session_cache
 
 log = logging.getLogger(__name__)
 

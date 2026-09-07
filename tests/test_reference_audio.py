@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from conftest import login_and_csrf, make_test_app
+from webauth.passwords import hash_password
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User
@@ -13,7 +14,6 @@ from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
     resolve_owned_reference_audio,
 )
-from webauth.passwords import hash_password
 
 
 def _write_ref(root: Path, user_id: str, name: str, data: bytes = b"RIFF") -> Path:

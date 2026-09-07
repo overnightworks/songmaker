@@ -16,6 +16,7 @@ from typing import Final, Literal
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
+from webauth.session_store import SessionCache, installed_session_cache
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -29,7 +30,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
-from webauth.session_store import SessionCache, installed_session_cache
 
 log = logging.getLogger(__name__)
 
@@ -576,10 +576,10 @@ def auto_setup_admin(ctx: AppContext) -> None:
         return
 
     from sqlalchemy.exc import IntegrityError
+    from webauth.passwords import check_password_strength, hash_password
 
     from songmaker_cli.constants import ROLE_ADMIN
     from songmaker_cli.db.queries import create_user, user_count
-    from webauth.passwords import check_password_strength, hash_password
 
     with ctx.db() as session:
         if user_count(session) > 0:

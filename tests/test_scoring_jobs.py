@@ -24,6 +24,7 @@ from conftest import (
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.api_models.whisper import WhisperCue
@@ -54,7 +55,6 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-from webauth.dependencies import AuthenticatedUser
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],

@@ -9,13 +9,13 @@ import pytest
 from conftest import install_app_context
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from webauth.passwords import hash_password
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
-from webauth.passwords import hash_password
 
 TEST_SECRET = b"a" * 64
 USER_ID = "u-reimport"
