@@ -1,0 +1,7 @@
+claim_id = "7c5f0de82ef1498093bd88ea77f64f31"
+agent = "songmaker-d8"
+role = "builder"
+base = "b1c5a7287ca7e07e9ddedc6dd9b1a43f6c300305"
+branch = "songmaker-d8/issue-889-pin-011"
+scope = ["pyproject.toml", "uv.lock"]
+opened_commit = "bfeb6385d6f246a606eb45c1921bc46fbcefe0f3"
