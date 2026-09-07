@@ -171,29 +171,9 @@ class _ProviderApiCredential:
     environment_key: str
 
 
-def provider_configuration(
-    provider: str,
-    cli_methods: frozenset[ProviderSetupMethod],
-) -> ProviderConfiguration:
-    """Say how this provider is set up for a surface that accepts ``cli_methods``.
-
-    A surface that runs a tool-using session accepts every CLI; one that only
-    needs a single completion accepts fewer. The host names its surfaces and
-    states their sets; this package answers for the provider.
-    """
-    return _provider_configuration(provider, cli_methods, current_config())
-
-
 def probe_provider_route(provider: str, route: ProviderRoute) -> ProviderRouteSnapshot:
     """Probe one route's credentials and model catalog, right now."""
-    return _probe_provider_route(provider, route, current_config())
-
-
-def _probe_provider_route(
-    provider: str,
-    route: ProviderRoute,
-    config: ProviderRuntimeConfig,
-) -> ProviderRouteSnapshot:
+    config = current_config()
     now = datetime.now(timezone.utc)
     capability = provider_route_capability()
     credential = _provider_api_credential(provider, config)
@@ -370,12 +350,17 @@ def _models_for_setup_method(
     )
 
 
-def _provider_configuration(
+def provider_configuration(
     provider: str,
     cli_methods: frozenset[ProviderSetupMethod],
-    config: ProviderRuntimeConfig,
 ) -> ProviderConfiguration:
-    credential = _provider_api_credential(provider, config)
+    """Say how this provider is set up for a surface that accepts ``cli_methods``.
+
+    A surface that runs a tool-using session accepts every CLI; one that only
+    needs a single completion accepts fewer. The host names its surfaces and
+    states their sets; this package answers for the provider.
+    """
+    credential = _provider_api_credential(provider, current_config())
     cli_method = _cli_setup_method(provider)
     if _secret(credential.secret):
         if provider == _CLAUDE_PROVIDER and not _anthropic_sdk_available():
