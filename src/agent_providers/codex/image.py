@@ -10,6 +10,7 @@ that install the ``image`` extra ever run a turn.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import shutil
@@ -49,6 +50,10 @@ from agent_providers.images import ImagePolicy
 from agent_providers.process import CliLineChannel, CliRunOutcome, CliRunReason
 
 CODEX_IMAGE_TURN_DIRECTORY_PREFIX: Final = "songmaker-cover-codex-"
+_IMAGE_ENCODER_PACKAGE: Final = "PIL"
+_IMAGE_ENCODER_MISSING_DETAIL: Final = (
+    "This deployment cannot encode an image: install the 'image' extra."
+)
 _USAGE_LIMIT_MARKER: Final = "usage limit"
 # Codex's own wording for the retry hint, e.g. "... try again at Sep 7th, 2026 8:45 PM."
 _USAGE_LIMIT_RETRY_AT_PATTERN: Final = re.compile(r"try again at (?P<retry_at>.+?)\.?\s*$")
@@ -101,6 +106,10 @@ class CodexImageCliError(CodexImageError):
     """The CLI ended without a verified successful image result."""
 
 
+class CodexImageEncoderUnavailableError(CodexImageError):
+    """This deployment has no image encoder, so no turn can produce a cover."""
+
+
 class CodexImageQuotaError(CodexImageError):
     """The Codex account hit its usage limit for this turn."""
 
@@ -110,7 +119,7 @@ class CodexImageQuotaError(CodexImageError):
 
 
 def codex_cover_image_capability_is_available() -> bool:
-    """Whether this process has every mounted dependency for a cover image turn."""
+    """Whether this process has every dependency for a cover image turn."""
     config = current_config()
     code_mode_host = config.codex_code_mode_host_binary
     resources = config.codex_resources_directory
@@ -119,7 +128,18 @@ def codex_cover_image_capability_is_available() -> bool:
         and code_mode_host.is_file()
         and os.access(code_mode_host, os.X_OK)
         and resources.is_dir()
+        and image_encoder_is_installed()
     )
+
+
+def image_encoder_is_installed() -> bool:
+    """Whether this deployment installed the optional image encoder.
+
+    A turn that reaches the encoder has already been paid for, so this is
+    asked before the capability is offered and again before a process is
+    spawned, never only where the encoder is imported.
+    """
+    return importlib.util.find_spec(_IMAGE_ENCODER_PACKAGE) is not None
 
 
 def generate_codex_cover_image(
@@ -137,6 +157,8 @@ def generate_codex_cover_image(
     spawned through ``run_cli_bounded``.  Its temporary ``CODEX_HOME`` is the
     only place where a generated artifact may be discovered.
     """
+    if not image_encoder_is_installed():
+        raise CodexImageEncoderUnavailableError(_IMAGE_ENCODER_MISSING_DETAIL)
     with tempfile.TemporaryDirectory(
         prefix=CODEX_IMAGE_TURN_DIRECTORY_PREFIX,
         dir=current_config().cli_working_directory_root,
@@ -434,7 +456,8 @@ def _require_pillow():
     """Import Pillow only where an image is actually produced.
 
     Every container imports this module for its error names, but only the
-    ones that install the ``image`` extra ever reach this line.
+    ones that install the ``image`` extra ever reach this line — a turn
+    without it is refused before it spawns.
     """
     from PIL import Image, ImageOps
 

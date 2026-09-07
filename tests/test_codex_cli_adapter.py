@@ -89,6 +89,46 @@ def test_cover_image_capability_requires_every_codex_mount(
     assert not codex_image.codex_cover_image_capability_is_available()
 
 
+def test_cover_image_capability_requires_the_installed_image_encoder(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    cli = tmp_path / "codex"
+    code_mode_host = tmp_path / "codex-code-mode-host"
+    resources = tmp_path / "codex-resources"
+    for binary in (cli, code_mode_host):
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+    resources.mkdir()
+    override_provider_runtime(
+        codex_cli_binary=str(cli),
+        codex_code_mode_host_binary=code_mode_host,
+        codex_resources_directory=resources,
+    )
+    monkeypatch.setattr(codex_image, "image_encoder_is_installed", lambda: False)
+
+    assert not codex_image.codex_cover_image_capability_is_available()
+
+
+def test_a_deployment_without_the_image_encoder_refuses_before_it_spawns(
+    monkeypatch,
+) -> None:
+    spawns: list[tuple[str, ...]] = []
+
+    def run_cli_bounded(command, **_kwargs):
+        spawns.append(command)
+        raise AssertionError("an unencodable turn must not reach the CLI")
+
+    monkeypatch.setattr(codex_protocol, "run_cli_bounded", run_cli_bounded)
+    monkeypatch.setattr(codex_image, "image_encoder_is_installed", lambda: False)
+
+    with pytest.raises(codex_image.CodexImageEncoderUnavailableError):
+        codex_image.generate_codex_cover_image(
+            "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
+        )
+
+    assert spawns == []
+
+
 @pytest.fixture(autouse=True)
 def codex_login_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     mirror = tmp_path / "auth.json"
