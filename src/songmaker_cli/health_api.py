@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, TypeAdapter
+from webauth.session_store import installed_session_cache
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -35,7 +36,6 @@ from songmaker_cli.lifecycle import (
     CodexImageSandboxRuntimeHealth,
     codex_image_sandbox_runtime_health,
 )
-from webauth.session_store import installed_session_cache
 
 router = APIRouter()
 

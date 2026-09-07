@@ -26,13 +26,13 @@ import pytest
 from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User, Version
-from webauth.dependencies import AuthenticatedUser
 
 OWNER_ID = "owner"
 ADMIN_ID = "admin"

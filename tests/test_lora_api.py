@@ -11,6 +11,7 @@ from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
@@ -38,7 +39,6 @@ from songmaker_cli.db.queries import (
     create_user_lora,
     update_user_lora,
 )
-from webauth.dependencies import AuthenticatedUser
 
 USER_A = "u-alice"
 USER_B = "u-bob"

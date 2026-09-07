@@ -15,15 +15,15 @@ import httpx
 import pytest
 from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi.testclient import TestClient
+from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.cookies import sign_session_id
+from webauth.passwords import hash_password
+from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
-from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.cookies import sign_session_id
-from webauth.passwords import hash_password
-from webauth.proxies import TrustedProxies
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -189,8 +189,9 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
 
 @pytest.fixture
 def auth_server_app(tmp_path: Path):
-    from songmaker_cli.db.queries import create_album, create_session, create_user
     from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+
+    from songmaker_cli.db.queries import create_album, create_session, create_user
 
     audio_dir = tmp_path / "audio"
     data_dir = tmp_path / "data"
@@ -780,9 +781,10 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
 def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "10")
 
+    from webauth.middleware import BodySizeLimitMiddleware
+
     from songmaker_cli.request_policies import build_body_size_policy
     from songmaker_cli.settings import get_settings
-    from webauth.middleware import BodySizeLimitMiddleware
 
     async def dummy_app(scope, receive, send):
         await receive()
@@ -1834,9 +1836,10 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
 
 
 def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
+    from webauth.passwords import hash_password
+
     from songmaker_cli.db.queries import create_user, get_user_by_username
     from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
-    from webauth.passwords import hash_password
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:

@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 from conftest import override_provider_runtime
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers import dispatch, openai_adapter, tool_loop
 from agent_providers.catalog import ProviderRoute
@@ -49,7 +50,6 @@ from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
-from webauth.dependencies import AuthenticatedUser
 
 
 class _Stream(AsyncIterator[StreamEvent]):

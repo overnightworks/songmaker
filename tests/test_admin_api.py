@@ -8,11 +8,11 @@ from unittest.mock import patch
 import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
+from webauth.passwords import hash_password
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
 from songmaker_cli.db.queries import create_user, create_user_lora
-from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.passwords import hash_password
 
 
 @pytest.fixture
@@ -412,7 +412,6 @@ def _get_user_id(client: TestClient, username: str) -> str:
 
 def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
     from conftest import login_and_csrf
-
     from webauth.session_store import SessionCache
 
     _login_as_admin(client)

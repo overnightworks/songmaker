@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final
 
-from songmaker_cli.constants import PWA_ICON_PATHS, RESOURCE_EVENT_STREAM_PATH
 from webauth.policies import (
     BodySizePolicy,
     BodySizeRule,
@@ -25,6 +24,8 @@ from webauth.policies import (
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
+
+from songmaker_cli.constants import PWA_ICON_PATHS, RESOURCE_EVENT_STREAM_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import ToolCatalog, ToolDeclaration
@@ -38,7 +39,6 @@ from songmaker_cli.mcp_server.tools import (
     tool_update_song_prompt,
     tool_update_song_style,
 )
-from webauth.dependencies import AuthenticatedUser
 
 _STRING = {"type": "string"}
 _INT = {"type": "integer"}

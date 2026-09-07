@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers import tool_loop
 from agent_providers.claude import adapter as claude_adapter
@@ -26,7 +27,6 @@ from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, COWRITER_TOOLS
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User
-from webauth.dependencies import AuthenticatedUser
 
 
 @dataclass

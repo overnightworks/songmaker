@@ -12,6 +12,8 @@ import pytest
 from conftest import login_and_csrf, make_test_app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
+from webauth.passwords import hash_password
 
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
@@ -34,8 +36,6 @@ from songmaker_cli.queue_streams import (
     run_ffmpeg_concat,
     track_source_from_generation,
 )
-from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 
 def _seed_queue_data(session) -> None:

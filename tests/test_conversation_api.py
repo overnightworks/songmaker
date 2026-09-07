@@ -11,6 +11,7 @@ import pytest
 from conftest import TEST_SECRET, install_app_context, make_fake_redis
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.errors import (
     ProviderUnavailableError,
@@ -38,7 +39,6 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from webauth.dependencies import AuthenticatedUser
 
 # ── fixtures ──────────────────────────────────────────────────────────
 

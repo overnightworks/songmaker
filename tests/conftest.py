@@ -311,9 +311,10 @@ def install_app_context(app, ctx) -> None:
     environment after building its app still gets its own values back from
     ``get_settings()``.
     """
+    from webauth.config import install_web_auth_config
+
     from songmaker_cli.app_context import build_web_auth_config
     from songmaker_cli.settings import Settings
-    from webauth.config import install_web_auth_config
 
     app.state.ctx = ctx
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))

@@ -14,6 +14,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
 from songmaker_cli.api_helpers import (
@@ -79,7 +80,6 @@ from songmaker_cli.db.queries import (
     unpick_generation,
     update_job_status,
 )
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

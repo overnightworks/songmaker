@@ -8,6 +8,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     check_generation_access,
@@ -69,7 +70,6 @@ from songmaker_cli.db.queries import (
     update_playlist,
 )
 from songmaker_cli.queue_streams import resolve_audio_path
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 

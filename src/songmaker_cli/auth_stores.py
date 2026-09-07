@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from webauth.ports import SessionIdentityChange
+
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
@@ -26,15 +28,14 @@ from songmaker_cli.db.queries import (
     record_login_attempt,
     user_count,
 )
-from webauth.ports import SessionIdentityChange
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from sqlalchemy.orm import Session
+    from webauth.ports import SessionIdentityChanged
 
     from songmaker_cli.db.models import User, UserSession
-    from webauth.ports import SessionIdentityChanged
 
 AUDITED_SESSION_ID_CHARS: Final = 8
 USER_AGENT_CHANGE_DETAIL: Final = "ua_changed"

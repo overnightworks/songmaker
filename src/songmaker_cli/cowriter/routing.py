@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.catalog import ProviderRoute
 from agent_providers.dispatch import cover_image_capability
@@ -27,7 +28,6 @@ from agent_providers.tool_loop import ToolExecutor
 from agent_providers.tools import ToolCatalog
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.db.queries.settings import get_cover_settings
-from webauth.dependencies import AuthenticatedUser
 
 
 @dataclass(frozen=True)

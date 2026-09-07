@@ -14,6 +14,8 @@ from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
+from webauth.rate_limit import RedisRateLimiter
 
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.audio_paths import AudioFileNotFoundError
@@ -63,8 +65,6 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
-from webauth.dependencies import AuthenticatedUser
-from webauth.rate_limit import RedisRateLimiter
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -134,8 +134,9 @@ def lock_lora_capacity(session: Session) -> None:
 
 def check_redis_health(request) -> None:
     """Reject mutation requests when Redis is degraded (fail-closed)."""
-    from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
     from webauth.session_store import installed_session_cache
+
+    from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
 
     cache = installed_session_cache(request.app)
     if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:

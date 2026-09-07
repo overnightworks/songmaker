@@ -22,7 +22,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov=webauth --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov=agent_providers --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -312,19 +312,6 @@ tests/acestep_worker/
 ├── test_task_store.py
 └── test_wrapper.py
 
-tests/webauth/                     The auth library on its own, against fake ports — no
-├── webauth_arrangement.py         SQLAlchemy and no songmaker imports, so these travel
-├── test_web_auth_config.py        with the package when it becomes its own distribution
-├── test_cached_authentication.py  (a named arrangement module rather than a conftest:
-├── test_cookies.py                pytest puts every test directory on sys.path, where a
-├── test_dependencies.py           second conftest would shadow the repository one). The
-├── test_login.py                  cache branch is driven through a fakeredis-backed
-├── test_passwords.py              SessionCache installed on a bare application.
-├── test_policies.py
-├── test_proxies.py
-├── test_redis_rate_limiter.py
-└── test_session_store.py
-
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
 │                                  resource-event decimal SSE payloads
@@ -361,6 +348,12 @@ frontend/e2e/
 │                                  both driven in the desktop and the mobile shell
 └── fixtures/take.mp3              3-second tone imported as a real take
 ```
+
+The auth library's own tests are not in this repository. They moved with
+`webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
+in #879 and run in that repository's CI; songmaker installs the released wheel
+and proves the auth surface it builds on it through `test_auth_api.py`,
+`test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 ## Testing Patterns
 

@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.errors import (
     ProviderUnavailableError,
@@ -105,7 +106,6 @@ from songmaker_cli.db.queries import (
     upsert_user_memory,
 )
 from songmaker_cli.db.queries.conversations import append_message
-from webauth.dependencies import AuthenticatedUser
 
 if TYPE_CHECKING:
     from agent_providers.catalog import ProviderRoute

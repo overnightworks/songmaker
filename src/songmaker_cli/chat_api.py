@@ -7,6 +7,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 
 from agent_providers.claude.provider import (
     UnavailableError,
@@ -45,7 +46,6 @@ from songmaker_cli.db.queries import (
     songs_with_chat,
     update_job_status,
 )
-from webauth.dependencies import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 
