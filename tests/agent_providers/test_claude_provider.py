@@ -937,7 +937,7 @@ def test_the_written_mcp_config_is_the_json_the_cli_expects() -> None:
 def test_the_mcp_config_file_is_readable_only_by_its_owner() -> None:
     path = provider._write_mcp_config(_configured_mcp_server(), "u-1")
     try:
-        assert Path(path).name.startswith("songmaker-mcp-")
+        assert Path(path).name.startswith(_configured_mcp_server().config_file_prefix)
         assert stat.S_IMODE(Path(path).stat().st_mode) == 0o600
         assert Path(path).read_text() == provider._build_mcp_config(
             _configured_mcp_server(), "u-1",
