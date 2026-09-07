@@ -9,6 +9,11 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from agent_providers.claude.adapter import (
+    call_claude_once,
+    stream_claude_api_turn,
+    stream_claude_turn,
+)
 from agent_providers.claude.provider import (
     UnavailableError as ClaudeUnavailableError,
 )
@@ -28,6 +33,10 @@ from agent_providers.errors import (
 )
 from agent_providers.events import StreamEvent
 from agent_providers.grok.transport import GrokCliToolTransport
+from agent_providers.openai_adapter import (
+    call_openai_compatible_once,
+    stream_openai_compatible_turn,
+)
 from agent_providers.process import (
     AgentCliUnavailableError,
     codex_cli_access_token_is_present,
@@ -46,15 +55,6 @@ from agent_providers.tools import (
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter.catalog import ProviderRoute
-from songmaker_cli.cowriter.claude_adapter import (
-    call_claude_once,
-    stream_claude_api_turn,
-    stream_claude_turn,
-)
-from songmaker_cli.cowriter.openai_adapter import (
-    call_openai_compatible_once,
-    stream_openai_compatible_turn,
-)
 from songmaker_cli.db.queries.settings import get_cover_settings
 from webauth.dependencies import AuthenticatedUser
 
