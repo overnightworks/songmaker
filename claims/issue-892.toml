@@ -1,8 +1,0 @@
-claim_id = "8b3d19ffc2be4e0088e2a07bbf080f0a"
-agent = "songmaker-d8"
-role = "builder"
-base = "9e79ad5b4399f81595180df4bc59ae5bca499129"
-branch = "songmaker-d8/issue-892-pin"
-scope = ["pyproject.toml", ".importlinter", "tests/test_import_boundaries.py", "tests/test_packaging_boundary.py", ".github/workflows/ci.yml", "uv.lock", "src/agent_providers", "tests/agent_providers", "CLAUDE.md", "docs/architecture.md", "docs/security.md", "docs/testing.md", "README.md", "tests/test_cowriter_dispatch.py"]
-opened_commit = "b19c4d473e2f17a0fe8199c0b909040ec6202150"
-whole_reason = "S1.3 Pin+Loeschung: Wheel-Pin, In-Tree-Loeschung, importlinter/Boundary-Tests/CI/Doku sind ein untrennbarer PR (ein bleibendes src schattet das Wheel)"
