@@ -1,0 +1,8 @@
+claim_id = "6d1e0fce05084055a3b3cbb772ed62ef"
+agent = "codex-songmaker-899"
+role = "coordinator"
+base = "a2b6a40ec050a22aa27c1223f471f2bb5149d288"
+branch = "codex/issue-899-closed-env-canary"
+scope = ["pyproject.toml", "uv.lock", "src/songmaker_cli/constants.py", "src/songmaker_cli/agent_runtime.py", "tests/test_agent_provider_runtime.py", "tests/test_conversation_api.py", "tests/test_secret_scrub_parity.py"]
+opened_commit = "99aeda6f6fd3af7ea952db00b758594d960f08a8"
+whole_reason = "Ein zusammenhaengender temporaerer Kandidatenlauf: Dependency-Pin, bestehender Host-Konfigurationseigentuemer und seine unmittelbar betroffenen Vertragstests; keine dauerhafte Migration oder Port-Aenderung."
