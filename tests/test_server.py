@@ -828,10 +828,14 @@ def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
         assert result == 413
 
 
-# ── CORS wildcard validation ───────────────────────────────────────
+# ── CORS validation ────────────────────────────────────────────────
 
 
-def test_cors_wildcard_invalid_raises(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "cors_origin",
+    ["*.example.com", "*", "https://one.example.com,https://two.example.com"],
+)
+def test_cors_wildcard_or_list_raises_at_startup(tmp_path: Path, cors_origin: str) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -850,7 +854,7 @@ def test_cors_wildcard_invalid_raises(tmp_path: Path) -> None:
         redis=make_fake_redis(),
     )
 
-    with patch.dict("os.environ", {"CORS_ORIGIN": "*."}):
+    with patch.dict("os.environ", {"CORS_ORIGIN": cors_origin}):
         with pytest.raises(ValueError, match="Invalid CORS_ORIGIN"):
             create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
 
@@ -887,6 +891,18 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
         },
     )
     assert resp.status_code == 200
+    assert resp.headers["Access-Control-Allow-Origin"] == "https://mysite.example.com"
+    assert resp.headers["Access-Control-Allow-Credentials"] == "true"
+
+    rejected_response = client.options(
+        "/api/songs",
+        headers={
+            "origin": "https://sibling.example.com",
+            "access-control-request-method": "GET",
+        },
+    )
+    assert rejected_response.status_code == 400
+    assert "Access-Control-Allow-Origin" not in rejected_response.headers
 
 
 # ── Wildcard ALLOWED_HOSTS pattern ─────────────────────────────────
