@@ -332,7 +332,7 @@ All responses include:
 - **Methods**: `GET`, `POST`, `PUT`, `DELETE` (no wildcard)
 - **Headers**: `Content-Type`, `Cookie`, `X-CSRF-Token` (no wildcard)
 - **Credentials**: Allowed
-- **Origins**: Configurable via `CORS_ORIGIN`. Wildcard origins must be `*.domain.tld` format (e.g., `*.trycloudflare.com`) — bare TLDs like `*.com` are rejected at startup. Defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
+- **Origins**: The normal interface calls the API under the same origin, so it needs no CORS permission. A deliberately separate trusted browser client may set `CORS_ORIGIN` to its one literal origin; startup rejects wildcards and comma-separated lists. `SameSite=Strict` does not isolate sibling subdomains of the same site, so do not trust a credentialed subdomain wildcard. When unset, CORS defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
 
 ## Error Handling
 
@@ -1053,7 +1053,7 @@ All mutating operations are logged to the `audit_log` table:
 |---------|-----|
 | HTTPS termination | Songmaker does not terminate TLS. An operator-provided TLS terminator must set `X-Forwarded-Proto: https`; Songmaker honors it only when the direct peer matches `TRUSTED_PROXIES`, which activates the `Secure` cookie flag and HSTS. No terminator configuration is shipped here. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
-| CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
+| CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |

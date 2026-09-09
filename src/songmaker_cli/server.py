@@ -402,23 +402,18 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
 
 
 def _cors_middleware_kwargs(cors_origin: str | None) -> dict:
+    if cors_origin and ("*" in cors_origin or "," in cors_origin):
+        raise ValueError(
+            "Invalid CORS_ORIGIN: configure one literal origin; "
+            "wildcards and lists are not allowed",
+        )
+
     cors_kwargs: dict = {
         "allow_methods": ["GET", "POST", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
         "allow_credentials": True,
     }
-    if cors_origin and "*" in cors_origin:
-        if not re.match(
-            r"^\*\.[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$",
-            cors_origin,
-        ):
-            raise ValueError(
-                f"Invalid CORS_ORIGIN wildcard: {cors_origin!r}. "
-                "Must be *.domain.tld (e.g., *.example.com, *.trycloudflare.com)"
-            )
-        suffix = re.escape(cors_origin[2:])
-        cors_kwargs["allow_origin_regex"] = rf"^https?://[^:/]+\.{suffix}$"
-    elif cors_origin:
+    if cors_origin:
         cors_kwargs["allow_origins"] = [cors_origin]
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
