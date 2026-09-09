@@ -1,7 +1,0 @@
-claim_id = "dc519ab2912641ddbafd4842add6816b"
-agent = "codex-songmaker-895"
-role = "coordinator"
-base = "a2b6a40ec050a22aa27c1223f471f2bb5149d288"
-branch = "codex/issue-895-cors-origin"
-scope = ["src/songmaker_cli/server.py", "tests/test_server.py", "docs/security.md"]
-opened_commit = "e184d056924623dd187435fda6fbd50bce838ee7"
