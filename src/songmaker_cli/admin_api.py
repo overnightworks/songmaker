@@ -110,7 +110,7 @@ def _clear_user_session_cache(request: Request, user_id: str) -> None:
     try:
         session_cache.delete_user_sessions(user_id)
     except Exception:
-        log.warning("Redis session cache clear failed for user %s", user_id)
+        log.warning("Redis session cache clear failed after hard delete")
 
 
 @router.get("/users")
@@ -261,7 +261,7 @@ def hard_delete_user_endpoint(
         raise HTTPException(400, LAST_ADMIN_DETAIL) from error
     db.commit()
 
-    _clear_user_session_cache(request, user_id)
+    _clear_user_session_cache(request, user.id)
     cleanup_generation_files(ctx.audio_dir, paths)
     for album_id in album_ids:
         remove_album_cover_files(ctx.audio_dir, album_id)

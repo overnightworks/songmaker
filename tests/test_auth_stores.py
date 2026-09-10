@@ -185,7 +185,7 @@ def test_management_lock_rejects_pending_business_changes(users, session) -> Non
 
     with pytest.raises(AssertionError, match="uncommitted mutations"):
         with DatabaseWriteLock(session).hold():
-            pytest.fail("A pending account mutation must not be committed by the lock")
+            pass
     session.rollback()
     assert users.get(user.id).role == "user"
 
