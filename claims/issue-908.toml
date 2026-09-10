@@ -1,8 +1,0 @@
-claim_id = "5f8737dd0df9453881cf7b7c4a54b427"
-agent = "codex-songmaker-908"
-role = "coordinator"
-base = "40c248799f507793a52acfadf268e75733744d6f"
-branch = "codex/issue-908-users-setup"
-scope = ["src/songmaker_cli/auth_api.py", "src/songmaker_cli/lifecycle.py", "tests/test_auth_api.py", "tests/test_server.py", "docs/architecture.md", "src/songmaker_cli/auth_dependencies.py"]
-opened_commit = "d2e3a4c4a988467be000fbdbc8ddd89074325033"
-whole_reason = "Setup, Bootstrap und Passwortaenderung teilen denselben Helferaufruf und eine Verdrahtung; sie landen nur zusammen gruen."
