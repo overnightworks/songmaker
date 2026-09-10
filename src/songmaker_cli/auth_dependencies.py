@@ -14,9 +14,31 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser, current_user_dependency
+from webauth.users import UserManagement
 
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.auth_stores import DatabaseAuditSink, DatabaseSessionRecordStore
+from songmaker_cli.auth_stores import (
+    DatabaseAuditSink,
+    DatabaseSessionRecordStore,
+    DatabaseUserStore,
+    DatabaseWriteLock,
+)
+
+
+def user_management(
+    request: Request,
+    db: Session = Depends(get_db_session),
+) -> UserManagement:
+    config = web_auth_config(request)
+    return UserManagement(
+        users=DatabaseUserStore(db),
+        sessions=DatabaseSessionRecordStore(
+            db, session_max_age_seconds=config.session_max_age_seconds,
+        ),
+        audit=DatabaseAuditSink(db),
+        lock=DatabaseWriteLock(db),
+        config=config,
+    )
 
 
 def _session_record_store(

@@ -47,7 +47,6 @@ from songmaker_cli.db.models import (
     Job,
     Playlist,
     Song,
-    User,
     UserLora,
     UserLoraSample,
 )
@@ -77,6 +76,7 @@ _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
 COVER_SUGGESTIONS_LOCK_ID = 7
 _LORA_CAPACITY_LOCK_ID = 8
+_USER_MANAGEMENT_LOCK_ID = 9
 
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
@@ -582,22 +582,6 @@ def check_own_generation_access(
 
 
 _log = logging.getLogger(__name__)
-
-
-def ensure_not_last_admin(session: Session, user_id: str) -> None:
-    """Raise 400 if demoting/deactivating the last active admin.
-
-    Uses SELECT ... FOR UPDATE on PostgreSQL to serialize concurrent
-    admin role changes and prevent racing to zero admins.
-    """
-    query = session.query(User).filter_by(role="admin", is_active=True)
-    if session.bind.dialect.name != "sqlite":
-        query = query.with_for_update()
-    admin_count = query.count()
-    if admin_count <= 1:
-        user = session.get(User, user_id)
-        if user and user.role == "admin":
-            raise HTTPException(400, "Cannot remove the last active admin")
 
 
 def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:

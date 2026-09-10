@@ -681,8 +681,13 @@ body-size and security-header middlewares, `dependencies.py` the
 verified-session-id dependencies, and `login.py` the transaction-free parts of
 signing in and out (cookie issuing and clearing, the attempt limits, the
 constant-time credential check). The login route with its advisory lock stays
-in the application. `users.py` provides transaction-free account-administration
-helpers; songmaker does not use them yet (#833, slice 2).
+in the application. `users.py` provides never-committing account-administration
+helpers. Songmaker's `admin_api.py` uses `UserManagement` for account creation,
+role changes, admin password resets, deactivation, session revocation, and the
+last-admin guard around its own hard-delete cascade. Reactivation remains a
+host-owned store update and audit event. Setup, environment bootstrap, and
+self-service password changes still use the application's existing paths
+(#908).
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, password hasher, rate backend, session liveness
@@ -702,8 +707,17 @@ the library through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
 endpoint owns the request's transaction. `DatabaseSessionRecordStore.touch(now=)`
 derives `expires_at` from that timestamp plus the installed configuration's
-`session_max_age_seconds`. The audit adapter handles session-identity changes;
-the new account-administration events remain with the later `users.py` adoption.
+`session_max_age_seconds`. `auth_dependencies.user_management` constructs one
+management instance per request from these stores and the installed config.
+`DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
+9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
+entry. Nested helpers share that lock and transaction. Exiting does not commit
+or release the database lock: the endpoint commits on success, and the request's
+DB dependency rolls back on failure. `DatabaseAuditSink` maps session-identity
+and account-administration events to songmaker's audit rows, retaining the
+combined UPDATE detail for a multi-field request. The
+[admin security contract](security.md#admin-session-management) owns the four
+deliberate behavior changes and the session-reference boundary.
 
 The same seam carries the four request policies in `webauth.policies`. The
 library owns what a rate limit, a CSRF check, a body cap, and a response header
