@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 from agent_providers.catalog import (
-    ProviderCapabilityMissing,
     ProviderRoute,
     ProviderRouteCapability,
     ProviderRouteReadinessState,
@@ -24,8 +23,6 @@ from agent_providers.process import AgentCliUnavailableError
 from conftest import override_provider_runtime
 
 from songmaker_cli.provider_status import (
-    ProviderSurface,
-    get_provider_configuration,
     refresh_provider_snapshot,
 )
 
@@ -121,7 +118,7 @@ def test_codex_cli_catalog_rejects_an_invalid_catalog(monkeypatch, payload):
     assert raised.value.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
 
 
-def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch):
+def test_claude_api_catalog_remains_available_for_the_judge_api_route(monkeypatch):
     override_provider_runtime(anthropic_api_key="test-key")
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("claude-sonnet-4-6")
@@ -130,7 +127,15 @@ def test_claude_api_catalog_remains_available_to_the_api_only_judge(monkeypatch)
         lambda *_args, **_kwargs: response,
     )
 
-    assert list_provider_models("claude", ProviderRoute.API) == ["claude-sonnet-4-6"]
+    monkeypatch.setattr("agent_providers.catalog._anthropic_sdk_available", lambda: True)
+    monkeypatch.setattr("agent_providers.catalog._cli_is_logged_in", lambda _provider: False)
+    snapshot = refresh_provider_snapshot("claude")
+
+    assert snapshot.routes[ProviderRoute.API].models == ("claude-sonnet-4-6",)
+    assert snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.READY
+    assert (
+        snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
+    )
 
 
 def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog(monkeypatch):
@@ -146,12 +151,10 @@ def test_claude_api_route_requires_the_anthropic_sdk_even_with_a_key_and_catalog
 
     snapshot = refresh_provider_snapshot("claude")
     route = snapshot.routes[ProviderRoute.API]
-    configuration = get_provider_configuration("claude", ProviderSurface.CO_WRITER)
 
     assert route.readiness is ProviderRouteReadinessState.DISTURBED
     assert route.reason is not None
     assert route.reason.code is SafeRouteReasonCode.API_HTTP_ERROR
-    assert configuration == ProviderCapabilityMissing("claude", "anthropic")
 
 
 def test_api_catalog_distinguishes_http_and_protocol_failures(monkeypatch):

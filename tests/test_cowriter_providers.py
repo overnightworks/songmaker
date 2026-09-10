@@ -33,6 +33,7 @@ from conftest import (
     make_fake_redis,
     override_provider_runtime,
     refresh_provider_snapshots,
+    seed_judge_route,
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -49,6 +50,7 @@ from songmaker_cli.constants import (
     SETTING_COWRITER_PROVIDER,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
+    SETTING_JUDGE_ROUTE,
 )
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, execute_cowriter_tool
@@ -166,6 +168,7 @@ def _stream_events(response) -> list[dict]:
 
 
 def _seed(session, user_id: str) -> None:
+    seed_judge_route(session)
     session.add(User(
         id=user_id, username=f"user-{user_id}", password_hash="x", role="admin",
     ))
@@ -1221,13 +1224,13 @@ def _stub_cli_runners(
             True,
             {
                 "claude": _status(
-                    "unconfigured", needs="api_key", environment_key="ANTHROPIC_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
                 "grok": _status(
-                    "unconfigured", needs="api_key", environment_key="XAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
                 "codex": _status(
-                    "unconfigured", needs="api_key", environment_key="OPENAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
             },
         ),
@@ -1238,18 +1241,12 @@ def _stub_cli_runners(
             CliLogin(logged_in=True, auth_method="chatgpt"),
             True,
             {
-                "claude": _status("configured", setup_method="claude_cli"),
+                "claude": _status("unconfigured", needs="api_key"),
                 "grok": _status(
-                    "cli_login_needs_api_key",
-                    needs="api_key",
-                    setup_method="grok_cli",
-                    environment_key="XAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
                 "codex": _status(
-                    "cli_login_needs_api_key",
-                    needs="api_key",
-                    setup_method="codex_cli",
-                    environment_key="OPENAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
             },
         ),
@@ -1261,13 +1258,13 @@ def _stub_cli_runners(
             True,
             {
                 "claude": _status(
-                    "configured", setup_method="api_key", environment_key="ANTHROPIC_API_KEY",
+                    "configured", setup_method="api_key",
                 ),
                 "grok": _status(
-                    "configured", setup_method="api_key", environment_key="XAI_API_KEY",
+                    "configured", setup_method="api_key",
                 ),
                 "codex": _status(
-                    "configured", setup_method="api_key", environment_key="OPENAI_API_KEY",
+                    "configured", setup_method="api_key",
                 ),
             },
         ),
@@ -1278,12 +1275,12 @@ def _stub_cli_runners(
             LOGGED_OUT,
             False,
             {
-                "claude": _status("missing_dependency", missing_dependency="anthropic"),
+                "claude": _status("missing_dependency"),
                 "grok": _status(
-                    "unconfigured", needs="api_key", environment_key="XAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
                 "codex": _status(
-                    "unconfigured", needs="api_key", environment_key="OPENAI_API_KEY",
+                    "unconfigured", needs="api_key",
                 ),
             },
         ),
@@ -1362,10 +1359,10 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
     assert grok["state"] == "configured"
     assert grok["setup_method"] == "grok_cli"
     judge = statuses["grok"]["judge"]
-    assert judge["state"] == "cli_login_needs_api_key"
+    assert judge["state"] == "unconfigured"
     assert judge["needs"] == "api_key"
-    assert judge["setup_method"] == "grok_cli"
-    assert judge["environment_key"] == "XAI_API_KEY"
+    assert judge["setup_method"] is None
+    assert judge["environment_key"] is None
 
     settings = client.get("/api/settings/cowriter").json()
     assert settings["models_by_provider"]["grok"]
@@ -1384,11 +1381,22 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
 
     assert judge_saved.status_code == 200
     assert judge_saved.json()["models_by_provider"]["grok"] == []
-    assert statuses["grok"]["judge"]["state"] == "cli_login_needs_api_key"
+    assert judge_saved.json()["provider_routes_status"]["grok"]["api"]["readiness"]["reason"] == {
+        "code": "api_key_not_set", "message": "API key is not set.",
+    }
+    cli_saved = client.put(
+        "/api/settings/judge",
+        json={"provider": "grok", "route": "cli", "model": "grok-4.6"},
+    )
+    assert cli_saved.status_code == 200
+    assert cli_saved.json()["route"] == "cli"
+    statuses = {item["provider"]: item for item in client.get("/api/settings/providers").json()}
+    assert statuses["grok"]["judge"]["state"] == "configured"
+    assert statuses["grok"]["judge"]["setup_method"] == "grok_cli"
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_refresh_records_unparseable_cli_output_as_unconfigured(
+def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
     admin_client, monkeypatch, provider,
 ):
     _configure_only_these_api_keys()
@@ -1399,24 +1407,36 @@ def test_refresh_records_unparseable_cli_output_as_unconfigured(
     else:
         monkeypatch.setattr("agent_providers.process._cli_output", lambda *_args: "not status")
     refresh_provider_snapshots()
-    from agent_providers.catalog import ProviderNotLoggedIn
+    from agent_providers.catalog import ProviderRouteReadinessState
 
     from songmaker_cli.provider_status import provider_snapshot
 
     snapshot = provider_snapshot(provider)
     assert snapshot is not None
-    assert isinstance(snapshot.cowriter, ProviderNotLoggedIn)
-    assert isinstance(snapshot.judge, ProviderNotLoggedIn)
+    expected_cli_state = (
+        ProviderRouteReadinessState.NOT_CONFIGURED
+        if provider == "claude" else ProviderRouteReadinessState.DISTURBED
+    )
+    assert snapshot.routes[ProviderRoute.CLI].readiness is expected_cli_state
+    assert (
+        snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
+    )
     assert snapshot.probed_at is not None
 
-    client, _ = admin_client
+    client, factory = admin_client
+    with factory() as session:
+        set_provider_routes(session, {name: "cli" for name in LIVE_CATALOG})
+        session.commit()
     response = client.get("/api/settings/providers")
 
     assert response.status_code == 200
     by_provider = {item["provider"]: item for item in response.json()}
     for surface in ("cowriter", "judge"):
         status = by_provider[provider][surface]
-        assert status["state"] == "unconfigured"
+        expected = "missing_dependency" if surface == "cowriter" and provider != "claude" else (
+            "unconfigured"
+        )
+        assert status["state"] == expected
         assert status["probed_at"] is not None
 
 
@@ -1450,14 +1470,6 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
 def test_settings_responses_project_one_snapshot_generation_per_provider(
     admin_client, monkeypatch,
 ):
-    from agent_providers.catalog import ProviderReady, ProviderSetupMethod
-
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.get_provider_configuration",
-        lambda provider, _surface: ProviderReady(
-            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
-        ),
-    )
     refresh_provider_snapshots()
     monkeypatch.setattr(
         "songmaker_cli.provider_status.provider_snapshot",
@@ -1552,24 +1564,11 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
 
     client, _ = admin_client
     secret_stderr = "/home/operator/.claude/credentials.json: permission denied"
-    def _configured_catalog(provider, _cli_methods):
-        if provider == "claude":
-            return catalog.ProviderReady(
-                provider, catalog.ProviderSetupMethod.CLAUDE_CLI,
-            )
-        return catalog.ProviderReady(
-            provider, catalog.ProviderSetupMethod.API_KEY,
-            f"{provider.upper()}_API_KEY",
-        )
-
     def _list_provider_models(provider, _route):
         if provider == "claude":
             return catalog._list_claude_cli_models()
         return list(LIVE_CATALOG[provider])
 
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.provider_configuration", _configured_catalog,
-    )
     monkeypatch.setattr(catalog, "list_provider_models", _list_provider_models)
     monkeypatch.setattr(catalog, "_cli_is_logged_in", lambda _provider: True)
     monkeypatch.setattr(
@@ -1999,22 +1998,9 @@ def _pinned_route_snapshot(
     )
 
 
-def _pinned_snapshots(claude_judge):
-    from agent_providers.catalog import (
-        ProviderNeedsKey,
-        ProviderNotLoggedIn,
-        ProviderRoute,
-        ProviderSetupMethod,
-    )
-
+def _pinned_snapshots(case: str):
     from songmaker_cli.provider_status import ProviderSnapshot
 
-    unconfigured = ProviderNotLoggedIn("x", "X_API_KEY")
-    judges = {
-        "claude": claude_judge,
-        "grok": ProviderNeedsKey("grok", ProviderSetupMethod.GROK_CLI, "XAI_API_KEY"),
-        "codex": ProviderNotLoggedIn("codex", "OPENAI_API_KEY"),
-    }
     routes = {
         "claude": {
             ProviderRoute.CLI: _pinned_route_snapshot(
@@ -2022,8 +2008,9 @@ def _pinned_snapshots(claude_judge):
                 readiness="ready", setup_label="CLI login",
             ),
             ProviderRoute.API: _pinned_route_snapshot(
-                readiness="not_configured",
-                reason=SafeRouteReasonCode.API_KEY_NOT_SET, setup_label="API key",
+                readiness="ready" if case == "ready" else "disturbed",
+                reason=None if case == "ready" else SafeRouteReasonCode.API_HTTP_ERROR,
+                setup_label="API key",
             ),
         },
         "grok": {
@@ -2052,8 +2039,6 @@ def _pinned_snapshots(claude_judge):
     }
     return {
         provider: ProviderSnapshot(
-            cowriter=unconfigured,
-            judge=judges[provider],
             probed_at=_PINNED_PROBED_AT,
             routes=routes[provider],
         )
@@ -2073,19 +2058,6 @@ def _pinned_cover_capability(provider: str, route):
     )
 
 
-def _claude_judge_configurations():
-    from agent_providers.catalog import (
-        ProviderCapabilityMissing,
-        ProviderReady,
-        ProviderSetupMethod,
-    )
-
-    return {
-        "ready": ProviderReady("claude", ProviderSetupMethod.API_KEY, "ANTHROPIC_API_KEY"),
-        "capability_missing": ProviderCapabilityMissing("claude", "anthropic"),
-    }
-
-
 def _pinned_response_body(case: str) -> bytes:
     return (
         Path(__file__).with_name("fixtures") / f"provider_status_{case}.json"
@@ -2100,7 +2072,7 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     with factory() as session:
         set_provider_routes(session, {"claude": "cli", "grok": "api", "codex": "cli"})
         session.commit()
-    snapshots = _pinned_snapshots(_claude_judge_configurations()[case])
+    snapshots = _pinned_snapshots(case)
     monkeypatch.setattr(
         "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,
     )
@@ -2112,3 +2084,117 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
 
     assert response.status_code == 200
     assert response.content == _pinned_response_body(case)
+
+
+@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
+@pytest.mark.parametrize("route,other_route", [("cli", "api"), ("api", "cli")])
+def test_judge_saves_only_models_from_its_selected_route(
+    admin_client, monkeypatch, every_provider_is_configured, provider, route, other_route,
+):
+    client, factory = admin_client
+    monkeypatch.setattr(
+        "agent_providers.catalog.list_provider_models",
+        lambda name, selected: [f"{name}-{selected.value}-model"],
+    )
+    refresh_provider_snapshots()
+    request = {"provider": provider, "route": route, "model": f"{provider}-{route}-model"}
+    rejected = client.put(
+        "/api/settings/judge", json={**request, "model": f"{provider}-{other_route}-model"},
+    )
+    assert rejected.status_code == 422
+    saved = client.put("/api/settings/judge", json=request)
+    assert saved.status_code == 200
+    body = saved.json()
+    assert {key: body[key] for key in request} == request
+    assert body["allowed_models"] == [request["model"]]
+    assert body["models_by_provider"] == {
+        name: [f"{name}-{route}-model"] for name in LIVE_CATALOG
+    }
+    assert body["provider_routes_status"][provider][other_route]["retained_model_id"] == request[
+        "model"
+    ]
+    assert client.get("/api/settings/judge").json() == body
+    statuses = {item["provider"]: item for item in client.get("/api/settings/providers").json()}
+    assert statuses[provider]["judge"]["setup_method"] == (
+        "api_key" if route == "api" else f"{provider}_cli"
+    )
+    with factory() as session:
+        audit = session.query(AuditLog).filter_by(resource_type="judge").one()
+        assert f"route={route}" in audit.detail
+
+    retained = client.put("/api/settings/judge", json={**request, "route": other_route})
+    assert retained.status_code == 200
+    assert retained.json()["provider_routes_status"][provider][other_route][
+        "retained_model_id"
+    ] == request["model"]
+
+
+@pytest.mark.parametrize("route", ["cli", "api"])
+@pytest.mark.parametrize("route_field", [{}, {"route": None}])
+def test_judge_save_without_route_preserves_its_saved_route(
+    admin_client, every_provider_is_configured, route, route_field,
+):
+    client, _ = admin_client
+    request = {"provider": "grok", "route": route, "model": "grok-4.6"}
+    assert client.put("/api/settings/judge", json=request).status_code == 200
+    saved = client.put(
+        "/api/settings/judge", json={"provider": "grok", "model": "grok-4.5", **route_field},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["route"] == route
+
+
+@pytest.mark.parametrize("route", ["cli", "api"])
+@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
+def test_judge_saves_an_empty_model_on_an_unavailable_route(admin_client, route, provider):
+    client, _ = admin_client
+    default = client.get("/api/settings/judge").json()["model"]
+    request = {"provider": provider, "route": route, "model": ""}
+    response = client.put("/api/settings/judge", json=request)
+    assert response.status_code == 200
+    body = client.get("/api/settings/judge").json()
+    assert {key: body[key] for key in request} == {
+        **request, "model": default if provider == "claude" else "",
+    }
+    assert body["allowed_models"] == []
+    assert body["provider_routes_status"][provider][route]["readiness"]["state"] == "unverified"
+
+
+@pytest.mark.parametrize("method", ["get", "put"])
+def test_judge_settings_require_an_admin(admin_client, method):
+    client, _ = admin_client
+    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+    response = client.request(
+        method, "/api/settings/judge", json={"provider": "grok", "route": "api", "model": ""},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("route", [None, "unknown", ""])
+@pytest.mark.parametrize("path,method", [
+    ("/api/settings/judge", "get"),
+    ("/api/settings/judge", "put"),
+    ("/api/settings/providers", "get"),
+])
+def test_missing_or_invalid_judge_route_is_rejected_without_a_default(
+    admin_client, route, path, method,
+):
+    client, factory = admin_client
+    with factory() as session:
+        session.query(RateLimitSetting).filter_by(setting_key=SETTING_JUDGE_ROUTE).delete()
+        if route is not None:
+            set_claude_model(session, SETTING_JUDGE_ROUTE, route)
+        session.commit()
+    response = client.request(method, path, json={"provider": "grok", "model": ""})
+    assert response.status_code == 422
+    assert "Judge route" in response.json()["detail"]
+
+
+def test_unknown_judge_route_leaves_the_selection_unchanged(admin_client):
+    client, _ = admin_client
+    before = client.get("/api/settings/judge").json()
+    rejected = client.put(
+        "/api/settings/judge", json={"provider": "codex", "route": "automatic", "model": ""},
+    )
+    assert rejected.status_code == 422
+    assert client.get("/api/settings/judge").json() == before

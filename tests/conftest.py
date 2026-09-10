@@ -466,6 +466,14 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
         return int16.astype(np.float32) / 32768.0, sr
 
 
+def seed_judge_route(session) -> None:
+    """Settings-only TestClients skip the startup pin and retain the old API route."""
+    from songmaker_cli.constants import SETTING_JUDGE_ROUTE
+    from songmaker_cli.db.queries.settings import set_claude_model
+
+    set_claude_model(session, SETTING_JUDGE_ROUTE, "api")
+
+
 def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
@@ -491,10 +499,11 @@ def make_test_app(
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
     factory = init_db(data_dir / "songmaker.db")
-    if seed_db is not None:
-        with factory() as session:
+    with factory() as session:
+        seed_judge_route(session)
+        if seed_db is not None:
             seed_db(session)
-            session.commit()
+        session.commit()
 
     redis = make_fake_redis()
     ctx = AppContext(
@@ -533,14 +542,6 @@ def refresh_provider_snapshots() -> None:
 
 @pytest.fixture
 def every_provider_is_configured(monkeypatch):
-    from agent_providers.catalog import ProviderReady, ProviderSetupMethod
-
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.get_provider_configuration",
-        lambda provider, surface: ProviderReady(
-            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
-        ),
-    )
     override_provider_runtime(
         anthropic_api_key="test-key",
         xai_api_key="test-key",

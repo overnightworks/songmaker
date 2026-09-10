@@ -429,6 +429,8 @@ export interface JobItem {
 
 export interface JudgeSettings {
 	provider: string;
+	route: 'cli' | 'api';
+	provider_routes_status: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
 	model: string;
 	allowed_providers: string[];
 	allowed_models: string[];
@@ -439,6 +441,7 @@ export interface JudgeSettings {
 
 export interface JudgeSettingsRequest {
 	provider: string;
+	route?: 'cli' | 'api' | null;
 	model: string;
 }
 

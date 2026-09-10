@@ -584,13 +584,16 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 | MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
 
+### Agent routes
+
 `db/queries/settings.py` owns the complete instance-wide Co-Writer route map
-and the independent Cover and Judge selections. Each task captures its provider,
-model, and explicit `cli` or `api` route before work begins.
+and the independent Cover and Judge selections. Co-Writer and Cover capture their provider,
+model, and explicit `cli` or `api` route before work begins. The Judge has its
+own saved route, while its worker call still captures only provider and model.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for all three: Co-Writer executes its
-selected route, the Judge calls its selected API adapter through
-`call_provider_once`, and Cover asks `cover_image_capability(provider, route)`,
+selected route, the Judge retains its existing `call_provider_once` path in
+the scoring worker, and Cover asks `cover_image_capability(provider, route)`,
 the one answer to whether a route carries an image tool and what blocks it
 today. Nothing else answers that: the cover job resolves its saved row through
 it, `/api/settings/providers` projects it per route as `cover_routes`, and no
@@ -602,7 +605,17 @@ named (`<Provider> · no image tool`) instead of quietly running Codex.
 Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
-catalogue snapshots. The Judge remains API-only. Saving a row is a question of
+catalogue snapshots. Judge settings expose `route` and `provider_routes_status`;
+the saved route owns their model list and the provider status's `judge` projection.
+At startup, an absent `judge_route` is pinned once from the saved provider and
+shared provider runtime configuration: Claude (also the unset provider) uses
+API when `ANTHROPIC_API_KEY` is set, otherwise CLI; Grok, Codex, and retired
+providers pin API. Existing route rows are preserved. Reads without a valid
+route return 422. An omitted or null route in a Judge update keeps the saved
+route. The settings contract is ahead of the call: until #844's runtime handoff,
+a newly selected route can report ready while the worker still takes its
+existing path. The Models page also continues to display API for Scoring until
+#844's UI slice. Saving a row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
@@ -968,9 +981,9 @@ stream.
 | GET | `/api/settings/cowriter` | user | Co-writer provider/model plus the effective `provider_routes` map and a typed readiness/catalogue snapshot for both routes of every provider. The existing provider-keyed model fields remain the selected-route projection. |
 | PUT | `/api/settings/cowriter` | admin | Atomically persist provider, model, optional complete route map, and history-tail budget. Omitting the map retains it. An unknown provider or model is rejected with a string detail; a route that cannot answer is saved with its reason in the response status. |
 | GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
-| GET | `/api/settings/judge` | user | `lyrical_coherence` judge provider, selected model, and live model catalogs per provider; when the active saved or default value is a genuine model ID for that provider, it belongs to the valid set and is appended at the end without changing provider order. `models_errors` has the same shape as the co-writer response |
-| PUT | `/api/settings/judge` | admin | Persist judge provider and model. The model must be one the provider lists on its API route, the one already stored for that provider, or empty while that catalogue lists nothing; an unconfigured judge surface no longer blocks the save. A fresh or retired stored pair is safely replaceable. |
-| GET | `/api/settings/providers` | admin | Existing selected-route `cowriter` and API-only `judge` projections plus route-keyed Co-Writer and Cover status snapshots. Cover's route reason comes from the shared image-capability dispatch owner. |
+| GET | `/api/settings/judge` | admin | Judge provider, route, model, and `provider_routes_status` for both routes per provider. `allowed_models` and `models_by_provider` project the saved route and retain the selected model. `models_errors` names unavailable catalogs; a missing or invalid saved route returns 422. |
+| PUT | `/api/settings/judge` | admin | Persist judge provider, route, and model. Omitting `route` or sending null keeps the saved route. The model must be listed on that route, already retained for that provider, or empty while the catalog lists nothing. Unavailable selections remain saved with their route reason; unknown selections return 422. A fresh or retired stored pair is replaceable. |
+| GET | `/api/settings/providers` | admin | `cowriter` and `judge` project their independently saved routes; `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability. A missing or invalid Judge route returns 422. Cover's route reason comes from the shared image-capability dispatch owner. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |

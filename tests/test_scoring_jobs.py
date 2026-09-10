@@ -43,6 +43,8 @@ from songmaker_cli.db.queries.settings import (
     get_cowriter_provider,
     get_judge_model,
     get_judge_provider,
+    get_judge_route,
+    pin_judge_route_if_unset,
     set_claude_model,
     set_cowriter_settings,
     set_judge_settings,
@@ -137,13 +139,36 @@ def test_judge_settings_are_not_coupled_to_the_cowriters(tmp_path: Path) -> None
     factory = init_db(tmp_path / "settings.db")
     with factory() as session:
         set_cowriter_settings(session, "codex", "gpt-5.4")
-        set_judge_settings(session, "grok", "grok-4.6")
+        set_judge_settings(session, "grok", "api", "grok-4.6")
         session.commit()
 
         assert get_cowriter_provider(session) == "codex"
         assert get_cowriter_model(session, "codex") == "gpt-5.4"
         assert get_judge_provider(session) == "grok"
         assert get_judge_model(session, "grok") == "grok-4.6"
+
+
+@pytest.mark.parametrize("route", ["cli", "api"])
+def test_saved_judge_route_survives_repinning_and_settings_rollback(tmp_path, route):
+    factory = init_db(tmp_path / "settings.db")
+    with factory() as session:
+        set_judge_settings(session, "grok", route, "grok-4.6")
+        session.commit()
+    with factory() as session:
+        assert pin_judge_route_if_unset(session, anthropic_key_is_set=True) is None
+        assert pin_judge_route_if_unset(session, anthropic_key_is_set=False) is None
+        assert get_judge_route(session) == route
+        set_judge_settings(session, "codex", "api", "gpt-5.4")
+        session.rollback()
+        assert get_judge_route(session) == route
+        assert get_judge_provider(session) == "grok"
+        assert get_judge_model(session, "grok") == "grok-4.6"
+
+
+def test_judge_route_has_no_implicit_default(tmp_path):
+    factory = init_db(tmp_path / "settings.db")
+    with factory() as session, pytest.raises(ValueError, match="Judge route"):
+        get_judge_route(session)
 
 
 # ── /api/settings/judge ──────────────────────────────────────────────
@@ -162,6 +187,7 @@ def admin_client(tmp_path: Path, monkeypatch):
     )
     factory = init_db(tmp_path / "judge_api.db")
     with factory() as session:
+        pin_judge_route_if_unset(session, anthropic_key_is_set=True)
         session.add(User(id="u-test", username="user-u-test", password_hash="x", role="admin"))
         session.commit()
     ctx = AppContext(
@@ -303,7 +329,7 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
     co-writer sees that provider judge the take (#315's done-when)."""
     factory, audio_dir = _seeded_generation(tmp_path)
     with factory() as session:
-        set_judge_settings(session, "grok", "grok-4.6")
+        set_judge_settings(session, "grok", "api", "grok-4.6")
         session.commit()
 
     override_provider_runtime(xai_api_key="grok-key")
@@ -341,7 +367,7 @@ def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigure
     the failure (status + named reason) instead of ending green (#315)."""
     factory, audio_dir = _seeded_generation(tmp_path)
     with factory() as session:
-        set_judge_settings(session, "grok", "grok-4.6")
+        set_judge_settings(session, "grok", "api", "grok-4.6")
         session.commit()
 
     override_provider_runtime(xai_api_key=None)

@@ -368,6 +368,7 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.db.queries.settings import (
     get_judge_provider as get_judge_provider,
 )
+from songmaker_cli.db.queries.settings import get_judge_route as get_judge_route
 from songmaker_cli.db.queries.settings import get_preset as get_preset
 from songmaker_cli.db.queries.settings import (
     get_raw_stored_cowriter_settings as get_raw_stored_cowriter_settings,
@@ -380,6 +381,9 @@ from songmaker_cli.db.queries.settings import list_all_models as list_all_models
 from songmaker_cli.db.queries.settings import list_presets as list_presets
 from songmaker_cli.db.queries.settings import list_shared_presets as list_shared_presets
 from songmaker_cli.db.queries.settings import name_exists as name_exists
+from songmaker_cli.db.queries.settings import (
+    pin_judge_route_if_unset as pin_judge_route_if_unset,
+)
 from songmaker_cli.db.queries.settings import save_global_defaults as save_global_defaults
 from songmaker_cli.db.queries.settings import set_claude_model as set_claude_model
 from songmaker_cli.db.queries.settings import (

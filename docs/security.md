@@ -883,8 +883,11 @@ still uses Songmaker's MCP tools. The API and DOM expose only safe readiness
 metadata (`set`/`not set` through route state), never a key value, raw
 provider body, command output, or a secret-derived value. A Co-Writer route
 is administrator-selected; a failed selected route returns its fixed safe
-reason and never retries the sibling CLI/API route. The Judge remains
-API-only.
+reason and never retries the sibling CLI/API route. Judge settings are also
+admin-only and expose the saved route with safe readiness metadata. The
+[Agent routes contract](architecture.md#agent-routes) describes the startup pin
+and the temporary separation between that saved route and the worker's
+unchanged credential resolution below.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
 request. `provider_status_refresh` owns those probes; an empty snapshot is reported
