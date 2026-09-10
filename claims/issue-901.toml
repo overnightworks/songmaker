@@ -1,7 +1,0 @@
-claim_id = "bfa090bbb4e74d91b969786609b6ac79"
-agent = "codex-songmaker-901"
-role = "coordinator"
-base = "a2b6a40ec050a22aa27c1223f471f2bb5149d288"
-branch = "codex/issue-901-scoring-picture"
-scope = ["docs/design/admin-models.html", "docs/design/README.md"]
-opened_commit = "893a63ffba27fe0133007df37ad1b7bf87e92b69"
