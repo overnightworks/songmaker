@@ -21,10 +21,13 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   04.09.2026 für #564: Die Leiste ist die eine Albumliste mit Cover, Filter,
   schaltbarem Detailgrad und ziehbarer Breite; die Reihe aus #545 ist als
   eigene Fläche abgelöst.
-- `admin-models.html` — der Admin-Tab „Models" (#317). Erste Fassung
-  freigegeben am 01.09.2026: Provider-Status oben, Co-Writer und Scoring als
-  baugleiche Blöcke darunter, totes Chat-Model-Feld entfernt. Backend-
-  Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
+- `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
+  01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
+  Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
+  Auswahl und Status. Die Scoring-CLI/API-Zeile wurde am 10.09.2026 für #844
+  freigegeben und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein
+  Produktverhalten; der Default bestehender Installationen bleibt in #844 offen.
+  Backend-Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
   providerneutral).
 - `album-browsing.html` — Album-/Playlist-Browsing nach dem Öffnen (#348).
   Erste Fassung freigegeben am 01.09.2026, nach dem Ausprobieren eines
