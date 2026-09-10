@@ -230,6 +230,7 @@ export const MODELS_STATUS_CHECKING_LABEL = 'Checking…';
 export const MODELS_STATUS_READY_CLI_LABEL = 'Ready · CLI login';
 export const MODELS_STATUS_READY_KEY_LABEL = 'Ready · key set';
 export const MODELS_STATUS_NEEDS_API_KEY_LABEL = 'Needs its API key';
+export const MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL = 'Claude CLI not logged in';
 export const MODELS_STATUS_NOT_SAVED_LABEL = 'Not saved';
 export const MODELS_OPTION_READY_LABEL = '✓ ready';
 export const MODELS_OPTION_NEEDS_API_KEY_PHRASE = 'needs its API key';

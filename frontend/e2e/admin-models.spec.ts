@@ -33,7 +33,7 @@ import {
 	MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 	MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 	MODELS_SAVED_LABEL,
-	MODELS_STATUS_NEEDS_API_KEY_LABEL,
+	MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL,
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
 	MODELS_TASK_SCORING_LABEL,
@@ -243,7 +243,8 @@ test('the Models table keeps every task, route, model and status on screen at ev
 	// included, the one the operator found clipped away -- stays on screen at
 	// every width, without the page ever scrolling sideways.
 	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-	await expect(scoringStatus).toContainText(MODELS_STATUS_NEEDS_API_KEY_LABEL);
+	// The keyless existing installation pins the judge route to CLI (#903).
+	await expect(scoringStatus).toContainText(MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL);
 	for (const width of DESKTOP_WIDTHS) {
 		await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
 		for (const column of [
@@ -375,7 +376,8 @@ test('at 375px every task is a card with its own labelled lines', async ({
 	// The cards stack, so the last task's status is reached by scrolling down --
 	// never by scrolling sideways.
 	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-	await expect(scoringStatus).toContainText(MODELS_STATUS_NEEDS_API_KEY_LABEL);
+	// The keyless existing installation pins the judge route to CLI (#903).
+	await expect(scoringStatus).toContainText(MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL);
 	await scoringStatus.scrollIntoViewIfNeeded();
 	await expect(scoringStatus).toBeInViewport();
 
