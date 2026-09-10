@@ -14,7 +14,7 @@
 // The stack behind it has no provider key and no mounted CLI (docker-compose.ci.yml
 // drops both), so the "nothing is set up" half of the ruled sentences is the
 // stack's own honest state rather than an arranged one: greyed route pills with
-// their reason, "No models", an amber "Needs its API key", and a co-writer turn
+// their reason, "No models", a gray "Claude CLI not logged in", and a co-writer turn
 // that ends with a named reason instead of silently switching provider.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
@@ -33,7 +33,6 @@ import {
 	MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 	MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 	MODELS_SAVED_LABEL,
-	MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL,
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
 	MODELS_TASK_SCORING_LABEL,
@@ -244,7 +243,9 @@ test('the Models table keeps every task, route, model and status on screen at ev
 	// every width, without the page ever scrolling sideways.
 	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
 	// The keyless existing installation pins the judge route to CLI (#903).
-	await expect(scoringStatus).toContainText(MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL);
+	await expect(scoringStatus).toContainText(
+		`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
+	);
 	for (const width of DESKTOP_WIDTHS) {
 		await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
 		for (const column of [
@@ -377,7 +378,9 @@ test('at 375px every task is a card with its own labelled lines', async ({
 	// never by scrolling sideways.
 	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
 	// The keyless existing installation pins the judge route to CLI (#903).
-	await expect(scoringStatus).toContainText(MODELS_STATUS_CLAUDE_CLI_NOT_LOGGED_IN_LABEL);
+	await expect(scoringStatus).toContainText(
+		`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
+	);
 	await scoringStatus.scrollIntoViewIfNeeded();
 	await expect(scoringStatus).toBeInViewport();
 
