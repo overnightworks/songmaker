@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.config import WebAuthConfig, web_auth_config
 from webauth.dependencies import AuthenticatedUser
@@ -20,8 +19,15 @@ from webauth.login import (
     judge_credentials,
     login_attempt_budget,
 )
-from webauth.passwords import hash_password, verify_password_constant_time
+from webauth.ports import UsernameTakenError
 from webauth.proxies import client_user_agent, resolve_client_ip
+from webauth.users import (
+    SetupAlreadyDoneError,
+    SetupRacedError,
+    UserManagement,
+    WrongPasswordError,
+    complete_first_run_setup,
+)
 
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import (
@@ -34,15 +40,16 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.auth_dependencies import get_current_user, get_verified_session_id
+from songmaker_cli.auth_dependencies import (
+    get_current_user,
+    get_verified_session_id,
+    user_management,
+)
 from songmaker_cli.auth_stores import DatabaseLoginAttemptStore
-from songmaker_cli.constants import ROLE_ADMIN
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
-    create_user,
     delete_session,
-    delete_user_sessions,
     get_user,
     get_user_by_username,
     prune_overflow_sessions,
@@ -77,16 +84,6 @@ def _cache_session(
         log.warning("Redis session cache write failed on login")
 
 
-def _clear_user_cache(request: Request, user_id: str) -> None:
-    session_cache = web_auth_config(request).session_cache
-    if not session_cache:
-        return
-    try:
-        session_cache.delete_user_sessions(user_id)
-    except Exception:
-        log.warning("Redis session cache clear failed")
-
-
 @router.get("/setup-required")
 def setup_required(db: Session = Depends(get_db_session)) -> SetupRequiredResponse:
     return SetupRequiredResponse(required=user_count(db) == 0)
@@ -102,30 +99,24 @@ def setup(
     response: Response,
     db: Session = Depends(get_db_session),
     config: WebAuthConfig = Depends(web_auth_config),
+    management: UserManagement = Depends(user_management),
 ) -> UserResponse:
-    _begin_exclusive(db)
-    if user_count(db) > 0:
-        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
+    try:
+        user = complete_first_run_setup(management, req.username, req.password)
+    except (SetupAlreadyDoneError, SetupRacedError, UsernameTakenError) as error:
+        db.rollback()
+        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL) from error
 
     ip = resolve_client_ip(request)
     ua = client_user_agent(request)
-    try:
-        user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
-        db.flush()
-        if user_count(db) > 1:
-            db.rollback()
-            raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
-        expires = datetime.now(timezone.utc) + timedelta(
-            seconds=config.session_max_age_seconds,
-        )
-        user_session = create_session(
-            db, user.id, expires,
-            ip_address=ip, user_agent=ua,
-        )
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL)
+    expires = datetime.now(timezone.utc) + timedelta(
+        seconds=config.session_max_age_seconds,
+    )
+    user_session = create_session(
+        db, user.id, expires,
+        ip_address=ip, user_agent=ua,
+    )
+    db.commit()
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     issue_session_cookies(response, request, user_session.id, config)
@@ -265,8 +256,8 @@ def change_password(
     db: Session = Depends(get_db_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
     config: WebAuthConfig = Depends(web_auth_config),
+    management: UserManagement = Depends(user_management),
 ) -> StatusResponse:
-    user = get_user(db, current_user.id)
     ip = resolve_client_ip(request)
     window = config.login_rate_window_seconds
 
@@ -279,15 +270,14 @@ def change_password(
             headers={"Retry-After": str(window)},
         )
 
-    if not verify_password_constant_time(req.current, user.password_hash):
+    try:
+        management.change_own_password(current_user, req.current, req.new)
+    except WrongPasswordError as error:
         record_login_attempt(db, ip, f"__pwchange__{current_user.username}", success=False)
         db.commit()
-        raise HTTPException(401, "Current password is incorrect")
+        raise HTTPException(401, "Current password is incorrect") from error
 
-    user.password_hash = hash_password(req.new)
-    delete_user_sessions(db, current_user.id)
-
-    ip = resolve_client_ip(request)
+    user = get_user(db, current_user.id)
     ua = client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(
         seconds=config.session_max_age_seconds,
@@ -298,7 +288,6 @@ def change_password(
     )
     db.commit()
 
-    _clear_user_cache(request, current_user.id)
     _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
     issue_session_cookies(response, request, new_session.id, config)
     return StatusResponse(status="ok")

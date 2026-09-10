@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import dataclasses
+from contextlib import closing
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
+from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import UserSession
@@ -361,6 +363,10 @@ def test_change_password_wrong_current(client: TestClient) -> None:
     )
     assert resp.status_code == 401
     assert "incorrect" in resp.json()["detail"]
+    attempts = client.get("/api/admin/login-attempts").json()["items"]
+    failures = [attempt for attempt in attempts if not attempt["success"]]
+    assert len(failures) == 1
+    assert failures[0]["username"] == "__pwchange__admin"
 
 
 def test_change_password_too_short(client: TestClient) -> None:
@@ -401,34 +407,23 @@ def test_change_password_unauthenticated(client: TestClient) -> None:
 
 
 def test_setup_race_condition_second_user_created(client: TestClient) -> None:
-    """After flush, user_count > 1 means another request won the race — must 403."""
-    from unittest.mock import patch
-
-    call_count = 0
-
-    def _user_count_side_effect(db):
-        nonlocal call_count
-        call_count += 1
-        return 0 if call_count == 1 else 2
-
-    with patch("songmaker_cli.auth_api.user_count", side_effect=_user_count_side_effect):
+    with patch("songmaker_cli.auth_stores.DatabaseUserStore.count", side_effect=[0, 2]):
         resp = client.post(
             "/api/auth/setup", json={"username": "racing", "password": "t3stP@ssw0rd"},
         )
 
     assert resp.status_code == 403
     assert "already completed" in resp.json()["detail"]
+    assert client.get("/api/auth/setup-required").json() == {"required": True}
+    assert DEFAULT_SESSION_COOKIE_NAME not in resp.cookies
+    with client.app.state.ctx.db() as session:
+        assert session.query(UserSession).count() == 0
 
 
 def test_setup_integrity_error_returns_403(client: TestClient) -> None:
-    """IntegrityError from create_user (duplicate username) must return 403."""
-    from unittest.mock import patch
-
-    from sqlalchemy.exc import IntegrityError
-
     with patch(
-        "songmaker_cli.auth_api.create_user",
-        side_effect=IntegrityError("duplicate", {}, Exception()),
+        "songmaker_cli.auth_stores.DatabaseUserStore.create",
+        side_effect=UsernameTakenError("Username already exists"),
     ):
         resp = client.post(
             "/api/auth/setup", json={"username": "admin", "password": "t3stP@ssw0rd"},
@@ -436,6 +431,54 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
     assert resp.status_code == 403
     assert "already completed" in resp.json()["detail"]
+    assert client.get("/api/auth/setup-required").json() == {"required": True}
+    assert DEFAULT_SESSION_COOKIE_NAME not in resp.cookies
+
+
+def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestClient) -> None:
+    setup = client.post(
+        "/api/auth/setup", json={"username": "admin", "password": "secure1234"},
+    )
+    assert setup.status_code == 200
+    assert client.get("/api/admin/audit-log").json()["items"] == []
+
+    client.headers["X-CSRF-Token"] = client.cookies[DEFAULT_CSRF_COOKIE_NAME]
+    change = client.put(
+        "/api/auth/password",
+        json={"current": "secure1234", "new_password": "newpassword1"},
+    )
+    assert change.status_code == 200
+    assert client.get("/api/admin/audit-log").json()["items"] == []
+
+
+def test_password_change_cache_failure_rolls_back_password_and_sessions(client: TestClient) -> None:
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        old_session_ids = {record.id for record in session.query(UserSession).all()}
+    cache = installed_web_auth_config(client.app).session_cache
+
+    with closing(TestClient(client.app, raise_server_exceptions=False)) as failing_client:
+        failing_client.cookies.update(client.cookies)
+        failing_client.headers.update(client.headers)
+        with patch.object(
+            cache, "delete_user_sessions", side_effect=RuntimeError("cache unavailable"),
+        ):
+            response = failing_client.put(
+                "/api/auth/password",
+                json={"current": "admin12345", "new_password": "newpassword1"},
+            )
+
+    assert response.status_code == 500
+    assert DEFAULT_SESSION_COOKIE_NAME not in response.cookies
+    with factory() as session:
+        assert {record.id for record in session.query(UserSession).all()} == old_session_ids
+    assert client.get("/api/auth/me").status_code == 200
+    login = client.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    )
+    assert login.status_code == 200
 
 
 # -- Redis session cache integration ------------------------------------------
