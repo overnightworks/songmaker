@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.1.0` and hash-locked in
+the `server` extra to the release wheel of tag `v0.4.0` and hash-locked in
 `uv.lock` (#879). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -11,7 +11,7 @@ songmaker's decision, built in `request_policies.py`.
 The provider layer is likewise not in this repository. `agent_providers` ships
 as the distribution `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the release wheel of tag `v0.1.0` and
+pinned bare in the `server` extra to the release wheel of tag `v0.1.2` and
 hash-locked in `uv.lock` (#886). Module names below such as
 `agent_providers.claude.provider` are its import paths; the runtime values it
 runs on — binaries, credential mirrors, secret-scrub list, the sandbox
@@ -159,12 +159,19 @@ Deployment" below.
 
 ## CSRF Protection
 
-Four-layer defense:
+Five-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
-3. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
-4. **Form-submit blocking**: Mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
+2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
+3. **Origin verification**: When `Sec-Fetch-Site` is absent or `same-site`, mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
+4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
+5. **Fetch metadata**: `Sec-Fetch-Site` is checked before the Origin allowlist. `same-origin` passes the origin check; `cross-site` and `none` are rejected (403), even with an allowed Origin. `same-site` and a missing header follow the Origin/Referer allowlist and form-submit rules above. The session-bound token is still required. The internal worker routes remain token-exempt but still follow this origin check. [Server tests](../tests/test_server.py) prove the accepted and rejected header cases.
+
+### Deliberate changes with webauth v0.4.0 (#905)
+
+- The per-IP middleware starts fresh budgets once at deployment because its Redis keys change to the class-qualified names documented below. Session keys, stored data and rights are unchanged.
+- The fetch-metadata check above hardens mutating `/api/` requests. Songmaker's frontend is same-origin; CLI and workers omit `Sec-Fetch-Site` and keep their existing behavior. A cross-site browser client cannot make these mutations, even when its Origin is configured.
+- Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/test_auth_api.py); no test pins this deletion attribute.
 
 ## Rate Limiting
 
@@ -213,9 +220,13 @@ the paths it reads are songmaker's own, built by
 `request_policies.build_rate_limit_policy` and installed on the middleware in
 `server.create_app`; every request gets exactly one class, and an unrecognized
 path falls back to the API class — fail closed, not fail open. Each class is a
-Redis sliding-window counter (`webauth.rate_limit.RedisRateLimiter`) over its
-own 60-second window and its own key prefix, so exhausting one class's counter
-never touches another's.
+Redis sliding-window counter (`webauth.rate_limit.RedisRateLimitBackend`,
+supplied as `WebAuthConfig.rate_limits`) over its own 60-second window. Keys
+are `rl:ip:API:<ip>`, `rl:ip:MEDIA:<ip>` and `rl:ip:STREAM:<ip>`, so exhausting
+one class's counter never touches another's. These replace `rl:ip:<ip>`,
+`rl:ip-media:<ip>` and `rl:ip-stream:<ip>` respectively. Direct sharing, queue
+stream and resource-event limiters retain their existing `prefix:key` keys;
+each call supplies its limit and window, and `Retry-After` remains that window.
 
 | Class  | Paths | Default | Why |
 |--------|-------|---------|-----|
@@ -332,7 +343,7 @@ All responses include:
 - **Methods**: `GET`, `POST`, `PUT`, `DELETE` (no wildcard)
 - **Headers**: `Content-Type`, `Cookie`, `X-CSRF-Token` (no wildcard)
 - **Credentials**: Allowed
-- **Origins**: The normal interface calls the API under the same origin, so it needs no CORS permission. A deliberately separate trusted browser client may set `CORS_ORIGIN` to its one literal origin; startup rejects wildcards and comma-separated lists. `SameSite=Strict` does not isolate sibling subdomains of the same site, so do not trust a credentialed subdomain wildcard. When unset, CORS defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
+- **Origins**: The normal interface calls the API under the same origin, so it needs no CORS permission. A deliberately separate trusted browser client may set `CORS_ORIGIN` to its one literal origin, but cross-site browsers cannot make mutating `/api/` calls because the fetch-metadata check rejects them even with CORS permission; startup rejects wildcards and comma-separated lists. `SameSite=Strict` does not isolate sibling subdomains of the same site, so do not trust a credentialed subdomain wildcard. When unset, CORS defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
 
 ## Error Handling
 
@@ -931,7 +942,7 @@ The ACE-Step worker pool runs each model-serving worker as a separate peer conta
 - **Header**: Workers send `X-Internal-Token: <token>` on every internal call. The web container does the same when the music-worker scheduler proxies `/load_model` / `/evict_model` to a worker.
 - **Verification**: `internal_api.verify_internal_token` is mounted as a router-level dependency, so every endpoint under `/api/internal/*` automatically requires the header. Comparison uses `hmac.compare_digest` for timing safety.
 - **Failure modes**: Missing env var → 503 ("Internal API not configured"). Wrong/missing token → 401. The 503 vs 401 split tells the operator whether the issue is config or credentials.
-- **CSRF**: `/api/internal/*` is exempt from the CSRF middleware. Workers do not have sessions; the internal token is the only credential that matters.
+- **CSRF**: `/api/internal/*` is exempt from the session-bound token check, but still follows the origin/fetch-metadata check. Workers send JSON without `Sec-Fetch-Site` or Origin headers and authenticate with the internal token; they do not have sessions.
 
 ### Deployment boundary
 
@@ -1056,7 +1067,7 @@ All mutating operations are logged to the `audit_log` table:
 |---------|-----|
 | HTTPS termination | Songmaker does not terminate TLS. An operator-provided TLS terminator must set `X-Forwarded-Proto: https`; Songmaker honors it only when the direct peer matches `TRUSTED_PROXIES`, which activates the `Secure` cookie flag and HSTS. No terminator configuration is shipped here. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
-| CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
+| CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Cross-site browser mutations to `/api/` remain rejected by `Sec-Fetch-Site`, even with this permission. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
