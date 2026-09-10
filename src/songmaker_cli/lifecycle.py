@@ -577,27 +577,48 @@ def auto_setup_admin(ctx: AppContext) -> None:
     if not admin_user or not admin_pass:
         return
 
-    from sqlalchemy.exc import IntegrityError
-    from webauth.passwords import check_password_strength, hash_password
+    from webauth.ports import UsernameTakenError
+    from webauth.users import (
+        SetupAlreadyDoneError,
+        SetupRacedError,
+        UserManagement,
+        WeakPasswordError,
+        complete_first_run_setup,
+    )
 
-    from songmaker_cli.constants import ROLE_ADMIN
-    from songmaker_cli.db.queries import create_user, user_count
+    from songmaker_cli.app_context import build_web_auth_config
+    from songmaker_cli.auth_stores import (
+        DatabaseAuditSink,
+        DatabaseSessionRecordStore,
+        DatabaseUserStore,
+        DatabaseWriteLock,
+    )
 
+    config = build_web_auth_config(ctx, settings)
     with ctx.db() as session:
-        if user_count(session) > 0:
-            return
+        management = UserManagement(
+            users=DatabaseUserStore(session),
+            sessions=DatabaseSessionRecordStore(
+                session, session_max_age_seconds=config.session_max_age_seconds,
+            ),
+            audit=DatabaseAuditSink(session),
+            lock=DatabaseWriteLock(session),
+            config=config,
+        )
         try:
-            check_password_strength(admin_pass)
-        except ValueError:
+            complete_first_run_setup(management, admin_user, admin_pass)
+        except SetupAlreadyDoneError:
+            session.rollback()
+            return
+        except WeakPasswordError:
+            session.rollback()
             log.error("ADMIN_PASSWORD does not meet strength requirements -- skipping auto-setup")
             return
-        try:
-            create_user(session, admin_user, hash_password(admin_pass), role=ROLE_ADMIN)
-            session.commit()
-        except IntegrityError:
+        except (SetupRacedError, UsernameTakenError):
             session.rollback()
             log.info("Auto-setup: admin user already exists (concurrent startup)")
             return
+        session.commit()
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 

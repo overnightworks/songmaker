@@ -1860,75 +1860,107 @@ def test_metrics_endpoint_offline_worker(
 # ── Auto-setup admin ──────────────────────────────────────────────
 
 
-def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import get_user_by_username
-    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
-
-    factory = init_db(tmp_path / "test.db")
-    ctx = AppContext(
-        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+@pytest.fixture
+def auto_setup_ctx(tmp_path: Path) -> AppContext:
+    return AppContext(
+        db=init_db(tmp_path / "test.db"),
+        audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
-        _auto_setup_admin(ctx)
 
-    with factory() as session:
+
+def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
+    from webauth.passwords import verify_password
+
+    from songmaker_cli.db.models import AuditLog, UserSession
+    from songmaker_cli.db.queries import get_user_by_username
+    from songmaker_cli.lifecycle import auto_setup_admin
+
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
+        auto_setup_admin(auto_setup_ctx)
+
+    with auto_setup_ctx.db() as session:
         user = get_user_by_username(session, "boss")
         assert user is not None
         assert user.role == "admin"
+        assert verify_password("Str0ng!Pass99", user.password_hash)
+        assert session.query(AuditLog).count() == 0
+        assert session.query(UserSession).count() == 0
 
 
-def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
-    from webauth.passwords import hash_password
+def test_auto_setup_admin_skips_when_users_exist(
+    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
+) -> None:
+    from songmaker_cli.db.queries import create_user, list_users
+    from songmaker_cli.lifecycle import auto_setup_admin
 
-    from songmaker_cli.db.queries import create_user, get_user_by_username
-    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
-
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+    with auto_setup_ctx.db() as session:
         create_user(session, "existing", hash_password("Test1234!"), role="admin")
         session.commit()
 
-    ctx = AppContext(
-        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
-        _auto_setup_admin(ctx)
+    with (
+        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}),
+        caplog.at_level(logging.INFO, logger="songmaker_cli.lifecycle"),
+    ):
+        auto_setup_admin(auto_setup_ctx)
 
-    with factory() as session:
-        assert get_user_by_username(session, "boss") is None
+    with auto_setup_ctx.db() as session:
+        assert [user.username for user in list_users(session)] == ["existing"]
+    assert not any(record.name == "songmaker_cli.lifecycle" for record in caplog.records)
 
 
 def test_auto_setup_admin_skips_without_env_vars(
-    tmp_path: Path, monkeypatch,
+    auto_setup_ctx: AppContext, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
+    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.lifecycle import auto_setup_admin
 
-    factory = init_db(tmp_path / "test.db")
-    ctx = AppContext(
-        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
-    _auto_setup_admin(ctx)
+    auto_setup_admin(auto_setup_ctx)
 
-
-def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import user_count
-    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
-
-    factory = init_db(tmp_path / "test.db")
-    ctx = AppContext(
-        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
-        _auto_setup_admin(ctx)
-
-    with factory() as session:
+    with auto_setup_ctx.db() as session:
         assert user_count(session) == 0
+
+
+def test_auto_setup_admin_rejects_weak_password(
+    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
+) -> None:
+    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.lifecycle import auto_setup_admin
+
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
+        auto_setup_admin(auto_setup_ctx)
+
+    with auto_setup_ctx.db() as session:
+        assert user_count(session) == 0
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
+
+
+@pytest.mark.parametrize("store_method", ["count", "create"])
+def test_auto_setup_admin_rolls_back_concurrent_startup(
+    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture, store_method: str,
+) -> None:
+    from webauth.ports import UsernameTakenError
+
+    from songmaker_cli.auth_stores import DatabaseUserStore
+    from songmaker_cli.db.models import AuditLog, UserSession
+    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.lifecycle import auto_setup_admin
+
+    failure = [0, 2] if store_method == "count" else UsernameTakenError("Username already exists")
+    with (
+        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}),
+        patch.object(DatabaseUserStore, store_method, side_effect=failure),
+        caplog.at_level(logging.INFO, logger="songmaker_cli.lifecycle"),
+    ):
+        auto_setup_admin(auto_setup_ctx)
+
+    with auto_setup_ctx.db() as session:
+        assert user_count(session) == 0
+        assert session.query(UserSession).count() == 0
+        assert session.query(AuditLog).count() == 0
+    assert "concurrent startup" in caplog.text
 
 
 # ── PWA static routes ────────────────────────────────────────────────
