@@ -1,8 +1,0 @@
-claim_id = "43ddf26798de49b387c07f722b5074ce"
-agent = "codex-songmaker-903"
-role = "coordinator"
-base = "9466ed0ad32096fddc2067ef652930f4e6269ebc"
-branch = "codex/issue-903-judge-route"
-scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/settings_api.py", "src/songmaker_cli/provider_status.py", "src/songmaker_cli/lifecycle.py", "tests/test_lifecycle_judge_route.py", "frontend/src/lib/api/types.ts", "docs/architecture.md", "src/songmaker_cli/server.py", "tests/conftest.py", "tests/test_cowriter_providers.py", "tests/test_scoring_jobs.py", "tests/test_cowriter_catalog.py", "tests/test_api.py", "frontend/src/routes/settings/users/page.test.ts", "docs/security.md", "src/songmaker_cli/db/queries/__init__.py", "tests/fixtures/provider_status_capability_missing.json", "tests/fixtures/provider_status_ready.json", "tests/test_lifecycle_background_loop_health.py", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/helpers.ts", "frontend/src/lib/constants.ts"]
-opened_commit = "6f20cf43925e1a8f63f79845775b47c841b6ddca"
-whole_reason = "Ein API-Vertrag (Judge-Route) zieht sich durch Konstante, Store, Modell, Endpoint, Status, Boot-Pin, generierte Typen, deren Tests, Fixtures, den E2E-Beleg der Models-Seite samt Label-Konstante und Docs; die Scheibe ist die kleinste, die den Vertrag konsistent beweist."
