@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException
@@ -74,6 +74,7 @@ from songmaker_cli.db.queries.settings import (
     get_effective_provider_routes,
     get_judge_model,
     get_judge_provider,
+    get_judge_route,
     get_preset,
     list_active_models,
     list_all_models,
@@ -92,14 +93,14 @@ from songmaker_cli.db.queries.settings import (
 )
 
 if TYPE_CHECKING:
-    from songmaker_cli.provider_status import ProviderSnapshot, ProviderSurface
+    from songmaker_cli.provider_status import ProviderSnapshot
 
 router = APIRouter()
 
-JUDGE_ROUTE = "api"
 PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
 PRESET_NOT_FOUND_DETAIL = "Preset not found"
 USER_NOT_FOUND_DETAIL = "User not found"
+PROVIDER_MODEL_CATALOG_UNVERIFIED: Final = "Provider model catalog is unverified"
 
 
 @router.get("/settings/generation-builtins")
@@ -402,24 +403,31 @@ def api_set_claude_models(
 # ── Provider reachability (shared by Co-Writer and Scoring) ────────
 
 
-@router.get("/settings/providers")
+@router.get(
+    "/settings/providers",
+    responses={422: {"description": "Stored judge route is invalid"}},
+)
 def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> list[ProviderStatusResponse]:
-    from songmaker_cli.provider_status import ProviderSurface, provider_snapshots
+    from songmaker_cli.provider_status import provider_snapshots
 
     snapshots = provider_snapshots()
     routes = get_effective_provider_routes(session)
+    try:
+        judge_route = get_judge_route(session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     return [
         ProviderStatusResponse(
             provider=name,
             cowriter=_surface_status_from_snapshot(
-                name, ProviderSurface.CO_WRITER, snapshots.get(name), routes[name],
+                name, snapshots.get(name), routes[name],
             ),
             judge=_surface_status_from_snapshot(
-                name, ProviderSurface.JUDGE, snapshots.get(name), None,
+                name, snapshots.get(name), judge_route,
             ),
             cowriter_routes=_route_statuses(snapshots.get(name), None),
             cover_routes=_cover_route_readiness(name),
@@ -460,70 +468,28 @@ def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
 
 def _surface_status_from_snapshot(
     provider: str,
-    surface: "ProviderSurface",
     snapshot: "ProviderSnapshot | None",
-    selected_route: str | None = None,
+    selected_route: str,
 ) -> ProviderSurfaceStatus:
-    from agent_providers.catalog import (
-        ProviderCapabilityMissing,
-        ProviderNeedsKey,
-        ProviderNotLoggedIn,
-        ProviderReady,
-    )
-
-    from songmaker_cli.provider_status import ProviderSurface
-
     if snapshot is None:
         return ProviderSurfaceStatus(state=ProviderSurfaceState.UNVERIFIED)
-    if surface is ProviderSurface.CO_WRITER and selected_route is not None:
-        route_status = _route_statuses(snapshot, None)[selected_route]
-        if route_status.readiness.state == "ready":
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.CONFIGURED,
-                setup_method="api_key" if selected_route == "api" else f"{provider}_cli",
-                probed_at=route_status.readiness.probed_at,
-            )
-        if route_status.readiness.state == "not_configured":
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.UNCONFIGURED,
-                needs="api_key" if selected_route == "api" else "cli_login",
-                probed_at=route_status.readiness.probed_at,
-            )
+    route_status = _route_statuses(snapshot, None)[selected_route]
+    if route_status.readiness.state == "ready":
         return ProviderSurfaceStatus(
-            state=ProviderSurfaceState.MISSING_DEPENDENCY,
+            state=ProviderSurfaceState.CONFIGURED,
+            setup_method="api_key" if selected_route == "api" else f"{provider}_cli",
             probed_at=route_status.readiness.probed_at,
         )
-    configuration = snapshot.cowriter if surface is ProviderSurface.CO_WRITER else snapshot.judge
-    match configuration:
-        case ProviderReady():
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.CONFIGURED,
-                setup_method=configuration.method.value,
-                environment_key=configuration.environment_key,
-                probed_at=snapshot.probed_at.isoformat(),
-            )
-        case ProviderNeedsKey():
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.CLI_LOGIN_NEEDS_API_KEY,
-                needs="api_key",
-                setup_method=configuration.method.value,
-                environment_key=configuration.missing_environment_key,
-                probed_at=snapshot.probed_at.isoformat(),
-            )
-        case ProviderCapabilityMissing():
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.MISSING_DEPENDENCY,
-                missing_dependency=configuration.dependency,
-                probed_at=snapshot.probed_at.isoformat(),
-            )
-        case ProviderNotLoggedIn():
-            return ProviderSurfaceStatus(
-                state=ProviderSurfaceState.UNCONFIGURED,
-                needs="api_key",
-                environment_key=configuration.missing_environment_key,
-                probed_at=snapshot.probed_at.isoformat(),
-            )
-    raise AssertionError(f"unhandled provider configuration state: {configuration!r}")
+    if route_status.readiness.state == "not_configured":
+        return ProviderSurfaceStatus(
+            state=ProviderSurfaceState.UNCONFIGURED,
+            needs="api_key" if selected_route == "api" else "cli_login",
+            probed_at=route_status.readiness.probed_at,
+        )
+    return ProviderSurfaceStatus(
+        state=ProviderSurfaceState.MISSING_DEPENDENCY,
+        probed_at=route_status.readiness.probed_at,
+    )
 
 
 def _live_catalogue(provider: str, route: str) -> list[str]:
@@ -548,7 +514,7 @@ def _models_from_route_snapshot(
     from agent_providers.catalog import models_with_active_model
 
     if snapshot is None:
-        return [], "Provider model catalog is unverified"
+        return [], PROVIDER_MODEL_CATALOG_UNVERIFIED
     route_snapshot = next(item for key, item in snapshot.routes.items() if key.value == route)
     models = models_with_active_model(list(route_snapshot.models), active_model)
     error = route_snapshot.catalogue_failure
@@ -758,27 +724,33 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
     from songmaker_cli.provider_status import provider_snapshots
 
     provider = get_judge_provider(session)
+    route = get_judge_route(session)
     model = get_judge_model(session, provider)
     snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
+    route_statuses_by_provider: dict[str, dict[str, ProviderRouteStatusResponse]] = {}
     for name in sorted(COWRITER_PROVIDERS):
-        models, error = _models_from_route_snapshot(
-            model if name == provider else None,
-            snapshots.get(name),
-            JUDGE_ROUTE,
+        route_statuses = _route_statuses(
+            snapshots.get(name), model if name == provider else None,
         )
-        models_by_provider[name] = models
-        if error:
-            errors[name] = error
+        route_statuses_by_provider[name] = route_statuses
+        selected = route_statuses[route]
+        models_by_provider[name] = selected.models
+        if selected.catalogue_failure:
+            errors[name] = selected.catalogue_failure.message
+        elif snapshots.get(name) is None:
+            errors[name] = PROVIDER_MODEL_CATALOG_UNVERIFIED
     return JudgeSettingsResponse(
         provider=provider,
+        route=route,
         model=model,
         allowed_providers=sorted(COWRITER_PROVIDERS),
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
         models_errors=errors,
         probed_at=_provider_probe_times(snapshots),
+        provider_routes_status=route_statuses_by_provider,
     )
 
 
@@ -787,7 +759,7 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
     responses={422: {"description": "Stored judge configuration is invalid"}},
 )
 def api_get_judge_settings(
-    _user: AuthenticatedUser = Depends(get_current_user),
+    _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> JudgeSettingsResponse:
     try:
@@ -798,7 +770,7 @@ def api_get_judge_settings(
 
 @router.put(
     "/settings/judge",
-    responses={422: {"description": "Judge provider or model is unknown"}},
+    responses={422: {"description": "Judge provider, route, or model is unknown"}},
 )
 def api_set_judge_settings(
     req: JudgeSettingsRequest,
@@ -810,16 +782,20 @@ def api_set_judge_settings(
         raise HTTPException(
             422, f"Unknown judge provider '{req.provider}'",
         )
+    try:
+        route = req.route if req.route is not None else get_judge_route(session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     _require_selectable_model(
         req.provider,
         req.model,
-        _live_catalogue(req.provider, JUDGE_ROUTE),
+        _live_catalogue(req.provider, route),
         get_judge_model(session, req.provider),
     )
-    set_judge_settings(session, req.provider, req.model)
+    set_judge_settings(session, req.provider, route, req.model)
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.JUDGE,
-        detail=f"provider={req.provider} model={req.model}",
+        detail=f"provider={req.provider} route={route} model={req.model}",
     )
     session.commit()
     return _judge_response(session)

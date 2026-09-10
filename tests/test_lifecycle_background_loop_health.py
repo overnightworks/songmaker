@@ -254,17 +254,11 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 def test_provider_status_loop_fills_snapshots_and_is_healthy(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:
-    from agent_providers.catalog import ProviderReady, ProviderRoute, ProviderSetupMethod
+    from agent_providers.catalog import ProviderRoute
     from agent_providers.constants import COWRITER_PROVIDERS
 
     from songmaker_cli.provider_status import provider_snapshot
 
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.get_provider_configuration",
-        lambda provider, _surface: ProviderReady(
-            provider, ProviderSetupMethod.API_KEY, f"{provider.upper()}_API_KEY",
-        ),
-    )
     refreshed = threading.Event()
     refreshed_routes: set[tuple[str, ProviderRoute]] = set()
     expected_routes = {

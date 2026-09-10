@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
+    SETTING_JUDGE_ROUTE,
     SETTING_PROVIDER_ROUTES,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
@@ -534,8 +535,44 @@ def get_judge_model(session: Session, provider: str) -> str:
     return ""
 
 
-def set_judge_settings(session: Session, provider: str, model: str) -> None:
+def get_judge_route(session: Session) -> str:
+    route = _get_claude_model_row(session, SETTING_JUDGE_ROUTE)
+    if route not in _ROUTE_VALUES:
+        raise ValueError("Judge route must be configured as cli or api")
+    return route
+
+
+def pin_judge_route_if_unset(session: Session, anthropic_key_is_set: bool) -> str | None:
+    """Pin the legacy call path once, before settings requests can read it.
+
+    A fixed row ID arbitrates concurrent boots: the settings unique key
+    includes nullable user_id and therefore does not exclude duplicate globals.
+    """
+    row = (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == SETTING_JUDGE_ROUTE,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+    if row is not None:
+        return None
+    provider = get_raw_stored_judge_settings(session).provider
+    route = "cli" if provider in (None, "", "claude") and not anthropic_key_is_set else "api"
+    session.add(RateLimitSetting(
+        id=SETTING_JUDGE_ROUTE,
+        setting_key=SETTING_JUDGE_ROUTE,
+        value=0,
+        value_text=route,
+    ))
+    session.flush()
+    return route
+
+
+def set_judge_settings(session: Session, provider: str, route: str, model: str) -> None:
     set_claude_model(session, SETTING_JUDGE_PROVIDER, provider)
+    set_claude_model(session, SETTING_JUDGE_ROUTE, route)
     set_claude_model(session, SETTING_JUDGE_MODEL, model)
 
 

@@ -55,6 +55,7 @@ from songmaker_cli.lifecycle import (
     BackgroundLoopRegistry,
     auto_setup_admin,
     cleanup_expired_resource_events,
+    pin_judge_route,
     provider_status_refresh_loop,
     reap_stale_jobs,
     reconcile_crashed_loras,
@@ -147,6 +148,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         session.commit()
 
     auto_setup_admin(ctx)
+    pin_judge_route(ctx)
     if settings.cover_executor is CoverExecutor.WEB:
         await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir, settings)
     reap_stale_jobs(ctx)

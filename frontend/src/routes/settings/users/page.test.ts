@@ -207,6 +207,8 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 function judgeSettings(provider: string, model: string): JudgeSettings {
 	return {
 		provider,
+		route: 'api',
+		provider_routes_status: {},
 		model,
 		allowed_providers: ['claude', 'codex', 'grok'],
 		allowed_models: [model],
@@ -692,6 +694,8 @@ describe('admin models tab', () => {
 	it('shows a scoring provider that cannot answer as its own grey row', async () => {
 		api.fetchJudgeSettings.mockResolvedValue({
 			provider: 'grok',
+			route: 'api',
+			provider_routes_status: {},
 			model: '',
 			allowed_providers: ['claude', 'codex', 'grok'],
 			allowed_models: [],
