@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +13,7 @@ from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
 
-from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
+from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
 from songmaker_cli.db.queries import create_user, create_user_lora
 
 
@@ -38,6 +39,204 @@ def _login_as_user(client: TestClient) -> None:
         create_user(session, "regular", hash_password("user123456"), role="user")
         session.commit()
     login_and_csrf(client, "regular", "user123456")
+
+
+@pytest.fixture
+def admin_client(client: TestClient) -> TestClient:
+    _login_as_admin(client)
+    return client
+
+
+@dataclass(frozen=True)
+class _ManagedAccount:
+    user_id: str
+    client: TestClient
+    session_reference: str
+
+
+@pytest.fixture
+def managed_account(admin_client: TestClient) -> _ManagedAccount:
+    response = admin_client.post(
+        "/api/admin/users", json={"username": "musician", "password": "t3stP@ssw0rd"},
+    )
+    assert response.status_code == 200
+    with TestClient(admin_client.app, cookies={}) as musician:
+        response_login = musician.post(
+            "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
+        )
+        assert response_login.status_code == 200
+        reference = next(
+            entry["id"] for entry in admin_client.get("/api/admin/sessions").json()["items"]
+            if entry["user_id"] == response.json()["id"]
+        )
+        yield _ManagedAccount(response.json()["id"], musician, reference)
+
+
+def _audit_entries(client: TestClient) -> list:
+    response = client.get("/api/admin/audit-log")
+    assert response.status_code == 200
+    return response.json()["items"]
+
+
+@pytest.mark.parametrize(
+    ("method", "payload", "action", "detail"),
+    [
+        ("POST", None, AuditAction.CREATE, "role=user"),
+        ("PUT", {"role": "admin"}, AuditAction.UPDATE, "role=admin"),
+        ("PUT", {"is_active": False}, AuditAction.DEACTIVATE, ""),
+        ("DELETE", None, AuditAction.DEACTIVATE, ""),
+        ("PUT", {"password": "newpass12345"}, AuditAction.UPDATE, "password_changed"),
+        ("PUT", {"is_active": True}, AuditAction.UPDATE, "active=True"),
+        ("PUT", {}, AuditAction.UPDATE, ""),
+        (
+            "PUT", {"role": "admin", "is_active": True, "password": "newpass12345"},
+            AuditAction.UPDATE, "role=admin, active=True, password_changed",
+        ),
+    ],
+)
+def test_admin_changes_keep_their_audit_action_and_detail(
+    admin_client: TestClient, method: str, payload, action: AuditAction, detail: str,
+) -> None:
+    before = {entry["id"] for entry in _audit_entries(admin_client)}
+    response = admin_client.post(
+        "/api/admin/users", json={"username": "musician", "password": "t3stP@ssw0rd"},
+    )
+    assert response.status_code == 200
+    user_id = response.json()["id"]
+    if method != "POST":
+        if payload == {"is_active": True}:
+            assert admin_client.delete(f"/api/admin/users/{user_id}").status_code == 200
+        before = {entry["id"] for entry in _audit_entries(admin_client)}
+        response = admin_client.request(method, f"/api/admin/users/{user_id}", json=payload)
+        assert response.status_code == 200
+
+    entries = [entry for entry in _audit_entries(admin_client) if entry["id"] not in before]
+    assert len(entries) == 1
+    entry = entries[0]
+    assert (entry["action"], entry["detail"]) == (action, detail)
+    assert (entry["resource_type"], entry["resource_id"]) == (ResourceType.USER, user_id)
+    assert entry["user_id"] == admin_client.get("/api/auth/me").json()["id"]
+
+
+def test_setting_the_existing_role_keeps_sessions_and_writes_no_audit(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+) -> None:
+    before = _audit_entries(admin_client)
+
+    response = admin_client.put(
+        f"/api/admin/users/{managed_account.user_id}", json={"role": "user"},
+    )
+
+    assert response.status_code == 200
+    assert _audit_entries(admin_client) == before
+    assert managed_account.client.get("/api/auth/me").status_code == 200
+
+
+def test_ending_a_session_writes_no_audit(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+) -> None:
+    before = _audit_entries(admin_client)
+
+    response = admin_client.delete(f"/api/admin/sessions/{managed_account.session_reference}")
+
+    assert response.status_code == 200
+    assert _audit_entries(admin_client) == before
+    assert managed_account.client.get("/api/auth/me").status_code == 401
+
+
+def test_reactivation_does_not_end_sessions(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+) -> None:
+    response = admin_client.put(
+        f"/api/admin/users/{managed_account.user_id}", json={"is_active": True},
+    )
+
+    assert response.status_code == 200
+    assert managed_account.client.get("/api/auth/me").status_code == 200
+
+
+def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+) -> None:
+    before = _audit_entries(admin_client)
+    users_before = admin_client.get("/api/admin/users").json()
+    hasher = installed_web_auth_config(admin_client.app).password_hasher
+    with TestClient(admin_client.app, raise_server_exceptions=False) as failing_client:
+        failing_client.cookies.update(admin_client.cookies)
+        failing_client.headers.update(admin_client.headers)
+        with patch.object(type(hasher), "hash", side_effect=RuntimeError("hash unavailable")):
+            response = failing_client.put(
+                f"/api/admin/users/{managed_account.user_id}",
+                json={"role": "admin", "password": "newpass12345"},
+            )
+
+    assert response.status_code == 500
+    assert admin_client.get("/api/admin/users").json() == users_before
+    assert _audit_entries(admin_client) == before
+    assert managed_account.client.get("/api/auth/me").status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "payload"),
+    [
+        ("PUT", {"role": "admin"}),
+        ("PUT", {"password": "newpass12345"}),
+        ("PUT", {"is_active": False}),
+        ("DELETE", None),
+    ],
+)
+def test_account_changes_end_existing_sessions(
+    admin_client: TestClient, managed_account: _ManagedAccount, method: str, payload,
+) -> None:
+    response = admin_client.request(
+        method, f"/api/admin/users/{managed_account.user_id}", json=payload,
+    )
+
+    assert response.status_code == 200
+    assert managed_account.client.get("/api/auth/me").status_code == 401
+    assert all(
+        entry["user_id"] != managed_account.user_id
+        for entry in admin_client.get("/api/admin/sessions").json()["items"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("method", "payload", "single_session"),
+    [
+        ("PUT", {"role": "admin"}, False),
+        ("PUT", {"password": "newpass12345"}, False),
+        ("PUT", {"is_active": False}, False),
+        ("DELETE", None, False),
+        ("DELETE", None, True),
+    ],
+)
+def test_cache_failure_rolls_back_account_changes_and_session_deletion(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+    method: str, payload, single_session: bool,
+) -> None:
+    audit_before = _audit_entries(admin_client)
+    users_before = admin_client.get("/api/admin/users").json()
+    cache = installed_web_auth_config(admin_client.app).session_cache
+    cache_method = "delete" if single_session else "delete_user_sessions"
+    path = (
+        f"/api/admin/sessions/{managed_account.session_reference}" if single_session
+        else f"/api/admin/users/{managed_account.user_id}"
+    )
+    with TestClient(admin_client.app, raise_server_exceptions=False) as failing_client:
+        failing_client.cookies.update(admin_client.cookies)
+        failing_client.headers.update(admin_client.headers)
+        with patch.object(cache, cache_method, side_effect=RuntimeError("cache unavailable")):
+            response = failing_client.request(method, path, json=payload)
+
+    assert response.status_code == 500
+    assert admin_client.get("/api/admin/users").json() == users_before
+    assert _audit_entries(admin_client) == audit_before
+    assert managed_account.client.get("/api/auth/me").status_code == 200
+    with TestClient(admin_client.app, cookies={}) as password_client:
+        login = password_client.post(
+            "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
+        )
+        assert login.status_code == 200
 
 
 # -- Access control -----------------------------------------------------------
@@ -297,7 +496,10 @@ def test_deactivate_admin_via_delete_allowed_when_multiple(client: TestClient) -
         assert admin2_user.is_active is False
 
 
-def test_delete_inactive_admin_blocked_when_sole_active(client: TestClient) -> None:
+@pytest.mark.parametrize("suffix", ["", "/permanent"])
+def test_delete_inactive_admin_allowed_when_another_admin_remains(
+    client: TestClient, suffix: str,
+) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
@@ -306,9 +508,8 @@ def test_delete_inactive_admin_blocked_when_sole_active(client: TestClient) -> N
     admin2_id = resp.json()["id"]
     client.put(f"/api/admin/users/{admin2_id}", json={"is_active": False})
 
-    resp = client.delete(f"/api/admin/users/{admin2_id}")
-    assert resp.status_code == 400
-    assert "last active admin" in resp.json()["detail"]
+    resp = client.delete(f"/api/admin/users/{admin2_id}{suffix}")
+    assert resp.status_code == 200
 
 
 def test_cannot_deactivate_sole_active_admin_via_delete(client: TestClient) -> None:
@@ -635,19 +836,28 @@ def test_hard_delete_self_blocked(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
-def test_hard_delete_last_admin_blocked(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    ("method", "suffix", "payload"),
+    [("PUT", "", {"role": "user"}), ("DELETE", "", None), ("DELETE", "/permanent", None)],
+)
+def test_last_active_admin_is_protected_from_every_removal_path(
+    client: TestClient, method: str, suffix: str, payload,
+) -> None:
     _login_as_admin(client)
-    resp = client.post(
+    admin_id = client.get("/api/auth/me").json()["id"]
+    target_id = client.post(
         "/api/admin/users",
         json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
-    )
-    admin2_id = resp.json()["id"]
+    ).json()["id"]
+    with client.app.state.ctx.db() as session:
+        from songmaker_cli.db.queries import update_user
+        update_user(session, admin_id, is_active=False)
+        session.commit()
 
-    client.put(f"/api/admin/users/{admin2_id}", json={"is_active": False})
+    response = client.request(method, f"/api/admin/users/{target_id}{suffix}", json=payload)
 
-    resp = client.delete(f"/api/admin/users/{admin2_id}/permanent")
-    assert resp.status_code == 400
-    assert "last active admin" in resp.json()["detail"]
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cannot remove the last active admin"
 
 
 def test_hard_delete_non_last_admin_allowed(client: TestClient) -> None:

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from webauth.passwords import check_password_strength
+from webauth.users import session_reference
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import AuditLog, LoginAttempt, User, UserSession
@@ -87,7 +87,7 @@ class SessionResponse(BaseModel):
     @classmethod
     def from_orm(cls, sess: UserSession) -> SessionResponse:
         return cls(
-            id=hashlib.sha256(sess.id.encode()).hexdigest(),
+            id=session_reference(sess.id),
             user_id=sess.user_id,
             username=sess.user.username,
             created_at=sess.created_at.isoformat(),

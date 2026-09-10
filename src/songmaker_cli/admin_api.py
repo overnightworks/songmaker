@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import logging
-from typing import Final
+from typing import Final, cast
 
 import httpx
 from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
+from webauth.ports import UnknownUserError, UsernameTakenError
+from webauth.users import (
+    LastAdminError,
+    SelfDeactivationError,
+    UnknownSessionError,
+    UserManagement,
+)
 
 from songmaker_cli.acestep_state import (
     read_download_in_progress,
@@ -27,7 +30,6 @@ from songmaker_cli.acestep_state import (
 from songmaker_cli.api_helpers import (
     AdminPagination,
     cleanup_generation_files,
-    ensure_not_last_admin,
     page_has_more,
 )
 from songmaker_cli.api_models import (
@@ -56,7 +58,8 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
-from songmaker_cli.auth_dependencies import require_admin
+from songmaker_cli.auth_dependencies import require_admin, user_management
+from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import (
     MODEL_CONFIG_PATHS,
     AuditAction,
@@ -75,11 +78,7 @@ from songmaker_cli.db.queries import (
     count_active_sessions,
     count_audit_log,
     count_login_attempts,
-    create_user,
-    delete_session,
-    delete_user_sessions,
     get_user,
-    get_user_by_username,
     get_worker_identity,
     hard_delete_user,
     list_active_sessions,
@@ -90,7 +89,6 @@ from songmaker_cli.db.queries import (
     list_users,
     list_worker_identities,
     record_audit,
-    update_user,
 )
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -98,6 +96,8 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 USER_NOT_FOUND_DETAIL: Final = "User not found"
+LAST_ADMIN_DETAIL: Final = "Cannot remove the last active admin"
+SELF_DEACTIVATION_DETAIL: Final = "Cannot deactivate your own account"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -140,18 +140,13 @@ def create_user_endpoint(
     req: CreateUserRequest,
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
+    management: UserManagement = Depends(user_management),
 ) -> UserResponse:
-    existing = get_user_by_username(db, req.username)
-    if existing:
-        raise HTTPException(409, "Username already exists")
-
-    user = create_user(db, req.username, hash_password(req.password), role=req.role)
-    record_audit(db, _admin.id, AuditAction.CREATE, ResourceType.USER, user.id, f"role={req.role}")
     try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(409, "Username already exists")
+        user = management.create_user(_admin, req.username, req.password, req.role)
+    except UsernameTakenError as error:
+        raise HTTPException(409, "Username already exists") from error
+    db.commit()
     return UserResponse.from_orm(user)
 
 
@@ -165,39 +160,35 @@ def create_user_endpoint(
 def update_user_endpoint(
     user_id: str,
     req: UpdateUserRequest,
-    request: Request,
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
+    management: UserManagement = Depends(user_management),
 ) -> UserResponse:
-    user = get_user(db, user_id)
-    if not user:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-
-    if user_id == admin.id and req.is_active is False:
-        raise HTTPException(400, "Cannot deactivate your own account")
-
-    if req.role is not None and req.role != "admin" and user.role == "admin":
-        ensure_not_last_admin(db, user_id)
-
-    password_hash = hash_password(req.password) if req.password else None
-    invalidate_sessions = req.role is not None or req.is_active is False or req.password
-    updated = update_user(
-        db, user_id, role=req.role, is_active=req.is_active, password_hash=password_hash,
-    )
-    changes = []
-    if req.role is not None:
-        changes.append(f"role={req.role}")
-    if req.is_active is not None:
-        changes.append(f"active={req.is_active}")
-    if req.password:
-        changes.append("password_changed")
-    if invalidate_sessions:
-        delete_user_sessions(db, user_id)
-    record_audit(db, admin.id, AuditAction.UPDATE, ResourceType.USER, user_id, ", ".join(changes))
+    audit = cast(DatabaseAuditSink, management.audit)
+    try:
+        with management.lock.hold(), audit.combine_user_updates():
+            user = management.users.get(user_id)
+            if user is None:
+                raise UnknownUserError("Account does not exist")
+            if req.is_active is False:
+                management.deactivate_user(admin, user_id)
+            if req.role is not None:
+                management.change_role(admin, user_id, req.role)
+            if req.is_active is True:
+                management.users.update(user_id, is_active=True)
+                audit.user_updated(admin.id, user_id, "active=True")
+            if req.password is not None:
+                management.set_password(admin, user_id, req.password)
+            if req.role is None and req.is_active is None and req.password is None:
+                audit.user_updated(admin.id, user_id, "")
+    except UnknownUserError as error:
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
+    except LastAdminError as error:
+        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
+    except SelfDeactivationError as error:
+        raise HTTPException(400, SELF_DEACTIVATION_DETAIL) from error
     db.commit()
-    if invalidate_sessions:
-        _clear_user_session_cache(request, user_id)
-    return UserResponse.from_orm(updated)
+    return UserResponse.from_orm(user)
 
 
 @router.delete(
@@ -209,25 +200,19 @@ def update_user_endpoint(
 )
 def deactivate_user_endpoint(
     user_id: str,
-    request: Request,
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
+    management: UserManagement = Depends(user_management),
 ) -> StatusResponse:
-    user = get_user(db, user_id)
-    if not user:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-
-    if user_id == admin.id:
-        raise HTTPException(400, "Cannot deactivate your own account")
-
-    if user.role == "admin":
-        ensure_not_last_admin(db, user_id)
-
-    update_user(db, user_id, is_active=False)
-    delete_user_sessions(db, user_id)
-    record_audit(db, admin.id, AuditAction.DEACTIVATE, ResourceType.USER, user_id)
+    try:
+        management.deactivate_user(admin, user_id)
+    except UnknownUserError as error:
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
+    except LastAdminError as error:
+        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
+    except SelfDeactivationError as error:
+        raise HTTPException(400, SELF_DEACTIVATION_DETAIL) from error
     db.commit()
-    _clear_user_session_cache(request, user_id)
     return StatusResponse(status="ok")
 
 
@@ -244,30 +229,36 @@ def hard_delete_user_endpoint(
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
+    management: UserManagement = Depends(user_management),
 ) -> StatusResponse:
-    user = get_user(db, user_id)
-    if not user:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
+    try:
+        with management.lock.hold():
+            user = get_user(db, user_id)
+            if not user:
+                raise HTTPException(404, USER_NOT_FOUND_DETAIL)
 
-    if user_id == admin.id:
-        raise HTTPException(400, "Cannot delete your own account")
+            if user_id == admin.id:
+                raise HTTPException(400, "Cannot delete your own account")
 
-    if user.role == "admin":
-        ensure_not_last_admin(db, user_id)
+            management.ensure_not_last_admin(user_id)
 
-    song_ids = list_song_ids_for_owner(db, user_id)
-    album_count = (
-        db.query(Album)
-        .execution_options(include_deleted=True)
-        .filter_by(created_by=user_id)
-        .count()
-    )
-    record_audit(
-        db, admin.id, AuditAction.HARD_DELETE, ResourceType.USER, user_id,
-        f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
-    )
+            song_ids = list_song_ids_for_owner(db, user_id)
+            album_count = (
+                db.query(Album)
+                .execution_options(include_deleted=True)
+                .filter_by(created_by=user_id)
+                .count()
+            )
+            record_audit(
+                db, admin.id, AuditAction.HARD_DELETE, ResourceType.USER, user_id,
+                f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
+            )
 
-    paths, album_ids, playlist_ids = hard_delete_user(db, user_id)
+            paths, album_ids, playlist_ids = hard_delete_user(db, user_id)
+    except UnknownUserError as error:
+        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
+    except LastAdminError as error:
+        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
     db.commit()
 
     _clear_user_session_cache(request, user_id)
@@ -338,22 +329,16 @@ def sessions_endpoint(
 )
 def force_logout_endpoint(
     session_hash: str,
-    request: Request,
     db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
+    admin: AuthenticatedUser = Depends(require_admin),
+    management: UserManagement = Depends(user_management),
 ) -> StatusResponse:
-    for sess in list_active_sessions(db):
-        if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
-            delete_session(db, sess.id)
-            db.commit()
-            session_cache = web_auth_config(request).session_cache
-            if session_cache:
-                try:
-                    session_cache.delete(sess.id, sess.user_id)
-                except Exception:
-                    log.warning("Redis session cache delete failed on force-logout")
-            return StatusResponse(status="ok")
-    raise HTTPException(404, "Session not found")
+    try:
+        management.revoke_session(admin, session_hash)
+    except UnknownSessionError as error:
+        raise HTTPException(404, "Session not found") from error
+    db.commit()
+    return StatusResponse(status="ok")
 
 
 def _derive_worker_status(state: WorkerEphemeralState | None) -> str:
