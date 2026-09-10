@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException
@@ -55,7 +55,6 @@ from songmaker_cli.db.queries import (
     delete_all_user_rate_limits,
     get_all_global_rate_limits,
     get_raw_stored_cowriter_settings,
-    get_raw_stored_judge_settings,
     get_user,
     get_user_rate_limits,
     record_audit,
@@ -101,6 +100,7 @@ router = APIRouter()
 PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
 PRESET_NOT_FOUND_DETAIL = "Preset not found"
 USER_NOT_FOUND_DETAIL = "User not found"
+PROVIDER_MODEL_CATALOG_UNVERIFIED: Final = "Provider model catalog is unverified"
 
 
 @router.get("/settings/generation-builtins")
@@ -514,7 +514,7 @@ def _models_from_route_snapshot(
     from agent_providers.catalog import models_with_active_model
 
     if snapshot is None:
-        return [], "Provider model catalog is unverified"
+        return [], PROVIDER_MODEL_CATALOG_UNVERIFIED
     route_snapshot = next(item for key, item in snapshot.routes.items() if key.value == route)
     models = models_with_active_model(list(route_snapshot.models), active_model)
     error = route_snapshot.catalogue_failure
@@ -720,19 +720,12 @@ def _cowriter_routes(session: Session, req: CowriterSettingsRequest) -> dict[str
 # ── Judge (lyrical-coherence) provider settings ─────────────────────
 
 
-def _model_the_judge_row_shows(session: Session, provider: str) -> str:
-    stored = get_raw_stored_judge_settings(session)
-    if stored.provider == provider and stored.model is not None:
-        return stored.model
-    return get_judge_model(session, provider)
-
-
 def _judge_response(session: Session) -> JudgeSettingsResponse:
     from songmaker_cli.provider_status import provider_snapshots
 
     provider = get_judge_provider(session)
     route = get_judge_route(session)
-    model = _model_the_judge_row_shows(session, provider)
+    model = get_judge_model(session, provider)
     snapshots = provider_snapshots()
     models_by_provider: dict[str, list[str]] = {}
     errors: dict[str, str] = {}
@@ -747,7 +740,7 @@ def _judge_response(session: Session) -> JudgeSettingsResponse:
         if selected.catalogue_failure:
             errors[name] = selected.catalogue_failure.message
         elif snapshots.get(name) is None:
-            errors[name] = "Provider model catalog is unverified"
+            errors[name] = PROVIDER_MODEL_CATALOG_UNVERIFIED
     return JudgeSettingsResponse(
         provider=provider,
         route=route,
@@ -797,7 +790,7 @@ def api_set_judge_settings(
         req.provider,
         req.model,
         _live_catalogue(req.provider, route),
-        _model_the_judge_row_shows(session, req.provider),
+        get_judge_model(session, req.provider),
     )
     set_judge_settings(session, req.provider, route, req.model)
     record_audit(

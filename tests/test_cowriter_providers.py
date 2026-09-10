@@ -2148,11 +2148,14 @@ def test_judge_save_without_route_preserves_its_saved_route(
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
 def test_judge_saves_an_empty_model_on_an_unavailable_route(admin_client, route, provider):
     client, _ = admin_client
+    default = client.get("/api/settings/judge").json()["model"]
     request = {"provider": provider, "route": route, "model": ""}
     response = client.put("/api/settings/judge", json=request)
     assert response.status_code == 200
     body = client.get("/api/settings/judge").json()
-    assert {key: body[key] for key in request} == request
+    assert {key: body[key] for key in request} == {
+        **request, "model": default if provider == "claude" else "",
+    }
     assert body["allowed_models"] == []
     assert body["provider_routes_status"][provider][route]["readiness"]["state"] == "unverified"
 
@@ -2195,18 +2198,3 @@ def test_unknown_judge_route_leaves_the_selection_unchanged(admin_client):
     )
     assert rejected.status_code == 422
     assert client.get("/api/settings/judge").json() == before
-
-
-def test_cleared_judge_model_does_not_retain_the_old_default(admin_client):
-    client, _ = admin_client
-    default = client.get("/api/settings/judge").json()["model"]
-    assert client.put(
-        "/api/settings/judge", json={"provider": "claude", "route": "cli", "model": ""},
-    ).status_code == 200
-
-    rejected = client.put(
-        "/api/settings/judge", json={"provider": "claude", "model": default},
-    )
-
-    assert rejected.status_code == 422
-    assert client.get("/api/settings/judge").json()["model"] == ""
