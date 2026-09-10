@@ -872,7 +872,8 @@
 	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
 	Anbietern, Gründe im Select). Die Scoring-CLI/API-Zeile wurde <strong>am 10.09.2026 für #844
 	freigegeben</strong> und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein Produktverhalten;
-	der Default bestehender Installationen bleibt in #844 offen. Gebaut wird gegen Issue #317; #315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
+	der Default bestehender Installationen bleibt in #844 offen. Gebaut wird gegen Issue #317;
+	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
 	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
 	Historie.
@@ -1154,15 +1155,8 @@
 					</div>
 
 					<div class="tt-row">
-						<span class="cell-task">Scoring</span>
-						<span>
-							<span class="sel">Claude<span class="caret">⌃</span></span>
-							<div class="menu">
-								<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
-								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
-								<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
-							</div>
-						</span>
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
 							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
 							<small class="why">API · key set</small>
@@ -1172,8 +1166,28 @@
 					</div>
 
 					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span>
+							<span class="sel">Codex<span class="caret">⌄</span></span>
+						</span>
+						<span>
+							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
+							<small class="why">API · no image tool</small>
+						</span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+
+					<div class="tt-row">
 						<span class="cell-task">Scoring</span>
-						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+						<span>
+							<span class="sel">Claude<span class="caret">⌃</span></span>
+							<div class="menu">
+								<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
+								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
+								<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
+							</div>
+						</span>
 						<span>
 							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
 							<small class="why">API · key set</small>
