@@ -685,9 +685,11 @@ in the application. `users.py` provides never-committing account-administration
 helpers. Songmaker's `admin_api.py` uses `UserManagement` for account creation,
 role changes, admin password resets, deactivation, session revocation, and the
 last-admin guard around its own hard-delete cascade. Reactivation remains a
-host-owned store update and audit event. Setup, environment bootstrap, and
-self-service password changes still use the application's existing paths
-(#908).
+host-owned store update and audit event. The setup route and environment
+bootstrap both call `complete_first_run_setup`; self-service password changes
+call `UserManagement.change_own_password`. The application retains the failed
+password-attempt budget and opens a fresh session with new cookies after a
+successful password change.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, password hasher, rate backend, session liveness
@@ -713,9 +715,12 @@ management instance per request from these stores and the installed config.
 9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
 entry. Nested helpers share that lock and transaction. Exiting does not commit
 or release the database lock: the endpoint commits on success, and the request's
-DB dependency rolls back on failure. `DatabaseAuditSink` maps session-identity
-and account-administration events to songmaker's audit rows, retaining the
-combined UPDATE detail for a multi-field request. The
+DB dependency rolls back on failure. The environment bootstrap builds its
+configuration through `build_web_auth_config` and uses the same stores and
+write lock. `DatabaseAuditSink` maps session-identity and account-administration
+events to songmaker's audit rows, with one audit row per changed field in a
+multi-field update. First-admin creation and self-service password changes
+produce no audit rows. The
 [admin security contract](security.md#admin-session-management) owns the four
 deliberate behavior changes and the session-reference boundary.
 
