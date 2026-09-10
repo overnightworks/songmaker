@@ -930,7 +930,34 @@ The scorer's two Hugging Face models (`faster-whisper`'s `large-v3`, `audiobox-a
 
 ## Admin Session Management
 
-The admin sessions endpoint (`GET /api/admin/sessions`) returns SHA256 hashes of session tokens, not the raw tokens. This prevents session hijacking via the admin panel. Force-logout (`DELETE /api/admin/sessions/{hash}`) looks up sessions by hash.
+The admin sessions endpoint (`GET /api/admin/sessions`) returns the public
+reference from `webauth.users.session_reference`, a SHA256 hash of the session
+token. This prevents session hijacking via the admin panel. Songmaker supplies
+the list's timestamps and pagination from its own records. Force-logout
+(`DELETE /api/admin/sessions/{hash}`) calls `UserManagement.revoke_session` and
+writes no audit entry.
+
+The admin adoption of `webauth.users` (#907, operator ruling 2026-09-10)
+deliberately changes four behaviors:
+
+1. Deactivation through `PUT is_active=false` writes `deactivate`, just like
+   DELETE, without detail. The existing DB and JSON representation of absent
+   detail is an empty string, not null.
+2. Setting the role already held by an account neither writes an audit entry
+   nor ends its sessions.
+3. An inactive admin can be deactivated again or permanently deleted while
+   another active admin remains. Only active admins count toward the last-admin
+   protection; removing the last active admin still returns 400.
+4. A cache failure while ending sessions during role changes, admin password
+   resets, deactivation, or force-logout returns 500 and rolls back the database
+   operation. Hard-delete retains its existing post-commit cache cleanup.
+
+The HTTP proofs live in [test_admin_api.py](../tests/test_admin_api.py):
+`test_admin_changes_keep_their_audit_action_and_detail`,
+`test_setting_the_existing_role_keeps_sessions_and_writes_no_audit`,
+`test_delete_inactive_admin_allowed_when_another_admin_remains`, and
+`test_cache_failure_rolls_back_account_changes_and_session_deletion`.
+Reactivation writes `update` with `active=True` and does not end sessions.
 
 ## ACE-Step Worker Pool Trust Boundary
 
@@ -1053,7 +1080,9 @@ complete end state that was validated before the first install.
 
 ## Audit Trail
 
-All mutating operations are logged to the `audit_log` table:
+Mutating operations are logged to the `audit_log` table, with the no-op role
+and session-revocation exceptions described under
+[Admin Session Management](#admin-session-management):
 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`, `deactivate`, `session_ip_change`, `session_ua_change`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
