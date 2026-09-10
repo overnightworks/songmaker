@@ -543,7 +543,11 @@ def get_judge_route(session: Session) -> str:
 
 
 def pin_judge_route_if_unset(session: Session, anthropic_key_is_set: bool) -> str | None:
-    """Pin the legacy call path once, before settings requests can read it."""
+    """Pin the legacy call path once, before settings requests can read it.
+
+    A fixed row ID arbitrates concurrent boots: the settings unique key
+    includes nullable user_id and therefore does not exclude duplicate globals.
+    """
     row = (
         session.query(RateLimitSetting)
         .filter(
@@ -556,7 +560,13 @@ def pin_judge_route_if_unset(session: Session, anthropic_key_is_set: bool) -> st
         return None
     provider = get_raw_stored_judge_settings(session).provider
     route = "cli" if provider in (None, "", "claude") and not anthropic_key_is_set else "api"
-    set_claude_model(session, SETTING_JUDGE_ROUTE, route)
+    session.add(RateLimitSetting(
+        id=SETTING_JUDGE_ROUTE,
+        setting_key=SETTING_JUDGE_ROUTE,
+        value=0,
+        value_text=route,
+    ))
+    session.flush()
     return route
 
 
