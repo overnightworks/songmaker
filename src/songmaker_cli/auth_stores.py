@@ -164,6 +164,7 @@ class DatabaseSessionRecordStore:
         record.ip_address = ip_address
         record.user_agent = user_agent
         record.expires_at = now + timedelta(seconds=self.session_max_age_seconds)
+        self.session.flush()
 
     def delete(self, session_id: str) -> None:
         delete_session(self.session, session_id)

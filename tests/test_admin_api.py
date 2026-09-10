@@ -78,6 +78,19 @@ def _audit_entries(client: TestClient) -> list:
     return response.json()["items"]
 
 
+def test_admin_can_update_a_user_after_a_session_cache_miss(
+    admin_client: TestClient, managed_account: _ManagedAccount,
+) -> None:
+    cache = installed_web_auth_config(admin_client.app).session_cache
+    with patch.object(cache, "get", return_value=None):
+        response = admin_client.put(
+            f"/api/admin/users/{managed_account.user_id}", json={"role": "admin"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+
+
 @pytest.mark.parametrize(
     ("method", "payload", "action", "detail"),
     [
