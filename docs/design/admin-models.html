@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin · Models — Fassung 2: eine Aufgaben-Tabelle</title>
+<title>Admin · Models — Fassung 2 mit Scoring-CLI/API</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 	:root {
@@ -868,17 +868,18 @@
 </head>
 <body>
 <p class="freeze-note">
-	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, gezeichnet am 06.09.2026</strong> nach
+	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, am 06.09.2026 freigegeben</strong> nach
 	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
-	Anbietern, Gründe im Select); wartet auf die Freigabe. Gebaut wird gegen Issue #317;
-	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
+	Anbietern, Gründe im Select). Die Scoring-CLI/API-Zeile wurde <strong>am 10.09.2026 für #844
+	freigegeben</strong> und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein Produktverhalten;
+	der Default bestehender Installationen bleibt in #844 offen. Gebaut wird gegen Issue #317; #315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
 	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
 	Historie.
 </p>
 <div class="wrap">
 	<header>
-		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2</div>
+		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2 · Scoring-Route #844</div>
 		<h1>One table: who does what, and does it work?</h1>
 		<p class="lede">
 			Drei Aufgaben, eine Tabelle, eine Zeile pro Aufgabe. Die Seite erklärt nicht mehr die
@@ -930,6 +931,12 @@
 				<strong>no image tool</strong>. Jede Farbe hat ihre eigene Form, damit die Zeile auch
 				schwarzweiß lesbar bleibt. Rot bleibt reserviert für den einzigen Fall, den nur ein
 				Mensch beenden kann: ein fehlgeschlagenes Speichern.
+			</p>
+			<p>
+				<strong>Am 10.09.2026 für #844 freigegeben:</strong> Auch Scoring bekommt im Bild dieselbe auswählbare
+				CLI/API-Route wie Co-Writer. Die gewählte, nicht benutzbare Route bleibt gespeichert und
+				erklärt ihren Grund in derselben Zeile; es gibt keinen stillen Wechsel. Die Beispiele wählen
+				nur Zustände für das Bild und entscheiden keinen Default vorhandener Installationen.
 			</p>
 		</div>
 	</section>
@@ -993,11 +1000,11 @@
 								<span class="cell-task">Scoring</span>
 								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 								<span>
-									<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
-									<small class="why">CLI · not available for scoring</small>
+									<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+									<small class="why">API · key set</small>
 								</span>
-								<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
-								<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+								<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 							</div>
 						</div>
 					</div>
@@ -1007,9 +1014,9 @@
 			<article class="state wide">
 				<div class="state-head"><h3>(b) Scoring · Grok chosen, key missing</h3><span class="tag tag-now">Needs its API key</span></div>
 				<p class="state-note">
-					Der Admin hat für Scoring Grok gewählt, der Schlüssel fehlt. Die Zeile wird gelb, das
-					API-Pill bleibt gewählt, aber inaktiv (gestrichelt), die CLI-Route steht grau daneben
-					mit ihrem Grund. Das Modell-Feld erfindet keinen Wert. Co-Writer und Cover bleiben
+					Der Admin hat für Scoring Grok über API gewählt, der Schlüssel fehlt. Die Zeile wird gelb,
+					die API-Pill bleibt gewählt, aber inaktiv (gestrichelt); CLI bleibt als eingerichtete,
+					unbenutzte Alternative sichtbar. Das Modell-Feld erfindet keinen Wert. Co-Writer und Cover bleiben
 					unberührt — der Ausfall gehört einer Zeile, nicht der Seite.
 				</p>
 
@@ -1054,9 +1061,9 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Grok<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
+							<span class="rsw"><b>CLI</b><b class="picked-dead">API</b></span>
 							<small class="why warn">API · key not set</small>
-							<small class="why">CLI · not available for scoring</small>
+							<small class="why">CLI · login set</small>
 						</span>
 						<span>
 							<span class="sel off">No models<span class="caret">⌄</span></span>
@@ -1122,11 +1129,11 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · not available for scoring</small>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
 						</span>
-						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 				</div>
 			</article>
@@ -1147,20 +1154,20 @@
 					</div>
 
 					<div class="tt-row">
-						<span class="cell-task">Cover</span>
+						<span class="cell-task">Scoring</span>
 						<span>
-							<span class="sel">Codex<span class="caret">⌃</span></span>
+							<span class="sel">Claude<span class="caret">⌃</span></span>
 							<div class="menu">
-								<div class="menu-item gap"><span>Claude</span><span class="state">no image tool</span></div>
+								<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
 								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
-								<div class="menu-item picked"><span>Codex</span><span class="state">✓ ready</span></div>
+								<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
 							</div>
 						</span>
 						<span>
-							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
-							<small class="why">API · no image tool</small>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
 						</span>
-						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 
@@ -1168,11 +1175,11 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · not available for scoring</small>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
 						</span>
-						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · key set</span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 				</div>
 
@@ -1240,10 +1247,10 @@
 						<span class="cell-task">Scoring</span>
 						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
 						<span>
-							<span class="rsw"><b class="dead">CLI</b><b class="on">API</b></span>
-							<small class="why">CLI · not available for scoring</small>
+							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
+							<small class="why">API · key set</small>
 						</span>
-						<span><span class="sel">claude-opus-4-6<span class="caret">⌄</span></span></span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
 						<span class="st bad"><span class="mark">✕</span>Not saved</span>
 					</div>
 					<div class="tt-sub bad">
@@ -1311,9 +1318,9 @@
 							<h4>Scoring</h4>
 							<div class="line"><span class="k">Provider</span><span><span class="sel">Grok<span class="caret">⌄</span></span></span></div>
 							<div class="line"><span class="k">Route</span><span>
-								<span class="rsw"><b class="dead">CLI</b><b class="picked-dead">API</b></span>
+								<span class="rsw"><b>CLI</b><b class="picked-dead">API</b></span>
 								<small class="why warn">API · key not set</small>
-								<small class="why">CLI · not available for scoring</small>
+								<small class="why">CLI · login set</small>
 							</span></div>
 							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
 							<div class="line"><span class="k">Status</span><span class="st warn"><span class="mark">!</span>Needs its API key</span></div>
@@ -1354,6 +1361,14 @@
 							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Codex CLI not logged in</span></div>
 						</div>
+
+						<div class="tcard off">
+							<h4>Scoring</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="picked-dead">CLI</b><b>API</b></span></span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Checking…</span></div>
+						</div>
 					</div>
 				</div>
 			</article>
@@ -1366,10 +1381,12 @@
 		<div class="decision">
 			<h3>Was offen bleibt</h3>
 			<p>
-				Der Scoring-Provider ist weiterhin Zielzustand: Der
+				Der Scoring-Provider und die CLI/API-Wahl sind weiterhin Zielzustand: Der
 				<code>lyrical_coherence</code>-Judge ruft heute fest Claude auf, eine echte
 				Provider-Abstraktion ist Issue #315. Bis dahin ist das Provider-Select in der
-				Scoring-Zeile ein Bild, kein Verhalten.
+				Scoring-Zeile ein Bild, kein Verhalten. Die Scoring-CLI/API-Zeile wurde am 10.09.2026 für #844
+				freigegeben und ist Teil der aktuellen Fassung; der Default bestehender Installationen bleibt
+				in #844 offen.
 			</p>
 			<p>
 				Woher „ready" seine Wahrheit nimmt, entscheidet das Backend (#316): eine Live-Probe bei
