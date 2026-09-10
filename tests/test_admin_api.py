@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -68,7 +69,8 @@ def managed_account(admin_client: TestClient) -> _ManagedAccount:
         "/api/admin/users", json={"username": "musician", "password": "t3stP@ssw0rd"},
     )
     assert response.status_code == 200
-    with TestClient(admin_client.app, cookies={}) as musician:
+    # Keep the fixture's fake Redis without starting the real app lifespan.
+    with closing(TestClient(admin_client.app, cookies={})) as musician:
         response_login = musician.post(
             "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
         )
@@ -178,7 +180,7 @@ def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
     before = _audit_entries(admin_client)
     users_before = admin_client.get("/api/admin/users").json()
     cache = installed_web_auth_config(admin_client.app).session_cache
-    with TestClient(admin_client.app, raise_server_exceptions=False) as failing_client:
+    with closing(TestClient(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
         with patch.object(
@@ -241,7 +243,7 @@ def test_cache_failure_rolls_back_account_changes_and_session_deletion(
         f"/api/admin/sessions/{managed_account.session_reference}" if single_session
         else f"/api/admin/users/{managed_account.user_id}"
     )
-    with TestClient(admin_client.app, raise_server_exceptions=False) as failing_client:
+    with closing(TestClient(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
         with patch.object(cache, cache_method, side_effect=RuntimeError("cache unavailable")):
@@ -251,7 +253,7 @@ def test_cache_failure_rolls_back_account_changes_and_session_deletion(
     assert admin_client.get("/api/admin/users").json() == users_before
     assert _audit_entries(admin_client) == audit_before
     assert managed_account.client.get("/api/auth/me").status_code == 200
-    with TestClient(admin_client.app, cookies={}) as password_client:
+    with closing(TestClient(admin_client.app, cookies={})) as password_client:
         login = password_client.post(
             "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
         )
