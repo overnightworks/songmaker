@@ -1394,7 +1394,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
     slug = resp.json()["share_slug"]
 
     class _BrokenLimiter:
-        def is_allowed(self, _ip: str) -> bool:
+        def is_allowed(self, _ip: str, *, limit: int, window_seconds: int) -> bool:
             raise RuntimeError("redis down")
 
     monkeypatch.setattr(

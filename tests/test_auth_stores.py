@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,7 @@ from songmaker_cli.db.models import (
 )
 
 _PASSWORD_HASH = "hashed"
+_SESSION_MAX_AGE_SECONDS = 3600
 
 
 @pytest.fixture
@@ -48,8 +51,13 @@ def users(session) -> UserStore:
 
 
 @pytest.fixture
-def sessions(session) -> SessionRecordStore:
-    return DatabaseSessionRecordStore(session)
+def session_max_age_seconds() -> int:
+    return _SESSION_MAX_AGE_SECONDS
+
+
+@pytest.fixture
+def sessions(session, session_max_age_seconds: int) -> SessionRecordStore:
+    return DatabaseSessionRecordStore(session, session_max_age_seconds=session_max_age_seconds)
 
 
 @pytest.fixture
@@ -70,12 +78,15 @@ def _expiry(hours: int = 1) -> datetime:
     ("port", "store"),
     [
         (UserStore, DatabaseUserStore),
-        (SessionRecordStore, DatabaseSessionRecordStore),
+        (SessionRecordStore, partial(
+            DatabaseSessionRecordStore, session_max_age_seconds=_SESSION_MAX_AGE_SECONDS,
+        )),
         (LoginAttemptStore, DatabaseLoginAttemptStore),
-        (AuditSink, DatabaseAuditSink),
     ],
 )
-def test_the_store_answers_everything_its_port_asks(port: type, store: type) -> None:
+def test_the_store_answers_everything_its_port_asks(
+    port: type, store: Callable[..., object],
+) -> None:
     assert isinstance(store(session=None), port)
 
 
@@ -112,8 +123,9 @@ def test_an_unknown_session_is_absent(sessions) -> None:
     assert sessions.load("does-not-exist") is None
 
 
-def test_touching_a_session_writes_its_new_origin_onto_the_record(
-    users, sessions, session,
+@pytest.mark.parametrize("session_max_age_seconds", [60, 7200])
+def test_touching_a_session_writes_its_new_origin_and_renews_from_the_supplied_time(
+    users, sessions, session, session_max_age_seconds: int,
 ) -> None:
     """`touch` hands nothing back: the caller keeps working with the record it
     loaded, so the new origin has to land on that object."""
@@ -122,13 +134,16 @@ def test_touching_a_session_writes_its_new_origin_onto_the_record(
         user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0",
     )
     session.commit()
-    renewed = _expiry(hours=2)
+    now = datetime(2026, 9, 10, 12, tzinfo=timezone.utc)
 
-    sessions.touch(created, ip_address="9.9.9.9", user_agent="New/2.0", expires_at=renewed)
+    sessions.touch(
+        created, ip_address="9.9.9.9", user_agent="New/2.0",
+        now=now,
+    )
 
     assert created.ip_address == "9.9.9.9"
     assert created.user_agent == "New/2.0"
-    assert created.expires_at == renewed
+    assert created.expires_at == now + timedelta(seconds=session_max_age_seconds)
 
 
 def test_deleting_a_session_leaves_the_others_alone(users, sessions, session) -> None:
@@ -269,7 +284,7 @@ def seeded(users, sessions, attempts, audit, session) -> _SeededStores:
         pytest.param(
             lambda s: s.sessions.touch(
                 s.sessions.load(s.session_ids[0]),
-                ip_address="9.9.9.9", user_agent="New/2.0", expires_at=_expiry(hours=2),
+                ip_address="9.9.9.9", user_agent="New/2.0", now=_expiry(),
             ),
             id="touching a session",
         ),

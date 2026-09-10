@@ -10,6 +10,7 @@ from conftest import install_app_context, make_fake_redis
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
@@ -31,9 +32,6 @@ def _db(tmp_path: Path):
 
 
 def _build_auth_app(_db, redis=None):
-    from webauth.config import installed_web_auth_config
-    from webauth.session_store import SessionCache, install_session_cache
-
     from songmaker_cli.app_context import AppContext, get_db_session
 
     if redis is None:
@@ -44,9 +42,6 @@ def _build_auth_app(_db, redis=None):
     )
     app = FastAPI()
     install_app_context(app, ctx)
-    install_session_cache(
-        app, SessionCache(redis, installed_web_auth_config(app).session_key_prefixes),
-    )
 
     @app.get("/protected")
     def protected(
@@ -267,10 +262,10 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
 def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id) -> None:
     from unittest.mock import patch
 
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     sid = create_session_id()
-    session_cache: SessionCache = auth_app.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(auth_app.app).session_cache
 
     auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
     auth_app.get("/protected")
@@ -284,10 +279,10 @@ def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id)
 def test_redis_miss_falls_back_to_db_and_populates_cache(
     auth_app: TestClient, create_session_id,
 ) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     sid = create_session_id()
-    session_cache: SessionCache = auth_app.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(auth_app.app).session_cache
 
     assert session_cache.get(sid) is None
 

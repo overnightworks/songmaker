@@ -15,7 +15,7 @@ from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
-from webauth.rate_limit import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.audio_paths import AudioFileNotFoundError
@@ -134,11 +134,11 @@ def lock_lora_capacity(session: Session) -> None:
 
 def check_redis_health(request) -> None:
     """Reject mutation requests when Redis is degraded (fail-closed)."""
-    from webauth.session_store import installed_session_cache
+    from webauth.config import web_auth_config
 
     from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
 
-    cache = installed_session_cache(request.app)
+    cache = web_auth_config(request).session_cache
     if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
@@ -633,16 +633,17 @@ def get_cached_limiter[LimiterT](
 
 
 def enforce_rate_limit(
-    limiter: RedisRateLimiter,
+    limiter: RedisRateLimitBackend,
     key: str,
     *,
     policy: LimiterFailurePolicy,
     reject_detail: str,
-    retry_after_seconds: int,
+    limit: int,
+    window_seconds: int,
     unavailable_log_message: str,
     unavailable_detail: str | None = None,
 ) -> None:
-    """Check ``limiter.is_allowed(key)`` and enforce the result as a 429.
+    """Check the request budget and enforce the result as a 429.
 
     ``policy`` names what happens when the limiter's Redis backend itself
     errors out: FAIL_OPEN logs and lets the request through, FAIL_CLOSED
@@ -650,7 +651,7 @@ def enforce_rate_limit(
     ``reject_detail`` if not given separately).
     """
     try:
-        allowed = limiter.is_allowed(key)
+        allowed = limiter.is_allowed(key, limit=limit, window_seconds=window_seconds)
     except Exception as exc:
         _log.warning(unavailable_log_message)
         if policy is LimiterFailurePolicy.FAIL_OPEN:
@@ -659,7 +660,7 @@ def enforce_rate_limit(
     if not allowed:
         raise HTTPException(
             429, reject_detail,
-            headers={"Retry-After": str(retry_after_seconds)},
+            headers={"Retry-After": str(window_seconds)},
         )
 
 

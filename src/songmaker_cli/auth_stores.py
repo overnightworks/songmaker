@@ -9,6 +9,7 @@ endpoint decides when the request's work becomes durable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Final
 
 from webauth.ports import SessionIdentityChange
@@ -66,6 +67,7 @@ class DatabaseUserStore:
 @dataclass(frozen=True)
 class DatabaseSessionRecordStore:
     session: Session
+    session_max_age_seconds: int
 
     def create(
         self,
@@ -89,11 +91,11 @@ class DatabaseSessionRecordStore:
         *,
         ip_address: str,
         user_agent: str,
-        expires_at: datetime,
+        now: datetime,
     ) -> None:
         record.ip_address = ip_address
         record.user_agent = user_agent
-        record.expires_at = expires_at
+        record.expires_at = now + timedelta(seconds=self.session_max_age_seconds)
 
     def delete(self, session_id: str) -> None:
         delete_session(self.session, session_id)

@@ -50,7 +50,7 @@ server = [
     # The auth layer lives in its own repository since #879. The pin is the
     # release wheel of an immutable tag, because the slim images have no git
     # and the acestep-worker installs with --require-hashes.
-    "overnightworks-webauth @ https://github.com/overnightworks/webauth/releases/download/v0.1.0/overnightworks_webauth-0.1.0-py3-none-any.whl",
+    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.4.0/overnightworks_webauth-0.4.0-py3-none-any.whl",
     # The provider layer lives in its own repository since #886. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
     # music worker or Pillow into the scoring worker (A8).

@@ -442,10 +442,10 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
 
 def test_login_populates_redis(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     _seed_admin(client)
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
 
     client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
 
@@ -458,12 +458,12 @@ def test_login_populates_redis(client: TestClient) -> None:
 
 
 def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
 
     _seed_admin(client)
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
     redis = client.app.state.ctx.redis
     user_id = _get_user_id(client, "admin")
 
@@ -494,7 +494,7 @@ def test_login_prunes_oldest_session_over_cap(
     monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 2)
     _seed_admin(client)
     redis = client.app.state.ctx.redis
-    session_cache = client.app.state.session_cache
+    session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
 
     first = TestClient(client.app, cookies={})
@@ -539,7 +539,7 @@ def test_login_redis_prune_failure_rolls_back(
     monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 1)
     _seed_admin(client)
     redis = client.app.state.ctx.redis
-    session_cache = client.app.state.session_cache
+    session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
 
     first = TestClient(client.app, cookies={})
@@ -579,7 +579,7 @@ def test_login_commit_failure_does_not_leave_redis_session(client: TestClient) -
 
     _seed_admin(client)
     user_id = _get_user_id(client, "admin")
-    session_cache = client.app.state.session_cache
+    session_cache = installed_web_auth_config(client.app).session_cache
     redis = client.app.state.ctx.redis
     created_ids: list[str] = []
     cached_before_commit = {"present": False}
@@ -623,7 +623,7 @@ def test_logout_removes_the_session_from_the_database_and_from_redis(
     _seed_admin(client)
     _login(client, "admin", "admin12345")
 
-    session_cache = client.app.state.session_cache
+    session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -639,12 +639,12 @@ def test_logout_removes_the_session_from_the_database_and_from_redis(
 
 
 def test_password_change_clears_old_populates_new(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     _seed_admin(client)
     _login(client, "admin", "admin12345")
 
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     redis = client.app.state.ctx.redis
     user_id = _get_user_id(client, "admin")
@@ -665,9 +665,9 @@ def test_password_change_clears_old_populates_new(client: TestClient) -> None:
 
 
 def test_setup_populates_redis(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
     client.post("/api/auth/setup", json={"username": "myadmin", "password": "secure1234"})
 
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
