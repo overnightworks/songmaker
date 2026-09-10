@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Final, cast
+from typing import Final
 
 import httpx
 from arq.connections import ArqRedis
@@ -58,7 +58,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
-from songmaker_cli.auth_dependencies import require_admin, user_management
+from songmaker_cli.auth_dependencies import _audit_sink, require_admin, user_management
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import (
     MODEL_CONFIG_PATHS,
@@ -163,10 +163,10 @@ def update_user_endpoint(
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
     management: UserManagement = Depends(user_management),
+    audit: DatabaseAuditSink = Depends(_audit_sink),
 ) -> UserResponse:
-    audit = cast(DatabaseAuditSink, management.audit)
     try:
-        with management.lock.hold(), audit.combine_user_updates():
+        with management.lock.hold():
             user = management.users.get(user_id)
             if user is None:
                 raise UnknownUserError("Account does not exist")

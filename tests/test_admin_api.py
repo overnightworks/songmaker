@@ -41,6 +41,14 @@ def _login_as_user(client: TestClient) -> None:
     login_and_csrf(client, "regular", "user123456")
 
 
+def _deactivate_actor_behind_the_cache(client: TestClient, actor_id: str) -> None:
+    from songmaker_cli.db.queries import update_user
+
+    with client.app.state.ctx.db() as session:
+        update_user(session, actor_id, is_active=False)
+        session.commit()
+
+
 @pytest.fixture
 def admin_client(client: TestClient) -> TestClient:
     _login_as_admin(client)
@@ -101,10 +109,6 @@ def test_admin_can_update_a_user_after_a_session_cache_miss(
         ("PUT", {"password": "newpass12345"}, AuditAction.UPDATE, "password_changed"),
         ("PUT", {"is_active": True}, AuditAction.UPDATE, "active=True"),
         ("PUT", {}, AuditAction.UPDATE, ""),
-        (
-            "PUT", {"role": "admin", "is_active": True, "password": "newpass12345"},
-            AuditAction.UPDATE, "role=admin, active=True, password_changed",
-        ),
     ],
 )
 def test_admin_changes_keep_their_audit_action_and_detail(
@@ -173,11 +177,13 @@ def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
 ) -> None:
     before = _audit_entries(admin_client)
     users_before = admin_client.get("/api/admin/users").json()
-    hasher = installed_web_auth_config(admin_client.app).password_hasher
+    cache = installed_web_auth_config(admin_client.app).session_cache
     with TestClient(admin_client.app, raise_server_exceptions=False) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
-        with patch.object(type(hasher), "hash", side_effect=RuntimeError("hash unavailable")):
+        with patch.object(
+            cache, "delete_user_sessions", side_effect=[[], RuntimeError("cache unavailable")],
+        ):
             response = failing_client.put(
                 f"/api/admin/users/{managed_account.user_id}",
                 json={"role": "admin", "password": "newpass12345"},
@@ -862,10 +868,7 @@ def test_last_active_admin_is_protected_from_every_removal_path(
         "/api/admin/users",
         json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
     ).json()["id"]
-    with client.app.state.ctx.db() as session:
-        from songmaker_cli.db.queries import update_user
-        update_user(session, admin_id, is_active=False)
-        session.commit()
+    _deactivate_actor_behind_the_cache(client, admin_id)
 
     response = client.request(method, f"/api/admin/users/{target_id}{suffix}", json=payload)
 

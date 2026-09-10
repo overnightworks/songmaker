@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from webauth.ports import SessionIdentityChanged, UserManagementEvent
 
-    from songmaker_cli.db.models import AuditLog, UserSession
+    from songmaker_cli.db.models import UserSession
 
 AUDITED_SESSION_ID_CHARS: Final = 8
 USER_AGENT_CHANGE_DETAIL: Final = "ua_changed"
@@ -78,6 +78,7 @@ class DatabaseUserStore:
         try:
             return create_user(self.session, username, password_hash, role=role)
         except IntegrityError:
+            # INSERT errors expose password hashes, which the store error contract forbids.
             raise UsernameTakenError("Username already exists") from None
 
     def list(self) -> list[User]:
@@ -201,32 +202,14 @@ class DatabaseLoginAttemptStore:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class DatabaseAuditSink:
     session: Session
-    _combining_updates: bool = field(default=False, init=False)
-    _combined_update: AuditLog | None = field(default=None, init=False)
-
-    @contextmanager
-    def combine_user_updates(self) -> Iterator[None]:
-        """Keep one UPDATE row for the fields of a single HTTP update request."""
-        self._combining_updates = True
-        try:
-            yield
-        finally:
-            self._combining_updates = False
-            self._combined_update = None
 
     def user_updated(self, actor_id: str | None, subject_id: str, detail: str) -> None:
-        if self._combining_updates and self._combined_update is not None:
-            self._combined_update.detail += f", {detail}"
-            self.session.flush()
-        else:
-            entry = record_audit(
-                self.session, actor_id, AuditAction.UPDATE, ResourceType.USER, subject_id, detail,
-            )
-            if self._combining_updates:
-                self._combined_update = entry
+        record_audit(
+            self.session, actor_id, AuditAction.UPDATE, ResourceType.USER, subject_id, detail,
+        )
 
     def user_management_event(self, event: UserManagementEvent) -> None:
         match event.kind:
