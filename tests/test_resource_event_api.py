@@ -14,6 +14,7 @@ from conftest import TEST_SECRET, make_fake_redis, make_test_app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
+from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
@@ -613,7 +614,7 @@ def test_each_reconnect_reauthenticates_disabled_account(
     with factory() as session:
         session.get(User, users["alice"]).is_active = False
         session.commit()
-    clients["alice"].app.state.session_cache.delete_user_sessions(users["alice"])
+    installed_web_auth_config(clients["alice"].app).session_cache.delete_user_sessions(users["alice"])
     assert clients["alice"].get("/api/resource-events/stream").status_code == 403
 
 
@@ -820,7 +821,7 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
     release_calls: list[tuple[str, str]] = []
 
     class _OpenLimiter:
-        def is_allowed(self, _user_id: str) -> bool:
+        def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
     class _Limiter:
@@ -900,7 +901,7 @@ def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
     app = clients["alice"].app
 
     class _OpenLimiter:
-        def is_allowed(self, _user_id: str) -> bool:
+        def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
     class _Limiter:
@@ -958,7 +959,7 @@ def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lea
     release_calls: list[tuple[str, str]] = []
 
     class _OpenLimiter:
-        def is_allowed(self, _user_id: str) -> bool:
+        def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
     class _Limiter:
@@ -1018,7 +1019,7 @@ def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease
     monkeypatch.setattr(deadline_middleware, "_SYNTHETIC_TERMINAL_SEND_TIMEOUT_SECONDS", 0.05)
 
     class _OpenLimiter:
-        def is_allowed(self, _user_id: str) -> bool:
+        def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
     class _Limiter:
@@ -1157,7 +1158,7 @@ def test_stream_limiter_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyP
     _install_finite_route_stream(monkeypatch)
 
     class _BrokenLimiter:
-        def is_allowed(self, _scope: str) -> bool:
+        def is_allowed(self, _scope: str, *, limit: int, window_seconds: int) -> bool:
             raise ConnectionError("redis unavailable")
 
     clients["alice"].app.state._resource_stream_open_limiter = _BrokenLimiter()

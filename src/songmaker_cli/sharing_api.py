@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 from webauth.proxies import resolve_client_ip
-from webauth.rate_limit import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import (
@@ -103,24 +103,21 @@ DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
 _SHARED_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_OPEN
 
 
-def _get_shared_limiter(request: Request) -> RedisRateLimiter:
-    def _build() -> RedisRateLimiter:
+def _get_shared_limiter(request: Request) -> RedisRateLimitBackend:
+    def _build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
-        return RedisRateLimiter(
+        return RedisRateLimitBackend(
             ctx.redis, REDIS_RL_SHARED_PREFIX,
-            _consts.SHARING_RATE_LIMIT, _consts.SHARING_RATE_WINDOW_SECONDS,
         )
     return get_cached_limiter(request, "_shared_limiter", _build)
 
 
-def _get_shared_stream_limiter(request: Request) -> RedisRateLimiter:
-    def _build() -> RedisRateLimiter:
+def _get_shared_stream_limiter(request: Request) -> RedisRateLimitBackend:
+    def _build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
-        return RedisRateLimiter(
+        return RedisRateLimitBackend(
             ctx.redis,
             REDIS_RL_SHARED_STREAM_PREFIX,
-            _consts.SHARING_STREAM_RATE_LIMIT,
-            _consts.SHARING_STREAM_RATE_WINDOW_SECONDS,
         )
     return get_cached_limiter(request, "_shared_stream_limiter", _build)
 
@@ -129,7 +126,8 @@ def _check_shared_rate_limit(request: Request) -> None:
     _check_rate_limit(
         request,
         _get_shared_limiter(request),
-        retry_after=_consts.SHARING_RATE_WINDOW_SECONDS,
+        limit=_consts.SHARING_RATE_LIMIT,
+        window_seconds=_consts.SHARING_RATE_WINDOW_SECONDS,
     )
 
 
@@ -137,21 +135,24 @@ def _check_shared_stream_rate_limit(request: Request) -> None:
     _check_rate_limit(
         request,
         _get_shared_stream_limiter(request),
-        retry_after=_consts.SHARING_STREAM_RATE_WINDOW_SECONDS,
+        limit=_consts.SHARING_STREAM_RATE_LIMIT,
+        window_seconds=_consts.SHARING_STREAM_RATE_WINDOW_SECONDS,
     )
 
 
 def _check_rate_limit(
     request: Request,
-    limiter: RedisRateLimiter,
+    limiter: RedisRateLimitBackend,
     *,
-    retry_after: int,
+    limit: int,
+    window_seconds: int,
 ) -> None:
     enforce_rate_limit(
         limiter, resolve_client_ip(request),
         policy=_SHARED_LIMITER_FAILURE_POLICY,
         reject_detail="Too many requests",
-        retry_after_seconds=retry_after,
+        limit=limit,
+        window_seconds=window_seconds,
         unavailable_log_message="Shared rate limiter unavailable -- allowing request",
     )
 

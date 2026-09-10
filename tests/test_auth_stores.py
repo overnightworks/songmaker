@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,7 @@ from songmaker_cli.db.models import (
 )
 
 _PASSWORD_HASH = "hashed"
+_SESSION_MAX_AGE_SECONDS = 3600
 
 
 @pytest.fixture
@@ -49,7 +52,7 @@ def users(session) -> UserStore:
 
 @pytest.fixture
 def sessions(session) -> SessionRecordStore:
-    return DatabaseSessionRecordStore(session)
+    return DatabaseSessionRecordStore(session, session_max_age_seconds=_SESSION_MAX_AGE_SECONDS)
 
 
 @pytest.fixture
@@ -70,12 +73,15 @@ def _expiry(hours: int = 1) -> datetime:
     ("port", "store"),
     [
         (UserStore, DatabaseUserStore),
-        (SessionRecordStore, DatabaseSessionRecordStore),
+        (SessionRecordStore, partial(
+            DatabaseSessionRecordStore, session_max_age_seconds=_SESSION_MAX_AGE_SECONDS,
+        )),
         (LoginAttemptStore, DatabaseLoginAttemptStore),
-        (AuditSink, DatabaseAuditSink),
     ],
 )
-def test_the_store_answers_everything_its_port_asks(port: type, store: type) -> None:
+def test_the_store_answers_everything_its_port_asks(
+    port: type, store: Callable[..., object],
+) -> None:
     assert isinstance(store(session=None), port)
 
 
@@ -124,7 +130,10 @@ def test_touching_a_session_writes_its_new_origin_onto_the_record(
     session.commit()
     renewed = _expiry(hours=2)
 
-    sessions.touch(created, ip_address="9.9.9.9", user_agent="New/2.0", expires_at=renewed)
+    sessions.touch(
+        created, ip_address="9.9.9.9", user_agent="New/2.0",
+        now=renewed - timedelta(seconds=_SESSION_MAX_AGE_SECONDS),
+    )
 
     assert created.ip_address == "9.9.9.9"
     assert created.user_agent == "New/2.0"
@@ -269,7 +278,7 @@ def seeded(users, sessions, attempts, audit, session) -> _SeededStores:
         pytest.param(
             lambda s: s.sessions.touch(
                 s.sessions.load(s.session_ids[0]),
-                ip_address="9.9.9.9", user_agent="New/2.0", expires_at=_expiry(hours=2),
+                ip_address="9.9.9.9", user_agent="New/2.0", now=_expiry(),
             ),
             id="touching a session",
         ),

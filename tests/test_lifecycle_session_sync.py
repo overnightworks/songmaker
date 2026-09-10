@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
-from webauth.config import SessionKeyPrefixes
-from webauth.session_store import SessionCache
+from webauth.config import install_web_auth_config
+from webauth.session_store import RedisSessionCache, SessionKeyPrefixes
 
-from songmaker_cli.app_context import AppContext
+from songmaker_cli.app_context import AppContext, build_web_auth_config
 from songmaker_cli.constants import REDIS_SESSION_PREFIX, REDIS_USER_SESSIONS_PREFIX
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.lifecycle import _sync_sessions, session_sync_loop
+from songmaker_cli.settings import get_settings
 
 _PREFIXES = SessionKeyPrefixes(
     session=REDIS_SESSION_PREFIX, user_sessions=REDIS_USER_SESSIONS_PREFIX,
@@ -50,7 +52,7 @@ def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _store_cached_session(
-    session_cache: SessionCache,
+    session_cache: RedisSessionCache,
     session_id: str,
     user_id: str,
     expires_at: datetime,
@@ -93,7 +95,7 @@ def test_session_sync_updates_live_sessions_and_evicts_stale_cache_entries(
         ))
         session.commit()
 
-    session_cache = SessionCache(ctx.redis, _PREFIXES)
+    session_cache = RedisSessionCache(ctx.redis, _PREFIXES)
     _store_cached_session(session_cache, "live", "active", now + timedelta(days=1), 300)
     _store_cached_session(
         session_cache,
@@ -134,7 +136,7 @@ def test_session_sync_purges_database_expiry_when_redis_has_no_sessions(
         )
         session.commit()
 
-    session_cache = SessionCache(ctx.redis, _PREFIXES)
+    session_cache = RedisSessionCache(ctx.redis, _PREFIXES)
 
     assert _sync_sessions(ctx, session_cache) == 0
     with ctx.db() as session:
@@ -148,6 +150,8 @@ def test_the_sync_loop_refuses_to_run_without_the_cache_it_reconciles(
     silently reconcile nothing at all."""
     app = FastAPI()
     app.state.ctx = ctx
+    config = replace(build_web_auth_config(ctx, get_settings()), session_cache=None)
+    install_web_auth_config(app, config)
 
     with pytest.raises(RuntimeError, match="session cache"):
         asyncio.run(session_sync_loop(app))

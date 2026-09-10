@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, TypeAdapter
-from webauth.session_store import installed_session_cache
+from webauth.config import web_auth_config
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -386,7 +386,7 @@ async def health_check(request: Request) -> JSONResponse:
         for name, health in background_loop_health.items()
     })
 
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )

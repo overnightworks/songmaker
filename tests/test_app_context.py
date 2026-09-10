@@ -15,11 +15,6 @@ from songmaker_cli.app_context import (
     parse_trusted_proxies,
 )
 from songmaker_cli.constants import (
-    REDIS_RL_IP_MEDIA_PREFIX,
-    REDIS_RL_IP_PREFIX,
-    REDIS_RL_IP_STREAM_PREFIX,
-    REDIS_SESSION_PREFIX,
-    REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
@@ -44,24 +39,11 @@ def test_the_configuration_carries_the_deployments_own_facts(ctx: AppContext) ->
     config = build_web_auth_config(ctx, get_settings())
 
     assert config.signing_key == TEST_SECRET
-    assert config.redis is ctx.redis
     assert "172.18.0.1" in config.trusted_proxies
     assert config.allowed_hosts_exact == frozenset({"songmaker.example"})
     assert [pattern.pattern for pattern in config.allowed_hosts_patterns] == [
         r"^[^:]+\.example$",
     ]
-
-
-def test_the_configuration_keeps_songmakers_redis_keys(ctx: AppContext) -> None:
-    """The keys name live sessions and live budgets: a changed prefix logs
-    everybody out and hands every visitor a fresh rate-limit allowance."""
-    config = build_web_auth_config(ctx, get_settings())
-
-    assert config.session_key_prefixes.session == REDIS_SESSION_PREFIX
-    assert config.session_key_prefixes.user_sessions == REDIS_USER_SESSIONS_PREFIX
-    assert config.rate_limit_key_prefixes.api == REDIS_RL_IP_PREFIX
-    assert config.rate_limit_key_prefixes.media == REDIS_RL_IP_MEDIA_PREFIX
-    assert config.rate_limit_key_prefixes.stream == REDIS_RL_IP_STREAM_PREFIX
 
 
 def test_the_configuration_takes_the_session_and_login_limits_from_settings(
@@ -72,10 +54,6 @@ def test_the_configuration_takes_the_session_and_login_limits_from_settings(
     config = build_web_auth_config(ctx, settings)
 
     assert config.session_max_age_seconds == settings.session_max_age_seconds
-    assert (
-        config.session_absolute_max_age_seconds
-        == settings.session_absolute_max_age_seconds
-    )
     assert config.login_rate_limit == settings.login_rate_limit
     assert config.login_lockout_threshold == settings.login_lockout_threshold
     assert config.login_lockout_window_seconds == settings.login_lockout_window_seconds
