@@ -436,6 +436,33 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     assert resp.status_code == 200
 
 
+@pytest.mark.parametrize(
+    ("fetch_site", "origin", "expected_status"),
+    [
+        ("same-origin", "http://localhost:8080", 200),
+        ("same-origin", "http://evil.example.com", 200),
+        ("cross-site", "http://localhost:8080", 403),
+        ("none", "http://localhost:8080", 403),
+        ("same-site", "http://localhost:8080", 200),
+        ("same-site", "http://evil.example.com", 403),
+    ],
+)
+def test_csrf_fetch_metadata_takes_precedence_over_the_origin_allowlist(
+    server_app: TestClient, fetch_site: str, origin: str, expected_status: int,
+) -> None:
+    response = server_app.post(
+        "/api/songs",
+        json={"title": "Fetch metadata proof", "album_id": "test_album"},
+        headers={"Sec-Fetch-Site": fetch_site, "Origin": origin},
+    )
+
+    assert response.status_code == expected_status
+    if expected_status == 403:
+        assert response.json()["detail"] == "Cross-origin request rejected"
+    else:
+        assert response.json()["title"] == "Fetch metadata proof"
+
+
 def test_csrf_rejects_spoofed_host_with_matching_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
