@@ -1,0 +1,8 @@
+claim_id = "06f38b4d07b84c1d900f59525b4d29be"
+agent = "codex-songmaker-907"
+role = "coordinator"
+base = "232dfb5beca558c6fe3b13a962ed21cfd33f8175"
+branch = "codex/issue-907-users-admin"
+scope = ["src/songmaker_cli/auth_stores.py", "src/songmaker_cli/auth_dependencies.py", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/api_models/auth.py", "tests/test_admin_api.py", "tests/test_auth_stores.py", "docs/security.md", "docs/architecture.md"]
+opened_commit = "13d4f1d3b89cdc747b14df47d99d2234eef995dc"
+whole_reason = "Ports, Sperre, Audit-Abbildung und die Admin-Endpoints haengen am selben UserManagement-Vertrag und landen nur zusammen gruen."
