@@ -3976,6 +3976,7 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
         pytest.param("/api/settings/claude-models", "put", {"400"}, id="set-claude-models"),
         pytest.param("/api/settings/cowriter", "get", {"422"}, id="get-cowriter"),
         pytest.param("/api/settings/cowriter", "put", {"422"}, id="set-cowriter"),
+        pytest.param("/api/settings/providers", "get", {"422"}, id="get-providers"),
         pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
         pytest.param("/api/settings/judge", "put", {"422"}, id="set-judge"),
         pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),

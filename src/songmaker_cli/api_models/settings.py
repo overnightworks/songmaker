@@ -158,11 +158,14 @@ class CowriterSettingsResponse(BaseModel):
 
 class JudgeSettingsRequest(BaseModel):
     provider: str
+    route: Literal["cli", "api"] | None = None
     model: str
 
 
 class JudgeSettingsResponse(BaseModel):
     provider: str
+    route: Literal["cli", "api"]
+    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]]
     model: str
     allowed_providers: list[str]
     allowed_models: list[str]
