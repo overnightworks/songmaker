@@ -1,8 +1,0 @@
-claim_id = "e77395caf14444f58d28ea6f4187ea71"
-agent = "codex-songmaker-899"
-role = "coordinator"
-base = "9466ed0ad32096fddc2067ef652930f4e6269ebc"
-branch = "codex/issue-899-canary-rerun"
-scope = ["pyproject.toml", "uv.lock", "src/songmaker_cli/constants.py", "src/songmaker_cli/agent_runtime.py", "tests/test_agent_provider_runtime.py", "tests/test_conversation_api.py", "tests/test_secret_scrub_parity.py"]
-opened_commit = "6fb4a5debcb48fe5d3aac9332c7aae6ee1f64956"
-whole_reason = "Ein temporaerer Versuchspin der Provider-Bibliothek zieht Lockfile, den einen Konfigurationseigentuemer und seine drei Testmodule zusammen; der Branch wird nie gemergt."
