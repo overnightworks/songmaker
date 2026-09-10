@@ -10,18 +10,16 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
-from webauth.config import (
-    RateLimitKeyPrefixes,
-    SessionKeyPrefixes,
-    WebAuthConfig,
-)
+from webauth.config import WebAuthConfig
+from webauth.liveness import ExpiryColumnLiveness
+from webauth.passwords import BcryptPasswordHasher
 from webauth.proxies import TrustedProxies
+from webauth.rate_limit import RedisRateLimitBackend
+from webauth.session_store import RedisSessionCache, SessionKeyPrefixes
 
 from songmaker_cli.constants import (
     HTTP_MAX_USER_AGENT_LENGTH,
-    REDIS_RL_IP_MEDIA_PREFIX,
     REDIS_RL_IP_PREFIX,
-    REDIS_RL_IP_STREAM_PREFIX,
     REDIS_SESSION_PREFIX,
     REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
@@ -57,21 +55,20 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
-        redis=ctx.redis,
+        password_hasher=BcryptPasswordHasher(),
+        rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
-        session_key_prefixes=SessionKeyPrefixes(
-            session=REDIS_SESSION_PREFIX,
-            user_sessions=REDIS_USER_SESSIONS_PREFIX,
-        ),
-        rate_limit_key_prefixes=RateLimitKeyPrefixes(
-            api=REDIS_RL_IP_PREFIX,
-            media=REDIS_RL_IP_MEDIA_PREFIX,
-            stream=REDIS_RL_IP_STREAM_PREFIX,
+        session_cache=RedisSessionCache(
+            ctx.redis,
+            SessionKeyPrefixes(
+                session=REDIS_SESSION_PREFIX,
+                user_sessions=REDIS_USER_SESSIONS_PREFIX,
+            ),
         ),
         allowed_hosts_exact=ctx.allowed_hosts_exact,
         allowed_hosts_patterns=tuple(ctx.allowed_hosts_patterns),
         session_max_age_seconds=settings.session_max_age_seconds,
-        session_absolute_max_age_seconds=settings.session_absolute_max_age_seconds,
+        session_liveness=ExpiryColumnLiveness(settings.session_absolute_max_age_seconds),
         max_user_agent_chars=HTTP_MAX_USER_AGENT_LENGTH,
         login_rate_limit=settings.login_rate_limit,
         login_lockout_threshold=settings.login_lockout_threshold,

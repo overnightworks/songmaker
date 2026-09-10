@@ -12,6 +12,7 @@ from __future__ import annotations
 import structlog
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
+from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser, current_user_dependency
 
 from songmaker_cli.app_context import get_db_session
@@ -19,9 +20,12 @@ from songmaker_cli.auth_stores import DatabaseAuditSink, DatabaseSessionRecordSt
 
 
 def _session_record_store(
+    request: Request,
     db: Session = Depends(get_db_session),
 ) -> DatabaseSessionRecordStore:
-    return DatabaseSessionRecordStore(db)
+    return DatabaseSessionRecordStore(
+        db, session_max_age_seconds=web_auth_config(request).session_max_age_seconds,
+    )
 
 
 def _audit_sink(db: Session = Depends(get_db_session)) -> DatabaseAuditSink:
@@ -50,4 +54,4 @@ def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:
     yield dependency stays open until the whole response finishes — which for
     a stream means holding a pooled connection for its entire lifetime.
     """
-    return get_current_user(request, DatabaseSessionRecordStore(db), DatabaseAuditSink(db))
+    return get_current_user(request, _session_record_store(request, db), DatabaseAuditSink(db))

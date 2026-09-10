@@ -222,14 +222,12 @@ def create_app(
 
     app.state.ctx = ctx
     from webauth.config import install_web_auth_config
-    from webauth.session_store import SessionCache, install_session_cache
 
     from songmaker_cli.redis_client import RedisHttpMetrics
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
-    install_session_cache(app, SessionCache(ctx.redis, web_auth.session_key_prefixes))
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange

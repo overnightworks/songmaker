@@ -12,7 +12,7 @@ from time import monotonic
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from webauth.rate_limit import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import (
@@ -351,15 +351,12 @@ async def _wait_for_next_resource_poll(deadline: float) -> bool:
 _STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 
 
-def _get_open_limiter(request: Request) -> RedisRateLimiter:
-    def _build() -> RedisRateLimiter:
+def _get_open_limiter(request: Request) -> RedisRateLimitBackend:
+    def _build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
-        settings = get_settings()
-        return RedisRateLimiter(
+        return RedisRateLimitBackend(
             ctx.redis,
             REDIS_RL_RESOURCE_STREAM_PREFIX,
-            settings.resource_event_stream_open_limit,
-            RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
         )
 
     return get_cached_limiter(request, "_resource_stream_open_limiter", _build)
@@ -397,7 +394,11 @@ def _acquire_stream_lease(
     rejects the request rather than letting an unmetered stream through.
     """
     try:
-        if not _get_open_limiter(request).is_allowed(user_id):
+        if not _get_open_limiter(request).is_allowed(
+            user_id,
+            limit=get_settings().resource_event_stream_open_limit,
+            window_seconds=RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
+        ):
             raise HTTPException(
                 429,
                 RESOURCE_EVENT_STREAM_LIMIT_DETAIL,

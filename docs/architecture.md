@@ -664,35 +664,46 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.1.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.4.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is still `webauth`, so nothing in
 `songmaker_cli` changed when the source moved. Its own tests moved with it.
 
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity
-decision, `ports.py` names the stores the host supplies, `policies.py` the four
-request policies it supplies, `session_store.py` the Redis session cache,
+decision, `ports.py` names the stores, password hasher, rate backend, session
+liveness and optional session cache the host supplies, `policies.py` the four
+request policies it supplies, `liveness.py` the expiry-column and idle-window
+session policies, `session_store.py` the Redis session cache,
 `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF,
 body-size and security-header middlewares, `dependencies.py` the
 `current_user_dependency` factory that yields the account, admin, and
 verified-session-id dependencies, and `login.py` the transaction-free parts of
 signing in and out (cookie issuing and clearing, the attempt limits, the
 constant-time credential check). The login route with its advisory lock stays
-in the application.
+in the application. `users.py` provides transaction-free account-administration
+helpers; songmaker does not use them yet (#833, slice 2).
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
-session secret, trusted proxies, Redis client and key prefixes, cookie and
-header names, allowed hosts, session ages, and login rate/lockout values arrive
+session secret, trusted proxies, password hasher, rate backend, session liveness
+policy, optional session cache, cookie and header names, allowed hosts, idle
+session age, and login rate/lockout values arrive
 as one frozen `WebAuthConfig`, built by
 `songmaker_cli/app_context.py::build_web_auth_config(ctx, settings)` and
 installed on the application in `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
-never installed one fails loudly at its first auth-protected request.
+never installed one fails loudly at its first auth-protected request. Songmaker
+binds `BcryptPasswordHasher`, `RedisRateLimitBackend`, `ExpiryColumnLiveness`
+(with the configured absolute age), and `RedisSessionCache` to those ports;
+the Redis adapters own the connection and key prefixes. The cache is read
+from the installed configuration, including by the lifecycle sync loop.
 songmaker's own data — users, sessions, login attempts, audit entries — reaches
 the library through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
-endpoint owns the request's transaction.
+endpoint owns the request's transaction. `DatabaseSessionRecordStore.touch(now=)`
+derives `expires_at` from that timestamp plus the installed configuration's
+`session_max_age_seconds`. The audit adapter handles session-identity changes;
+the new account-administration events remain with the later `users.py` adoption.
 
 The same seam carries the four request policies in `webauth.policies`. The
 library owns what a rate limit, a CSRF check, a body cap, and a response header
@@ -708,7 +719,7 @@ no middleware reads songmaker's settings.
 The provider layer left this repository with #886. It ships as the distribution
 `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-and is pinned in the `server` extra to the release wheel of tag `v0.1.0`;
+and is pinned in the `server` extra to the release wheel of tag `v0.1.2`;
 `uv.lock` records that wheel's hash, so every image installs the same bytes and
 no image needs `git`. The pin is bare — not `[api,image]` in its brackets — so
 the library's own optional capabilities never leak `anthropic` into the music

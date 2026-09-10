@@ -14,9 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
-from webauth.session_store import installed_session_cache
 
 from songmaker_cli.acestep_state import (
     read_download_in_progress,
@@ -104,7 +104,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _clear_user_session_cache(request: Request, user_id: str) -> None:
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     if not session_cache:
         return
     try:
@@ -346,7 +346,7 @@ def force_logout_endpoint(
         if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
             delete_session(db, sess.id)
             db.commit()
-            session_cache = installed_session_cache(request.app)
+            session_cache = web_auth_config(request).session_cache
             if session_cache:
                 try:
                     session_cache.delete(sess.id, sess.user_id)

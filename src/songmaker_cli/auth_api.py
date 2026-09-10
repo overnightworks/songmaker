@@ -12,14 +12,16 @@ from sqlalchemy.orm import Session
 from webauth.config import WebAuthConfig, web_auth_config
 from webauth.dependencies import AuthenticatedUser
 from webauth.login import (
+    INVALID_CREDENTIALS_DETAIL,
+    LoginOutcome,
     clear_session_cookies,
-    enforce_login_attempt_limits,
+    http_refusal,
     issue_session_cookies,
-    password_admits_account,
+    judge_credentials,
+    login_attempt_budget,
 )
 from webauth.passwords import hash_password, verify_password_constant_time
 from webauth.proxies import client_user_agent, resolve_client_ip
-from webauth.session_store import installed_session_cache
 
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import (
@@ -62,7 +64,7 @@ SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
 def _cache_session(
     request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
 ) -> None:
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     if not session_cache:
         return
     max_age = web_auth_config(request).session_max_age_seconds
@@ -76,7 +78,7 @@ def _cache_session(
 
 
 def _clear_user_cache(request: Request, user_id: str) -> None:
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     if not session_cache:
         return
     try:
@@ -148,13 +150,15 @@ def login(
 ) -> UserResponse:
     ip = resolve_client_ip(request)
 
-    enforce_login_attempt_limits(
+    refusal = login_attempt_budget(
         DatabaseLoginAttemptStore(db),
         ip_address=ip,
         username=req.username,
         config=config,
     )
-    user = _authenticate_login(db, ip, req)
+    if refusal is not None:
+        raise http_refusal(refusal)
+    user = _authenticate_login(db, ip, req, config)
 
     assert not db.new and not db.dirty and not db.deleted, (
         "login: session has uncommitted mutations — "
@@ -176,7 +180,7 @@ def login(
         db, user.id, get_settings().max_concurrent_sessions_per_user,
     )
 
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     if session_cache is not None:
         try:
             for pruned_id in pruned_ids:
@@ -201,13 +205,16 @@ def login(
     return UserResponse.from_orm(user)
 
 
-def _authenticate_login(db: Session, ip: str, req: LoginRequest) -> User:
+def _authenticate_login(
+    db: Session, ip: str, req: LoginRequest, config: WebAuthConfig,
+) -> User:
     user = get_user_by_username(db, req.username)
-    if password_admits_account(req.password, user):
+    outcome = judge_credentials(req.password, user, hasher=config.password_hasher)
+    if outcome is LoginOutcome.ADMITTED:
         return user
     record_login_attempt(db, ip, req.username, success=False)
     db.commit()
-    raise HTTPException(401, "Invalid username or password")
+    raise HTTPException(401, INVALID_CREDENTIALS_DETAIL)
 
 
 @router.delete("/session")
@@ -222,7 +229,7 @@ def logout(
     delete_session(db, session_id)
     db.commit()
 
-    session_cache = installed_session_cache(request.app)
+    session_cache = web_auth_config(request).session_cache
     if session_cache:
         try:
             session_cache.delete(session_id, current_user.id)

@@ -16,7 +16,8 @@ from typing import Final, Literal
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
-from webauth.session_store import SessionCache, installed_session_cache
+from webauth.config import installed_web_auth_config
+from webauth.ports import SessionCache
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -739,7 +740,7 @@ async def session_sync_loop(app: FastAPI) -> None:
     )
 
     ctx: AppContext = app.state.ctx
-    session_cache = installed_session_cache(app)
+    session_cache = installed_web_auth_config(app).session_cache
     if session_cache is None:
         raise RuntimeError(
             "Session sync needs the session cache the application installs at startup.",

@@ -193,7 +193,7 @@ def test_run_ffmpeg_concat_maps_build_failures_to_public_errors(
 
 def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
     class BrokenLimiter:
-        def is_allowed(self, _user_id):
+        def is_allowed(self, _user_id, *, limit: int, window_seconds: int):
             raise RuntimeError("down")
 
     limiter = BrokenLimiter()
@@ -2726,7 +2726,7 @@ def test_library_pool_queue_rate_limiter_failure_is_503(
     tmp_path: Path, monkeypatch
 ) -> None:
     class BrokenLimiter:
-        def is_allowed(self, _user_id):
+        def is_allowed(self, _user_id, *, limit: int, window_seconds: int):
             raise RuntimeError("down")
 
     _patch_audio_build(monkeypatch)

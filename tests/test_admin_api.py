@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
+from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
 
@@ -412,7 +413,7 @@ def _get_user_id(client: TestClient, username: str) -> str:
 
 def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
     from conftest import login_and_csrf
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     _login_as_admin(client)
 
@@ -425,7 +426,7 @@ def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
     victim_client = TestClient(client.app, cookies={})
     login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
 
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     redis = client.app.state.ctx.redis
     sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{victim_id}")
@@ -440,7 +441,7 @@ def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
 
 
 def test_force_logout_clears_redis(client: TestClient) -> None:
-    from webauth.session_store import SessionCache
+    from webauth.ports import SessionCache
 
     _login_as_admin(client)
 
@@ -455,7 +456,7 @@ def test_force_logout_clears_redis(client: TestClient) -> None:
         json={"username": "victim2", "password": "t3stP@ssw0rd"},
     )
 
-    session_cache: SessionCache = client.app.state.session_cache
+    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
     victim_id = _get_user_id(client, "victim2")
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     redis = client.app.state.ctx.redis

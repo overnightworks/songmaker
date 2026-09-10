@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -15,14 +16,13 @@ from songmaker_cli.app_context import (
     parse_trusted_proxies,
 )
 from songmaker_cli.constants import (
-    REDIS_RL_IP_MEDIA_PREFIX,
     REDIS_RL_IP_PREFIX,
-    REDIS_RL_IP_STREAM_PREFIX,
     REDIS_SESSION_PREFIX,
     REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
+from songmaker_cli.db.models import UserSession
 from songmaker_cli.settings import get_settings
 
 
@@ -44,7 +44,6 @@ def test_the_configuration_carries_the_deployments_own_facts(ctx: AppContext) ->
     config = build_web_auth_config(ctx, get_settings())
 
     assert config.signing_key == TEST_SECRET
-    assert config.redis is ctx.redis
     assert "172.18.0.1" in config.trusted_proxies
     assert config.allowed_hosts_exact == frozenset({"songmaker.example"})
     assert [pattern.pattern for pattern in config.allowed_hosts_patterns] == [
@@ -52,16 +51,40 @@ def test_the_configuration_carries_the_deployments_own_facts(ctx: AppContext) ->
     ]
 
 
-def test_the_configuration_keeps_songmakers_redis_keys(ctx: AppContext) -> None:
-    """The keys name live sessions and live budgets: a changed prefix logs
-    everybody out and hands every visitor a fresh rate-limit allowance."""
+def test_the_session_cache_writes_to_songmakers_redis_keys(ctx: AppContext) -> None:
+    config = build_web_auth_config(ctx, get_settings())
+    now = datetime(2026, 9, 10, tzinfo=timezone.utc)
+
+    config.session_cache.store(
+        session_id="session-1", user_id="user-1", username="nina", role="user",
+        is_active=True, ip_address="1.2.3.4", user_agent="TestBrowser/1.0",
+        expires_at=now + timedelta(seconds=config.session_max_age_seconds),
+        created_at=now, max_age_seconds=config.session_max_age_seconds,
+    )
+
+    assert ctx.redis.exists(f"{REDIS_SESSION_PREFIX}:session-1")
+    assert ctx.redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:user-1") == {"session-1"}
+
+
+def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext) -> None:
     config = build_web_auth_config(ctx, get_settings())
 
-    assert config.session_key_prefixes.session == REDIS_SESSION_PREFIX
-    assert config.session_key_prefixes.user_sessions == REDIS_USER_SESSIONS_PREFIX
-    assert config.rate_limit_key_prefixes.api == REDIS_RL_IP_PREFIX
-    assert config.rate_limit_key_prefixes.media == REDIS_RL_IP_MEDIA_PREFIX
-    assert config.rate_limit_key_prefixes.stream == REDIS_RL_IP_STREAM_PREFIX
+    assert config.rate_limits.is_allowed("x", limit=1, window_seconds=60)
+    assert not config.rate_limits.is_allowed("x", limit=1, window_seconds=60)
+    assert ctx.redis.zcard(f"{REDIS_RL_IP_PREFIX}:x") == 1
+
+
+def test_the_liveness_policy_uses_the_configured_absolute_session_age(ctx: AppContext) -> None:
+    settings = get_settings().model_copy(update={"session_absolute_max_age_seconds": 600})
+    config = build_web_auth_config(ctx, settings)
+    now = datetime(2026, 9, 10, tzinfo=timezone.utc)
+    record = UserSession(
+        created_at=now - timedelta(seconds=settings.session_absolute_max_age_seconds),
+        expires_at=now + timedelta(days=1),
+    )
+
+    assert config.session_liveness.admits_stored_session(record, now)
+    assert not config.session_liveness.admits_stored_session(record, now + timedelta(seconds=1))
 
 
 def test_the_configuration_takes_the_session_and_login_limits_from_settings(
@@ -72,10 +95,6 @@ def test_the_configuration_takes_the_session_and_login_limits_from_settings(
     config = build_web_auth_config(ctx, settings)
 
     assert config.session_max_age_seconds == settings.session_max_age_seconds
-    assert (
-        config.session_absolute_max_age_seconds
-        == settings.session_absolute_max_age_seconds
-    )
     assert config.login_rate_limit == settings.login_rate_limit
     assert config.login_lockout_threshold == settings.login_lockout_threshold
     assert config.login_lockout_window_seconds == settings.login_lockout_window_seconds

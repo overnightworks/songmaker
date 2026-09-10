@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
-from webauth.rate_limit import RedisRateLimiter
+from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
 from songmaker_cli import queue_streams
@@ -63,14 +63,12 @@ LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
 _QUEUE_STREAM_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 
 
-def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
-    def _build() -> RedisRateLimiter:
+def _get_queue_stream_limiter(request: Request) -> RedisRateLimitBackend:
+    def _build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
-        return RedisRateLimiter(
+        return RedisRateLimitBackend(
             ctx.redis,
             REDIS_RL_QUEUE_STREAM_PREFIX,
-            _consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
-            _consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
         )
 
     return get_cached_limiter(request, "_queue_stream_limiter", _build)
@@ -82,7 +80,8 @@ def check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> 
         user.id,
         policy=_QUEUE_STREAM_LIMITER_FAILURE_POLICY,
         reject_detail="Too many queue stream requests",
-        retry_after_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
+        limit=_consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
+        window_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
         unavailable_log_message="Queue stream rate limiter unavailable -- rejecting request",
         unavailable_detail="Queue stream rate limiter unavailable",
     )
