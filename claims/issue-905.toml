@@ -1,8 +1,0 @@
-claim_id = "dba87c6a605f4f3ba587ea5af01cdfbd"
-agent = "codex-songmaker-905"
-role = "coordinator"
-base = "664c11127f17141e41dda38c2f1b90c2d6f29a08"
-branch = "codex/issue-905-webauth-pin"
-scope = ["pyproject.toml", "uv.lock", "src/songmaker_cli/app_context.py", "src/songmaker_cli/server.py", "src/songmaker_cli/auth_dependencies.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/sharing_api.py", "src/songmaker_cli/queue_stream_api.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/constants.py", "tests/conftest.py", "tests/test_app_context.py", "tests/test_lifecycle_session_sync.py", "tests/test_middleware.py", "tests/test_auth_api.py", "tests/test_admin_api.py", "tests/test_resource_event_api.py", "tests/test_auth_stores.py", "tests/test_server.py", "tests/test_redis.py", "tests/test_rate_limit.py", "docs/security.md", "docs/architecture.md", "docs/testing.md", "README.md", "CLAUDE.md", "tests/test_queue_streams.py", "tests/test_sharing.py"]
-opened_commit = "63dd37ee71a8494a9a0d264ff0d89d2f26295303"
-whole_reason = "Ein atomarer Bibliothekssprung: v0.4.0 entfernt Klassen und Config-Felder, die an allen genannten Stellen gleichzeitig ersetzt werden muessen, sonst startet der Server nicht."
