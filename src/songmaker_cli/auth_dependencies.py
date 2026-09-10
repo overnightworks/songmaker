@@ -12,7 +12,7 @@ from __future__ import annotations
 import structlog
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
-from webauth.config import web_auth_config
+from webauth.config import WebAuthConfig, web_auth_config
 from webauth.dependencies import AuthenticatedUser, current_user_dependency
 from webauth.users import UserManagement
 
@@ -29,7 +29,10 @@ def user_management(
     request: Request,
     db: Session = Depends(get_db_session),
 ) -> UserManagement:
-    config = web_auth_config(request)
+    return build_user_management(db, web_auth_config(request))
+
+
+def build_user_management(db: Session, config: WebAuthConfig) -> UserManagement:
     return UserManagement(
         users=DatabaseUserStore(db),
         sessions=DatabaseSessionRecordStore(

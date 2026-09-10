@@ -581,30 +581,16 @@ def auto_setup_admin(ctx: AppContext) -> None:
     from webauth.users import (
         SetupAlreadyDoneError,
         SetupRacedError,
-        UserManagement,
         WeakPasswordError,
         complete_first_run_setup,
     )
 
     from songmaker_cli.app_context import build_web_auth_config
-    from songmaker_cli.auth_stores import (
-        DatabaseAuditSink,
-        DatabaseSessionRecordStore,
-        DatabaseUserStore,
-        DatabaseWriteLock,
-    )
+    from songmaker_cli.auth_dependencies import build_user_management
 
     config = build_web_auth_config(ctx, settings)
     with ctx.db() as session:
-        management = UserManagement(
-            users=DatabaseUserStore(session),
-            sessions=DatabaseSessionRecordStore(
-                session, session_max_age_seconds=config.session_max_age_seconds,
-            ),
-            audit=DatabaseAuditSink(session),
-            lock=DatabaseWriteLock(session),
-            config=config,
-        )
+        management = build_user_management(session, config)
         try:
             complete_first_run_setup(management, admin_user, admin_pass)
         except SetupAlreadyDoneError:

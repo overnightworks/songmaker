@@ -343,11 +343,23 @@ def test_me_unauthenticated(client: TestClient) -> None:
 def test_change_password(client: TestClient) -> None:
     _seed_admin(client)
     _login(client, "admin", "admin12345")
+    _login(client, "admin", "admin12345")
+    user_id = _get_user_id(client, "admin")
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        old_session_ids = {
+            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
+        }
     resp = client.put(
         "/api/auth/password",
         json={"current": "admin12345", "new_password": "newpassword1"},
     )
     assert resp.status_code == 200
+
+    with factory() as session:
+        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
+        assert len(remaining) == 1
+        assert remaining[0].id not in old_session_ids
 
     client.delete("/api/auth/session")
     resp = client.post("/api/auth/login", json={"username": "admin", "password": "newpassword1"})
