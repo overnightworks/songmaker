@@ -24,7 +24,7 @@ import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/s
 import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
-import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -729,6 +729,25 @@ describe('song selection (dead song link, issue #237)', () => {
 			get(toasts).some((t) => t.type === 'error' && t.message === SONG_LINK_NOT_FOUND_TOAST)
 		).toBe(true);
 	});
+
+	it.each([
+		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
+		[new Error('Network unavailable'), 'Network unavailable'],
+		[null, TAKES_ERROR]
+	])(
+		'shows a context-loading error without clearing the selected song (%s)',
+		async (error, message) => {
+			songList.set([song({ ...navigableSongDefaults(), generation_count: 2 })]);
+			fetchSong.mockRejectedValue(error);
+
+			await selectSong('s1');
+
+			await vi.waitFor(() =>
+				expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message })])
+			);
+			expect(get(selectedSongId)).toBe('s1');
+		}
+	);
 
 	it('leaves a valid song selection untouched', async () => {
 		selectedSongId.set('s2');

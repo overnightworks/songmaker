@@ -26,7 +26,7 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
@@ -340,17 +340,18 @@ export function albumTrackNeighbors(
 //
 // A dead songId (deleted between the link being shared/saved and it being
 // opened, issue #237) is a permanent, expected condition, not a transient
-// failure: it is handled here, once, for every entry point, instead of each
-// caller (none of which await this) leaking an unhandled rejection. Any
-// other failure (network, 5xx) is not this function's to swallow and
-// propagates to the caller.
+// failure: it clears only the dead selection. Other failures leave the
+// selection available for retry and surface through the shared error toast.
 async function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
 	try {
 		await ensureGenerationsLoaded(songId);
 	} catch (err) {
-		if (!isNotFound(err)) throw err;
-		reportSongLinkNotFound(songId);
+		if (isNotFound(err)) {
+			reportSongLinkNotFound(songId);
+		} else {
+			addToast(err instanceof Error ? err.message : TAKES_ERROR, 'error');
+		}
 	}
 }
 
@@ -383,7 +384,7 @@ function applySelectedSong(
 		void loadSongsForAlbum(albumId);
 	}
 	playerSelectSong(songId);
-	loadSongContext(songId);
+	void loadSongContext(songId);
 	if (tab === 'write') openWriteTab();
 	setLibrarySurface('detail');
 	closeSidebar();
@@ -572,7 +573,7 @@ export function initNavigation(): () => void {
 	if (!isLibraryHistoryState(existing)) {
 		if (window.location.pathname === '/') void replaceLibraryHistory();
 	} else if (existing.songId) {
-		loadSongContext(existing.songId);
+		void loadSongContext(existing.songId);
 	}
 
 	function onPopstate(e: PopStateEvent): void {
