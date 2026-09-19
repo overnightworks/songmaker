@@ -749,11 +749,7 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
         close_duration = loop.time() - started_at
         assert await asyncio.to_thread(release_started.wait, 1)
         allow_release.set()
-        for _ in range(100):
-            if not redis_client._LEASE_RELEASE_TASKS:
-                break
-            await asyncio.sleep(0.01)
-        assert not redis_client._LEASE_RELEASE_TASKS
+        await redis_client.drain_lease_releases()
         return close_duration
 
     try:
@@ -805,11 +801,7 @@ def _resource_event_stream_scope(client: TestClient) -> dict:
 
 async def _wait_for_released_lease(released: threading.Event) -> None:
     assert await asyncio.to_thread(released.wait, 1)
-    for _ in range(100):
-        if not redis_client._LEASE_RELEASE_TASKS:
-            break
-        await asyncio.sleep(0.01)
-    assert not redis_client._LEASE_RELEASE_TASKS
+    await redis_client.drain_lease_releases()
 
 
 def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(
