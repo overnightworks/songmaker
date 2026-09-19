@@ -23,7 +23,7 @@ export function isEditableElement(target: EventTarget | null): boolean {
 	return target.contentEditable === 'true';
 }
 
-export function hasOpenOverlay(root: Document | null): boolean {
+function hasOpenOverlay(root: Document | null): boolean {
 	if (!root) return false;
 	return root.querySelector('[aria-modal="true"], [data-escape-overlay="true"]') !== null;
 }
@@ -39,7 +39,7 @@ export function shouldHandleGlobalEscape(
 	return true;
 }
 
-export type EscapeLevelUpTarget = 'now-playing' | 'collection' | 'wall' | null;
+type EscapeLevelUpTarget = 'now-playing' | 'collection' | 'wall' | null;
 
 // Pure decision: what one level up means for the current state. The
 // +layout.svelte handler reads the live stores and calls the matching action

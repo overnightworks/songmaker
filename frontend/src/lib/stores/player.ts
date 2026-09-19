@@ -73,24 +73,6 @@ export const selectedSong = derived(
 	([$songs, $id]) => $songs.find((s) => s.id === $id) ?? null
 );
 
-export const selectedGeneration = derived(
-	[selectedSong, selectedGenerationId],
-	([$song, $genId]) => {
-		if (!$song || !$genId) return null;
-		return $song.generations.find((g) => g.id === $genId) ?? null;
-	}
-);
-
-export const filteredSongs = derived([songList, selectedAlbumId], ([$songs, $albumId]) =>
-	$albumId ? $songs.filter((s) => s.album_id === $albumId) : $songs
-);
-
-export function selectAlbum(albumId: string | null): void {
-	selectedAlbumId.set(albumId);
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-}
-
 export function selectSong(songId: string): void {
 	selectedSongId.set(songId);
 	selectedGenerationId.set(null);
@@ -130,12 +112,12 @@ export function clearGenerationSelection(): void {
 // only owner of that name: navigation may open, close, or replace the
 // playlist detail while the queue keeps playing, so nothing downstream may
 // read the open collection to label what is playing.
-export interface PlaylistQueueSource {
+interface PlaylistQueueSource {
 	id: string;
 	title: string;
 }
 
-export type QueueContext =
+type QueueContext =
 	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
 	| {
@@ -199,7 +181,7 @@ export const shuffleLabel = derived([shuffleEnabled, queueContext], ([$enabled, 
 		: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScopeLabel($ctx)}`
 );
 
-export type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
+type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -273,7 +255,7 @@ export function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInf
 	};
 }
 
-export function playGeneration(
+function playGeneration(
 	gen: GenerationItem,
 	song: SongItem,
 	opts: { restart?: boolean } = {}
@@ -431,7 +413,7 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 	loadNativeTake(takes[index]);
 }
 
-export async function playLibraryFromGeneration(
+async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
@@ -471,7 +453,7 @@ export async function playLibraryFromGeneration(
 	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
 }
 
-export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
+async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
 	playStartNotice.set('building');
@@ -503,7 +485,7 @@ export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Pr
 	playNativeLibraryTakes(queue.takes.map(poolTakeToPlaybackInfo), 0, opts.resumeAtTrackTime);
 }
 
-export type IdlePlayTarget =
+type IdlePlayTarget =
 	| { type: 'playlist'; label: string }
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
@@ -711,7 +693,7 @@ function setAlbumQueueTakes(
 	);
 }
 
-export function currentPlaylistIndex(
+function currentPlaylistIndex(
 	ctx: { entries: PlaylistEntryItem[]; index: number },
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
@@ -824,10 +806,10 @@ export function jumpToQueueIndex(index: number): void {
 // opens on. Owned here (not by PlayerBar or the layout, which only read them)
 // so any surface — a take row, a deep link — can open Now Playing straight to
 // the judging panel without routing through PlayerBar's own click handlers.
-export type NowPlayingSurface = 'closed' | NowPlayingSurfaceKind;
+type NowPlayingSurface = 'closed' | NowPlayingSurfaceKind;
 export const nowPlayingSurface = writable<NowPlayingSurface>('closed');
 export const nowPlayingOpen = derived(nowPlayingSurface, (surface) => surface !== 'closed');
-export type NowPlayingPanel = 'queue' | 'take';
+type NowPlayingPanel = 'queue' | 'take';
 export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
 
 // Whether the viewport has room for the docked panel beside the workspace.
@@ -1168,7 +1150,7 @@ export async function playAlbumSong(albumId: string, song: SongItem): Promise<vo
 	await playAlbumFromGeneration(albumId, fresh, gen);
 }
 
-export async function playAlbumFromGeneration(
+async function playAlbumFromGeneration(
 	albumId: string,
 	song: SongItem,
 	gen: GenerationItem,
@@ -1261,7 +1243,7 @@ function playPlaylist(playlist: PlaylistDetailItem): void {
 // the listener picked. Owning the shuffle reset here is what keeps every
 // entry click honest — a row means "play from here", which no leftover
 // shuffle from a previous queue may reorder.
-export function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): void {
+function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): void {
 	setShuffle(false);
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
@@ -1409,7 +1391,7 @@ export async function navigateToPlaying(): Promise<void> {
 	await revealPlayingSong(song, cur.generation.id);
 }
 
-export function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
+function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
 	if (reason === 'window-end') {
 		windowEnded.set(true);
 		return;

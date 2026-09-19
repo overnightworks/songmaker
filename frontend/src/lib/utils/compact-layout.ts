@@ -1,6 +1,6 @@
 import { COMPACT_LAYOUT_MEDIA } from '$lib/constants';
 
-export function readCompactLayout(
+function readCompactLayout(
 	media: Pick<MediaQueryList, 'matches'>,
 	root: { dataset: DOMStringMap } = document.documentElement
 ): boolean {

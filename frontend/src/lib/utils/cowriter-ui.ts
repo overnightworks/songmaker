@@ -7,7 +7,7 @@ const SONG_ID_TARGETING_TOOLS = new Set([
 	'rename_song'
 ]);
 
-export interface CowriterToolCallTarget {
+interface CowriterToolCallTarget {
 	title: string;
 	/** True when this proposal targets a song other than the one currently open. */
 	foreign: boolean;

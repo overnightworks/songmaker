@@ -5,10 +5,9 @@ import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine
 export type { PlaybackInfo } from './playbackTypes';
 export type { StreamFallbackState } from './queueStreamEngine';
 
-export type PlayerStatus =
-	'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
+type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
-export type StreamEndReason = 'normal' | 'window-end';
+type StreamEndReason = 'normal' | 'window-end';
 
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/

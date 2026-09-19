@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { COMPACT_LAYOUT_MEDIA } from '$lib/constants';
-import { readCompactLayout, subscribeCompactLayout } from './compact-layout';
+import { subscribeCompactLayout } from './compact-layout';
 
 type MediaListener = (event: MediaQueryListEvent) => void;
 
@@ -40,20 +40,6 @@ function stubMatchMedia(matches: boolean): {
 afterEach(() => {
 	delete document.documentElement.dataset.pointer;
 	vi.unstubAllGlobals();
-});
-
-describe('readCompactLayout', () => {
-	it('is compact when the media query matches even on a fine pointer', () => {
-		expect(readCompactLayout({ matches: true }, { dataset: { pointer: 'fine' } })).toBe(true);
-	});
-
-	it('is compact when data-pointer is coarse even if the media query does not match', () => {
-		expect(readCompactLayout({ matches: false }, { dataset: { pointer: 'coarse' } })).toBe(true);
-	});
-
-	it('is not compact on a wide fine pointer', () => {
-		expect(readCompactLayout({ matches: false }, { dataset: { pointer: 'fine' } })).toBe(false);
-	});
 });
 
 describe('subscribeCompactLayout', () => {

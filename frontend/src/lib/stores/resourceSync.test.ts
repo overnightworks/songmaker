@@ -26,7 +26,7 @@ vi.mock('$lib/stores/auth', () => {
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { ApiError } from '$lib/api/fetch';
-import { classifyAuthFailure, clearAuth, currentUser } from '$lib/stores/auth';
+import { clearAuth, currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
 import type {
@@ -48,20 +48,27 @@ import {
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import {
-	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
-	probeResourceAuth,
 	requestSongRefresh,
 	resetResourceSyncForTests,
 	retryResourceSync,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
-	waitForResourceReady,
-	type ResourceAuthProbe,
-	type ResourceEventSource,
-	type ResourceSyncDeps,
-	type ResourceSyncState
+	waitForResourceReady
 } from './resourceSync';
+
+type ResourceSyncDeps = ConstructorParameters<typeof ResourceSyncController>[0];
+type ResourceEventSource = ReturnType<ResourceSyncDeps['createEventSource']>;
+type ResourceAuthProbe = Awaited<ReturnType<ResourceSyncDeps['probeAuth']>>;
+type ResourceSyncState = ResourceSyncController['state'];
+
+const DISCONNECTED_SYNC: ResourceSyncState = {
+	status: 'disconnected',
+	error: null,
+	highWaterMark: null,
+	appliedSequence: null,
+	ready: false
+};
 
 // Jitter only adds to the exponential delay (never subtracts, see
 // `sseReconnect.ts`), so a delay at the backoff ceiling can run up to
@@ -207,7 +214,7 @@ function setup(options?: {
 	watchLoadedSongs?: ResourceSyncDeps['watchLoadedSongs'];
 }) {
 	const sources: MockEventSource[] = [];
-	const store = writable<ResourceSyncState>({ ...EMPTY_RESOURCE_SYNC });
+	const store = writable<ResourceSyncState>({ ...DISCONNECTED_SYNC });
 	const upserted: SongItem[] = [];
 	const fetchCalls: string[] = [];
 	const snapshotStarts: number[] = [];
@@ -839,7 +846,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		controller.stop();
 		expect(sources[0].closed).toBe(true);
-		expect(get(store)).toEqual(EMPTY_RESOURCE_SYNC);
+		expect(get(store)).toEqual(DISCONNECTED_SYNC);
 	});
 
 	it('cleanup unbinds visibility revalidation', async () => {
@@ -955,7 +962,7 @@ describe('resource sync owner', () => {
 
 		expect(fetchCalls).toEqual([]);
 		expect(probeAuth).not.toHaveBeenCalled();
-		expect(get(store)).toEqual(EMPTY_RESOURCE_SYNC);
+		expect(get(store)).toEqual(DISCONNECTED_SYNC);
 	});
 
 	it('retries failed live refreshes on the next hello instead of hiding them', async () => {
@@ -1159,30 +1166,6 @@ describe('resource sync owner', () => {
 		await flush();
 
 		expect(get(store)).toMatchObject({ status: 'error', error });
-	});
-});
-
-function stubFetchOnce(status: number) {
-	vi.stubGlobal(
-		'fetch',
-		vi.fn().mockResolvedValue({
-			ok: false,
-			status,
-			headers: { get: () => null },
-			json: () => Promise.resolve({ detail: '' })
-		})
-	);
-}
-
-describe('probeResourceAuth', () => {
-	it.each([
-		[403, 'disabled'],
-		[401, 'unauthorized'],
-		[500, 'retryable']
-	] as const)('uses the shared classifier for a %i auth probe', async (status, expected) => {
-		stubFetchOnce(status);
-		expect(await probeResourceAuth()).toBe(expected);
-		expect(classifyAuthFailure).toHaveBeenCalledOnce();
 	});
 });
 

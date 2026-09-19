@@ -1,5 +1,5 @@
 /** Inclusive byte range as returned by {@link parseRangeHeader}. */
-export interface ByteRange {
+interface ByteRange {
 	start: number;
 	/** Inclusive end offset. */
 	end: number;

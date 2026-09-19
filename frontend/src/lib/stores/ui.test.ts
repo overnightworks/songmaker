@@ -24,15 +24,15 @@ describe('railCollapsed', () => {
 	});
 
 	it('persists each edge-control toggle', async () => {
-		const { railCollapsed, toggleRailCollapsed, RAIL_COLLAPSED_STORAGE_KEY } = await import('./ui');
+		const { railCollapsed, toggleRailCollapsed } = await import('./ui');
 
 		toggleRailCollapsed();
 		expect(get(railCollapsed)).toBe(true);
-		expect(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY)).toBe('true');
+		expect(localStorage.getItem('songmaker.rail-collapsed')).toBe('true');
 
 		toggleRailCollapsed();
 		expect(get(railCollapsed)).toBe(false);
-		expect(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY)).toBe('false');
+		expect(localStorage.getItem('songmaker.rail-collapsed')).toBe('false');
 	});
 });
 
@@ -48,14 +48,13 @@ describe('libraryContinueCollapsed', () => {
 		const {
 			initLibraryContinueCollapsed,
 			libraryContinueCollapsed,
-			toggleLibraryContinueCollapsed,
-			LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY
+			toggleLibraryContinueCollapsed
 		} = await import('./ui');
 
 		expect(get(libraryContinueCollapsed)).toBe(true);
 		toggleLibraryContinueCollapsed();
 		expect(get(libraryContinueCollapsed)).toBe(false);
-		expect(localStorage.getItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY)).toBe('false');
+		expect(localStorage.getItem('songmaker.library-continue-collapsed')).toBe('false');
 
 		libraryContinueCollapsed.set(true);
 		initLibraryContinueCollapsed();

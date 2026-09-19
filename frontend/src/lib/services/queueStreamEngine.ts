@@ -155,7 +155,7 @@ export class QueueStreamEngine {
 	}
 }
 
-export function streamTrackToPlaybackInfo(track: QueueStreamTrackItem): PlaybackInfo {
+function streamTrackToPlaybackInfo(track: QueueStreamTrackItem): PlaybackInfo {
 	return {
 		generation: streamTrackToGeneration(track),
 		songId: track.song_id,

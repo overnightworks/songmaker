@@ -10,12 +10,12 @@ export function closeSidebar(): void {
 	sidebarOpen.set(false);
 }
 
-export type Theme = 'dark' | 'light';
+type Theme = 'dark' | 'light';
 
 const STORAGE_KEY = 'theme';
-export const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
+const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 export const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
-export const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
+const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
 export const RAIL_MIN_WIDTH_PX = 220;
 export const RAIL_MAX_WIDTH_PX = 360;
 export const RAIL_WIDTH_STEP_PX = 8;
@@ -57,7 +57,7 @@ export function initLibraryContinueCollapsed(): void {
 	libraryContinueCollapsed.set(getInitialLibraryContinueCollapsed());
 }
 
-export function clampRailWidth(width: number): number {
+function clampRailWidth(width: number): number {
 	return Math.min(RAIL_MAX_WIDTH_PX, Math.max(RAIL_MIN_WIDTH_PX, Math.round(width)));
 }
 

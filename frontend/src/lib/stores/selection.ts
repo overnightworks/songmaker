@@ -6,15 +6,6 @@ export const selectionMode = writable(false);
 
 export const selectionCount = derived(selectedIds, ($ids) => $ids.size);
 
-export function enterSelectionMode(): void {
-	selectionMode.set(true);
-}
-
-export function exitSelectionMode(): void {
-	selectionMode.set(false);
-	selectedIds.set(new Set());
-}
-
 export function toggleSelection(id: string): void {
 	selectedIds.update((ids) => {
 		const next = new Set(ids);
@@ -32,7 +23,7 @@ export function toggleSelection(id: string): void {
 	});
 }
 
-export function selectAll(ids: string[]): void {
+function selectAll(ids: string[]): void {
 	selectedIds.update((current) => {
 		const next = new Set(current);
 		for (const id of ids) {
@@ -53,8 +44,4 @@ export function selectAllUnkept(generations: GenerationItem[]): void {
 export function clearSelection(): void {
 	selectedIds.set(new Set());
 	selectionMode.set(false);
-}
-
-export function isSelected(id: string): boolean {
-	return get(selectedIds).has(id);
 }

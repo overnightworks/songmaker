@@ -17,7 +17,6 @@ import {
 	syncRailSearch,
 	visibleRailSearchPages
 } from './railSearch';
-import type { RailSearchState } from './railSearch';
 
 function songSummary(overrides: Partial<SongSummaryResponse> = {}): SongSummaryResponse {
 	return {
@@ -121,7 +120,11 @@ describe('syncRailSearch', () => {
 		searchLibrary.mockResolvedValueOnce({ items: [], next_cursor: null, has_more: false });
 		retryRailSearch();
 		await vi.runAllTimersAsync();
-		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'ready', error: null });
+		expect(get(railSearch)).toMatchObject({
+			query: 'stadion',
+			status: 'ready' as const,
+			error: null
+		});
 	});
 });
 
@@ -135,7 +138,7 @@ describe('groupRailSearchResults', () => {
 	});
 
 	it('groups library, playlist, and page targets without giving a result two actions', () => {
-		const state: RailSearchState = {
+		const state = {
 			query: 'stadion',
 			status: 'ready' as const,
 			error: null,
