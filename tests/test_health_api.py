@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -468,8 +469,57 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> 
 
 
 @pytest.fixture
-def prometheus_output_before_refactor() -> bytes:
-    """Literal output captured from the formatter before issue #942."""
+def prometheus_output_before_refactor(without_probes) -> bytes:
+    """Literal output captured before the formatter refactors, including absent probes."""
+    if without_probes:
+        return (
+            b'# HELP songmaker_http_requests_total Total HTTP requests by method and status.\n'
+            b'# TYPE songmaker_http_requests_total counter\n'
+            b'songmaker_http_requests_total{method="POST",status="201"} 3\n'
+            b'songmaker_http_requests_total{method="GET",status="200"} 10\n'
+            b'# HELP songmaker_http_request_duration_milliseconds_total Cumulative HTTP '
+            b'request duration in milliseconds.\n'
+            b'# TYPE songmaker_http_request_duration_milliseconds_total counter\n'
+            b'songmaker_http_request_duration_milliseconds_total 456.7\n'
+            b'# HELP songmaker_active_sessions Number of active user sessions.\n'
+            b'# TYPE songmaker_active_sessions gauge\n'
+            b'songmaker_active_sessions 3\n'
+            b'# HELP songmaker_jobs_total Total jobs by type and status.\n'
+            b'# TYPE songmaker_jobs_total gauge\n'
+            b'songmaker_jobs_total{type="generate",status="completed"} 5\n'
+            b'songmaker_jobs_total{type="generate",status="failed"} 1\n'
+            b'songmaker_jobs_total{type="score",status="queued"} 2\n'
+            b'# HELP songmaker_last_job_failure_timestamp_seconds Unix time of the '
+            b'newest job failure, 0 while nothing has ever failed.\n'
+            b'# TYPE songmaker_last_job_failure_timestamp_seconds gauge\n'
+            b'songmaker_last_job_failure_timestamp_seconds 1756000000.0\n'
+            b'# HELP songmaker_job_duration_seconds Job duration statistics for completed jobs.\n'
+            b'# TYPE songmaker_job_duration_seconds gauge\n'
+            b'# HELP songmaker_queue_depth Number of jobs waiting per arq queue.\n'
+            b'# TYPE songmaker_queue_depth gauge\n'
+            b'songmaker_queue_depth{queue="music"} 7\n'
+            b'songmaker_queue_depth{queue="scoring"} 2\n'
+            b'# HELP songmaker_acestep_workers_total Total registered acestep workers by status.\n'
+            b'# TYPE songmaker_acestep_workers_total gauge\n'
+            b'songmaker_acestep_workers_total{status="online"} 0\n'
+            b'songmaker_acestep_workers_total{status="loading"} 0\n'
+            b'songmaker_acestep_workers_total{status="offline"} 3\n'
+            b'# HELP songmaker_acestep_worker_loaded_models Number of loaded models per worker.\n'
+            b'# TYPE songmaker_acestep_worker_loaded_models gauge\n'
+            b'# HELP songmaker_acestep_worker_queue_depth Per-worker generation queue depth.\n'
+            b'# TYPE songmaker_acestep_worker_queue_depth gauge\n'
+            b'# HELP songmaker_acestep_worker_vram_used_gigabytes Per-worker VRAM used, '
+            b'from its own heartbeat.\n'
+            b'# TYPE songmaker_acestep_worker_vram_used_gigabytes gauge\n'
+            b'# HELP songmaker_acestep_worker_vram_total_gigabytes Per-worker VRAM '
+            b'budget, from its heartbeat.\n'
+            b'# TYPE songmaker_acestep_worker_vram_total_gigabytes gauge\n'
+            b'# HELP songmaker_background_loop_consecutive_failures Consecutive failures '
+            b'per background loop.\n'
+            b'# TYPE songmaker_background_loop_consecutive_failures gauge\n'
+            b'# HELP songmaker_background_loop_alive Whether each background loop task is alive.\n'
+            b'# TYPE songmaker_background_loop_alive gauge\n'
+        )
     return (
         b'# HELP songmaker_http_requests_total Total HTTP requests by method and status.\n'
         b'# TYPE songmaker_http_requests_total counter\n'
@@ -535,7 +585,10 @@ def prometheus_output_before_refactor() -> bytes:
     )
 
 
-def test_prometheus_output_is_byte_identical(prometheus_output_before_refactor) -> None:
+@pytest.mark.parametrize("without_probes", [False, True], ids=["sampled", "without-probes"])
+def test_prometheus_output_is_byte_identical(
+    prometheus_output_before_refactor, without_probes,
+) -> None:
     metrics = _PrometheusMetrics(
         http_snapshot={
             "http_requests_total": {"POST 201": 3, "GET 200": 10},
@@ -559,4 +612,20 @@ def test_prometheus_output_is_byte_identical(prometheus_output_before_refactor) 
         background_loop_consecutive_failures={"session_sync": 0, "score_backfill": 3},
         background_loop_alive={"session_sync": False, "score_backfill": True},
     )
+    if without_probes:
+        metrics = replace(
+            metrics,
+            duration_avg=None,
+            duration_min=None,
+            duration_max=None,
+            acestep_workers_online=0,
+            acestep_workers_loading=0,
+            acestep_workers_offline=3,
+            acestep_worker_loaded_counts={},
+            acestep_worker_queue_depths={},
+            acestep_worker_vram_used_gb={},
+            acestep_worker_vram_total_gb={},
+            background_loop_consecutive_failures={},
+            background_loop_alive={},
+        )
     assert _format_prometheus(metrics).encode() == prometheus_output_before_refactor
