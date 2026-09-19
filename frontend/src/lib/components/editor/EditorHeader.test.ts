@@ -1,6 +1,7 @@
+import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SongItem } from '$lib/api/types';
+
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import {
 	clearHitboxStyles,
@@ -26,37 +27,19 @@ afterEach(async () => {
 	clearPointer();
 });
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'sommerlicht',
-		title: 'Sommerlicht',
-		album_id: 'a1',
-		album_title: 'Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
 function defaultProps() {
 	return {
-		song: song(),
+		song: song({
+			slug: 'sommerlicht',
+			title: 'Sommerlicht',
+			bpm: 120,
+			audio_duration: 180,
+			key_scale: 'Am',
+			generation_params: null,
+			best_scores: null,
+			best_rating: null,
+			share_slug: null
+		}),
 		coverUrl: null,
 		coverFailed: false,
 		coverAlt: 'Song',
@@ -222,7 +205,19 @@ describe('EditorHeader', () => {
 	});
 
 	it('announces the song title as the heading name, with a separately named edit button', async () => {
-		const { target } = await render({ song: song({ title: 'Sommerlicht' }) });
+		const { target } = await render({
+			song: song({
+				slug: 'sommerlicht',
+				bpm: 120,
+				audio_duration: 180,
+				key_scale: 'Am',
+				generation_params: null,
+				best_scores: null,
+				best_rating: null,
+				share_slug: null,
+				title: 'Sommerlicht'
+			})
+		});
 		const heading = getByRoleHeading(target, 'Sommerlicht');
 		expect(heading.tagName).toBe('H2');
 		const editButton = getByRoleButton(heading, 'Edit song title');

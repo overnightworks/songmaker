@@ -23,7 +23,7 @@ import {
 	NOW_PLAYING_STACKED_MAX_PX
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { closeSidebar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -222,47 +222,24 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-const TAKE: GenerationItem = {
-	id: 'g1',
-	song_id: 's1',
-	version_id: 'v1',
-	version_number: 1,
+const TAKE = makeGeneration({
 	generation_number: 2,
 	mp3_path: 'a.mp3',
-	wav_path: null,
 	seed: 1,
-	status: 'completed',
-	is_archived: false,
-	is_picked: false,
-	is_kept: false,
-	is_shared: false,
 	model_mode: 'sft',
-	whisper_text: null,
-	whisper_cues: null,
 	version_lyrics: 'old verse',
-	scores: null,
-	generation_params: null,
-	audio_duration_sec: null,
 	created_at: ''
-};
+});
 
-const PLAYING_SONG: SongItem = {
-	id: 's1',
+const PLAYING_SONG = makeSong({
 	slug: 'tide',
 	title: 'Tide',
-	album_id: 'a1',
 	album_title: 'Nachtstrom',
-	artist: 'Artist',
-	track_number: 1,
-	vocal_language: 'en',
 	lyrics: 'old verse',
 	prompt: 'dreamy',
-	version_count: 1,
-	generation_count: 1,
-	is_shared: false,
 	created_at: '',
 	generations: [TAKE]
-};
+});
 
 function playing(songTitle = 'Tide'): PlaybackInfo {
 	return {

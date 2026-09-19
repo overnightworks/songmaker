@@ -1,9 +1,10 @@
+import { makeSongSummary as songSummary } from '$lib/test-utils/factories';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { RAIL_SEARCH_LABEL } from '$lib/constants';
-import type { SongSummaryResponse } from '$lib/api/types';
+
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { railSearch, resetRailSearchForTests } from '$lib/stores/railSearch';
 import { playlistList } from '$lib/stores/playlists';
@@ -12,34 +13,6 @@ import RailSearch from './RailSearch.svelte';
 
 const navigation = vi.hoisted(() => ({ openRailSearchTarget: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => navigation);
-
-function songSummary(overrides: Partial<SongSummaryResponse> = {}): SongSummaryResponse {
-	return {
-		id: 's1',
-		slug: 'stadion',
-		title: 'Stadion',
-		album_id: 'a1',
-		album_title: 'Anfield',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		is_shared: false,
-		share_slug: null,
-		best_scores: null,
-		best_rating: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
 
 const { render, cleanup } = createComponentMount(RailSearch);
 
@@ -106,7 +79,16 @@ describe('RailSearch', () => {
 					type: 'song',
 					album_id: 'a1',
 					album_title: 'Anfield',
-					song: songSummary()
+					song: songSummary({
+						bpm: 120,
+						audio_duration: 180,
+						key_scale: 'Am',
+						generation_params: null,
+						share_slug: null,
+						best_scores: null,
+						best_rating: null,
+						cover: null
+					})
 				}
 			]
 		});

@@ -1,8 +1,12 @@
+import {
+	makePlaylist as playlistItem,
+	makePlaylistDetail as playlistDetail,
+	makePlaylistEntry as playlistEntry
+} from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { PlaylistDetailItem, PlaylistEntryItem, PlaylistItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -99,56 +103,6 @@ class FakeEventSource {
 	}
 }
 
-function playlistItem(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
-	return {
-		id: 'p1',
-		title: PLAYLIST_TITLE,
-		slug: PLAYLIST_SLUG,
-		entry_count: 1,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function playlistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
-	return {
-		id: 'pe1',
-		position: 0,
-		generation_id: 'g1',
-		song_id: 's1',
-		song_title: ENTRY_SONG_TITLE,
-		album_title: 'Anfield',
-		artist: 'Artist',
-		generation_number: 1,
-		version_number: 1,
-		is_picked: true,
-		audio_duration: 180,
-		mp3_path: 's1/g1.mp3',
-		seed: 1,
-		model_mode: 'turbo',
-		lyrics: null,
-		...overrides
-	};
-}
-
-function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: PLAYLIST_TITLE,
-		slug: PLAYLIST_SLUG,
-		entry_count: 1,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [playlistEntry()],
-		...overrides
-	};
-}
-
 function page<T>(items: T[]) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
 }
@@ -196,8 +150,21 @@ function coldTabAt(pathname: string): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
-	api.fetchPlaylists.mockReset().mockResolvedValue([playlistItem()]);
-	api.fetchPlaylist.mockReset().mockResolvedValue(playlistDetail());
+	api.fetchPlaylists
+		.mockReset()
+		.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
+	api.fetchPlaylist.mockReset().mockResolvedValue(
+		playlistDetail({
+			title: PLAYLIST_TITLE,
+			slug: PLAYLIST_SLUG,
+			share_slug: null,
+			entries: [
+				playlistEntry({ song_title: ENTRY_SONG_TITLE, is_picked: true, model_mode: 'turbo' })
+			]
+		})
+	);
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
 	api.fetchSongs.mockReset().mockResolvedValue(page([]));
 	api.fetchSong.mockReset();
@@ -259,7 +226,9 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 	it('shows the playlist after Try again once the failure is over', async () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
-		api.fetchPlaylists.mockResolvedValue([playlistItem()]);
+		api.fetchPlaylists.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
 
 		requireElement(target, 'button.address-action').click();
 
@@ -272,7 +241,9 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
-		api.fetchPlaylists.mockResolvedValue([playlistItem()]);
+		api.fetchPlaylists.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(PLAYLIST_TITLE));
@@ -283,7 +254,9 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 describe('/playlist/<slug> naming no playlist', () => {
 	beforeEach(() => {
 		coldTabAt('/playlist/ghost');
-		api.fetchPlaylists.mockResolvedValue([playlistItem()]);
+		api.fetchPlaylists.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
 	});
 
 	it('says the address names no playlist instead of showing an empty page', async () => {
