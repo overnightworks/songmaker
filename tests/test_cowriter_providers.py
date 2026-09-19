@@ -29,17 +29,15 @@ from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
 from agent_providers.tools import openai_tool_schemas
 from conftest import (
     TEST_SECRET,
-    install_app_context,
-    make_fake_redis,
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
     override_provider_runtime,
     refresh_provider_snapshots,
     seed_judge_route,
 )
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     SETTING_CLAUDE_SCORING_MODEL,
@@ -138,23 +136,16 @@ def test_provider_routes_are_compact_complete_and_reject_malformed_values(tmp_pa
 
 
 @pytest.fixture(autouse=True)
-def _clear_agent_cli_caches():
+def _clear_agent_cli_caches(monkeypatch):
     from agent_providers.process import clear_agent_cli_caches
 
-    from songmaker_cli.provider_status import clear_provider_snapshots
+    from songmaker_cli import provider_status
+
+    monkeypatch.setattr(provider_status, "_provider_snapshots", {})
 
     clear_agent_cli_caches()
-    clear_provider_snapshots()
     yield
     clear_agent_cli_caches()
-    clear_provider_snapshots()
-
-
-def _fake_user(user_id: str, role: str = "user"):
-    user = AuthenticatedUser(
-        id=user_id, username=f"u-{user_id}", role=role, is_active=True,
-    )
-    return lambda: user
 
 
 def _stream_events(response) -> list[dict]:
@@ -190,18 +181,10 @@ def admin_client(tmp_path: Path, monkeypatch):
     factory = init_db(tmp_path / "cowriter.db")
     with factory() as session:
         _seed(session, "u-test")
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
-    app.include_router(router)
     yield TestClient(app), factory
 
 
@@ -746,7 +729,9 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
         "anthropic",
         SimpleNamespace(AsyncAnthropic=AsyncAnthropic, APIError=Exception),
     )
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-test", username="u-u-test"
+    )
 
     response = client.post("/api/chat/turn", json={"message": "Please revise the lyrics."})
     events = _stream_events(response)
@@ -834,14 +819,18 @@ def test_cowriter_put_without_routes_preserves_the_stored_route_map(
 
 def test_cowriter_put_requires_an_admin(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-plain", username="u-u-plain"
+    )
     try:
         response = client.put(
             "/api/settings/cowriter",
             json={"provider": "grok", "model": "grok-4.6"},
         )
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+            "u-test", role="admin", username="u-u-test"
+        )
 
     assert response.status_code == 403
 
@@ -926,9 +915,7 @@ def test_missing_credentials_named_error_no_persist(
 
 def test_create_song_tool_hits_canonical_function(admin_client):
     _, factory = admin_client
-    user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
-    )
+    user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "create_song",
@@ -954,9 +941,7 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
     isolated-session tool_rename_song coverage elsewhere) — pin that the
     slug still follows the title through execute_cowriter_tool's commit."""
     _, factory = admin_client
-    user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
-    )
+    user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "rename_song",
@@ -972,9 +957,7 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
 def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_client):
     """The Grok and Codex executor takes the same version-writing path as MCP."""
     _, factory = admin_client
-    user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
-    )
+    user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
         original = Version(
             id="v1", song_id="s1", version_number=1, lyrics="old lyrics",
@@ -1006,9 +989,7 @@ def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_c
 
 def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client):
     _, factory = admin_client
-    user = AuthenticatedUser(
-        id="u-test", username="u-u-test", role="admin", is_active=True,
-    )
+    user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "suggest_album_cover", {"album_id": "alb1"},
@@ -1077,7 +1058,7 @@ def test_openai_adapter_emits_same_event_types(admin_client, every_provider_is_c
 def _songmaker_tool_executor(session=None, user=None):
     """Bind songmaker's tool executor the way the app's routing does."""
     bound_session = session if session is not None else MagicMock()
-    bound_user = user or AuthenticatedUser(id="u", username="u", role="user", is_active=True)
+    bound_user = user or make_authenticated_user("u")
     return lambda name, arguments: cowriter_tools.execute_cowriter_tool(
         bound_session, bound_user, name, arguments,
     )
@@ -1599,18 +1580,24 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
 
 def test_provider_status_requires_admin(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-plain", username="u-u-plain"
+    )
     try:
         resp = client.get("/api/settings/providers")
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+            "u-test", role="admin", username="u-u-test"
+        )
 
     assert resp.status_code == 403
 
 
 def test_cover_settings_are_admin_only(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-plain", username="u-u-plain"
+    )
     try:
         assert client.get("/api/settings/cover").status_code == 403
         assert client.put(
@@ -1618,7 +1605,9 @@ def test_cover_settings_are_admin_only(admin_client):
             json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
         ).status_code == 403
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+            "u-test", role="admin", username="u-u-test"
+        )
 
 
 def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
@@ -2163,7 +2152,9 @@ def test_judge_saves_an_empty_model_on_an_unavailable_route(admin_client, route,
 @pytest.mark.parametrize("method", ["get", "put"])
 def test_judge_settings_require_an_admin(admin_client, method):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-test", username="u-u-test"
+    )
     response = client.request(
         method, "/api/settings/judge", json={"provider": "grok", "route": "api", "model": ""},
     )

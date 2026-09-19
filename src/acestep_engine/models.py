@@ -93,17 +93,6 @@ class LoraTrainingConfig:
 
 
 @dataclass(frozen=True)
-class LoraTrainingResult:
-    """Outcome of a LoKR training run + export.
-
-    ``adapter_dir`` is the exported adapter directory the client can pass
-    straight to ``/v1/lora/load``.
-    """
-
-    adapter_dir: str
-
-
-@dataclass(frozen=True)
 class AceStepResult:
     """Result from an ACE-Step generation.
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -56,6 +55,7 @@ from songmaker_cli.cover_suggestions import (
     remove_cover_suggestion_files,
     request_cover_suggestions,
     resolve_suggestion_png,
+    utc_day_start,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -406,11 +406,6 @@ async def api_upload_album_cover(
     return _single_album_response(session, album)
 
 
-def _utc_day_start() -> datetime:
-    now = datetime.now(timezone.utc)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
 @router.post(
     "/albums/{album_id}/cover-suggestions",
     responses={
@@ -476,7 +471,7 @@ def api_list_cover_suggestions(
     return CoverSuggestionsResponse.from_orm(
         job=get_last_cover_job_for_album(session, album.id),
         suggestions=list_album_cover_suggestions(session, album.id),
-        used_today=count_cover_jobs_since(session, album.id, _utc_day_start()),
+        used_today=count_cover_jobs_since(session, album.id, utc_day_start()),
         daily_limit=settings.cover_suggestions_daily_limit,
     )
 

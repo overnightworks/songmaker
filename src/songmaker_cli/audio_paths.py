@@ -43,11 +43,6 @@ def require_canonical_audio_filename(filename: str) -> None:
         raise HTTPException(404, NOT_FOUND_DETAIL)
 
 
-def audio_filename_is_contained(audio_dir: Path, filename: str) -> bool:
-    """Whether resolving ``filename`` keeps it inside ``audio_dir``."""
-    return _resolved_within_root(audio_dir, filename) is not None
-
-
 def canonical_audio_filename(audio_dir: Path, filename: str) -> str | None:
     """Return the root-relative canonical filename, or ``None`` if it escapes."""
     audio_path = _resolved_within_root(audio_dir, filename)

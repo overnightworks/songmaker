@@ -17,19 +17,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from conftest import (
-    TEST_SECRET,
-    install_app_context,
-    make_fake_redis,
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
     override_provider_runtime,
     refresh_provider_snapshots,
 )
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_models.whisper import WhisperCue
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     JUDGE_DEFAULT_PROVIDER,
@@ -174,11 +170,6 @@ def test_judge_route_has_no_implicit_default(tmp_path):
 # ── /api/settings/judge ──────────────────────────────────────────────
 
 
-def _fake_user(user_id: str, role: str = "admin"):
-    user = AuthenticatedUser(id=user_id, username=f"u-{user_id}", role=role, is_active=True)
-    return lambda: user
-
-
 @pytest.fixture
 def admin_client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
@@ -190,18 +181,10 @@ def admin_client(tmp_path: Path, monkeypatch):
         pin_judge_route_if_unset(session, anthropic_key_is_set=True)
         session.add(User(id="u-test", username="user-u-test", password_hash="x", role="admin"))
         session.commit()
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test")
-    app.include_router(router)
     yield TestClient(app), factory
 
 
