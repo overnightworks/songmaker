@@ -4,12 +4,10 @@ import asyncio
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+from acestep_worker.clock import utcnow
 
 
 @dataclass
@@ -17,7 +15,7 @@ class LoadedModel:
     mode: str
     handle: Any
     port: int
-    loaded_at: datetime = field(default_factory=_now)
+    loaded_at: datetime = field(default_factory=utcnow)
 
 
 @dataclass
@@ -159,7 +157,7 @@ class ModelCache:
                     f"budget {self._budget_gb:.1f}GB"
                 )
             self._target_loading = mode
-            self._loading_started_at = _now()
+            self._loading_started_at = utcnow()
             self._loading_last_log_line = None
             try:
                 evicted = await self._evict_to_fit(target_size)

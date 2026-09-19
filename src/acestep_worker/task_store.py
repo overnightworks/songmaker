@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
+from acestep_worker.clock import utcnow
 from acestep_worker.models import (
     TaskKind,
     TaskResult,
@@ -16,10 +17,6 @@ from acestep_worker.models import (
 
 TERMINAL_RETENTION_SECONDS = 60.0
 _TERMINAL_STATES: frozenset[TaskState] = frozenset({"done", "error"})
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -33,8 +30,8 @@ class _Task:
     training_started_at: datetime | None = None
     result: TaskResult | None = None
     error: str | None = None
-    created_at: datetime = field(default_factory=_now)
-    updated_at: datetime = field(default_factory=_now)
+    created_at: datetime = field(default_factory=utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     terminal_at: datetime | None = None
     subscribers: list[asyncio.Queue[WorkerTaskEvent]] = field(default_factory=list)
 
@@ -85,7 +82,7 @@ class TaskStore:
         await self._update(task_id, state="running")
 
     async def mark_training_started(self, task_id: str) -> None:
-        await self._update(task_id, training_started_at=_now())
+        await self._update(task_id, training_started_at=utcnow())
 
     async def update_progress(
         self,
@@ -136,7 +133,7 @@ class TaskStore:
                 task.result = result
             if error is not None:
                 task.error = error
-            task.updated_at = _now()
+            task.updated_at = utcnow()
             if terminal:
                 task.terminal_at = task.updated_at
             event = task.to_event()
@@ -175,7 +172,7 @@ class TaskStore:
                     task.subscribers.remove(queue)
 
     async def cleanup_terminal(self) -> int:
-        cutoff = _now()
+        cutoff = utcnow()
         async with self._lock:
             to_drop = [
                 tid

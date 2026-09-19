@@ -79,7 +79,7 @@ def _session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def _utcnow() -> datetime:
+def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
@@ -112,7 +112,7 @@ class Album(ShareMixin, Base):
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -141,8 +141,8 @@ class Song(ShareMixin, Base):
     vocal_language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
     cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
     last_played_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
@@ -175,7 +175,7 @@ class Version(Base):
     audio_duration: Mapped[int] = mapped_column(Integer, default=0)
     key_scale: Mapped[str] = mapped_column(String(10), default="")
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     song: Mapped[Song] = relationship(back_populates="versions")
     generations: Mapped[list[Generation]] = relationship(back_populates="version")
@@ -219,7 +219,7 @@ class Generation(ShareMixin, Base):
         ForeignKey(GENERATIONS_ID, ondelete=SET_NULL), nullable=True,
     )
     audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")
     version: Mapped[Version | None] = relationship(back_populates="generations")
@@ -255,8 +255,8 @@ class Playlist(ShareMixin, Base):
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
 
     entries: Mapped[list[PlaylistEntry]] = relationship(
         back_populates="playlist", cascade=DELETE_ORPHANS,
@@ -273,7 +273,7 @@ class PlaylistEntry(Base):
         ForeignKey(GENERATIONS_ID, ondelete="CASCADE"), index=True,
     )
     position: Mapped[int] = mapped_column(Integer)
-    added_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    added_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     playlist: Mapped[Playlist] = relationship(back_populates="entries")
     generation: Mapped[Generation] = relationship()
@@ -286,7 +286,7 @@ class Score(Base):
     generation_id: Mapped[str] = mapped_column(ForeignKey(GENERATIONS_ID), index=True)
     scorer: Mapped[str] = mapped_column(String(50))
     value: Mapped[dict] = mapped_column(JSON)
-    scored_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    scored_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     generation: Mapped[Generation] = relationship(back_populates="scores")
 
@@ -298,7 +298,7 @@ class Rating(Base):
     generation_id: Mapped[str] = mapped_column(ForeignKey(GENERATIONS_ID), unique=True)
     rating: Mapped[float] = mapped_column(Float)
     notes: Mapped[str] = mapped_column(Text, default="")
-    rated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    rated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     generation: Mapped[Generation] = relationship(back_populates="rating")
 
@@ -321,8 +321,8 @@ class GenerationPreset(Base):
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
 
     @validates("params")
     def _validate_params(self, _key: str, value: object) -> dict:
@@ -357,8 +357,8 @@ class Job(Base):
         ForeignKey(ALBUMS_ID, ondelete="CASCADE"), nullable=True, index=True,
     )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    started_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    started_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
     album: Mapped[Album | None] = relationship()
@@ -375,7 +375,7 @@ class AlbumCoverSuggestion(Base):
         ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     png_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     album: Mapped[Album] = relationship(back_populates="cover_suggestions")
     job: Mapped[Job] = relationship()
@@ -395,8 +395,8 @@ class User(Base):
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,
     )
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
 
     sessions: Mapped[list[UserSession]] = relationship(
         back_populates="user", cascade=DELETE_ORPHANS,
@@ -433,7 +433,7 @@ class ResourceEvent(Base):
     resource_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        TZDateTime, nullable=False, default=_utcnow, index=True,
+        TZDateTime, nullable=False, default=utcnow, index=True,
     )
 
 
@@ -442,7 +442,7 @@ class UserSession(Base):
 
     id: Mapped[str] = mapped_column(String(43), primary_key=True, default=_session_token)
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
     ip_address: Mapped[str] = mapped_column(String(45), default="")
     user_agent: Mapped[str] = mapped_column(String(500), default="")
@@ -457,7 +457,7 @@ class LoginAttempt(Base):
     ip_address: Mapped[str] = mapped_column(String(45), index=True)
     username: Mapped[str] = mapped_column(String(100))
     success: Mapped[bool] = mapped_column(Boolean)
-    attempted_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    attempted_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
 
 class RateLimitSetting(Base):
@@ -473,7 +473,7 @@ class RateLimitSetting(Base):
     setting_key: Mapped[str] = mapped_column(String(50))
     value: Mapped[int] = mapped_column(Integer)
     value_text: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
 
 
 class Conversation(Base):
@@ -489,9 +489,9 @@ class Conversation(Base):
         ForeignKey(USERS_ID, ondelete="CASCADE"), index=True,
     )
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
     archived_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
@@ -531,7 +531,7 @@ class ConversationSummary(Base):
     message_count: Mapped[int] = mapped_column(Integer, default=0)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
     conversation: Mapped[Conversation] = relationship(back_populates="summary")
@@ -547,7 +547,7 @@ class CowriterUserMemory(Base):
     )
     body: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
 
@@ -561,7 +561,7 @@ class CowriterSongMemory(Base):
     )
     body: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
 
@@ -575,7 +575,7 @@ class CowriterAlbumMemory(Base):
     )
     body: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
 
@@ -592,7 +592,7 @@ class ChatMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(10))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     conversation: Mapped[Conversation | None] = relationship(back_populates="messages")
 
@@ -605,9 +605,9 @@ class AceStepWorker(Base):
     port: Mapped[int] = mapped_column(Integer)
     gpu_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vram_total_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
-    registered_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    registered_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     last_register_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
 
@@ -647,7 +647,7 @@ class UserLora(Base):
         ForeignKey("jobs.id", ondelete=SET_NULL), nullable=True, index=True,
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(
         TZDateTime, nullable=True, index=True,
@@ -675,9 +675,9 @@ class UserLoraSample(Base):
     caption: Mapped[str] = mapped_column(Text, default="")
     lyrics: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        TZDateTime, default=_utcnow, onupdate=_utcnow,
+        TZDateTime, default=utcnow, onupdate=utcnow,
     )
 
     user_lora: Mapped[UserLora] = relationship(back_populates="samples")
@@ -694,4 +694,4 @@ class AuditLog(Base):
     resource_type: Mapped[str] = mapped_column(String(30))
     resource_id: Mapped[str] = mapped_column(String(64), default="")
     detail: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, index=True)

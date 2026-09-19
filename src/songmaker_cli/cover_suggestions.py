@@ -93,7 +93,7 @@ def request_cover_suggestions(
         raise CoverSuggestionAlreadyRunningError()
 
     settings = get_settings()
-    used_today = count_cover_jobs_since(session, album.id, _utc_day_start())
+    used_today = count_cover_jobs_since(session, album.id, utc_day_start())
     if used_today >= settings.cover_suggestions_daily_limit:
         raise CoverSuggestionDailyLimitReachedError()
 
@@ -102,7 +102,7 @@ def request_cover_suggestions(
     return CoverSuggestionRequest(job=job, stale_suggestion_paths=stale_suggestion_paths)
 
 
-def _utc_day_start() -> datetime:
+def utc_day_start() -> datetime:
     now = datetime.now(timezone.utc)
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 

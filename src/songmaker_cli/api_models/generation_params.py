@@ -23,7 +23,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _GEN_PARAM_MAX_STRING_LENGTH = 2000
 
-_VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 
 

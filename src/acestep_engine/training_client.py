@@ -136,11 +136,6 @@ class _InitializeModelRequestPayload(BaseModel):
     init_llm: bool = False
 
 
-def _default_base_url() -> str:
-    settings = get_engine_settings()
-    return f"{settings.acestep_host}:{settings.acestep_port}"
-
-
 def _unwrap_data(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise TrainingResponseError(

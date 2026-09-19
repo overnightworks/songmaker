@@ -5,8 +5,9 @@ from datetime import timedelta
 
 import pytest
 
+from acestep_worker.clock import utcnow
 from acestep_worker.models import GenerationTaskResult
-from acestep_worker.task_store import TaskStore, _now
+from acestep_worker.task_store import TaskStore
 
 
 def _run(coro):
@@ -278,7 +279,7 @@ def test_cleanup_terminal_drops_old() -> None:
         store = TaskStore(retention_seconds=0.0)
         task_id = await store.create("generate")
         await store.complete(task_id, _generated())
-        store._tasks[task_id].terminal_at = _now() - timedelta(seconds=10)
+        store._tasks[task_id].terminal_at = utcnow() - timedelta(seconds=10)
         dropped = await store.cleanup_terminal()
         size = await store.size()
         return dropped, size

@@ -104,10 +104,6 @@ async def read_queue_depth(pool: ArqRedis, worker_id: str) -> int:
     return int(text) if text is not None else 0
 
 
-async def incr_queue_depth(pool: ArqRedis, worker_id: str) -> int:
-    return await pool.incr(queue_depth_key(worker_id))
-
-
 async def decr_queue_depth(pool: ArqRedis, worker_id: str) -> int:
     return await pool.decr(queue_depth_key(worker_id))
 
@@ -158,13 +154,6 @@ async def renew_gpu_hold(
 async def release_gpu_hold(pool: ArqRedis, worker_id: str, token: str) -> bool:
     result = await pool.eval(RELEASE_GPU_HOLD_SCRIPT, 1, gpu_hold_key(worker_id), token)
     return bool(result)
-
-
-async def list_worker_states(
-    pool: ArqRedis,
-    worker_ids: list[str],
-) -> dict[str, dict[str, Any] | None]:
-    return {wid: await read_worker_state(pool, wid) for wid in worker_ids}
 
 
 async def set_download_in_progress(pool: ArqRedis, mode: str, job_id: str) -> bool:

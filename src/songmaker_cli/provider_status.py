@@ -57,8 +57,3 @@ def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
     with _provider_snapshots_lock:
         _provider_snapshots[provider] = snapshot
     return snapshot
-
-
-def clear_provider_snapshots() -> None:
-    with _provider_snapshots_lock:
-        _provider_snapshots.clear()

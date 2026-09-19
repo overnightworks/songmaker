@@ -32,7 +32,6 @@ from songmaker_cli.constants import (
     SSE_POLL_INTERVAL_SECONDS,
     AuditAction,
     JobStatus,
-    LimiterFailurePolicy,
     ResourceType,
 )
 from songmaker_cli.db.models import Job
@@ -50,7 +49,6 @@ _LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 # runaway client open unbounded streams. Enforced by hand in
 # _acquire_job_stream_lease's try/except below, not via api_helpers'
 # enforce_rate_limit -- see that function's own docstring for why.
-_JOB_STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 
 
 @router.get(
