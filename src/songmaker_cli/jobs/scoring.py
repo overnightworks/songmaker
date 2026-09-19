@@ -18,6 +18,7 @@ from songmaker_cli.db.queries import (
     get_judge_provider,
     lock_active_job,
     save_scores,
+    set_generation_transcript,
 )
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.lyrical_coherence import (
@@ -239,8 +240,6 @@ def _persist_scores(
     gen_id: str,
     song_scores: SongScores,
 ) -> bool:
-    from songmaker_cli.db.models import Generation
-
     with db_factory() as session:
         if lock_active_job(session, job_id) is None:
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
@@ -252,10 +251,9 @@ def _persist_scores(
             refreshed_keys=song_scores.refreshed_output_keys(),
         )
         if text_accuracy := song_scores.text_accuracy:
-            generation = session.query(Generation).filter_by(id=gen_id).first()
-            if generation:
-                generation.whisper_text = text_accuracy.transcript
-                generation.whisper_cues = [cue.model_dump() for cue in text_accuracy.whisper_cues]
+            set_generation_transcript(
+                session, gen_id, text_accuracy.transcript, text_accuracy.whisper_cues,
+            )
         session.commit()
     return True
 

@@ -147,6 +147,9 @@ from songmaker_cli.db.queries.generations import pick_generation as pick_generat
 from songmaker_cli.db.queries.generations import save_rating as save_rating
 from songmaker_cli.db.queries.generations import save_scores as save_scores
 from songmaker_cli.db.queries.generations import (
+    set_generation_transcript as set_generation_transcript,
+)
+from songmaker_cli.db.queries.generations import (
     unarchive_generation as unarchive_generation,
 )
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation

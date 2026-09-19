@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -11,6 +11,7 @@ from typing import Final
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli import queue_streams
+from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.audio_paths import canonical_audio_filename
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
@@ -177,6 +178,18 @@ def save_scores(
     merged.update(scores)
     existing.value = merged
     flag_modified(existing, "value")
+    session.flush()
+
+
+def set_generation_transcript(
+    session: Session,
+    generation_id: str,
+    text: str,
+    cues: Sequence[WhisperCue],
+) -> None:
+    generation = _require_generation(session, generation_id)
+    generation.whisper_text = text
+    generation.whisper_cues = [cue.model_dump() for cue in cues]
     session.flush()
 
 

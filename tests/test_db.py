@@ -85,6 +85,7 @@ from songmaker_cli.db.queries import (
     recover_stale_jobs_by_age_and_type,
     save_rating,
     save_scores,
+    set_generation_transcript,
     unarchive_generation,
     unkeep_generation,
     unpick_generation,
@@ -1131,6 +1132,27 @@ def test_generation_null_whisper_cues_serializes_as_null(
     assert gen.whisper_cues is None
     d = GenerationResponse.from_orm(gen).model_dump()
     assert d["whisper_cues"] is None
+
+
+def test_set_generation_transcript_rejects_missing_generation(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found: missing"):
+        set_generation_transcript(db_session, "missing", "hello world", ())
+
+
+def test_set_generation_transcript_flushes_without_committing(seeded_session: Session) -> None:
+    cue = WhisperCue(start=0.0, end=1.0, text="hello world")
+
+    set_generation_transcript(seeded_session, "g1", "hello world", (cue,))
+    seeded_session.expire_all()
+
+    generation = seeded_session.get(Generation, "g1")
+    assert generation.whisper_text == "hello world"
+    assert generation.whisper_cues == [{"start": 0.0, "end": 1.0, "text": "hello world"}]
+
+    seeded_session.rollback()
+
+    assert generation.whisper_text is None
+    assert generation.whisper_cues is None
 
 
 def test_generation_whisper_cues_roundtrip(seeded_session: Session) -> None:
