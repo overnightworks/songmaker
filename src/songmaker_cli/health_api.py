@@ -12,12 +12,12 @@ from pathlib import Path
 
 from agent_providers.claude import provider
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, TypeAdapter
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
 from webauth.config import web_auth_config
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
+from songmaker_cli.api_models.health import HealthResponse
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     PROM_ACESTEP_WORKER_LOADED_MODELS,
@@ -38,25 +38,9 @@ from songmaker_cli.constants import (
     PROM_QUEUE_DEPTH,
 )
 from songmaker_cli.db import queries
-from songmaker_cli.lifecycle import (
-    BackgroundLoopName,
-    BackgroundLoopStatus,
-    CodexImageSandboxRuntimeHealth,
-    codex_image_sandbox_runtime_health,
-)
+from songmaker_cli.lifecycle import codex_image_sandbox_runtime_health
 
 router = APIRouter()
-
-
-class BackgroundLoopResponse(BaseModel):
-    state: BackgroundLoopStatus
-    consecutive_failures: int
-    last_error: str | None
-
-
-_background_loop_response_adapter = TypeAdapter(
-    dict[BackgroundLoopName, BackgroundLoopResponse],
-)
 
 
 @dataclass(frozen=True)
@@ -295,7 +279,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
 
 
 @router.get("/health")
-async def health_check(request: Request) -> JSONResponse:
+async def health_check(request: Request) -> HealthResponse:
     ctx: AppContext = request.app.state.ctx
     startup_time: datetime = getattr(
         request.app.state, "startup_time", datetime.now(timezone.utc),
@@ -322,74 +306,24 @@ async def health_check(request: Request) -> JSONResponse:
         if acestep_state.worker_is_online(state):
             workers_online += 1
 
-    if workers_online > 0:
-        acestep = "healthy"
-    elif workers_total == 0:
-        acestep = "unknown"
-    else:
-        acestep = "unhealthy"
-
     redis_ok = redis_client.redis_health(ctx.redis)
-    background_loop_health = request.app.state.background_loop_registry.loop_health()
-    background_loops = _background_loop_response_adapter.validate_python({
-        name: {
-            "state": health.status,
-            "consecutive_failures": health.consecutive_failures,
-            "last_error": health.last_error,
-        }
-        for name, health in background_loop_health.items()
-    })
-
     session_cache = web_auth_config(request).session_cache
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )
-    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth = (
-        codex_image_sandbox_runtime_health()
+    return HealthResponse.from_signals(
+        db_ok=db_ok,
+        redis_ok=redis_ok,
+        music_running=music_running,
+        scoring_running=scoring_running,
+        music_queue_depth=music_queue_depth,
+        scoring_queue_depth=scoring_queue_depth,
+        session_cache_failures=session_cache_failures,
+        workers_total=workers_total,
+        workers_online=workers_online,
+        queue_depth_cap_reached=queue_depth_cap_reached,
+        uptime_seconds=uptime,
+        claude_cli_tool_surface=provider.claude_cli_tool_surface_health(),
+        codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
+        background_loops=request.app.state.background_loop_registry.loop_health(),
     )
-
-    degraded = (
-        not db_ok
-        or (not music_running and not scoring_running)
-        or not redis_ok
-        or acestep == "unhealthy"
-    )
-    return JSONResponse({
-        "status": "degraded" if degraded else "ok",
-        "music_worker": "running" if music_running else "stopped",
-        "scoring_worker": "running" if scoring_running else "stopped",
-        "music_queue_depth": music_queue_depth,
-        "scoring_queue_depth": scoring_queue_depth,
-        "db": "ok" if db_ok else "error",
-        "redis": "ok" if redis_ok else "error",
-        "redis_session_cache_failures": session_cache_failures,
-        "acestep": acestep,
-        "acestep_workers_total": workers_total,
-        "acestep_workers_online": workers_online,
-        "queue_depth_cap_reached": queue_depth_cap_reached,
-        "uptime_seconds": uptime,
-        # "ok" / "drift" / "unverified" (#351): whether the mounted Claude
-        # CLI's tool surface still matches the co-writer's allowlist. A
-        # drifted binary never takes the whole server down — the co-writer
-        # path refuses it on its own — but the operator and monitoring
-        # should see the state without reading the boot log. This is the
-        # gate's *live* answer (round 7), not a value frozen at boot: it
-        # reads provider.claude_cli_tool_surface_health(), which every
-        # verify_cli_tool_surface() call updates, cache hit or fresh probe
-        # alike — a later successful co-writer turn clears an earlier
-        # "unverified", and a later drifted build replaces an earlier
-        # "ok". Defaults to "unverified" (never a silent "ok") for the
-        # narrow window before the boot-time check has run at all.
-        "claude_cli_tool_surface": provider.claude_cli_tool_surface_health(),
-        # "ready" / "not_set_up" / "unverified" (#789): whether the Codex
-        # cover-image sandbox's user-namespace boot check last succeeded.
-        # Same live-value shape as claude_cli_tool_surface above — reads
-        # lifecycle.codex_image_sandbox_runtime_health(), which every
-        # report_codex_image_sandbox_runtime() call updates, so a later
-        # boot report overrides an earlier one. Defaults to "unverified"
-        # for the window before the boot report has run at all.
-        "codex_image_sandbox_runtime": codex_image_sandbox_runtime,
-        "background_loops": _background_loop_response_adapter.dump_python(
-            background_loops, mode="json",
-        ),
-    })
