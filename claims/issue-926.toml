@@ -1,8 +1,0 @@
-claim_id = "63256cceaf5d4242878180a90e965995"
-agent = "claude-head"
-role = "builder"
-base = "76e8b4517168faee7f849fbd3059558ed1771858"
-branch = "claude/issue-926-similar-functions"
-scope = [".gitignore", "docs/testing.md", "pyproject.toml", "scripts/similar_functions.py", "tests/test_packaging_boundary.py", "tests/test_similar_functions.py", "uv.lock"]
-opened_commit = "90f17aaef7789d9e4c72d2a57a3420f961dfd266"
-whole_reason = "Das neue Extra muss in der Extras-Karte des Packaging-Tests stehen; derselbe Vertrag wie pyproject"
