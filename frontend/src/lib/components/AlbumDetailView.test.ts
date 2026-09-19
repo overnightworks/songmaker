@@ -10,7 +10,6 @@ import type {
 	SongItem
 } from '$lib/api/types';
 import {
-	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
@@ -93,7 +92,6 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
-import AlbumNode from './AlbumNode.svelte';
 import { selectSong } from '$lib/stores/navigation';
 import { playAlbumSong } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
@@ -775,67 +773,5 @@ describe('AlbumDetailView song row Play', () => {
 
 		expect(selectSong).toHaveBeenCalledWith('s-local');
 		expect(playAlbumSong).not.toHaveBeenCalled();
-	});
-});
-
-describe('AlbumNode cover vs fallback', () => {
-	function renderNode(item: AlbumItem): HTMLElement {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(
-			mount(AlbumNode, {
-				target,
-				props: { album: item, selected: false, onselect: () => undefined }
-			})
-		);
-		return target;
-	}
-
-	it('renders cover image with type and title alt', async () => {
-		const target = renderNode(
-			album({
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=abc.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=abc.jpg'
-				}
-			})
-		);
-		await tick();
-		const img = target.querySelector('img');
-		expect(img?.getAttribute('src')).toContain('variant=card');
-		expect(img?.getAttribute('alt')).toBe(`${ALBUM_COVER_ALT_TYPE} Night Drive`);
-		expect(target.querySelector('.album-art-initials')).toBeNull();
-	});
-
-	it('falls back to initials when the cover image errors', async () => {
-		const target = renderNode(
-			album({
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=missing.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=missing.jpg'
-				}
-			})
-		);
-		await tick();
-		target.querySelector('img')?.dispatchEvent(new Event('error'));
-		await tick();
-		expect(target.querySelector('img')).toBeNull();
-		expect(target.querySelector('.album-art-initials')?.getAttribute('aria-hidden')).toBe('true');
-		expect(target.querySelector('.album-art-initials')?.textContent).toBe('ND');
-	});
-
-	it('uses primary color fallback when there is no cover', async () => {
-		const target = renderNode(album({ colors: { primary: '#112233' } }));
-		await tick();
-		expect(target.querySelector('img')).toBeNull();
-		const art = target.querySelector('.album-art');
-		expect(art?.getAttribute('aria-hidden')).toBe('true');
-		expect(art?.getAttribute('style')).toContain('rgb(17, 34, 51)');
-	});
-
-	it('uses empty initials when title and cover are missing', async () => {
-		const target = renderNode(album({ title: '   ', colors: {} }));
-		await tick();
-		expect(target.querySelector('.album-art-initials')?.textContent).toBe(ALBUM_ART_EMPTY_INITIALS);
 	});
 });

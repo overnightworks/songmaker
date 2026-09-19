@@ -8,7 +8,7 @@
 	} from '$lib/stores/playlists';
 	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { railTreeQuery } from '$lib/stores/filter';
+	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		RAIL_PLAYING_MARKER_LABEL,
 		RAIL_PLAYLISTS_LABEL,

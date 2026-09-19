@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 
-import { searchQuery } from '$lib/stores/filter';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
 import {
 	captureLibraryScroll,
 	detailTab,

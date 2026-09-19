@@ -3,7 +3,6 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem, SongSummaryResponse } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_SEARCH_PAGE_SIZE } from '$lib/constants';
-import { searchQuery } from '$lib/stores/filter';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 
@@ -27,6 +26,7 @@ import {
 	changeLibrarySort,
 	groupSearchHits,
 	librarySearch,
+	searchQuery,
 	libraryBrowse,
 	listLoadedSongIds,
 	watchLoadedSongIds,
