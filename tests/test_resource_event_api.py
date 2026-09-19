@@ -18,6 +18,7 @@ from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
+import songmaker_cli.redis_client as redis_client
 import songmaker_cli.resource_event_api as resource_api
 from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
@@ -749,10 +750,10 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
         assert await asyncio.to_thread(release_started.wait, 1)
         allow_release.set()
         for _ in range(100):
-            if not resource_api._LEASE_RELEASE_TASKS:
+            if not redis_client._LEASE_RELEASE_TASKS:
                 break
             await asyncio.sleep(0.01)
-        assert not resource_api._LEASE_RELEASE_TASKS
+        assert not redis_client._LEASE_RELEASE_TASKS
         return close_duration
 
     try:
@@ -805,10 +806,10 @@ def _resource_event_stream_scope(client: TestClient) -> dict:
 async def _wait_for_released_lease(released: threading.Event) -> None:
     assert await asyncio.to_thread(released.wait, 1)
     for _ in range(100):
-        if not resource_api._LEASE_RELEASE_TASKS:
+        if not redis_client._LEASE_RELEASE_TASKS:
             break
         await asyncio.sleep(0.01)
-    assert not resource_api._LEASE_RELEASE_TASKS
+    assert not redis_client._LEASE_RELEASE_TASKS
 
 
 def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(

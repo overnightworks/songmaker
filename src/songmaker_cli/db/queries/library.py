@@ -163,17 +163,15 @@ def _descending_keyset_clause(key, value, model_id, cursor_id, same_type: bool, 
 
 
 def _parse_sort_datetime(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed
+    return aware_timestamp(datetime.fromisoformat(value))
 
 
 def _hit_type(hit: Album | Song) -> str:
     return LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
 
 
-def _aware(value: datetime) -> datetime:
+def aware_timestamp(value: datetime) -> datetime:
+    """Interpret naive database timestamps as UTC, preserving explicit offsets."""
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
@@ -190,8 +188,8 @@ def _hit_before(left: Album | Song, right: Album | Song, sort: str) -> bool:
         if left_type != right_type:
             return left_type < right_type
         return left.id < right.id
-    left_ts = _aware(left.created_at)
-    right_ts = _aware(right.created_at)
+    left_ts = aware_timestamp(left.created_at)
+    right_ts = aware_timestamp(right.created_at)
     if sort == LIBRARY_SORT_OLDEST:
         if left_ts != right_ts:
             return left_ts < right_ts

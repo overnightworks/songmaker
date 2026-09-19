@@ -49,13 +49,11 @@ from songmaker_cli.db.queries import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
+from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
 log = logging.getLogger(__name__)
-
-_LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 _ROUTE_PATH = RESOURCE_EVENT_STREAM_PATH.removeprefix("/api")
 _SSE_HEADERS = {
@@ -420,27 +418,6 @@ def _acquire_stream_lease(
     return limiter, token
 
 
-async def _release_stream_lease(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-) -> None:
-    try:
-        await asyncio.to_thread(limiter.release, user_id, lease_token)
-    except Exception:
-        log.warning("Resource stream lease release failed")
-
-
-def _schedule_stream_lease_release(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-) -> None:
-    task = asyncio.create_task(_release_stream_lease(limiter, user_id, lease_token))
-    _LEASE_RELEASE_TASKS.add(task)
-    task.add_done_callback(_LEASE_RELEASE_TASKS.discard)
-
-
 async def _leased_resource_event_generator(
     ctx: AppContext,
     limiter: RedisConcurrentLeaseLimiter,
@@ -460,7 +437,7 @@ async def _leased_resource_event_generator(
         ):
             yield frame
     finally:
-        _schedule_stream_lease_release(limiter, user_id, lease_token)
+        release_lease_in_background(limiter, user_id, lease_token, subject="Resource stream")
 
 
 @router.get(

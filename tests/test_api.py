@@ -734,15 +734,24 @@ def test_pick_generation_api(client: TestClient) -> None:
 
 
 @pytest.mark.acceptance("ACC-CURATION-02")
-def test_pick_replaces_previous(client: TestClient) -> None:
-    first = client.post("/api/generations/g1/pick")
+@pytest.mark.parametrize(
+    ("action", "flag", "previous_remains"),
+    [
+        pytest.param("pick", "is_picked", False, id="pick-replaces-previous"),
+        pytest.param("keep", "is_kept", True, id="keep-is-additive"),
+    ],
+)
+def test_pick_replaces_previous_while_keep_is_additive(
+    client: TestClient, action: str, flag: str, previous_remains: bool,
+) -> None:
+    first = client.post(f"/api/generations/g1/{action}")
     assert first.status_code == 200
-    second = client.post("/api/generations/g2/pick")
+    second = client.post(f"/api/generations/g2/{action}")
     assert second.status_code == 200
     resp = client.get("/api/generations/g1")
-    assert resp.json()["is_picked"] is False
+    assert resp.json()[flag] is previous_remains
     resp = client.get("/api/generations/g2")
-    assert resp.json()["is_picked"] is True
+    assert resp.json()[flag] is True
 
 
 def test_unpick_generation_api(client: TestClient) -> None:
@@ -1170,10 +1179,22 @@ def test_generate_song_missing_model_rejected(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_generate_song_invalid_model(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        pytest.param("/api/songs/s1/generate", {}, id="generate"),
+        pytest.param("/api/generations/g1/cover", {"src_generation_id": "g1"}, id="cover"),
+        pytest.param(
+            "/api/generations/g1/repaint",
+            {"src_generation_id": "g1", "repainting_start": 0.1, "repainting_end": 0.5},
+            id="repaint",
+        ),
+    ],
+)
+def test_generate_song_invalid_model(client: TestClient, path: str, payload: dict) -> None:
     resp = client.post(
-        "/api/songs/s1/generate",
-        json={"count": 1, "model": "invalid"},
+        path,
+        json={"count": 1, "model": "invalid", **payload},
     )
     assert resp.status_code == 422
 
@@ -3157,17 +3178,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
 def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     client: TestClient,
 ) -> None:
-    """The lease release (`_schedule_job_stream_lease_release`) is
+    """The lease release (`redis_client.release_lease_in_background`) is
     intentionally fire-and-forget -- a background `asyncio.create_task`,
     off the generator's own execution path, the same way
-    resource_event_api.py's `_schedule_stream_lease_release` is (see that
-    module's `test_disconnect_releases_lease_off_loop_and_contains_failure`:
-    release must not block the stream's own close). That makes
-    TestClient.stream() the wrong tool to observe it with: TestClient never
-    entered via `with TestClient(app) as client:` opens a fresh
-    `anyio.from_thread` portal per call and tears it down the instant that
-    call's response finishes (starlette's ASGITransport.handle_request), so
-    the fire-and-forget task is racing that teardown, not the test's own
+    resource_event_api.py's stream lease release is (see that module's
+    `test_disconnect_releases_lease_off_loop_and_contains_failure`: release
+    must not block the stream's own close). That makes TestClient.stream()
+    the wrong tool to observe it with: TestClient never entered via
+    `with TestClient(app) as client:` opens a fresh `anyio.from_thread`
+    portal per call and tears it down the instant that call's response
+    finishes (starlette's ASGITransport.handle_request), so the
+    fire-and-forget task is racing that teardown, not the test's own
     wait -- no `released.wait(N)` duration, however generous, fixes a task
     that can be cancelled before it runs. Driving the app directly inside
     one asyncio.run() (the same technique
@@ -3175,11 +3196,11 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     uses, and test_resource_event_api.py's outer-deadline tests) keeps the
     loop that scheduled the task alive, so the test can wait on the real
     condition -- the task's own completion, observed via
-    jobs_api._LEASE_RELEASE_TASKS emptying, mirroring
+    redis_client._LEASE_RELEASE_TASKS emptying, mirroring
     test_resource_event_api.py's _wait_for_released_lease."""
     import asyncio
 
-    from songmaker_cli import jobs_api
+    from songmaker_cli import redis_client
     from songmaker_cli.db.queries import create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
@@ -3217,7 +3238,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
         await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
 
         for _ in range(500):
-            if not jobs_api._LEASE_RELEASE_TASKS:
+            if not redis_client._LEASE_RELEASE_TASKS:
                 break
             await asyncio.sleep(0.01)
 
@@ -3226,7 +3247,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     status = asyncio.run(asyncio.wait_for(_drive(), timeout=5))
 
     assert status == 200
-    assert not jobs_api._LEASE_RELEASE_TASKS
+    assert not redis_client._LEASE_RELEASE_TASKS
     assert acquire_calls == [_DEFAULT_USER_ID]
     assert release_calls == [(_DEFAULT_USER_ID, "lease-token")]
 
@@ -3547,12 +3568,13 @@ def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
         with pytest.raises(HTTPException) as exc_info:
             check_lora_sample_access(sample, user)
     else:
+        admin = make_authenticated_user("admin", role="admin")
         generation = SimpleNamespace(
             song=SimpleNamespace(album=SimpleNamespace(created_by="other")),
         )
-        with patch("songmaker_cli.api_helpers.check_generation_access", return_value=generation):
+        with patch("songmaker_cli.api_helpers.get_generation", return_value=generation):
             with pytest.raises(HTTPException) as exc_info:
-                check_own_generation_access(object(), "g1", user)
+                check_own_generation_access(object(), "g1", admin)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == detail

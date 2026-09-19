@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from sqlalchemy import ColumnElement, and_, func, or_
 from sqlalchemy.orm import Session, aliased, joinedload
@@ -26,6 +25,7 @@ from songmaker_cli.db.models import (
     ShareMixin,
     Song,
 )
+from songmaker_cli.db.queries.library import aware_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -245,7 +245,7 @@ def list_shared_inventory(
     total = _count_shared_inventory(session, user_id)
     items = _load_shared_entities(session, user_id, item_type)
     items.sort(key=lambda entity: (_inventory_type(entity), entity.id))
-    items.sort(key=lambda entity: _aware(entity.created_at), reverse=True)
+    items.sort(key=lambda entity: aware_timestamp(entity.created_at), reverse=True)
     return SharedInventoryPage(
         items=items[offset:offset + limit],
         total=total,
@@ -336,9 +336,3 @@ def _inventory_type(entity: SharedInventoryEntity) -> str:
     if isinstance(entity, Playlist):
         return LIBRARY_ITEM_PLAYLIST
     raise TypeError(f"Unsupported share inventory entity: {type(entity).__name__}")
-
-
-def _aware(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value

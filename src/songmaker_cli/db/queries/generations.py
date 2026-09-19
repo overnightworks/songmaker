@@ -196,43 +196,40 @@ def save_rating(
     return rating
 
 
-def pick_generation(session: Session, generation_id: str) -> None:
+def _require_generation(session: Session, generation_id: str) -> Generation:
     gen = session.query(Generation).filter_by(id=generation_id).first()
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
+    return gen
+
+
+def pick_generation(session: Session, generation_id: str) -> None:
+    gen = _require_generation(session, generation_id)
     session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
     gen.is_picked = True
     session.flush()
 
 
 def unpick_generation(session: Session, generation_id: str) -> None:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = _require_generation(session, generation_id)
     gen.is_picked = False
     session.flush()
 
 
 def keep_generation(session: Session, generation_id: str) -> None:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = _require_generation(session, generation_id)
     gen.is_kept = True
     session.flush()
 
 
 def unkeep_generation(session: Session, generation_id: str) -> None:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = _require_generation(session, generation_id)
     gen.is_kept = False
     session.flush()
 
 
 def archive_generation(session: Session, generation_id: str) -> Generation:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = _require_generation(session, generation_id)
     gen.is_archived = True
     gen.archived_at = datetime.now(timezone.utc)
     session.flush()
@@ -240,9 +237,7 @@ def archive_generation(session: Session, generation_id: str) -> Generation:
 
 
 def unarchive_generation(session: Session, generation_id: str) -> Generation:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = _require_generation(session, generation_id)
     gen.is_archived = False
     gen.archived_at = None
     session.flush()

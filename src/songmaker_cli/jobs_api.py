@@ -36,13 +36,11 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import get_job, get_queue_position, record_audit, update_job_status
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
+from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
 log = logging.getLogger(__name__)
-
-_LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 # The job SSE stream fails closed, same as the resource-event stream's lease
 # (see resource_event_api.py): an unenforced concurrency lease could let a
@@ -226,27 +224,6 @@ def _acquire_job_stream_lease(
     return limiter, token
 
 
-async def _release_job_stream_lease(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-) -> None:
-    try:
-        await asyncio.to_thread(limiter.release, user_id, lease_token)
-    except Exception:
-        log.warning("Job stream lease release failed")
-
-
-def _schedule_job_stream_lease_release(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-) -> None:
-    task = asyncio.create_task(_release_job_stream_lease(limiter, user_id, lease_token))
-    _LEASE_RELEASE_TASKS.add(task)
-    task.add_done_callback(_LEASE_RELEASE_TASKS.discard)
-
-
 async def _leased_job_event_generator(
     ctx: AppContext,
     limiter: RedisConcurrentLeaseLimiter,
@@ -258,7 +235,7 @@ async def _leased_job_event_generator(
         async for frame in _job_event_generator(ctx, job_id):
             yield frame
     finally:
-        _schedule_job_stream_lease_release(limiter, user_id, lease_token)
+        release_lease_in_background(limiter, user_id, lease_token, subject="Job stream")
 
 
 @router.post(

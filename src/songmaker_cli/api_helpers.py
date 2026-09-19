@@ -551,12 +551,13 @@ def check_lora_sample_access(
 
 def check_generation_access(
     session: Session, gen_id: str, user: AuthenticatedUser,
+    *, require_owner: bool = False,
 ) -> Generation:
     """Load a generation and verify ownership. Returns the generation or raises 404."""
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN:
+    if require_owner or user.role != ROLE_ADMIN:
         album = gen.song.album if gen.song else None
         if not album or album.created_by != user.id:
             raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
@@ -573,11 +574,7 @@ def check_own_generation_access(
     where a take becomes private source material rather than an administrative
     resource.
     """
-    gen = check_generation_access(session, gen_id, user)
-    album = gen.song.album if gen.song else None
-    if not album or album.created_by != user.id:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
-    return gen
+    return check_generation_access(session, gen_id, user, require_owner=True)
 
 
 _log = logging.getLogger(__name__)
