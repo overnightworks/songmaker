@@ -8,24 +8,13 @@ from unittest.mock import patch
 
 import pytest
 from agent_providers.events import AssistantTextEvent, FinalEvent
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_models import ChatTurnV2Request
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
-
-
-def _fake_user(user_id: str, role: str = "user"):
-    user = AuthenticatedUser(
-        id=user_id, username=f"u-{user_id}", role=role, is_active=True,
-    )
-    return lambda: user
 
 
 def _stream_events(response) -> list[dict]:
@@ -76,18 +65,10 @@ def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "mentions.db")
     with factory() as session:
         _seed(session, "u-test")
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test")
-    app.include_router(router)
     yield TestClient(app)
 
 
@@ -98,18 +79,10 @@ def stranger_client(tmp_path: Path) -> TestClient:
         _seed(session, "u-owner")
         session.add(User(id="u-spy", username="spy", password_hash="x", role="user"))
         session.commit()
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-spy")
-    app.include_router(router)
     yield TestClient(app)
 
 
