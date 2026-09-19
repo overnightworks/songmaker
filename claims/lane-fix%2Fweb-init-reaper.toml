@@ -1,0 +1,7 @@
+claim_id = "0f981317fa85452a8a8f61ef771b1843"
+agent = "claude-head"
+role = "builder"
+base = "d38a52c2c117b184e1297fd27e346922904c6dae"
+branch = "fix/web-init-reaper"
+scope = ["docker-compose.yml"]
+opened_commit = "d6e489553a2e0366d75eae10015d77ed7ebd2915"
