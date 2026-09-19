@@ -6,7 +6,7 @@ import base64
 import hmac
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import sha256
 from typing import Any
 
@@ -82,15 +82,13 @@ def decode_library_cursor(
 
 
 def cursor_from_hit(hit: Any, *, q: str, sort: str) -> LibraryCursor:
-    from songmaker_cli.db.models import Album
+    from songmaker_cli.db.models import Album, aware_timestamp
 
     item_type = LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
     if sort == LIBRARY_SORT_TITLE:
         sort_value = hit.title.lower()
     else:
-        created = hit.created_at
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
+        created = aware_timestamp(hit.created_at)
         sort_value = created.isoformat()
     return LibraryCursor(
         q=q,

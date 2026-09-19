@@ -19,6 +19,8 @@ def _remaining_time_estimate(
     *,
     now: datetime,
 ) -> RemainingTimeEstimate:
+    from songmaker_cli.db.models import aware_timestamp
+
     if job.status in JOB_TERMINAL_STATUSES:
         return 0
     if job.status != JobStatus.RUNNING:
@@ -43,8 +45,7 @@ def _remaining_time_estimate(
     training_started_at = job.training_started_at
     if training_started_at is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    if training_started_at.tzinfo is None:
-        training_started_at = training_started_at.replace(tzinfo=timezone.utc)
+    training_started_at = aware_timestamp(training_started_at)
     elapsed_seconds = (now - training_started_at).total_seconds()
     if elapsed_seconds <= 0:
         return REMAINING_TIME_ESTIMATE_CALCULATING

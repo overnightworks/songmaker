@@ -656,6 +656,7 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
 def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
+    from songmaker_cli.redis_client import release_lease_in_background
     from songmaker_cli.server import _lifespan
 
     factory = init_db(tmp_path / "test.db")
@@ -668,6 +669,12 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         redis=make_fake_redis(),
     )
 
+    released_leases = []
+
+    class Limiter:
+        def release(self, user_id: str, token: str) -> None:
+            released_leases.append((user_id, token))
+
     async def _run():
         cleanup_started = asyncio.Event()
         cleanup_cancelled = asyncio.Event()
@@ -677,6 +684,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
             try:
                 await asyncio.Future()
             except asyncio.CancelledError:
+                release_lease_in_background(Limiter(), "alice", "lease-token", subject="Test")
                 cleanup_cancelled.set()
                 raise
 
@@ -702,6 +710,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         cleanup.assert_called_once_with(mock_app.state.ctx)
         cleanup_loop.assert_awaited_once_with(mock_app)
         assert cleanup_cancelled.is_set()
+        assert released_leases == [("alice", "lease-token")]
 
     asyncio.run(_run())
 

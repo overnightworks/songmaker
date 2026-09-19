@@ -18,7 +18,7 @@ from songmaker_cli.constants import (
     JobType,
     stale_job_thresholds,
 )
-from songmaker_cli.db.models import Job
+from songmaker_cli.db.models import Job, aware_timestamp
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
@@ -268,9 +268,7 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     fallback removed — PID reuse on long-running containers made it
     unreliable.
     """
-    hb = job.heartbeat_at
-    if hb.tzinfo is None:
-        hb = hb.replace(tzinfo=timezone.utc)
+    hb = aware_timestamp(job.heartbeat_at)
     return hb < cutoff
 
 
@@ -316,9 +314,7 @@ def _queued_verdict(
 
 
 def _is_started_stale(job: Job, cutoff: datetime) -> bool:
-    started_at = job.started_at
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
+    started_at = aware_timestamp(job.started_at)
     return started_at < cutoff
 
 
@@ -411,8 +407,8 @@ def recover_stale_jobs_by_age_and_type(
     """
     if now is None:
         now = datetime.now(timezone.utc)
-    elif now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+    else:
+        now = aware_timestamp(now)
 
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in _active_jobs_with_thresholds(session, user_id):
@@ -517,9 +513,7 @@ def last_job_failure_time(session: Session) -> datetime | None:
     )
     if newest is None:
         return None
-    if newest.tzinfo is None:
-        return newest.replace(tzinfo=timezone.utc)
-    return newest
+    return aware_timestamp(newest)
 
 
 def _duration_seconds_expr(session: Session):

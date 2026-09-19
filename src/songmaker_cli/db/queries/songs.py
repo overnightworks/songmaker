@@ -16,6 +16,7 @@ from songmaker_cli.db.models import (
     Generation,
     Song,
     Version,
+    aware_timestamp,
 )
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
@@ -114,9 +115,7 @@ def record_song_listen(session: Session, song: Song) -> None:
 
 
 def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
-    activity_at = candidate.activity_at
-    if activity_at.tzinfo is None:
-        activity_at = activity_at.replace(tzinfo=timezone.utc)
+    activity_at = aware_timestamp(candidate.activity_at)
     item_type = "album" if isinstance(candidate.item, Album) else "song"
     return (-activity_at.timestamp(), item_type, candidate.item.id)
 
@@ -491,9 +490,7 @@ def restore_song(session: Session, song_id: str) -> Song:
         raise ValueError(f"Song not found: {song_id}")
     if song.deleted_at is None:
         return song
-    deleted_at = song.deleted_at
-    if deleted_at.tzinfo is None:
-        deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+    deleted_at = aware_timestamp(song.deleted_at)
     age = datetime.now(timezone.utc) - deleted_at
     window = timedelta(days=get_settings().soft_delete_retention_days)
     if age > window:

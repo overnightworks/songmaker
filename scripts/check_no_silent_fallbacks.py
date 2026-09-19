@@ -295,7 +295,7 @@ RULES: list[Rule] = [
         pattern=r"(created_at|updated_at|attempted_at|expires_at):\s*(str|datetime)\s*\|\s*None",
         description=(
             "Timestamp field marked Optional but the underlying DB column "
-            "is NOT NULL with default=_utcnow. Drop the | None and the "
+            "is NOT NULL with default=utcnow. Drop the | None and the "
             "matching `if x else None` in from_orm. A timestamp the "
             "response computes, whose None is a real answer, is declared "
             "as ComputedTimestamp (api_models/fields.py)."

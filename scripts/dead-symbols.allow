@@ -40,7 +40,6 @@ songmaker_cli/album_api.py:api_unarchive_album # HTTP dispatcher: router.post('/
 songmaker_cli/album_api.py:api_unshare_album # HTTP dispatcher: router.delete('/albums/{album_id}/share')
 songmaker_cli/album_api.py:api_update_album # HTTP dispatcher: router.put('/albums/{album_id}', responses={404: {'description': 'Album not found'}, 422: {'description': 'Album title is required'}})
 songmaker_cli/album_api.py:api_upload_album_cover # HTTP dispatcher: router.post('/albums/{album_id}/cover')
-songmaker_cli/api_helpers.py:unique_lora_slug # Pre-existing uncalled helper outside the enumerated deletions; residual tracked by #928
 songmaker_cli/auth_api.py:change_password # HTTP dispatcher: router.put('/password', responses={401: {'description': 'Current password is incorrect'}, 429: {'description': 'Too many password change attempts'}})
 songmaker_cli/auth_api.py:logout # HTTP dispatcher: router.delete('/session')
 songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
@@ -124,7 +123,6 @@ songmaker_cli/queue_stream_api.py:api_get_queue_stream_audio # HTTP dispatcher: 
 songmaker_cli/queue_stream_api.py:api_pin_queue_stream # HTTP dispatcher: router.post('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}, 409: {'description': 'Pinned storage cap is reached'}})
 songmaker_cli/queue_stream_api.py:api_unpin_queue_stream # HTTP dispatcher: router.delete('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}})
 songmaker_cli/reimport_api.py:api_reimport # HTTP dispatcher: router.post('/songs/{song_id}/reimport', responses={413: {'description': 'Uploaded audio file is too large'}, 422: {'description': 'Reimport upload is invalid'}})
-songmaker_cli/resource_event_api.py:_STREAM_LEASE_FAILURE_POLICY # Pre-existing documentation-only policy constant outside the enumerated deletions; residual owned by #928
 songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
 songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/test_scorers_extended.py
 songmaker_cli/scoring/audiobox_aesthetics.py:score_audiobox # Scorer registry: register('audiobox')

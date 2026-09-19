@@ -70,7 +70,6 @@ if TYPE_CHECKING:
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
-_LORA_SLUG_LOCK_ID = 3
 _SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
@@ -360,21 +359,6 @@ def unique_album_id(session: Session, title: str) -> str:
     base_slug = slugify(title, max_length=_ALBUM_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
         session, "unique_album_id", _ALBUM_ID_LOCK_ID, base_slug, is_taken,
-    )
-
-
-def unique_lora_slug(session: Session, user_id: str, name: str) -> str:
-    """Find a LoRA slug unique within one user's LoRAs."""
-    def is_taken(candidate: str) -> bool:
-        return (
-            session.query(UserLora)
-            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-            .first()
-        ) is not None
-
-    base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
-    return _acquire_unique_slug(
-        session, "unique_lora_slug", _LORA_SLUG_LOCK_ID, base_slug, is_taken,
     )
 
 

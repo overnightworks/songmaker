@@ -123,6 +123,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
+    from songmaker_cli.redis_client import drain_lease_releases
 
     ctx: AppContext = app.state.ctx
     settings = get_settings()
@@ -198,6 +199,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         for _name, task in loop_tasks:
             task.cancel()
         await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
+        await drain_lease_releases()
         await close_arq_pool()
         await shutdown_tool_surface_background_tasks()
 

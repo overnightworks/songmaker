@@ -83,6 +83,13 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def aware_timestamp(value: datetime) -> datetime:
+    """Interpret naive database timestamps as UTC, preserving explicit offsets."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 TZDateTime = DateTime(timezone=True)
 
 

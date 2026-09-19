@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -16,7 +16,7 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_TITLE,
     LIKE_ESCAPE_CHAR,
 )
-from songmaker_cli.db.models import Album, Song
+from songmaker_cli.db.models import Album, Song, aware_timestamp
 from songmaker_cli.library_cursor import LibraryCursor
 
 _SONG_LIST_OPTIONS = (
@@ -168,13 +168,6 @@ def _parse_sort_datetime(value: str) -> datetime:
 
 def _hit_type(hit: Album | Song) -> str:
     return LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
-
-
-def aware_timestamp(value: datetime) -> datetime:
-    """Interpret naive database timestamps as UTC, preserving explicit offsets."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
 
 
 def _hit_before(left: Album | Song, right: Album | Song, sort: str) -> bool:

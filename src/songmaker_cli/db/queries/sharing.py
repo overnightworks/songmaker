@@ -24,8 +24,8 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     ShareMixin,
     Song,
+    aware_timestamp,
 )
-from songmaker_cli.db.queries.library import aware_timestamp
 
 log = logging.getLogger(__name__)
 

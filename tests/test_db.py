@@ -39,6 +39,7 @@ from songmaker_cli.db.models import (
     Song,
     User,
     Version,
+    aware_timestamp,
 )
 from songmaker_cli.db.queries import (
     UNSET,
@@ -96,6 +97,16 @@ from songmaker_cli.db.queries import (
     user_count,
 )
 from songmaker_cli.worker_liveness import WorkerLiveness
+
+
+@pytest.mark.parametrize("offset", [None, timezone.utc, timezone(timedelta(hours=5, minutes=30))])
+def test_aware_timestamp_preserves_explicit_offsets_and_interprets_naive_as_utc(offset) -> None:
+    value = datetime(2026, 9, 20, 12, 34, 56, tzinfo=offset)
+
+    result = aware_timestamp(value)
+
+    assert result == datetime(2026, 9, 20, 12, 34, 56, tzinfo=offset or timezone.utc)
+    assert result.tzinfo == (offset or timezone.utc)
 
 
 @pytest.fixture

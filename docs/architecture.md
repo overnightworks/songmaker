@@ -934,6 +934,10 @@ ledger.
 
 ### Web background loops
 
+After stopping its background loops, `server._lifespan` awaits
+`redis_client.drain_lease_releases()` so pending Redis lease releases finish before
+the event loop closes.
+
 | Loop | Cadence | Owner and result |
 | --- | --- | --- |
 | `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health` reports the loop through the shared registry. |
