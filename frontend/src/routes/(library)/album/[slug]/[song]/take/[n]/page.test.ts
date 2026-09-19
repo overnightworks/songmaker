@@ -1,8 +1,13 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -77,6 +82,13 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import TakeAddressHarness from './harness.svelte';
 
+function routedTakeSongDefaults(): Partial<SongItem> {
+	return {
+		id: 'song-1',
+		generations: [generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 })]
+	};
+}
+
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
 // the cold start below exercises the production restore path instead of a
@@ -107,80 +119,6 @@ class FakeEventSource {
 			listener(new MessageEvent(type, { data }));
 		}
 	}
-}
-
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: ALBUM_SLUG,
-		title: ALBUM_TITLE,
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 'song-1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: '/audio/g1.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 'song-1',
-		slug: SONG_SLUG,
-		title: TRACK_TITLE,
-		album_id: ALBUM_SLUG,
-		album_title: ALBUM_TITLE,
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [generation()],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
 }
 
 function page(items: SongItem[] | AlbumItem[]) {
@@ -233,10 +171,32 @@ function coldTabAt(pathname: string): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
-	api.fetchAlbum.mockReset().mockResolvedValue(album());
+	api.fetchAlbum
+		.mockReset()
+		.mockResolvedValue(
+			album({ id: ALBUM_SLUG, title: ALBUM_TITLE, share_slug: null, cover: null })
+		);
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
-	api.fetchSongs.mockReset().mockResolvedValue(page([song()]));
-	api.fetchSong.mockReset().mockResolvedValue(song());
+	api.fetchSongs.mockReset().mockResolvedValue(
+		page([
+			song({
+				...routedTakeSongDefaults(),
+				slug: SONG_SLUG,
+				title: TRACK_TITLE,
+				album_id: ALBUM_SLUG,
+				album_title: ALBUM_TITLE
+			})
+		])
+	);
+	api.fetchSong.mockReset().mockResolvedValue(
+		song({
+			...routedTakeSongDefaults(),
+			slug: SONG_SLUG,
+			title: TRACK_TITLE,
+			album_id: ALBUM_SLUG,
+			album_title: ALBUM_TITLE
+		})
+	);
 	api.fetchVersions.mockReset().mockResolvedValue([]);
 	api.fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
 	api.fetchActiveModels.mockReset().mockResolvedValue([]);
@@ -274,14 +234,35 @@ describe('/album/<slug>/<song-slug>/take/<n> opened cold', () => {
 
 	it('loads the rest of the song generations to find a take the listing did not carry yet', async () => {
 		api.fetchSongs.mockResolvedValue(
-			page([song({ generation_count: 2, generations: [generation({ id: 'g1' })] })])
+			page([
+				song({
+					...routedTakeSongDefaults(),
+					slug: SONG_SLUG,
+					title: TRACK_TITLE,
+					album_id: ALBUM_SLUG,
+					album_title: ALBUM_TITLE,
+					generation_count: 2,
+					generations: [generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 })]
+				})
+			])
 		);
 		api.fetchSong.mockResolvedValue(
 			song({
+				...routedTakeSongDefaults(),
+				slug: SONG_SLUG,
+				title: TRACK_TITLE,
+				album_id: ALBUM_SLUG,
+				album_title: ALBUM_TITLE,
 				generation_count: 2,
 				generations: [
-					generation({ id: 'g1', generation_number: 1 }),
-					generation({ id: 'g2', generation_number: 2 })
+					generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 }),
+					generation({
+						song_id: 'song-1',
+						mp3_path: '/audio/g1.mp3',
+						seed: 1,
+						id: 'g2',
+						generation_number: 2
+					})
 				]
 			})
 		);
@@ -350,7 +331,9 @@ describe('/album/<slug>/<song-slug>/take/<n> whose song cannot be reached', () =
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
-		api.fetchAlbum.mockResolvedValue(album());
+		api.fetchAlbum.mockResolvedValue(
+			album({ id: ALBUM_SLUG, title: ALBUM_TITLE, share_slug: null, cover: null })
+		);
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));

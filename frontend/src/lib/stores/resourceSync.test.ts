@@ -1,3 +1,4 @@
+import { makeGeneration as gen, makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
@@ -29,12 +30,7 @@ import { ApiError } from '$lib/api/fetch';
 import { clearAuth, currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
-import type {
-	AuthUser,
-	GenerationCreatedResourceEvent,
-	GenerationItem,
-	SongItem
-} from '$lib/api/types';
+import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
@@ -115,62 +111,6 @@ class MockEventSource implements ResourceEventSource {
 	}
 }
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'track',
-		title: 'Track',
-		album_id: 'a1',
-		album_title: 'Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
-function gen(id: string, overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id,
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		seed: 1,
-		mp3_path: `${id}.mp3`,
-		wav_path: null,
-		status: 'completed',
-		is_picked: false,
-		is_kept: false,
-		is_archived: false,
-		is_shared: false,
-		share_slug: null,
-		model_mode: 'sft',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
 function created(
 	sequence: string,
 	generationId: string,
@@ -225,9 +165,13 @@ function setup(options?: {
 		options?.fetchSong ??
 		(async (songId: string) =>
 			song({
+				slug: 'track',
+				title: 'Track',
 				id: songId,
 				generation_count: 1,
-				generations: [gen('g-from-server')]
+				generations: [
+					gen({ seed: 1, model_mode: 'sft', id: 'g-from-server', mp3_path: 'g-from-server.mp3' })
+				]
 			}));
 	const controller = new ResourceSyncController(
 		{
@@ -311,7 +255,16 @@ describe('resource sync interleavings', () => {
 		const snapshotSongs: SongItem[] = [];
 		const { controller, sources, store, upserted, fetchCalls } = setup({
 			loadSnapshot: async () => {
-				snapshotSongs.push(song({ generation_count: 1, generations: [gen('g-before')] }));
+				snapshotSongs.push(
+					song({
+						slug: 'track',
+						title: 'Track',
+						generation_count: 1,
+						generations: [
+							gen({ seed: 1, model_mode: 'sft', id: 'g-before', mp3_path: 'g-before.mp3' })
+						]
+					})
+				);
 				return true;
 			}
 		});
@@ -331,7 +284,13 @@ describe('resource sync interleavings', () => {
 		const gate = deferred<boolean>();
 		const { controller, sources, upserted, fetchCalls, store } = setup({
 			loadSnapshot: () => gate.promise,
-			fetchSong: async () => song({ generation_count: 1, generations: [gen('g-mid')] })
+			fetchSong: async () =>
+				song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 1,
+					generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-mid', mp3_path: 'g-mid.mp3' })]
+				})
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -349,7 +308,15 @@ describe('resource sync interleavings', () => {
 		const gate = deferred<boolean>();
 		const { controller, sources, upserted, fetchCalls, store } = setup({
 			loadSnapshot: () => gate.promise,
-			fetchSong: async () => song({ generation_count: 1, generations: [gen('g-during')] })
+			fetchSong: async () =>
+				song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 1,
+					generations: [
+						gen({ seed: 1, model_mode: 'sft', id: 'g-during', mp3_path: 'g-during.mp3' })
+					]
+				})
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -372,8 +339,15 @@ describe('resource sync interleavings', () => {
 		const { controller, sources, upserted } = setup({
 			fetchSong: async () =>
 				snapshotDone
-					? song({ generation_count: 1, generations: [gen('g-live')] })
-					: song({ generations: [] })
+					? song({
+							slug: 'track',
+							title: 'Track',
+							generation_count: 1,
+							generations: [
+								gen({ seed: 1, model_mode: 'sft', id: 'g-live', mp3_path: 'g-live.mp3' })
+							]
+						})
+					: song({ slug: 'track', title: 'Track', generation_count: 0 })
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -466,13 +440,28 @@ describe('resource sync owner', () => {
 			listLoadedSongIds: () => loaded,
 			fetchSong: async (songId) =>
 				song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
 					id: songId,
 					generations:
 						songId === seenSongId
 							? Array.from({ length: RESOURCE_SYNC_TRACKED_EVENT_LIMIT + 1 }, (_, index) =>
-									gen(`g-seen-${index + 1}`)
+									gen({
+										seed: 1,
+										model_mode: 'sft',
+										id: `g-seen-${index + 1}`,
+										mp3_path: `g-seen-${index + 1}.mp3`
+									})
 								)
-							: [gen(`g-${songId}`)]
+							: [
+									gen({
+										seed: 1,
+										model_mode: 'sft',
+										id: `g-${songId}`,
+										mp3_path: `g-${songId}.mp3`
+									})
+								]
 				})
 		});
 		controller.start();
@@ -511,8 +500,13 @@ describe('resource sync owner', () => {
 		const { controller, sources, fetchCalls, upserted } = setup({
 			fetchSong: async () =>
 				snapshotDone
-					? song({ generation_count: 1, generations: [gen('g-dup')] })
-					: song({ generations: [] })
+					? song({
+							slug: 'track',
+							title: 'Track',
+							generation_count: 1,
+							generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-dup', mp3_path: 'g-dup.mp3' })]
+						})
+					: song({ slug: 'track', title: 'Track', generation_count: 0 })
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -534,7 +528,12 @@ describe('resource sync owner', () => {
 			fetchSong: async () => {
 				calls += 1;
 				if (calls === 1) return first.promise;
-				return song({ generation_count: 1, generations: [gen('g-new')] });
+				return song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 1,
+					generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-new', mp3_path: 'g-new.mp3' })]
+				});
 			}
 		});
 		controller.start();
@@ -546,7 +545,14 @@ describe('resource sync owner', () => {
 		await flush();
 		latestSource(sources).emit('generation.created', created('2', 'g-new'));
 		await flush();
-		first.resolve(song({ generation_count: 1, generations: [gen('g-old')] }));
+		first.resolve(
+			song({
+				slug: 'track',
+				title: 'Track',
+				generation_count: 1,
+				generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-old', mp3_path: 'g-old.mp3' })]
+			})
+		);
 		await flush();
 		expect(upserted.map((item) => item.generations[0]?.id)).toEqual(['g-new']);
 	});
@@ -699,7 +705,21 @@ describe('resource sync owner', () => {
 			const response = responses.get(songId);
 			if (!response) throw new Error(`Missing response for ${songId}`);
 			response.resolve(
-				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+				song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					id: songId,
+					generations: [
+						gen({
+							seed: 1,
+							model_mode: 'sft',
+							id: `g-${songId}`,
+							mp3_path: `g-${songId}.mp3`,
+							song_id: songId
+						})
+					]
+				})
 			);
 		}
 		await vi.waitFor(() => expect(responses.size).toBe(ids.length));
@@ -707,7 +727,21 @@ describe('resource sync owner', () => {
 			const response = responses.get(songId);
 			if (!response) throw new Error(`Missing response for ${songId}`);
 			response.resolve(
-				song({ id: songId, generations: [gen(`g-${songId}`, { song_id: songId })] })
+				song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					id: songId,
+					generations: [
+						gen({
+							seed: 1,
+							model_mode: 'sft',
+							id: `g-${songId}`,
+							mp3_path: `g-${songId}.mp3`,
+							song_id: songId
+						})
+					]
+				})
 			);
 		}
 		await refresh;
@@ -747,7 +781,12 @@ describe('resource sync owner', () => {
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
-				return song({ generations: [gen('g1')] });
+				return song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
+				});
 			}
 		});
 		controller.start();
@@ -773,7 +812,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		const retry = controller.retry();
 		controller.stop();
-		pending.resolve(song());
+		pending.resolve(song({ slug: 'track', title: 'Track', generation_count: 0 }));
 
 		expect(await retry).toBe(false);
 	});
@@ -971,7 +1010,12 @@ describe('resource sync owner', () => {
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
-				return song({ generations: [gen('g1')] });
+				return song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
+				});
 			}
 		});
 		controller.start();
@@ -1020,7 +1064,12 @@ describe('resource sync owner', () => {
 		const { controller, sources, store } = setup({
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
-				return song({ generations: [gen('g1')] });
+				return song({
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
+				});
 			}
 		});
 		controller.start();
@@ -1191,7 +1240,11 @@ describe('library resource sync wiring', () => {
 						};
 					}
 					if (path === '/api/songs/selected-song') {
-						return { ok: true, json: async () => song({ id: 'selected-song' }) };
+						return {
+							ok: true,
+							json: async () =>
+								song({ slug: 'track', title: 'Track', generation_count: 0, id: 'selected-song' })
+						};
 					}
 					throw new Error(`Unexpected request: ${path}`);
 				})

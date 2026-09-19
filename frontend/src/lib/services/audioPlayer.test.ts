@@ -1,5 +1,6 @@
+import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, QueueStreamManifest } from '$lib/api/types';
+import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
@@ -13,37 +14,15 @@ function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCa
 	};
 }
 
-function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'a1/song_v1.mp3',
-		wav_path: 'a1/song_v1.wav',
-		seed: 42,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		model_mode: 'sft',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00Z',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
 function makeInfo(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	return {
-		generation: makeGen(),
+		generation: makeGen({
+			mp3_path: 'a1/song_v1.mp3',
+			wav_path: 'a1/song_v1.wav',
+			seed: 42,
+			model_mode: 'sft',
+			created_at: '2026-01-01T00:00:00Z'
+		}),
 		songId: 's1',
 		songTitle: 'Song',
 		artist: 'Artist',
@@ -216,7 +195,17 @@ describe('load()', () => {
 		fakeAudio.fire('canplay');
 		fakeAudio.fire('play');
 		const initialSrc = fakeAudio.src;
-		audioPlayer.load(makeInfo({ generation: makeGen() }));
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					mp3_path: 'a1/song_v1.mp3',
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z'
+				})
+			})
+		);
 		expect(fakeAudio.src).toBe(initialSrc);
 	});
 
@@ -236,7 +225,18 @@ describe('load()', () => {
 
 	it('reloads when generation id differs', () => {
 		audioPlayer.load(makeInfo());
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }));
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z',
+					id: 'g2',
+					mp3_path: 'b.mp3'
+				})
+			})
+		);
 		expect(fakeAudio.src).toBe('/audio/b.mp3');
 	});
 
@@ -253,9 +253,21 @@ describe('load()', () => {
 		fakeAudio.fire('play');
 		statuses.length = 0;
 
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }), {
-			autoplay: false
-		});
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z',
+					id: 'g2',
+					mp3_path: 'b.mp3'
+				})
+			}),
+			{
+				autoplay: false
+			}
+		);
 
 		expect(statuses).toEqual([['g2', 'loading']]);
 
@@ -271,7 +283,18 @@ describe('load()', () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
 		expect(audioPlayer.status).toBe('error');
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }));
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z',
+					id: 'g2',
+					mp3_path: 'b.mp3'
+				})
+			})
+		);
 		expect(audioPlayer.status).toBe('loading');
 		expect(audioPlayer.error).toBeNull();
 	});
@@ -801,7 +824,18 @@ describe('error handling', () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
 
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }) }));
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z',
+					id: 'g2',
+					mp3_path: 'b.mp3'
+				})
+			})
+		);
 		expect(audioPlayer.status).toBe('loading');
 
 		resolveProbe?.({ ok: false, status: 404 } as Response);
@@ -1084,7 +1118,18 @@ describe('loadUrl()', () => {
 		fakeAudio.fire('canplay');
 		fakeAudio.fire('play');
 		const initialSrc = fakeAudio.src;
-		audioPlayer.loadUrl(makeInfo({ generation: makeGen() }), '/shared/slug/audio/first.mp3');
+		audioPlayer.loadUrl(
+			makeInfo({
+				generation: makeGen({
+					mp3_path: 'a1/song_v1.mp3',
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z'
+				})
+			}),
+			'/shared/slug/audio/first.mp3'
+		);
 		expect(fakeAudio.src).toBe(initialSrc);
 	});
 
@@ -1252,7 +1297,21 @@ describe('audio graph', () => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
 		audioPlayer.getAnalyser();
 
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2' }) }), { autoplay: false });
+		audioPlayer.load(
+			makeInfo({
+				generation: makeGen({
+					mp3_path: 'a1/song_v1.mp3',
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: '2026-01-01T00:00:00Z',
+					id: 'g2'
+				})
+			}),
+			{
+				autoplay: false
+			}
+		);
 		audioPlayer.pause();
 
 		expect(fake.context.close).not.toHaveBeenCalled();

@@ -1,14 +1,13 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type {
-	AlbumItem,
-	CoverSuggestionsResponse,
-	GenerationItem,
-	JobItem,
-	SongItem
-} from '$lib/api/types';
+import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
@@ -115,80 +114,6 @@ class FakeJobEventSource {
 	}
 }
 
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a-local',
-		title: 'Night Drive',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's-local',
-		slug: 'local-only',
-		title: 'Local Only',
-		album_id: 'a-local',
-		album_title: 'Night Drive',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's-local',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
 function coverSuggestions(
 	overrides: Partial<CoverSuggestionsResponse> = {}
 ): CoverSuggestionsResponse {
@@ -213,8 +138,10 @@ async function renderDetail(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-	albumList.set([album()]);
-	songList.set([song()]);
+	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
+	songList.set([
+		song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+	]);
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
 	updateAlbum.mockReset();
@@ -312,7 +239,15 @@ describe('AlbumDetailView header', () => {
 	});
 
 	it('opens curation mode from the menu', async () => {
-		songList.set([song({ generation_count: 1, generations: [generation()] })]);
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generation_count: 1,
+				generations: [generation({ song_id: 's-local' })]
+			})
+		]);
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
@@ -327,6 +262,8 @@ describe('AlbumDetailView header', () => {
 	it('uploads a cover from the menu action', async () => {
 		uploadAlbumCover.mockResolvedValue(
 			album({
+				id: 'a-local',
+				title: 'Night Drive',
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=abc.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=abc.jpg'
@@ -376,7 +313,9 @@ describe('AlbumDetailView header', () => {
 	});
 
 	it('archives the album through the menu without a confirmation dialog', async () => {
-		archiveAlbum.mockResolvedValue(album({ is_archived: true }));
+		archiveAlbum.mockResolvedValue(
+			album({ id: 'a-local', title: 'Night Drive', is_archived: true })
+		);
 		openCollection.set({ kind: 'album', id: 'a-local' });
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
@@ -429,7 +368,10 @@ describe('AlbumDetailView cover suggestions', () => {
 
 	it('keeps a delayed previous album response from replacing the current album state', async () => {
 		const firstResponse = deferred<CoverSuggestionsResponse>();
-		albumList.set([album(), album({ id: 'a-other', title: 'Other Night' })]);
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive' }),
+			album({ id: 'a-other', title: 'Other Night' })
+		]);
 		fetchAlbumCoverSuggestions.mockImplementationOnce(() => firstResponse.promise);
 		fetchAlbumCoverSuggestions.mockResolvedValueOnce(
 			coverSuggestions({
@@ -488,7 +430,11 @@ describe('AlbumDetailView cover suggestions', () => {
 			})
 		);
 		selectAlbumCoverSuggestion.mockResolvedValue(
-			album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
 		);
 		const target = await renderDetail();
 
@@ -551,7 +497,13 @@ describe('AlbumDetailView cover suggestions', () => {
 	});
 
 	it('puts replacement by suggestion beside upload and removal in the existing overflow', async () => {
-		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		albumList.set([
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
+		]);
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((element) =>
@@ -571,7 +523,13 @@ describe('AlbumDetailView cover suggestions', () => {
 	});
 
 	it('replaces stale suggestions before a new request and keeps its failure visible', async () => {
-		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		albumList.set([
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
+		]);
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({
 				suggestions: [
@@ -608,7 +566,13 @@ describe('AlbumDetailView cover suggestions', () => {
 	});
 
 	it('keeps replacement suggestions reachable when the album already has a cover', async () => {
-		albumList.set([album({ cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })]);
+		albumList.set([
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
+		]);
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({ suggestions: [{ id: 'replacement', url: '/replacement.png' }] })
 		);
@@ -621,15 +585,21 @@ describe('AlbumDetailView cover suggestions', () => {
 
 describe('AlbumDetailView subtitle and year', () => {
 	it('shows the album subtitle and year under the title', async () => {
-		albumList.set([album({ subtitle: 'Live at the Roxy', year: '1994' })]);
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'Live at the Roxy', year: '1994' })
+		]);
 		const target = await renderDetail();
 		expect(target.querySelector('.album-meta')?.textContent).toContain('Live at the Roxy');
 		expect(target.querySelector('.album-meta')?.textContent).toContain('1994');
 	});
 
 	it('saves an edited subtitle through updateAlbum and updates the store', async () => {
-		albumList.set([album({ subtitle: 'Old Subtitle', year: '1999' })]);
-		updateAlbum.mockResolvedValue(album({ subtitle: 'New Subtitle', year: '1999' }));
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'Old Subtitle', year: '1999' })
+		]);
+		updateAlbum.mockResolvedValue(
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'New Subtitle', year: '1999' })
+		);
 		const target = await renderDetail();
 		requireElement<HTMLButtonElement>(target, '.album-meta .editable-title-display').click();
 		await tick();
@@ -645,8 +615,8 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('saves an edited year as a number through updateAlbum', async () => {
-		albumList.set([album({ subtitle: '', year: '1999' })]);
-		updateAlbum.mockResolvedValue(album({ subtitle: '', year: '2005' }));
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
+		updateAlbum.mockResolvedValue(album({ id: 'a-local', title: 'Night Drive', year: '2005' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -662,8 +632,8 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('clears the year through updateAlbum when emptied', async () => {
-		albumList.set([album({ subtitle: '', year: '1999' })]);
-		updateAlbum.mockResolvedValue(album({ subtitle: '', year: '' }));
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
+		updateAlbum.mockResolvedValue(album({ id: 'a-local', title: 'Night Drive' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -679,7 +649,7 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('rejects a non-numeric year without calling updateAlbum', async () => {
-		albumList.set([album({ subtitle: '', year: '1999' })]);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -696,7 +666,7 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('rejects a year outside the plausible range without calling updateAlbum', async () => {
-		albumList.set([album({ subtitle: '', year: '1999' })]);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -717,7 +687,9 @@ describe('AlbumDetailView song row Play', () => {
 	it('plays the row inside the open album, letting the player resolve the take', async () => {
 		// The row knows the song, not which take to play — a song whose takes
 		// are not loaded yet (just switched albums, #141/4) still plays.
-		songList.set([song({ generations: [], generation_count: 2 })]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-play').click();
@@ -730,13 +702,24 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('counts takes, not gens, on a song row', async () => {
-		songList.set([song({ generations: [], generation_count: 2 })]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
+		]);
 		const target = await renderDetail();
 		expect(requireElement(target, '.item-meta').textContent?.trim()).toBe('2 takes');
 	});
 
 	it('names the row play action after the song it starts', async () => {
-		songList.set([song({ title: 'Tide', generations: [generation()], generation_count: 1 })]);
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				title: 'Tide',
+				generations: [generation({ song_id: 's-local' })],
+				generation_count: 1
+			})
+		]);
 		const target = await renderDetail();
 
 		expect(requireElement(target, '.item-play').getAttribute('aria-label')).toBe(
@@ -745,7 +728,9 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('disables Play when the song has no generations', async () => {
-		songList.set([song({ generations: [], generation_count: 0 })]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+		]);
 		const target = await renderDetail();
 
 		const playBtn = requireElement<HTMLButtonElement>(target, '.item-play');
@@ -753,8 +738,16 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('does not open the song when Play is clicked', async () => {
-		const first = generation({ id: 'g-first' });
-		songList.set([song({ generations: [first], generation_count: 1 })]);
+		const first = generation({ song_id: 's-local', id: 'g-first' });
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generations: [first],
+				generation_count: 1
+			})
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-play').click();
@@ -764,8 +757,16 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('opens the song when the row body is clicked, not Play', async () => {
-		const first = generation({ id: 'g-first' });
-		songList.set([song({ generations: [first], generation_count: 1 })]);
+		const first = generation({ song_id: 's-local', id: 'g-first' });
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generations: [first],
+				generation_count: 1
+			})
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-body').click();

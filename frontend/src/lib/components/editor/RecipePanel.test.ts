@@ -1,3 +1,4 @@
+import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -29,67 +30,30 @@ import {
 	sourceGeneration
 } from '$lib/stores/recipe';
 import { RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+
 import RecipePanel from './RecipePanel.svelte';
 import recipePanelSource from './RecipePanel.svelte?raw';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function makeSong(): SongItem {
-	return {
-		id: 's1',
-		slug: 'test',
-		title: 'Test',
-		album_id: 'a1',
-		album_title: 'Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: 'hello',
-		prompt: 'rock',
-		bpm: 108,
-		audio_duration: 195,
-		key_scale: 'A',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '',
-		is_shared: false,
-		share_slug: null
-	};
-}
-
-function makeGeneration(): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 3,
-		generation_number: 2,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00'
-	};
-}
-
 beforeEach(() => {
-	loadSongData(makeSong());
+	loadSongData(
+		makeSong({
+			slug: 'test',
+			title: 'Test',
+			lyrics: 'hello',
+			prompt: 'rock',
+			bpm: 108,
+			audio_duration: 195,
+			key_scale: 'A',
+			generation_params: null,
+			generation_count: 0,
+			best_scores: null,
+			best_rating: null,
+			created_at: '',
+			share_slug: null
+		})
+	);
 	pinnedSeed.set(null);
 	clearSource();
 	recipeModel.set('turbo');
@@ -142,7 +106,7 @@ describe('RecipePanel', () => {
 			expect(btn.disabled).toBe(true);
 		}
 
-		setSourceFromGeneration(makeGeneration(), 'repaint');
+		setSourceFromGeneration(makeGeneration({ version_number: 3, generation_number: 2 }), 'repaint');
 		await tick();
 		const afterSource = Array.from(
 			target.querySelectorAll<HTMLButtonElement>('.repaint-row .segmented button')
@@ -156,7 +120,7 @@ describe('RecipePanel', () => {
 		'says that %s uses the lyrics and style currently in the editor',
 		async (mode) => {
 			const target = await render();
-			setSourceFromGeneration(makeGeneration(), mode);
+			setSourceFromGeneration(makeGeneration({ version_number: 3, generation_number: 2 }), mode);
 			await tick();
 
 			expect(target.querySelector('.source-mode-hint')?.textContent).toBe(RECIPE_SOURCE_MODE_HINT);
