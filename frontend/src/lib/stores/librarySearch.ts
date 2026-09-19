@@ -61,6 +61,9 @@ const EMPTY_SEARCH: LibrarySearchState = {
 	nextCursor: null
 };
 
+export const railTreeQuery = writable('');
+export const searchQuery = writable('');
+
 export const librarySort = writable<LibrarySort>('newest');
 export const librarySearch = writable<LibrarySearchState>({ ...EMPTY_SEARCH });
 export const libraryBrowse = writable<LibraryBrowseState>({

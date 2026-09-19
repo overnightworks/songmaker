@@ -11,10 +11,10 @@ import type {
 import { ApiError } from '$lib/api/fetch';
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
-import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
 	librarySearch,
+	searchQuery,
 	librarySort,
 	loadLibraryBrowse,
 	resetLibrarySearchForTests
