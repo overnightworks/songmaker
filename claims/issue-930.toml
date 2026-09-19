@@ -1,0 +1,8 @@
+claim_id = "ed8ace21e34342d4b7b79a9f2fc62f8e"
+agent = "claude-head"
+role = "builder"
+base = "76e8b4517168faee7f849fbd3059558ed1771858"
+branch = "claude/issue-930-dead-frontend"
+scope = [".github/workflows/ci.yml", "frontend/src/lib/components", "frontend/src/lib/services", "frontend/src/lib/stores", "frontend/src/lib/utils", "scripts/check_test_only_exports.sh", "scripts/dead-exports.allow"]
+opened_commit = "ef8f8b9d188c1b8d6fbc04e2cb85650b6db4268b"
+whole_reason = "Löschungen und Umstellungen eines Audits gehören zusammen; die Pfade sind Verzeichnisse, weil tote Dateien verschwinden"
