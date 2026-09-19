@@ -42,8 +42,6 @@ from songmaker_cli.constants import (
     JOB_ERROR_UNEXPECTED,
     JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
-    JOB_ERROR_WORKER_GENERATION_FAILED,
-    JOB_ERROR_WORKER_STREAM_SILENT,
     JOB_HEARTBEAT_INTERVAL_SECONDS,
     JOB_TERMINAL_STATUSES,
     JobStatus,
@@ -62,7 +60,6 @@ _USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
     (ConnectionError, JOB_ERROR_SERVER_UNREACHABLE),
     (TimeoutError, JOB_ERROR_GENERATION_TIMED_OUT),
     (NoCapacityError, JOB_ERROR_NO_WORKERS),
-    (WorkerTaskFailed, JOB_ERROR_WORKER_GENERATION_FAILED),
     (RuntimeError, JOB_ERROR_INTERNAL),
 )
 
@@ -115,8 +112,6 @@ def _sanitize_codex_image_cli_error(exc: CodexImageCliError) -> str:
 
 
 def _default_error_message(exc: Exception) -> str:
-    if isinstance(exc, WorkerTaskFailed) and str(exc) == JOB_ERROR_WORKER_STREAM_SILENT:
-        return JOB_ERROR_WORKER_STREAM_SILENT
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return message
@@ -124,6 +119,7 @@ def _default_error_message(exc: Exception) -> str:
 
 
 _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = (
+    (WorkerTaskFailed, str),
     (GenerationSetupError, _sanitize_generation_setup_error),
     (JudgeFailureError, _sanitize_judge_failure_error),
     (
