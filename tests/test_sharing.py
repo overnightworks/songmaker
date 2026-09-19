@@ -1441,16 +1441,26 @@ def _shared_album_slug(client: TestClient) -> str:
     return client.post("/api/albums/test_album/share").json()["share_slug"]
 
 
-def test_shared_rate_limit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stream", [False, True], ids=["page", "stream"])
+def test_shared_rate_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stream: bool,
+) -> None:
+    import songmaker_cli.constants as consts
+
     client, _ = _make_sharing_app(tmp_path)
     slug = _shared_album_slug(client)
-
-    with _shared_app_with_small_budget(client, tmp_path) as app:
-        unauthed = TestClient(app, cookies={})
-        for _ in range(3):
-            resp = unauthed.get(f"/shared/{slug}")
+    monkeypatch.setattr(consts, "SHARING_RATE_LIMIT", 100 if stream else 2)
+    monkeypatch.setattr(consts, "SHARING_STREAM_RATE_LIMIT", 2)
+    unauthed = TestClient(client.app, cookies={})
+    for _ in range(3):
+        resp = (
+            unauthed.post("/shared/missing/stream")
+            if stream else unauthed.get(f"/shared/{slug}")
+        )
 
     assert resp.status_code == 429
+    if stream:
+        assert unauthed.get(f"/shared/{slug}").status_code == 200
 
 
 def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> None:
@@ -1720,12 +1730,24 @@ def test_share_inventory_includes_archived_take(tmp_path: Path) -> None:
     assert page.total == 4
 
 
-def test_share_inventory_pagination_total_is_unfiltered(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "album_timezone",
+    [None, timezone.utc, timezone(timedelta(hours=2)), timezone(timedelta(hours=-2))],
+)
+def test_share_inventory_pagination_total_is_unfiltered(
+    tmp_path: Path, album_timezone: timezone | None,
+) -> None:
     from songmaker_cli.constants import LIBRARY_ITEM_ALBUM
     from songmaker_cli.db.queries import list_shared_inventory
 
     factory = _inventory_factory(tmp_path)
     with factory() as session:
+        album = session.get(Album, "alice-album")
+        timestamp = _ts(40)
+        album.created_at = (
+            timestamp.astimezone(album_timezone)
+            if album_timezone is not None else timestamp.replace(tzinfo=None)
+        )
         first = list_shared_inventory(session, USER_A, offset=0, limit=2)
         second = list_shared_inventory(session, USER_A, offset=2, limit=2)
         albums = list_shared_inventory(
@@ -1987,6 +2009,13 @@ def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient
         ),
         pytest.param(
             "/api/songs/s1/share", "/shared/song/{slug}/cover", id="song",
+        ),
+        pytest.param(
+            "/api/songs/s1/share", "/shared/song/{slug}/album-cover", id="song-album",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share",
+            "/shared/playlist/{slug}/album-cover/test_album", id="playlist-album",
         ),
         pytest.param(
             "/api/generations/g1/share",
