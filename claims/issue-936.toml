@@ -1,0 +1,8 @@
+claim_id = "a27b2585fef14961b8e136c334814b39"
+agent = "claude-head"
+role = "builder"
+base = "d306e86efaf290be017e9b42b9fb12654450f4b5"
+branch = "claude/issue-936-dead-exports"
+scope = ["frontend/src/lib/api/fetch.ts", "frontend/src/lib/services", "frontend/src/lib/stores", "frontend/src/lib/utils", "scripts/check_test_only_exports.sh", "scripts/dead-exports.allow"]
+opened_commit = "1e879e330fe730442295f8a7c9d6c1c08ab96c6a"
+whole_reason = "Löschungen eines Audits über viele kleine Dateien; Verzeichnisse, weil Dateien verschwinden"
