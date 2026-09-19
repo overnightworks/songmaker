@@ -3178,17 +3178,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
 def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     client: TestClient,
 ) -> None:
-    """The lease release (`_schedule_job_stream_lease_release`) is
+    """The lease release (`redis_client.release_lease_in_background`) is
     intentionally fire-and-forget -- a background `asyncio.create_task`,
     off the generator's own execution path, the same way
-    resource_event_api.py's `_schedule_stream_lease_release` is (see that
-    module's `test_disconnect_releases_lease_off_loop_and_contains_failure`:
-    release must not block the stream's own close). That makes
-    TestClient.stream() the wrong tool to observe it with: TestClient never
-    entered via `with TestClient(app) as client:` opens a fresh
-    `anyio.from_thread` portal per call and tears it down the instant that
-    call's response finishes (starlette's ASGITransport.handle_request), so
-    the fire-and-forget task is racing that teardown, not the test's own
+    resource_event_api.py's stream lease release is (see that module's
+    `test_disconnect_releases_lease_off_loop_and_contains_failure`: release
+    must not block the stream's own close). That makes TestClient.stream()
+    the wrong tool to observe it with: TestClient never entered via
+    `with TestClient(app) as client:` opens a fresh `anyio.from_thread`
+    portal per call and tears it down the instant that call's response
+    finishes (starlette's ASGITransport.handle_request), so the
+    fire-and-forget task is racing that teardown, not the test's own
     wait -- no `released.wait(N)` duration, however generous, fixes a task
     that can be cancelled before it runs. Driving the app directly inside
     one asyncio.run() (the same technique
@@ -3196,11 +3196,11 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     uses, and test_resource_event_api.py's outer-deadline tests) keeps the
     loop that scheduled the task alive, so the test can wait on the real
     condition -- the task's own completion, observed via
-    jobs_api._LEASE_RELEASE_TASKS emptying, mirroring
+    redis_client._LEASE_RELEASE_TASKS emptying, mirroring
     test_resource_event_api.py's _wait_for_released_lease."""
     import asyncio
 
-    from songmaker_cli import jobs_api
+    from songmaker_cli import redis_client
     from songmaker_cli.db.queries import create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
@@ -3238,7 +3238,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
         await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
 
         for _ in range(500):
-            if not jobs_api._LEASE_RELEASE_TASKS:
+            if not redis_client._LEASE_RELEASE_TASKS:
                 break
             await asyncio.sleep(0.01)
 
@@ -3247,7 +3247,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     status = asyncio.run(asyncio.wait_for(_drive(), timeout=5))
 
     assert status == 200
-    assert not jobs_api._LEASE_RELEASE_TASKS
+    assert not redis_client._LEASE_RELEASE_TASKS
     assert acquire_calls == [_DEFAULT_USER_ID]
     assert release_calls == [(_DEFAULT_USER_ID, "lease-token")]
 
