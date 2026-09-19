@@ -77,14 +77,12 @@ def run_scoring_job(
     job_id: str,
     gen_id: str,
     scorers: list[str] | None,
-    db_factory: sessionmaker[Session] | None = None,
-    audio_dir: Path | None = None,
+    *,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
     device: str = "cpu",
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
-    assert db_factory is not None, "db_factory is required"
-    assert audio_dir is not None, "audio_dir is required"
-
     import structlog
 
     structlog.contextvars.clear_contextvars()

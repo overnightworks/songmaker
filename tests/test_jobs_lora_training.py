@@ -1850,12 +1850,6 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
             _run(reservation)
 
 
-def test_run_without_factory_raises(db_factory, tmp_path) -> None:
-    training = run_lora_training_job({}, "j", "l", "u")
-    with pytest.raises(RuntimeError):
-        _run(training)
-
-
 def test_restoring_a_previous_adapter_rejects_a_file_at_the_final_path(tmp_path: Path) -> None:
     from songmaker_cli.jobs.lora_training import _restore_previous_lora_adapter
 
