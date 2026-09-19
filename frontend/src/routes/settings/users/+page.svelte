@@ -845,11 +845,7 @@
 								>
 								<td class="actions">
 									{#if me && user.id !== me.id}
-										<button
-											class="small"
-											data-hitbox="text"
-											onclick={() => handleToggleRole(user)}
-										>
+										<button class="small" data-hitbox="text" onclick={() => handleToggleRole(user)}>
 											{user.role === 'admin' ? 'Demote' : 'Promote'}
 										</button>
 										<button
