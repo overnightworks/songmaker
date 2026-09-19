@@ -29,6 +29,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSample
 from songmaker_cli.db.queries import get_job, get_user_lora
 from songmaker_cli.jobs.lora_training import (
+    _LoraProgressThrottle,
     _validate_export_path,
     _worker_training_started_at,
     cleanup_failed_lora_with_factory,
@@ -210,6 +211,48 @@ def _patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=Non
             yield
 
     return _cm()
+
+
+def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
+    seeded, db_factory,
+) -> None:
+    started_at = datetime(2026, 9, 19, 12, tzinfo=timezone.utc)
+    throttle = _LoraProgressThrottle(db_factory, "job-1", seeded["lora_id"])
+    with db_factory() as session:
+        lora = get_user_lora(session, seeded["lora_id"])
+        lora.status = LoraStatus.PREPROCESSING
+        session.commit()
+
+    reports = [
+        (0.0, 0.05, 0, None, True, LoraStatus.PREPROCESSING),
+        (1.99, 0.10, 0, None, False, LoraStatus.PREPROCESSING),
+        (2.0, 0.15, 0, None, True, LoraStatus.PREPROCESSING),
+        (2.1, 0.20, 1, None, True, LoraStatus.TRAINING),
+        (2.2, 0.25, 1, started_at, True, LoraStatus.TRAINING),
+        (2.3, 0.90, 1, started_at, False, LoraStatus.TRAINING),
+        (4.2, 0.80, 1, started_at, True, LoraStatus.TRAINING),
+        (4.3, 0.90, 500, started_at, True, LoraStatus.EXPORTING),
+        (4.4, 0.95, 500, started_at, False, LoraStatus.EXPORTING),
+    ]
+    expected = None
+    for now, fraction, epoch, start, published, status in reports:
+        with patch(
+            "songmaker_cli.jobs.lora_training.time",
+            SimpleNamespace(monotonic=lambda: now),
+        ):
+            throttle.report(fraction, epoch, 500, start)
+        if published:
+            expected = (fraction, epoch, start)
+        with db_factory() as session:
+            job = get_job(session, "job-1")
+            saved_start = (
+                job.training_started_at.replace(tzinfo=timezone.utc)
+                if job.training_started_at is not None else None
+            )
+            assert (job.progress, job.current_epoch, saved_start) == expected
+            assert job.train_epochs == 500
+            assert job.status == JobStatus.RUNNING
+            assert get_user_lora(session, seeded["lora_id"]).status == status
 
 
 def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplog) -> None:
