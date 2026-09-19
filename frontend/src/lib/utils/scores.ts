@@ -1,11 +1,11 @@
 import type { TrackScores } from '$lib/api/types';
 
-export interface ScoreThreshold {
+interface ScoreThreshold {
 	good: number;
 	ok: number;
 }
 
-export const SCORE_THRESHOLDS: Record<string, ScoreThreshold> = {
+const SCORE_THRESHOLDS: Record<string, ScoreThreshold> = {
 	user_rating: { good: 70, ok: 40 },
 	audiobox_enjoyment: { good: 7, ok: 4 },
 	audiobox_quality: { good: 7, ok: 4 },
@@ -21,7 +21,7 @@ export function scoreColor(key: string, value: number): string {
 	return value >= t.ok ? 'ok' : 'bad';
 }
 
-export type ScoreKey =
+type ScoreKey =
 	| 'user_rating'
 	| 'text_accuracy'
 	| 'dynamics'
@@ -36,7 +36,7 @@ type ScoreScale = 'hundred' | 'ten';
 // How the panel writes the raw number out. The pill has its own rule.
 type PanelFormat = 'integer' | 'percent' | 'decimal';
 
-export interface ScoreMetric {
+interface ScoreMetric {
 	key: ScoreKey;
 	label: string;
 	scale: ScoreScale;
@@ -50,7 +50,7 @@ export interface ScoreMetric {
 // tempo that was detected, not how good the take is, and it colours itself
 // from its deviation rather than from a threshold, so the panel keeps it as
 // its own entry.
-export const SCORE_METRICS: readonly ScoreMetric[] = [
+const SCORE_METRICS: readonly ScoreMetric[] = [
 	{ key: 'user_rating', label: 'Rating', scale: 'hundred', panelFormat: 'integer' },
 	{ key: 'text_accuracy', label: 'Lyrics sung', scale: 'hundred', panelFormat: 'percent' },
 	{ key: 'dynamics', label: 'Dynamics', scale: 'hundred', panelFormat: 'integer' },
@@ -79,7 +79,7 @@ export function formatScore(metric: ScoreMetric, value: number, display: 'panel'
 	}
 }
 
-export interface ScoreReading {
+interface ScoreReading {
 	metric: ScoreMetric;
 	value: number;
 }
@@ -100,7 +100,7 @@ export function scoreReadings(scores: TrackScores | null): ScoreReading[] {
 // A take at or above this much uninterrupted silence reads as broken rather
 // than merely quiet — well past an intentional dramatic pause, which rarely
 // runs this long (issue #222).
-export const QUALITY_FLAG_SILENCE_SECONDS = 15;
+const QUALITY_FLAG_SILENCE_SECONDS = 15;
 
 // lyrical_coherence lands on exactly 0 in the clear no-vocals case —
 // Whisper's transcript came back empty — and, as a defensive fallback, when
@@ -108,9 +108,9 @@ export const QUALITY_FLAG_SILENCE_SECONDS = 15;
 // Either way it is a hard failure worth flagging, unlike merely weak or
 // garbled singing (score 1+), which already shows through the score badge's
 // own color.
-export const QUALITY_FLAG_VOCAL_FAILURE_COHERENCE = 0;
+const QUALITY_FLAG_VOCAL_FAILURE_COHERENCE = 0;
 
-export interface QualityFlag {
+interface QualityFlag {
 	label: string;
 	title: string;
 }

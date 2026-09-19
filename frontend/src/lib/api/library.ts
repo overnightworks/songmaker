@@ -15,7 +15,7 @@ const DEFAULT_LIBRARY_POOL: LibraryPoolQueue['pool'] = 'mix';
 
 export type LibrarySort = CreatedSort;
 
-export type { LibraryAlbumHit, LibrarySearchResponse, LibrarySongHit } from './types';
+export type { LibrarySearchResponse } from './types';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 export type LibraryContinueItem = LibraryContinueResponse['items'][number];
 

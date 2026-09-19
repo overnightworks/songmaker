@@ -57,7 +57,7 @@ export async function fetchSharedAlbumStream(slug: string): Promise<QueueStreamM
 	return resp.json() as Promise<QueueStreamManifest>;
 }
 
-export interface QueueStreamPinState {
+interface QueueStreamPinState {
 	snapshot_id: string;
 	pinned: boolean;
 	pinned_at: string | null;

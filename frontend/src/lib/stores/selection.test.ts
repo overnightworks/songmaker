@@ -4,10 +4,6 @@ import { get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
 import {
 	clearSelection,
-	enterSelectionMode,
-	exitSelectionMode,
-	isSelected,
-	selectAll,
 	selectAllUnkept,
 	selectedIds,
 	selectionCount,
@@ -53,7 +49,7 @@ describe('selection', () => {
 
 		expect(get(selectionMode)).toBe(true);
 		expect(get(selectionCount)).toBe(1);
-		expect(isSelected('g1')).toBe(true);
+		expect(get(selectedIds).has('g1')).toBe(true);
 
 		toggleSelection('g1');
 
@@ -72,19 +68,18 @@ describe('selection', () => {
 
 	it('keeps existing selections when adding all ids and clears them when selection mode exits', () => {
 		toggleSelection('g1');
-		selectAll(['g1', 'g2']);
+		selectAllUnkept([generation({ id: 'g1' }), generation({ id: 'g2' })]);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1', 'g2']));
 		expect(get(selectionCount)).toBe(2);
 
-		exitSelectionMode();
+		clearSelection();
 
 		expect(get(selectionMode)).toBe(false);
 		expect(get(selectionCount)).toBe(0);
 	});
 
 	it('selects only generations that are neither picked nor kept', () => {
-		enterSelectionMode();
 		selectAllUnkept([
 			generation({ id: 'available' }),
 			generation({ id: 'picked', is_picked: true }),

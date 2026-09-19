@@ -3,14 +3,14 @@ import { writable } from 'svelte/store';
 const TOAST_DURATION_MS = 5000;
 const UNDO_TOAST_DURATION_MS = 30000;
 
-export type ToastType = 'error' | 'success' | 'info';
+type ToastType = 'error' | 'success' | 'info';
 
-export interface ToastAction {
+interface ToastAction {
 	label: string;
 	handler: () => void | Promise<void>;
 }
 
-export interface Toast {
+interface Toast {
 	id: number;
 	message: string;
 	type: ToastType;

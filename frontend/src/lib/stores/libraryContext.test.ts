@@ -86,7 +86,6 @@ import { goto } from '$app/navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
-	albumIsExpanded,
 	applyLibraryHistory,
 	captureLibraryScroll,
 	detailTab,
@@ -248,14 +247,6 @@ afterEach(() => {
 	resetLibrarySearchForTests();
 	resetShares();
 	resetPlaylists();
-});
-
-describe('albumIsExpanded', () => {
-	it('expands search groups with song hits only', () => {
-		expect(albumIsExpanded({ searching: false, songHits: 2 })).toBe(false);
-		expect(albumIsExpanded({ searching: true, songHits: 1 })).toBe(true);
-		expect(albumIsExpanded({ searching: true, songHits: 0 })).toBe(false);
-	});
 });
 
 describe('library history snapshot', () => {

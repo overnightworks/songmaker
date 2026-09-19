@@ -7,7 +7,7 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { EMPTY_RESOURCE_SYNC, resourceSync } from '$lib/stores/resourceSync';
+import { resetResourceSyncForTests, resourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
 const retryResourceSync = vi.hoisted(() => vi.fn(async () => true));
@@ -85,12 +85,12 @@ function renderWorkspace(): HTMLElement {
 }
 
 function streamLive(): void {
-	resourceSync.set({ ...EMPTY_RESOURCE_SYNC, status: 'live', ready: true });
+	resourceSync.update((state) => ({ ...state, status: 'live', ready: true }));
 }
 
 beforeEach(() => {
 	retryResourceSync.mockClear();
-	resourceSync.set({ ...EMPTY_RESOURCE_SYNC });
+	resetResourceSyncForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetCollectionForTests();
@@ -103,7 +103,7 @@ beforeEach(() => {
 afterEach(() => {
 	for (const app of mounted.splice(0)) void unmount(app);
 	document.body.innerHTML = '';
-	resourceSync.set({ ...EMPTY_RESOURCE_SYNC });
+	resetResourceSyncForTests();
 });
 
 describe('the library workspace', () => {
@@ -114,7 +114,7 @@ describe('the library workspace', () => {
 	});
 
 	it('states the failure and offers a retry when the stream never came up', async () => {
-		resourceSync.set({ ...EMPTY_RESOURCE_SYNC, status: 'error', error: 'Stream refused' });
+		resourceSync.update((state) => ({ ...state, status: 'error', error: 'Stream refused' }));
 
 		const target = renderWorkspace();
 		expect(target.textContent).toContain('Stream refused');
@@ -146,12 +146,12 @@ describe('the library workspace', () => {
 		const target = renderWorkspace();
 		await tick();
 
-		resourceSync.set({
-			...EMPTY_RESOURCE_SYNC,
+		resourceSync.update((state) => ({
+			...state,
 			status: 'error',
 			error: 'Lost the stream',
 			ready: true
-		});
+		}));
 		await tick();
 
 		expect(target.textContent).toContain('Lost the stream');

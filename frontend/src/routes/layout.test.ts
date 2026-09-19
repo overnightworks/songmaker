@@ -24,13 +24,7 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import type { GenerationItem, SongItem } from '$lib/api/types';
-import {
-	closeSidebar,
-	railCollapsed,
-	railWidth,
-	RAIL_WIDTH_STORAGE_KEY,
-	sidebarOpen
-} from '$lib/stores/ui';
+import { closeSidebar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState, liveStream } = vi.hoisted(() => ({
@@ -222,7 +216,7 @@ afterEach(async () => {
 	railCollapsed.set(false);
 	localStorage.removeItem('songmaker.rail-collapsed');
 	railWidth.set(264);
-	localStorage.removeItem(RAIL_WIDTH_STORAGE_KEY);
+	localStorage.removeItem('songmaker.rail-width');
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
@@ -437,7 +431,7 @@ describe('app shell', () => {
 	});
 
 	it('makes the desktop shell inherit the remembered expanded rail width', async () => {
-		localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, '320');
+		localStorage.setItem('songmaker.rail-width', '320');
 		const target = await renderDesktopLayout();
 		const shell = requireElement<HTMLElement>(target, '.shell-row');
 		const rail = requireElement<HTMLElement>(shell, '.rail');

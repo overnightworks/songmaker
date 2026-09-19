@@ -11,7 +11,7 @@ export function playbackVisualizerAllowed(): boolean {
 	);
 }
 
-export interface Particle {
+interface Particle {
 	x: number;
 	y: number;
 	vx: number;
@@ -33,7 +33,7 @@ export interface VizColors {
 	ab: number;
 }
 
-export function lerpColor(c: VizColors, t: number): { r: number; g: number; b: number } {
+function lerpColor(c: VizColors, t: number): { r: number; g: number; b: number } {
 	return {
 		r: Math.round(c.pr + (c.ar - c.pr) * t),
 		g: Math.round(c.pg + (c.ag - c.pg) * t),

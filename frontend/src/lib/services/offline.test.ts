@@ -1,26 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import {
-	manifestCacheKey,
 	offlineStreamUrl,
-	buildCacheStreamMessage,
-	buildUncacheStreamMessage,
-	isStreamSaved,
 	saveStream,
 	removeStream,
-	offlinePlaylistMetaKey,
-	playlistOfflineMeta,
 	rememberPlaylistOfflineStream,
 	forgetPlaylistOfflineStream,
 	loadSavedOfflinePlaylist,
-	OFFLINE_STREAM_META_VERSION,
-	isOfflinePlaylistStreamMeta,
-	isLiveAudioPath,
-	isOfflineAudioPath,
 	shouldInterceptInServiceWorker,
 	responseForOfflineCacheHit,
 	requestPathname
 } from './offline';
+
+const SAVED_PLAYLIST = {
+	playlist_id: 'pl-1',
+	snapshot_id: 'snap-1',
+	stream_url: '/offline/stream/snap-1',
+	manifest_url: '/offline/manifest/snap-1',
+	version: 1
+};
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -38,55 +36,18 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 	};
 }
 
-// ── Pure message builders ──────────────────────────────────────────────────
-
-describe('manifestCacheKey', () => {
-	it('produces a stable URL from snapshot id', () => {
-		expect(manifestCacheKey('abc-123')).toBe('/offline/manifest/abc-123');
-	});
-});
-
-describe('buildCacheStreamMessage', () => {
-	it('sets type CACHE_STREAM', () => {
-		expect(buildCacheStreamMessage(makeManifest()).type).toBe('CACHE_STREAM');
-	});
-
-	it('fetches the live stream and caches the synthetic offline URL', () => {
-		const manifest = makeManifest({
-			snapshot_id: 'snap-9',
-			stream_url: '/api/queue-streams/snap-9/audio'
-		});
-		const msg = buildCacheStreamMessage(manifest);
-		expect(msg.sourceUrl).toBe('/api/queue-streams/snap-9/audio');
-		expect(msg.streamUrl).toBe(offlineStreamUrl('snap-9'));
-	});
-
-	it('derives manifestUrl from snapshot_id', () => {
-		const manifest = makeManifest({ snapshot_id: 'snap-42' });
-		expect(buildCacheStreamMessage(manifest).manifestUrl).toBe(manifestCacheKey('snap-42'));
-	});
-
-	it('reports trackCount in meta', () => {
-		const manifest = makeManifest({ tracks: [] });
-		expect(buildCacheStreamMessage(manifest).meta.trackCount).toBe(0);
-	});
-});
-
 describe('service worker fetch routing', () => {
 	it('does not intercept live per-track audio', () => {
-		expect(isLiveAudioPath('/audio/user/file.mp3')).toBe(true);
 		expect(shouldInterceptInServiceWorker('/audio/user/file.mp3')).toBe(false);
 	});
 
 	it('does not intercept live queue-stream audio', () => {
-		expect(isLiveAudioPath('/api/queue-streams/abc/audio')).toBe(true);
 		expect(shouldInterceptInServiceWorker('/api/queue-streams/abc/audio')).toBe(false);
 	});
 
 	it('intercepts only the synthetic offline namespace', () => {
-		expect(isOfflineAudioPath(offlineStreamUrl('snap-1'))).toBe(true);
 		expect(shouldInterceptInServiceWorker(offlineStreamUrl('snap-1'))).toBe(true);
-		expect(shouldInterceptInServiceWorker(manifestCacheKey('snap-1'))).toBe(true);
+		expect(shouldInterceptInServiceWorker('/offline/manifest/snap-1')).toBe(true);
 		expect(shouldInterceptInServiceWorker('/api/jobs/1')).toBe(false);
 	});
 
@@ -125,18 +86,6 @@ describe('responseForOfflineCacheHit', () => {
 	});
 });
 
-describe('buildUncacheStreamMessage', () => {
-	it('sets type UNCACHE_STREAM', () => {
-		expect(buildUncacheStreamMessage('/audio/s.mp3', 'snap-1').type).toBe('UNCACHE_STREAM');
-	});
-
-	it('preserves streamUrl and derives manifestUrl', () => {
-		const msg = buildUncacheStreamMessage('/audio/s.mp3', 'snap-1');
-		expect(msg.streamUrl).toBe('/audio/s.mp3');
-		expect(msg.manifestUrl).toBe(manifestCacheKey('snap-1'));
-	});
-});
-
 // ── Cache-API interaction ──────────────────────────────────────────────────
 
 // Simple in-memory cache that the mock caches.open returns.
@@ -160,37 +109,6 @@ const mockCache = {
 const mockCaches = {
 	open: vi.fn(async () => mockCache)
 };
-
-describe('isStreamSaved', () => {
-	beforeEach(() => {
-		store.clear();
-		vi.clearAllMocks();
-		mockCaches.open.mockResolvedValue(mockCache);
-		mockCache.match.mockImplementation(async (url: string | Request) => {
-			const key = typeof url === 'string' ? url : (url as Request).url;
-			return store.get(key);
-		});
-		vi.stubGlobal('caches', mockCaches);
-	});
-
-	afterEach(() => {
-		vi.unstubAllGlobals();
-	});
-
-	it('returns false when the URL is not in the cache', async () => {
-		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(false);
-	});
-
-	it('returns true when the URL is present in the cache', async () => {
-		store.set(offlineStreamUrl('snap-1'), new Response('data'));
-		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(true);
-	});
-
-	it('returns false when caches API is unavailable', async () => {
-		vi.unstubAllGlobals();
-		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(false);
-	});
-});
 
 describe('removeStream', () => {
 	const mockController = { postMessage: vi.fn() };
@@ -228,7 +146,7 @@ describe('removeStream', () => {
 	});
 
 	it('removes the manifest URL from the cache', async () => {
-		const mKey = manifestCacheKey('snap-1');
+		const mKey = '/offline/manifest/snap-1';
 		store.set(mKey, new Response('{}'));
 		await removeStream(offlineStreamUrl('snap-1'), 'snap-1');
 		expect(store.has(mKey)).toBe(false);
@@ -264,7 +182,13 @@ describe('saveStream', () => {
 		});
 		await saveStream(makeManifest());
 		expect(mockController.postMessage).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'CACHE_STREAM' }),
+			{
+				type: 'CACHE_STREAM',
+				sourceUrl: '/audio/queue-streams/snap-1.mp3',
+				streamUrl: '/offline/stream/snap-1',
+				manifestUrl: '/offline/manifest/snap-1',
+				meta: { title: 'snap-1', trackCount: 0 }
+			},
 			expect.any(Array)
 		);
 	});
@@ -346,32 +270,32 @@ describe('playlist offline metadata', () => {
 	});
 
 	it('reconstructs saved status from cache metadata with empty sessionStorage', async () => {
-		const meta = playlistOfflineMeta('pl-1', 'snap-1');
-		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+		const meta = SAVED_PLAYLIST;
+		store.set('/offline/meta/playlist/pl-1', new Response(JSON.stringify(meta)));
 		store.set(meta.stream_url, new Response('audio'));
 
 		const loaded = await loadSavedOfflinePlaylist('pl-1');
 
 		expect(sessionStorage).toHaveLength(0);
 		expect(loaded).toEqual(meta);
-		expect(loaded?.version).toBe(OFFLINE_STREAM_META_VERSION);
+		expect(loaded?.version).toBe(1);
 	});
 
 	it('forgets metadata when the stream body is gone', async () => {
-		const meta = playlistOfflineMeta('pl-1', 'snap-1');
-		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+		const meta = SAVED_PLAYLIST;
+		store.set('/offline/meta/playlist/pl-1', new Response(JSON.stringify(meta)));
 
 		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
-		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
+		expect(store.has('/offline/meta/playlist/pl-1')).toBe(false);
 	});
 
 	it('ignores an unknown metadata version', async () => {
 		store.set(
-			offlinePlaylistMetaKey('pl-1'),
+			'/offline/meta/playlist/pl-1',
 			new Response(
 				JSON.stringify({
-					...playlistOfflineMeta('pl-1', 'snap-1'),
-					version: OFFLINE_STREAM_META_VERSION + 1
+					...SAVED_PLAYLIST,
+					version: 2
 				})
 			)
 		);
@@ -381,35 +305,34 @@ describe('playlist offline metadata', () => {
 	});
 
 	it('rejects metadata stored under a different playlist key', async () => {
-		const meta = playlistOfflineMeta('pl-other', 'snap-1');
-		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+		const meta = { ...SAVED_PLAYLIST, playlist_id: 'pl-other' };
+		store.set('/offline/meta/playlist/pl-1', new Response(JSON.stringify(meta)));
 		store.set(meta.stream_url, new Response('audio'));
 
 		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
-		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
+		expect(store.has('/offline/meta/playlist/pl-1')).toBe(false);
 	});
 
 	it.each([
-		['an older version', { ...playlistOfflineMeta('pl-1', 'snap-1'), version: 0 }],
-		['an empty snapshot id', { ...playlistOfflineMeta('pl-1', 'snap-1'), snapshot_id: '' }],
-		[
-			'a missing manifest URL',
-			{ ...playlistOfflineMeta('pl-1', 'snap-1'), manifest_url: undefined }
-		],
+		['an older version', { ...SAVED_PLAYLIST, version: 0 }],
+		['an empty snapshot id', { ...SAVED_PLAYLIST, snapshot_id: '' }],
+		['a missing manifest URL', { ...SAVED_PLAYLIST, manifest_url: undefined }],
 		['a non-object value', 'not metadata']
-	])('does not treat %s as reusable offline playlist metadata', (_name, candidate) => {
-		expect(isOfflinePlaylistStreamMeta(candidate)).toBe(false);
+	])('does not treat %s as reusable offline playlist metadata', async (_name, candidate) => {
+		store.set('/offline/meta/playlist/pl-1', new Response(JSON.stringify(candidate)));
+		store.set(SAVED_PLAYLIST.stream_url, new Response('audio'));
+		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
 	});
 
 	it('writes and removes playlist metadata in the cache', async () => {
-		await rememberPlaylistOfflineStream('pl-1', 'snap-9');
-		const raw = store.get(offlinePlaylistMetaKey('pl-1'));
+		await rememberPlaylistOfflineStream('pl-1', 'snap-1');
+		const raw = store.get('/offline/meta/playlist/pl-1');
 		if (!raw) {
 			throw new Error('expected cached playlist metadata');
 		}
-		expect(await raw.json()).toEqual(playlistOfflineMeta('pl-1', 'snap-9'));
+		expect(await raw.json()).toEqual(SAVED_PLAYLIST);
 
 		await forgetPlaylistOfflineStream('pl-1');
-		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
+		expect(store.has('/offline/meta/playlist/pl-1')).toBe(false);
 	});
 });

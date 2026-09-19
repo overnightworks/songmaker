@@ -72,10 +72,10 @@ export const LORA_TRAINING_PROGRESS_LABEL = 'Training progress';
 export const LORA_TRAINING_STATUS_LABEL = 'Training';
 export const LORA_TRAINING_WAITING_LABEL = 'Waiting';
 export const LORA_TRAINING_WAITING_DEFAULT_REASON = 'Waiting for the worker.';
-export const LORA_TRAINING_QUEUE_POSITION_TEMPLATE = 'Position {position} in the queue';
-export const LORA_TRAINING_EPOCH_TEMPLATE = 'Epoch {current} of {total}';
+const LORA_TRAINING_QUEUE_POSITION_TEMPLATE = 'Position {position} in the queue';
+const LORA_TRAINING_EPOCH_TEMPLATE = 'Epoch {current} of {total}';
 export const LORA_TRAINING_REMAINING_CALCULATING = 'Calculating remaining time...';
-export const LORA_TRAINING_REMAINING_TEMPLATE = '~ {time} remaining';
+const LORA_TRAINING_REMAINING_TEMPLATE = '~ {time} remaining';
 
 export function loraTrainingQueuePositionLabel(position: number): string {
 	return LORA_TRAINING_QUEUE_POSITION_TEMPLATE.replace('{position}', String(position));
@@ -126,8 +126,8 @@ export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
 // A collection row announces the action its click performs, then the title:
 // "Play Tide", "Pause Tide". Every surface that renders such a row, and every
 // flow that finds one by name, builds the label here.
-export const COLLECTION_ROW_PLAY_ACTION = 'Play';
-export const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
+const COLLECTION_ROW_PLAY_ACTION = 'Play';
+const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
 
 export function collectionRowPlayLabel(title: string): string {
 	return `${COLLECTION_ROW_PLAY_ACTION} ${title}`;
@@ -185,8 +185,6 @@ export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remainin
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
-export const EDITOR_TABS_LABEL = 'Editor tabs';
-export const EDITOR_TAB_WRITE_LABEL = 'Write';
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
@@ -310,7 +308,6 @@ export const RECIPE_PRESET_LABEL = 'Preset';
 export const RECIPE_PRESET_DEFAULT_OPTION = 'Default';
 export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
 export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
-export const RECIPE_SAVE_AS_PRESET_NAME_PROMPT = 'Name this preset';
 export const RECIPE_SEED_RANDOM_LABEL = 'Random';
 export const RECIPE_SEED_PINNED_LABEL = 'Pinned';
 export const RECIPE_REPAINT_OFF_LABEL = 'Off';
@@ -328,9 +325,7 @@ export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
-export const LIBRARY_SEARCH_ERROR = 'Search failed';
 export const LIBRARY_RETRY_LABEL = 'Retry';
-export const LIBRARY_LOAD_MORE = 'Load more';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
 export const LIBRARY_SONG_PAGE_SIZE = 200;
@@ -351,8 +346,6 @@ export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
 export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
-export const ALBUM_COVER_REPLACE_LABEL = 'Replace album cover';
-export const ALBUM_COVER_REMOVE_LABEL = 'Remove album cover';
 export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest cover';
 export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestions…';
 export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your covers…';
@@ -432,25 +425,16 @@ export const RAIL_PLAYING_MARKER_LABEL = 'Playing';
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
-export const LIBRARY_ROW_COLLAPSE_LABEL = 'Collapse albums';
-export const LIBRARY_ROW_EXPAND_LABEL = 'Expand albums';
-// Match the mobile shell: without a stored choice, its song and take row
-// starts collapsed so the editor remains the first surface to read.
-export const LIBRARY_ROW_COMPACT_MAX_PX = 390;
-export const LIBRARY_ROW_COMPACT_MEDIA = `(max-width: ${LIBRARY_ROW_COMPACT_MAX_PX}px)`;
-
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
-export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
 export const LIBRARY_ARCHIVED_TOGGLE_LABEL = 'Archived';
 export const LIBRARY_ARCHIVED_EMPTY = 'No archived albums';
 export const LIBRARY_ARCHIVED_LOADING = 'Loading archived albums…';
 export const LIBRARY_ARCHIVED_ERROR = 'Failed to load archived albums';
 export const LIBRARY_ARCHIVED_UNARCHIVE_LABEL = 'Unarchive';
-export const LIBRARY_PLAYLISTS_EMPTY = 'No playlists yet';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
-export const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
+const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
 
 export function playlistEntryOverflowLabel(songTitle: string): string {
 	return `${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${songTitle}`;
@@ -486,8 +470,6 @@ export const LIBRARY_SHARES_TYPE_EMPTY: Record<ShareInventoryType, string> = {
 	generation: 'No shared takes',
 	playlist: 'No shared playlists'
 };
-export const LIBRARY_NEW_PLAYLIST_LABEL = 'New playlist';
-export const LIBRARY_NEW_ALBUM_LABEL = 'New album';
 
 export function librarySharesStatusLabel(total: number): string {
 	return `${LIBRARY_SHARES_LABEL}${LIBRARY_SHARES_COUNT_SEP}${total}`;

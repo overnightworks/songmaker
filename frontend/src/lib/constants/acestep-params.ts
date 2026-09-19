@@ -13,7 +13,7 @@
  * constants/acestep-param-fields.ts and are not duplicated here.
  */
 
-export interface ParamDescription {
+interface ParamDescription {
 	short: string;
 	long: string;
 }

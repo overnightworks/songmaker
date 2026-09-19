@@ -14,7 +14,7 @@ export interface GenerationActions {
 	clickVersion: (versionId: string) => void;
 }
 
-export const GENERATION_ACTIONS_KEY = Symbol('generation-actions');
+const GENERATION_ACTIONS_KEY = Symbol('generation-actions');
 
 export function setGenerationActions(actions: GenerationActions): void {
 	setContext(GENERATION_ACTIONS_KEY, actions);

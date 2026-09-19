@@ -1,7 +1,7 @@
 export const COMPACT_SELECT_CLASS = 'compact-select';
 export const COMPACT_STACK_CLASS = 'compact-stack';
 
-export const COMPACT_UI_STYLE = `.${COMPACT_SELECT_CLASS} {
+const COMPACT_UI_STYLE = `.${COMPACT_SELECT_CLASS} {
 	width: 100%;
 	max-width: 100%;
 	min-width: 0;

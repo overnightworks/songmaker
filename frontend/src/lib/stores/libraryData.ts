@@ -28,7 +28,7 @@ export function resetLibraryContinueItems(): void {
 	libraryContinueItemsRequest = null;
 }
 
-export function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
+function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
 	if (!current) return incoming;
 	const generations =
 		current.generations.length >= incoming.generations.length
@@ -73,9 +73,9 @@ export function cancelAlbumSongLoads(): void {
 	albumSongLoads.clear();
 }
 
-export type AlbumSongsLoadStatus = 'idle' | 'loading' | 'error';
+type AlbumSongsLoadStatus = 'idle' | 'loading' | 'error';
 
-export interface AlbumSongsLoadState {
+interface AlbumSongsLoadState {
 	status: AlbumSongsLoadStatus;
 	error: string | null;
 }
@@ -173,9 +173,9 @@ export function addAlbumToList(album: AlbumItem): void {
 	});
 }
 
-export type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface AllAlbumsLoadState {
+interface AllAlbumsLoadState {
 	status: AllAlbumsLoadStatus;
 	error: string | null;
 }
@@ -263,15 +263,5 @@ export function removeGenerationFromSong(songId: string, genId: string): void {
 		...s,
 		generations: s.generations.filter((g) => g.id !== genId),
 		generation_count: s.generation_count - 1
-	}));
-}
-
-export function updateGenerationScores(
-	genId: string,
-	update: Record<string, number | string>
-): void {
-	updateGenerationInList(genId, (gen) => ({
-		...gen,
-		scores: { ...gen.scores, ...update }
 	}));
 }

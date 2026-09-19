@@ -19,7 +19,6 @@ import {
 	recipeChips,
 	recipeModel,
 	recipeOpen,
-	recipeParamsFromTake,
 	repaintMode,
 	resetRecipeSourceForSong,
 	seedRecipeModel,
@@ -211,20 +210,6 @@ describe('recipeChips', () => {
 		expect(recipeChips({ ...base, model: 'base' }).find((c) => c.key === 'model')?.changed).toBe(
 			false
 		);
-	});
-});
-
-describe('recipeParamsFromTake', () => {
-	it('keeps only recipe-relevant keys', () => {
-		const params = recipeParamsFromTake(generation().generation_params);
-		expect(params.inference_steps).toBe(8);
-		expect(params.guidance_scale).toBe(1.5);
-		expect((params as Record<string, unknown>).task_type).toBeUndefined();
-		expect((params as Record<string, unknown>).seed).toBeUndefined();
-	});
-
-	it('returns an empty object for missing params', () => {
-		expect(recipeParamsFromTake(null)).toEqual({});
 	});
 });
 

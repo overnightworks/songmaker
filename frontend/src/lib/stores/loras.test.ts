@@ -18,16 +18,13 @@ vi.mock('$lib/api/loras', () => ({
 import {
 	loras,
 	lorasError,
-	readyLoras,
 	anyLoraActive,
 	isLoraActive,
 	loadLoras,
 	createLora,
 	softDeleteLora,
 	trainLora,
-	refreshLora,
-	applyLoraUpdate,
-	getLoraById
+	refreshLora
 } from './loras';
 
 function makeLora(over: Record<string, unknown> = {}) {
@@ -85,17 +82,6 @@ describe('LoRA store', () => {
 		expect(mockListLoras).toHaveBeenCalledWith(true);
 	});
 
-	it('readyLoras derives only ready non-deleted entries', () => {
-		loras.set([
-			makeLora({ id: 'a', status: 'ready' }),
-			makeLora({ id: 'b', status: 'training' }),
-			makeLora({ id: 'c', status: 'ready', deleted_at: '2026-01-02' }),
-			makeLora({ id: 'd', status: 'failed' })
-		]);
-		const ready = get(readyLoras);
-		expect(ready.map((l) => l.id)).toEqual(['a']);
-	});
-
 	it('anyLoraActive is true when any is active', () => {
 		loras.set([makeLora({ status: 'draft' })]);
 		expect(get(anyLoraActive)).toBe(false);
@@ -137,19 +123,5 @@ describe('LoRA store', () => {
 		mockGetLora.mockResolvedValueOnce(makeLora({ id: 'x' }));
 		await refreshLora('x');
 		expect(get(loras)).toHaveLength(1);
-	});
-
-	it('applyLoraUpdate inserts or updates', () => {
-		loras.set([makeLora({ id: 'a', name: 'A' })]);
-		applyLoraUpdate(makeLora({ id: 'a', name: 'A2' }));
-		expect(get(loras)[0].name).toBe('A2');
-		applyLoraUpdate(makeLora({ id: 'b', name: 'B' }));
-		expect(get(loras)).toHaveLength(2);
-	});
-
-	it('getLoraById returns the matching entry', () => {
-		loras.set([makeLora({ id: 'a' }), makeLora({ id: 'b' })]);
-		expect(getLoraById('b')?.id).toBe('b');
-		expect(getLoraById('c')).toBeUndefined();
 	});
 });

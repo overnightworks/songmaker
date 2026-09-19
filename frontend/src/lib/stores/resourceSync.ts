@@ -34,12 +34,12 @@ import { selectedSongId } from '$lib/stores/player';
 import { classifyAuthFailure } from '$lib/stores/auth';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
-export type ResourceSyncStatus =
+type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
-export type ResourceAuthProbe = 'ok' | 'unauthorized' | 'disabled' | 'retryable';
+type ResourceAuthProbe = 'ok' | 'unauthorized' | 'disabled' | 'retryable';
 
-export interface ResourceSyncState {
+interface ResourceSyncState {
 	status: ResourceSyncStatus;
 	error: string | null;
 	highWaterMark: string | null;
@@ -47,19 +47,19 @@ export interface ResourceSyncState {
 	ready: boolean;
 }
 
-export interface ResourceSyncTrackedSizes {
+interface ResourceSyncTrackedSizes {
 	deferred: number;
 	seenGenerationIds: number;
 }
 
-export interface ResourceEventSource {
+interface ResourceEventSource {
 	addEventListener(type: string, listener: (event: Event) => void): void;
 	removeEventListener(type: string, listener: (event: Event) => void): void;
 	close(): void;
 	onerror: ((event: Event) => void) | null;
 }
 
-export interface ResourceSyncDeps {
+interface ResourceSyncDeps {
 	createEventSource: (url: string) => ResourceEventSource;
 	fetchSong: (songId: string) => Promise<SongItem>;
 	applySong: (song: SongItem) => void;
@@ -717,7 +717,7 @@ function errorMessage(err: unknown): string {
 	return RESOURCE_SYNC_ERROR;
 }
 
-export async function probeResourceAuth(): Promise<ResourceAuthProbe> {
+async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 	try {
 		await fetchMe();
 		return 'ok';
@@ -785,5 +785,3 @@ export function resetResourceSyncForTests(): void {
 	libraryController = null;
 	resourceSync.set({ ...INITIAL });
 }
-
-export { INITIAL as EMPTY_RESOURCE_SYNC };

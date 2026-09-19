@@ -1,8 +1,8 @@
 import type { Action } from 'svelte/action';
 
-export type KineticScrollAxis = 'x' | 'y';
+type KineticScrollAxis = 'x' | 'y';
 
-export interface KineticScrollOptions {
+interface KineticScrollOptions {
 	itemSelector: string;
 	onOpen?: (item: HTMLElement) => void;
 }
@@ -16,7 +16,7 @@ const FRAME_MS = 1000 / 60;
 const MIN_VELOCITY_PX_PER_MS = 0.05;
 const MAX_VELOCITY_PX_PER_MS = 2.6;
 const WHEEL_VELOCITY_GAIN = 0.06;
-export const DRAG_THRESHOLD_PX = 6;
+const DRAG_THRESHOLD_PX = 6;
 const VELOCITY_SAMPLE_WINDOW_MS = 120;
 
 interface PointerSample {

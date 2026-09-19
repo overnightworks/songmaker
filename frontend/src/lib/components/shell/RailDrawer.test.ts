@@ -11,13 +11,7 @@ vi.mock('$app/navigation', () => ({
 }));
 
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
-import {
-	closeSidebar,
-	railWidth,
-	RAIL_WIDTH_STORAGE_KEY,
-	sidebarOpen,
-	toggleSidebar
-} from '$lib/stores/ui';
+import { closeSidebar, railWidth, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import RailDrawer from './RailDrawer.svelte';
 import railDrawerSource from './RailDrawer.svelte?raw';
 
@@ -40,7 +34,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	closeSidebar();
 	railWidth.set(264);
-	localStorage.removeItem(RAIL_WIDTH_STORAGE_KEY);
+	localStorage.removeItem('songmaker.rail-width');
 	afterNavigateCb = undefined;
 });
 

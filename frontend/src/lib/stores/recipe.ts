@@ -7,7 +7,7 @@ import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 export type SourceMode = 'repaint' | 'cover';
 export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
 
-export interface PendingSource {
+interface PendingSource {
 	generation: GenerationItem;
 	mode: SourceMode;
 }
@@ -83,7 +83,7 @@ const RECIPE_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
 	'user_lora_id'
 ];
 
-export function recipeParamsFromTake(
+function recipeParamsFromTake(
 	params: GenerationParams | null | undefined
 ): VersionGenerationParams {
 	const filtered: VersionGenerationParams = {};
@@ -165,7 +165,7 @@ export interface RecipeChip {
 	changed: boolean;
 }
 
-export interface RecipeChipInput {
+interface RecipeChipInput {
 	model: string | null;
 	takes: number;
 	bpm: number;

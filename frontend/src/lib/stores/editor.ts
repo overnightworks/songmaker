@@ -14,7 +14,7 @@ import type {
 	VersionItem
 } from '$lib/api/types';
 
-export interface SongData {
+interface SongData {
 	lyrics: string;
 	prompt: string;
 	bpm: number;
@@ -37,7 +37,7 @@ interface EditorState {
 	draft: SongData;
 }
 
-export const editorState = writable<EditorState>({
+const editorState = writable<EditorState>({
 	saved: { ...EMPTY_SONG_DATA },
 	draft: { ...EMPTY_SONG_DATA }
 });
@@ -147,7 +147,7 @@ export function discardDraft(): void {
 	editorState.update((s) => ({ ...s, draft: { ...s.saved } }));
 }
 
-export async function loadVersions(songId: string): Promise<void> {
+async function loadVersions(songId: string): Promise<void> {
 	versions.set(await fetchVersions(songId));
 	currentVersionIndex.set(0);
 }

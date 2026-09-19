@@ -6,9 +6,9 @@ import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 
-export type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error';
+type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export type RailSearchPageHref =
+type RailSearchPageHref =
 	| '/'
 	| '/settings/generation'
 	| '/settings/playback'
@@ -24,33 +24,33 @@ export type RailSearchTarget =
 	| { kind: 'playlist'; id: string }
 	| { kind: 'page'; href: RailSearchPageHref };
 
-export interface RailSearchPage {
+interface RailSearchPage {
 	label: string;
 	href: RailSearchPageHref;
 	keywords: readonly string[];
 	adminOnly?: boolean;
 }
 
-export interface RailSearchResult {
+interface RailSearchResult {
 	id: string;
 	label: string;
 	meta: string | null;
 	target: RailSearchTarget;
 }
 
-export interface RailSearchGroup {
+interface RailSearchGroup {
 	label: 'Library' | 'Playlists' | 'Pages';
 	results: RailSearchResult[];
 }
 
-export interface RailSearchState {
+interface RailSearchState {
 	query: string;
 	status: RailSearchStatus;
 	error: string | null;
 	hits: LibrarySearchHit[];
 }
 
-export const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
+const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
 	{ label: 'Library', href: '/', keywords: ['albums', 'songs'] },
 	{ label: 'Generation', href: '/settings/generation', keywords: ['settings'] },
 	{ label: 'Playback', href: '/settings/playback', keywords: ['settings'] },

@@ -24,15 +24,15 @@ describe('railCollapsed', () => {
 	});
 
 	it('persists each edge-control toggle', async () => {
-		const { railCollapsed, toggleRailCollapsed, RAIL_COLLAPSED_STORAGE_KEY } = await import('./ui');
+		const { railCollapsed, toggleRailCollapsed } = await import('./ui');
 
 		toggleRailCollapsed();
 		expect(get(railCollapsed)).toBe(true);
-		expect(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY)).toBe('true');
+		expect(localStorage.getItem('songmaker.rail-collapsed')).toBe('true');
 
 		toggleRailCollapsed();
 		expect(get(railCollapsed)).toBe(false);
-		expect(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY)).toBe('false');
+		expect(localStorage.getItem('songmaker.rail-collapsed')).toBe('false');
 	});
 });
 
@@ -48,14 +48,13 @@ describe('libraryContinueCollapsed', () => {
 		const {
 			initLibraryContinueCollapsed,
 			libraryContinueCollapsed,
-			toggleLibraryContinueCollapsed,
-			LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY
+			toggleLibraryContinueCollapsed
 		} = await import('./ui');
 
 		expect(get(libraryContinueCollapsed)).toBe(true);
 		toggleLibraryContinueCollapsed();
 		expect(get(libraryContinueCollapsed)).toBe(false);
-		expect(localStorage.getItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY)).toBe('false');
+		expect(localStorage.getItem('songmaker.library-continue-collapsed')).toBe('false');
 
 		libraryContinueCollapsed.set(true);
 		initLibraryContinueCollapsed();
@@ -71,21 +70,15 @@ describe('railWidth', () => {
 	});
 
 	it('clamps and persists width changes at the store boundary', async () => {
-		const {
-			railWidth,
-			setRailWidth,
-			RAIL_MAX_WIDTH_PX,
-			RAIL_MIN_WIDTH_PX,
-			RAIL_WIDTH_STORAGE_KEY
-		} = await import('./ui');
+		const { railWidth, setRailWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } = await import('./ui');
 
 		setRailWidth(RAIL_MAX_WIDTH_PX + 20);
 		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
-		expect(localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe(String(RAIL_MAX_WIDTH_PX));
+		expect(localStorage.getItem('songmaker.rail-width')).toBe(String(RAIL_MAX_WIDTH_PX));
 
 		setRailWidth(RAIL_MIN_WIDTH_PX - 20);
 		expect(get(railWidth)).toBe(RAIL_MIN_WIDTH_PX);
-		expect(localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe(String(RAIL_MIN_WIDTH_PX));
+		expect(localStorage.getItem('songmaker.rail-width')).toBe(String(RAIL_MIN_WIDTH_PX));
 	});
 
 	it('restores a clamped browser preference after a reload', async () => {

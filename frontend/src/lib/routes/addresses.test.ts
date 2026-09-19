@@ -5,7 +5,6 @@ import {
 	isAlbumRoutePath,
 	isPlaylistRoutePath,
 	isSongRoutePath,
-	isTakeRoutePath,
 	legacySongRoutePath,
 	libraryRouteShape,
 	pendingTakeRoutePath,
@@ -37,11 +36,6 @@ describe('library route addresses', () => {
 		['song', isSongRoutePath, '/album/anfield', false],
 		['song', isSongRoutePath, '/album/anfield/', false],
 		['song', isSongRoutePath, '/', false],
-		['take', isTakeRoutePath, '/album/anfield/tide/take/3', true],
-		['take', isTakeRoutePath, '/album/anfield/tide/take/', false],
-		['take', isTakeRoutePath, '/album/anfield/tide', false],
-		['take', isTakeRoutePath, '/album/anfield', false],
-		['take', isTakeRoutePath, '/', false],
 		['playlist', isPlaylistRoutePath, '/playlist/friday-night', true],
 		['playlist', isPlaylistRoutePath, '/playlist/', false],
 		['playlist', isPlaylistRoutePath, '/', false],
@@ -55,6 +49,7 @@ describe('library route addresses', () => {
 		['/album/anfield', 'album'],
 		['/album/anfield/tide', 'album-song'],
 		['/album/anfield/tide/take/3', 'album-song-take'],
+		['/album/anfield/tide/take/', 'album-song'],
 		['/playlist/friday-night', 'playlist'],
 		['/settings/voices', 'external']
 	])('classifies %s as %s', (pathname, shape) => {

@@ -29,7 +29,7 @@ export function isSongRoutePath(pathname: string): boolean {
 	return slashIndex !== -1 && rest.length > slashIndex + 1;
 }
 
-export function isTakeRoutePath(pathname: string): boolean {
+function isTakeRoutePath(pathname: string): boolean {
 	if (!isSongRoutePath(pathname)) return false;
 	const takeIndex = pathname.indexOf(TAKE_ROUTE_SEGMENT);
 	return takeIndex !== -1 && pathname.length > takeIndex + TAKE_ROUTE_SEGMENT.length;

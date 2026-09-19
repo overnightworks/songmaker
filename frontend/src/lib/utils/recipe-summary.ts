@@ -19,12 +19,12 @@ const RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL = 'Reproducibility';
 const RECIPE_TAKE_GROUP_VERSION_LABEL = 'Version';
 const RECIPE_TAKE_GROUP_OTHER_LABEL = 'Other';
 
-export interface RecipeEntry {
+interface RecipeEntry {
 	label: string;
 	value: string;
 }
 
-export interface RecipeGroup {
+interface RecipeGroup {
 	label: string;
 	entries: RecipeEntry[];
 }

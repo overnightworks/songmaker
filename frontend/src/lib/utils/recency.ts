@@ -2,45 +2,11 @@ export type CreatedSort = 'newest' | 'oldest' | 'title';
 
 export const CREATED_SORTS: readonly CreatedSort[] = ['newest', 'oldest', 'title'];
 
-export const CREATED_SORT_LABELS: Record<CreatedSort, string> = {
-	newest: 'Newest',
-	oldest: 'Oldest',
-	title: 'Title'
-};
-
-const SECOND_MS = 1000;
-const MINUTE_MS = 60 * SECOND_MS;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
-
-export function parseCreatedAt(iso: string | null | undefined): Date | null {
+function parseCreatedAt(iso: string | null | undefined): Date | null {
 	if (!iso) return null;
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return null;
 	return date;
-}
-
-export const CREATED_AGE_PREFIX = 'created';
-
-export function formatRelativeAge(iso: string | null | undefined, now: Date = new Date()): string {
-	const date = parseCreatedAt(iso);
-	if (!date) return 'unknown';
-	const delta = now.getTime() - date.getTime();
-	if (delta < 0) return 'soon';
-	if (delta < MINUTE_MS) return `${Math.floor(delta / SECOND_MS)}s`;
-	if (delta < HOUR_MS) return `${Math.floor(delta / MINUTE_MS)}m`;
-	if (delta < DAY_MS) return `${Math.floor(delta / HOUR_MS)}h`;
-	return `${Math.floor(delta / DAY_MS)}d`;
-}
-
-export function formatCreatedAge(iso: string | null | undefined, now: Date = new Date()): string {
-	return `${CREATED_AGE_PREFIX} ${formatRelativeAge(iso, now)}`;
-}
-
-export function formatExactLocalTime(iso: string | null | undefined): string {
-	const date = parseCreatedAt(iso);
-	if (!date) return 'unknown time';
-	return date.toLocaleString();
 }
 
 export function compareByCreatedAt<

@@ -8,7 +8,7 @@ import { addToast } from '$lib/stores/toast';
 const MAX_POLL_ERRORS = 10;
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 
-export interface ActiveJob {
+interface ActiveJob {
 	job: JobStatus;
 	songId?: string;
 	albumId?: string;
@@ -150,7 +150,7 @@ export function removeJob(jobId: string): void {
 	activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 }
 
-export function stopTracking(jobId: string): void {
+function stopTracking(jobId: string): void {
 	const timer = reconnectTimers.get(jobId);
 	if (timer !== undefined) {
 		clearTimeout(timer);

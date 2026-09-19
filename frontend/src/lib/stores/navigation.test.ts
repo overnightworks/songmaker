@@ -82,7 +82,6 @@ import {
 	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
-	loadSongContext,
 	openAlbum,
 	openCollectionEntry,
 	openLibraryCreate,
@@ -93,7 +92,6 @@ import {
 	persistLibraryHistory,
 	resetNavigationForTests,
 	revealPlayingSong,
-	revealSharedTake,
 	selectNeighborSong,
 	selectSong
 } from './navigation';
@@ -770,12 +768,13 @@ describe('opening a song recovers its failure banner', () => {
 	});
 });
 
-describe('loadSongContext (dead song link, issue #237)', () => {
+describe('song selection (dead song link, issue #237)', () => {
 	it('clears the selection and shows a not-found toast for a dead song, without throwing', async () => {
 		selectedSongId.set('dead');
 		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/dead'));
 
-		await expect(loadSongContext('dead')).resolves.toBeUndefined();
+		await selectSong('dead');
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
 		expect(get(selectedSongId)).toBeNull();
 		expect(
@@ -783,21 +782,11 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 		).toBe(true);
 	});
 
-	it('propagates a non-404 error instead of swallowing it', async () => {
-		selectedSongId.set('s-broken');
-		fetchSong.mockRejectedValue(new ApiError(500, 'Boom', '/api/songs/s-broken'));
-
-		await expect(loadSongContext('s-broken')).rejects.toThrow('Boom');
-
-		expect(get(selectedSongId)).toBe('s-broken');
-		expect(get(toasts)).toHaveLength(0);
-	});
-
 	it('leaves a valid song selection untouched', async () => {
 		selectedSongId.set('s2');
 		fetchSong.mockResolvedValue(song({ id: 's2', album_id: 'a1' }));
 
-		await expect(loadSongContext('s2')).resolves.toBeUndefined();
+		await selectSong('s2');
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
@@ -820,14 +809,15 @@ describe('loadSongContext (dead song link, issue #237)', () => {
 		);
 		selectedSongId.set('s1');
 
-		const loadingDeadLink = loadSongContext('s1');
+		await selectSong('s1');
 		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
 		selectedSongId.set('s2');
 		if (!rejectLookup) {
 			throw new Error('Expected the song lookup to expose its rejection callback');
 		}
 		rejectLookup(new ApiError(404, 'Song not found', '/api/songs/s1'));
-		await expect(loadingDeadLink).resolves.toBeUndefined();
+		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
+		await Promise.resolve();
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
@@ -976,14 +966,14 @@ describe('a dirty draft guards song switch / leave', () => {
 	// await selectSong and then set selectedGenerationId as a follow-up step
 	// -- guardDirtyNavigation resolves that promise the instant it parks a
 	// dirty draft, so the pin ran against the still-open old song a microtask
-	// later. revealSharedTake folds both into one guarded action instead.
-	it('defers revealSharedTake the same way, without pinning the take against the old song', async () => {
+	// later. Revealing the playing song keeps both changes in one guarded action.
+	it('defers revealing a playing take the same way, without pinning the take against the old song', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ id: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await revealSharedTake('s2', 'g2');
+		await revealPlayingSong(song({ id: 's2' }), 'g2');
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBeNull();

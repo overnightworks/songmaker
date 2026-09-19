@@ -23,9 +23,8 @@ export type {
 	SharedPlaylistPayload,
 	SharedSongPayload
 };
-export type { SharedAlbumSongPayload, SharedPlaylistEntryPayload } from '$lib/api/types';
 
-export type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
+type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
 
 export interface SharedTrack {
 	key: string;

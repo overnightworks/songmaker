@@ -2,7 +2,7 @@ import { writable, type Readable } from 'svelte/store';
 
 const DEFAULT_MAX_ERRORS = 5;
 
-export interface PollingStore<T> {
+interface PollingStore<T> {
 	data: Readable<T | null>;
 	error: Readable<Error | null>;
 	loading: Readable<boolean>;
@@ -11,7 +11,7 @@ export interface PollingStore<T> {
 	stop: () => void;
 }
 
-export interface PollingOptions {
+interface PollingOptions {
 	isHidden?: () => boolean;
 	maxErrors?: number;
 }

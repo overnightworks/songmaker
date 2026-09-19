@@ -3,16 +3,10 @@ import { ApiError } from '$lib/api/fetch';
 import { fetchAlbums } from '$lib/api/albums';
 import { searchLibrary, type LibrarySort } from '$lib/api/library';
 import { fetchSongs } from '$lib/api/songs';
-import type {
-	AlbumItem,
-	LibrarySearchResponse,
-	SongItem,
-	SongSummaryResponse
-} from '$lib/api/types';
+import type { LibrarySearchResponse, SongItem, SongSummaryResponse } from '$lib/api/types';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_QUERY_REQUIRED,
-	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
 } from '$lib/constants';
@@ -26,10 +20,10 @@ import {
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { patchSharesFromSong } from '$lib/stores/shares';
 
-export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
+type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 
-export interface LibrarySearchState {
+interface LibrarySearchState {
 	q: string;
 	status: LibrarySearchStatus;
 	error: string | null;
@@ -38,18 +32,13 @@ export interface LibrarySearchState {
 	nextCursor: string | null;
 }
 
-export interface LibraryBrowseState {
+interface LibraryBrowseState {
 	status: LibrarySearchStatus;
 	error: string | null;
 	albumHasMore: boolean;
 	songHasMore: boolean;
 	albumOffset: number;
 	songOffset: number;
-}
-
-export interface LibraryAlbumGroup {
-	album: AlbumItem;
-	songs: SongSummaryResponse[];
 }
 
 const EMPTY_SEARCH: LibrarySearchState = {
@@ -75,106 +64,14 @@ export const libraryBrowse = writable<LibraryBrowseState>({
 	songOffset: 0
 });
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchGeneration = 0;
 let browseGeneration = 0;
-
-export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
-	const groups = new Map<string, LibraryAlbumGroup>();
-	for (const hit of hits) {
-		if (hit.type === 'album') {
-			const existing = groups.get(hit.album.id);
-			if (existing) {
-				existing.album = hit.album;
-			} else {
-				groups.set(hit.album.id, { album: hit.album, songs: [] });
-			}
-			continue;
-		}
-		let group = groups.get(hit.album_id);
-		if (!group) {
-			group = {
-				album: {
-					id: hit.album_id,
-					title: hit.album_title,
-					artist: hit.song.artist,
-					subtitle: '',
-					year: '',
-					colors: {},
-					song_count: 0,
-					picked_count: 0,
-					is_shared: false,
-					share_slug: null,
-					created_at: hit.song.created_at,
-					is_archived: false
-				},
-				songs: []
-			};
-			groups.set(hit.album_id, group);
-		}
-		group.songs.push(hit.song);
-		if (group.album.song_count < group.songs.length) {
-			group.album = { ...group.album, song_count: group.songs.length };
-		}
-	}
-	return [...groups.values()];
-}
-
-export function syncLibrarySearch(rawQuery: string): void {
-	const q = rawQuery.trim();
-	if (!q) {
-		if (searchTimer !== null) {
-			clearTimeout(searchTimer);
-			searchTimer = null;
-		}
-		searchGeneration += 1;
-		librarySearch.set({ ...EMPTY_SEARCH });
-		return;
-	}
-	const current = get(librarySearch);
-	if (current.q === q && (current.status === 'loading' || current.status === 'ready')) {
-		return;
-	}
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
-	librarySearch.set({
-		q,
-		status: 'loading',
-		error: null,
-		items: [],
-		hasMore: false,
-		nextCursor: null
-	});
-	const sort = get(librarySort);
-	searchTimer = setTimeout(() => {
-		searchTimer = null;
-		void runLibrarySearch(q, sort, { reset: true });
-	}, LIBRARY_SEARCH_DEBOUNCE_MS);
-}
-
-export function retryLibrarySearch(): void {
-	const state = get(librarySearch);
-	if (!state.q) return;
-	void runLibrarySearch(state.q, get(librarySort), { reset: state.items.length === 0 });
-}
-
-export async function loadMoreLibrarySearch(): Promise<void> {
-	const state = get(librarySearch);
-	if (!state.q || !state.hasMore || state.status === 'loading') return;
-	await runLibrarySearch(state.q, get(librarySort), { reset: false });
-}
 
 export async function restoreLibrarySearch(
 	rawQuery: string,
 	sort: LibrarySort,
 	loadedCount: number
 ): Promise<void> {
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
 	const q = rawQuery.trim();
 	if (!q) {
 		searchGeneration += 1;
@@ -200,28 +97,6 @@ export async function restoreLibrarySearch(
 	) {
 		await runLibrarySearch(q, sort, { reset: false });
 	}
-}
-
-export function changeLibrarySort(sort: LibrarySort, searchRaw: string): void {
-	librarySort.set(sort);
-	const q = searchRaw.trim();
-	if (!q) {
-		void loadLibraryBrowse({ reset: true });
-		return;
-	}
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
-	librarySearch.set({
-		q,
-		status: 'loading',
-		error: null,
-		items: [],
-		hasMore: false,
-		nextCursor: null
-	});
-	void runLibrarySearch(q, sort, { reset: true });
 }
 
 export async function restoreLibraryBrowse(
@@ -343,10 +218,6 @@ export function watchLoadedSongIds(onChange: () => void): () => void {
 }
 
 export function cancelLibraryDataLoads(): void {
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
 	searchGeneration += 1;
 	browseGeneration += 1;
 }
