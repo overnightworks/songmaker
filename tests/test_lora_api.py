@@ -7,14 +7,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     USER_LORA_MAX_SAMPLES,
@@ -49,15 +46,8 @@ def _seed_users(session: Session) -> None:
     session.add(User(id=USER_B, username="bob", password_hash="x", role="user"))
 
 
-def _user_dep(user_id: str, role: str = "user"):
-    def _dep() -> AuthenticatedUser:
-        return AuthenticatedUser(
-            id=user_id, username=user_id, role=role, is_active=True,
-        )
-    return _dep
-
-
-def _build_app(tmp_path: Path, user_id: str = USER_A) -> tuple[TestClient, AppContext]:
+@pytest.fixture
+def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
     data_dir = tmp_path / "data"
@@ -68,28 +58,17 @@ def _build_app(tmp_path: Path, user_id: str = USER_A) -> tuple[TestClient, AppCo
         _seed_users(session)
         session.commit()
 
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_A)
     )
-
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _user_dep(user_id)
-    app.include_router(router)
+    ctx = app.state.ctx
     return TestClient(app), ctx
 
 
 @pytest.fixture
-def client_a(tmp_path: Path) -> TestClient:
-    client, _ = _build_app(tmp_path, USER_A)
+def client_a(client_and_ctx: tuple[TestClient, AppContext]) -> TestClient:
+    client, _ = client_and_ctx
     yield client
-
-
-@pytest.fixture
-def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
-    return _build_app(tmp_path, USER_A)
 
 
 @contextmanager
@@ -300,18 +279,14 @@ def test_get_lora_missing_returns_404(client_a: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_cross_user_access_is_404(tmp_path: Path) -> None:
-    client_a, ctx = _build_app(tmp_path, USER_A)
+def test_cross_user_access_is_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
+    client_a, ctx = client_and_ctx
     with ctx.db() as session:
         lora_a = create_user_lora(session, USER_A, "Secret", "secret")
         session.commit()
         lora_id = lora_a.id
 
-    app_b = FastAPI()
-    install_app_context(app_b, ctx)
-    from songmaker_cli.api import router
-    app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
-    app_b.include_router(router)
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
 
     assert client_b.get(f"/api/loras/{lora_id}").status_code == 404
@@ -320,8 +295,10 @@ def test_cross_user_access_is_404(tmp_path: Path) -> None:
     assert client_b.get("/api/loras").json()["loras"] == []
 
 
-def test_admin_cannot_access_another_users_lora(tmp_path: Path) -> None:
-    _, ctx = _build_app(tmp_path, USER_A)
+def test_admin_cannot_access_another_users_lora(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    _, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
@@ -445,11 +422,7 @@ def _make_take(
 
 
 def _client_for_user(ctx: AppContext, user_id: str, role: str = "user") -> TestClient:
-    app = FastAPI()
-    install_app_context(app, ctx)
-    from songmaker_cli.api import router
-    app.dependency_overrides[get_current_user] = _user_dep(user_id, role)
-    app.include_router(router)
+    app = make_router_app(ctx, user=make_authenticated_user(user_id, role=role))
     return TestClient(app)
 
 
@@ -473,8 +446,10 @@ def test_add_sample_from_own_take_copies_audio_and_take_version(
     assert sample["audio_path"] != f"{USER_A}/{take_id}.mp3"
 
 
-def test_add_sample_from_foreign_take_returns_404(tmp_path: Path) -> None:
-    _, ctx = _build_app(tmp_path, USER_A)
+def test_add_sample_from_foreign_take_returns_404(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    _, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_B)
     take_id = _make_take(ctx, owner_id=USER_A)
     client_b = _client_for_user(ctx, USER_B)
@@ -608,8 +583,10 @@ def test_own_take_catalogue_only_returns_callers_playable_takes(
     }
 
 
-def test_admin_cannot_browse_or_copy_another_users_takes(tmp_path: Path) -> None:
-    _, ctx = _build_app(tmp_path, USER_A)
+def test_admin_cannot_browse_or_copy_another_users_takes(
+    client_and_ctx: tuple[TestClient, AppContext],
+) -> None:
+    _, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
     take_id = _make_take(ctx)
     admin = _client_for_user(ctx, "u-admin", role="admin")
@@ -815,15 +792,11 @@ def test_add_sample_missing_lora_404(client_a: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_add_sample_cross_user_404(tmp_path: Path) -> None:
-    client_a, ctx = _build_app(tmp_path, USER_A)
+def test_add_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
+    client_a, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
 
-    from songmaker_cli.api import router
-    app_b = FastAPI()
-    install_app_context(app_b, ctx)
-    app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
-    app_b.include_router(router)
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.post(
         f"/api/loras/{lora_id}/samples",
@@ -970,8 +943,8 @@ def test_patch_sample_missing_404(client_a: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_patch_sample_cross_user_404(tmp_path: Path) -> None:
-    client_a, ctx = _build_app(tmp_path, USER_A)
+def test_patch_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
+    client_a, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
@@ -980,11 +953,7 @@ def test_patch_sample_cross_user_404(tmp_path: Path) -> None:
         session.commit()
         sample_id = sample.id
 
-    from songmaker_cli.api import router
-    app_b = FastAPI()
-    install_app_context(app_b, ctx)
-    app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
-    app_b.include_router(router)
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.patch(
         f"/api/loras/{lora_id}/samples/{sample_id}",
@@ -1078,8 +1047,8 @@ def test_delete_sample_missing_404(client_a: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_delete_sample_cross_user_404(tmp_path: Path) -> None:
-    client_a, ctx = _build_app(tmp_path, USER_A)
+def test_delete_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
+    client_a, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
@@ -1088,11 +1057,7 @@ def test_delete_sample_cross_user_404(tmp_path: Path) -> None:
         session.commit()
         sample_id = sample.id
 
-    from songmaker_cli.api import router
-    app_b = FastAPI()
-    install_app_context(app_b, ctx)
-    app_b.dependency_overrides[get_current_user] = _user_dep(USER_B)
-    app_b.include_router(router)
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.delete(f"/api/loras/{lora_id}/samples/{sample_id}")
     assert resp.status_code == 404

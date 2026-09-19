@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context
-from webauth.dependencies import AuthenticatedUser
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.api_models.generation_params import (
@@ -25,12 +24,6 @@ from songmaker_cli.jobs.generation import (
 
 USER_A = "u-alice"
 USER_B = "u-bob"
-
-
-def _auth(user_id: str = USER_A, role: str = "user") -> AuthenticatedUser:
-    return AuthenticatedUser(
-        id=user_id, username=user_id, role=role, is_active=True,
-    )
 
 
 @pytest.fixture
@@ -91,14 +84,16 @@ def test_extract_user_lora_id_from_invalid() -> None:
 def test_check_lora_ready_accepts_ready_lora(db_factory) -> None:
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
-        lora = check_lora_ready_for_generation(session, lora_id, _auth(USER_A))
+        lora = check_lora_ready_for_generation(session, lora_id, make_authenticated_user(USER_A))
         assert lora is not None
         assert lora.id == lora_id
 
 
 def test_check_lora_ready_none_is_noop(db_factory) -> None:
     with db_factory() as session:
-        assert check_lora_ready_for_generation(session, None, _auth(USER_A)) is None
+        assert (
+            check_lora_ready_for_generation(session, None, make_authenticated_user(USER_A)) is None
+        )
 
 
 def test_check_lora_ready_rejects_non_ready(db_factory) -> None:
@@ -110,7 +105,7 @@ def test_check_lora_ready_rejects_non_ready(db_factory) -> None:
         session.commit()
 
     with db_factory() as session:
-        auth = _auth(USER_A)
+        auth = make_authenticated_user(USER_A)
         with pytest.raises(HTTPException) as exc:
             check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 422
@@ -127,7 +122,7 @@ def test_check_lora_ready_rejects_deleted(db_factory) -> None:
         lora.deleted_at = datetime.now(timezone.utc)
         session.commit()
     with db_factory() as session:
-        auth = _auth(USER_A)
+        auth = make_authenticated_user(USER_A)
         with pytest.raises(HTTPException) as exc:
             check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 422
@@ -138,7 +133,7 @@ def test_check_lora_ready_rejects_cross_user(db_factory) -> None:
 
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
-        auth = _auth(USER_B)
+        auth = make_authenticated_user(USER_B)
         with pytest.raises(HTTPException) as exc:
             check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 404
@@ -149,7 +144,7 @@ def test_check_lora_ready_admin_cannot_access_another_users_lora(db_factory) -> 
 
     lora_id = _make_ready_lora(db_factory, USER_A)
     with db_factory() as session:
-        auth = _auth(USER_B, role="admin")
+        auth = make_authenticated_user(USER_B, role="admin")
         with pytest.raises(HTTPException) as exc:
             check_lora_ready_for_generation(session, lora_id, auth)
     assert exc.value.status_code == 404
@@ -159,7 +154,7 @@ def test_check_lora_ready_404_when_missing(db_factory) -> None:
     from fastapi import HTTPException
 
     with db_factory() as session:
-        auth = _auth(USER_A)
+        auth = make_authenticated_user(USER_A)
         with pytest.raises(HTTPException) as exc:
             check_lora_ready_for_generation(session, "does-not-exist", auth)
     assert exc.value.status_code == 404
@@ -245,13 +240,7 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
 
 
 def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
-    from conftest import TEST_SECRET, make_fake_redis
-    from fastapi import FastAPI
     from fastapi.testclient import TestClient
-
-    from songmaker_cli.api import router
-    from songmaker_cli.app_context import AppContext
-    from songmaker_cli.auth_dependencies import get_current_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -279,15 +268,10 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
         )
         session.commit()
 
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
     (tmp_path / "data").mkdir()
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = lambda: _auth(USER_B, role="admin")
-    app.include_router(router)
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_B, role="admin")
+    )
     client = TestClient(app)
 
     resp = client.post("/api/songs/S1/generate", json={"count": 1, "model": "sft"})

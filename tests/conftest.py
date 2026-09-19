@@ -1,4 +1,4 @@
-"""Shared test fixtures for WAV generation and song markdown creation."""
+"""Shared fixtures and builders for API, database, and audio tests."""
 
 from __future__ import annotations
 
@@ -30,7 +30,12 @@ import fakeredis  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from webauth.dependencies import AuthenticatedUser  # noqa: E402
+
+from songmaker_cli.app_context import AppContext  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 
@@ -418,35 +423,6 @@ def make_stereo_wav_bytes():
     return _make
 
 
-@pytest.fixture
-def make_sine_wav_bytes():
-    """Factory fixture: build stereo WAV bytes containing a sine wave."""
-
-    def _make(
-        frequency: float = 440.0,
-        duration: float = 2.0,
-        sample_rate: int = 44100,
-    ) -> bytes:
-        n = int(sample_rate * duration)
-        t = np.arange(n, dtype=np.float64)
-        signal = 0.3 * np.sin(2.0 * np.pi * frequency * t / sample_rate)
-        int16 = np.clip(signal * 32768.0, -32768.0, 32767.0).astype(np.int16)
-
-        interleaved = np.empty(n * 2, dtype=np.int16)
-        interleaved[0::2] = int16
-        interleaved[1::2] = int16
-
-        buf = BytesIO()
-        with wave.open(buf, "w") as wf:
-            wf.setnchannels(2)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            wf.writeframes(interleaved.tobytes())
-        return buf.getvalue()
-
-    return _make
-
-
 def write_wav(path: Path, audio: np.ndarray, sr: int) -> None:
     """Write a float32/float64 numpy array to a 16-bit WAV file (stdlib only)."""
     int16 = np.clip(audio * 32768.0, -32768.0, 32767.0).astype(np.int16)
@@ -472,6 +448,60 @@ def seed_judge_route(session) -> None:
     from songmaker_cli.db.queries.settings import set_claude_model
 
     set_claude_model(session, SETTING_JUDGE_ROUTE, "api")
+
+
+def make_authenticated_user(
+    user_id: str,
+    *,
+    role: str = "user",
+    username: str | None = None,
+) -> AuthenticatedUser:
+    """Build an active user, using the ID as the default username."""
+    return AuthenticatedUser(
+        id=user_id,
+        username=user_id if username is None else username,
+        role=role,
+        is_active=True,
+    )
+
+
+def make_router_ctx(
+    tmp_path: Path,
+    *,
+    db: sessionmaker[Session] | None = None,
+    seed_db: Callable[[Session], None] | None = None,
+) -> AppContext:
+    """Build a router context, preserving an existing DB and committing seed data."""
+    from songmaker_cli.db.engine import init_test_db
+
+    ctx = AppContext(
+        db=db if db is not None else init_test_db(tmp_path / "test.db"),
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        signing_key=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    if seed_db is not None:
+        with ctx.db() as session:
+            seed_db(session)
+            session.commit()
+    return ctx
+
+
+def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -> FastAPI:
+    """Mount the API router on an existing context, without middleware or lifecycle.
+
+    Without a user override, requests exercise real authentication.
+    """
+    from songmaker_cli.api import router
+    from songmaker_cli.auth_dependencies import get_current_user
+
+    app = FastAPI()
+    install_app_context(app, ctx)
+    if user is not None:
+        app.dependency_overrides[get_current_user] = lambda: user
+    app.include_router(router)
+    return app
 
 
 def make_test_app(
@@ -513,21 +543,6 @@ def make_test_app(
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     return client, factory
-
-
-@pytest.fixture
-def make_song_md():
-    """Factory fixture: create a song markdown file in a lyrics directory."""
-
-    def _make(lyrics_dir: Path, stem: str = "01_test_song") -> Path:
-        md = lyrics_dir / f"{stem}.md"
-        md.write_text(
-            "---\ntitle: Test\nprompt: rock\nlanguage: en\n---\n\n## Lyrics\n\n"
-            "[verse]\nHello world\nSecond line\n",
-        )
-        return md
-
-    return _make
 
 
 def refresh_provider_snapshots() -> None:
