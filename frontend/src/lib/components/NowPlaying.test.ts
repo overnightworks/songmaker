@@ -290,19 +290,19 @@ describe('NowPlaying', () => {
 			playlist: { id: 'p1', title: 'Night Drive' },
 			entries: [
 				playlistEntry({
-					generation_id: `g-${'pe1'}`,
-					song_id: `s-${'pe1'}`,
+					generation_id: 'g-pe1',
+					song_id: 's-pe1',
 					song_title: 'Tide',
 					album_title: 'Nachtstrom',
-					mp3_path: `${'pe1'}.mp3`
+					mp3_path: 'pe1.mp3'
 				}),
 				playlistEntry({
 					id: 'pe2',
-					generation_id: `g-${'pe2'}`,
-					song_id: `s-${'pe2'}`,
+					generation_id: 'g-pe2',
+					song_id: 's-pe2',
 					song_title: 'Second',
 					album_title: 'Nachtstrom',
-					mp3_path: `${'pe2'}.mp3`
+					mp3_path: 'pe2.mp3'
 				})
 			],
 			index: 0

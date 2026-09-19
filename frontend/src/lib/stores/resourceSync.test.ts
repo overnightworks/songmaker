@@ -192,9 +192,7 @@ function setup(options?: {
 				...songDefaults,
 				id: songId,
 				generation_count: 1,
-				generations: [
-					gen({ ...genDefaults, id: 'g-from-server', mp3_path: `${'g-from-server'}.mp3` })
-				]
+				generations: [gen({ ...genDefaults, id: 'g-from-server', mp3_path: 'g-from-server.mp3' })]
 			}));
 	const controller = new ResourceSyncController(
 		{
@@ -282,7 +280,7 @@ describe('resource sync interleavings', () => {
 					song({
 						...songDefaults,
 						generation_count: 1,
-						generations: [gen({ ...genDefaults, id: 'g-before', mp3_path: `${'g-before'}.mp3` })]
+						generations: [gen({ ...genDefaults, id: 'g-before', mp3_path: 'g-before.mp3' })]
 					})
 				);
 				return true;
@@ -308,7 +306,7 @@ describe('resource sync interleavings', () => {
 				song({
 					...songDefaults,
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-mid', mp3_path: `${'g-mid'}.mp3` })]
+					generations: [gen({ ...genDefaults, id: 'g-mid', mp3_path: 'g-mid.mp3' })]
 				})
 		});
 		controller.start();
@@ -331,7 +329,7 @@ describe('resource sync interleavings', () => {
 				song({
 					...songDefaults,
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-during', mp3_path: `${'g-during'}.mp3` })]
+					generations: [gen({ ...genDefaults, id: 'g-during', mp3_path: 'g-during.mp3' })]
 				})
 		});
 		controller.start();
@@ -358,7 +356,7 @@ describe('resource sync interleavings', () => {
 					? song({
 							...songDefaults,
 							generation_count: 1,
-							generations: [gen({ ...genDefaults, id: 'g-live', mp3_path: `${'g-live'}.mp3` })]
+							generations: [gen({ ...genDefaults, id: 'g-live', mp3_path: 'g-live.mp3' })]
 						})
 					: song(songDefaults)
 		});
@@ -461,10 +459,10 @@ describe('resource sync owner', () => {
 									gen({
 										...genDefaults,
 										id: `g-seen-${index + 1}`,
-										mp3_path: `${`g-seen-${index + 1}`}.mp3`
+										mp3_path: `g-seen-${index + 1}.mp3`
 									})
 								)
-							: [gen({ ...genDefaults, id: `g-${songId}`, mp3_path: `${`g-${songId}`}.mp3` })]
+							: [gen({ ...genDefaults, id: `g-${songId}`, mp3_path: `g-${songId}.mp3` })]
 				})
 		});
 		controller.start();
@@ -506,7 +504,7 @@ describe('resource sync owner', () => {
 					? song({
 							...songDefaults,
 							generation_count: 1,
-							generations: [gen({ ...genDefaults, id: 'g-dup', mp3_path: `${'g-dup'}.mp3` })]
+							generations: [gen({ ...genDefaults, id: 'g-dup', mp3_path: 'g-dup.mp3' })]
 						})
 					: song(songDefaults)
 		});
@@ -533,7 +531,7 @@ describe('resource sync owner', () => {
 				return song({
 					...songDefaults,
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-new', mp3_path: `${'g-new'}.mp3` })]
+					generations: [gen({ ...genDefaults, id: 'g-new', mp3_path: 'g-new.mp3' })]
 				});
 			}
 		});
@@ -550,7 +548,7 @@ describe('resource sync owner', () => {
 			song({
 				...songDefaults,
 				generation_count: 1,
-				generations: [gen({ ...genDefaults, id: 'g-old', mp3_path: `${'g-old'}.mp3` })]
+				generations: [gen({ ...genDefaults, id: 'g-old', mp3_path: 'g-old.mp3' })]
 			})
 		);
 		await flush();
@@ -712,7 +710,7 @@ describe('resource sync owner', () => {
 						gen({
 							...genDefaults,
 							id: `g-${songId}`,
-							mp3_path: `${`g-${songId}`}.mp3`,
+							mp3_path: `g-${songId}.mp3`,
 							song_id: songId
 						})
 					]
@@ -731,7 +729,7 @@ describe('resource sync owner', () => {
 						gen({
 							...genDefaults,
 							id: `g-${songId}`,
-							mp3_path: `${`g-${songId}`}.mp3`,
+							mp3_path: `g-${songId}.mp3`,
 							song_id: songId
 						})
 					]
@@ -777,7 +775,7 @@ describe('resource sync owner', () => {
 				if (fail) throw new Error('boom');
 				return song({
 					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: `${'g1'}.mp3` })]
+					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
@@ -1004,7 +1002,7 @@ describe('resource sync owner', () => {
 				if (fail) throw new Error('boom');
 				return song({
 					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: `${'g1'}.mp3` })]
+					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
@@ -1056,7 +1054,7 @@ describe('resource sync owner', () => {
 				if (fail) throw new Error('boom');
 				return song({
 					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: `${'g1'}.mp3` })]
+					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
