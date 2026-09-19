@@ -104,23 +104,17 @@ DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
 _SHARED_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_OPEN
 
 
-def _get_shared_limiter(request: Request) -> RedisRateLimitBackend:
-    def _build() -> RedisRateLimitBackend:
-        ctx: AppContext = request.app.state.ctx
-        return RedisRateLimitBackend(
-            ctx.redis, REDIS_RL_SHARED_PREFIX,
-        )
-    return get_cached_limiter(request, "_shared_limiter", _build)
+def _get_shared_limiter(request: Request, *, stream: bool = False) -> RedisRateLimitBackend:
+    state_attr, prefix = (
+        ("_shared_stream_limiter", REDIS_RL_SHARED_STREAM_PREFIX)
+        if stream else ("_shared_limiter", REDIS_RL_SHARED_PREFIX)
+    )
 
-
-def _get_shared_stream_limiter(request: Request) -> RedisRateLimitBackend:
-    def _build() -> RedisRateLimitBackend:
+    def build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
-        return RedisRateLimitBackend(
-            ctx.redis,
-            REDIS_RL_SHARED_STREAM_PREFIX,
-        )
-    return get_cached_limiter(request, "_shared_stream_limiter", _build)
+        return RedisRateLimitBackend(ctx.redis, prefix)
+
+    return get_cached_limiter(request, state_attr, build)
 
 
 def _check_shared_rate_limit(request: Request) -> None:
@@ -135,7 +129,7 @@ def _check_shared_rate_limit(request: Request) -> None:
 def _check_shared_stream_rate_limit(request: Request) -> None:
     _check_rate_limit(
         request,
-        _get_shared_stream_limiter(request),
+        _get_shared_limiter(request, stream=True),
         limit=_consts.SHARING_STREAM_RATE_LIMIT,
         window_seconds=_consts.SHARING_STREAM_RATE_WINDOW_SECONDS,
     )

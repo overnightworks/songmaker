@@ -3571,7 +3571,7 @@ def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
         generation = SimpleNamespace(
             song=SimpleNamespace(album=SimpleNamespace(created_by="other")),
         )
-        with patch("songmaker_cli.api_helpers.check_generation_access", return_value=generation):
+        with patch("songmaker_cli.api_helpers.get_generation", return_value=generation):
             with pytest.raises(HTTPException) as exc_info:
                 check_own_generation_access(object(), "g1", user)
 

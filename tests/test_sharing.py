@@ -1441,16 +1441,26 @@ def _shared_album_slug(client: TestClient) -> str:
     return client.post("/api/albums/test_album/share").json()["share_slug"]
 
 
-def test_shared_rate_limit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("stream", [False, True], ids=["page", "stream"])
+def test_shared_rate_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stream: bool,
+) -> None:
+    import songmaker_cli.constants as consts
+
     client, _ = _make_sharing_app(tmp_path)
     slug = _shared_album_slug(client)
-
-    with _shared_app_with_small_budget(client, tmp_path) as app:
-        unauthed = TestClient(app, cookies={})
-        for _ in range(3):
-            resp = unauthed.get(f"/shared/{slug}")
+    monkeypatch.setattr(consts, "SHARING_RATE_LIMIT", 100 if stream else 2)
+    monkeypatch.setattr(consts, "SHARING_STREAM_RATE_LIMIT", 2)
+    unauthed = TestClient(client.app, cookies={})
+    for _ in range(3):
+        resp = (
+            unauthed.post("/shared/missing/stream")
+            if stream else unauthed.get(f"/shared/{slug}")
+        )
 
     assert resp.status_code == 429
+    if stream:
+        assert unauthed.get(f"/shared/{slug}").status_code == 200
 
 
 def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> None:
