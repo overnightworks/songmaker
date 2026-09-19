@@ -38,9 +38,7 @@ import {
 	overlaySongList,
 	replaceSongInList,
 	resetLibraryContinueItems,
-	retainRicherSong,
 	songList,
-	updateGenerationScores,
 	upsertSongInList
 } from './libraryData';
 
@@ -277,7 +275,7 @@ describe('song list mutations', () => {
 		expect(fetchSongs).toHaveBeenCalledTimes(1);
 	});
 
-	it('retainRicherSong keeps loaded takes when a summary arrives later', () => {
+	it('overlaySongList keeps loaded takes when a summary arrives later', () => {
 		const loaded = makeSong({
 			id: 's1',
 			generation_count: 1,
@@ -289,13 +287,13 @@ describe('song list mutations', () => {
 			generation_count: 0,
 			generations: []
 		});
-		const merged = retainRicherSong(loaded, summary);
+		const merged = overlaySongList([loaded], [summary])[0];
 		expect(merged.title).toBe('Updated title');
 		expect(merged.generation_count).toBe(1);
 		expect(merged.generations).toHaveLength(1);
 	});
 
-	it('retainRicherSong raises generation_count without dropping loaded takes', () => {
+	it('overlaySongList raises generation_count without dropping loaded takes', () => {
 		const loaded = makeSong({
 			id: 's1',
 			generation_count: 1,
@@ -306,7 +304,7 @@ describe('song list mutations', () => {
 			generation_count: 2,
 			generations: []
 		});
-		const merged = retainRicherSong(loaded, summary);
+		const merged = overlaySongList([loaded], [summary])[0];
 		expect(merged.generation_count).toBe(2);
 		expect(merged.generations).toHaveLength(1);
 	});
@@ -329,23 +327,6 @@ describe('song list mutations', () => {
 		upsertSongInList(makeSong({ id: 'a', title: 'A2' }));
 		const byId = new Map(get(songList).map((s) => [s.id, s.title]));
 		expect([byId.get('a'), byId.get('b')]).toEqual(['A2', 'B']);
-	});
-});
-
-describe('updateGenerationScores', () => {
-	it('updates scores for matching generation', () => {
-		songList.set([makeSong()]);
-		updateGenerationScores('g1', { dynamics: 80 });
-		const songs = get(songList);
-		expect(songs[0].generations[0].scores).toEqual({ dynamics: 80 });
-	});
-
-	it('does not affect other generations', () => {
-		const gen2 = makeGen({ id: 'g2', seed: 99 });
-		songList.set([makeSong({ generations: [makeGen(), gen2] })]);
-		updateGenerationScores('g1', { dynamics: 80 });
-		const songs = get(songList);
-		expect(songs[0].generations[1].scores).toBeNull();
 	});
 });
 

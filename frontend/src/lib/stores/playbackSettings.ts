@@ -38,7 +38,7 @@ export function shouldUseQueueStream(mode: QueuePlaybackMode): boolean {
 // union Keep) stays and now means "+ Keeps" here.
 export const LIBRARY_TAKE_POOLS = ['picks', 'mix', 'all'] as const;
 export type LibraryTakePool = (typeof LIBRARY_TAKE_POOLS)[number];
-export const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'picks';
+const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'picks';
 
 export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
 	picks: 'Picks',
@@ -77,7 +77,7 @@ export function setLibraryTakePool(pool: LibraryTakePool): void {
 // viewport has room for both, and it survives the session so the next open
 // lands where they last were. A compact viewport offers only the full surface
 // and never writes here.
-export const DEFAULT_DESKTOP_NOW_PLAYING_SURFACE: NowPlayingSurfaceKind = 'docked';
+const DEFAULT_DESKTOP_NOW_PLAYING_SURFACE: NowPlayingSurfaceKind = 'docked';
 
 const DESKTOP_SURFACE_STORAGE_KEY = 'nowPlayingDesktopSurface';
 const VALID_DESKTOP_SURFACES: ReadonlySet<string> = new Set<string>(NOW_PLAYING_SURFACE_KINDS);

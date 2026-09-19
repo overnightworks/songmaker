@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	escapeLevelUpTarget,
-	hasOpenOverlay,
 	isEditableElement,
 	shouldHandleGlobalEscape
 } from './escape-level-up';
@@ -46,12 +45,17 @@ describe('isEditableElement', () => {
 	});
 });
 
-describe('hasOpenOverlay', () => {
+describe('Escape while overlays are mounted', () => {
 	it('finds an aria-modal dialog', () => {
 		const dialog = document.createElement('div');
 		dialog.setAttribute('aria-modal', 'true');
 		document.body.append(dialog);
-		expect(hasOpenOverlay(document)).toBe(true);
+		expect(
+			!shouldHandleGlobalEscape(
+				{ key: 'Escape', target: document.body, defaultPrevented: false },
+				document
+			)
+		).toBe(true);
 		dialog.remove();
 	});
 
@@ -60,12 +64,22 @@ describe('hasOpenOverlay', () => {
 		menu.setAttribute('role', 'menu');
 		menu.setAttribute('data-escape-overlay', 'true');
 		document.body.append(menu);
-		expect(hasOpenOverlay(document)).toBe(true);
+		expect(
+			!shouldHandleGlobalEscape(
+				{ key: 'Escape', target: document.body, defaultPrevented: false },
+				document
+			)
+		).toBe(true);
 		menu.remove();
 	});
 
 	it('reports no overlay when none is mounted', () => {
-		expect(hasOpenOverlay(document)).toBe(false);
+		expect(
+			!shouldHandleGlobalEscape(
+				{ key: 'Escape', target: document.body, defaultPrevented: false },
+				document
+			)
+		).toBe(false);
 	});
 });
 

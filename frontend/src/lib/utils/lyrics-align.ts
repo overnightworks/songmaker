@@ -67,7 +67,7 @@ const LENGTH_FACTOR_MAX = (2 - RELEVANT_RATIO) / RELEVANT_RATIO;
 
 const SECTION_MARKER = /^\[[^[\]]+\]$/;
 
-export interface LyricLineInterval {
+interface LyricLineInterval {
 	start: number;
 	end: number;
 }

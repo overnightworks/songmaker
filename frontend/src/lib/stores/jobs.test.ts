@@ -23,7 +23,6 @@ import {
 	hydrateGenerationFailure,
 	removeJob,
 	resetGenerationFailures,
-	stopTracking,
 	trackJob
 } from './jobs';
 import { toasts } from './toast';
@@ -259,10 +258,10 @@ describe('jobs store', () => {
 		expect(MockEventSource.instances).toHaveLength(4);
 	});
 
-	it('stopTracking cancels a pending reconnect', async () => {
+	it('removeJob cancels a pending reconnect', async () => {
 		trackJob(makeJob(), {});
 		latestSource().simulateError();
-		stopTracking('j1');
+		removeJob('j1');
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(MockEventSource.instances).toHaveLength(1);
 	});
@@ -296,16 +295,16 @@ describe('jobs store', () => {
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('stopTracking closes EventSource without removing from store', () => {
+	it('removeJob closes EventSource and removes the job from the store', () => {
 		trackJob(makeJob(), {});
 		const source = latestSource();
-		stopTracking('j1');
+		removeJob('j1');
 		expect(source.closed).toBe(true);
-		expect(get(activeJobs)).toHaveLength(1);
+		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('stopTracking is safe for unknown jobId', () => {
-		expect(() => stopTracking('unknown')).not.toThrow();
+	it('removeJob is safe for unknown jobId', () => {
+		expect(() => removeJob('unknown')).not.toThrow();
 	});
 
 	it('keeps the cause of a failed generation for its song', async () => {

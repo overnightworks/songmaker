@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem, SongSummaryResponse } from '$lib/api/types';
-import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_SEARCH_PAGE_SIZE } from '$lib/constants';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 
@@ -23,20 +22,15 @@ vi.mock('$lib/api/songs', () => ({
 import {
 	applySyncedSong,
 	forgetSyncedSong,
-	changeLibrarySort,
-	groupSearchHits,
 	librarySearch,
 	searchQuery,
 	libraryBrowse,
 	listLoadedSongIds,
 	watchLoadedSongIds,
 	loadLibraryBrowse,
-	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
 	restoreLibraryBrowse,
-	restoreLibrarySearch,
-	retryLibrarySearch,
-	syncLibrarySearch
+	restoreLibrarySearch
 } from './librarySearch';
 
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
@@ -131,118 +125,7 @@ afterEach(() => {
 	resetLibrarySearchForTests();
 });
 
-describe('syncLibrarySearch', () => {
-	it('keeps the debounce when only trailing whitespace is added', async () => {
-		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
-		syncLibrarySearch('Tide');
-		syncLibrarySearch('Tide ');
-		expect(searchLibrary).not.toHaveBeenCalled();
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(searchLibrary).toHaveBeenCalledTimes(1);
-		expect(searchLibrary).toHaveBeenCalledWith({
-			q: 'Tide',
-			sort: 'newest',
-			limit: LIBRARY_SEARCH_PAGE_SIZE,
-			cursor: null
-		});
-	});
-
-	it('does not call the server for an empty query', async () => {
-		syncLibrarySearch('   ');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(searchLibrary).not.toHaveBeenCalled();
-		expect(get(librarySearch).status).toBe('idle');
-	});
-
-	it('debounces then searches the server instead of the loaded song list', async () => {
-		searchLibrary.mockResolvedValue({
-			items: [
-				{
-					type: 'album',
-					album: album()
-				}
-			],
-			next_cursor: null,
-			has_more: false
-		});
-		syncLibrarySearch('Nachtstrom');
-		expect(searchLibrary).not.toHaveBeenCalled();
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(searchLibrary).toHaveBeenCalledWith({
-			q: 'Nachtstrom',
-			sort: 'newest',
-			limit: LIBRARY_SEARCH_PAGE_SIZE,
-			cursor: null
-		});
-		expect(get(librarySearch).items).toHaveLength(1);
-		expect(get(librarySearch).items[0]).toMatchObject({ type: 'album' });
-		expect(get(songList)[0].title).toBe('Local Only');
-	});
-
-	it('ignores a stale response after the query is cleared', async () => {
-		let resolveSearch: (value: unknown) => void = () => {};
-		searchLibrary.mockReturnValue(
-			new Promise((resolve) => {
-				resolveSearch = resolve;
-			})
-		);
-		syncLibrarySearch('Nachtstrom');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		syncLibrarySearch('');
-		resolveSearch({
-			items: [{ type: 'album', album: album() }],
-			next_cursor: null,
-			has_more: false
-		});
-		await Promise.resolve();
-		expect(get(librarySearch).status).toBe('idle');
-		expect(get(librarySearch).items).toEqual([]);
-	});
-
-	it('records an error without swallowing it and retries the same query', async () => {
-		searchLibrary.mockRejectedValueOnce(new Error('boom'));
-		syncLibrarySearch('Tide');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(get(librarySearch).status).toBe('error');
-		expect(get(librarySearch).error).toBe('boom');
-		searchLibrary.mockResolvedValueOnce({
-			items: [],
-			next_cursor: null,
-			has_more: false
-		});
-		retryLibrarySearch();
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(searchLibrary).toHaveBeenCalledTimes(2);
-		expect(get(librarySearch).status).toBe('ready');
-	});
-
-	it('load more appends using the next cursor', async () => {
-		searchLibrary.mockResolvedValueOnce({
-			items: [{ type: 'album', album: album({ id: 'a1' }) }],
-			next_cursor: 'cursor-1',
-			has_more: true
-		});
-		syncLibrarySearch('Catalog');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		searchLibrary.mockResolvedValueOnce({
-			items: [{ type: 'album', album: album({ id: 'a2', title: 'Catalog 2' }) }],
-			next_cursor: null,
-			has_more: false
-		});
-		loadMoreLibrarySearch();
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(searchLibrary).toHaveBeenLastCalledWith({
-			q: 'Catalog',
-			sort: 'newest',
-			limit: LIBRARY_SEARCH_PAGE_SIZE,
-			cursor: 'cursor-1'
-		});
-		expect(get(librarySearch).items).toHaveLength(2);
-		expect(get(librarySearch).hasMore).toBe(false);
-	});
-
+describe('restoreLibrarySearch', () => {
 	it('restoreLibrarySearch replays pages until the saved count is loaded', async () => {
 		searchLibrary
 			.mockResolvedValueOnce({
@@ -258,35 +141,6 @@ describe('syncLibrarySearch', () => {
 		await restoreLibrarySearch('Catalog', 'newest', 2);
 		expect(searchLibrary).toHaveBeenCalledTimes(2);
 		expect(get(librarySearch).items).toHaveLength(2);
-		syncLibrarySearch('Catalog');
-		expect(searchLibrary).toHaveBeenCalledTimes(2);
-	});
-
-	it('does not re-fetch a restored search that already settled with zero hits', async () => {
-		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
-		await restoreLibrarySearch('zzz', 'newest', 0);
-		expect(searchLibrary).toHaveBeenCalledTimes(1);
-		expect(get(librarySearch).status).toBe('ready');
-		expect(get(librarySearch).items).toHaveLength(0);
-		syncLibrarySearch('zzz');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(searchLibrary).toHaveBeenCalledTimes(1);
-	});
-});
-
-describe('changeLibrarySort', () => {
-	it('re-searches immediately when a query is active', async () => {
-		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
-		syncLibrarySearch('Nachtstrom');
-		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		searchLibrary.mockClear();
-		changeLibrarySort('title', 'Nachtstrom');
-		expect(searchLibrary).toHaveBeenCalledWith({
-			q: 'Nachtstrom',
-			sort: 'title',
-			limit: LIBRARY_SEARCH_PAGE_SIZE,
-			cursor: null
-		});
 	});
 });
 
@@ -479,38 +333,6 @@ describe('loadLibraryBrowse', () => {
 		await loadLibraryBrowse({ reset: true });
 		expect(get(songList)[0].generations.map((item) => item.id)).toEqual(['g1']);
 		expect(get(songList)[0].generation_count).toBe(1);
-	});
-});
-
-describe('groupSearchHits', () => {
-	it('keeps album hits without matching songs and attaches song hits to album context', () => {
-		const groups = groupSearchHits([
-			{ type: 'album', album: album({ id: 'nachtstrom', title: 'Nachtstrom' }) },
-			{
-				type: 'song',
-				song: searchSong({ id: 's-tide', title: 'Tide', album_id: 'nachtstrom' }),
-				album_id: 'nachtstrom',
-				album_title: 'Nachtstrom'
-			},
-			{
-				type: 'song',
-				song: searchSong({
-					id: 's-other',
-					title: 'Other',
-					album_id: 'other',
-					album_title: 'Other'
-				}),
-				album_id: 'other',
-				album_title: 'Other'
-			}
-		]);
-		expect(groups).toHaveLength(2);
-		expect(groups[0].album.title).toBe('Nachtstrom');
-		expect(groups[0].songs.map((s) => s.id)).toEqual(['s-tide']);
-		expect(groups[1].album.id).toBe('other');
-		expect(groups[1].album.title).toBe('Other');
-		expect(groups[1].songs).toHaveLength(1);
-		expect(groups[1].album.song_count).toBe(1);
 	});
 });
 

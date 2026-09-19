@@ -2,14 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type {
-	AlbumItem,
-	GenerationItem,
-	JobItem,
-	SongItem,
-	VersionGenerationParams,
-	VersionItem
-} from '$lib/api/types';
+import type { AlbumItem, GenerationItem, JobItem, SongItem, VersionItem } from '$lib/api/types';
 import type { HealthSummary } from '$lib/api/client';
 import {
 	ALBUM_COVER_ALT_TYPE,
@@ -58,7 +51,7 @@ import {
 	persistLibraryHistory,
 	resetNavigationForTests,
 	selectSong,
-	switchTab
+	openWriteTab
 } from '$lib/stores/navigation';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -427,6 +420,7 @@ afterEach(async () => {
 	clearHitboxStyles();
 	clearPointer();
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 describe('SongDetailView header — one row, every state', () => {
@@ -693,13 +687,13 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 	});
 
 	it('re-enables Generate without a reload once a worker comes back online', async () => {
+		vi.useFakeTimers();
 		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 0 }));
 		const target = await renderView();
 		expect(generateBtn(target)?.disabled).toBe(true);
 
 		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 1 }));
-		const { refreshHealth } = await import('$lib/stores/health');
-		await refreshHealth();
+		await vi.advanceTimersByTimeAsync(15_000);
 		await tick();
 
 		const btn = generateBtn(target);
@@ -1045,18 +1039,31 @@ describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
 });
 
 describe('recipe params from a take', () => {
-	it('copies reusable params on Again', async () => {
-		const { recipeParamsFromTake } = await import('$lib/stores/recipe');
-		const params: VersionGenerationParams = recipeParamsFromTake({
-			inference_steps: 8,
-			guidance_scale: 1.5,
-			task_type: 'text2music',
-			seed: 99
-		});
-		expect(params.inference_steps).toBe(8);
-		expect(params.guidance_scale).toBe(1.5);
-		expect((params as Record<string, unknown>).task_type).toBeUndefined();
-		expect((params as Record<string, unknown>).seed).toBeUndefined();
+	it('copies reusable params and pins the seed when Again is clicked', async () => {
+		songList.set([
+			song({
+				generations: [
+					generation({
+						seed: 99,
+						generation_params: {
+							inference_steps: 8,
+							guidance_scale: 1.5,
+							task_type: 'text2music',
+							seed: 99
+						}
+					})
+				]
+			})
+		]);
+		const target = await renderView();
+		target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+		await tick();
+		clickNamed(target, TAKE_AGAIN_LABEL);
+		await tick();
+
+		expect(get(editGenParams)).toEqual({ inference_steps: 8, guidance_scale: 1.5 });
+		expect(get(pinnedSeed)).toBe(99);
+		expect(get(recipeOpen)).toBe(true);
 	});
 });
 
@@ -1130,7 +1137,7 @@ describe('song header album rail', () => {
 		selectedSongId.set('s1');
 		const cleanup = initNavigation();
 		selectSong('s1');
-		switchTab('write');
+		openWriteTab();
 		const index = history.state.index;
 		const push = vi.spyOn(history, 'pushState');
 		const target = await renderView();

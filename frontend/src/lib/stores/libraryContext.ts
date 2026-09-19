@@ -33,7 +33,7 @@ import { CREATED_SORTS } from '$lib/utils/recency';
 // 'browse' shows the library wall (the LibraryWall component); 'detail' shows
 // whichever collection is currently open; 'create' shows the create form.
 // Song detail always wins over all three (see LibraryWorkspace.svelte).
-export type LibrarySurface = 'browse' | 'detail' | 'create';
+type LibrarySurface = 'browse' | 'detail' | 'create';
 // Editor tabs (epic #98): 'write' hosts style/lyrics (and Co-Writer mode),
 // 'takes' lists generations. Superseded the pre-#100 'generations'|'edit'|'chat'
 // trio; LEGACY_DETAIL_TAB_MAP below keeps old persisted history entries valid.
@@ -80,7 +80,7 @@ let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
 
-export function isLibrarySort(value: unknown): value is LibrarySort {
+function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
 }
 
@@ -200,7 +200,7 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	return '/';
 }
 
-export type HistoryWriteMode = 'push' | 'replace';
+type HistoryWriteMode = 'push' | 'replace';
 
 // The one place that decides how a library history entry reaches the browser.
 //
@@ -295,7 +295,7 @@ function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: Histor
 	else history.replaceState(state, '', url);
 }
 
-export type AlbumAddress = 'found' | 'unknown';
+type AlbumAddress = 'found' | 'unknown';
 
 // The entry point of the /album/<slug> route (issue #269). A pasted address is
 // the only thing a cold tab knows, so the slug is checked against the API
@@ -374,7 +374,7 @@ async function albumExists(albumId: string): Promise<boolean> {
 	}
 }
 
-export type SongAddress = 'found' | 'unknown-song' | 'unknown-album';
+type SongAddress = 'found' | 'unknown-song' | 'unknown-album';
 
 // The entry point of the /album/<slug>/<song-slug> route (issue #275), one
 // level under openAlbumAddress above -- same shape, same reasoning: an
@@ -412,7 +412,7 @@ export async function openSongAddress(
 	return 'found';
 }
 
-export type TakeAddress = 'found' | 'unknown-take' | 'unknown-song' | 'unknown-album';
+type TakeAddress = 'found' | 'unknown-take' | 'unknown-song' | 'unknown-album';
 
 // The entry point of the /album/<slug>/<song-slug>/take/<n> route (issue
 // #281), one level under openSongAddress above -- same shape again: an
@@ -453,7 +453,7 @@ export async function openTakeAddress(
 	return 'found';
 }
 
-export type PlaylistAddress = 'found' | 'unknown';
+type PlaylistAddress = 'found' | 'unknown';
 
 // The entry point of the /playlist/<slug> route (issue #286), the last new
 // address of the chain -- same shape as openAlbumAddress: an unknown slug is
@@ -524,7 +524,7 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 	};
 }
 
-export type LegacySongQueryAddress =
+type LegacySongQueryAddress =
 	{ kind: 'found'; path: string; droppedUnknownTake: boolean } | { kind: 'unknown-song' };
 
 // The legacy `/?song=<uuid>` and `/?song=<uuid>&gen=<uuid>` entry points
@@ -807,10 +807,6 @@ export function setLibrarySurface(surface: LibrarySurface): void {
 
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
-}
-
-export function albumIsExpanded(options: { searching: boolean; songHits: number }): boolean {
-	return options.searching && options.songHits > 0;
 }
 
 export function resetLibraryContextForTests(): void {

@@ -12,7 +12,7 @@ export interface MemoryProposal {
 const PROPOSAL_RE =
 	/<memory_proposal\s+scope="(user|song|album)"(?:\s+target_id="([^"]*)")?\s*>\s*<current>([\s\S]*?)<\/current>\s*<proposed>([\s\S]*?)<\/proposed>\s*<\/memory_proposal>/gi;
 
-export function parseMemoryProposals(text: string): MemoryProposal[] {
+function parseMemoryProposals(text: string): MemoryProposal[] {
 	const out: MemoryProposal[] = [];
 	for (const match of text.matchAll(PROPOSAL_RE)) {
 		out.push({
@@ -51,7 +51,7 @@ export function collectPendingProposals(
 	return found;
 }
 
-export function memoryItemForScope(
+function memoryItemForScope(
 	bundle: MemoryBundle | null,
 	scope: MemoryScope
 ): MemoryScopeItem | null {

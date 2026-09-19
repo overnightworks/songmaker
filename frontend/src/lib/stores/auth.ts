@@ -17,8 +17,8 @@ export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
-export type AuthFailureKind = 'unauthorized' | 'disabled' | 'retryable';
-export type AuthNotice = Exclude<AuthFailureKind, 'retryable'>;
+type AuthFailureKind = 'unauthorized' | 'disabled' | 'retryable';
+type AuthNotice = Exclude<AuthFailureKind, 'retryable'>;
 
 export const authNotice = writable<AuthNotice | null>(null);
 

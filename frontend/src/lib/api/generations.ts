@@ -18,7 +18,7 @@ export async function generateSong(
 	});
 }
 
-export interface RepaintOptions {
+interface RepaintOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
 	model: string;
@@ -61,7 +61,7 @@ export async function repaintGeneration(
 	});
 }
 
-export interface CoverOptions {
+interface CoverOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
 	model: string;

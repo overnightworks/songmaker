@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { QueueStreamEngine, streamTrackToPlaybackInfo } from './queueStreamEngine';
+import { QueueStreamEngine } from './queueStreamEngine';
 
 function manifest(windowed: boolean): QueueStreamManifest {
 	return {
@@ -54,18 +54,18 @@ function manifest(windowed: boolean): QueueStreamManifest {
 	};
 }
 
-describe('streamTrackToPlaybackInfo', () => {
+describe('QueueStreamEngine playback metadata', () => {
 	it('maps version lyrics and album title from the stream track', () => {
-		const info = streamTrackToPlaybackInfo(manifest(false).tracks[0]);
-		expect(info.lyrics).toBe('old verse');
-		expect(info.albumTitle).toBe('Album');
-		expect(info.generation.version_lyrics).toBe('old verse');
+		const info = new QueueStreamEngine().start(manifest(false), 0)?.info;
+		expect(info?.lyrics).toBe('old verse');
+		expect(info?.albumTitle).toBe('Album');
+		expect(info?.generation.version_lyrics).toBe('old verse');
 	});
 
 	it('keeps missing version lyrics as null', () => {
-		const info = streamTrackToPlaybackInfo(manifest(false).tracks[1]);
-		expect(info.lyrics).toBeNull();
-		expect(info.generation.version_lyrics).toBeNull();
+		const info = new QueueStreamEngine().start(manifest(false), 1)?.info;
+		expect(info?.lyrics).toBeNull();
+		expect(info?.generation.version_lyrics).toBeNull();
 	});
 });
 
