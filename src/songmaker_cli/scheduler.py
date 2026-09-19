@@ -231,6 +231,16 @@ def _parse_sse_event(buffer: str) -> tuple[str, dict] | None:
     return event_type, data
 
 
+def _worker_response_cause(response: httpx.Response) -> str:
+    try:
+        body = json.loads(response.text)
+    except json.JSONDecodeError:
+        return response.text
+    if isinstance(body, dict) and isinstance(body.get("detail"), str):
+        return body["detail"]
+    return response.text
+
+
 async def _ensure_loaded(
     worker: _PickedWorker,
     target_mode: str,
@@ -252,7 +262,7 @@ async def _ensure_loaded(
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise WorkerTaskFailed(resp.text) from exc
+            raise WorkerTaskFailed(_worker_response_cause(resp)) from exc
 
 
 async def _submit_generation(

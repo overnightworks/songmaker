@@ -845,7 +845,7 @@ def test_generation_job_preserves_auto_load_response(
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error_type == "generation_error"
-        assert job.error == response.text
+        assert job.error == cause
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
