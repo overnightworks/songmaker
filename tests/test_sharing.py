@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from conftest import (
     TEST_SECRET,
-    install_app_context,
     login_and_csrf,
     make_fake_redis,
+    make_router_app,
     make_test_app,
 )
 from fastapi.testclient import TestClient
@@ -1638,27 +1638,15 @@ def _seed_inventory(session) -> None:
 
 
 def _inventory_client(tmp_path: Path, user_id: str, role: str = "user"):
-    from fastapi import FastAPI
     from webauth.dependencies import AuthenticatedUser
 
-    from songmaker_cli.api import router
-    from songmaker_cli.app_context import AppContext
-    from songmaker_cli.auth_dependencies import get_current_user
-
     factory = _inventory_factory(tmp_path)
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=user_id, username=f"test-{user_id}", role=role, is_active=True,
+        ),
     )
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = (
-        lambda: AuthenticatedUser(id=user_id, username=f"test-{user_id}", role=role, is_active=True)
-    )
-    app.include_router(router)
     return TestClient(app), factory
 
 

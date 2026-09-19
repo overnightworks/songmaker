@@ -6,13 +6,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import make_router_app
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -319,13 +317,6 @@ def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> No
 # ── API-layer tests ──────────────────────────────────────────────────
 
 
-def _fake_user(user_id: str, role: str):
-    user = AuthenticatedUser(
-        id=user_id, username=f"u_{role}", role=role, is_active=True,
-    )
-    return lambda: user
-
-
 def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -346,19 +337,12 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
         session.query(AvailableModel).update({"is_active": True})
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=_DEFAULT_USER_ID, username=f"u_{role}", role=role, is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(_DEFAULT_USER_ID, role)
-    app.include_router(router)
     return TestClient(app)
 
 
@@ -412,23 +396,18 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
         session.add(Album(id="rock", title="R", artist="A", created_by="u1"))
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u1", username="u_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u1", "user")
-    app.include_router(router)
     c1 = TestClient(app)
     c1.delete("/api/albums/rock")
 
-    app.dependency_overrides[get_current_user] = _fake_user("u2", "user")
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u2", username="u_user", role="user", is_active=True,
+    )
     c2 = TestClient(app)
     r = c2.post("/api/albums/rock/restore")
     assert r.status_code == 404

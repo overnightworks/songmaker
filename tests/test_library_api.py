@@ -7,15 +7,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import TEST_SECRET, make_fake_redis, make_router_app
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_MISMATCH,
@@ -32,11 +30,6 @@ from songmaker_cli.db.models import Album, Generation, Song, User, Version
 USER_A = "user-a"
 USER_B = "user-b"
 ADMIN_ID = "user-admin"
-
-
-def _fake_user(user_id: str, username: str, role: str):
-    user = AuthenticatedUser(id=user_id, username=username, role=role, is_active=True)
-    return lambda: user
 
 
 def _ts(offset_seconds: int) -> datetime:
@@ -110,14 +103,12 @@ def _library_env(tmp_path: Path) -> tuple[object, object]:
 
 
 def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(
-        user_id, f"test-{user_id}", role,
+    app = make_router_app(
+        ctx.data_dir.parent, ctx=ctx,
+        user=AuthenticatedUser(
+            id=user_id, username=f"test-{user_id}", role=role, is_active=True,
+        ),
     )
-    app.include_router(router)
     return TestClient(app)
 
 

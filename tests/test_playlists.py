@@ -9,13 +9,10 @@ from unittest.mock import patch
 
 import pytest
 from conftest import (
-    TEST_SECRET,
-    install_app_context,
     login_and_csrf,
-    make_fake_redis,
+    make_router_app,
     make_test_app,
 )
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
@@ -24,8 +21,6 @@ from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
 
 from songmaker_cli.api_helpers import slugify
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_JPEG_MAGIC,
     COVER_MAX_BYTES,
@@ -128,13 +123,6 @@ def seeded_session(db_factory) -> Session:
     session.close()
 
 
-def _fake_user():
-    user = AuthenticatedUser(
-        id=_DEFAULT_USER_ID, username="test", role="user", is_active=True,
-    )
-    return lambda: user
-
-
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
@@ -147,18 +135,12 @@ def client(tmp_path: Path) -> TestClient:
     owner_dir.mkdir(parents=True)
     for name in ("g1.mp3", "g2.mp3", "g3.mp3"):
         (owner_dir / name).write_bytes(b"source")
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=_DEFAULT_USER_ID, username="test", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user()
-    app.include_router(router)
     yield TestClient(app)
 
 

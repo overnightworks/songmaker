@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context
+from conftest import make_router_app
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
@@ -245,13 +245,7 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
 
 
 def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
-    from conftest import TEST_SECRET, make_fake_redis
-    from fastapi import FastAPI
     from fastapi.testclient import TestClient
-
-    from songmaker_cli.api import router
-    from songmaker_cli.app_context import AppContext
-    from songmaker_cli.auth_dependencies import get_current_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -279,15 +273,8 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
         )
         session.commit()
 
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
     (tmp_path / "data").mkdir()
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = lambda: _auth(USER_B, role="admin")
-    app.include_router(router)
+    app = make_router_app(tmp_path, db=factory, user=_auth(USER_B, role="admin"))
     client = TestClient(app)
 
     resp = client.post("/api/songs/S1/generate", json={"count": 1, "model": "sft"})

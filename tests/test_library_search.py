@@ -23,13 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import make_router_app
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User, Version
@@ -67,21 +64,12 @@ def _client_with_title(
         ))
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=searcher or AuthenticatedUser(
+            id=OWNER_ID, username="owner", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = lambda: searcher or AuthenticatedUser(
-        id=OWNER_ID, username="owner", role="user", is_active=True,
-    )
-    app.include_router(router)
     return TestClient(app)
 
 

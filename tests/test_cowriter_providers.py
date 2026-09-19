@@ -29,17 +29,14 @@ from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
 from agent_providers.tools import openai_tool_schemas
 from conftest import (
     TEST_SECRET,
-    install_app_context,
-    make_fake_redis,
+    make_router_app,
     override_provider_runtime,
     refresh_provider_snapshots,
     seed_judge_route,
 )
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     SETTING_CLAUDE_SCORING_MODEL,
@@ -150,13 +147,6 @@ def _clear_agent_cli_caches():
     clear_provider_snapshots()
 
 
-def _fake_user(user_id: str, role: str = "user"):
-    user = AuthenticatedUser(
-        id=user_id, username=f"u-{user_id}", role=role, is_active=True,
-    )
-    return lambda: user
-
-
 def _stream_events(response) -> list[dict]:
     events: list[dict] = []
     for line in response.iter_lines():
@@ -190,18 +180,12 @@ def admin_client(tmp_path: Path, monkeypatch):
     factory = init_db(tmp_path / "cowriter.db")
     with factory() as session:
         _seed(session, "u-test")
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="u-u-test", role="admin", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
-    app.include_router(router)
     yield TestClient(app), factory
 
 
@@ -746,7 +730,9 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
         "anthropic",
         SimpleNamespace(AsyncAnthropic=AsyncAnthropic, APIError=Exception),
     )
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u-test", username="u-u-test", role="user", is_active=True,
+    )
 
     response = client.post("/api/chat/turn", json={"message": "Please revise the lyrics."})
     events = _stream_events(response)
@@ -834,14 +820,18 @@ def test_cowriter_put_without_routes_preserves_the_stored_route_map(
 
 def test_cowriter_put_requires_an_admin(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u-plain", username="u-u-plain", role="user", is_active=True,
+    )
     try:
         response = client.put(
             "/api/settings/cowriter",
             json={"provider": "grok", "model": "grok-4.6"},
         )
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+            id="u-test", username="u-u-test", role="admin", is_active=True,
+        )
 
     assert response.status_code == 403
 
@@ -1599,18 +1589,24 @@ def test_claude_cli_stderr_stays_out_of_model_catalog_settings_errors(
 
 def test_provider_status_requires_admin(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u-plain", username="u-u-plain", role="user", is_active=True,
+    )
     try:
         resp = client.get("/api/settings/providers")
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+            id="u-test", username="u-u-test", role="admin", is_active=True,
+        )
 
     assert resp.status_code == 403
 
 
 def test_cover_settings_are_admin_only(admin_client):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-plain", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u-plain", username="u-u-plain", role="user", is_active=True,
+    )
     try:
         assert client.get("/api/settings/cover").status_code == 403
         assert client.put(
@@ -1618,7 +1614,9 @@ def test_cover_settings_are_admin_only(admin_client):
             json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
         ).status_code == 403
     finally:
-        client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "admin")
+        client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+            id="u-test", username="u-u-test", role="admin", is_active=True,
+        )
 
 
 def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
@@ -2163,7 +2161,9 @@ def test_judge_saves_an_empty_model_on_an_unavailable_route(admin_client, route,
 @pytest.mark.parametrize("method", ["get", "put"])
 def test_judge_settings_require_an_admin(admin_client, method):
     client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = _fake_user("u-test", "user")
+    client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="u-test", username="u-u-test", role="user", is_active=True,
+    )
     response = client.request(
         method, "/api/settings/judge", json={"provider": "grok", "route": "api", "model": ""},
     )

@@ -9,14 +9,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, install_app_context, make_fake_redis
-from fastapi import FastAPI
+from conftest import make_router_app
 from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -35,12 +33,6 @@ from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 _DEFAULT_USER_ID = "u-test"
 
 
-def _fake_user(user_id: str, username: str, role: str):
-    """Return a dependency override for get_current_user."""
-    user = AuthenticatedUser(id=user_id, username=username, role=role, is_active=True)
-    return lambda: user
-
-
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
@@ -57,20 +49,12 @@ def client(tmp_path: Path) -> TestClient:
     wav_dir.mkdir(parents=True, exist_ok=True)
     (wav_dir / "g1.wav").write_bytes(b"RIFF" + b"\x00" * 40)
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=_DEFAULT_USER_ID, username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(
-        _DEFAULT_USER_ID, "test_user", "user",
-    )
-    app.include_router(router)
     yield TestClient(app)
 
 
@@ -80,17 +64,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
     with factory() as session:
         _seed_db(session)
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.include_router(router)
+    app = make_router_app(tmp_path, db=factory)
     yield TestClient(app)
 
 
@@ -140,20 +114,12 @@ def gzip_client(tmp_path: Path) -> TestClient:
         gen1.whisper_cues = _whisper_cues_payload(300)
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=_DEFAULT_USER_ID, username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(
-        _DEFAULT_USER_ID, "test_user", "user",
-    )
-    app.include_router(router)
     app.add_middleware(
         SelectiveGZipMiddleware,
         minimum_size=GZIP_MINIMUM_SIZE_BYTES,
@@ -192,21 +158,12 @@ def _make_authed_client(
         session.flush()
         _seed_db(session, owner_id=user_id if role != "admin" else None)
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id=user_id, username=f"test_{role}", role=role, is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(
-        user_id, f"test_{role}", role,
-    )
-    app.include_router(router)
     return TestClient(app)
 
 
@@ -474,19 +431,12 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
-    app.include_router(router)
     tc = TestClient(app)
 
     resp = tc.put("/api/songs/s-other/title", json={"title": "Hijacked"})
@@ -577,19 +527,12 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
         ))
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
-    app.include_router(router)
     tc = TestClient(app)
 
     resp = tc.put("/api/albums/other", json={"title": "Hijacked"})
@@ -726,21 +669,12 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
         ))
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user(
-        "u-test", "test_user", "user",
-    )
-    app.include_router(router)
     tc = TestClient(app)
 
     resp = tc.get("/api/generations/g-other")
@@ -2992,7 +2926,6 @@ def _make_pool_capacity_limited_client(
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from songmaker_cli.api import router
     from songmaker_cli.db.engine import _enable_sqlite_pragmas, _seed_available_models
     from songmaker_cli.db.models import Base
 
@@ -3016,13 +2949,7 @@ def _make_pool_capacity_limited_client(
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.include_router(router)
+    app = make_router_app(tmp_path, db=factory)
     # No app.dependency_overrides[get_current_user] here on purpose (#331
     # Findings 1/2, review round 2): api_stream_job calls get_current_user
     # directly, not through Depends(), so an override would never reach it
@@ -3782,24 +3709,18 @@ def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
 def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from webauth.middleware import BodySizeLimitMiddleware
 
-    from songmaker_cli.api import router
     from songmaker_cli.request_policies import build_body_size_policy
     from songmaker_cli.settings import get_settings
 
     factory = init_db(tmp_path / "test.db")
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
 
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test", "user")
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test", role="user", is_active=True,
+        ),
+    )
     app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
-    app.include_router(router)
 
     tc = TestClient(app)
     large_body = b"x" * 2_000_000
@@ -4294,19 +4215,12 @@ def test_bulk_delete_other_user(tmp_path: Path) -> None:
         session.add_all([gen_mine, gen_other])
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
-    app.include_router(router)
     tc = TestClient(app)
 
     resp = tc.post(
@@ -4337,19 +4251,12 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
     (gen_dir / "g1.wav").write_bytes(b"fake")
     (gen_dir / "g2.mp3").write_bytes(b"fake")
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+    app = make_router_app(
+        tmp_path, db=factory,
+        user=AuthenticatedUser(
+            id="u-test", username="test_user", role="user", is_active=True,
+        ),
     )
-    from songmaker_cli.api import router
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
-    app.include_router(router)
     tc = TestClient(app)
 
     resp = tc.post(

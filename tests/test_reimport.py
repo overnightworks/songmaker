@@ -6,9 +6,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import install_app_context
+from conftest import make_router_app
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
 
 from songmaker_cli.app_context import AppContext
@@ -200,13 +201,6 @@ def test_extract_seed_with_mutagen(tmp_path: Path) -> None:
 # ── API endpoint ─────────────────────────────────────────────────────
 
 
-def _fake_user():
-    from webauth.dependencies import AuthenticatedUser
-    return lambda: AuthenticatedUser(
-        id=USER_ID, username="reimporter", role="admin", is_active=True,
-    )
-
-
 @pytest.fixture
 def reimport_client(tmp_path: Path):
     audio_dir = tmp_path / "audio"
@@ -223,16 +217,12 @@ def reimport_client(tmp_path: Path):
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=_make_fake_redis(),
     )
-
-    from fastapi import FastAPI
-
-    from songmaker_cli.api import router
-    from songmaker_cli.auth_dependencies import get_current_user
-
-    app = FastAPI()
-    install_app_context(app, ctx)
-    app.dependency_overrides[get_current_user] = _fake_user()
-    app.include_router(router)
+    app = make_router_app(
+        tmp_path, ctx=ctx,
+        user=AuthenticatedUser(
+            id=USER_ID, username="reimporter", role="admin", is_active=True,
+        ),
+    )
     return TestClient(app)
 
 
