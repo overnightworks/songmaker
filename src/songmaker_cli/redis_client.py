@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from typing import TYPE_CHECKING
 
@@ -14,6 +16,10 @@ from songmaker_cli.constants import (
 
 if TYPE_CHECKING:
     from redis import Redis
+
+log = logging.getLogger(__name__)
+
+_LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 
 def create_redis(url: str) -> Redis:
@@ -106,6 +112,31 @@ class RedisConcurrentLeaseLimiter:
             self._global_key,
             token,
         )
+
+
+async def _release_lease(
+    limiter: RedisConcurrentLeaseLimiter,
+    user_id: str,
+    lease_token: str,
+    *,
+    subject: str,
+) -> None:
+    try:
+        await asyncio.to_thread(limiter.release, user_id, lease_token)
+    except Exception:
+        log.warning("%s lease release failed", subject)
+
+
+def release_lease_in_background(
+    limiter: RedisConcurrentLeaseLimiter,
+    user_id: str,
+    lease_token: str,
+    *,
+    subject: str,
+) -> None:
+    task = asyncio.create_task(_release_lease(limiter, user_id, lease_token, subject=subject))
+    _LEASE_RELEASE_TASKS.add(task)
+    task.add_done_callback(_LEASE_RELEASE_TASKS.discard)
 
 
 class RedisHttpMetrics:
