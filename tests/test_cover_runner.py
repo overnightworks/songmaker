@@ -107,7 +107,14 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
     image_started = threading.Event()
     allow_image_return = threading.Event()
 
-    def fake_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
+    def fake_image_generator(
+        _prompt: str,
+        *,
+        policy: ImagePolicy,
+        deadline: float,
+        abort_signal: threading.Event | None,
+        model: str,
+    ) -> bytes:
         assert deadline > 0
         image_started.set()
         assert allow_image_return.wait(timeout=2)
@@ -255,7 +262,9 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
         else:
             assert job.status == JobStatus.COMPLETED
             assert len(job.album.cover_suggestions) == 3
-            assert all((audio_dir / item.png_path).is_file() for item in job.album.cover_suggestions)
+            assert all(
+                (audio_dir / item.png_path).is_file() for item in job.album.cover_suggestions
+            )
     assert not list(audio_dir.rglob(".*.staging"))
 
 
@@ -295,7 +304,14 @@ def test_web_runner_names_the_cause_in_the_job_error(
         cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
 
-    def fail_image_generator(_prompt: str, *, deadline: float, model: str) -> bytes:
+    def fail_image_generator(
+        _prompt: str,
+        *,
+        policy: ImagePolicy,
+        deadline: float,
+        abort_signal: threading.Event | None,
+        model: str,
+    ) -> bytes:
         raise raised
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)

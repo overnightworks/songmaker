@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from agent_providers.codex.image import generate_codex_cover_image
-
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.jobs._runtime import _update_job
@@ -39,7 +37,6 @@ async def run_cover_suggestion_job(
         db_factory=db_factory,
         audio_dir=audio_dir,
         settings=settings,
-        image_generator=generate_codex_cover_image,
     )
 
 
