@@ -220,6 +220,9 @@ jobs:
       - name: Svelte check
         run: pnpm check
 
+      - name: No test-only-alive exports
+        run: bash ../scripts/check_test_only_exports.sh
+
       - name: Lint
         run: pnpm lint
 
